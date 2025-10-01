@@ -4,13 +4,16 @@
     {
         public int Id { get; set; }
         public int CompanyId { get; set; }
-        public Company Company { get; set; }
-
         public int ChallanNumber { get; set; }
-        public string ClientName { get; set; } = "";
+
+        // Replace old ClientName with ClientId foreign key
+        public int ClientId { get; set; }
         public string PoNumber { get; set; } = "";
         public DateTime? DeliveryDate { get; set; }
 
-        public List<DeliveryItem> Items { get; set; } = new();
+        // Navigation
+        public Company Company { get; set; } = null!;
+        public Client Client { get; set; } = null!;
+        public ICollection<DeliveryItem> Items { get; set; } = new List<DeliveryItem>();
     }
 }

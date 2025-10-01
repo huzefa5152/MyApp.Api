@@ -21,7 +21,7 @@ namespace MyApp.Api.Services.Implementations
             return deliveryChallans.Select(dc => new DeliveryChallanDto
             {
                 ChallanNumber = dc.ChallanNumber,
-                ClientName = dc.ClientName,
+                ClientId = dc.ClientId,
                 PoNumber = dc.PoNumber,
                 DeliveryDate = dc.DeliveryDate,
                 Items = dc.Items.Select(i => new DeliveryItemDto
@@ -38,7 +38,7 @@ namespace MyApp.Api.Services.Implementations
             var deliveryChallan = new DeliveryChallan
             {
                 CompanyId = companyId,
-                ClientName = dto.ClientName,
+                ClientId = dto.ClientId,
                 PoNumber = dto.PoNumber,
                 DeliveryDate = dto.DeliveryDate,
                 Items = dto.Items.Select(i => new DeliveryItem
@@ -54,7 +54,7 @@ namespace MyApp.Api.Services.Implementations
             return new DeliveryChallanDto
             {
                 ChallanNumber = created.ChallanNumber,
-                ClientName = created.ClientName,
+                ClientId = created.ClientId,
                 PoNumber = created.PoNumber,
                 DeliveryDate = created.DeliveryDate,
                 Items = created.Items.Select(i => new DeliveryItemDto

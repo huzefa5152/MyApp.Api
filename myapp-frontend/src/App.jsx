@@ -4,6 +4,7 @@ import { Routes, Route, NavLink, useLocation } from "react-router-dom";
 import CompanyPage from "./pages/CompanyPage";
 import ChallansPage from "./pages/ChallanPage";
 import "./App.css";
+import ClientsPage from "./pages/ClientsPage";
 
 export default function App() {
   const [companyOpen, setCompanyOpen] = useState(false);
@@ -79,6 +80,15 @@ export default function App() {
             >
               Companies List
             </NavLink>
+            <NavLink
+              to="/Clients/list"
+              className={({ isActive }) =>
+                "nav-link mb-1 p-2 rounded " +
+                (isActive ? "active bg-white text-primary fw-bold" : "text-white")
+              }
+            >
+              Clients List
+            </NavLink>
           </div>
 
           <MainLink to="/challans" label="Challans" />
@@ -97,6 +107,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<h2>Welcome to MyApp Dashboard</h2>} />
           <Route path="/companies/*" element={<CompanyPage />} />
+          <Route path="/Clients/*" element={<ClientsPage />} />
           <Route path="/challans" element={<ChallansPage />} />
           <Route path="*" element={<h2>Page Not Found</h2>} />
         </Routes>

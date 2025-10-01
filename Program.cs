@@ -19,10 +19,12 @@ builder.Services.AddSwaggerGen();
 // Register Repositories
 builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<IDeliveryChallanRepository, DeliveryChallanRepository>();
+builder.Services.AddScoped<IClientRepository, ClientRepository>();
 
 // Register Services
 builder.Services.AddScoped<ICompanyService, CompanyService>();
 builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
+builder.Services.AddScoped<IClientService, ClientService>();
 
 // before builder.Build()
 builder.Services.AddCors(options =>

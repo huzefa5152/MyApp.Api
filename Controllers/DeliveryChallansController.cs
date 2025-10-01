@@ -32,8 +32,9 @@ namespace MyApp.Api.Controllers
             try
             {
                 // Validate main fields
-                if (string.IsNullOrWhiteSpace(dto.ClientName))
-                    return BadRequest(new { error = "Client name is required." });
+                // Validate client
+                if (dto.ClientId <= 0)
+                    return BadRequest(new { error = "Invalid client." });
 
                 if (string.IsNullOrWhiteSpace(dto.PoNumber))
                     return BadRequest(new { error = "PO number is required." });

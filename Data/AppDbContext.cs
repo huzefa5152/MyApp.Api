@@ -11,6 +11,8 @@ namespace MyApp.Api.Data
         public DbSet<DeliveryChallan> DeliveryChallans { get; set; }
         public DbSet<DeliveryItem> DeliveryItems { get; set; }
 
+        public DbSet<Client> Clients { get; set; } // ✅ add this
+
         public DbSet<ItemDescription> ItemDescriptions { get; set; }
         public DbSet<Unit> Units { get; set; }
 
