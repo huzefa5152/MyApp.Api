@@ -10,18 +10,12 @@ namespace MyApp.Api.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "AvatarPath",
-                table: "Users",
-                type: "nvarchar(max)",
-                nullable: true);
-
-            migrationBuilder.UpdateData(
-                table: "Users",
-                keyColumn: "Id",
-                keyValue: 1,
-                column: "AvatarPath",
-                value: null);
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'AvatarPath')
+                BEGIN
+                    ALTER TABLE [Users] ADD [AvatarPath] nvarchar(max) NULL;
+                END
+            ");
         }
 
         /// <inheritdoc />

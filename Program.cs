@@ -77,6 +77,19 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    // Fix: remove bad migration records that ran as no-ops (Users table was never created)
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users')
+        BEGIN
+            DELETE FROM [__EFMigrationsHistory] WHERE [MigrationId] IN (
+                '20260403164225_AddUsersTable',
+                '20260403181242_AddUserAvatarPath',
+                '20260403184710_AddClientCompanyId'
+            );
+        END
+    ");
+
     db.Database.Migrate();
 }
 

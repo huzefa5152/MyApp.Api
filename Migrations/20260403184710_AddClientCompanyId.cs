@@ -10,29 +10,34 @@ namespace MyApp.Api.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<int>(
-                name: "CompanyId",
-                table: "Clients",
-                type: "int",
-                nullable: false,
-                defaultValue: 0);
+            // Add CompanyId column if it doesn't exist
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Clients') AND name = 'CompanyId')
+                BEGIN
+                    ALTER TABLE [Clients] ADD [CompanyId] int NOT NULL DEFAULT 0;
+                END
+            ");
 
             // Assign existing clients to the first company
             migrationBuilder.Sql(
                 "UPDATE Clients SET CompanyId = (SELECT TOP 1 Id FROM Companies ORDER BY Id) WHERE CompanyId = 0");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Clients_CompanyId",
-                table: "Clients",
-                column: "CompanyId");
+            // Add index if it doesn't exist
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Clients_CompanyId')
+                BEGIN
+                    CREATE INDEX [IX_Clients_CompanyId] ON [Clients] ([CompanyId]);
+                END
+            ");
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_Clients_Companies_CompanyId",
-                table: "Clients",
-                column: "CompanyId",
-                principalTable: "Companies",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
+            // Add FK if it doesn't exist
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.foreign_keys WHERE name = 'FK_Clients_Companies_CompanyId')
+                BEGIN
+                    ALTER TABLE [Clients] ADD CONSTRAINT [FK_Clients_Companies_CompanyId]
+                        FOREIGN KEY ([CompanyId]) REFERENCES [Companies] ([Id]) ON DELETE NO ACTION;
+                END
+            ");
         }
 
         /// <inheritdoc />
