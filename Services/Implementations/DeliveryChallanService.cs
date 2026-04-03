@@ -22,6 +22,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 ChallanNumber = dc.ChallanNumber,
                 ClientId = dc.ClientId,
+                ClientName = dc.Client?.Name ?? "",
                 PoNumber = dc.PoNumber,
                 DeliveryDate = dc.DeliveryDate,
                 Items = dc.Items.Select(i => new DeliveryItemDto
@@ -55,6 +56,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 ChallanNumber = created.ChallanNumber,
                 ClientId = created.ClientId,
+                ClientName = created.Client?.Name ?? "",
                 PoNumber = created.PoNumber,
                 DeliveryDate = created.DeliveryDate,
                 Items = created.Items.Select(i => new DeliveryItemDto

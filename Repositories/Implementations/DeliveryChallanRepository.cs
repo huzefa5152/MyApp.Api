@@ -18,6 +18,7 @@ namespace MyApp.Api.Repositories.Implementations
         {
             return await _context.DeliveryChallans
                                  .Include(dc => dc.Items)
+                                 .Include(dc => dc.Client)
                                  .Where(dc => dc.CompanyId == companyId)
                                  .OrderBy(dc => dc.ChallanNumber)
                                  .ToListAsync();
@@ -43,6 +44,9 @@ namespace MyApp.Api.Repositories.Implementations
 
             _context.DeliveryChallans.Add(deliveryChallan);
             await _context.SaveChangesAsync();
+
+            // Eager-load Client so the response includes ClientName
+            await _context.Entry(deliveryChallan).Reference(dc => dc.Client).LoadAsync();
 
             return deliveryChallan;
         }

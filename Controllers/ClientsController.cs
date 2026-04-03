@@ -28,18 +28,30 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<ClientDto>> SaveClient([FromBody] ClientDto dto)
+        public async Task<ActionResult<ClientDto>> CreateClient([FromBody] ClientDto dto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
             try
             {
-                ClientDto result;
-                if (dto.Id.HasValue && dto.Id > 0)
-                    result = await _service.UpdateAsync(dto);  // Update
-                else
-                    result = await _service.CreateAsync(dto);  // Create
+                var result = await _service.CreateAsync(dto);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
 
+        [HttpPut("{id}")]
+        public async Task<ActionResult<ClientDto>> UpdateClient(int id, [FromBody] ClientDto dto)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            dto.Id = id;
+            try
+            {
+                var result = await _service.UpdateAsync(dto);
                 return Ok(result);
             }
             catch (InvalidOperationException ex)

@@ -32,12 +32,19 @@ jobs:
           cp -r myapp-frontend/dist/* wwwroot/
 
       - name: Publish .NET API
-        run: dotnet publish -c Release -o ./publish
+        run: dotnet publish MyApp.Api.csproj -c Release -o ./publish
 
       - name: Copy frontend wwwroot into publish
         run: |
           mkdir -p ./publish/wwwroot
           cp -r wwwroot/* ./publish/wwwroot/
+
+      - name: Take app offline (prevent IIS file locks)
+        run: |
+          echo "App is being updated..." > app_offline.htm
+          curl -s --ftp-create-dirs -T app_offline.htm \
+            "ftp://${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}@site61833.siteasp.net/wwwroot/app_offline.htm"
+          sleep 5
 
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -48,3 +55,9 @@ jobs:
           local-dir: ./publish/
           server-dir: /wwwroot/
           dangerous-clean-slate: false
+
+      - name: Bring app back online
+        if: always()
+        run: |
+          curl -s -Q "-DELE /wwwroot/app_offline.htm" \
+            "ftp://${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}@site61833.siteasp.net/"
