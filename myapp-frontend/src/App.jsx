@@ -9,7 +9,7 @@ import ClientsPage from "./pages/ClientsPage";
 import ProfilePage from "./pages/ProfilePage";
 import LoginPage from "./pages/public/LoginPage";
 import LandingPage from "./pages/public/LandingPage";
-import ProtectedRoute from "./components/ProtectedRoute";
+import ProtectedRoute from "./Components/ProtectedRoute";
 import "./App.css";
 
 export default function App() {
