@@ -35,12 +35,15 @@ builder.Services.AddCors(options =>
          .AllowAnyMethod());
 });
 
-// Use PORT env variable for Render.com deployment, fallback to 5000 for local dev
-var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
-builder.WebHost.ConfigureKestrel(options =>
+// Use PORT env variable for Docker/Render deployment; IIS/MonsterASP manages its own port
+var port = Environment.GetEnvironmentVariable("PORT");
+if (port != null)
 {
-    options.ListenAnyIP(int.Parse(port));
-});
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ListenAnyIP(int.Parse(port));
+    });
+}
 
 
 var app = builder.Build();
