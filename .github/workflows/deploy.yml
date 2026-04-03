@@ -39,14 +39,6 @@ jobs:
           mkdir -p ./publish/wwwroot
           cp -r wwwroot/* ./publish/wwwroot/
 
-      - name: Take app offline (prevent IIS file locks)
-        run: |
-          echo "App is being updated..." > app_offline.htm
-          curl -s --ftp-create-dirs -T app_offline.htm \
-            --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" \
-            "ftp://site61833.siteasp.net/wwwroot/app_offline.htm"
-          sleep 5
-
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
@@ -56,10 +48,3 @@ jobs:
           local-dir: ./publish/
           server-dir: /wwwroot/
           dangerous-clean-slate: false
-
-      - name: Bring app back online
-        if: always()
-        run: |
-          curl -s -Q "-DELE /wwwroot/app_offline.htm" \
-            --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" \
-            "ftp://site61833.siteasp.net/"
