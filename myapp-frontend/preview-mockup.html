@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hakimi Traders - Preview Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* fonts loaded via link tag */
+
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { font-family: 'Inter', 'Segoe UI', sans-serif; color: #333; overflow-x: hidden; }
+h1, h2, h3, h4, h5 { font-family: 'Poppins', 'Segoe UI', sans-serif; }
+a { text-decoration: none; color: inherit; }
+
+/* ===== NAVBAR ===== */
+.navbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 60px;
+  background: transparent;
+  transition: all 0.4s ease;
+}
+.navbar.scrolled {
+  background: rgba(10, 22, 40, 0.95);
+  backdrop-filter: blur(12px);
+  padding: 10px 60px;
+  box-shadow: 0 4px 30px rgba(0,0,0,0.15);
+}
+.nav-brand { display: flex; align-items: center; gap: 12px; }
+.nav-brand .logo-icon {
+  width: 44px; height: 44px; background: linear-gradient(135deg, #00897b, #00bfa5);
+  border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  font-size: 18px; color: #fff; font-weight: 800; font-family: 'Poppins';
+}
+.nav-brand h2 { color: #fff; font-size: 20px; font-weight: 700; letter-spacing: 1px; }
+.nav-links { display: flex; align-items: center; gap: 28px; list-style: none; }
+.nav-links a {
+  color: rgba(255,255,255,0.85); font-size: 14px; font-weight: 500;
+  transition: color 0.3s; position: relative;
+}
+.nav-links a:hover { color: #00e5ff; }
+.nav-links a::after {
+  content: ''; position: absolute; bottom: -4px; left: 0; width: 0; height: 2px;
+  background: #00e5ff; transition: width 0.3s;
+}
+.nav-links a:hover::after { width: 100%; }
+.btn-login {
+  background: linear-gradient(135deg, #00897b, #00bfa5) !important;
+  color: #fff !important; padding: 10px 24px; border-radius: 50px;
+  font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 8px;
+  transition: all 0.3s; border: none; cursor: pointer;
+}
+.btn-login:hover { transform: translateY(-2px); box-shadow: 0 6px 25px rgba(0,137,123,0.4); }
+.btn-login::after { display: none !important; }
+
+/* ===== HERO ===== */
+.hero {
+  min-height: 100vh; display: flex; align-items: center;
+  background: linear-gradient(135deg, #0a1628 0%, #0d47a1 40%, #00897b 80%, #004d40 100%);
+  position: relative; overflow: hidden;
+}
+.hero-particles {
+  position: absolute; inset: 0; overflow: hidden;
+}
+.hero-particles span {
+  position: absolute; border-radius: 50%; opacity: 0.07;
+  background: #00e5ff;
+  animation: floatUp linear infinite;
+}
+.hero-particles span:nth-child(1) { width: 300px; height: 300px; top: 10%; right: -5%; animation-duration: 8s; }
+.hero-particles span:nth-child(2) { width: 200px; height: 200px; bottom: 10%; left: -3%; animation-duration: 10s; animation-delay: 2s; }
+.hero-particles span:nth-child(3) { width: 150px; height: 150px; top: 40%; left: 30%; animation-duration: 12s; animation-delay: 4s; }
+.hero-particles span:nth-child(4) { width: 80px; height: 80px; top: 20%; left: 60%; animation-duration: 7s; background: #fff; }
+.hero-particles span:nth-child(5) { width: 120px; height: 120px; bottom: 30%; right: 20%; animation-duration: 9s; animation-delay: 1s; }
+
+@keyframes floatUp {
+  0% { transform: translateY(0) scale(1); opacity: 0.07; }
+  50% { transform: translateY(-30px) scale(1.1); opacity: 0.12; }
+  100% { transform: translateY(0) scale(1); opacity: 0.07; }
+}
+
+.hero-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 60px;
+  max-width: 1300px; margin: 0 auto; padding: 120px 60px 80px;
+  position: relative; z-index: 1;
+}
+.hero-content { display: flex; flex-direction: column; justify-content: center; }
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(0,229,255,0.1); border: 1px solid rgba(0,229,255,0.3);
+  padding: 8px 18px; border-radius: 50px; width: fit-content;
+  color: #00e5ff; font-size: 13px; font-weight: 500; margin-bottom: 24px;
+}
+.hero-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: #00e5ff; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.hero h1 { font-size: 56px; font-weight: 800; color: #fff; line-height: 1.1; margin-bottom: 12px; }
+.hero h1 span {
+  background: linear-gradient(135deg, #00e5ff, #00bfa5); -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent; background-clip: text;
+}
+.hero-tagline {
+  font-size: 20px; color: rgba(255,255,255,0.75); line-height: 1.6;
+  margin-bottom: 36px; max-width: 520px;
+}
+.hero-btns { display: flex; gap: 16px; flex-wrap: wrap; }
+.btn-primary {
+  background: linear-gradient(135deg, #00897b, #00bfa5);
+  color: #fff; padding: 14px 32px; border-radius: 50px;
+  font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; gap: 10px;
+  transition: all 0.3s; border: none; cursor: pointer;
+}
+.btn-primary:hover { transform: translateY(-3px); box-shadow: 0 10px 35px rgba(0,137,123,0.35); }
+.btn-outline {
+  background: transparent; border: 2px solid rgba(255,255,255,0.3);
+  color: #fff; padding: 12px 30px; border-radius: 50px;
+  font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; gap: 10px;
+  transition: all 0.3s; cursor: pointer;
+}
+.btn-outline:hover { border-color: #00e5ff; color: #00e5ff; transform: translateY(-3px); }
+
+/* Hero product cards */
+.hero-visual { display: flex; align-items: center; justify-content: center; position: relative; }
+.hero-img-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; transform: rotate(-3deg); }
+.hero-img-card {
+  border-radius: 16px; overflow: hidden; position: relative;
+  background: linear-gradient(135deg, rgba(0,137,123,0.2), rgba(13,71,161,0.3));
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 180px; text-align: center; transition: transform 0.3s;
+}
+.hero-img-card:hover { transform: scale(1.05); }
+.hero-img-card:nth-child(2) { transform: translateY(30px); }
+.hero-img-card:nth-child(3) { transform: translateY(-30px); }
+.hero-img-card:nth-child(2):hover { transform: translateY(30px) scale(1.05); }
+.hero-img-card:nth-child(3):hover { transform: translateY(-30px) scale(1.05); }
+.hero-img-card .card-icon {
+  width: 60px; height: 60px; margin-bottom: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.hero-img-card .card-icon svg { width: 48px; height: 48px; }
+.hero-img-card span { color: rgba(255,255,255,0.9); font-size: 13px; font-weight: 600; }
+
+/* Scroll indicator */
+.scroll-indicator {
+  position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+  z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  color: rgba(255,255,255,0.5); font-size: 12px;
+}
+.scroll-indicator .mouse {
+  width: 26px; height: 40px; border: 2px solid rgba(255,255,255,0.3); border-radius: 13px;
+  position: relative;
+}
+.scroll-indicator .mouse::before {
+  content: ''; position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  width: 4px; height: 8px; background: #00e5ff; border-radius: 2px;
+  animation: scrollDown 1.5s ease-in-out infinite;
+}
+@keyframes scrollDown { 0% { opacity: 1; top: 8px; } 100% { opacity: 0; top: 22px; } }
+
+/* ===== STATS BAR ===== */
+.stats-bar { background: linear-gradient(135deg, #0d47a1, #00897b); padding: 50px 60px; }
+.stats-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px;
+  max-width: 1200px; margin: 0 auto; text-align: center;
+}
+.stat-item h3 { font-size: 48px; color: #fff; font-weight: 800; }
+.stat-item h3 span { color: #00e5ff; }
+.stat-item p { color: rgba(255,255,255,0.75); font-size: 15px; margin-top: 4px; }
+
+/* ===== SECTION COMMON ===== */
+.section { padding: 100px 60px; max-width: 1300px; margin: 0 auto; }
+.section-header { text-align: center; margin-bottom: 60px; }
+.section-header .label {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: #00897b; font-size: 14px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 2px; margin-bottom: 12px;
+}
+.section-header h2 { font-size: 40px; font-weight: 700; color: #0a1628; }
+.section-header p { font-size: 17px; color: #666; max-width: 600px; margin: 16px auto 0; line-height: 1.7; }
+
+/* ===== ABOUT ===== */
+.about-section { background: #f8f9fa; padding: 100px 60px; }
+.about-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 60px;
+  max-width: 1200px; margin: 0 auto; align-items: center;
+}
+.about-image {
+  border-radius: 20px; overflow: hidden; position: relative;
+  background: linear-gradient(135deg, #0d47a1, #00897b);
+  min-height: 420px; display: flex; align-items: center; justify-content: center;
+}
+.about-image svg { width: 160px; height: 160px; opacity: 0.2; }
+.about-image .overlay-text {
+  position: absolute; bottom: 30px; left: 30px; right: 30px;
+  background: rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+  border-radius: 12px; padding: 20px;
+  color: #fff; font-size: 14px; line-height: 1.6;
+}
+.about-content h2 { font-size: 36px; font-weight: 700; color: #0a1628; margin-bottom: 20px; }
+.about-content p { color: #555; font-size: 16px; line-height: 1.8; margin-bottom: 16px; }
+.about-badges { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 24px; }
+.about-badge {
+  background: linear-gradient(135deg, rgba(0,137,123,0.1), rgba(13,71,161,0.1));
+  border: 1px solid rgba(0,137,123,0.2);
+  padding: 10px 20px; border-radius: 50px;
+  font-size: 13px; font-weight: 600; color: #00897b;
+}
+
+/* ===== PRODUCT CATEGORIES ===== */
+.categories-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.category-card {
+  background: #fff; border-radius: 16px; padding: 36px 28px;
+  border: 1px solid #eee; transition: all 0.4s;
+  text-align: center; position: relative; overflow: hidden;
+}
+.category-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+  background: linear-gradient(135deg, #0d47a1, #00897b);
+  transform: scaleX(0); transition: transform 0.4s; transform-origin: left;
+}
+.category-card:hover { transform: translateY(-8px); box-shadow: 0 20px 60px rgba(0,0,0,0.08); }
+.category-card:hover::before { transform: scaleX(1); }
+.category-icon {
+  width: 72px; height: 72px; margin: 0 auto 20px;
+  background: linear-gradient(135deg, rgba(0,137,123,0.1), rgba(13,71,161,0.1));
+  border-radius: 16px; display: flex; align-items: center; justify-content: center;
+  transition: all 0.4s;
+}
+.category-icon svg { width: 32px; height: 32px; fill: #00897b; transition: fill 0.4s; }
+.category-card:hover .category-icon {
+  background: linear-gradient(135deg, #0d47a1, #00897b);
+  transform: scale(1.1);
+}
+.category-card:hover .category-icon svg { fill: #fff; }
+.category-card h3 { font-size: 18px; font-weight: 600; color: #0a1628; margin-bottom: 10px; }
+.category-card p { font-size: 14px; color: #777; line-height: 1.6; }
+
+/* ===== PRODUCTS SHOWCASE ===== */
+.products-section { background: #0a1628; padding: 100px 60px; }
+.products-section .section-header h2 { color: #fff; }
+.products-section .section-header p { color: rgba(255,255,255,0.6); }
+.products-section .section-header .label { color: #00e5ff; }
+
+.product-tabs {
+  display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+  margin-bottom: 40px; max-width: 1200px; margin-left: auto; margin-right: auto;
+}
+.product-tab {
+  padding: 10px 20px; border-radius: 50px; border: 1px solid rgba(255,255,255,0.15);
+  background: transparent; color: rgba(255,255,255,0.6);
+  font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.3s;
+  font-family: 'Inter', sans-serif;
+}
+.product-tab.active, .product-tab:hover {
+  background: linear-gradient(135deg, #00897b, #00bfa5);
+  color: #fff; border-color: transparent;
+}
+
+.products-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;
+  max-width: 1200px; margin: 0 auto;
+}
+.product-card {
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px; overflow: hidden; transition: all 0.4s;
+}
+.product-card:hover {
+  transform: translateY(-6px); border-color: rgba(0,229,255,0.3);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+}
+.product-img {
+  height: 180px; display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+}
+.product-img img {
+  width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s;
+}
+.product-card:hover .product-img img { transform: scale(1.08); }
+.product-img .img-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, transparent 40%, rgba(10,22,40,0.7) 100%);
+}
+.product-info { padding: 20px; }
+.product-info h4 { color: #fff; font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.product-info p { color: rgba(255,255,255,0.5); font-size: 13px; }
+.product-info .brand-tag {
+  display: inline-block; margin-top: 10px;
+  background: rgba(0,229,255,0.1); color: #00e5ff;
+  padding: 4px 12px; border-radius: 50px; font-size: 11px; font-weight: 600;
+}
+
+/* ===== BRANDS ===== */
+.brands-section { background: #f8f9fa; padding: 80px 60px; overflow: hidden; }
+.brands-row {
+  display: flex; gap: 20px; margin-bottom: 20px;
+  animation: scrollBrands 40s linear infinite;
+  width: max-content;
+}
+.brands-row.reverse { animation-direction: reverse; }
+@keyframes scrollBrands {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.brand-chip {
+  flex-shrink: 0; padding: 16px 28px;
+  background: #fff; border: 1px solid #e8e8e8; border-radius: 12px;
+  font-weight: 700; font-size: 16px; color: #0a1628;
+  white-space: nowrap; transition: all 0.3s;
+  display: flex; align-items: center; gap: 12px;
+  min-width: 160px; justify-content: center;
+}
+.brand-chip:hover {
+  border-color: #00897b; color: #00897b;
+  box-shadow: 0 8px 25px rgba(0,137,123,0.1); transform: translateY(-3px);
+}
+.brand-chip .brand-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: linear-gradient(135deg, #00897b, #0d47a1);
+  flex-shrink: 0;
+}
+.brand-chip img {
+  height: 28px; width: auto; object-fit: contain;
+}
+
+/* ===== CLIENTS ===== */
+.clients-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+.client-card {
+  background: #fff; border: 1px solid #eee; border-radius: 14px;
+  padding: 28px 20px; text-align: center; transition: all 0.3s;
+  position: relative;
+}
+.client-card:hover {
+  transform: translateY(-4px); box-shadow: 0 15px 40px rgba(0,0,0,0.06);
+  border-color: #00897b;
+}
+.client-logo {
+  width: 60px; height: 60px; margin: 0 auto 14px;
+  background: linear-gradient(135deg, rgba(0,137,123,0.08), rgba(13,71,161,0.08));
+  border-radius: 14px; display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 800; color: #0d47a1; font-family: 'Poppins';
+  overflow: hidden;
+}
+.client-logo img { width: 100%; height: 100%; object-fit: contain; padding: 8px; }
+.client-card h4 { font-size: 14px; font-weight: 600; color: #0a1628; margin-bottom: 6px; }
+.client-card .industry {
+  font-size: 12px; color: #00897b; font-weight: 500;
+  background: rgba(0,137,123,0.08); padding: 4px 12px; border-radius: 50px;
+  display: inline-block;
+}
+
+/* ===== WHY CHOOSE US ===== */
+.why-section { background: linear-gradient(135deg, #0a1628, #0d47a1); padding: 100px 60px; }
+.why-section .section-header h2 { color: #fff; }
+.why-section .section-header p { color: rgba(255,255,255,0.6); }
+.why-section .section-header .label { color: #00e5ff; }
+.why-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px;
+  max-width: 1200px; margin: 0 auto;
+}
+.why-card {
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px; padding: 40px 30px; text-align: center;
+  transition: all 0.4s; backdrop-filter: blur(10px);
+}
+.why-card:hover {
+  background: rgba(255,255,255,0.1); transform: translateY(-8px);
+  box-shadow: 0 25px 60px rgba(0,0,0,0.2);
+}
+.why-icon {
+  width: 80px; height: 80px; margin: 0 auto 24px;
+  background: linear-gradient(135deg, #00897b, #00bfa5);
+  border-radius: 20px; display: flex; align-items: center; justify-content: center;
+}
+.why-icon svg { width: 36px; height: 36px; fill: #fff; }
+.why-card h3 { color: #fff; font-size: 20px; font-weight: 600; margin-bottom: 12px; }
+.why-card p { color: rgba(255,255,255,0.6); font-size: 15px; line-height: 1.7; }
+
+/* ===== CONTACT ===== */
+.contact-section { background: #f8f9fa; padding: 100px 60px; }
+.contact-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 50px;
+  max-width: 1200px; margin: 0 auto;
+}
+.contact-form {
+  background: #fff; border-radius: 20px; padding: 40px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.05);
+}
+.form-group { margin-bottom: 20px; }
+.form-group label { display: block; font-size: 14px; font-weight: 600; color: #0a1628; margin-bottom: 8px; }
+.form-group input, .form-group textarea {
+  width: 100%; padding: 14px 18px; border: 1px solid #e0e0e0; border-radius: 12px;
+  font-size: 15px; font-family: 'Inter', sans-serif; transition: border 0.3s; outline: none;
+}
+.form-group input:focus, .form-group textarea:focus { border-color: #00897b; }
+.form-group textarea { resize: vertical; min-height: 120px; }
+.btn-submit {
+  width: 100%; padding: 16px; background: linear-gradient(135deg, #0d47a1, #00897b);
+  color: #fff; border: none; border-radius: 12px; font-size: 16px;
+  font-weight: 600; cursor: pointer; transition: all 0.3s; font-family: 'Inter';
+}
+.btn-submit:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,137,123,0.3); }
+
+.contact-info { display: flex; flex-direction: column; gap: 20px; }
+.contact-card {
+  background: #fff; border-radius: 16px; padding: 24px; display: flex; gap: 18px;
+  border: 1px solid #eee; transition: all 0.3s; align-items: center;
+}
+.contact-card:hover { border-color: #00897b; transform: translateX(6px); }
+.contact-card .icon {
+  width: 52px; height: 52px; flex-shrink: 0;
+  background: linear-gradient(135deg, rgba(0,137,123,0.1), rgba(13,71,161,0.1));
+  border-radius: 14px; display: flex; align-items: center; justify-content: center;
+}
+.contact-card .icon svg { width: 22px; height: 22px; fill: #00897b; }
+.contact-card h4 { font-size: 15px; font-weight: 600; color: #0a1628; margin-bottom: 4px; }
+.contact-card p { font-size: 14px; color: #666; line-height: 1.5; }
+.contact-card.highlight {
+  background: linear-gradient(135deg, #0d47a1, #00897b); border: none;
+}
+.contact-card.highlight .icon { background: rgba(255,255,255,0.15); }
+.contact-card.highlight .icon svg { fill: #fff; }
+.contact-card.highlight h4 { color: #fff; }
+.contact-card.highlight p { color: rgba(255,255,255,0.8); }
+
+/* ===== FOOTER ===== */
+.footer { background: #0a1628; padding: 60px 60px 30px; }
+.footer-grid {
+  display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 50px;
+  max-width: 1200px; margin: 0 auto; padding-bottom: 40px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.footer h3 { color: #fff; font-size: 18px; margin-bottom: 20px; }
+.footer p, .footer a { color: rgba(255,255,255,0.5); font-size: 14px; line-height: 1.8; }
+.footer a:hover { color: #00e5ff; }
+.footer-links { list-style: none; }
+.footer-links li { margin-bottom: 10px; }
+.footer-bottom {
+  max-width: 1200px; margin: 0 auto; padding-top: 24px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.footer-bottom p { color: rgba(255,255,255,0.4); font-size: 13px; }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 1024px) {
+  .hero-grid { grid-template-columns: 1fr; text-center; }
+  .hero-content { align-items: center; text-align: center; }
+  .hero-visual { display: none; }
+  .hero h1 { font-size: 42px; }
+  .hero-tagline { max-width: 100%; }
+  .hero-btns { justify-content: center; }
+  .products-grid { grid-template-columns: repeat(3, 1fr); }
+  .about-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .navbar { padding: 14px 24px; }
+  .nav-links { display: none; }
+  .hero-grid { padding: 100px 24px 60px; }
+  .hero h1 { font-size: 32px; }
+  .hero-tagline { font-size: 16px; }
+  .section { padding: 60px 24px; }
+  .about-section, .brands-section, .contact-section { padding: 60px 24px; }
+  .products-section, .why-section { padding: 60px 24px; }
+  .stats-bar { padding: 40px 24px; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .stat-item h3 { font-size: 36px; }
+  .categories-grid { grid-template-columns: 1fr 1fr; }
+  .products-grid { grid-template-columns: repeat(2, 1fr); }
+  .clients-grid { grid-template-columns: repeat(2, 1fr); }
+  .why-grid { grid-template-columns: 1fr; }
+  .contact-grid { grid-template-columns: 1fr; }
+  .footer-grid { grid-template-columns: 1fr; }
+  .footer { padding: 40px 24px 20px; }
+  .section-header h2 { font-size: 28px; }
+  .product-tabs { gap: 6px; }
+  .product-tab { padding: 8px 14px; font-size: 12px; }
+}
+@media (max-width: 480px) {
+  .categories-grid { grid-template-columns: 1fr; }
+  .products-grid { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 28px; }
+  .hero-btns { flex-direction: column; align-items: center; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar scrolled">
+  <div class="nav-brand">
+    <div class="logo-icon">HT</div>
+    <h2>HAKIMI TRADERS</h2>
+  </div>
+  <ul class="nav-links">
+    <li><a href="#hero">Home</a></li>
+    <li><a href="#about">About</a></li>
+    <li><a href="#categories">Products</a></li>
+    <li><a href="#brands">Brands</a></li>
+    <li><a href="#clients">Clients</a></li>
+    <li><a href="#contact">Contact</a></li>
+    <li><a href="#" class="btn-login">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+      System Login
+    </a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-particles">
+    <span></span><span></span><span></span><span></span><span></span>
+  </div>
+  <div class="hero-grid">
+    <div class="hero-content">
+      <div class="hero-badge"><span class="dot"></span> Trusted Since 2008</div>
+      <h1>HAKIMI<br><span>TRADERS</span></h1>
+      <p class="hero-tagline">Specialist of Pneumatics Fitting, Equipments & General Order Suppliers. Your trusted partner for industrial pneumatic solutions in Pakistan.</p>
+      <div class="hero-btns">
+        <a href="#products" class="btn-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H8a2 2 0 00-2 2v4H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2v-4h2a2 2 0 002-2V4a2 2 0 00-2-2zm-4 16H4V10h12v8zm4-6h-2v-2a2 2 0 00-2-2H8V4h12v8z"/></svg>
+          Explore Products
+        </a>
+        <a href="#contact" class="btn-outline">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+          Contact Us
+        </a>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="hero-img-grid">
+        <div class="hero-img-card">
+          <div class="card-icon">
+            <svg viewBox="0 0 64 64" fill="none" stroke="#00e5ff" stroke-width="2"><circle cx="32" cy="32" r="28"/><circle cx="32" cy="32" r="14"/><path d="M32 4v10M32 50v10M4 32h10M50 32h10"/></svg>
+          </div>
+          <span>Pneumatic Fittings</span>
+        </div>
+        <div class="hero-img-card">
+          <div class="card-icon">
+            <svg viewBox="0 0 64 64" fill="none" stroke="#00e5ff" stroke-width="2"><circle cx="32" cy="32" r="24"/><path d="M32 12v20l14 8"/><circle cx="32" cy="32" r="3" fill="#00e5ff"/></svg>
+          </div>
+          <span>Pressure Gauges</span>
+        </div>
+        <div class="hero-img-card">
+          <div class="card-icon">
+            <svg viewBox="0 0 64 64" fill="none" stroke="#00e5ff" stroke-width="2"><path d="M20 44l-8 8M44 20l8-8M24 40l-4 4M40 24l4-4"/><circle cx="32" cy="32" r="10"/><path d="M26 32h12M32 26v12"/></svg>
+          </div>
+          <span>Repair & Service</span>
+        </div>
+        <div class="hero-img-card">
+          <div class="card-icon">
+            <svg viewBox="0 0 64 64" fill="none" stroke="#00e5ff" stroke-width="2"><rect x="8" y="20" width="48" height="32" rx="4"/><path d="M16 20V12a16 16 0 0132 0v8"/><rect x="24" y="32" width="16" height="12" rx="2"/></svg>
+          </div>
+          <span>Industrial Supply</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="scroll-indicator">
+    <div class="mouse"></div>
+    <span>Scroll Down</span>
+  </div>
+</section>
+
+<!-- STATS BAR -->
+<div class="stats-bar">
+  <div class="stats-grid">
+    <div class="stat-item"><h3>15<span>+</span></h3><p>Years Experience</p></div>
+    <div class="stat-item"><h3>50<span>+</span></h3><p>Product Lines</p></div>
+    <div class="stat-item"><h3>25<span>+</span></h3><p>Trusted Brands</p></div>
+    <div class="stat-item"><h3>20<span>+</span></h3><p>Major Clients</p></div>
+  </div>
+</div>
+
+<!-- ABOUT -->
+<section class="about-section" id="about">
+  <div class="about-grid">
+    <div class="about-image">
+      <svg viewBox="0 0 200 200" fill="none" stroke="white" stroke-width="1.5">
+        <rect x="30" y="60" width="140" height="100" rx="8"/>
+        <rect x="50" y="40" width="30" height="20" rx="4"/>
+        <rect x="120" y="40" width="30" height="20" rx="4"/>
+        <path d="M60 60v-10a5 5 0 015-5h10M125 60v-10a5 5 0 015-5h10"/>
+        <circle cx="100" cy="110" r="20"/>
+        <path d="M100 95v15l10 5"/>
+      </svg>
+      <div class="overlay-text">
+        <strong>NTN:</strong> 4228937-8 &nbsp;|&nbsp; <strong>STRN:</strong> 3277876175852<br>
+        Shop# 21, Falak Corporate City, Talpur Road, Karachi
+      </div>
+    </div>
+    <div class="about-content">
+      <h2>About Hakimi Traders</h2>
+      <p>Hakimi Traders is a leading supplier of pneumatic fittings, equipment, and general industrial supplies in Pakistan. With over 15 years of experience, we serve some of the largest industrial groups in the country.</p>
+      <p>We specialize in providing high-quality pneumatic components from world-renowned brands, along with expert repair and servicing of pneumatic equipment including cylinders, FRL units, and solenoid valves.</p>
+      <div class="about-badges">
+        <span class="about-badge">&#10003; Certified Supplier</span>
+        <span class="about-badge">&#9889; Fast Delivery</span>
+        <span class="about-badge">&#9878; Genuine Parts</span>
+        <span class="about-badge">&#9881; Expert Repairs</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRODUCT CATEGORIES -->
+<section class="section" id="categories">
+  <div class="section-header">
+    <div class="label">&#9632; WHAT WE OFFER</div>
+    <h2>Product Categories</h2>
+    <p>Comprehensive range of industrial supplies from world-class manufacturers</p>
+  </div>
+  <div class="categories-grid">
+    <div class="category-card">
+      <div class="category-icon">
+        <svg viewBox="0 0 32 32"><path d="M16 2a14 14 0 100 28 14 14 0 000-28zm0 4a10 10 0 11-.001 20.001A10 10 0 0116 6zm0 4a6 6 0 100 12 6 6 0 000-12z"/></svg>
+      </div>
+      <h3>Pneumatic Equipment</h3>
+      <p>Fittings, cylinders, valves, FRL units, tubing & accessories from top brands</p>
+    </div>
+    <div class="category-card">
+      <div class="category-icon">
+        <svg viewBox="0 0 32 32"><path d="M26 4H6a2 2 0 00-2 2v20a2 2 0 002 2h20a2 2 0 002-2V6a2 2 0 00-2-2zM6 6h20v4H6V6zm0 6h8v14H6V12zm10 14V12h10v14H16z"/></svg>
+      </div>
+      <h3>Office Supplies</h3>
+      <p>Complete stationery & office supply solutions for businesses</p>
+    </div>
+    <div class="category-card">
+      <div class="category-icon">
+        <svg viewBox="0 0 32 32"><path d="M26 14h-2V8a2 2 0 00-2-2h-4V2h-4v4h-4a2 2 0 00-2 2v6H6a2 2 0 00-2 2v10a2 2 0 002 2h20a2 2 0 002-2V16a2 2 0 00-2-2zM10 8h12v6H10V8zm16 18H6V16h20v10z"/></svg>
+      </div>
+      <h3>Hardware Supplies</h3>
+      <p>Industrial & commercial hardware tools and materials</p>
+    </div>
+    <div class="category-card">
+      <div class="category-icon">
+        <svg viewBox="0 0 32 32"><path d="M24 4H8a4 4 0 00-4 4v2h24V8a4 4 0 00-4-4zM4 12v12a4 4 0 004 4h16a4 4 0 004-4V12H4zm12 10a4 4 0 110-8 4 4 0 010 8z"/></svg>
+      </div>
+      <h3>Sanitary Supplies</h3>
+      <p>Quality sanitary fittings and plumbing supplies</p>
+    </div>
+    <div class="category-card">
+      <div class="category-icon">
+        <svg viewBox="0 0 32 32"><path d="M4 14h24v4H4zM4 8h6v4H4zM22 8h6v4h-6zM4 20h6v4H4zM22 20h6v4h-6z"/></svg>
+      </div>
+      <h3>Industrial Pipes</h3>
+      <p>All kinds of pipes - PU, SS, brass, mild steel & more</p>
+    </div>
+    <div class="category-card">
+      <div class="category-icon">
+        <svg viewBox="0 0 32 32"><path d="M26 6H6a2 2 0 00-2 2v4h24V8a2 2 0 00-2-2zM4 14v10a2 2 0 002 2h20a2 2 0 002-2V14H4zm8 8H8v-4h4v4zm6 0h-4v-4h4v4zm6 0h-4v-4h4v4z"/></svg>
+      </div>
+      <h3>General Order Supply</h3>
+      <p>Custom procurement & supply chain solutions for any requirement</p>
+    </div>
+  </div>
+</section>
+
+<!-- PRODUCTS SHOWCASE -->
+<section class="products-section" id="products">
+  <div class="section-header">
+    <div class="label">&#9670; OUR PRODUCTS</div>
+    <h2>Products Showcase</h2>
+    <p>Explore our extensive range of pneumatic, hydraulic & industrial products</p>
+  </div>
+  <div class="product-tabs">
+    <button class="product-tab active">Pneumatic Accessories</button>
+    <button class="product-tab">Air Service</button>
+    <button class="product-tab">Cylinders</button>
+    <button class="product-tab">Valves</button>
+    <button class="product-tab">Hydraulics</button>
+    <button class="product-tab">Industrial Valves</button>
+    <button class="product-tab">Pressure</button>
+    <button class="product-tab">Temperature</button>
+    <button class="product-tab">Fittings</button>
+    <button class="product-tab">Repair Kits</button>
+  </div>
+  <div class="products-grid">
+    <div class="product-card">
+      <div class="product-img" style="background:#e8eef5;">
+        <img src="public/images/products/page4_img10.jpeg" alt="PU Tubing & Push-in Fittings">
+        <div class="img-overlay"></div>
+      </div>
+      <div class="product-info">
+        <h4>PU Tubing & Push-in Fittings</h4>
+        <p>Polyurethane tubing & one-touch fittings</p>
+        <span class="brand-tag">Legris | SMC | Sang-A</span>
+      </div>
+    </div>
+    <div class="product-card">
+      <div class="product-img" style="background:#dce5f0;">
+        <img src="public/images/products/page4_img11.jpeg" alt="Metal Push-in Fittings">
+        <div class="img-overlay"></div>
+      </div>
+      <div class="product-info">
+        <h4>Metal Push-in Fittings</h4>
+        <p>High-pressure metal pneumatic fittings</p>
+        <span class="brand-tag">Parker | Swagelok</span>
+      </div>
+    </div>
+    <div class="product-card">
+      <div class="product-img" style="background:#e0e8f0;">
+        <img src="public/images/products/page4_img14.jpeg" alt="Couplings">
+        <div class="img-overlay"></div>
+      </div>
+      <div class="product-info">
+        <h4>Couplings & Silencers</h4>
+        <p>Quick disconnect air couplers & silencers</p>
+        <span class="brand-tag">Norgren | CKD</span>
+      </div>
+    </div>
+    <div class="product-card">
+      <div class="product-img" style="background:#e5eaef;">
+        <img src="public/images/products/page5_img11.jpeg" alt="FRL Units">
+        <div class="img-overlay"></div>
+      </div>
+      <div class="product-info">
+        <h4>FRL Units & Air Service</h4>
+        <p>Filters, regulators, lubricators & FRL combos</p>
+        <span class="brand-tag">SMC | Norgren | FESTO</span>
+      </div>
+    </div>
+    <div class="product-card">
+      <div class="product-img" style="background:#3a1a1a;">
+        <img src="public/images/products/page6_img9.jpeg" alt="Pneumatic Cylinders">
+        <div class="img-overlay"></div>
+      </div>
+      <div class="product-info">
+        <h4>Pneumatic Cylinders</h4>
+        <p>Mini, standard, compact & rodless cylinders</p>
+        <span class="brand-tag">SMC | FESTO</span>
+      </div>
+    </div>
+    <div class="product-card">
+      <div class="product-img" style="background:#eaeaea;">
+        <img src="public/images/products/page7_img16.jpeg" alt="Pneumatic Valves">
+        <div class="img-overlay"></div>
+      </div>
+      <div class="product-info">
+        <h4>Pneumatic Valves</h4>
+        <p>Solenoid, pilot, flow control & non-return valves</p>
+        <span class="brand-tag">CKD | Burkert | ASCO</span>
+      </div>
+    </div>
+    <div class="product-card">
+      <div class="product-img" style="background:#f0f0f0;">
+        <img src="public/images/products/page8_img9.jpeg" alt="Hydraulic Valves">
+        <div class="img-overlay"></div>
+      </div>
+      <div class="product-info">
+        <h4>Hydraulic Equipment</h4>
+        <p>Solenoid valves, fittings, couplers & ball valves</p>
+        <span class="brand-tag">Parker | Vickers</span>
+      </div>
+    </div>
+    <div class="product-card">
+      <div class="product-img" style="background:#f5f0e8;">
+        <img src="public/images/products/page9_img8.jpeg" alt="Industrial Valves">
+        <div class="img-overlay"></div>
+      </div>
+      <div class="product-info">
+        <h4>Industrial Ball Valves</h4>
+        <p>Brass, SS & mild steel ball valves</p>
+        <span class="brand-tag">KTZ | Whitey | ASCO</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Second row of products -->
+  <div class="products-grid" style="margin-top:20px; max-width:1200px; margin-left:auto; margin-right:auto;">
+    <div class="product-card">
+      <div class="product-img" style="background:#f5f5f5;">
+        <img src="public/images/products/page10_img7.jpeg" alt="Pressure Gauges">
+        <div class="img-overlay"></div>
+      </div>
+      <div class="product-info">
+        <h4>Pressure Gauges</h4>
+        <p>Oil-filled, dry & electric contact gauges</p>
+        <span class="brand-tag">WIKA | Nuova Fima</span>
+      </div>
+    </div>
+    <div class="product-card">
+      <div class="product-img" style="background:#f0f0f0;">
+        <img src="public/images/products/page12_img7.jpeg" alt="Thermometers">
+        <div class="img-overlay"></div>
+      </div>
+      <div class="product-info">
+        <h4>Temperature Instruments</h4>
+        <p>Capillary, bimetal & machine glass thermometers</p>
+        <span class="brand-tag">WIKA | JUMO</span>
+      </div>
+    </div>
+    <div class="product-card">
+      <div class="product-img" style="background:#f5f5f0;">
+        <img src="public/images/products/page13_img10.jpeg" alt="SS Fittings">
+        <div class="img-overlay"></div>
+      </div>
+      <div class="product-info">
+        <h4>Stainless Steel Fittings</h4>
+        <p>Ferule, threaded fittings & seamless tubes</p>
+        <span class="brand-tag">Swagelok | Parker</span>
+      </div>
+    </div>
+    <div class="product-card">
+      <div class="product-img" style="background:#f5f0e5;">
+        <img src="public/images/products/page14_img8.jpeg" alt="Brass Fittings">
+        <div class="img-overlay"></div>
+      </div>
+      <div class="product-info">
+        <h4>Brass Fittings</h4>
+        <p>Ferule, threaded & hose nozzle fittings</p>
+        <span class="brand-tag">Legris | Wade</span>
+      </div>
+    </div>
+    <div class="product-card">
+      <div class="product-img" style="background:#d8dfe8;">
+        <img src="public/images/products/page15_img8.jpeg" alt="MS Fittings">
+        <div class="img-overlay"></div>
+      </div>
+      <div class="product-info">
+        <h4>Mild Steel Fittings</h4>
+        <p>Ferule, threaded & hose fittings</p>
+        <span class="brand-tag">Parker | EAO</span>
+      </div>
+    </div>
+    <div class="product-card">
+      <div class="product-img" style="background:#2a2a2a;">
+        <img src="public/images/products/page16_img10.jpeg" alt="Repair Kits">
+        <div class="img-overlay"></div>
+      </div>
+      <div class="product-info">
+        <h4>Servicing & Repair Kits</h4>
+        <p>Cylinder, FRL & solenoid valve repair kits</p>
+        <span class="brand-tag">OEM Parts</span>
+      </div>
+    </div>
+    <div class="product-card">
+      <div class="product-img" style="background:#f0f0f0;">
+        <img src="public/images/products/page8_img10.jpeg" alt="Hydraulic Fittings">
+        <div class="img-overlay"></div>
+      </div>
+      <div class="product-info">
+        <h4>Hydraulic Fittings & Valves</h4>
+        <p>Needle valves, ball valves & couplers</p>
+        <span class="brand-tag">Parker | Swagelok</span>
+      </div>
+    </div>
+    <div class="product-card">
+      <div class="product-img" style="background:#e8e8e8;">
+        <img src="public/images/products/page11_img8.jpeg" alt="Pressure Switches">
+        <div class="img-overlay"></div>
+      </div>
+      <div class="product-info">
+        <h4>Pressure Switches</h4>
+        <p>Pressure switches, transmitters & gas regulators</p>
+        <span class="brand-tag">Danfoss</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BRANDS -->
+<section class="brands-section" id="brands">
+  <div class="section-header">
+    <div class="label">&#9733; TRUSTED BRANDS</div>
+    <h2>Our Brand Partners</h2>
+    <p>We supply genuine products from world-renowned manufacturers</p>
+  </div>
+  <div class="brands-row">
+    <div class="brand-chip"><span class="brand-dot"></span> Legris</div>
+    <div class="brand-chip"><span class="brand-dot"></span> SMC</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Norgren</div>
+    <div class="brand-chip"><span class="brand-dot"></span> WIKA</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Swagelok</div>
+    <div class="brand-chip"><span class="brand-dot"></span> FESTO</div>
+    <div class="brand-chip"><span class="brand-dot"></span> CKD</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Sang-A</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Parker</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Nuova Fima</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Burkert</div>
+    <div class="brand-chip"><span class="brand-dot"></span> AirTac</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Legris</div>
+    <div class="brand-chip"><span class="brand-dot"></span> SMC</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Norgren</div>
+    <div class="brand-chip"><span class="brand-dot"></span> WIKA</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Swagelok</div>
+    <div class="brand-chip"><span class="brand-dot"></span> FESTO</div>
+    <div class="brand-chip"><span class="brand-dot"></span> CKD</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Sang-A</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Parker</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Nuova Fima</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Burkert</div>
+    <div class="brand-chip"><span class="brand-dot"></span> AirTac</div>
+  </div>
+  <div class="brands-row reverse">
+    <div class="brand-chip"><span class="brand-dot"></span> ASCO</div>
+    <div class="brand-chip"><span class="brand-dot"></span> MAC</div>
+    <div class="brand-chip"><span class="brand-dot"></span> WABCO</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Danfoss</div>
+    <div class="brand-chip"><span class="brand-dot"></span> JUMO</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Whitey</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Southman</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Vickers</div>
+    <div class="brand-chip"><span class="brand-dot"></span> NAB</div>
+    <div class="brand-chip"><span class="brand-dot"></span> SNS</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Nitta Moore</div>
+    <div class="brand-chip"><span class="brand-dot"></span> KTZ</div>
+    <div class="brand-chip"><span class="brand-dot"></span> ASCO</div>
+    <div class="brand-chip"><span class="brand-dot"></span> MAC</div>
+    <div class="brand-chip"><span class="brand-dot"></span> WABCO</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Danfoss</div>
+    <div class="brand-chip"><span class="brand-dot"></span> JUMO</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Whitey</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Southman</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Vickers</div>
+    <div class="brand-chip"><span class="brand-dot"></span> NAB</div>
+    <div class="brand-chip"><span class="brand-dot"></span> SNS</div>
+    <div class="brand-chip"><span class="brand-dot"></span> Nitta Moore</div>
+    <div class="brand-chip"><span class="brand-dot"></span> KTZ</div>
+  </div>
+</section>
+
+<!-- CLIENTS -->
+<section class="section" id="clients">
+  <div class="section-header">
+    <div class="label">&#9827; OUR CLIENTS</div>
+    <h2>Trusted By Industry Leaders</h2>
+    <p>Serving Pakistan's top industrial groups across textile, food, pharma & more</p>
+  </div>
+  <div class="clients-grid">
+    <div class="client-card">
+      <div class="client-logo">M</div>
+      <h4>Mekotex (Pvt) Ltd</h4>
+      <span class="industry">Textile</span>
+    </div>
+    <div class="client-card">
+      <div class="client-logo">T</div>
+      <h4>Tata Pakistan</h4>
+      <span class="industry">Conglomerate</span>
+    </div>
+    <div class="client-card">
+      <div class="client-logo" style="color:#e91e63;">S</div>
+      <h4>Sapphire Group</h4>
+      <span class="industry">Textile & Energy</span>
+    </div>
+    <div class="client-card">
+      <div class="client-logo" style="color:#1565c0;">AD</div>
+      <h4>Artistic Denim Mills</h4>
+      <span class="industry">Textile</span>
+    </div>
+    <div class="client-card">
+      <div class="client-logo" style="color:#d32f2f;">M</div>
+      <h4>Medicam Group</h4>
+      <span class="industry">Pharma & FMCG</span>
+    </div>
+    <div class="client-card">
+      <div class="client-logo" style="color:#e65100;">LK</div>
+      <h4>Lotte Kolson (Pvt) Ltd</h4>
+      <span class="industry">Food & Beverage</span>
+    </div>
+    <div class="client-card">
+      <div class="client-logo" style="color:#c62828;">CB</div>
+      <h4>Continental Biscuits Ltd</h4>
+      <span class="industry">Food - LU Biscuits</span>
+    </div>
+    <div class="client-card">
+      <div class="client-logo" style="color:#283593;">SE</div>
+      <h4>Soorty Enterprises</h4>
+      <span class="industry">Denim & Textile</span>
+    </div>
+    <div class="client-card">
+      <div class="client-logo">SQ</div>
+      <h4>Siddiqsons Ltd</h4>
+      <span class="industry">Textile & Energy</span>
+    </div>
+    <div class="client-card">
+      <div class="client-logo" style="color:#2e7d32;">AR</div>
+      <h4>Al-Raheem Textile</h4>
+      <span class="industry">Textile</span>
+    </div>
+    <div class="client-card">
+      <div class="client-logo" style="color:#4527a0;">KI</div>
+      <h4>KAM International</h4>
+      <span class="industry">Industrial</span>
+    </div>
+    <div class="client-card">
+      <div class="client-logo" style="color:#00838f;">ME</div>
+      <h4>Mundia Export</h4>
+      <span class="industry">Export</span>
+    </div>
+  </div>
+</section>
+
+<!-- WHY CHOOSE US -->
+<section class="why-section">
+  <div class="section-header">
+    <div class="label">&#9733; WHY CHOOSE US</div>
+    <h2>Your Trusted Industrial Partner</h2>
+    <p>Experience, quality, and reliability that sets us apart</p>
+  </div>
+  <div class="why-grid">
+    <div class="why-card">
+      <div class="why-icon">
+        <svg viewBox="0 0 36 36" fill="white"><path d="M18 2l4.5 9.2L33 12.8l-7.5 7.3L27.2 31 18 26.2 8.8 31l1.7-10.9L3 12.8l10.5-1.6z"/></svg>
+      </div>
+      <h3>Premium Quality</h3>
+      <p>Genuine products from 25+ world-renowned brands. We ensure every component meets international quality standards.</p>
+    </div>
+    <div class="why-card">
+      <div class="why-icon">
+        <svg viewBox="0 0 36 36" fill="white"><path d="M22 6h-2V2h-4v4h-2a4 4 0 00-4 4v20a4 4 0 004 4h8a4 4 0 004-4V10a4 4 0 00-4-4zm0 24h-8V10h8v20zm-6-8h4v4h-4v-4z"/></svg>
+      </div>
+      <h3>Expert Repair & Service</h3>
+      <p>Specialized servicing of pneumatic cylinders, FRL units, solenoid valves with genuine repair kits.</p>
+    </div>
+    <div class="why-card">
+      <div class="why-icon">
+        <svg viewBox="0 0 36 36" fill="white"><path d="M30 14H24V8L14 18h6v6L30 14zM6 4h20v4H6V4zm0 24h20v4H6v-4z"/></svg>
+      </div>
+      <h3>Reliable Supply Chain</h3>
+      <p>Timely delivery, competitive pricing, and dedicated support for all your industrial supply needs.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CONTACT -->
+<section class="contact-section" id="contact">
+  <div class="section-header">
+    <div class="label">&#9993; GET IN TOUCH</div>
+    <h2>Contact Us</h2>
+    <p>Ready to discuss your requirements? Reach out to us today.</p>
+  </div>
+  <div class="contact-grid">
+    <div class="contact-form">
+      <div class="form-group">
+        <label>Your Name</label>
+        <input type="text" placeholder="Enter your full name">
+      </div>
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" placeholder="your@email.com">
+      </div>
+      <div class="form-group">
+        <label>Phone Number</label>
+        <input type="tel" placeholder="+92 xxx xxxxxxx">
+      </div>
+      <div class="form-group">
+        <label>Message</label>
+        <textarea placeholder="Tell us about your requirements..."></textarea>
+      </div>
+      <button class="btn-submit">&#10148; Send Message</button>
+    </div>
+    <div class="contact-info">
+      <div class="contact-card">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="#00897b"><path d="M20 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+        </div>
+        <div><h4>Email</h4><p>hakimitraders111@gmail.com</p></div>
+      </div>
+      <div class="contact-card">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="#00897b"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        </div>
+        <div><h4>Director - Sakina Dossaji</h4><p>0335-5285380</p></div>
+      </div>
+      <div class="contact-card">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="#00897b"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>
+        </div>
+        <div><h4>Director Technical - Murtaza</h4><p>0331-3368883</p></div>
+      </div>
+      <div class="contact-card">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="#00897b"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>
+        </div>
+        <div><h4>Office Address</h4><p>Shop# 21, Falak Corporate City,<br>Talpur Road, opposite City Post Office,<br>Karachi, Pakistan</p></div>
+      </div>
+      <div class="contact-card highlight">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="white"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
+        </div>
+        <div><h4>Need Urgent Supply?</h4><p>Call us directly for immediate assistance with your requirements.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-grid">
+    <div>
+      <h3>HAKIMI TRADERS</h3>
+      <p>Specialist of Pneumatics Fitting, Equipments & General Order Suppliers. Your trusted partner for industrial pneumatic solutions since 2008.</p>
+      <br>
+      <p><strong style="color:#00e5ff;">NTN:</strong> 4228937-8 &nbsp;|&nbsp; <strong style="color:#00e5ff;">STRN:</strong> 3277876175852</p>
+    </div>
+    <div>
+      <h3>Quick Links</h3>
+      <ul class="footer-links">
+        <li><a href="#hero">Home</a></li>
+        <li><a href="#about">About Us</a></li>
+        <li><a href="#categories">Products</a></li>
+        <li><a href="#brands">Brands</a></li>
+        <li><a href="#clients">Our Clients</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+    </div>
+    <div>
+      <h3>Contact Info</h3>
+      <p style="color:#00e5ff;">&#9993;</p><p>hakimitraders111@gmail.com</p>
+      <br>
+      <p style="color:#00e5ff;">&#9742;</p><p>0335-5285380</p>
+      <br>
+      <p style="color:#00e5ff;">&#9742;</p><p>0331-3368883</p>
+      <br>
+      <p style="color:#00e5ff;">&#9906;</p><p>Shop# 21, Falak Corporate City, Karachi</p>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>&copy; 2024 Hakimi Traders. All Rights Reserved.</p>
+    <p style="color:rgba(255,255,255,0.3);">Designed with care</p>
+  </div>
+</footer>
+
+<script>
+// Tab switching
+document.querySelectorAll('.product-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.product-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+  });
+});
+// Navbar scroll effect
+window.addEventListener('scroll', () => {
+  const navbar = document.querySelector('.navbar');
+  if (window.scrollY > 50) navbar.classList.add('scrolled');
+  else navbar.classList.remove('scrolled');
+});
+</script>
+</body>
+</html>

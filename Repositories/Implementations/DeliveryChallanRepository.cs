@@ -50,5 +50,10 @@ namespace MyApp.Api.Repositories.Implementations
 
             return deliveryChallan;
         }
+
+        public async Task<int> GetTotalCountAsync()
+        {
+            return await _context.DeliveryChallans.CountAsync();
+        }
     }
 }

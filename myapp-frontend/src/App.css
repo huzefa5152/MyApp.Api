@@ -141,6 +141,17 @@
 }
 
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Avatar hover overlay */
+.dl-main [style*="avatarWrapper"]:hover .avatar-overlay,
+div[style]:hover > div[style*="inset: 0"] {
+  opacity: 1 !important;
+}
+
 @keyframes logo-spin {
   from {
     transform: rotate(0deg);

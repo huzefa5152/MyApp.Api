@@ -67,5 +67,10 @@ namespace MyApp.Api.Services.Implementations
                 }).ToList()
             };
         }
+
+        public async Task<int> GetTotalCountAsync()
+        {
+            return await _repository.GetTotalCountAsync();
+        }
     }
 }

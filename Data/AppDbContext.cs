@@ -15,9 +15,27 @@ namespace MyApp.Api.Data
 
         public DbSet<ItemDescription> ItemDescriptions { get; set; }
         public DbSet<Unit> Units { get; set; }
+        public DbSet<User> Users { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // Unique index on Username
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.Username)
+                .IsUnique();
+
+            // Seed default admin user (password: admin123)
+            // Pre-computed BCrypt hash to avoid dynamic value in HasData
+            modelBuilder.Entity<User>().HasData(new User
+            {
+                Id = 1,
+                Username = "admin",
+                PasswordHash = "$2a$11$ITxobMb6Kk7r4cjBAN3tF.U2x5q/PpaueP/1dvUSr6V0N5z724cuu",
+                FullName = "Administrator",
+                Role = "Admin",
+                CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            });
+
             // Delete Items when a DeliveryChallan is deleted
             modelBuilder.Entity<DeliveryChallan>()
                 .HasMany(dc => dc.Items)
@@ -31,6 +49,13 @@ namespace MyApp.Api.Data
                 .WithMany(c => c.DeliveryChallans)
                 .HasForeignKey(dc => dc.CompanyId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Client belongs to Company (no cascade to avoid multiple cascade paths)
+            modelBuilder.Entity<Client>()
+                .HasOne(c => c.Company)
+                .WithMany(co => co.Clients)
+                .HasForeignKey(c => c.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Optional: make ItemDescription.Name and Unit.Name unique
             modelBuilder.Entity<ItemDescription>()

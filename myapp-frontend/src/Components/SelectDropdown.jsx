@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import httpClient from "../api/httpClient";
+import { dropdownStyles } from "../theme";
 
 export default function SelectDropdown({
   label,
@@ -9,15 +10,20 @@ export default function SelectDropdown({
   placeholder = "Select an option",
   optionLabelKey = "name",
   optionValueKey = "id",
-  className = "form-select"
+  className,
 }) {
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const fetchedRef = useRef(false);
+  const prevEndpointRef = useRef(null);
 
   useEffect(() => {
+    if (prevEndpointRef.current === endpoint) return;
+    prevEndpointRef.current = endpoint;
+
     const fetchOptions = async () => {
+      setLoading(true);
+      setError("");
       try {
         const response = await httpClient.get(endpoint);
         setOptions(response.data || []);
@@ -29,17 +35,29 @@ export default function SelectDropdown({
       }
     };
 
-    if (!fetchedRef.current) {
-      fetchedRef.current = true;
-      fetchOptions();
-    }
+    fetchOptions();
   }, [endpoint]);
+
+  const useThemeStyle = className === "" || className === undefined;
 
   return (
     <div>
-      {label && <label className="form-label">{label}</label>}
+      {label && (
+        <label
+          style={{
+            display: "block",
+            marginBottom: "0.35rem",
+            fontWeight: 600,
+            fontSize: "0.85rem",
+            color: "#5f6d7e",
+          }}
+        >
+          {label}
+        </label>
+      )}
       <select
-        className={className}
+        className={useThemeStyle ? undefined : className}
+        style={useThemeStyle ? { ...dropdownStyles.base, width: "100%" } : undefined}
         value={value?.[optionValueKey] || ""}
         onChange={(e) => {
           const selected = options.find(
@@ -47,7 +65,7 @@ export default function SelectDropdown({
           );
           onChange(selected || null);
         }}
-        disabled={loading || error}
+        disabled={loading || !!error}
       >
         <option value="">
           {loading ? "Loading..." : placeholder}
@@ -58,7 +76,11 @@ export default function SelectDropdown({
           </option>
         ))}
       </select>
-      {error && <div className="text-danger small mt-1">{error}</div>}
+      {error && (
+        <div style={{ color: "#dc3545", fontSize: "0.78rem", marginTop: "0.25rem" }}>
+          {error}
+        </div>
+      )}
     </div>
   );
 }

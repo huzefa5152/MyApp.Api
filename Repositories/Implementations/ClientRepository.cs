@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
@@ -12,6 +12,12 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<IEnumerable<Client>> GetAllAsync() =>
             await _db.Clients.AsNoTracking().ToListAsync();
+
+        public async Task<IEnumerable<Client>> GetByCompanyAsync(int companyId) =>
+            await _db.Clients.AsNoTracking()
+                .Where(c => c.CompanyId == companyId)
+                .OrderBy(c => c.Name)
+                .ToListAsync();
 
         public async Task<Client?> GetByIdAsync(int id) =>
             await _db.Clients.FindAsync(id);
@@ -36,10 +42,12 @@ namespace MyApp.Api.Repositories.Implementations
             await _db.SaveChangesAsync();
         }
 
-        public async Task<bool> ExistsWithNameAsync(string name, int? excludeId = null)
+        public async Task<bool> ExistsWithNameAsync(string name, int companyId, int? excludeId = null)
         {
             return await _db.Clients.AnyAsync(c =>
-                c.Name.ToLower() == name.ToLower() && (excludeId == null || c.Id != excludeId));
+                c.Name.ToLower() == name.ToLower() &&
+                c.CompanyId == companyId &&
+                (excludeId == null || c.Id != excludeId));
         }
     }
 }

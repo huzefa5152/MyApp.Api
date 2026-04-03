@@ -1,9 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class DeliveryChallansController : ControllerBase
@@ -13,6 +15,14 @@ namespace MyApp.Api.Controllers
         public DeliveryChallansController(IDeliveryChallanService service)
         {
             _service = service;
+        }
+
+        // GET: api/DeliveryChallans/count
+        [HttpGet("count")]
+        public async Task<ActionResult<int>> GetTotalCount()
+        {
+            var count = await _service.GetTotalCountAsync();
+            return Ok(count);
         }
 
         // GET: api/DeliveryChallans/company/1

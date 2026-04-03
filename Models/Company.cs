@@ -8,5 +8,6 @@
         public int CurrentChallanNumber { get; set; }
 
         public List<DeliveryChallan> DeliveryChallans { get; set; } = new();
+        public List<Client> Clients { get; set; } = new();
     }
 }

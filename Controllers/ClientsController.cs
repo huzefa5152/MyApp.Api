@@ -1,13 +1,11 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using MyApp.Api.Data;
 using MyApp.Api.DTOs;
-using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class ClientsController : ControllerBase
@@ -18,6 +16,10 @@ namespace MyApp.Api.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<ClientDto>>> GetClients()
             => Ok(await _service.GetAllAsync());
+
+        [HttpGet("company/{companyId}")]
+        public async Task<ActionResult<IEnumerable<ClientDto>>> GetClientsByCompany(int companyId)
+            => Ok(await _service.GetByCompanyAsync(companyId));
 
         [HttpGet("{id}")]
         public async Task<ActionResult<ClientDto>> GetClient(int id)

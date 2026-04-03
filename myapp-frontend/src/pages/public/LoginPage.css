@@ -1,0 +1,420 @@
+/* ============================================================
+   LoginPage.css  –  Hakimi Traders Login
+   ============================================================ */
+
+/* ── Root wrapper ─────────────────────────────────────────── */
+.ht-login-root {
+  min-height: 100vh;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── Left branding panel ──────────────────────────────────── */
+.ht-brand-panel {
+  flex: 0 0 45%;
+  background: linear-gradient(145deg, #0d47a1 0%, #1565c0 40%, #00897b 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Decorative circles */
+.ht-brand-panel::before,
+.ht-brand-panel::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.12;
+  background: #fff;
+}
+.ht-brand-panel::before {
+  width: 380px;
+  height: 380px;
+  top: -100px;
+  left: -120px;
+}
+.ht-brand-panel::after {
+  width: 260px;
+  height: 260px;
+  bottom: -80px;
+  right: -80px;
+}
+
+.ht-brand-logo-wrap {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 2rem;
+}
+
+.ht-brand-icon {
+  width: 90px;
+  height: 90px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.8rem;
+  color: #fff;
+  backdrop-filter: blur(4px);
+  margin: 0 auto;
+}
+
+.ht-brand-title {
+  position: relative;
+  z-index: 1;
+  color: #fff;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-align: center;
+  line-height: 1.2;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  margin-bottom: 0.75rem;
+}
+
+.ht-brand-divider {
+  width: 60px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 2px;
+  margin: 0 auto 1.25rem;
+  position: relative;
+  z-index: 1;
+}
+
+.ht-brand-tagline {
+  position: relative;
+  z-index: 1;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.85rem;
+  font-weight: 400;
+  text-align: center;
+  line-height: 1.6;
+  max-width: 300px;
+}
+
+.ht-brand-features {
+  position: relative;
+  z-index: 1;
+  margin-top: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 280px;
+}
+
+.ht-brand-feature-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.82rem;
+}
+
+.ht-brand-feature-item .feature-dot {
+  width: 8px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Right form panel ─────────────────────────────────────── */
+.ht-form-panel {
+  flex: 1;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+  position: relative;
+}
+
+/* Form card entrance animation */
+@keyframes ht-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ht-form-card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(13, 71, 161, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 2.75rem 2.5rem;
+  width: 100%;
+  max-width: 420px;
+  animation: ht-slide-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ht-form-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.ht-form-header h2 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #0d47a1;
+  margin-bottom: 0.35rem;
+}
+
+.ht-form-header p {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+/* ── Input group styling ──────────────────────────────────── */
+.ht-input-group {
+  position: relative;
+  margin-bottom: 1.25rem;
+}
+
+.ht-input-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  font-size: 1rem;
+  pointer-events: none;
+  transition: color 0.2s;
+  z-index: 2;
+}
+
+.ht-form-control {
+  width: 100%;
+  padding: 0.7rem 0.9rem 0.7rem 2.75rem;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 0.925rem;
+  color: #111827;
+  background: #f9fafb;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  outline: none;
+}
+
+.ht-form-control:focus {
+  border-color: #1565c0;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.12);
+}
+
+.ht-form-control::placeholder {
+  color: #9ca3af;
+}
+
+.ht-input-group:focus-within .ht-input-icon {
+  color: #1565c0;
+}
+
+/* Password toggle button */
+.ht-pw-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  transition: color 0.2s;
+  z-index: 2;
+}
+.ht-pw-toggle:hover {
+  color: #1565c0;
+}
+
+/* ── Error alert ──────────────────────────────────────────── */
+@keyframes ht-shake {
+  0%, 100% { transform: translateX(0); }
+  15%       { transform: translateX(-7px); }
+  30%       { transform: translateX(7px); }
+  45%       { transform: translateX(-5px); }
+  60%       { transform: translateX(5px); }
+  75%       { transform: translateX(-3px); }
+  90%       { transform: translateX(3px); }
+}
+
+.ht-error-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-left: 4px solid #ef4444;
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.85rem;
+  color: #b91c1c;
+  margin-bottom: 1.25rem;
+  animation: ht-shake 0.5s ease-in-out;
+}
+
+.ht-error-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ── Login button ─────────────────────────────────────────── */
+.ht-btn-login {
+  width: 100%;
+  padding: 0.8rem 1rem;
+  background: linear-gradient(135deg, #0d47a1 0%, #1976d2 60%, #00897b 100%);
+  background-size: 200% 200%;
+  background-position: left center;
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 0.975rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: background-position 0.4s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 14px rgba(13, 71, 161, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.ht-btn-login:hover:not(:disabled) {
+  background-position: right center;
+  box-shadow: 0 6px 20px rgba(13, 71, 161, 0.45);
+  transform: translateY(-1px);
+}
+
+.ht-btn-login:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(13, 71, 161, 0.25);
+}
+
+.ht-btn-login:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+/* Spinner inside button */
+.ht-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: ht-spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+@keyframes ht-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Back link ────────────────────────────────────────────── */
+.ht-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #6b7280;
+  font-size: 0.82rem;
+  text-decoration: none;
+  transition: color 0.2s;
+  margin-top: 1.5rem;
+}
+
+.ht-back-link:hover {
+  color: #0d47a1;
+  text-decoration: underline;
+}
+
+.ht-form-footer {
+  text-align: center;
+}
+
+/* ── Mobile layout ────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .ht-login-root {
+    flex-direction: column;
+  }
+
+  .ht-brand-panel {
+    flex: 0 0 auto;
+    padding: 1.75rem 1.5rem;
+    /* compact top banner on mobile */
+    flex-direction: row;
+    gap: 1rem;
+    justify-content: flex-start;
+  }
+
+  .ht-brand-panel::before {
+    width: 220px;
+    height: 220px;
+    top: -80px;
+    right: -60px;
+    left: unset;
+  }
+
+  .ht-brand-panel::after {
+    display: none;
+  }
+
+  .ht-brand-logo-wrap {
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+
+  .ht-brand-icon {
+    width: 56px;
+    height: 56px;
+    font-size: 1.7rem;
+  }
+
+  .ht-brand-title {
+    font-size: 1.15rem;
+    letter-spacing: 1px;
+    text-align: left;
+  }
+
+  .ht-brand-tagline {
+    font-size: 0.72rem;
+    text-align: left;
+    max-width: 100%;
+  }
+
+  .ht-brand-divider,
+  .ht-brand-features {
+    display: none;
+  }
+
+  .ht-form-panel {
+    flex: 1;
+    justify-content: flex-start;
+    padding-top: 1.75rem;
+  }
+
+  .ht-form-card {
+    padding: 2rem 1.5rem;
+    border-radius: 12px;
+  }
+}
+
+@media (max-width: 400px) {
+  .ht-form-card {
+    padding: 1.5rem 1.1rem;
+  }
+}

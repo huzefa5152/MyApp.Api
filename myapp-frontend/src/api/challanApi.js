@@ -5,3 +5,6 @@ export const getDeliveryChallansByCompany = (companyId) =>
 
 export const createDeliveryChallan = (companyId, payload) =>
   httpClient.post(`/deliverychallans/company/${companyId}`, payload);
+
+export const getDeliveryChallansCount = () =>
+  httpClient.get("/deliverychallans/count");
