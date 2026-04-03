@@ -15,4 +15,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 
 WORKDIR /app
 COPY --from=build /app .
+
+# Render.com sets PORT env variable
+ENV ASPNETCORE_ENVIRONMENT=Production
+EXPOSE 10000
+
 ENTRYPOINT ["dotnet", "MyApp.Api.dll"]

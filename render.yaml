@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: myapp-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    repo: https://github.com/huzefa5152/MyApp.Api
+    branch: master
+    plan: free
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__DefaultConnection
+        sync: false  # Set manually in Render dashboard
