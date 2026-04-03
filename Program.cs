@@ -63,6 +63,13 @@ if (app.Environment.IsDevelopment())
 
 app.UseAuthorization();
 
+// Serve React frontend static files from wwwroot
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.MapControllers(); // 👈 maps your controllers (like CompaniesController)
+
+// SPA fallback: serve index.html for any non-API, non-file routes
+app.MapFallbackToFile("index.html");
 
 app.Run();

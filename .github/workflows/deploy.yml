@@ -1,0 +1,50 @@
+name: Deploy to MonsterASP.NET
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build React Frontend
+        working-directory: myapp-frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy frontend build to wwwroot
+        run: |
+          mkdir -p wwwroot
+          cp -r myapp-frontend/dist/* wwwroot/
+
+      - name: Publish .NET API
+        run: dotnet publish -c Release -o ./publish
+
+      - name: Copy frontend wwwroot into publish
+        run: |
+          mkdir -p ./publish/wwwroot
+          cp -r wwwroot/* ./publish/wwwroot/
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: site61833.siteasp.net
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./publish/
+          server-dir: /wwwroot/
+          dangerous-clean-slate: false
