@@ -227,12 +227,12 @@ export default function LandingPage() {
       });
   }, [activeTab, apiBase, categoryImages, productTabs]);
 
-  // Scroll to active tab button
-  useEffect(() => {
-    if (!tabsRef.current) return;
-    const btn = tabsRef.current.querySelector(`[data-tab="${activeTab}"]`);
-    if (btn) btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-  }, [activeTab]);
+  // Scroll to active tab button (disabled — tabs are flex-wrapped now, not horizontally scrollable)
+  // useEffect(() => {
+  //   if (!tabsRef.current) return;
+  //   const btn = tabsRef.current.querySelector(`[data-tab="${activeTab}"]`);
+  //   if (btn) btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  // }, [activeTab]);
 
   const handleFormChange = (e) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
