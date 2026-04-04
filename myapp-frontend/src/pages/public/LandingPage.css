@@ -642,6 +642,8 @@
   border-radius: var(--lp-radius);
   overflow: hidden;
   box-shadow: var(--lp-shadow-lg);
+  width: 100%;
+  min-width: 0;
 }
 
 .lp-swiper {

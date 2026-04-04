@@ -192,7 +192,7 @@ export default function LandingPage() {
     return () => AOS.refresh();
   }, []);
 
-  // Fetch category list from API on mount
+  // Fetch category list from API on mount, then preload all category images
   useEffect(() => {
     fetch(`${apiBase}/product-images`)
       .then((res) => (res.ok ? res.json() : []))
@@ -208,24 +208,18 @@ export default function LandingPage() {
           };
         });
         setProductTabs(tabs);
+        // Preload images for all categories in the background
+        categories.forEach((cat) => {
+          fetch(`${apiBase}/product-images/${cat.name}`)
+            .then((res) => res.ok ? res.json() : [])
+            .then((images) => {
+              setCategoryImages((prev) => ({ ...prev, [cat.name]: images }));
+            })
+            .catch(() => {});
+        });
       })
       .catch(() => setProductTabs([]));
   }, [apiBase]);
-
-  // Fetch images for the active tab's category folder
-  useEffect(() => {
-    if (productTabs.length === 0) return;
-    const folder = productTabs[activeTab]?.folder;
-    if (!folder || categoryImages[folder]) return;
-    fetch(`${apiBase}/product-images/${folder}`)
-      .then((res) => res.ok ? res.json() : [])
-      .then((images) => {
-        setCategoryImages((prev) => ({ ...prev, [folder]: images }));
-      })
-      .catch(() => {
-        setCategoryImages((prev) => ({ ...prev, [folder]: [] }));
-      });
-  }, [activeTab, apiBase, categoryImages, productTabs]);
 
   // Scroll to active tab button (disabled — tabs are flex-wrapped now, not horizontally scrollable)
   // useEffect(() => {
@@ -436,8 +430,10 @@ export default function LandingPage() {
                   slidesPerView={1}
                   navigation
                   pagination={{ clickable: true }}
-                  autoplay={{ delay: 3500, disableOnInteraction: false }}
+                  autoplay={{ delay: 2000, disableOnInteraction: false }}
                   loop={activeImages.length > 1}
+                  observer={true}
+                  observeParents={true}
                   className="lp-swiper"
                 >
                   {activeImages.map((src, idx) => (
@@ -446,7 +442,7 @@ export default function LandingPage() {
                         <img
                           src={src}
                           alt={`${activeProduct.label} product image ${idx + 1}`}
-                          loading="lazy"
+                          loading={idx === 0 ? "eager" : "lazy"}
                           onError={(e) => {
                             e.currentTarget.style.display = "none";
                           }}
