@@ -39,6 +39,19 @@ jobs:
           mkdir -p ./publish/wwwroot
           cp -r wwwroot/* ./publish/wwwroot/
 
+      - name: Stop app (upload app_offline.htm)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: site61833.siteasp.net
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./.github/offline/
+          server-dir: /wwwroot/
+          dangerous-clean-slate: false
+
+      - name: Wait for app to stop
+        run: sleep 5
+
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
