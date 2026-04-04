@@ -163,8 +163,8 @@ export default function UsersPage() {
         />
       </div>
 
-      {/* Users Table */}
-      <div style={styles.card}>
+      {/* Users List */}
+      <div>
         {loading ? (
           <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
             Loading users...
@@ -174,75 +174,46 @@ export default function UsersPage() {
             {search ? "No users match your search" : "No users found"}
           </p>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>User</th>
-                  <th style={styles.th}>Username</th>
-                  <th style={styles.th}>Role</th>
-                  <th style={styles.th}>Created</th>
-                  <th style={{ ...styles.th, textAlign: "right" }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((u) => (
-                  <tr key={u.id} style={styles.tr}>
-                    <td style={styles.td}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                        {u.avatarPath ? (
-                          <img
-                            src={u.avatarPath}
-                            alt={u.fullName}
-                            style={styles.avatar}
-                          />
-                        ) : (
-                          <div style={styles.avatarFallback}>
-                            {getInitials(u.fullName)}
-                          </div>
-                        )}
-                        <span style={{ fontWeight: 600, color: colors.textPrimary }}>
-                          {u.fullName}
-                        </span>
-                      </div>
-                    </td>
-                    <td style={styles.td}>
-                      <span style={{ color: colors.textSecondary }}>{u.username}</span>
-                    </td>
-                    <td style={styles.td}>
-                      <span style={styles.roleBadge}>{u.role}</span>
-                    </td>
-                    <td style={styles.td}>
-                      <span style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>
-                        {new Date(u.createdAt).toLocaleDateString()}
-                      </span>
-                    </td>
-                    <td style={{ ...styles.td, textAlign: "right" }}>
-                      {isSeedAdmin && u.id !== seedAdminUserId && (
-                        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-                          <button
-                            style={styles.editBtn}
-                            onClick={() => openEdit(u)}
-                            title="Edit user"
-                          >
-                            <MdEdit style={{ fontSize: "1.1rem" }} />
-                            <span>Edit</span>
-                          </button>
-                          <button
-                            style={styles.deleteBtn}
-                            onClick={() => setDeleteConfirm(u)}
-                            title="Delete user"
-                          >
-                            <MdDelete style={{ fontSize: "1.1rem" }} />
-                            <span>Delete</span>
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="user-cards-grid">
+            {filtered.map((u) => (
+              <div key={u.id} style={styles.userCard}>
+                <div style={styles.userCardTop}>
+                  {u.avatarPath ? (
+                    <img src={u.avatarPath} alt={u.fullName} style={styles.avatar} />
+                  ) : (
+                    <div style={styles.avatarFallback}>
+                      {getInitials(u.fullName)}
+                    </div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, color: colors.textPrimary, fontSize: "0.95rem" }}>
+                      {u.fullName}
+                    </div>
+                    <div style={{ color: colors.textSecondary, fontSize: "0.84rem" }}>
+                      @{u.username}
+                    </div>
+                  </div>
+                  <span style={styles.roleBadge}>{u.role}</span>
+                </div>
+                <div style={styles.userCardMeta}>
+                  <span style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>
+                    Joined {new Date(u.createdAt).toLocaleDateString()}
+                  </span>
+                  {isSeedAdmin && u.id !== seedAdminUserId && (
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <button style={styles.editBtn} onClick={() => openEdit(u)} title="Edit user">
+                        <MdEdit style={{ fontSize: "1rem" }} />
+                        <span>Edit</span>
+                      </button>
+                      <button style={styles.deleteBtn} onClick={() => setDeleteConfirm(u)} title="Delete user">
+                        <MdDelete style={{ fontSize: "1rem" }} />
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -442,34 +413,27 @@ const styles = {
     fontSize: "0.9rem",
     color: colors.textPrimary,
   },
-  card: {
+  userCard: {
     background: colors.cardBg,
     border: `1px solid ${colors.cardBorder}`,
     borderRadius: 12,
-    overflow: "hidden",
+    padding: "1rem 1.15rem",
+    transition: "box-shadow 0.2s, transform 0.15s",
   },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
+  userCardTop: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
   },
-  th: {
-    textAlign: "left",
-    padding: "0.85rem 1rem",
-    fontSize: "0.8rem",
-    fontWeight: 600,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    color: colors.textSecondary,
-    borderBottom: `2px solid ${colors.cardBorder}`,
-    background: colors.inputBg,
-  },
-  tr: {
-    borderBottom: `1px solid ${colors.cardBorder}`,
-  },
-  td: {
-    padding: "0.85rem 1rem",
-    fontSize: "0.9rem",
-    verticalAlign: "middle",
+  userCardMeta: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: "0.5rem",
+    marginTop: "0.75rem",
+    paddingTop: "0.75rem",
+    borderTop: `1px solid ${colors.cardBorder}`,
   },
   avatar: {
     width: 36,
