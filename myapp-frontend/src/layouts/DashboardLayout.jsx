@@ -12,6 +12,7 @@ import {
   MdClose,
   MdKeyboardArrowDown,
   MdAccountCircle,
+  MdGroupAdd,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import "./DashboardLayout.css";
@@ -84,6 +85,9 @@ export default function DashboardLayout() {
 
   const displayName = getDisplayName(user);
   const initials = getInitials(user);
+  const avatarUrl = user?.avatarPath
+    ? `${window.location.origin}${user.avatarPath}`
+    : null;
 
   return (
     <div className="dl-shell">
@@ -180,6 +184,17 @@ export default function DashboardLayout() {
             <span className="dl-nav__label">Challans</span>
           </NavLink>
 
+          {/* Users */}
+          <NavLink
+            to="/users"
+            className={({ isActive }) =>
+              "dl-nav__item" + (isActive ? " active" : "")
+            }
+          >
+            <MdGroupAdd className="dl-nav__icon" aria-hidden="true" />
+            <span className="dl-nav__label">Users</span>
+          </NavLink>
+
           <hr className="dl-nav__divider" />
           <span className="dl-nav__section-label">Account</span>
 
@@ -190,7 +205,11 @@ export default function DashboardLayout() {
               "dl-nav__item" + (isActive ? " active" : "")
             }
           >
-            <MdAccountCircle className="dl-nav__icon" aria-hidden="true" />
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" className="dl-nav__avatar-img" aria-hidden="true" />
+            ) : (
+              <MdAccountCircle className="dl-nav__icon" aria-hidden="true" />
+            )}
             <span className="dl-nav__label">My Profile</span>
           </NavLink>
         </nav>
@@ -241,7 +260,11 @@ export default function DashboardLayout() {
               aria-haspopup="true"
             >
               <div className="dl-topbar__avatar" aria-hidden="true">
-                {initials}
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" className="dl-topbar__avatar-img" />
+                ) : (
+                  initials
+                )}
               </div>
               <span>{displayName}</span>
               <MdKeyboardArrowDown
@@ -292,6 +315,7 @@ function getBreadcrumb(pathname) {
     "/Clients/list": "Configuration / Clients List",
     "/challans": "Challans",
     "/profile": "My Profile",
+    "/users": "User Management",
   };
   return map[pathname] ?? pathname.replace(/\//g, " / ").replace(/^\s\/\s/, "");
 }

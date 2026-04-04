@@ -17,3 +17,5 @@ export const uploadAvatar = (file) => {
     headers: { "Content-Type": "multipart/form-data" },
   });
 };
+
+export const removeAvatar = () => httpClient.delete("/auth/avatar");

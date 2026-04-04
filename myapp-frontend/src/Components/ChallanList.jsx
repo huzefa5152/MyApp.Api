@@ -46,7 +46,7 @@ export default function ChallanList({ challans }) {
       )}
 
       {/* Challan cards grid */}
-      <div style={{ ...cardStyles.grid, maxHeight: "calc(100vh - 320px)", overflowY: "auto" }}>
+      <div className="card-grid" style={{ maxHeight: "calc(100vh - 320px)", overflowY: "auto" }}>
         {filteredChallans.length === 0 && (
           <p style={{ color: colors.textSecondary, gridColumn: "1 / -1", textAlign: "center", padding: "2rem 0" }}>
             No matching challans found.

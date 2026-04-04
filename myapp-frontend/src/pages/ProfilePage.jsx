@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import {
   MdAccountCircle,
   MdEdit,
@@ -10,9 +10,10 @@ import {
   MdCameraAlt,
   MdCheckCircle,
   MdShield,
+  MdDelete,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
-import { updateProfile, changePassword, uploadAvatar } from "../api/authApi";
+import { updateProfile, changePassword, uploadAvatar, removeAvatar } from "../api/authApi";
 
 const colors = {
   blue: "#0d47a1",
@@ -56,6 +57,12 @@ export default function ProfilePage() {
   // Avatar state
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [avatarMsg, setAvatarMsg] = useState(null);
+  const avatarMsgTimer = useRef(null);
+  const showAvatarMsg = useCallback((msg) => {
+    clearTimeout(avatarMsgTimer.current);
+    setAvatarMsg(msg);
+    avatarMsgTimer.current = setTimeout(() => setAvatarMsg(null), 5000);
+  }, []);
 
   const handleEditToggle = () => {
     if (editing) {
@@ -139,15 +146,29 @@ export default function ProfilePage() {
     try {
       await uploadAvatar(file);
       await refreshUser();
-      setAvatarMsg({ type: "success", text: "Avatar updated" });
+      showAvatarMsg({ type: "success", text: "Avatar updated" });
     } catch (err) {
-      setAvatarMsg({
+      showAvatarMsg({
         type: "error",
         text: err.response?.data?.message || "Failed to upload avatar",
       });
     } finally {
       setAvatarLoading(false);
       e.target.value = "";
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setAvatarLoading(true);
+    setAvatarMsg(null);
+    try {
+      await removeAvatar();
+      await refreshUser();
+      showAvatarMsg({ type: "success", text: "Avatar removed" });
+    } catch {
+      showAvatarMsg({ type: "error", text: "Failed to remove avatar" });
+    } finally {
+      setAvatarLoading(false);
     }
   };
 
@@ -174,11 +195,14 @@ export default function ProfilePage() {
       </div>
 
       {/* Avatar + Info Card */}
-      <div style={styles.card}>
-        <div style={styles.avatarSection}>
+      <div style={styles.profileCard}>
+        {/* Gradient banner */}
+        <div style={styles.profileBanner} />
+
+        {/* Avatar */}
+        <div style={styles.avatarRow}>
           <div
             style={styles.avatarWrapper}
-            onClick={handleAvatarClick}
             onMouseEnter={() => setAvatarHover(true)}
             onMouseLeave={() => setAvatarHover(false)}
           >
@@ -191,8 +215,34 @@ export default function ProfilePage() {
             ) : (
               <div style={styles.avatarFallback}>{initials}</div>
             )}
+            {/* Hover overlay — shows change + remove when avatar exists, just change icon otherwise */}
             <div style={{ ...styles.avatarOverlay, opacity: avatarHover ? 1 : 0 }}>
-              <MdCameraAlt size={22} color="#fff" />
+              {user?.avatarPath ? (
+                <div style={styles.avatarOverlayActions}>
+                  <button
+                    onClick={handleAvatarClick}
+                    style={styles.avatarOverlayBtn}
+                    title="Change photo"
+                  >
+                    <MdCameraAlt size={18} />
+                    <span style={styles.avatarOverlayLabel}>Change</span>
+                  </button>
+                  <div style={styles.avatarOverlayDivider} />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleRemoveAvatar(); }}
+                    disabled={avatarLoading}
+                    style={styles.avatarOverlayBtn}
+                    title="Remove photo"
+                  >
+                    <MdDelete size={18} />
+                    <span style={styles.avatarOverlayLabel}>Remove</span>
+                  </button>
+                </div>
+              ) : (
+                <div onClick={handleAvatarClick} style={{ cursor: "pointer", textAlign: "center" }}>
+                  <MdCameraAlt size={24} color="#fff" />
+                </div>
+              )}
             </div>
             {avatarLoading && <div style={styles.avatarSpinner} />}
           </div>
@@ -203,26 +253,37 @@ export default function ProfilePage() {
             onChange={handleFileChange}
             style={{ display: "none" }}
           />
-          <div style={{ flex: 1 }}>
-            <h3 style={{ margin: 0, color: colors.textPrimary, fontSize: "1.3rem" }}>
-              {user?.fullName || "User"}
-            </h3>
-            <p style={{ margin: "0.25rem 0 0", color: colors.textSecondary, fontSize: "0.9rem" }}>
-              @{user?.username}
-            </p>
-            <span style={styles.roleBadge}>
-              <MdShield size={13} style={{ marginRight: 4 }} />
-              {user?.role || "User"}
-            </span>
-          </div>
         </div>
+
+        {/* User info */}
+        <div style={styles.profileInfo}>
+          <h3 style={styles.profileName}>
+            {user?.fullName || "User"}
+          </h3>
+          <p style={styles.profileUsername}>
+            @{user?.username}
+          </p>
+          <span style={styles.roleBadge}>
+            <MdShield size={13} style={{ marginRight: 4 }} />
+            {user?.role || "User"}
+          </span>
+        </div>
+
         {avatarMsg && (
-          <div style={avatarMsg.type === "success" ? styles.successMsg : styles.errorMsg}>
+          <div style={{ padding: "0 1.5rem", ...( avatarMsg.type === "success" ? styles.successMsg : styles.errorMsg ) }}>
             {avatarMsg.text}
           </div>
         )}
-        <p style={{ color: colors.textSecondary, fontSize: "0.82rem", margin: "0.75rem 0 0", textAlign: "center" }}>
-          Click avatar to upload a new photo (JPG, PNG, WebP — max 2 MB)
+
+        {/* Avatar actions */}
+        <div style={styles.avatarActions}>
+          <button onClick={handleAvatarClick} style={styles.uploadBtn}>
+            <MdCameraAlt size={15} />
+            Upload Photo
+          </button>
+        </div>
+        <p style={styles.avatarHint}>
+          JPG, PNG or WebP. Max 7 MB.
         </p>
       </div>
 
@@ -394,22 +455,34 @@ const styles = {
     padding: "1.5rem",
     marginBottom: "1.25rem",
   },
-  avatarSection: {
+  profileCard: {
+    backgroundColor: colors.cardBg,
+    borderRadius: 14,
+    border: `1px solid ${colors.cardBorder}`,
+    boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+    marginBottom: "1.25rem",
+    overflow: "hidden",
+  },
+  profileBanner: {
+    height: 90,
+    background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.teal} 100%)`,
+  },
+  avatarRow: {
     display: "flex",
-    alignItems: "center",
-    gap: "1.5rem",
-    flexWrap: "wrap",
+    justifyContent: "center",
+    marginTop: -52,
   },
   avatarWrapper: {
     position: "relative",
-    width: 100,
-    height: 100,
+    width: 104,
+    height: 104,
     borderRadius: "50%",
     cursor: "pointer",
     flexShrink: 0,
     overflow: "hidden",
-    border: `3px solid ${colors.cardBorder}`,
-    transition: "border-color 0.25s",
+    border: "4px solid #fff",
+    boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+    transition: "transform 0.25s",
   },
   avatarImg: {
     width: "100%",
@@ -425,20 +498,47 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     color: "#fff",
-    fontSize: "2rem",
+    fontSize: "2.2rem",
     fontWeight: 700,
     letterSpacing: 1,
   },
   avatarOverlay: {
     position: "absolute",
     inset: 0,
-    background: "rgba(0,0,0,0.45)",
+    background: "rgba(0,0,0,0.55)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     opacity: 0,
     transition: "opacity 0.25s",
     borderRadius: "50%",
+  },
+  avatarOverlayActions: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 0,
+  },
+  avatarOverlayBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    background: "none",
+    border: "none",
+    color: "#fff",
+    cursor: "pointer",
+    padding: "6px 10px",
+  },
+  avatarOverlayLabel: {
+    fontSize: "0.65rem",
+    fontWeight: 600,
+    letterSpacing: "0.03em",
+    textTransform: "uppercase",
+  },
+  avatarOverlayDivider: {
+    height: 1,
+    width: 40,
+    background: "rgba(255,255,255,0.35)",
   },
   avatarSpinner: {
     position: "absolute",
@@ -448,16 +548,59 @@ const styles = {
     borderRadius: "50%",
     animation: "spin 0.8s linear infinite",
   },
+  profileInfo: {
+    textAlign: "center",
+    padding: "0.75rem 1.5rem 0",
+  },
+  profileName: {
+    margin: 0,
+    fontSize: "1.35rem",
+    fontWeight: 700,
+    color: colors.textPrimary,
+  },
+  profileUsername: {
+    margin: "0.2rem 0 0",
+    color: colors.textSecondary,
+    fontSize: "0.9rem",
+  },
   roleBadge: {
     display: "inline-flex",
     alignItems: "center",
     marginTop: "0.5rem",
-    padding: "0.2rem 0.7rem",
+    padding: "0.25rem 0.75rem",
     borderRadius: 20,
     background: `linear-gradient(135deg, ${colors.blue}18, ${colors.teal}18)`,
     color: colors.blue,
     fontSize: "0.78rem",
     fontWeight: 600,
+  },
+  avatarActions: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: "0.6rem",
+    padding: "1rem 1.5rem 0",
+    flexWrap: "wrap",
+  },
+  uploadBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.35rem",
+    padding: "0.45rem 1rem",
+    background: `linear-gradient(135deg, ${colors.blue}, ${colors.blueLight})`,
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  avatarHint: {
+    textAlign: "center",
+    color: colors.textSecondary,
+    fontSize: "0.78rem",
+    margin: 0,
+    padding: "0.6rem 1.5rem 1.25rem",
   },
   cardHeader: {
     display: "flex",

@@ -7,6 +7,7 @@ import CompanyPage from "./pages/CompanyPage";
 import ChallansPage from "./pages/ChallanPage";
 import ClientsPage from "./pages/ClientsPage";
 import ProfilePage from "./pages/ProfilePage";
+import UsersPage from "./pages/UsersPage";
 import LoginPage from "./pages/public/LoginPage";
 import LandingPage from "./pages/public/LandingPage";
 import ProtectedRoute from "./Components/ProtectedRoute";
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/Clients/*" element={<ClientsPage />} />
           <Route path="/challans" element={<ChallansPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/users" element={<UsersPage />} />
         </Route>
       </Route>
 

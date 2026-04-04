@@ -140,7 +140,8 @@ export default function PublicLayout() {
             onClick={() => setDrawerOpen(false)}
             aria-label="Close navigation menu"
           >
-            <FiX size={24} />
+            <span>Close</span>
+            <FiX size={22} />
           </button>
         </div>
         <div className="pl-drawer__links">

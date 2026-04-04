@@ -31,7 +31,7 @@ export const buttonHover = {
 export const cardStyles = {
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+    gridTemplateColumns: "repeat(3, 1fr)",
     gap: "1.25rem",
   },
   card: {

@@ -346,6 +346,23 @@
   font-size: 0.8rem;
   font-weight: 700;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.dl-topbar__avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+/* Sidebar profile avatar */
+.dl-nav__avatar-img {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 
 /* User dropdown menu */
@@ -449,4 +466,23 @@
   color: rgba(255,255,255,0.45);
   padding: 0.5rem 0.85rem 0.2rem;
   font-weight: 600;
+}
+
+/* ---------- Card Grid Responsive ---------- */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+@media (max-width: 768px) {
+  .card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
 }

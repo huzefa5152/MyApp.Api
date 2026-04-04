@@ -14,7 +14,7 @@ export default function ClientList({ clients, onEdit, fetchClients }) {
   };
 
   return (
-    <div style={cardStyles.grid}>
+    <div className="card-grid">
       {clients.map((client) => (
         <div
           key={client.id}

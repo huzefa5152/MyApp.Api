@@ -15,7 +15,7 @@ export default function CompanyList({ companies, onEdit, fetchCompanies }) {
   };
 
   return (
-    <div style={cardStyles.grid}>
+    <div className="card-grid">
       {companies.map((c) => (
         <div
           key={c.id}

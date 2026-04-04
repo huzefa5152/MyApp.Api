@@ -580,24 +580,17 @@
   background: var(--lp-gradient);
 }
 
-/* Tab nav wrapper — horizontally scrollable */
+/* Tab nav wrapper */
 .lp-products__tabs-wrap {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
   margin-bottom: 2rem;
-}
-
-.lp-products__tabs-wrap::-webkit-scrollbar {
-  display: none;
+  padding: 0.5rem 0;
 }
 
 .lp-products__tabs {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.5rem;
-  width: max-content;
-  min-width: 100%;
-  padding-bottom: 0.25rem;
 }
 
 .lp-products__tab {
@@ -1253,6 +1246,55 @@
   .lp-section-header {
     margin-bottom: 2.5rem;
   }
+
+  /* Products showcase — mobile */
+  .lp-products__carousel {
+    max-width: 100%;
+  }
+
+  .lp-swiper__slide {
+    aspect-ratio: 16 / 10;
+  }
+
+  .lp-swiper__slide img {
+    padding: 0.75rem;
+  }
+
+  .lp-products__carousel .swiper-button-next,
+  .lp-products__carousel .swiper-button-prev {
+    width: 32px;
+    height: 32px;
+  }
+
+  .lp-products__carousel .swiper-button-next::after,
+  .lp-products__carousel .swiper-button-prev::after {
+    font-size: 0.7rem;
+  }
+
+  .lp-products__tabs {
+    gap: 0.4rem;
+  }
+
+  .lp-products__tab {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+  }
+
+  .lp-products__list-title {
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.6rem;
+  }
+
+  .lp-products__item {
+    font-size: 0.85rem;
+    padding: 0.45rem 0.7rem;
+    gap: 0.5rem;
+  }
+
+  .lp-products__panel-inner {
+    gap: 1.5rem;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1272,5 +1314,47 @@
 
   .lp-about__badges {
     gap: 0.4rem;
+  }
+
+  /* Products showcase — small mobile */
+  .lp-swiper__slide {
+    aspect-ratio: 16 / 9;
+  }
+
+  .lp-swiper__slide img {
+    padding: 0.5rem;
+  }
+
+  .lp-products__carousel .swiper-button-next,
+  .lp-products__carousel .swiper-button-prev {
+    width: 28px;
+    height: 28px;
+  }
+
+  .lp-products__carousel .swiper-button-next::after,
+  .lp-products__carousel .swiper-button-prev::after {
+    font-size: 0.6rem;
+  }
+
+  .lp-products__tab {
+    padding: 0.45rem 0.85rem;
+    font-size: 0.75rem;
+  }
+
+  .lp-products__list-title {
+    font-size: 1.05rem;
+  }
+
+  .lp-products__item {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.6rem;
+  }
+
+  .lp-products__items {
+    gap: 0.45rem;
+  }
+
+  .lp-products__panel-inner {
+    gap: 1.25rem;
   }
 }

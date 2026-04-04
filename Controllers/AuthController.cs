@@ -16,11 +16,13 @@ namespace MyApp.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly int _seedAdminUserId;
 
         public AuthController(AppDbContext context, IConfiguration configuration)
         {
             _context = context;
             _configuration = configuration;
+            _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
         }
 
         [HttpPost("login")]
@@ -64,7 +66,9 @@ namespace MyApp.Api.Controllers
                 user.Username,
                 user.FullName,
                 user.Role,
-                user.AvatarPath
+                user.AvatarPath,
+                IsSeedAdmin = user.Id == _seedAdminUserId,
+                SeedAdminUserId = _seedAdminUserId
             });
         }
 
@@ -130,8 +134,8 @@ namespace MyApp.Api.Controllers
             if (file == null || file.Length == 0)
                 return BadRequest(new { message = "No file uploaded" });
 
-            if (file.Length > 2 * 1024 * 1024)
-                return BadRequest(new { message = "File size must be under 2 MB" });
+            if (file.Length > 7 * 1024 * 1024)
+                return BadRequest(new { message = "File size must be under 7 MB" });
 
             var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp" };
             var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
@@ -165,6 +169,31 @@ namespace MyApp.Api.Controllers
             await _context.SaveChangesAsync();
 
             return Ok(new { avatarPath = user.AvatarPath });
+        }
+
+        [HttpDelete("avatar")]
+        [Authorize]
+        public async Task<ActionResult> RemoveAvatar()
+        {
+            var username = User.FindFirstValue(ClaimTypes.Name);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+            if (user == null) return NotFound();
+
+            if (!string.IsNullOrEmpty(user.AvatarPath))
+            {
+                var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+                var avatarsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "avatars");
+                foreach (var ext in allowed)
+                {
+                    var oldPath = Path.Combine(avatarsDir, $"user-{user.Id}{ext}");
+                    if (System.IO.File.Exists(oldPath)) System.IO.File.Delete(oldPath);
+                }
+
+                user.AvatarPath = null;
+                await _context.SaveChangesAsync();
+            }
+
+            return Ok(new { message = "Avatar removed" });
         }
 
         private string GenerateJwtToken(Models.User user)
