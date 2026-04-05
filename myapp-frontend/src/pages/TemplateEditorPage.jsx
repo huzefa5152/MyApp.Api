@@ -199,6 +199,15 @@ export default function TemplateEditorPage() {
     );
   }
 
+  if (companies.length === 0) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "3rem", flexDirection: "column" }}>
+        <MdBusiness size={48} color={colors.inputBorder} />
+        <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>No companies available. Add a company first.</p>
+      </div>
+    );
+  }
+
   return (
     <div style={{ height: "calc(100vh - 80px)", display: "flex", flexDirection: "column", gap: "0" }}>
       {/* Toast */}
