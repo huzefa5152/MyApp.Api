@@ -66,6 +66,7 @@ export default function ChallanModal({ challan, onClose }) {
                 <thead>
                   <tr>
                     <th style={{ ...styles.th, width: 40 }}>#</th>
+                    <th style={{ ...styles.th, width: 110 }}>Item Type</th>
                     <th style={styles.th}>Description</th>
                     <th style={{ ...styles.th, width: 70, textAlign: "center" }}>Qty</th>
                     <th style={{ ...styles.th, width: 90, textAlign: "center" }}>Unit</th>
@@ -75,6 +76,7 @@ export default function ChallanModal({ challan, onClose }) {
                   {challan.items.map((item, idx) => (
                     <tr key={idx}>
                       <td style={{ ...styles.td, textAlign: "center", color: colors.textSecondary }}>{idx + 1}</td>
+                      <td style={styles.td}>{item.itemTypeName || "—"}</td>
                       <td style={styles.td}>{item.description}</td>
                       <td style={{ ...styles.td, textAlign: "center", fontWeight: 600 }}>{item.quantity}</td>
                       <td style={{ ...styles.td, textAlign: "center" }}>{item.unit}</td>

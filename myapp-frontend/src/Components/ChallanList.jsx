@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MdSearch, MdReceipt, MdPerson, MdCalendarToday, MdVisibility } from "react-icons/md";
+import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint } from "react-icons/md";
 import ChallanModal from "./ChallanModal";
 import { cardStyles, cardHover } from "../theme";
 
@@ -14,93 +14,105 @@ const colors = {
   inputBorder: "#d0d7e2",
 };
 
-export default function ChallanList({ challans }) {
+const statusColors = {
+  Pending: { bg: "#fff3e0", color: "#e65100", border: "#e6510030" },
+  Invoiced: { bg: "#e8f5e9", color: "#2e7d32", border: "#2e7d3230" },
+  Cancelled: { bg: "#ffebee", color: "#c62828", border: "#c6282830" },
+};
+
+export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems }) {
   const [selectedChallan, setSelectedChallan] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
 
   if (!challans || challans.length === 0) return null;
 
-  const filteredChallans = challans.filter((c) => {
-    const term = searchTerm.toLowerCase();
-    return (
-      c.challanNumber.toString().includes(term) ||
-      c.clientName.toLowerCase().includes(term) ||
-      (c.poNumber && c.poNumber.toLowerCase().includes(term))
-    );
-  });
-
   return (
     <>
-      {/* Search Bar */}
-      {challans.length > 2 && (
-        <div style={styles.searchWrapper}>
-          <MdSearch size={18} style={styles.searchIcon} />
-          <input
-            type="text"
-            style={styles.searchInput}
-            placeholder="Search by Challan #, Client, or PO Number..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-      )}
+      <div className="card-grid">
+        {challans.map((c) => {
+          const sc = statusColors[c.status] || statusColors.Pending;
+          const isPending = c.status === "Pending";
+          return (
+            <div
+              key={c.id}
+              style={cardStyles.card}
+              onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHover)}
+              onMouseLeave={(e) =>
+                Object.assign(e.currentTarget.style, { transform: "none", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" })
+              }
+            >
+              <div style={cardStyles.cardContent}>
+                <div>
+                  <div style={styles.cardTopRow}>
+                    <h5 style={cardStyles.title}>
+                      <MdReceipt style={{ color: colors.blue, marginRight: 6, verticalAlign: "middle" }} />
+                      Challan #{c.challanNumber}
+                    </h5>
+                    <span style={{ ...styles.statusBadge, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
+                      {c.status}
+                    </span>
+                  </div>
 
-      {/* Challan cards grid */}
-      <div className="card-grid" style={{ maxHeight: "calc(100vh - 320px)", overflowY: "auto" }}>
-        {filteredChallans.length === 0 && (
-          <p style={{ color: colors.textSecondary, gridColumn: "1 / -1", textAlign: "center", padding: "2rem 0" }}>
-            No matching challans found.
-          </p>
-        )}
-
-        {filteredChallans.map((c) => (
-          <div
-            key={c.challanNumber}
-            style={cardStyles.card}
-            onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHover)}
-            onMouseLeave={(e) =>
-              Object.assign(e.currentTarget.style, { transform: "none", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" })
-            }
-          >
-            <div style={cardStyles.cardContent}>
-              <div>
-                <div style={styles.cardTopRow}>
-                  <h5 style={cardStyles.title}>
-                    <MdReceipt style={{ color: colors.blue, marginRight: 6, verticalAlign: "middle" }} />
-                    Challan #{c.challanNumber}
-                  </h5>
-                  <span style={styles.dateBadge}>
-                    <MdCalendarToday size={12} style={{ marginRight: 4 }} />
-                    {new Date(c.deliveryDate).toLocaleDateString()}
-                  </span>
+                  <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <MdPerson style={{ color: colors.teal, flexShrink: 0 }} />
+                    <strong>Client:</strong> {c.clientName}
+                  </p>
+                  <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <MdReceipt style={{ color: colors.textSecondary, flexShrink: 0 }} />
+                    <strong>PO:</strong> {c.poNumber || "\u2014"}
+                  </p>
+                  {c.deliveryDate && (
+                    <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <MdCalendarToday size={14} style={{ color: colors.textSecondary, flexShrink: 0 }} />
+                      {new Date(c.deliveryDate).toLocaleDateString()}
+                    </p>
+                  )}
+                  <p style={{ ...cardStyles.text, fontSize: "0.78rem", color: colors.textSecondary }}>
+                    {c.items?.length || 0} item{(c.items?.length || 0) !== 1 ? "s" : ""}
+                  </p>
                 </div>
 
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <MdPerson style={{ color: colors.teal, flexShrink: 0 }} />
-                  <strong>Client:</strong> {c.clientName}
-                </p>
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <MdReceipt style={{ color: colors.textSecondary, flexShrink: 0 }} />
-                  <strong>PO:</strong> {c.poNumber || "—"}
-                </p>
-              </div>
-
-              <div style={cardStyles.buttonGroup}>
-                <button
-                  style={{ ...cardStyles.button, ...cardStyles.edit, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                  onClick={() => setSelectedChallan(c)}
-                  onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.08)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
-                >
-                  <MdVisibility /> View Details
-                </button>
+                <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
+                  <button
+                    style={{ ...styles.actionBtn, ...styles.viewBtn }}
+                    onClick={() => setSelectedChallan(c)}
+                  >
+                    <MdVisibility size={14} /> View
+                  </button>
+                  <button
+                    style={{ ...styles.actionBtn, ...styles.printBtn }}
+                    onClick={() => onPrint?.(c)}
+                  >
+                    <MdPrint size={14} /> Print
+                  </button>
+                  {isPending && (
+                    <>
+                      <button
+                        style={{ ...styles.actionBtn, ...styles.editBtn }}
+                        onClick={() => onEditItems?.(c)}
+                      >
+                        <MdEdit size={14} /> Edit
+                      </button>
+                      <button
+                        style={{ ...styles.actionBtn, ...styles.cancelBtn }}
+                        onClick={() => onCancel?.(c)}
+                      >
+                        <MdCancel size={14} /> Cancel
+                      </button>
+                      <button
+                        style={{ ...styles.actionBtn, ...styles.deleteBtn }}
+                        onClick={() => onDelete?.(c)}
+                      >
+                        <MdDelete size={14} /> Delete
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Detail Modal */}
       <ChallanModal challan={selectedChallan} onClose={() => setSelectedChallan(null)} />
     </>
   );
@@ -138,15 +150,32 @@ const styles = {
     gap: "0.5rem",
     marginBottom: "0.5rem",
   },
-  dateBadge: {
+  statusBadge: {
     display: "inline-flex",
     alignItems: "center",
-    fontSize: "0.75rem",
-    fontWeight: 600,
-    color: colors.teal,
-    backgroundColor: `${colors.teal}12`,
-    padding: "0.2rem 0.6rem",
+    fontSize: "0.72rem",
+    fontWeight: 700,
+    padding: "0.2rem 0.65rem",
     borderRadius: 20,
     whiteSpace: "nowrap",
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
   },
+  actionBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    padding: "0.3rem 0.6rem",
+    borderRadius: 6,
+    border: "none",
+    fontSize: "0.76rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "filter 0.2s",
+  },
+  viewBtn: { backgroundColor: "#e3f2fd", color: "#0d47a1" },
+  printBtn: { backgroundColor: "#f3e5f5", color: "#7b1fa2" },
+  editBtn: { backgroundColor: "#fff3e0", color: "#e65100" },
+  cancelBtn: { backgroundColor: "#fce4ec", color: "#c62828" },
+  deleteBtn: { backgroundColor: "#ffebee", color: "#b71c1c" },
 };

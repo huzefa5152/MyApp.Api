@@ -11,10 +11,12 @@ namespace MyApp.Api.Controllers
     public class CompaniesController : ControllerBase
     {
         private readonly ICompanyService _companyService;
+        private readonly IWebHostEnvironment _env;
 
-        public CompaniesController(ICompanyService companyService)
+        public CompaniesController(ICompanyService companyService, IWebHostEnvironment env)
         {
             _companyService = companyService;
+            _env = env;
         }
 
         // GET: api/companies
@@ -84,6 +86,46 @@ namespace MyApp.Api.Controllers
         {
             await _companyService.DeleteAsync(id);
             return NoContent();
+        }
+
+        // POST: api/companies/{id}/logo
+        [HttpPost("{id}/logo")]
+        public async Task<ActionResult<CompanyDto>> UploadLogo(int id, IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "No file uploaded." });
+
+            var company = await _companyService.GetByIdAsync(id);
+            if (company == null) return NotFound();
+
+            var uploadsDir = Path.Combine(_env.ContentRootPath, "data", "uploads", "logos");
+            Directory.CreateDirectory(uploadsDir);
+
+            var ext = Path.GetExtension(file.FileName);
+            var fileName = $"company_{id}{ext}";
+            var filePath = Path.Combine(uploadsDir, fileName);
+
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            var logoPath = $"/data/uploads/logos/{fileName}";
+
+            var updateDto = new UpdateCompanyDto
+            {
+                Name = company.Name,
+                BrandName = company.BrandName,
+                FullAddress = company.FullAddress,
+                Phone = company.Phone,
+                NTN = company.NTN,
+                STRN = company.STRN,
+                LogoPath = logoPath,
+                StartingChallanNumber = company.StartingChallanNumber,
+                StartingInvoiceNumber = company.StartingInvoiceNumber
+            };
+            var updated = await _companyService.UpdateAsync(id, updateDto);
+            return Ok(updated);
         }
     }
 }

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { MdAdd, MdClose, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SelectDropdown from "./SelectDropdown";
+import { getItemTypes } from "../api/itemTypeApi";
 import { formStyles } from "../theme";
 
 const colors = {
@@ -21,17 +22,22 @@ const colors = {
 export default function ChallanForm({ onClose, onSaved, companyId }) {
   const [client, setClient] = useState(null);
   const [poNumber, setPoNumber] = useState("");
+  const [poDate, setPoDate] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
   const [items, setItems] = useState([
-    { description: "", quantity: 1, unit: "" },
+    { itemTypeId: "", description: "", quantity: 1, unit: "" },
   ]);
+  const [itemTypes, setItemTypes] = useState([]);
   const [error, setError] = useState("");
   const itemsContainerRef = useRef(null);
 
   useEffect(() => {
+    getItemTypes().then(({ data }) => setItemTypes(data)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (itemsContainerRef.current) {
-      itemsContainerRef.current.scrollTop =
-        itemsContainerRef.current.scrollHeight;
+      itemsContainerRef.current.scrollTop = itemsContainerRef.current.scrollHeight;
     }
   }, [items]);
 
@@ -47,8 +53,12 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       setError("Please fill the description of the current item before adding a new one.");
       return;
     }
+    if (!lastItem.itemTypeId) {
+      setError("Please select an item type before adding a new item.");
+      return;
+    }
     setError("");
-    setItems([...items, { description: "", quantity: 1, unit: "" }]);
+    setItems([...items, { itemTypeId: "", description: "", quantity: 1, unit: "" }]);
   };
 
   const removeItem = (index) => setItems(items.filter((_, i) => i !== index));
@@ -62,6 +72,10 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       setError("Please add at least one item with a description.");
       return;
     }
+    if (validItems.some((i) => !i.itemTypeId)) {
+      setError("Please select an item type for all items.");
+      return;
+    }
     if (!client) {
       setError("Please select a client.");
       return;
@@ -72,6 +86,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
         clientId: client.id,
         clientName: client.label,
         poNumber: poNumber.trim(),
+        poDate: poDate ? new Date(poDate).toISOString() : null,
         deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : null,
         items: validItems,
       });
@@ -83,13 +98,11 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
     }
   };
 
+  const isDisabled = items.some((i) => !i.description.trim() || !i.itemTypeId) || !client || !poNumber.trim();
+
   return (
     <div style={formStyles.backdrop} onClick={onClose}>
-      <div
-        style={{ ...formStyles.modal, maxWidth: 750, cursor: "default" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
+      <div style={{ ...formStyles.modal, maxWidth: 850, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>Create Delivery Challan</h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
@@ -99,7 +112,6 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
           <div style={formStyles.body}>
             {error && <div style={styles.errorAlert}>{error}</div>}
 
-            {/* Client & PO Row */}
             <div style={styles.row}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <SelectDropdown
@@ -113,119 +125,70 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <label style={styles.label}>PO Number</label>
-                <input
-                  type="text"
-                  style={styles.input}
-                  value={poNumber}
-                  onChange={(e) => setPoNumber(e.target.value)}
-                  placeholder="Enter PO number"
-                />
+                <input type="text" style={styles.input} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Enter PO number" />
               </div>
             </div>
 
-            {/* Delivery Date */}
-            <div style={{ ...styles.row, maxWidth: 280 }}>
-              <div style={{ flex: 1 }}>
+            <div style={styles.row}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <label style={styles.label}>PO Date</label>
+                <input type="date" style={styles.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <label style={styles.label}>Delivery Date</label>
-                <input
-                  type="date"
-                  style={styles.input}
-                  value={deliveryDate}
-                  onChange={(e) => setDeliveryDate(e.target.value)}
-                />
+                <input type="date" style={styles.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
               </div>
             </div>
 
-            {/* Items */}
             <div style={{ marginTop: "0.25rem" }}>
               <label style={{ ...styles.label, marginBottom: "0.5rem" }}>Items</label>
-              <div
-                ref={itemsContainerRef}
-                style={styles.itemsContainer}
-              >
+              <div ref={itemsContainerRef} style={styles.itemsContainer}>
                 {items.map((item, idx) => (
                   <div key={idx} style={styles.itemRow}>
-                    {/* Index */}
                     <div style={styles.itemIndex}>{idx + 1}</div>
 
-                    {/* Description */}
+                    {/* Item Type */}
+                    <div style={{ width: 120, flexShrink: 0 }}>
+                      <select
+                        style={{ ...styles.input, padding: "0.55rem 0.35rem", fontSize: "0.82rem" }}
+                        value={item.itemTypeId}
+                        onChange={(e) => handleItemChange(idx, "itemTypeId", parseInt(e.target.value) || "")}
+                      >
+                        <option value="">Type...</option>
+                        {itemTypes.map((t) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
                     <div style={{ flex: 2, minWidth: 0 }}>
-                      <LookupAutocomplete
-                        label="Description"
-                        endpoint="/lookup/items"
-                        value={item.description}
-                        onChange={(val) => handleItemChange(idx, "description", val)}
-                      />
+                      <LookupAutocomplete label="Description" endpoint="/lookup/items" value={item.description} onChange={(val) => handleItemChange(idx, "description", val)} />
                     </div>
 
-                    {/* Quantity */}
                     <div style={{ width: 58, flexShrink: 0 }}>
-                      <input
-                        type="number"
-                        min={1}
-                        style={{ ...styles.input, textAlign: "center", padding: "0.55rem 0.25rem" }}
-                        value={item.quantity}
-                        onChange={(e) => handleItemChange(idx, "quantity", e.target.value)}
-                      />
+                      <input type="number" min={1} style={{ ...styles.input, textAlign: "center", padding: "0.55rem 0.25rem" }} value={item.quantity} onChange={(e) => handleItemChange(idx, "quantity", e.target.value)} />
                     </div>
 
-                    {/* Unit */}
                     <div style={{ width: 90, flexShrink: 0 }}>
-                      <LookupAutocomplete
-                        label="Unit"
-                        endpoint="/lookup/units"
-                        value={item.unit}
-                        onChange={(val) => handleItemChange(idx, "unit", val)}
-                      />
+                      <LookupAutocomplete label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(val) => handleItemChange(idx, "unit", val)} />
                     </div>
 
-                    {/* Remove */}
                     <div style={{ flexShrink: 0 }}>
                       {idx !== 0 && (
-                        <button
-                          type="button"
-                          style={styles.removeBtn}
-                          onClick={() => removeItem(idx)}
-                          title="Remove item"
-                        >
-                          <MdDelete size={16} />
-                        </button>
+                        <button type="button" style={styles.removeBtn} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>
                       )}
                     </div>
                   </div>
                 ))}
               </div>
 
-              <button
-                type="button"
-                style={styles.addItemBtn}
-                onClick={addItem}
-              >
-                <MdAdd size={16} /> Add Item
-              </button>
+              <button type="button" style={styles.addItemBtn} onClick={addItem}><MdAdd size={16} /> Add Item</button>
             </div>
           </div>
 
-          {/* Footer */}
           <div style={formStyles.footer}>
-            <button
-              type="button"
-              style={{ ...formStyles.button, ...formStyles.cancel }}
-              onClick={onClose}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              style={{
-                ...formStyles.button,
-                ...formStyles.submit,
-                opacity: (items.some((i) => !i.description.trim()) || !client || !poNumber.trim()) ? 0.6 : 1,
-              }}
-              disabled={items.some((i) => !i.description.trim()) || !client || !poNumber.trim()}
-            >
-              Save Challan
-            </button>
+            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: isDisabled ? 0.6 : 1 }} disabled={isDisabled}>Save Challan</button>
           </div>
         </form>
       </div>
@@ -234,96 +197,13 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 }
 
 const styles = {
-  row: {
-    display: "flex",
-    gap: "1rem",
-    marginBottom: "1rem",
-    flexWrap: "wrap",
-  },
-  label: {
-    display: "block",
-    marginBottom: "0.35rem",
-    fontWeight: 600,
-    fontSize: "0.85rem",
-    color: colors.textSecondary,
-  },
-  input: {
-    width: "100%",
-    padding: "0.55rem 0.75rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
-    fontSize: "0.9rem",
-    backgroundColor: colors.inputBg,
-    color: colors.textPrimary,
-    outline: "none",
-    transition: "border-color 0.25s",
-    boxSizing: "border-box",
-  },
-  errorAlert: {
-    backgroundColor: colors.dangerLight,
-    color: colors.danger,
-    padding: "0.65rem 1rem",
-    borderRadius: 8,
-    marginBottom: "1rem",
-    fontWeight: 500,
-    border: `1px solid ${colors.danger}30`,
-    fontSize: "0.85rem",
-  },
-  itemsContainer: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.5rem",
-    maxHeight: 220,
-    overflowY: "auto",
-    overflowX: "hidden",
-    paddingRight: 4,
-  },
-  itemRow: {
-    display: "flex",
-    gap: "0.4rem",
-    alignItems: "flex-start",
-    padding: "0.5rem",
-    borderRadius: 10,
-    border: `1px solid ${colors.cardBorder}`,
-    backgroundColor: "#fafbfc",
-    minWidth: 0,
-  },
-  itemIndex: {
-    width: 22,
-    paddingTop: "0.55rem",
-    fontWeight: 700,
-    fontSize: "0.82rem",
-    color: colors.textSecondary,
-    textAlign: "center",
-    flexShrink: 0,
-  },
-  removeBtn: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "0.4rem",
-    marginTop: "0.3rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.danger}25`,
-    backgroundColor: colors.dangerLight,
-    color: colors.danger,
-    cursor: "pointer",
-    transition: "background-color 0.2s",
-    flexShrink: 0,
-  },
-  addItemBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.3rem",
-    marginTop: "0.6rem",
-    padding: "0.4rem 0.9rem",
-    borderRadius: 8,
-    border: "none",
-    backgroundColor: `${colors.teal}14`,
-    color: colors.teal,
-    fontSize: "0.82rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "background-color 0.2s",
-  },
+  row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
+  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
+  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", transition: "border-color 0.25s", boxSizing: "border-box" },
+  errorAlert: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, border: `1px solid ${colors.danger}30`, fontSize: "0.85rem" },
+  itemsContainer: { display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: 220, overflowY: "auto", overflowX: "hidden", paddingRight: 4 },
+  itemRow: { display: "flex", gap: "0.4rem", alignItems: "flex-start", padding: "0.5rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fafbfc", minWidth: 0 },
+  itemIndex: { width: 22, paddingTop: "0.55rem", fontWeight: 700, fontSize: "0.82rem", color: colors.textSecondary, textAlign: "center", flexShrink: 0 },
+  removeBtn: { display: "flex", alignItems: "center", justifyContent: "center", padding: "0.4rem", marginTop: "0.3rem", borderRadius: 8, border: `1px solid ${colors.danger}25`, backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", transition: "background-color 0.2s", flexShrink: 0 },
+  addItemBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", marginTop: "0.6rem", padding: "0.4rem 0.9rem", borderRadius: 8, border: "none", backgroundColor: `${colors.teal}14`, color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", transition: "background-color 0.2s" },
 };

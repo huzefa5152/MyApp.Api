@@ -17,6 +17,18 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<IEnumerable<ClientDto>>> GetClients()
             => Ok(await _service.GetAllAsync());
 
+        [HttpGet("count")]
+        public async Task<ActionResult<int>> GetCount([FromQuery] int? companyId)
+        {
+            if (companyId.HasValue)
+            {
+                var clients = await _service.GetByCompanyAsync(companyId.Value);
+                return Ok(clients.Count());
+            }
+            var all = await _service.GetAllAsync();
+            return Ok(all.Count());
+        }
+
         [HttpGet("company/{companyId}")]
         public async Task<ActionResult<IEnumerable<ClientDto>>> GetClientsByCompany(int companyId)
             => Ok(await _service.GetByCompanyAsync(companyId));

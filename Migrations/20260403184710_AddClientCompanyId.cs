@@ -10,6 +10,22 @@ namespace MyApp.Api.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            // Create Clients table if it doesn't exist (it may have been created outside of migrations)
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Clients')
+                BEGIN
+                    CREATE TABLE [Clients] (
+                        [Id] int NOT NULL IDENTITY(1,1),
+                        [Name] nvarchar(max) NOT NULL,
+                        [Address] nvarchar(max) NULL,
+                        [Phone] nvarchar(max) NULL,
+                        [Email] nvarchar(max) NULL,
+                        [CreatedAt] datetime2 NOT NULL DEFAULT GETUTCDATE(),
+                        CONSTRAINT [PK_Clients] PRIMARY KEY ([Id])
+                    );
+                END
+            ");
+
             // Add CompanyId column if it doesn't exist
             migrationBuilder.Sql(@"
                 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Clients') AND name = 'CompanyId')

@@ -10,23 +10,17 @@ const {
 
 export default function ClientForm({ client, companyId, onClose, onSaved }) {
   const [formData, setFormData] = useState(
-    client || { id: null, name: "", address: "", email: "", phone: "" }
+    client || { id: null, name: "", address: "", email: "", phone: "", ntn: "", strn: "" }
   );
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    if (client) setFormData(client);
+    if (client) setFormData({ ...client, ntn: client.ntn || "", strn: client.strn || "" });
   }, [client]);
 
   const validate = () => {
     const newErrors = {};
     if (!formData.name.trim()) newErrors.name = "Name is required";
-    if (!formData.email.trim()) newErrors.email = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))
-      newErrors.email = "Email is invalid";
-    if (!formData.phone.trim()) newErrors.phone = "Phone is required";
-    else if (!/^\+?\d{7,15}$/.test(formData.phone))
-      newErrors.phone = "Phone number is invalid";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -75,17 +69,28 @@ export default function ClientForm({ client, companyId, onClose, onSaved }) {
               <input type="text" name="address" value={formData.address} onChange={handleChange} style={input} />
             </div>
 
-            <div style={formGroup}>
-              <label style={label}>Email *</label>
-              <input type="email" name="email" value={formData.email} onChange={handleChange} style={{ ...input, ...fieldError("email") }} />
-              {errors.email && <span style={{ color: "#dc3545", fontSize: "0.78rem", marginTop: "0.2rem", display: "block" }}>{errors.email}</span>}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <div style={formGroup}>
+                <label style={label}>Email</label>
+                <input type="email" name="email" value={formData.email} onChange={handleChange} style={input} />
+              </div>
+              <div style={formGroup}>
+                <label style={label}>Phone</label>
+                <input type="text" name="phone" value={formData.phone} onChange={handleChange} style={input} />
+              </div>
             </div>
 
-            <div style={formGroup}>
-              <label style={label}>Phone *</label>
-              <input type="text" name="phone" value={formData.phone} onChange={handleChange} style={{ ...input, ...fieldError("phone") }} />
-              {errors.phone && <span style={{ color: "#dc3545", fontSize: "0.78rem", marginTop: "0.2rem", display: "block" }}>{errors.phone}</span>}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <div style={formGroup}>
+                <label style={label}>NTN</label>
+                <input type="text" name="ntn" value={formData.ntn} onChange={handleChange} style={input} />
+              </div>
+              <div style={formGroup}>
+                <label style={label}>STRN</label>
+                <input type="text" name="strn" value={formData.strn} onChange={handleChange} style={input} />
+              </div>
             </div>
+
           </div>
 
           <div style={footer}>

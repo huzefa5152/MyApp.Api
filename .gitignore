@@ -364,3 +364,6 @@ FodyWeavers.xsd
 # Deployment artifacts
 publish-ftp/
 migration.sql
+
+# User-uploaded files (logos, avatars)
+data/

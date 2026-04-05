@@ -146,8 +146,8 @@ namespace MyApp.Api.Controllers
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
             if (user == null) return NotFound();
 
-            // Save to wwwroot/images/avatars/
-            var avatarsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "avatars");
+            // Save to data/images/avatars/ (persistent, outside wwwroot)
+            var avatarsDir = Path.Combine(Directory.GetCurrentDirectory(), "data", "images", "avatars");
             Directory.CreateDirectory(avatarsDir);
 
             var fileName = $"user-{user.Id}{ext}";
@@ -165,7 +165,7 @@ namespace MyApp.Api.Controllers
                 await file.CopyToAsync(stream);
             }
 
-            user.AvatarPath = $"/images/avatars/{fileName}";
+            user.AvatarPath = $"/data/images/avatars/{fileName}";
             await _context.SaveChangesAsync();
 
             return Ok(new { avatarPath = user.AvatarPath });
@@ -182,7 +182,7 @@ namespace MyApp.Api.Controllers
             if (!string.IsNullOrEmpty(user.AvatarPath))
             {
                 var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp" };
-                var avatarsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "avatars");
+                var avatarsDir = Path.Combine(Directory.GetCurrentDirectory(), "data", "images", "avatars");
                 foreach (var ext in allowed)
                 {
                     var oldPath = Path.Combine(avatarsDir, $"user-{user.Id}{ext}");

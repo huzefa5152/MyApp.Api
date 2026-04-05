@@ -6,13 +6,16 @@ import {
   MdSettings,
   MdBusiness,
   MdPeople,
+  MdCategory,
   MdDescription,
+  MdReceipt,
   MdLogout,
   MdMenu,
   MdClose,
   MdKeyboardArrowDown,
   MdAccountCircle,
   MdGroupAdd,
+  MdCode,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import "./DashboardLayout.css";
@@ -59,7 +62,7 @@ export default function DashboardLayout() {
   }, []);
 
   // Auto-expand Configuration submenu if a child route is active
-  const isConfigActive = location.pathname.startsWith("/companies") || location.pathname.startsWith("/Clients");
+  const isConfigActive = location.pathname.startsWith("/companies") || location.pathname.startsWith("/Clients") || location.pathname.startsWith("/item-types") || location.pathname.startsWith("/templates");
   useEffect(() => {
     if (isConfigActive) setConfigOpen(true);
   }, [isConfigActive]);
@@ -170,6 +173,24 @@ export default function DashboardLayout() {
                 <MdPeople aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
                 Clients List
               </NavLink>
+              <NavLink
+                to="/item-types"
+                className={({ isActive }) =>
+                  "dl-submenu__item" + (isActive ? " active" : "")
+                }
+              >
+                <MdCategory aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
+                Item Types
+              </NavLink>
+              <NavLink
+                to="/templates"
+                className={({ isActive }) =>
+                  "dl-submenu__item" + (isActive ? " active" : "")
+                }
+              >
+                <MdCode aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
+                Print Templates
+              </NavLink>
             </div>
           </div>
 
@@ -184,6 +205,17 @@ export default function DashboardLayout() {
             <span className="dl-nav__label">Challans</span>
           </NavLink>
 
+          {/* Invoices */}
+          <NavLink
+            to="/invoices"
+            className={({ isActive }) =>
+              "dl-nav__item" + (isActive ? " active" : "")
+            }
+          >
+            <MdReceipt className="dl-nav__icon" aria-hidden="true" />
+            <span className="dl-nav__label">Invoices</span>
+          </NavLink>
+
           {/* Users */}
           <NavLink
             to="/users"
@@ -194,6 +226,7 @@ export default function DashboardLayout() {
             <MdGroupAdd className="dl-nav__icon" aria-hidden="true" />
             <span className="dl-nav__label">Users</span>
           </NavLink>
+
 
           <hr className="dl-nav__divider" />
           <span className="dl-nav__section-label">Account</span>
@@ -313,9 +346,12 @@ function getBreadcrumb(pathname) {
     "/dashboard": "Dashboard",
     "/companies/list": "Configuration / Companies List",
     "/Clients/list": "Configuration / Clients List",
+    "/item-types": "Configuration / Item Types",
     "/challans": "Challans",
+    "/invoices": "Invoices",
     "/profile": "My Profile",
     "/users": "User Management",
+    "/templates": "Print Templates",
   };
   return map[pathname] ?? pathname.replace(/\//g, " / ").replace(/^\s\/\s/, "");
 }

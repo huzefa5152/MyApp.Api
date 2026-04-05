@@ -1,11 +1,12 @@
 // src/pages/DashboardPage.jsx
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { MdBusiness, MdPeople, MdDescription, MdArrowForward, MdRefresh } from "react-icons/md";
+import { MdBusiness, MdPeople, MdDescription, MdReceipt, MdArrowForward, MdRefresh, MdFilterList } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { getCompanies } from "../api/companyApi";
-import { getClients } from "../api/clientApi";
+import { getClientsCount } from "../api/clientApi";
 import { getDeliveryChallansCount } from "../api/challanApi";
+import { getInvoicesCount } from "../api/invoiceApi";
 
 /* ------------------------------------------------------------------ */
 /*  Inline styles – keeps the component self-contained                  */
@@ -149,6 +150,23 @@ const styles = {
     justifyContent: "space-between",
     gap: "1rem",
   },
+  filterRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+    marginBottom: "1.5rem",
+  },
+  filterSelect: {
+    padding: "0.5rem 0.85rem",
+    borderRadius: 10,
+    border: "1px solid #d0d7e2",
+    backgroundColor: "#f8f9fb",
+    fontSize: "0.9rem",
+    color: "#1a2332",
+    outline: "none",
+    cursor: "pointer",
+    minWidth: 200,
+  },
 };
 
 /* ------------------------------------------------------------------ */
@@ -158,26 +176,38 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [counts, setCounts] = useState({ companies: null, clients: null, challans: null });
+  const [companies, setCompanies] = useState([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [counts, setCounts] = useState({ companies: null, clients: null, challans: null, invoices: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const displayName =
     user?.name ?? user?.username ?? user?.email ?? "there";
 
-  const fetchCounts = async () => {
+  const fetchCompanies = async () => {
+    try {
+      const { data } = await getCompanies();
+      setCompanies(Array.isArray(data) ? data : []);
+    } catch { /* ignore */ }
+  };
+
+  const fetchCounts = async (companyId) => {
     setLoading(true);
     setError(null);
     try {
-      const [companiesRes, clientsRes, challansCountRes] = await Promise.all([
+      const cid = companyId || null;
+      const [companiesRes, clientsCountRes, challansCountRes, invoicesCountRes] = await Promise.all([
         getCompanies(),
-        getClients(),
-        getDeliveryChallansCount(),
+        getClientsCount(cid),
+        getDeliveryChallansCount(cid),
+        getInvoicesCount(cid),
       ]);
       setCounts({
         companies: Array.isArray(companiesRes.data) ? companiesRes.data.length : 0,
-        clients: Array.isArray(clientsRes.data) ? clientsRes.data.length : 0,
+        clients: typeof clientsCountRes.data === "number" ? clientsCountRes.data : 0,
         challans: typeof challansCountRes.data === "number" ? challansCountRes.data : 0,
+        invoices: typeof invoicesCountRes.data === "number" ? invoicesCountRes.data : 0,
       });
     } catch (err) {
       console.error("Dashboard fetch error:", err);
@@ -188,9 +218,15 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
+    fetchCompanies();
     fetchCounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    fetchCounts(selectedCompanyId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCompanyId]);
 
   /* Card hover handlers */
   const hoverIn = (e) => {
@@ -231,6 +267,12 @@ export default function DashboardPage() {
       icon: <MdDescription style={styles.statIcon} />,
       gradient: "linear-gradient(135deg, #1565c0 30%, #00897b 100%)",
     },
+    {
+      label: "Invoices",
+      count: counts.invoices,
+      icon: <MdReceipt style={styles.statIcon} />,
+      gradient: "linear-gradient(135deg, #6a1b9a 0%, #8e24aa 100%)",
+    },
   ];
 
   /* Quick action cards config */
@@ -262,6 +304,15 @@ export default function DashboardPage() {
       path: "/challans",
       btnLabel: "Go to Challans",
     },
+    {
+      title: "Invoices",
+      icon: <MdReceipt style={{ color: "#6a1b9a", fontSize: "1.2rem" }} />,
+      desc: "Create invoices from pending challans, print bills and sales tax invoices.",
+      borderColor: "#e1bee7",
+      btnColor: "#6a1b9a",
+      path: "/invoices",
+      btnLabel: "Go to Invoices",
+    },
   ];
 
   return (
@@ -284,13 +335,30 @@ export default function DashboardPage() {
         </span>
       </div>
 
+      {/* Company Filter */}
+      {companies.length > 0 && (
+        <div style={styles.filterRow}>
+          <MdFilterList size={20} color="#0d47a1" />
+          <select
+            style={styles.filterSelect}
+            value={selectedCompanyId}
+            onChange={(e) => setSelectedCompanyId(e.target.value)}
+          >
+            <option value="">All Companies</option>
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Error */}
       {error && (
         <div style={styles.errorBox}>
           <span>{error}</span>
           <button
             type="button"
-            onClick={fetchCounts}
+            onClick={() => fetchCounts(selectedCompanyId)}
             style={{ ...styles.actionBtn("#842029"), flexShrink: 0 }}
           >
             <MdRefresh /> Retry

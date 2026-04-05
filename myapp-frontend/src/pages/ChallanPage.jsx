@@ -1,9 +1,20 @@
-import { useState, useEffect } from "react";
-import { MdDescription, MdAdd, MdBusiness } from "react-icons/md";
+import { useState, useEffect, useCallback } from "react";
+import { MdDescription, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
 import ChallanForm from "../Components/ChallanForm";
-import { getDeliveryChallansByCompany, createDeliveryChallan } from "../api/challanApi";
+import ChallanEditForm from "../Components/ChallanEditForm";
+import {
+  getPagedChallansByCompany,
+  createDeliveryChallan,
+  cancelChallan,
+  deleteChallan,
+  getChallanPrintData,
+} from "../api/challanApi";
 import { getCompanies } from "../api/companyApi";
+import { getClientsByCompany } from "../api/clientApi";
+import { getTemplate } from "../api/printTemplateApi";
+import { mergeTemplate } from "../utils/templateEngine";
+import { defaultChallanTemplate } from "../utils/defaultTemplates";
 import { dropdownStyles } from "../theme";
 
 const colors = {
@@ -13,15 +24,30 @@ const colors = {
   textPrimary: "#1a2332",
   textSecondary: "#5f6d7e",
   cardBorder: "#e8edf3",
+  inputBg: "#f8f9fb",
+  inputBorder: "#d0d7e2",
 };
 
 export default function ChallanPage() {
   const [companies, setCompanies] = useState([]);
+  const [clients, setClients] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [challans, setChallans] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [editChallan, setEditChallan] = useState(null);
   const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [loadingChallans, setLoadingChallans] = useState(false);
+
+  // Pagination & filters
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [clientFilter, setClientFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const fetchCompanies = async () => {
     setLoadingCompanies(true);
@@ -36,38 +62,132 @@ export default function ChallanPage() {
     }
   };
 
-  const fetchChallans = async (companyId) => {
+  const fetchClients = async (companyId) => {
+    try {
+      const { data } = await getClientsByCompany(companyId);
+      setClients(data);
+    } catch { setClients([]); }
+  };
+
+  const fetchChallans = useCallback(async (companyId, pg) => {
     if (!companyId) return;
     setLoadingChallans(true);
     try {
-      const { data } = await getDeliveryChallansByCompany(companyId);
-      setChallans(data);
+      const params = { page: pg || page };
+      if (search) params.search = search;
+      if (statusFilter) params.status = statusFilter;
+      if (clientFilter) params.clientId = clientFilter;
+      if (dateFrom) params.dateFrom = dateFrom;
+      if (dateTo) params.dateTo = dateTo;
+      const { data } = await getPagedChallansByCompany(companyId, params);
+      setChallans(data.items);
+      setTotalCount(data.totalCount);
+      setTotalPages(data.totalPages);
+      setPageSize(data.pageSize);
     } catch {
       setChallans([]);
-      alert("Failed to fetch delivery challans.");
+      setTotalCount(0);
+      setTotalPages(0);
     } finally {
       setLoadingChallans(false);
     }
-  };
+  }, [page, search, statusFilter, clientFilter, dateFrom, dateTo]);
 
   useEffect(() => { fetchCompanies(); }, []);
+
   useEffect(() => {
-    if (selectedCompany) fetchChallans(selectedCompany.id);
-    else setChallans([]);
+    if (selectedCompany) {
+      fetchClients(selectedCompany.id);
+      setPage(1);
+      fetchChallans(selectedCompany.id, 1);
+    } else {
+      setChallans([]);
+      setClients([]);
+    }
   }, [selectedCompany]);
+
+  // Re-fetch when filters or page change
+  useEffect(() => {
+    if (selectedCompany) fetchChallans(selectedCompany.id, page);
+  }, [page, search, statusFilter, clientFilter, dateFrom, dateTo]);
+
+  const resetFilters = () => {
+    setSearch("");
+    setStatusFilter("");
+    setClientFilter("");
+    setDateFrom("");
+    setDateTo("");
+    setPage(1);
+  };
+
+  const handleFilterChange = (setter) => (e) => {
+    setter(e.target.value);
+    setPage(1);
+  };
 
   const handleAddChallan = () => { if (selectedCompany) setShowModal(true); };
 
   const handleSaveChallan = async (payload) => {
     if (!selectedCompany) return;
     await createDeliveryChallan(selectedCompany.id, payload);
-    await fetchChallans(selectedCompany.id);
+    fetchChallans(selectedCompany.id, page);
     setShowModal(false);
   };
 
+  const handleCancel = async (challan) => {
+    if (!window.confirm(`Cancel Challan #${challan.challanNumber}?`)) return;
+    try {
+      await cancelChallan(challan.id);
+      fetchChallans(selectedCompany.id, page);
+    } catch (err) {
+      alert(err.response?.data?.error || "Failed to cancel challan.");
+    }
+  };
+
+  const handleDelete = async (challan) => {
+    if (!window.confirm(`Delete Challan #${challan.challanNumber}? This cannot be undone.`)) return;
+    try {
+      await deleteChallan(challan.id);
+      fetchChallans(selectedCompany.id, page);
+    } catch (err) {
+      alert(err.response?.data?.error || "Failed to delete challan.");
+    }
+  };
+
+  const handlePrint = async (challan) => {
+    const w = window.open("", "_blank");
+    if (!w) { alert("Popup blocked. Please allow popups for this site."); return; }
+    w.document.write("<p>Loading challan...</p>");
+    try {
+      const { data } = await getChallanPrintData(challan.id);
+      let template = defaultChallanTemplate;
+      try {
+        const res = await getTemplate(selectedCompany.id, "Challan");
+        if (res.data?.htmlContent) template = res.data.htmlContent;
+      } catch { /* use default */ }
+      const html = mergeTemplate(template, data);
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
+      w.focus();
+      w.onafterprint = () => w.close();
+      w.print();
+    } catch {
+      w.close();
+      alert("Failed to load print data.");
+    }
+  };
+
+  const handleEditItems = (challan) => setEditChallan(challan);
+  const handleEditSaved = () => {
+    setEditChallan(null);
+    fetchChallans(selectedCompany.id, page);
+  };
+
+  const hasFilters = search || statusFilter || clientFilter || dateFrom || dateTo;
+
   return (
     <div>
-      {/* Page Header */}
       <div style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={styles.headerIcon}>
@@ -77,7 +197,7 @@ export default function ChallanPage() {
             <h2 style={styles.pageTitle}>Delivery Challans</h2>
             <p style={styles.pageSubtitle}>
               {selectedCompany
-                ? `${challans.length} challan${challans.length !== 1 ? "s" : ""} for ${selectedCompany.name}`
+                ? `${totalCount} challan${totalCount !== 1 ? "s" : ""} for ${selectedCompany.name}`
                 : "Select a company to view challans"}
             </p>
           </div>
@@ -89,27 +209,62 @@ export default function ChallanPage() {
         )}
       </div>
 
-      {/* Company Selector */}
       {loadingCompanies ? (
         <div style={styles.loadingContainer}>
           <div style={styles.spinner} />
           <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>Loading companies...</span>
         </div>
       ) : companies.length > 0 ? (
-        <div style={{ marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <MdBusiness size={20} color={colors.blue} />
-          <select
-            style={dropdownStyles.base}
-            value={selectedCompany?.id || ""}
-            onChange={(e) =>
-              setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))
-            }
-          >
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
+        <>
+          <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <MdBusiness size={20} color={colors.blue} />
+            <select
+              style={dropdownStyles.base}
+              value={selectedCompany?.id || ""}
+              onChange={(e) =>
+                setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))
+              }
+            >
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filters */}
+          {selectedCompany && (
+            <div className="filters-row">
+              <div className="filter-search-wrap">
+                <MdSearch size={15} className="filter-search-icon" />
+                <input
+                  type="text"
+                  placeholder="Search DC#, Client, PO..."
+                  className="filter-search-input"
+                  value={search}
+                  onChange={handleFilterChange(setSearch)}
+                />
+              </div>
+              <select className="filter-select" value={statusFilter} onChange={handleFilterChange(setStatusFilter)}>
+                <option value="">All Status</option>
+                <option value="Pending">Pending</option>
+                <option value="Invoiced">Invoiced</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+              <select className="filter-select" value={clientFilter} onChange={handleFilterChange(setClientFilter)}>
+                <option value="">All Clients</option>
+                {clients.map((cl) => <option key={cl.id} value={cl.id}>{cl.name}</option>)}
+              </select>
+              <div className="filter-date-group">
+                <input type="date" className="filter-date-input" value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" />
+                <span className="filter-date-sep">–</span>
+                <input type="date" className="filter-date-input" value={dateTo} onChange={handleFilterChange(setDateTo)} title="To date" />
+              </div>
+              {hasFilters && (
+                <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>
+              )}
+            </div>
+          )}
+        </>
       ) : (
         <div style={styles.emptyState}>
           <MdBusiness size={40} color={colors.cardBorder} />
@@ -117,7 +272,6 @@ export default function ChallanPage() {
         </div>
       )}
 
-      {/* Challan List */}
       {loadingChallans ? (
         <div style={styles.loadingContainer}>
           <div style={styles.spinner} />
@@ -126,13 +280,44 @@ export default function ChallanPage() {
       ) : challans.length === 0 && selectedCompany ? (
         <div style={styles.emptyState}>
           <MdDescription size={40} color={colors.cardBorder} />
-          <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>No delivery challans found for this company.</p>
+          <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
+            {hasFilters ? "No challans match the current filters." : "No delivery challans found for this company."}
+          </p>
         </div>
       ) : (
-        <ChallanList challans={challans} />
+        <>
+          <ChallanList
+            challans={challans}
+            onCancel={handleCancel}
+            onDelete={handleDelete}
+            onPrint={handlePrint}
+            onEditItems={handleEditItems}
+          />
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div style={styles.pagination}>
+              <button
+                style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }}
+                disabled={page <= 1}
+                onClick={() => setPage(page - 1)}
+              >
+                <MdChevronLeft size={20} /> Prev
+              </button>
+              <span style={styles.pageInfo}>
+                Page {page} of {totalPages} ({totalCount} total)
+              </span>
+              <button
+                style={{ ...styles.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }}
+                disabled={page >= totalPages}
+                onClick={() => setPage(page + 1)}
+              >
+                Next <MdChevronRight size={20} />
+              </button>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Create Challan Modal */}
       {showModal && selectedCompany && (
         <ChallanForm
           companyId={selectedCompany.id}
@@ -140,8 +325,150 @@ export default function ChallanPage() {
           onSaved={handleSaveChallan}
         />
       )}
+
+      {editChallan && (
+        <ChallanEditForm
+          challan={editChallan}
+          onClose={() => setEditChallan(null)}
+          onSaved={handleEditSaved}
+        />
+      )}
     </div>
   );
+}
+
+function buildChallanPrintHtml(data) {
+  const MIN_ROWS = 15;
+  const nl2br = (s) => (s || "").replace(/\n/g, "<br>");
+  const fmtDate = (d) => {
+    if (!d) return "";
+    const dt = new Date(d);
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const dd = String(dt.getDate()).padStart(2, "0");
+    const mmm = months[dt.getMonth()];
+    const yy = String(dt.getFullYear()).slice(-2);
+    return `${dd}-${mmm}-${yy}`;
+  };
+
+  // Build item rows
+  let itemRows = data.items.map((item) =>
+    `<tr>
+      <td class="cell qty">${item.quantity}</td>
+      <td class="cell item">${item.description}</td>
+    </tr>`
+  ).join("");
+
+  // Pad with empty rows to reach minimum
+  const emptyCount = Math.max(0, MIN_ROWS - data.items.length);
+  for (let i = 0; i < emptyCount; i++) {
+    itemRows += `<tr><td class="cell qty">&nbsp;</td><td class="cell item">&nbsp;</td></tr>`;
+  }
+
+  const date = fmtDate(data.deliveryDate);
+
+  return `<!DOCTYPE html><html><head><title>DC #${data.challanNumber}</title>
+<style>
+  @media print {
+    @page { size: A4; margin: 10mm 0 0 0; }
+    @page:first { margin: 0; }
+    html, body { height: 100%; margin: 0; }
+    .footer-section { page-break-inside: avoid; }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+  }
+  html, body { height: 100%; }
+  body { font-family: "Times New Roman", Times, serif; font-size: 16px; color: #000;
+         display: flex; flex-direction: column; min-height: 100vh;
+         padding: 10mm 12mm; }
+  .main-content { flex: 1; }
+  .footer-section { margin-top: auto; }
+
+  /* ---- Two-column header ---- */
+  .header-grid { display: flex; justify-content: space-between; }
+  .header-left { flex: 1; }
+  .header-right { text-align: right; white-space: nowrap; padding-left: 20px; }
+
+  /* Left: logo + name row */
+  .brand-row { display: flex; align-items: center; gap: 14px; }
+  .brand-row img { height: 75px; }
+  .company-name { font-size: 38px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; }
+  .company-address { font-size: 11.5px; color: #333; margin-top: 2px; line-height: 1.35; }
+  .company-contact { font-size: 12.5px; margin-top: 6px; line-height: 1.4; }
+
+  /* Right: DC label, date, DC number */
+  .dc-label { font-size: 22px; font-weight: 700; color: #1a5276; }
+  .dc-date { font-size: 17px; font-weight: 700; margin-top: 6px; }
+  .dc-number { font-size: 28px; font-weight: 900; margin-top: 14px; }
+
+  /* ---- Info lines (below header) ---- */
+  .info-section { margin-top: 18px; }
+  .info-line { font-size: 18px; margin-bottom: 5px; }
+  .info-line strong { font-weight: 700; }
+  .info-line .value { font-size: 20px; font-weight: 900; margin-left: 14px; }
+
+  /* ---- Table ---- */
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  thead { display: table-row-group; }
+  th { background-color: #2c3e50 !important; color: #fff !important; font-weight: 700; font-size: 12px; text-transform: uppercase; padding: 6px 14px; border: 1px solid #2c3e50; }
+  th.qty-head { width: 130px; text-align: center; }
+  .cell { border: 1px solid #888; padding: 8px 14px; font-size: 15px; height: 34px; }
+  .cell.qty { text-align: center; width: 130px; }
+  .cell.item { text-align: left; }
+  tbody tr:nth-child(odd) td { background-color: #ffffff !important; }
+  tbody tr:nth-child(even) td { background-color: #d9d9d9 !important; }
+
+  /* ---- Footer ---- */
+  .thank-you { text-align: center; font-size: 22px; font-weight: 700; font-style: italic; margin-top: 20px; }
+  .sig-row { display: flex; justify-content: space-between; margin-top: 50px; padding: 0 40px; }
+  .sig-block { text-align: center; }
+  .sig-block .line { width: 220px; border-top: 1.5px solid #4a90b8; margin-bottom: 1px; }
+  .sig-block .label { font-size: 13px; font-weight: normal; color: #000; }
+</style></head><body>
+
+<div class="main-content">
+<!-- Two-column header -->
+<div class="header-grid">
+  <div class="header-left">
+    <div class="brand-row">
+      ${data.companyLogoPath ? `<img src="${data.companyLogoPath}" />` : ""}
+      <span class="company-name">${data.companyBrandName}</span>
+    </div>
+    ${data.companyAddress ? `<div class="company-address">${nl2br(data.companyAddress)}</div>` : ""}
+    ${data.companyPhone ? `<div class="company-contact">${nl2br(data.companyPhone)}</div>` : ""}
+  </div>
+  <div class="header-right">
+    <div class="dc-label">Delivery Challan</div>
+    <div class="dc-date">${date}</div>
+    <div class="dc-number">DC # ${data.challanNumber}</div>
+  </div>
+</div>
+
+<!-- Info -->
+<div class="info-section">
+  <div class="info-line"><strong>Messers:</strong> <span class="value">${data.clientName}${data.clientAddress ? `, ${data.clientAddress}` : ""}</span></div>
+  <div class="info-line"><strong>Purchase Order:</strong> <span class="value">${data.poNumber || "\u2014"}</span></div>
+</div>
+
+<!-- Items Table -->
+<table>
+  <thead><tr><th class="qty-head">Quantity</th><th>Item</th></tr></thead>
+  <tbody>${itemRows}</tbody>
+</table>
+</div>
+
+<!-- Footer -->
+<div class="footer-section">
+  <div class="thank-you">Thank you for your business!</div>
+  <div class="sig-row">
+    <div class="sig-block"><div class="line"></div><div class="label">Signature and Stamp</div></div>
+    <div class="sig-block"><div class="line"></div><div class="label">Receiver Signature and Stamp</div></div>
+  </div>
+</div>
+
+</body></html>`;
 }
 
 const styles = {
@@ -211,5 +538,31 @@ const styles = {
     justifyContent: "center",
     padding: "3rem 1rem",
     textAlign: "center",
+  },
+  pagination: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: "1rem",
+    padding: "1rem 0",
+    marginTop: "0.5rem",
+  },
+  pageBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.2rem",
+    padding: "0.4rem 0.8rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    backgroundColor: "#fff",
+    color: colors.blue,
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  pageInfo: {
+    fontSize: "0.82rem",
+    color: colors.textSecondary,
+    fontWeight: 500,
   },
 };

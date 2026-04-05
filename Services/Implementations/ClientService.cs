@@ -8,35 +8,49 @@ namespace MyApp.Api.Services.Implementations
     public class ClientService : IClientService
     {
         private readonly IClientRepository _repo;
-        public ClientService(IClientRepository repo) => _repo = repo;
+        private readonly IInvoiceRepository _invoiceRepo;
+        public ClientService(IClientRepository repo, IInvoiceRepository invoiceRepo)
+        {
+            _repo = repo;
+            _invoiceRepo = invoiceRepo;
+        }
 
-        private static ClientDto ToDto(Client c) => new()
+        private static ClientDto ToDto(Client c, bool hasInvoices = false) => new()
         {
             Id = c.Id,
             Name = c.Name,
             Address = c.Address,
             Phone = c.Phone,
             Email = c.Email,
+            NTN = c.NTN,
+            STRN = c.STRN,
             CompanyId = c.CompanyId,
+            HasInvoices = hasInvoices,
             CreatedAt = c.CreatedAt
         };
 
         public async Task<IEnumerable<ClientDto>> GetAllAsync()
         {
-            var clients = await _repo.GetAllAsync();
-            return clients.Select(ToDto);
+            var clients = (await _repo.GetAllAsync()).ToList();
+            var clientIds = clients.Select(c => c.Id).ToList();
+            var hasInvoicesMap = await _invoiceRepo.HasInvoicesForClientsAsync(clientIds);
+            return clients.Select(c => ToDto(c, hasInvoicesMap.GetValueOrDefault(c.Id)));
         }
 
         public async Task<IEnumerable<ClientDto>> GetByCompanyAsync(int companyId)
         {
-            var clients = await _repo.GetByCompanyAsync(companyId);
-            return clients.Select(ToDto);
+            var clients = (await _repo.GetByCompanyAsync(companyId)).ToList();
+            var clientIds = clients.Select(c => c.Id).ToList();
+            var hasInvoicesMap = await _invoiceRepo.HasInvoicesForClientsAsync(clientIds);
+            return clients.Select(c => ToDto(c, hasInvoicesMap.GetValueOrDefault(c.Id)));
         }
 
         public async Task<ClientDto?> GetByIdAsync(int id)
         {
             var c = await _repo.GetByIdAsync(id);
-            return c == null ? null : ToDto(c);
+            if (c == null) return null;
+            var hasInvoices = await _invoiceRepo.HasInvoicesForClientAsync(c.Id);
+            return ToDto(c, hasInvoices);
         }
 
         public async Task<ClientDto> CreateAsync(ClientDto dto)
@@ -50,6 +64,8 @@ namespace MyApp.Api.Services.Implementations
                 Address = dto.Address,
                 Phone = dto.Phone,
                 Email = dto.Email,
+                NTN = dto.NTN,
+                STRN = dto.STRN,
                 CompanyId = dto.CompanyId,
                 CreatedAt = DateTime.UtcNow
             };
@@ -72,9 +88,12 @@ namespace MyApp.Api.Services.Implementations
             client.Address = dto.Address;
             client.Phone = dto.Phone;
             client.Email = dto.Email;
+            client.NTN = dto.NTN;
+            client.STRN = dto.STRN;
 
+            var hasInvoices = await _invoiceRepo.HasInvoicesForClientAsync(client.Id);
             await _repo.UpdateAsync(client);
-            return ToDto(client);
+            return ToDto(client, hasInvoices);
         }
 
         public async Task DeleteAsync(int id)

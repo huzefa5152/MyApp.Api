@@ -45,11 +45,16 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<IDeliveryChallanRepository, DeliveryChallanRepository>();
 builder.Services.AddScoped<IClientRepository, ClientRepository>();
+builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+builder.Services.AddScoped<IItemTypeRepository, ItemTypeRepository>();
+builder.Services.AddScoped<IPrintTemplateRepository, PrintTemplateRepository>();
 
 // Register Services
 builder.Services.AddScoped<ICompanyService, CompanyService>();
 builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
 builder.Services.AddScoped<IClientService, ClientService>();
+builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
 
 // before builder.Build()
 builder.Services.AddCors(options =>
@@ -112,6 +117,15 @@ app.UseAuthorization();
 // Serve React frontend static files from wwwroot
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+// Serve user-uploaded files (logos, avatars) from persistent data/ folder
+var dataPath = Path.Combine(app.Environment.ContentRootPath, "data");
+Directory.CreateDirectory(dataPath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(dataPath),
+    RequestPath = "/data"
+});
 
 app.MapControllers(); // 👈 maps your controllers (like CompaniesController)
 

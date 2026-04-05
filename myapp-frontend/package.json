@@ -16,6 +16,7 @@
     "aos": "^2.3.4",
     "axios": "^1.11.0",
     "bootstrap": "^5.3.8",
+    "handlebars": "^4.7.9",
     "react": "^19.1.1",
     "react-bootstrap": "^2.10.10",
     "react-countup": "^6.5.3",

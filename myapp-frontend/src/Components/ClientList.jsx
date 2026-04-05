@@ -45,6 +45,16 @@ export default function ClientList({ clients, onEdit, fetchClients }) {
                   <MdLocationOn style={{ color: "#5f6d7e", flexShrink: 0 }} /> {client.address}
                 </p>
               )}
+              {client.ntn && (
+                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>NTN:</strong> {client.ntn}
+                </p>
+              )}
+              {client.strn && (
+                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>STRN:</strong> {client.strn}
+                </p>
+              )}
             </div>
             <div style={cardStyles.buttonGroup}>
               <button

@@ -7,6 +7,8 @@
         public string? Address { get; set; }
         public string? Phone { get; set; }
         public string? Email { get; set; }
+        public string? NTN { get; set; }
+        public string? STRN { get; set; }
         public int CompanyId { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
