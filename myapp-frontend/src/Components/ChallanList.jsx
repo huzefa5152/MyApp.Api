@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint } from "react-icons/md";
+import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn } from "react-icons/md";
 import ChallanModal from "./ChallanModal";
 import { cardStyles, cardHover } from "../theme";
 
@@ -20,7 +20,7 @@ const statusColors = {
   Cancelled: { bg: "#ffebee", color: "#c62828", border: "#c6282830" },
 };
 
-export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems }) {
+export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, exportingId }) {
   const [selectedChallan, setSelectedChallan] = useState(null);
 
   if (!challans || challans.length === 0) return null;
@@ -84,6 +84,22 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                   >
                     <MdPrint size={14} /> Print
                   </button>
+                  <button
+                    style={{ ...styles.actionBtn, ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }}
+                    disabled={!!exportingId}
+                    onClick={() => onExportPdf?.(c)}
+                  >
+                    {exportingId === c.id + "-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} PDF
+                  </button>
+                  {onExportExcel && (
+                    <button
+                      style={{ ...styles.actionBtn, ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }}
+                      disabled={!!exportingId}
+                      onClick={() => onExportExcel(c)}
+                    >
+                      {exportingId === c.id + "-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Excel
+                    </button>
+                  )}
                   {isPending && (
                     <>
                       <button
@@ -175,6 +191,8 @@ const styles = {
   },
   viewBtn: { backgroundColor: "#e3f2fd", color: "#0d47a1" },
   printBtn: { backgroundColor: "#f3e5f5", color: "#7b1fa2" },
+  pdfBtn: { backgroundColor: "#ffebee", color: "#c62828" },
+  excelBtn: { backgroundColor: "#e8f5e9", color: "#2e7d32" },
   editBtn: { backgroundColor: "#fff3e0", color: "#e65100" },
   cancelBtn: { backgroundColor: "#fce4ec", color: "#c62828" },
   deleteBtn: { backgroundColor: "#ffebee", color: "#b71c1c" },

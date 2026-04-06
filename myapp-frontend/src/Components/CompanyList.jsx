@@ -1,16 +1,20 @@
 import { MdEdit, MdDelete, MdReceipt, MdBusiness, MdPhone, MdLocationOn } from "react-icons/md";
 import { deleteCompany } from "../api/companyApi";
+import { notify } from "../utils/notify";
 import { cardStyles, cardHover } from "../theme";
+import { useConfirm } from "./ConfirmDialog";
 
 export default function CompanyList({ companies, onEdit, fetchCompanies }) {
+  const confirm = useConfirm();
+
   const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this company?")) {
-      try {
-        await deleteCompany(id);
-        fetchCompanies();
-      } catch {
-        alert("Failed to delete company.");
-      }
+    const ok = await confirm({ title: "Delete Company?", message: "Are you sure you want to delete this company? This action cannot be undone.", variant: "danger", confirmText: "Delete" });
+    if (!ok) return;
+    try {
+      await deleteCompany(id);
+      fetchCompanies();
+    } catch {
+      notify("Failed to delete company.", "error");
     }
   };
 
@@ -58,11 +62,11 @@ export default function CompanyList({ companies, onEdit, fetchCompanies }) {
               )}
               <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
                 <MdReceipt style={{ color: "#0d47a1", flexShrink: 0 }} />
-                <strong>Challan #:</strong> {c.startingChallanNumber}{c.currentChallanNumber > 0 ? ` → Current: #${c.currentChallanNumber}` : " (starting)"}
+                <strong>Challan #:</strong> Starts at {c.startingChallanNumber}{c.currentChallanNumber > 0 ? ` → Current: #${c.currentChallanNumber}` : ""}
               </p>
               <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
                 <MdReceipt style={{ color: "#00897b", flexShrink: 0 }} />
-                <strong>Invoice #:</strong> {c.startingInvoiceNumber}{c.currentInvoiceNumber > 0 ? ` → Current: #${c.currentInvoiceNumber}` : " (starting)"}
+                <strong>Invoice #:</strong> Starts at {c.startingInvoiceNumber}{c.currentInvoiceNumber > 0 ? ` → Current: #${c.currentInvoiceNumber}` : ""}
               </p>
               {c.logoPath && (
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem", padding: "0.4rem 0.6rem", backgroundColor: "#f8f9fb", borderRadius: 8, border: "1px solid #e8edf3", width: "fit-content" }}>

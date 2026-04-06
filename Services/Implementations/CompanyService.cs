@@ -1,4 +1,6 @@
-﻿using MyApp.Api.DTOs;
+﻿using Microsoft.EntityFrameworkCore;
+using MyApp.Api.Data;
+using MyApp.Api.DTOs;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Services.Interfaces;
@@ -10,12 +12,14 @@ namespace MyApp.Api.Services.Implementations
         private readonly ICompanyRepository _repository;
         private readonly IDeliveryChallanRepository _challanRepo;
         private readonly IInvoiceRepository _invoiceRepo;
+        private readonly AppDbContext _context;
 
-        public CompanyService(ICompanyRepository repository, IDeliveryChallanRepository challanRepo, IInvoiceRepository invoiceRepo)
+        public CompanyService(ICompanyRepository repository, IDeliveryChallanRepository challanRepo, IInvoiceRepository invoiceRepo, AppDbContext context)
         {
             _repository = repository;
             _challanRepo = challanRepo;
             _invoiceRepo = invoiceRepo;
+            _context = context;
         }
 
         private static CompanyDto ToDto(Company c, bool hasChallans = false, bool hasInvoices = false) => new()
@@ -72,7 +76,7 @@ namespace MyApp.Api.Services.Implementations
                 NTN = dto.NTN,
                 STRN = dto.STRN,
                 StartingChallanNumber = dto.StartingChallanNumber,
-                CurrentChallanNumber = dto.StartingChallanNumber,
+                CurrentChallanNumber = 0,
                 StartingInvoiceNumber = dto.StartingInvoiceNumber,
                 CurrentInvoiceNumber = 0
             };
@@ -103,7 +107,7 @@ namespace MyApp.Api.Services.Implementations
             if (!hasChallans)
             {
                 company.StartingChallanNumber = dto.StartingChallanNumber;
-                company.CurrentChallanNumber = dto.StartingChallanNumber;
+                company.CurrentChallanNumber = 0;
             }
 
             // Only allow changing starting invoice number if no invoices exist
@@ -123,6 +127,37 @@ namespace MyApp.Api.Services.Implementations
             var company = await _repository.GetByIdAsync(id);
             if (company == null) throw new KeyNotFoundException("Company not found");
 
+            // Cascade delete all related data (SQL Server doesn't allow multiple cascade paths)
+            // Order: unlink challans from invoices → delete invoices → delete challans → delete clients → delete company
+
+            // 1. Unlink challans from invoices
+            await _context.DeliveryChallans
+                .Where(dc => dc.CompanyId == id && dc.InvoiceId != null)
+                .ExecuteUpdateAsync(s => s.SetProperty(dc => dc.InvoiceId, (int?)null));
+
+            // 2. Delete invoice items, then invoices
+            var invoiceIds = await _context.Invoices.Where(i => i.CompanyId == id).Select(i => i.Id).ToListAsync();
+            if (invoiceIds.Count > 0)
+            {
+                await _context.InvoiceItems.Where(ii => invoiceIds.Contains(ii.InvoiceId)).ExecuteDeleteAsync();
+                await _context.Invoices.Where(i => i.CompanyId == id).ExecuteDeleteAsync();
+            }
+
+            // 3. Delete delivery items, then challans
+            var challanIds = await _context.DeliveryChallans.Where(dc => dc.CompanyId == id).Select(dc => dc.Id).ToListAsync();
+            if (challanIds.Count > 0)
+            {
+                await _context.DeliveryItems.Where(di => challanIds.Contains(di.DeliveryChallanId)).ExecuteDeleteAsync();
+                await _context.DeliveryChallans.Where(dc => dc.CompanyId == id).ExecuteDeleteAsync();
+            }
+
+            // 4. Delete clients
+            await _context.Clients.Where(c => c.CompanyId == id).ExecuteDeleteAsync();
+
+            // 5. Delete print templates (already CASCADE in DB, but be explicit)
+            await _context.PrintTemplates.Where(pt => pt.CompanyId == id).ExecuteDeleteAsync();
+
+            // 6. Delete the company
             await _repository.DeleteAsync(company);
         }
     }

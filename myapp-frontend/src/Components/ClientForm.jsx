@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { createClient, updateClient } from "../api/clientApi";
+import { notify } from "../utils/notify";
 import { formStyles } from "../theme";
 
 const {
@@ -10,12 +11,12 @@ const {
 
 export default function ClientForm({ client, companyId, onClose, onSaved }) {
   const [formData, setFormData] = useState(
-    client || { id: null, name: "", address: "", email: "", phone: "", ntn: "", strn: "" }
+    client || { id: null, name: "", address: "", email: "", phone: "", ntn: "", strn: "", site: "" }
   );
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    if (client) setFormData({ ...client, ntn: client.ntn || "", strn: client.strn || "" });
+    if (client) setFormData({ ...client, ntn: client.ntn || "", strn: client.strn || "", site: client.site || "" });
   }, [client]);
 
   const validate = () => {
@@ -42,7 +43,7 @@ export default function ClientForm({ client, companyId, onClose, onSaved }) {
       onClose();
     } catch (err) {
       const msg = err.response?.data?.message || "Failed to save client. Please try again.";
-      alert(msg);
+      notify(msg, "error");
     }
   };
 
@@ -89,6 +90,12 @@ export default function ClientForm({ client, companyId, onClose, onSaved }) {
                 <label style={label}>STRN</label>
                 <input type="text" name="strn" value={formData.strn} onChange={handleChange} style={input} />
               </div>
+            </div>
+
+            <div style={formGroup}>
+              <label style={label}>Sites</label>
+              <input type="text" name="site" value={formData.site} onChange={handleChange} style={input} placeholder="e.g. Site-A ; Site-B ; Site-C" />
+              <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.25rem", display: "block" }}>Separate multiple sites with semicolons (;). These will appear as dropdown options when creating a delivery challan.</span>
             </div>
 
           </div>

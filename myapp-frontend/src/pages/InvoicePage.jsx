@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice } from "../api/invoiceApi";
-import { getCompanies } from "../api/companyApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
-import { getTemplate } from "../api/printTemplateApi";
+import { useCompany } from "../contexts/CompanyContext";
+import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { defaultBillTemplate, defaultTaxInvoiceTemplate } from "../utils/defaultTemplates";
+import { exportToPdf } from "../utils/exportUtils";
+import { saveAs } from "file-saver";
+import { notify } from "../utils/notify";
 
 const colors = {
   blue: "#0d47a1",
@@ -20,12 +23,10 @@ const colors = {
 };
 
 export default function InvoicePage() {
-  const [companies, setCompanies] = useState([]);
+  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const [clients, setClients] = useState([]);
-  const [selectedCompany, setSelectedCompany] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
 
   // Pagination & filters
@@ -36,16 +37,9 @@ export default function InvoicePage() {
   const [clientFilter, setClientFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-
-  const fetchCompanies = async () => {
-    setLoadingCompanies(true);
-    try {
-      const { data } = await getCompanies();
-      setCompanies(data);
-      if (!selectedCompany && data.length > 0) setSelectedCompany(data[0]);
-    } catch { alert("Failed to load companies."); }
-    finally { setLoadingCompanies(false); }
-  };
+  const [hasExcelBill, setHasExcelBill] = useState(false);
+  const [hasExcelTax, setHasExcelTax] = useState(false);
+  const [exportingId, setExportingId] = useState(null);
 
   const fetchClients = async (companyId) => {
     try {
@@ -71,16 +65,22 @@ export default function InvoicePage() {
     finally { setLoadingInvoices(false); }
   }, [page, search, clientFilter, dateFrom, dateTo]);
 
-  useEffect(() => { fetchCompanies(); }, []);
-
   useEffect(() => {
     if (selectedCompany) {
       fetchClients(selectedCompany.id);
       setPage(1);
       fetchInvoices(selectedCompany.id, 1);
+      hasExcelTemplate(selectedCompany.id, "Bill")
+        .then(r => setHasExcelBill(r.data.hasExcelTemplate))
+        .catch(() => setHasExcelBill(false));
+      hasExcelTemplate(selectedCompany.id, "TaxInvoice")
+        .then(r => setHasExcelTax(r.data.hasExcelTemplate))
+        .catch(() => setHasExcelTax(false));
     } else {
       setInvoices([]);
       setClients([]);
+      setHasExcelBill(false);
+      setHasExcelTax(false);
     }
   }, [selectedCompany]);
 
@@ -101,7 +101,7 @@ export default function InvoicePage() {
 
   const handlePrintBill = async (inv) => {
     const w = window.open("", "_blank");
-    if (!w) { alert("Popup blocked. Please allow popups for this site."); return; }
+    if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
     w.document.write("<p>Loading bill...</p>");
     try {
       const { data } = await getInvoicePrintBill(inv.id);
@@ -117,12 +117,12 @@ export default function InvoicePage() {
       w.focus();
       w.onafterprint = () => w.close();
       w.print();
-    } catch { w.close(); alert("Failed to load bill data."); }
+    } catch { w.close(); notify("Failed to load bill data.", "error"); }
   };
 
   const handlePrintTax = async (inv) => {
     const w = window.open("", "_blank");
-    if (!w) { alert("Popup blocked. Please allow popups for this site."); return; }
+    if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
     w.document.write("<p>Loading tax invoice...</p>");
     try {
       const { data } = await getInvoicePrintTaxInvoice(inv.id);
@@ -138,7 +138,61 @@ export default function InvoicePage() {
       w.focus();
       w.onafterprint = () => w.close();
       w.print();
-    } catch { w.close(); alert("Failed to load tax invoice data."); }
+    } catch { w.close(); notify("Failed to load tax invoice data.", "error"); }
+  };
+
+  const handleExportBillPdf = async (inv) => {
+    if (exportingId) return;
+    setExportingId(inv.id + "-bill-pdf");
+    try {
+      const { data } = await getInvoicePrintBill(inv.id);
+      let template = defaultBillTemplate;
+      try {
+        const res = await getTemplate(selectedCompany.id, "Bill");
+        if (res.data?.htmlContent) template = res.data.htmlContent;
+      } catch { /* use default */ }
+      const html = mergeTemplate(template, data);
+      await exportToPdf(html, `Bill # ${data.invoiceNumber} ${data.clientName}`);
+    } catch { notify("Failed to export Bill PDF.", "error"); }
+    finally { setExportingId(null); }
+  };
+
+  const handleExportBillExcel = async (inv) => {
+    if (exportingId) return;
+    setExportingId(inv.id + "-bill-excel");
+    try {
+      const { data } = await getInvoicePrintBill(inv.id);
+      const res = await exportExcel(selectedCompany.id, "Bill", data);
+      saveAs(res.data, `Bill # ${data.invoiceNumber} ${data.clientName}.xlsx`);
+    } catch { notify("Failed to export Bill Excel.", "error"); }
+    finally { setExportingId(null); }
+  };
+
+  const handleExportTaxPdf = async (inv) => {
+    if (exportingId) return;
+    setExportingId(inv.id + "-tax-pdf");
+    try {
+      const { data } = await getInvoicePrintTaxInvoice(inv.id);
+      let template = defaultTaxInvoiceTemplate;
+      try {
+        const res = await getTemplate(selectedCompany.id, "TaxInvoice");
+        if (res.data?.htmlContent) template = res.data.htmlContent;
+      } catch { /* use default */ }
+      const html = mergeTemplate(template, data);
+      await exportToPdf(html, `Invoice # ${data.invoiceNumber} ${data.buyerName || data.clientName}`);
+    } catch { notify("Failed to export Tax Invoice PDF.", "error"); }
+    finally { setExportingId(null); }
+  };
+
+  const handleExportTaxExcel = async (inv) => {
+    if (exportingId) return;
+    setExportingId(inv.id + "-tax-excel");
+    try {
+      const { data } = await getInvoicePrintTaxInvoice(inv.id);
+      const res = await exportExcel(selectedCompany.id, "TaxInvoice", data);
+      saveAs(res.data, `Invoice # ${data.invoiceNumber} ${data.buyerName || data.clientName}.xlsx`);
+    } catch { notify("Failed to export Tax Invoice Excel.", "error"); }
+    finally { setExportingId(null); }
   };
 
   const hasFilters = search || clientFilter || dateFrom || dateTo;
@@ -248,6 +302,22 @@ export default function InvoicePage() {
                     <button style={styles.taxBtn} onClick={() => handlePrintTax(inv)}>
                       <MdDescription size={14} /> Tax Invoice
                     </button>
+                    <button style={{ ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportBillPdf(inv)}>
+                      {exportingId === inv.id + "-bill-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Bill PDF
+                    </button>
+                    <button style={{ ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxPdf(inv)}>
+                      {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Tax PDF
+                    </button>
+                    {hasExcelBill && (
+                      <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportBillExcel(inv)}>
+                        {exportingId === inv.id + "-bill-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Bill XLS
+                      </button>
+                    )}
+                    {hasExcelTax && (
+                      <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxExcel(inv)}>
+                        {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Tax XLS
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -301,6 +371,8 @@ const styles = {
   emptyState: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3rem 1rem", textAlign: "center" },
   printBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#f3e5f5", color: "#7b1fa2" },
   taxBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#e8f5e9", color: "#2e7d32" },
+  pdfBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#ffebee", color: "#c62828" },
+  excelBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#e8f5e9", color: "#1b5e20" },
   pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", padding: "1rem 0", marginTop: "0.5rem" },
   pageBtn: {
     display: "inline-flex", alignItems: "center", gap: "0.2rem", padding: "0.4rem 0.8rem", borderRadius: 8,

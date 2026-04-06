@@ -16,6 +16,7 @@ import {
   MdAccountCircle,
   MdGroupAdd,
   MdCode,
+  MdBugReport,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import "./DashboardLayout.css";
@@ -227,6 +228,16 @@ export default function DashboardLayout() {
             <span className="dl-nav__label">Users</span>
           </NavLink>
 
+          {/* Audit Logs */}
+          <NavLink
+            to="/audit-logs"
+            className={({ isActive }) =>
+              "dl-nav__item" + (isActive ? " active" : "")
+            }
+          >
+            <MdBugReport className="dl-nav__icon" aria-hidden="true" />
+            <span className="dl-nav__label">Audit Logs</span>
+          </NavLink>
 
           <hr className="dl-nav__divider" />
           <span className="dl-nav__section-label">Account</span>
@@ -352,6 +363,7 @@ function getBreadcrumb(pathname) {
     "/profile": "My Profile",
     "/users": "User Management",
     "/templates": "Print Templates",
+    "/audit-logs": "Audit Logs",
   };
   return map[pathname] ?? pathname.replace(/\//g, " / ").replace(/^\s\/\s/, "");
 }

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { MdBusiness, MdAdd, MdSearch } from "react-icons/md";
 import CompanyList from "../Components/CompanyList";
 import CompanyForm from "../Components/CompanyForm";
-import { getCompanies } from "../api/companyApi";
+import { useCompany } from "../contexts/CompanyContext";
 
 const styles = {
   header: {
@@ -88,31 +88,18 @@ const styles = {
 };
 
 export default function CompanyPage() {
-  const [companies, setCompanies] = useState([]);
-  const [selectedCompany, setSelectedCompany] = useState(null);
+  const { companies, refreshCompanies } = useCompany();
+  const [editingCompany, setEditingCompany] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
 
-  const fetchCompanies = async () => {
-    try {
-      const { data } = await getCompanies();
-      setCompanies(data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => {
-    fetchCompanies();
-  }, []);
-
   const handleEdit = (company) => {
-    setSelectedCompany(company);
+    setEditingCompany(company);
     setShowModal(true);
   };
 
   const handleAdd = () => {
-    setSelectedCompany(null);
+    setEditingCompany(null);
     setShowModal(true);
   };
 
@@ -161,15 +148,15 @@ export default function CompanyPage() {
         <CompanyList
           companies={filtered}
           onEdit={handleEdit}
-          fetchCompanies={fetchCompanies}
+          fetchCompanies={refreshCompanies}
         />
       )}
 
       {showModal && (
         <CompanyForm
-          company={selectedCompany}
+          company={editingCompany}
           onClose={() => setShowModal(false)}
-          onSaved={fetchCompanies}
+          onSaved={refreshCompanies}
         />
       )}
     </div>

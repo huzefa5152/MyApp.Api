@@ -199,6 +199,10 @@ namespace MyApp.Api.Services.Implementations
                 PoDate = inv.DeliveryChallans.Select(dc => dc.PoDate).FirstOrDefault(),
                 ClientName = inv.Client?.Name ?? "",
                 ClientAddress = inv.Client?.Address,
+                ConcernDepartment = string.Join(", ", inv.DeliveryChallans
+                    .Select(dc => dc.Site)
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .Distinct()),
                 ClientNTN = inv.Client?.NTN,
                 ClientSTRN = inv.Client?.STRN,
                 Subtotal = inv.Subtotal,

@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { MdCategory, MdAdd, MdEdit, MdDelete, MdSearch } from "react-icons/md";
 import { getItemTypes, createItemType, updateItemType, deleteItemType } from "../api/itemTypeApi";
 import { formStyles } from "../theme";
+import { notify } from "../utils/notify";
+import { useConfirm } from "../Components/ConfirmDialog";
 
 const colors = {
   blue: "#0d47a1",
@@ -13,6 +15,7 @@ const colors = {
 };
 
 export default function ItemTypesPage() {
+  const confirm = useConfirm();
   const [itemTypes, setItemTypes] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState(null);
@@ -24,7 +27,7 @@ export default function ItemTypesPage() {
     try {
       const { data } = await getItemTypes();
       setItemTypes(data);
-    } catch { alert("Failed to load item types."); }
+    } catch { notify("Failed to load item types.", "error"); }
   };
 
   useEffect(() => { fetch(); }, []);
@@ -47,12 +50,13 @@ export default function ItemTypesPage() {
   };
 
   const handleDelete = async (it) => {
-    if (!window.confirm(`Delete item type "${it.name}"?`)) return;
+    const ok = await confirm({ title: "Delete Item Type?", message: `Delete item type "${it.name}"? It may be in use by existing challans.`, variant: "danger", confirmText: "Delete" });
+    if (!ok) return;
     try {
       await deleteItemType(it.id);
       fetch();
     } catch (err) {
-      alert(err.response?.data?.message || "Cannot delete - may be in use.");
+      notify(err.response?.data?.message || "Cannot delete - may be in use.", "error");
     }
   };
 

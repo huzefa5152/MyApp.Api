@@ -27,7 +27,7 @@
 /* ---------- Sidebar ---------- */
 .dl-sidebar {
   width: var(--sidebar-width);
-  min-height: 100vh;
+  height: 100vh;
   background: linear-gradient(160deg, var(--sidebar-bg-from) 0%, var(--sidebar-bg-to) 100%);
   display: flex;
   flex-direction: column;
@@ -37,10 +37,7 @@
   z-index: 1040;
   transition: transform var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 4px 0 24px rgba(13, 71, 161, 0.22);
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.25) transparent;
+  overflow: hidden;
 }
 
 .dl-sidebar::-webkit-scrollbar { width: 4px; }
@@ -94,7 +91,13 @@
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.25) transparent;
 }
+.dl-nav::-webkit-scrollbar { width: 4px; }
+.dl-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 4px; }
 
 /* Nav Items */
 .dl-nav__item {
@@ -616,5 +619,34 @@
 
   .filter-clear-btn {
     align-self: flex-end;
+  }
+}
+
+/* ---------- Mobile: compact sidebar so logout is visible without scrolling ---------- */
+@media (max-width: 991.98px) {
+  .dl-brand {
+    padding: 0.8rem 1rem 0.6rem;
+  }
+  .dl-brand__icon {
+    font-size: 1.3rem;
+    margin-bottom: 0.25rem;
+  }
+  .dl-brand__name {
+    font-size: 1.1rem;
+  }
+  .dl-brand__tagline {
+    font-size: 0.65rem;
+  }
+  .dl-nav {
+    padding: 0.5rem 0.75rem;
+  }
+  .dl-nav__item {
+    padding: 0.45rem 0.85rem;
+  }
+  .dl-sidebar-footer {
+    padding: 0.6rem 0.75rem;
+  }
+  .dl-sidebar-footer__copy {
+    margin-bottom: 0.4rem;
   }
 }

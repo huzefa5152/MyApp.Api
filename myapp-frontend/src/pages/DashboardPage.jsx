@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { MdBusiness, MdPeople, MdDescription, MdReceipt, MdArrowForward, MdRefresh, MdFilterList } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
+import { useCompany } from "../contexts/CompanyContext";
 import { getCompanies } from "../api/companyApi";
 import { getClientsCount } from "../api/clientApi";
 import { getDeliveryChallansCount } from "../api/challanApi";
@@ -174,9 +175,9 @@ const styles = {
 /* ------------------------------------------------------------------ */
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { companies, selectedCompany, setSelectedCompany } = useCompany();
   const navigate = useNavigate();
 
-  const [companies, setCompanies] = useState([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [counts, setCounts] = useState({ companies: null, clients: null, challans: null, invoices: null });
   const [loading, setLoading] = useState(true);
@@ -184,13 +185,6 @@ export default function DashboardPage() {
 
   const displayName =
     user?.name ?? user?.username ?? user?.email ?? "there";
-
-  const fetchCompanies = async () => {
-    try {
-      const { data } = await getCompanies();
-      setCompanies(Array.isArray(data) ? data : []);
-    } catch { /* ignore */ }
-  };
 
   const fetchCounts = async (companyId) => {
     setLoading(true);
@@ -218,7 +212,6 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    fetchCompanies();
     fetchCounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -342,7 +335,11 @@ export default function DashboardPage() {
           <select
             style={styles.filterSelect}
             value={selectedCompanyId}
-            onChange={(e) => setSelectedCompanyId(e.target.value)}
+            onChange={(e) => {
+              setSelectedCompanyId(e.target.value);
+              const c = companies.find((x) => String(x.id) === e.target.value);
+              if (c) setSelectedCompany(c);
+            }}
           >
             <option value="">All Companies</option>
             {companies.map((c) => (

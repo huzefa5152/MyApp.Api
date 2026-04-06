@@ -3,8 +3,8 @@ import { MdPeople, MdAdd, MdSearch, MdBusiness } from "react-icons/md";
 import ClientList from "../Components/ClientList";
 import ClientForm from "../Components/ClientForm";
 import { getClientsByCompany } from "../api/clientApi";
-import { getCompanies } from "../api/companyApi";
 import { dropdownStyles } from "../theme";
+import { useCompany } from "../contexts/CompanyContext";
 
 const colors = {
   blue: "#0d47a1",
@@ -15,27 +15,12 @@ const colors = {
 };
 
 export default function ClientsPage() {
-  const [companies, setCompanies] = useState([]);
-  const [selectedCompany, setSelectedCompany] = useState(null);
+  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
-  const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [loadingClients, setLoadingClients] = useState(false);
-
-  const fetchCompanies = async () => {
-    setLoadingCompanies(true);
-    try {
-      const { data } = await getCompanies();
-      setCompanies(data);
-      if (!selectedCompany && data.length > 0) setSelectedCompany(data[0]);
-    } catch {
-      alert("Failed to fetch companies.");
-    } finally {
-      setLoadingCompanies(false);
-    }
-  };
 
   const fetchClients = async (companyId) => {
     if (!companyId) return;
@@ -50,7 +35,6 @@ export default function ClientsPage() {
     }
   };
 
-  useEffect(() => { fetchCompanies(); }, []);
   useEffect(() => {
     if (selectedCompany) fetchClients(selectedCompany.id);
     else setClients([]);

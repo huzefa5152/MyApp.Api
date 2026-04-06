@@ -146,6 +146,17 @@
   to { transform: rotate(360deg); }
 }
 
+.btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  vertical-align: middle;
+}
+
 /* Avatar hover overlay */
 .dl-main [style*="avatarWrapper"]:hover .avatar-overlay,
 div[style]:hover > div[style*="inset: 0"] {

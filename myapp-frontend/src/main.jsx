@@ -4,6 +4,10 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./contexts/AuthContext";
+import { CompanyProvider } from "./contexts/CompanyContext";
+import ErrorBoundary from "./Components/ErrorBoundary";
+import NotificationProvider from "./Components/NotificationProvider";
+import ConfirmProvider from "./Components/ConfirmDialog";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./index.css";
 
@@ -17,10 +21,18 @@ const root = createRoot(container);
 
 root.render(
   <React.StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <NotificationProvider>
+          <ConfirmProvider>
+            <AuthProvider>
+              <CompanyProvider>
+                <App />
+              </CompanyProvider>
+            </AuthProvider>
+          </ConfirmProvider>
+        </NotificationProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </React.StrictMode>
 );

@@ -83,13 +83,13 @@ Handlebars.registerHelper("taxEmptyRows", (count) => {
   let html = "";
   for (let i = 0; i < count; i++) {
     html += '<tr>';
-    html += '<td class="cell c">&nbsp;</td>';
-    html += '<td class="cell c">&nbsp;</td>';
-    html += '<td class="cell">&nbsp;</td>';
-    html += '<td class="cell r">&nbsp;&nbsp; -</td>';
-    html += '<td class="cell c">&nbsp;</td>';
-    html += '<td class="cell r">&nbsp;&nbsp; -</td>';
-    html += '<td class="cell r">&nbsp;&nbsp; -</td>';
+    html += '<td></td>';
+    html += '<td></td>';
+    html += '<td></td>';
+    html += '<td class="right">-</td>';
+    html += '<td class="center">-</td>';
+    html += '<td class="right">-</td>';
+    html += '<td class="right">-</td>';
     html += '</tr>';
   }
   return new Handlebars.SafeString(html);
@@ -116,6 +116,7 @@ export const MERGE_FIELDS = {
     { field: "{{fmtDate deliveryDate}}", label: "Delivery Date" },
     { field: "{{clientName}}", label: "Client Name" },
     { field: "{{clientAddress}}", label: "Client Address" },
+    { field: "{{clientSite}}", label: "Client Site" },
     { field: "{{poNumber}}", label: "PO Number" },
     { field: "{{fmtDate poDate}}", label: "PO Date" },
     { field: "{{items.length}}", label: "Item Count" },
@@ -127,8 +128,8 @@ export const MERGE_FIELDS = {
   Bill: [
     { field: "{{companyBrandName}}", label: "Company Brand Name" },
     { field: "{{companyLogoPath}}", label: "Company Logo URL" },
-    { field: "{{companyAddress}}", label: "Company Address" },
-    { field: "{{companyPhone}}", label: "Company Phone" },
+    { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },
+    { field: "{{{nl2br companyPhone}}}", label: "Company Phone (with line breaks)" },
     { field: "{{companyNTN}}", label: "Company NTN" },
     { field: "{{companySTRN}}", label: "Company STRN" },
     { field: "{{invoiceNumber}}", label: "Invoice/Bill Number" },
@@ -138,6 +139,8 @@ export const MERGE_FIELDS = {
     { field: "{{poNumber}}", label: "PO Number" },
     { field: "{{fmtDate poDate}}", label: "PO Date" },
     { field: "{{clientName}}", label: "Client Name" },
+    { field: "{{clientAddress}}", label: "Client Address" },
+    { field: "{{concernDepartment}}", label: "Concern Department" },
     { field: "{{clientNTN}}", label: "Client NTN" },
     { field: "{{clientSTRN}}", label: "Client STRN/GST" },
     { field: "{{fmt subtotal}}", label: "Subtotal" },
@@ -150,17 +153,18 @@ export const MERGE_FIELDS = {
     { field: "{{this.sNo}}", label: "Item S# (in loop)" },
     { field: "{{this.quantity}}", label: "Item Quantity (in loop)" },
     { field: "{{this.description}}", label: "Item Description (in loop)" },
+    { field: "{{this.itemTypeName}}", label: "Item Type Name (in loop)" },
     { field: "{{fmt this.unitPrice}}", label: "Item Unit Price (in loop)" },
     { field: "{{fmt this.lineTotal}}", label: "Item Line Total (in loop)" },
   ],
   TaxInvoice: [
     { field: "{{supplierName}}", label: "Supplier Name" },
-    { field: "{{supplierAddress}}", label: "Supplier Address" },
-    { field: "{{supplierPhone}}", label: "Supplier Phone" },
+    { field: "{{{nl2br supplierAddress}}}", label: "Supplier Address (with line breaks)" },
+    { field: "{{{nl2br supplierPhone}}}", label: "Supplier Phone (with line breaks)" },
     { field: "{{supplierNTN}}", label: "Supplier NTN" },
     { field: "{{supplierSTRN}}", label: "Supplier STRN" },
     { field: "{{buyerName}}", label: "Buyer Name" },
-    { field: "{{buyerAddress}}", label: "Buyer Address" },
+    { field: "{{{nl2br buyerAddress}}}", label: "Buyer Address (with line breaks)" },
     { field: "{{buyerPhone}}", label: "Buyer Phone" },
     { field: "{{buyerNTN}}", label: "Buyer NTN" },
     { field: "{{buyerSTRN}}", label: "Buyer STRN" },
@@ -168,6 +172,7 @@ export const MERGE_FIELDS = {
     { field: "{{fmtDate date}}", label: "Invoice Date" },
     { field: "{{join challanNumbers}}", label: "Challan Numbers" },
     { field: "{{poNumber}}", label: "PO Number" },
+    { field: "{{gstRate}}", label: "GST Rate %" },
     { field: "{{fmtDec subtotal}}", label: "Subtotal" },
     { field: "{{fmtDec gstAmount}}", label: "GST Amount" },
     { field: "{{fmtDec grandTotal}}", label: "Grand Total" },

@@ -20,9 +20,14 @@ namespace MyApp.Api.Data
         public DbSet<ItemType> ItemTypes { get; set; }
         public DbSet<User> Users { get; set; }
         public DbSet<PrintTemplate> PrintTemplates { get; set; }
+        public DbSet<MergeField> MergeFields { get; set; }
+        public DbSet<AuditLog> AuditLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(a => a.Timestamp);
+
             // Unique index on Username
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Username)
@@ -140,6 +145,134 @@ namespace MyApp.Api.Data
                 .HasForeignKey(di => di.ItemTypeId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // MergeField: unique per (TemplateType, FieldExpression)
+            modelBuilder.Entity<MergeField>()
+                .HasIndex(mf => new { mf.TemplateType, mf.FieldExpression })
+                .IsUnique();
+
+            // Seed merge fields — all fields used in actual templates
+            var id = 1;
+            modelBuilder.Entity<MergeField>().HasData(
+                // ── Challan: Company ──
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{companyBrandName}}", Label = "Company Brand Name", Category = "Company", SortOrder = 1 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{companyLogoPath}}", Label = "Company Logo URL", Category = "Company", SortOrder = 2 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{{nl2br companyAddress}}}", Label = "Company Address (with line breaks)", Category = "Company", SortOrder = 3 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{{nl2br companyPhone}}}", Label = "Company Phone (with line breaks)", Category = "Company", SortOrder = 4 },
+                // ── Challan: Document ──
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{challanNumber}}", Label = "Challan Number", Category = "Document", SortOrder = 10 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{fmtDate deliveryDate}}", Label = "Delivery Date", Category = "Document", SortOrder = 11 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{poNumber}}", Label = "PO Number", Category = "Document", SortOrder = 12 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{fmtDate poDate}}", Label = "PO Date", Category = "Document", SortOrder = 13 },
+                // ── Challan: Client ──
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{clientName}}", Label = "Client Name", Category = "Client", SortOrder = 20 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{clientAddress}}", Label = "Client Address", Category = "Client", SortOrder = 21 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{clientSite}}", Label = "Client Site", Category = "Client", SortOrder = 22 },
+                // ── Challan: Items ──
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{items.length}}", Label = "Item Count", Category = "Items", SortOrder = 30 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{#each items}}", Label = "Loop: Items Start", Category = "Items", SortOrder = 31 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{/each}}", Label = "Loop: End", Category = "Items", SortOrder = 32 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{this.quantity}}", Label = "Item Quantity (in loop)", Category = "Items", SortOrder = 33 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{this.description}}", Label = "Item Description (in loop)", Category = "Items", SortOrder = 34 },
+                // ── Challan: Conditionals ──
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{#if companyLogoPath}}", Label = "If: Has Logo", Category = "Conditionals", SortOrder = 40 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{#if companyAddress}}", Label = "If: Has Address", Category = "Conditionals", SortOrder = 41 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{#if companyPhone}}", Label = "If: Has Phone", Category = "Conditionals", SortOrder = 42 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{#if poNumber}}", Label = "If: Has PO Number", Category = "Conditionals", SortOrder = 43 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{#if poDate}}", Label = "If: Has PO Date", Category = "Conditionals", SortOrder = 44 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{#if clientSite}}", Label = "If: Has Client Site", Category = "Conditionals", SortOrder = 45 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{else}}", Label = "Else", Category = "Conditionals", SortOrder = 46 },
+                new MergeField { Id = id++, TemplateType = "Challan", FieldExpression = "{{/if}}", Label = "End If", Category = "Conditionals", SortOrder = 47 },
+
+                // ── Bill: Company ──
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{companyBrandName}}", Label = "Company Brand Name", Category = "Company", SortOrder = 1 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{companyLogoPath}}", Label = "Company Logo URL", Category = "Company", SortOrder = 2 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{{nl2br companyAddress}}}", Label = "Company Address (with line breaks)", Category = "Company", SortOrder = 3 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{{nl2br companyPhone}}}", Label = "Company Phone (with line breaks)", Category = "Company", SortOrder = 4 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{companyNTN}}", Label = "Company NTN", Category = "Company", SortOrder = 5 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{companySTRN}}", Label = "Company STRN", Category = "Company", SortOrder = 6 },
+                // ── Bill: Document ──
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{invoiceNumber}}", Label = "Invoice/Bill Number", Category = "Document", SortOrder = 10 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{fmtDate date}}", Label = "Invoice Date", Category = "Document", SortOrder = 11 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{join challanNumbers}}", Label = "Challan Numbers (comma-separated)", Category = "Document", SortOrder = 12 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{joinDates challanDates}}", Label = "Challan Dates (comma-separated)", Category = "Document", SortOrder = 13 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{poNumber}}", Label = "PO Number", Category = "Document", SortOrder = 14 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{fmtDate poDate}}", Label = "PO Date", Category = "Document", SortOrder = 15 },
+                // ── Bill: Client ──
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{clientName}}", Label = "Client Name", Category = "Client", SortOrder = 20 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{clientAddress}}", Label = "Client Address", Category = "Client", SortOrder = 21 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{concernDepartment}}", Label = "Concern Department", Category = "Client", SortOrder = 22 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{clientNTN}}", Label = "Client NTN", Category = "Client", SortOrder = 23 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{clientSTRN}}", Label = "Client STRN/GST", Category = "Client", SortOrder = 24 },
+                // ── Bill: Totals ──
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{fmt subtotal}}", Label = "Subtotal (formatted)", Category = "Totals", SortOrder = 30 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{gstRate}}", Label = "GST Rate %", Category = "Totals", SortOrder = 31 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{fmt gstAmount}}", Label = "GST Amount (formatted)", Category = "Totals", SortOrder = 32 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{fmt grandTotal}}", Label = "Grand Total (formatted)", Category = "Totals", SortOrder = 33 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{amountInWords}}", Label = "Amount In Words", Category = "Totals", SortOrder = 34 },
+                // ── Bill: Items ──
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{#each items}}", Label = "Loop: Items Start", Category = "Items", SortOrder = 40 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{/each}}", Label = "Loop: End", Category = "Items", SortOrder = 41 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{this.sNo}}", Label = "Item S# (in loop)", Category = "Items", SortOrder = 42 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{this.quantity}}", Label = "Item Quantity (in loop)", Category = "Items", SortOrder = 43 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{this.description}}", Label = "Item Description (in loop)", Category = "Items", SortOrder = 44 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{this.itemTypeName}}", Label = "Item Type Name (in loop)", Category = "Items", SortOrder = 45 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{fmt this.unitPrice}}", Label = "Unit Price (in loop)", Category = "Items", SortOrder = 46 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{fmt this.lineTotal}}", Label = "Line Total (in loop)", Category = "Items", SortOrder = 47 },
+                // ── Bill: Conditionals ──
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{#if companyLogoPath}}", Label = "If: Has Logo", Category = "Conditionals", SortOrder = 50 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{#if clientNTN}}", Label = "If: Has Client NTN", Category = "Conditionals", SortOrder = 51 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{#if clientSTRN}}", Label = "If: Has Client STRN", Category = "Conditionals", SortOrder = 52 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{#if poNumber}}", Label = "If: Has PO Number", Category = "Conditionals", SortOrder = 53 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{#if poDate}}", Label = "If: Has PO Date", Category = "Conditionals", SortOrder = 54 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{else}}", Label = "Else", Category = "Conditionals", SortOrder = 55 },
+                new MergeField { Id = id++, TemplateType = "Bill", FieldExpression = "{{/if}}", Label = "End If", Category = "Conditionals", SortOrder = 56 },
+
+                // ── TaxInvoice: Supplier ──
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{supplierName}}", Label = "Supplier Name", Category = "Supplier", SortOrder = 1 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{{nl2br supplierAddress}}}", Label = "Supplier Address (with line breaks)", Category = "Supplier", SortOrder = 2 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{{nl2br supplierPhone}}}", Label = "Supplier Phone (with line breaks)", Category = "Supplier", SortOrder = 3 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{supplierNTN}}", Label = "Supplier NTN", Category = "Supplier", SortOrder = 4 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{supplierSTRN}}", Label = "Supplier STRN", Category = "Supplier", SortOrder = 5 },
+                // ── TaxInvoice: Buyer ──
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{buyerName}}", Label = "Buyer Name", Category = "Buyer", SortOrder = 10 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{{nl2br buyerAddress}}}", Label = "Buyer Address (with line breaks)", Category = "Buyer", SortOrder = 11 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{buyerPhone}}", Label = "Buyer Phone", Category = "Buyer", SortOrder = 12 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{buyerNTN}}", Label = "Buyer NTN", Category = "Buyer", SortOrder = 13 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{buyerSTRN}}", Label = "Buyer STRN", Category = "Buyer", SortOrder = 14 },
+                // ── TaxInvoice: Document ──
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{invoiceNumber}}", Label = "Invoice Number", Category = "Document", SortOrder = 20 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{fmtDate date}}", Label = "Invoice Date", Category = "Document", SortOrder = 21 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{join challanNumbers}}", Label = "Challan Numbers", Category = "Document", SortOrder = 22 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{poNumber}}", Label = "PO Number", Category = "Document", SortOrder = 23 },
+                // ── TaxInvoice: Totals ──
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{gstRate}}", Label = "GST Rate %", Category = "Totals", SortOrder = 30 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{fmtDec subtotal}}", Label = "Subtotal (2 decimals)", Category = "Totals", SortOrder = 31 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{fmtDec gstAmount}}", Label = "GST Amount (2 decimals)", Category = "Totals", SortOrder = 32 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{fmtDec grandTotal}}", Label = "Grand Total (2 decimals)", Category = "Totals", SortOrder = 33 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{amountInWords}}", Label = "Amount In Words", Category = "Totals", SortOrder = 34 },
+                // ── TaxInvoice: Items ──
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{#each items}}", Label = "Loop: Items Start", Category = "Items", SortOrder = 40 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{/each}}", Label = "Loop: End", Category = "Items", SortOrder = 41 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{this.quantity}}", Label = "Item Quantity (in loop)", Category = "Items", SortOrder = 42 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{this.uom}}", Label = "Item UOM (in loop)", Category = "Items", SortOrder = 43 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{this.description}}", Label = "Item Description (in loop)", Category = "Items", SortOrder = 44 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{fmtDec this.valueExclTax}}", Label = "Value Excl Tax (in loop)", Category = "Items", SortOrder = 45 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{this.gstRate}}", Label = "GST Rate % (in loop)", Category = "Items", SortOrder = 46 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{fmtDec this.gstAmount}}", Label = "GST Amount (in loop)", Category = "Items", SortOrder = 47 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{fmtDec this.totalInclTax}}", Label = "Total Incl Tax (in loop)", Category = "Items", SortOrder = 48 },
+                // ── TaxInvoice: Conditionals ──
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{#if supplierAddress}}", Label = "If: Has Supplier Address", Category = "Conditionals", SortOrder = 50 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{#if supplierPhone}}", Label = "If: Has Supplier Phone", Category = "Conditionals", SortOrder = 51 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{#if supplierSTRN}}", Label = "If: Has Supplier STRN", Category = "Conditionals", SortOrder = 52 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{#if supplierNTN}}", Label = "If: Has Supplier NTN", Category = "Conditionals", SortOrder = 53 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{#if buyerAddress}}", Label = "If: Has Buyer Address", Category = "Conditionals", SortOrder = 54 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{#if buyerPhone}}", Label = "If: Has Buyer Phone", Category = "Conditionals", SortOrder = 55 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{#if buyerSTRN}}", Label = "If: Has Buyer STRN", Category = "Conditionals", SortOrder = 56 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{#if buyerNTN}}", Label = "If: Has Buyer NTN", Category = "Conditionals", SortOrder = 57 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{else}}", Label = "Else", Category = "Conditionals", SortOrder = 58 },
+                new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{/if}}", Label = "End If", Category = "Conditionals", SortOrder = 59 }
+            );
         }
 
     }

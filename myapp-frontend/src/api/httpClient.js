@@ -1,5 +1,6 @@
 // src/api/httpClient.js
 import axios from "axios";
+import { notify } from "../utils/notify";
 
 function getApiBase() {
   // runtime file (preferred)
@@ -34,17 +35,23 @@ httpClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor: on 401, clear token and redirect to /login
+// Response interceptor: handle errors globally
 httpClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (
-      error.response?.status === 401 &&
-      window.location.pathname !== "/login"
-    ) {
+    const status = error.response?.status;
+
+    if (status === 401 && window.location.pathname !== "/login") {
       localStorage.removeItem("token");
       window.location.href = "/login";
+    } else if (status === 403) {
+      notify("You don't have permission to perform this action.", "warning");
+    } else if (status >= 500) {
+      notify("Something went wrong on the server. Please try again.", "error");
+    } else if (!error.response) {
+      notify("Network error. Please check your connection.", "error");
     }
+
     return Promise.reject(error);
   }
 );

@@ -14,6 +14,7 @@ import {
 } from "react-icons/md";
 import { getUsers, createUser, updateUser, deleteUser } from "../api/usersApi";
 import { useAuth } from "../contexts/AuthContext";
+import { notify } from "../utils/notify";
 
 const colors = {
   blue: "#0d47a1",
@@ -109,7 +110,7 @@ export default function UsersPage() {
       setDeleteConfirm(null);
       fetchUsers();
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to delete user");
+      notify(err.response?.data?.message || "Failed to delete user", "error");
       setDeleteConfirm(null);
     }
   };

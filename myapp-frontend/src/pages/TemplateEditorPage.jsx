@@ -1,10 +1,26 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { MdCode, MdBusiness, MdSave, MdRefresh, MdContentCopy, MdVisibility, MdEdit as MdEditIcon } from "react-icons/md";
-import { getCompanies } from "../api/companyApi";
-import { getTemplate, upsertTemplate } from "../api/printTemplateApi";
-import { mergeTemplate, MERGE_FIELDS } from "../utils/templateEngine";
-import { defaultChallanTemplate, defaultBillTemplate, defaultTaxInvoiceTemplate } from "../utils/defaultTemplates";
+import {
+  MdCode, MdBusiness, MdSave, MdRefresh, MdContentCopy,
+  MdVisibility, MdEdit as MdEditIcon, MdBrush,
+  MdUploadFile, MdDelete, MdGridOn,
+} from "react-icons/md";
+import {
+  getTemplate, upsertTemplate, getMergeFields,
+  uploadExcelTemplate, deleteExcelTemplate,
+} from "../api/printTemplateApi";
+import { useCompany } from "../contexts/CompanyContext";
+import { mergeTemplate } from "../utils/templateEngine";
+import {
+  defaultChallanTemplate, defaultBillTemplate, defaultTaxInvoiceTemplate,
+} from "../utils/defaultTemplates";
 import { dropdownStyles } from "../theme";
+import CodeEditor from "../components/templateEditor/CodeEditor";
+import MergeFieldSidebar from "../components/templateEditor/MergeFieldSidebar";
+import PreviewPane from "../components/templateEditor/PreviewPane";
+import SyncWarningModal from "../components/templateEditor/SyncWarningModal";
+import VisualEditor from "../components/templateEditor/VisualEditor";
+import StarterTemplatePicker from "../components/templateEditor/StarterTemplatePicker";
+import { useConfirm } from "../Components/ConfirmDialog";
 
 const TEMPLATE_TYPES = [
   { value: "Challan", label: "Delivery Challan" },
@@ -45,6 +61,7 @@ const SAMPLE_DATA = {
     clientName: "Sample Client Pvt Ltd",
     clientNTN: "9876543-2",
     clientSTRN: "9876543210987",
+    concernDepartment: "Main Office",
     subtotal: 150000,
     gstRate: 18,
     gstAmount: 27000,
@@ -93,41 +110,51 @@ const colors = {
   textPrimary: "#1a2332",
   textSecondary: "#5f6d7e",
   cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
   inputBorder: "#d0d7e2",
 };
 
 export default function TemplateEditorPage() {
-  const [companies, setCompanies] = useState([]);
-  const [selectedCompany, setSelectedCompany] = useState(null);
+  const confirm = useConfirm();
+  const { companies, selectedCompany, setSelectedCompany, loading } = useCompany();
   const [templateType, setTemplateType] = useState("Challan");
   const [htmlContent, setHtmlContent] = useState("");
   const [originalContent, setOriginalContent] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [templateJson, setTemplateJson] = useState(null);
+  const [originalJson, setOriginalJson] = useState(null);
+  const [editorMode, setEditorMode] = useState("code"); // "code" | "visual"
   const [activeTab, setActiveTab] = useState("editor"); // editor | preview
+  const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
-  const editorRef = useRef(null);
+  const [showSyncWarning, setShowSyncWarning] = useState(false);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [fields, setFields] = useState([]);
+  const [hasExcel, setHasExcel] = useState(false);
+  const [excelUploading, setExcelUploading] = useState(false);
+  const excelInputRef = useRef(null);
+  const htmlImportRef = useRef(null);
+  const codeEditorRef = useRef(null);
+  const visualEditorRef = useRef(null);
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Fetch companies
+  // Fetch merge fields from API when template type changes
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await getCompanies();
-        setCompanies(data);
-        if (data.length > 0) setSelectedCompany(data[0]);
+        const { data } = await getMergeFields(templateType);
+        setFields(data.map(f => ({
+          field: f.fieldExpression,
+          label: f.label,
+          category: f.category,
+        })));
       } catch {
-        showToast("Failed to load companies", "error");
-      } finally {
-        setLoading(false);
+        setFields([]);
       }
     })();
-  }, []);
+  }, [templateType]);
 
   // Fetch template when company/type changes
   useEffect(() => {
@@ -137,11 +164,20 @@ export default function TemplateEditorPage() {
         const { data } = await getTemplate(selectedCompany.id, templateType);
         setHtmlContent(data.htmlContent);
         setOriginalContent(data.htmlContent);
+        setTemplateJson(data.templateJson || null);
+        setOriginalJson(data.templateJson || null);
+        setEditorMode(data.editorMode || "code");
+        setHasExcel(data.hasExcelTemplate || false);
+        setActiveTab("editor");
       } catch {
-        // No saved template — use default
         const def = DEFAULT_TEMPLATES[templateType] || "";
         setHtmlContent(def);
         setOriginalContent("");
+        setTemplateJson(null);
+        setOriginalJson(null);
+        setEditorMode("code");
+        setHasExcel(false);
+        setActiveTab("editor");
       }
     })();
   }, [selectedCompany, templateType]);
@@ -150,8 +186,20 @@ export default function TemplateEditorPage() {
     if (!selectedCompany) return;
     setSaving(true);
     try {
-      await upsertTemplate(selectedCompany.id, templateType, htmlContent);
-      setOriginalContent(htmlContent);
+      let saveHtml = htmlContent;
+      let saveJson = templateJson;
+
+      // If in visual mode, extract current state from GrapesJS
+      if (editorMode === "visual" && visualEditorRef.current) {
+        saveHtml = visualEditorRef.current.getHtml();
+        saveJson = JSON.stringify(visualEditorRef.current.getProjectData());
+      }
+
+      await upsertTemplate(selectedCompany.id, templateType, saveHtml, saveJson, editorMode);
+      setHtmlContent(saveHtml);
+      setTemplateJson(saveJson);
+      setOriginalContent(saveHtml);
+      setOriginalJson(saveJson);
       showToast("Template saved successfully!");
     } catch {
       showToast("Failed to save template", "error");
@@ -163,33 +211,136 @@ export default function TemplateEditorPage() {
   const handleReset = () => {
     const def = DEFAULT_TEMPLATES[templateType] || "";
     setHtmlContent(def);
+    setTemplateJson(null);
+    if (editorMode === "visual") {
+      setEditorMode("code");
+    }
   };
 
-  const insertField = useCallback((field) => {
-    const el = editorRef.current;
-    if (!el) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const before = htmlContent.substring(0, start);
-    const after = htmlContent.substring(end);
-    const newContent = before + field + after;
-    setHtmlContent(newContent);
-    setTimeout(() => {
-      el.focus();
-      el.selectionStart = el.selectionEnd = start + field.length;
-    }, 0);
-  }, [htmlContent]);
+  const handleModeSwitch = (newMode) => {
+    if (newMode === editorMode) return;
+
+    if (newMode === "visual") {
+      // Switching to visual: if no templateJson exists, warn about lossy conversion
+      if (!templateJson) {
+        setShowSyncWarning(true);
+        return;
+      }
+      // If templateJson exists, switch directly (lossless)
+      setEditorMode("visual");
+      setActiveTab("editor");
+    } else {
+      // Switching to code: don't extract HTML from GrapesJS here
+      // (GrapesJS reformats HTML, causing false "unsaved changes").
+      // HTML is extracted only at save time.
+      setEditorMode("code");
+      setActiveTab("editor");
+    }
+  };
+
+  const confirmSyncWarning = () => {
+    setShowSyncWarning(false);
+    setEditorMode("visual");
+    setActiveTab("editor");
+  };
+
+  const handleSelectStarter = async (template) => {
+    if (htmlContent && htmlContent !== DEFAULT_TEMPLATES[templateType]) {
+      const ok = await confirm({ title: "Replace Template?", message: "This will replace your current template. Any unsaved changes will be lost.", variant: "warning", confirmText: "Replace" });
+      if (!ok) return;
+    }
+    setHtmlContent(template.html);
+    setTemplateJson(null);
+    setEditorMode("code");
+    setActiveTab("editor");
+    setShowTemplatePicker(false);
+    showToast(`Loaded "${template.name}" template`);
+  };
+
+  const handleExcelUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedCompany) return;
+    setExcelUploading(true);
+    try {
+      await uploadExcelTemplate(selectedCompany.id, templateType, file);
+      setHasExcel(true);
+      showToast("Excel template uploaded!");
+    } catch {
+      showToast("Failed to upload Excel template", "error");
+    } finally {
+      setExcelUploading(false);
+      if (excelInputRef.current) excelInputRef.current.value = "";
+    }
+  };
+
+  const handleExcelDelete = async () => {
+    if (!selectedCompany) return;
+    const ok = await confirm({ title: "Remove Excel Template?", message: "Remove the Excel template for this type? This cannot be undone.", variant: "danger", confirmText: "Remove" });
+    if (!ok) return;
+    try {
+      await deleteExcelTemplate(selectedCompany.id, templateType);
+      setHasExcel(false);
+      showToast("Excel template removed");
+    } catch {
+      showToast("Failed to remove Excel template", "error");
+    }
+  };
+
+  const handleImportHtml = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const content = ev.target.result;
+      if (htmlContent && htmlContent !== DEFAULT_TEMPLATES[templateType]) {
+        const ok = await confirm({ title: "Replace Template?", message: "This will replace your current template. Any unsaved changes will be lost.", variant: "warning", confirmText: "Replace" });
+        if (!ok) return;
+      }
+      setHtmlContent(content);
+      setTemplateJson(null);
+      setEditorMode("code");
+      setActiveTab("editor");
+      showToast("HTML template imported!");
+    };
+    reader.readAsText(file);
+    if (htmlImportRef.current) htmlImportRef.current.value = "";
+  };
+
+  const insertField = useCallback(
+    (field) => {
+      if (editorMode === "visual") {
+        visualEditorRef.current?.insertMergeField(field);
+        return;
+      }
+      const el = codeEditorRef.current;
+      if (!el) return;
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      const before = htmlContent.substring(0, start);
+      const after = htmlContent.substring(end);
+      const newContent = before + field + after;
+      setHtmlContent(newContent);
+      setTimeout(() => {
+        el.focus();
+        el.selectionStart = el.selectionEnd = start + field.length;
+      }, 0);
+    },
+    [htmlContent, editorMode]
+  );
 
   const previewHtml = (() => {
     try {
-      return mergeTemplate(htmlContent, SAMPLE_DATA[templateType]);
+      const src = editorMode === "visual" && visualEditorRef.current
+        ? visualEditorRef.current.getHtml()
+        : htmlContent;
+      return mergeTemplate(src, SAMPLE_DATA[templateType]);
     } catch (e) {
       return `<div style="color:red;padding:20px;font-family:sans-serif"><h3>Template Error</h3><pre>${e.message}</pre></div>`;
     }
   })();
 
-  const hasChanges = htmlContent !== originalContent;
-  const fields = MERGE_FIELDS[templateType] || [];
+  const hasChanges = htmlContent !== originalContent || templateJson !== originalJson;
+  // fields is now fetched from API via useEffect above
 
   if (loading) {
     return (
@@ -208,6 +359,8 @@ export default function TemplateEditorPage() {
     );
   }
 
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+
   return (
     <div style={{ height: "calc(100vh - 80px)", display: "flex", flexDirection: "column", gap: "0" }}>
       {/* Toast */}
@@ -218,135 +371,272 @@ export default function TemplateEditorPage() {
           background: toast.type === "error" ? "#dc3545" : "#28a745",
           color: "#fff", fontWeight: 600, fontSize: "0.9rem",
           boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
-          animation: "fadeIn 0.3s ease",
         }}>
           {toast.msg}
         </div>
       )}
 
+      {/* Sync Warning Modal */}
+      {showSyncWarning && (
+        <SyncWarningModal
+          onConfirm={confirmSyncWarning}
+          onCancel={() => setShowSyncWarning(false)}
+        />
+      )}
+
+      {/* Starter Template Picker */}
+      {showTemplatePicker && (
+        <StarterTemplatePicker
+          templateType={templateType}
+          onSelect={handleSelectStarter}
+          onClose={() => setShowTemplatePicker(false)}
+        />
+      )}
+
       {/* Top Bar */}
       <div style={styles.topBar}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}>
-            <MdCode size={24} color="#fff" />
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div style={{ ...styles.headerIcon, ...(isMobile ? { width: 34, height: 34, borderRadius: 8 } : {}) }}>
+            <MdCode size={isMobile ? 18 : 24} color="#fff" />
           </div>
           <div>
-            <h2 style={{ margin: 0, fontSize: "1.3rem", fontWeight: 700, color: colors.textPrimary }}>
+            <h2 style={{ margin: 0, fontSize: isMobile ? "1rem" : "1.3rem", fontWeight: 700, color: colors.textPrimary }}>
               Template Editor
             </h2>
-            <p style={{ margin: 0, fontSize: "0.82rem", color: colors.textSecondary }}>
-              Customize print templates for each company
-            </p>
+            {!isMobile && (
+              <p style={{ margin: 0, fontSize: "0.82rem", color: colors.textSecondary }}>
+                Customize print templates for each company
+              </p>
+            )}
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <MdBusiness size={18} color={colors.blue} />
+        {isMobile ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+              <MdBusiness size={16} color={colors.blue} style={{ flexShrink: 0 }} />
+              <select
+                style={{ ...dropdownStyles.base, minWidth: 0, flex: 1, fontSize: "0.82rem" }}
+                value={selectedCompany?.id || ""}
+                onChange={(e) => setSelectedCompany(companies.find(c => c.id === parseInt(e.target.value)))}
+              >
+                {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <select
+                style={{ ...dropdownStyles.base, minWidth: 0, flex: 1, fontSize: "0.82rem" }}
+                value={templateType}
+                onChange={(e) => setTemplateType(e.target.value)}
+              >
+                {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+              <button style={{ ...styles.btn, ...styles.btnOutline, padding: "0.4rem 0.6rem", fontSize: "0.78rem", flexShrink: 0 }} onClick={handleReset} title="Reset to default">
+                <MdRefresh size={14} /> Reset
+              </button>
+              <button
+                style={{ ...styles.btn, ...styles.btnPrimary, opacity: saving ? 0.7 : 1, padding: "0.4rem 0.6rem", fontSize: "0.78rem", flexShrink: 0 }}
+                onClick={handleSave}
+                disabled={saving}
+              >
+                <MdSave size={14} /> {saving ? "..." : "Save"}
+              </button>
+            </div>
+            {hasChanges && <span style={{ fontSize: "0.75rem", color: "#e65100", fontWeight: 600 }}>Unsaved changes</span>}
+          </div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <MdBusiness size={18} color={colors.blue} />
+              <select
+                style={{ ...dropdownStyles.base, minWidth: "180px" }}
+                value={selectedCompany?.id || ""}
+                onChange={(e) => setSelectedCompany(companies.find(c => c.id === parseInt(e.target.value)))}
+              >
+                {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
+              </select>
+            </div>
             <select
               style={{ ...dropdownStyles.base, minWidth: "180px" }}
-              value={selectedCompany?.id || ""}
-              onChange={(e) => setSelectedCompany(companies.find(c => c.id === parseInt(e.target.value)))}
+              value={templateType}
+              onChange={(e) => setTemplateType(e.target.value)}
             >
-              {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
+              {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
+
+            {/* Mode Toggle */}
+            <div style={styles.modeToggle}>
+              <button
+                style={{ ...styles.modeBtn, ...(editorMode === "code" ? styles.modeBtnActive : {}) }}
+                onClick={() => handleModeSwitch("code")}
+                title="Code Editor"
+              >
+                <MdCode size={16} /> Code
+              </button>
+              <button
+                style={{ ...styles.modeBtn, ...(editorMode === "visual" ? styles.modeBtnActive : {}) }}
+                onClick={() => handleModeSwitch("visual")}
+                title="Visual Builder"
+              >
+                <MdBrush size={16} /> Visual
+              </button>
+            </div>
+
+            <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={() => setShowTemplatePicker(true)} title="Start from a template">
+              <MdContentCopy size={16} /> Templates
+            </button>
+            <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={() => htmlImportRef.current?.click()} title="Import HTML file">
+              <MdUploadFile size={16} /> Import HTML
+            </button>
+            <input
+              ref={htmlImportRef}
+              type="file"
+              accept=".html,.htm"
+              style={{ display: "none" }}
+              onChange={handleImportHtml}
+            />
+            <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={handleReset} title="Reset to default">
+              <MdRefresh size={16} /> Reset
+            </button>
+            <button
+              style={{ ...styles.btn, ...styles.btnPrimary, opacity: saving ? 0.7 : 1 }}
+              onClick={handleSave}
+              disabled={saving}
+            >
+              <MdSave size={16} /> {saving ? "Saving..." : "Save"}
+            </button>
+            {hasChanges && <span style={{ fontSize: "0.78rem", color: "#e65100", fontWeight: 600 }}>Unsaved changes</span>}
           </div>
-
-          <select
-            style={{ ...dropdownStyles.base, minWidth: "180px" }}
-            value={templateType}
-            onChange={(e) => setTemplateType(e.target.value)}
-          >
-            {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </select>
-
-          <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={handleReset} title="Reset to default">
-            <MdRefresh size={16} /> Reset
-          </button>
-          <button
-            style={{ ...styles.btn, ...styles.btnPrimary, opacity: saving ? 0.7 : 1 }}
-            onClick={handleSave}
-            disabled={saving}
-          >
-            <MdSave size={16} /> {saving ? "Saving..." : "Save"}
-          </button>
-          {hasChanges && <span style={{ fontSize: "0.78rem", color: "#e65100", fontWeight: 600 }}>Unsaved changes</span>}
-        </div>
+        )}
       </div>
+
+      {/* Excel Template Bar */}
+      {selectedCompany && (
+        <div style={styles.excelBar}>
+          <MdGridOn size={16} color={colors.teal} />
+          <span style={{ fontSize: "0.82rem", fontWeight: 600, color: colors.textPrimary }}>
+            Excel Template:
+          </span>
+          {hasExcel ? (
+            <>
+              <span style={styles.excelBadge}>Uploaded</span>
+              <button style={{ ...styles.btn, ...styles.btnDanger, padding: "0.3rem 0.6rem", fontSize: "0.78rem" }} onClick={handleExcelDelete}>
+                <MdDelete size={14} /> Remove
+              </button>
+              <button
+                style={{ ...styles.btn, ...styles.btnOutline, padding: "0.3rem 0.6rem", fontSize: "0.78rem" }}
+                onClick={() => excelInputRef.current?.click()}
+                disabled={excelUploading}
+              >
+                <MdUploadFile size={14} /> Replace
+              </button>
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: "0.8rem", color: colors.textSecondary }}>
+                No Excel template — Excel export button hidden on challan/invoice pages
+              </span>
+              <button
+                style={{ ...styles.btn, ...styles.btnOutline, padding: "0.3rem 0.6rem", fontSize: "0.78rem" }}
+                onClick={() => excelInputRef.current?.click()}
+                disabled={excelUploading}
+              >
+                <MdUploadFile size={14} /> {excelUploading ? "Uploading..." : "Upload .xlsx"}
+              </button>
+            </>
+          )}
+          <input
+            ref={excelInputRef}
+            type="file"
+            accept=".xlsx,.xlsm"
+            style={{ display: "none" }}
+            onChange={handleExcelUpload}
+          />
+        </div>
+      )}
 
       {/* Main Content */}
       <div style={{ flex: 1, display: "flex", gap: "0", overflow: "hidden", borderTop: `1px solid ${colors.cardBorder}` }}>
-        {/* Merge Fields Sidebar */}
-        <div style={styles.sidebar}>
-          <div style={styles.sidebarHeader}>Merge Fields</div>
-          <div style={styles.sidebarScroll}>
-            {fields.map((f, i) => (
+
+        {/* Visual Editor Mode */}
+        {editorMode === "visual" ? (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            {/* Tabs for visual mode */}
+            <div style={styles.tabs}>
               <button
-                key={i}
-                style={styles.fieldBtn}
-                onClick={() => insertField(f.field)}
-                title={`Insert ${f.field}`}
-                onMouseEnter={e => e.currentTarget.style.background = "#e3f2fd"}
-                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                style={{ ...styles.tab, ...(activeTab === "editor" ? styles.tabActive : {}) }}
+                onClick={() => setActiveTab("editor")}
               >
-                <span style={{ fontSize: "0.7rem", color: colors.blue, fontFamily: "monospace", fontWeight: 600 }}>
-                  {f.field.length > 30 ? f.field.substring(0, 30) + "..." : f.field}
-                </span>
-                <span style={{ fontSize: "0.72rem", color: colors.textSecondary }}>{f.label}</span>
+                <MdBrush size={15} /> Visual Builder
               </button>
-            ))}
-          </div>
-        </div>
+              <button
+                style={{ ...styles.tab, ...(activeTab === "preview" ? styles.tabActive : {}) }}
+                onClick={() => setActiveTab("preview")}
+              >
+                <MdVisibility size={15} /> Preview
+              </button>
+            </div>
 
-        {/* Editor / Preview Area */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          {/* Tabs */}
-          <div style={styles.tabs}>
-            <button
-              style={{ ...styles.tab, ...(activeTab === "editor" ? styles.tabActive : {}) }}
-              onClick={() => setActiveTab("editor")}
-            >
-              <MdEditIcon size={15} /> Editor
-            </button>
-            <button
-              style={{ ...styles.tab, ...(activeTab === "preview" ? styles.tabActive : {}) }}
-              onClick={() => setActiveTab("preview")}
-            >
-              <MdVisibility size={15} /> Preview
-            </button>
-            <button
-              style={{ ...styles.tab, ...styles.tabCopy }}
-              onClick={() => { navigator.clipboard.writeText(htmlContent); showToast("Copied to clipboard!"); }}
-              title="Copy HTML"
-            >
-              <MdContentCopy size={14} /> Copy
-            </button>
-          </div>
-
-          {/* Editor Tab */}
-          {activeTab === "editor" && (
-            <textarea
-              ref={editorRef}
-              value={htmlContent}
-              onChange={(e) => setHtmlContent(e.target.value)}
-              style={styles.editor}
-              spellCheck={false}
-              placeholder="Paste or edit your HTML template here..."
-            />
-          )}
-
-          {/* Preview Tab */}
-          {activeTab === "preview" && (
-            <div style={styles.previewContainer}>
-              <iframe
-                srcDoc={previewHtml}
-                style={styles.previewFrame}
-                title="Template Preview"
-                sandbox="allow-same-origin"
+            {/* Keep VisualEditor mounted (hidden during preview) to preserve GrapesJS state */}
+            <div style={{ flex: 1, display: activeTab === "editor" ? "flex" : "none", overflow: "hidden" }}>
+              <VisualEditor
+                ref={visualEditorRef}
+                htmlContent={htmlContent}
+                templateJson={templateJson}
+                fields={fields}
               />
             </div>
-          )}
-        </div>
+            {activeTab === "preview" && (
+              <PreviewPane html={previewHtml} isMobile={isMobile} />
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Merge Fields Sidebar - hidden on mobile */}
+            {!isMobile && (
+              <MergeFieldSidebar fields={fields} onInsert={insertField} />
+            )}
+
+            {/* Code Editor / Preview Area */}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              {/* Tabs */}
+              <div style={styles.tabs}>
+                <button
+                  style={{ ...styles.tab, ...(activeTab === "editor" ? styles.tabActive : {}), padding: isMobile ? "0.5rem 0.75rem" : undefined }}
+                  onClick={() => setActiveTab("editor")}
+                >
+                  <MdEditIcon size={15} /> Editor
+                </button>
+                <button
+                  style={{ ...styles.tab, ...(activeTab === "preview" ? styles.tabActive : {}), padding: isMobile ? "0.5rem 0.75rem" : undefined }}
+                  onClick={() => setActiveTab("preview")}
+                >
+                  <MdVisibility size={15} /> Preview
+                </button>
+                <button
+                  style={{ ...styles.tab, ...styles.tabCopy, padding: isMobile ? "0.5rem 0.6rem" : undefined }}
+                  onClick={() => { navigator.clipboard.writeText(htmlContent); showToast("Copied to clipboard!"); }}
+                  title="Copy HTML"
+                >
+                  <MdContentCopy size={14} /> Copy
+                </button>
+              </div>
+
+              {activeTab === "editor" && (
+                <CodeEditor
+                  ref={codeEditorRef}
+                  value={htmlContent}
+                  onChange={setHtmlContent}
+                  isMobile={isMobile}
+                />
+              )}
+
+              {activeTab === "preview" && (
+                <PreviewPane html={previewHtml} isMobile={isMobile} />
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -394,41 +684,28 @@ const styles = {
     color: colors.textSecondary,
     border: `1px solid ${colors.inputBorder}`,
   },
-  sidebar: {
-    width: 240,
-    borderRight: `1px solid ${colors.cardBorder}`,
-    display: "flex",
-    flexDirection: "column",
-    background: "#fafbfc",
-    flexShrink: 0,
+  modeToggle: {
+    display: "inline-flex",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    overflow: "hidden",
   },
-  sidebarHeader: {
-    padding: "0.65rem 0.85rem",
-    fontWeight: 700,
-    fontSize: "0.82rem",
-    color: colors.textPrimary,
-    borderBottom: `1px solid ${colors.cardBorder}`,
-    textTransform: "uppercase",
-    letterSpacing: "0.5px",
-    background: "#f0f2f5",
-  },
-  sidebarScroll: {
-    flex: 1,
-    overflowY: "auto",
-    padding: "0.25rem",
-  },
-  fieldBtn: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "1px",
-    width: "100%",
-    padding: "0.4rem 0.6rem",
+  modeBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    padding: "0.4rem 0.75rem",
     border: "none",
-    background: "transparent",
+    background: "#fff",
+    color: colors.textSecondary,
+    fontSize: "0.82rem",
+    fontWeight: 600,
     cursor: "pointer",
-    textAlign: "left",
-    borderRadius: 6,
-    transition: "background 0.15s",
+    transition: "all 0.2s",
+  },
+  modeBtnActive: {
+    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+    color: "#fff",
   },
   tabs: {
     display: "flex",
@@ -460,32 +737,30 @@ const styles = {
     fontSize: "0.8rem",
     color: colors.textSecondary,
   },
-  editor: {
-    flex: 1,
-    fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
-    fontSize: "13px",
-    lineHeight: "1.5",
-    padding: "1rem",
-    border: "none",
-    outline: "none",
-    resize: "none",
-    background: "#1e1e2e",
-    color: "#cdd6f4",
-    tabSize: 2,
-  },
-  previewContainer: {
-    flex: 1,
-    overflow: "auto",
-    background: "#e8e8e8",
+  excelBar: {
     display: "flex",
-    justifyContent: "center",
-    padding: "1rem",
+    alignItems: "center",
+    gap: "0.6rem",
+    padding: "0.45rem 1.25rem",
+    background: "#f0f7f4",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    flexWrap: "wrap",
   },
-  previewFrame: {
-    width: "210mm",
-    minHeight: "297mm",
-    border: "none",
+  excelBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    fontSize: "0.72rem",
+    fontWeight: 700,
+    padding: "0.15rem 0.55rem",
+    borderRadius: 12,
+    background: "#e8f5e9",
+    color: "#2e7d32",
+    border: "1px solid #2e7d3230",
+    textTransform: "uppercase",
+  },
+  btnDanger: {
     background: "#fff",
-    boxShadow: "0 2px 20px rgba(0,0,0,0.15)",
+    color: "#c62828",
+    border: "1px solid #c6282830",
   },
 };

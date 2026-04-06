@@ -9,6 +9,7 @@
         public string? Email { get; set; }
         public string? NTN { get; set; }
         public string? STRN { get; set; }
+        public string? Site { get; set; }
         public int CompanyId { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

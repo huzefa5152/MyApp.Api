@@ -21,6 +21,7 @@ const colors = {
 
 export default function ChallanForm({ onClose, onSaved, companyId }) {
   const [client, setClient] = useState(null);
+  const [site, setSite] = useState("");
   const [poNumber, setPoNumber] = useState("");
   const [poDate, setPoDate] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
@@ -85,6 +86,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       await onSaved({
         clientId: client.id,
         clientName: client.label,
+        site: site || null,
         poNumber: poNumber.trim(),
         poDate: poDate ? new Date(poDate).toISOString() : null,
         deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : null,
@@ -118,7 +120,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                   label="Client"
                   endpoint={`/clients/company/${companyId}`}
                   value={client}
-                  onChange={(val) => setClient(val)}
+                  onChange={(val) => { setClient(val); setSite(""); }}
                   placeholder="Choose client"
                   className=""
                 />
@@ -128,6 +130,22 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                 <input type="text" style={styles.input} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Enter PO number" />
               </div>
             </div>
+
+            {client?.site && (
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={styles.label}>Site</label>
+                <select
+                  style={styles.input}
+                  value={site}
+                  onChange={(e) => setSite(e.target.value)}
+                >
+                  <option value="">Select site...</option>
+                  {client.site.split(";").map((s) => s.trim()).filter(Boolean).map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div style={styles.row}>
               <div style={{ flex: 1, minWidth: 0 }}>

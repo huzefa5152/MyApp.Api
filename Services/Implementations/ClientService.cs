@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
@@ -9,10 +11,12 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly IClientRepository _repo;
         private readonly IInvoiceRepository _invoiceRepo;
-        public ClientService(IClientRepository repo, IInvoiceRepository invoiceRepo)
+        private readonly AppDbContext _context;
+        public ClientService(IClientRepository repo, IInvoiceRepository invoiceRepo, AppDbContext context)
         {
             _repo = repo;
             _invoiceRepo = invoiceRepo;
+            _context = context;
         }
 
         private static ClientDto ToDto(Client c, bool hasInvoices = false) => new()
@@ -24,6 +28,7 @@ namespace MyApp.Api.Services.Implementations
             Email = c.Email,
             NTN = c.NTN,
             STRN = c.STRN,
+            Site = c.Site,
             CompanyId = c.CompanyId,
             HasInvoices = hasInvoices,
             CreatedAt = c.CreatedAt
@@ -66,6 +71,7 @@ namespace MyApp.Api.Services.Implementations
                 Email = dto.Email,
                 NTN = dto.NTN,
                 STRN = dto.STRN,
+                Site = dto.Site,
                 CompanyId = dto.CompanyId,
                 CreatedAt = DateTime.UtcNow
             };
@@ -90,6 +96,7 @@ namespace MyApp.Api.Services.Implementations
             client.Email = dto.Email;
             client.NTN = dto.NTN;
             client.STRN = dto.STRN;
+            client.Site = dto.Site;
 
             var hasInvoices = await _invoiceRepo.HasInvoicesForClientAsync(client.Id);
             await _repo.UpdateAsync(client);
@@ -100,6 +107,31 @@ namespace MyApp.Api.Services.Implementations
         {
             var client = await _repo.GetByIdAsync(id);
             if (client == null) return;
+
+            // Cascade delete: unlink challans from invoices → delete invoices → delete challans → delete client
+
+            // 1. Unlink challans from invoices for this client
+            await _context.DeliveryChallans
+                .Where(dc => dc.ClientId == id && dc.InvoiceId != null)
+                .ExecuteUpdateAsync(s => s.SetProperty(dc => dc.InvoiceId, (int?)null));
+
+            // 2. Delete invoice items, then invoices
+            var invoiceIds = await _context.Invoices.Where(i => i.ClientId == id).Select(i => i.Id).ToListAsync();
+            if (invoiceIds.Count > 0)
+            {
+                await _context.InvoiceItems.Where(ii => invoiceIds.Contains(ii.InvoiceId)).ExecuteDeleteAsync();
+                await _context.Invoices.Where(i => i.ClientId == id).ExecuteDeleteAsync();
+            }
+
+            // 3. Delete delivery items, then challans
+            var challanIds = await _context.DeliveryChallans.Where(dc => dc.ClientId == id).Select(dc => dc.Id).ToListAsync();
+            if (challanIds.Count > 0)
+            {
+                await _context.DeliveryItems.Where(di => challanIds.Contains(di.DeliveryChallanId)).ExecuteDeleteAsync();
+                await _context.DeliveryChallans.Where(dc => dc.ClientId == id).ExecuteDeleteAsync();
+            }
+
+            // 4. Delete the client
             await _repo.DeleteAsync(client);
         }
     }

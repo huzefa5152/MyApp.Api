@@ -6,6 +6,9 @@ namespace MyApp.Api.Models
         public int CompanyId { get; set; }
         public string TemplateType { get; set; } = ""; // Challan, Bill, TaxInvoice
         public string HtmlContent { get; set; } = "";
+        public string? TemplateJson { get; set; }
+        public string? EditorMode { get; set; }
+        public string? ExcelTemplatePath { get; set; }
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
         public Company Company { get; set; } = null!;

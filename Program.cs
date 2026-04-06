@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using MyApp.Api.Data;
 using MyApp.Api.Repositories.Implementations;
 using MyApp.Api.Repositories.Interfaces;
+using MyApp.Api.Middleware;
 using MyApp.Api.Services.Implementations;
 using MyApp.Api.Services.Interfaces;
 
@@ -48,6 +49,8 @@ builder.Services.AddScoped<IClientRepository, ClientRepository>();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 builder.Services.AddScoped<IItemTypeRepository, ItemTypeRepository>();
 builder.Services.AddScoped<IPrintTemplateRepository, PrintTemplateRepository>();
+builder.Services.AddScoped<IMergeFieldRepository, MergeFieldRepository>();
+builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 
 // Register Services
 builder.Services.AddScoped<ICompanyService, CompanyService>();
@@ -55,6 +58,7 @@ builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
 builder.Services.AddScoped<IClientService, ClientService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 
 // before builder.Build()
 builder.Services.AddCors(options =>
@@ -104,6 +108,12 @@ app.UseSwaggerUI();
 
 // after app = builder.Build()
 app.UseCors("AllowFrontend");
+
+// Enable request body buffering so the exception middleware can read it
+app.Use(async (ctx, next) => { ctx.Request.EnableBuffering(); await next(); });
+
+// Global exception handling — logs to AuditLogs table
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
 // Only redirect to HTTPS in production if not behind a reverse proxy (Render handles SSL)
 if (app.Environment.IsDevelopment())

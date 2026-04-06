@@ -23,6 +23,7 @@ namespace MyApp.Api.Services.Implementations
             PoNumber = dc.PoNumber,
             PoDate = dc.PoDate,
             DeliveryDate = dc.DeliveryDate,
+            Site = dc.Site,
             Status = dc.Status,
             InvoiceId = dc.InvoiceId,
             Items = dc.Items.Select(i => new DeliveryItemDto
@@ -70,6 +71,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 CompanyId = companyId,
                 ClientId = dto.ClientId,
+                Site = dto.Site,
                 PoNumber = dto.PoNumber,
                 PoDate = dto.PoDate,
                 DeliveryDate = dto.DeliveryDate,
@@ -184,6 +186,7 @@ namespace MyApp.Api.Services.Implementations
                 DeliveryDate = dc.DeliveryDate,
                 ClientName = dc.Client?.Name ?? "",
                 ClientAddress = dc.Client?.Address,
+                ClientSite = dc.Site,
                 PoNumber = dc.PoNumber,
                 PoDate = dc.PoDate,
                 Items = dc.Items.Select(i => new PrintChallanItemDto

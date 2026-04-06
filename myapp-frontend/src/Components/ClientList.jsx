@@ -1,15 +1,20 @@
 import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete } from "react-icons/md";
 import { deleteClient } from "../api/clientApi";
 import { cardStyles, cardHover } from "../theme";
+import { useConfirm } from "./ConfirmDialog";
+import { notify } from "../utils/notify";
 
 export default function ClientList({ clients, onEdit, fetchClients }) {
+  const confirm = useConfirm();
+
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this client?")) return;
+    const ok = await confirm({ title: "Delete Client?", message: "Are you sure you want to delete this client? This action cannot be undone.", variant: "danger", confirmText: "Delete" });
+    if (!ok) return;
     try {
       await deleteClient(id);
       fetchClients();
     } catch (err) {
-      console.error("Error deleting client:", err);
+      notify("Failed to delete client.", "error");
     }
   };
 
@@ -53,6 +58,11 @@ export default function ClientList({ clients, onEdit, fetchClients }) {
               {client.strn && (
                 <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
                   <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>STRN:</strong> {client.strn}
+                </p>
+              )}
+              {client.site && (
+                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>Site:</strong> {client.site}
                 </p>
               )}
             </div>

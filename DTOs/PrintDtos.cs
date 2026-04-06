@@ -11,6 +11,7 @@ namespace MyApp.Api.DTOs
         public DateTime? DeliveryDate { get; set; }
         public string ClientName { get; set; } = "";
         public string? ClientAddress { get; set; }
+        public string? ClientSite { get; set; }
         public string PoNumber { get; set; } = "";
         public DateTime? PoDate { get; set; }
         public List<PrintChallanItemDto> Items { get; set; } = new();
@@ -40,6 +41,7 @@ namespace MyApp.Api.DTOs
         public DateTime? PoDate { get; set; }
         public string ClientName { get; set; } = "";
         public string? ClientAddress { get; set; }
+        public string? ConcernDepartment { get; set; }
         public string? ClientNTN { get; set; }
         public string? ClientSTRN { get; set; }
         public decimal Subtotal { get; set; }

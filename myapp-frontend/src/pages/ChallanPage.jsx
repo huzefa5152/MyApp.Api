@@ -10,12 +10,16 @@ import {
   deleteChallan,
   getChallanPrintData,
 } from "../api/challanApi";
-import { getCompanies } from "../api/companyApi";
 import { getClientsByCompany } from "../api/clientApi";
-import { getTemplate } from "../api/printTemplateApi";
+import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { defaultChallanTemplate } from "../utils/defaultTemplates";
+import { exportToPdf } from "../utils/exportUtils";
+import { saveAs } from "file-saver";
 import { dropdownStyles } from "../theme";
+import { useCompany } from "../contexts/CompanyContext";
+import { notify } from "../utils/notify";
+import { useConfirm } from "../Components/ConfirmDialog";
 
 const colors = {
   blue: "#0d47a1",
@@ -29,13 +33,12 @@ const colors = {
 };
 
 export default function ChallanPage() {
-  const [companies, setCompanies] = useState([]);
+  const confirm = useConfirm();
+  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const [clients, setClients] = useState([]);
-  const [selectedCompany, setSelectedCompany] = useState(null);
   const [challans, setChallans] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editChallan, setEditChallan] = useState(null);
-  const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [loadingChallans, setLoadingChallans] = useState(false);
 
   // Pagination & filters
@@ -48,19 +51,8 @@ export default function ChallanPage() {
   const [clientFilter, setClientFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-
-  const fetchCompanies = async () => {
-    setLoadingCompanies(true);
-    try {
-      const { data } = await getCompanies();
-      setCompanies(data);
-      if (!selectedCompany && data.length > 0) setSelectedCompany(data[0]);
-    } catch {
-      alert("Failed to fetch companies. Please try again.");
-    } finally {
-      setLoadingCompanies(false);
-    }
-  };
+  const [hasExcelTpl, setHasExcelTpl] = useState(false);
+  const [exportingId, setExportingId] = useState(null);
 
   const fetchClients = async (companyId) => {
     try {
@@ -93,16 +85,18 @@ export default function ChallanPage() {
     }
   }, [page, search, statusFilter, clientFilter, dateFrom, dateTo]);
 
-  useEffect(() => { fetchCompanies(); }, []);
-
   useEffect(() => {
     if (selectedCompany) {
       fetchClients(selectedCompany.id);
       setPage(1);
       fetchChallans(selectedCompany.id, 1);
+      hasExcelTemplate(selectedCompany.id, "Challan")
+        .then(r => setHasExcelTpl(r.data.hasExcelTemplate))
+        .catch(() => setHasExcelTpl(false));
     } else {
       setChallans([]);
       setClients([]);
+      setHasExcelTpl(false);
     }
   }, [selectedCompany]);
 
@@ -135,28 +129,30 @@ export default function ChallanPage() {
   };
 
   const handleCancel = async (challan) => {
-    if (!window.confirm(`Cancel Challan #${challan.challanNumber}?`)) return;
+    const ok = await confirm({ title: "Cancel Challan?", message: `Cancel Challan #${challan.challanNumber}? This will mark it as cancelled.`, variant: "warning", confirmText: "Cancel Challan" });
+    if (!ok) return;
     try {
       await cancelChallan(challan.id);
       fetchChallans(selectedCompany.id, page);
     } catch (err) {
-      alert(err.response?.data?.error || "Failed to cancel challan.");
+      notify(err.response?.data?.error || "Failed to cancel challan.", "error");
     }
   };
 
   const handleDelete = async (challan) => {
-    if (!window.confirm(`Delete Challan #${challan.challanNumber}? This cannot be undone.`)) return;
+    const ok = await confirm({ title: "Delete Challan?", message: `Delete Challan #${challan.challanNumber}? This cannot be undone.`, variant: "danger", confirmText: "Delete" });
+    if (!ok) return;
     try {
       await deleteChallan(challan.id);
       fetchChallans(selectedCompany.id, page);
     } catch (err) {
-      alert(err.response?.data?.error || "Failed to delete challan.");
+      notify(err.response?.data?.error || "Failed to delete challan.", "error");
     }
   };
 
   const handlePrint = async (challan) => {
     const w = window.open("", "_blank");
-    if (!w) { alert("Popup blocked. Please allow popups for this site."); return; }
+    if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
     w.document.write("<p>Loading challan...</p>");
     try {
       const { data } = await getChallanPrintData(challan.id);
@@ -174,7 +170,7 @@ export default function ChallanPage() {
       w.print();
     } catch {
       w.close();
-      alert("Failed to load print data.");
+      notify("Failed to load print data.", "error");
     }
   };
 
@@ -182,6 +178,40 @@ export default function ChallanPage() {
   const handleEditSaved = () => {
     setEditChallan(null);
     fetchChallans(selectedCompany.id, page);
+  };
+
+  const handleExportPdf = async (challan) => {
+    if (exportingId) return;
+    setExportingId(challan.id + "-pdf");
+    try {
+      const { data } = await getChallanPrintData(challan.id);
+      let template = defaultChallanTemplate;
+      try {
+        const res = await getTemplate(selectedCompany.id, "Challan");
+        if (res.data?.htmlContent) template = res.data.htmlContent;
+      } catch { /* use default */ }
+      const html = mergeTemplate(template, data);
+      const name = `DC # ${data.challanNumber} ${data.clientName}`;
+      await exportToPdf(html, name);
+    } catch {
+      notify("Failed to export PDF.", "error");
+    } finally {
+      setExportingId(null);
+    }
+  };
+
+  const handleExportExcel = async (challan) => {
+    if (exportingId) return;
+    setExportingId(challan.id + "-excel");
+    try {
+      const { data } = await getChallanPrintData(challan.id);
+      const res = await exportExcel(selectedCompany.id, "Challan", data);
+      saveAs(res.data, `DC # ${data.challanNumber} ${data.clientName}.xlsx`);
+    } catch {
+      notify("Failed to export Excel.", "error");
+    } finally {
+      setExportingId(null);
+    }
   };
 
   const hasFilters = search || statusFilter || clientFilter || dateFrom || dateTo;
@@ -292,6 +322,9 @@ export default function ChallanPage() {
             onDelete={handleDelete}
             onPrint={handlePrint}
             onEditItems={handleEditItems}
+            onExportPdf={handleExportPdf}
+            onExportExcel={hasExcelTpl ? handleExportExcel : null}
+            exportingId={exportingId}
           />
           {/* Pagination */}
           {totalPages > 1 && (

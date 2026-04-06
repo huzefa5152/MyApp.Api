@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
@@ -8,8 +10,13 @@ namespace MyApp.Api.Services.Implementations
     public class ItemTypeService : IItemTypeService
     {
         private readonly IItemTypeRepository _repo;
+        private readonly AppDbContext _context;
 
-        public ItemTypeService(IItemTypeRepository repo) => _repo = repo;
+        public ItemTypeService(IItemTypeRepository repo, AppDbContext context)
+        {
+            _repo = repo;
+            _context = context;
+        }
 
         public async Task<List<ItemTypeDto>> GetAllAsync()
         {
@@ -49,6 +56,11 @@ namespace MyApp.Api.Services.Implementations
         {
             var it = await _repo.GetByIdAsync(id);
             if (it == null) throw new KeyNotFoundException("Item type not found.");
+
+            var inUse = await _context.DeliveryItems.AnyAsync(di => di.ItemTypeId == id);
+            if (inUse)
+                throw new InvalidOperationException($"Cannot delete \"{it.Name}\" — it is used in existing challans.");
+
             await _repo.DeleteAsync(it);
         }
     }

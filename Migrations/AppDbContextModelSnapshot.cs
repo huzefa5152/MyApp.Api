@@ -22,6 +22,59 @@ namespace MyApp.Api.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("MyApp.Api.Models.AuditLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ExceptionType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("HttpMethod")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("QueryString")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RequestBody")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RequestPath")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("StackTrace")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("StatusCode")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Timestamp");
+
+                    b.ToTable("AuditLogs");
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.Client", b =>
                 {
                     b.Property<int>("Id")
@@ -53,6 +106,9 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("STRN")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Site")
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
@@ -137,6 +193,9 @@ namespace MyApp.Api.Migrations
 
                     b.Property<string>("PoNumber")
                         .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Site")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Status")
@@ -334,6 +393,933 @@ namespace MyApp.Api.Migrations
                     b.ToTable("ItemTypes");
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.MergeField", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Category")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FieldExpression")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TemplateType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TemplateType", "FieldExpression")
+                        .IsUnique();
+
+                    b.ToTable("MergeFields");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Category = "Company",
+                            FieldExpression = "{{companyBrandName}}",
+                            Label = "Company Brand Name",
+                            SortOrder = 1,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Category = "Company",
+                            FieldExpression = "{{companyLogoPath}}",
+                            Label = "Company Logo URL",
+                            SortOrder = 2,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Category = "Company",
+                            FieldExpression = "{{{nl2br companyAddress}}}",
+                            Label = "Company Address (with line breaks)",
+                            SortOrder = 3,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Category = "Company",
+                            FieldExpression = "{{{nl2br companyPhone}}}",
+                            Label = "Company Phone (with line breaks)",
+                            SortOrder = 4,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 5,
+                            Category = "Document",
+                            FieldExpression = "{{challanNumber}}",
+                            Label = "Challan Number",
+                            SortOrder = 10,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 6,
+                            Category = "Document",
+                            FieldExpression = "{{fmtDate deliveryDate}}",
+                            Label = "Delivery Date",
+                            SortOrder = 11,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Category = "Document",
+                            FieldExpression = "{{poNumber}}",
+                            Label = "PO Number",
+                            SortOrder = 12,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 8,
+                            Category = "Document",
+                            FieldExpression = "{{fmtDate poDate}}",
+                            Label = "PO Date",
+                            SortOrder = 13,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 9,
+                            Category = "Client",
+                            FieldExpression = "{{clientName}}",
+                            Label = "Client Name",
+                            SortOrder = 20,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 10,
+                            Category = "Client",
+                            FieldExpression = "{{clientAddress}}",
+                            Label = "Client Address",
+                            SortOrder = 21,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 11,
+                            Category = "Client",
+                            FieldExpression = "{{clientSite}}",
+                            Label = "Client Site",
+                            SortOrder = 22,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Category = "Items",
+                            FieldExpression = "{{items.length}}",
+                            Label = "Item Count",
+                            SortOrder = 30,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Category = "Items",
+                            FieldExpression = "{{#each items}}",
+                            Label = "Loop: Items Start",
+                            SortOrder = 31,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 14,
+                            Category = "Items",
+                            FieldExpression = "{{/each}}",
+                            Label = "Loop: End",
+                            SortOrder = 32,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 15,
+                            Category = "Items",
+                            FieldExpression = "{{this.quantity}}",
+                            Label = "Item Quantity (in loop)",
+                            SortOrder = 33,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 16,
+                            Category = "Items",
+                            FieldExpression = "{{this.description}}",
+                            Label = "Item Description (in loop)",
+                            SortOrder = 34,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 17,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if companyLogoPath}}",
+                            Label = "If: Has Logo",
+                            SortOrder = 40,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 18,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if companyAddress}}",
+                            Label = "If: Has Address",
+                            SortOrder = 41,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 19,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if companyPhone}}",
+                            Label = "If: Has Phone",
+                            SortOrder = 42,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 20,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if poNumber}}",
+                            Label = "If: Has PO Number",
+                            SortOrder = 43,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 21,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if poDate}}",
+                            Label = "If: Has PO Date",
+                            SortOrder = 44,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 22,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if clientSite}}",
+                            Label = "If: Has Client Site",
+                            SortOrder = 45,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 23,
+                            Category = "Conditionals",
+                            FieldExpression = "{{else}}",
+                            Label = "Else",
+                            SortOrder = 46,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 24,
+                            Category = "Conditionals",
+                            FieldExpression = "{{/if}}",
+                            Label = "End If",
+                            SortOrder = 47,
+                            TemplateType = "Challan"
+                        },
+                        new
+                        {
+                            Id = 25,
+                            Category = "Company",
+                            FieldExpression = "{{companyBrandName}}",
+                            Label = "Company Brand Name",
+                            SortOrder = 1,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 26,
+                            Category = "Company",
+                            FieldExpression = "{{companyLogoPath}}",
+                            Label = "Company Logo URL",
+                            SortOrder = 2,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 27,
+                            Category = "Company",
+                            FieldExpression = "{{{nl2br companyAddress}}}",
+                            Label = "Company Address (with line breaks)",
+                            SortOrder = 3,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 28,
+                            Category = "Company",
+                            FieldExpression = "{{{nl2br companyPhone}}}",
+                            Label = "Company Phone (with line breaks)",
+                            SortOrder = 4,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 29,
+                            Category = "Company",
+                            FieldExpression = "{{companyNTN}}",
+                            Label = "Company NTN",
+                            SortOrder = 5,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 30,
+                            Category = "Company",
+                            FieldExpression = "{{companySTRN}}",
+                            Label = "Company STRN",
+                            SortOrder = 6,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 31,
+                            Category = "Document",
+                            FieldExpression = "{{invoiceNumber}}",
+                            Label = "Invoice/Bill Number",
+                            SortOrder = 10,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 32,
+                            Category = "Document",
+                            FieldExpression = "{{fmtDate date}}",
+                            Label = "Invoice Date",
+                            SortOrder = 11,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 33,
+                            Category = "Document",
+                            FieldExpression = "{{join challanNumbers}}",
+                            Label = "Challan Numbers (comma-separated)",
+                            SortOrder = 12,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 34,
+                            Category = "Document",
+                            FieldExpression = "{{joinDates challanDates}}",
+                            Label = "Challan Dates (comma-separated)",
+                            SortOrder = 13,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 35,
+                            Category = "Document",
+                            FieldExpression = "{{poNumber}}",
+                            Label = "PO Number",
+                            SortOrder = 14,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 36,
+                            Category = "Document",
+                            FieldExpression = "{{fmtDate poDate}}",
+                            Label = "PO Date",
+                            SortOrder = 15,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 37,
+                            Category = "Client",
+                            FieldExpression = "{{clientName}}",
+                            Label = "Client Name",
+                            SortOrder = 20,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 38,
+                            Category = "Client",
+                            FieldExpression = "{{clientAddress}}",
+                            Label = "Client Address",
+                            SortOrder = 21,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 39,
+                            Category = "Client",
+                            FieldExpression = "{{concernDepartment}}",
+                            Label = "Concern Department",
+                            SortOrder = 22,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 40,
+                            Category = "Client",
+                            FieldExpression = "{{clientNTN}}",
+                            Label = "Client NTN",
+                            SortOrder = 23,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 41,
+                            Category = "Client",
+                            FieldExpression = "{{clientSTRN}}",
+                            Label = "Client STRN/GST",
+                            SortOrder = 24,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 42,
+                            Category = "Totals",
+                            FieldExpression = "{{fmt subtotal}}",
+                            Label = "Subtotal (formatted)",
+                            SortOrder = 30,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 43,
+                            Category = "Totals",
+                            FieldExpression = "{{gstRate}}",
+                            Label = "GST Rate %",
+                            SortOrder = 31,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 44,
+                            Category = "Totals",
+                            FieldExpression = "{{fmt gstAmount}}",
+                            Label = "GST Amount (formatted)",
+                            SortOrder = 32,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 45,
+                            Category = "Totals",
+                            FieldExpression = "{{fmt grandTotal}}",
+                            Label = "Grand Total (formatted)",
+                            SortOrder = 33,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 46,
+                            Category = "Totals",
+                            FieldExpression = "{{amountInWords}}",
+                            Label = "Amount In Words",
+                            SortOrder = 34,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 47,
+                            Category = "Items",
+                            FieldExpression = "{{#each items}}",
+                            Label = "Loop: Items Start",
+                            SortOrder = 40,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 48,
+                            Category = "Items",
+                            FieldExpression = "{{/each}}",
+                            Label = "Loop: End",
+                            SortOrder = 41,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 49,
+                            Category = "Items",
+                            FieldExpression = "{{this.sNo}}",
+                            Label = "Item S# (in loop)",
+                            SortOrder = 42,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 50,
+                            Category = "Items",
+                            FieldExpression = "{{this.quantity}}",
+                            Label = "Item Quantity (in loop)",
+                            SortOrder = 43,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 51,
+                            Category = "Items",
+                            FieldExpression = "{{this.description}}",
+                            Label = "Item Description (in loop)",
+                            SortOrder = 44,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 52,
+                            Category = "Items",
+                            FieldExpression = "{{this.itemTypeName}}",
+                            Label = "Item Type Name (in loop)",
+                            SortOrder = 45,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 53,
+                            Category = "Items",
+                            FieldExpression = "{{fmt this.unitPrice}}",
+                            Label = "Unit Price (in loop)",
+                            SortOrder = 46,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 54,
+                            Category = "Items",
+                            FieldExpression = "{{fmt this.lineTotal}}",
+                            Label = "Line Total (in loop)",
+                            SortOrder = 47,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 55,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if companyLogoPath}}",
+                            Label = "If: Has Logo",
+                            SortOrder = 50,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 56,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if clientNTN}}",
+                            Label = "If: Has Client NTN",
+                            SortOrder = 51,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 57,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if clientSTRN}}",
+                            Label = "If: Has Client STRN",
+                            SortOrder = 52,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 58,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if poNumber}}",
+                            Label = "If: Has PO Number",
+                            SortOrder = 53,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 59,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if poDate}}",
+                            Label = "If: Has PO Date",
+                            SortOrder = 54,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 60,
+                            Category = "Conditionals",
+                            FieldExpression = "{{else}}",
+                            Label = "Else",
+                            SortOrder = 55,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 61,
+                            Category = "Conditionals",
+                            FieldExpression = "{{/if}}",
+                            Label = "End If",
+                            SortOrder = 56,
+                            TemplateType = "Bill"
+                        },
+                        new
+                        {
+                            Id = 62,
+                            Category = "Supplier",
+                            FieldExpression = "{{supplierName}}",
+                            Label = "Supplier Name",
+                            SortOrder = 1,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 63,
+                            Category = "Supplier",
+                            FieldExpression = "{{{nl2br supplierAddress}}}",
+                            Label = "Supplier Address (with line breaks)",
+                            SortOrder = 2,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 64,
+                            Category = "Supplier",
+                            FieldExpression = "{{{nl2br supplierPhone}}}",
+                            Label = "Supplier Phone (with line breaks)",
+                            SortOrder = 3,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 65,
+                            Category = "Supplier",
+                            FieldExpression = "{{supplierNTN}}",
+                            Label = "Supplier NTN",
+                            SortOrder = 4,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 66,
+                            Category = "Supplier",
+                            FieldExpression = "{{supplierSTRN}}",
+                            Label = "Supplier STRN",
+                            SortOrder = 5,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 67,
+                            Category = "Buyer",
+                            FieldExpression = "{{buyerName}}",
+                            Label = "Buyer Name",
+                            SortOrder = 10,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 68,
+                            Category = "Buyer",
+                            FieldExpression = "{{{nl2br buyerAddress}}}",
+                            Label = "Buyer Address (with line breaks)",
+                            SortOrder = 11,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 69,
+                            Category = "Buyer",
+                            FieldExpression = "{{buyerPhone}}",
+                            Label = "Buyer Phone",
+                            SortOrder = 12,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 70,
+                            Category = "Buyer",
+                            FieldExpression = "{{buyerNTN}}",
+                            Label = "Buyer NTN",
+                            SortOrder = 13,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 71,
+                            Category = "Buyer",
+                            FieldExpression = "{{buyerSTRN}}",
+                            Label = "Buyer STRN",
+                            SortOrder = 14,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 72,
+                            Category = "Document",
+                            FieldExpression = "{{invoiceNumber}}",
+                            Label = "Invoice Number",
+                            SortOrder = 20,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 73,
+                            Category = "Document",
+                            FieldExpression = "{{fmtDate date}}",
+                            Label = "Invoice Date",
+                            SortOrder = 21,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 74,
+                            Category = "Document",
+                            FieldExpression = "{{join challanNumbers}}",
+                            Label = "Challan Numbers",
+                            SortOrder = 22,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 75,
+                            Category = "Document",
+                            FieldExpression = "{{poNumber}}",
+                            Label = "PO Number",
+                            SortOrder = 23,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 76,
+                            Category = "Totals",
+                            FieldExpression = "{{gstRate}}",
+                            Label = "GST Rate %",
+                            SortOrder = 30,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 77,
+                            Category = "Totals",
+                            FieldExpression = "{{fmtDec subtotal}}",
+                            Label = "Subtotal (2 decimals)",
+                            SortOrder = 31,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 78,
+                            Category = "Totals",
+                            FieldExpression = "{{fmtDec gstAmount}}",
+                            Label = "GST Amount (2 decimals)",
+                            SortOrder = 32,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 79,
+                            Category = "Totals",
+                            FieldExpression = "{{fmtDec grandTotal}}",
+                            Label = "Grand Total (2 decimals)",
+                            SortOrder = 33,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 80,
+                            Category = "Totals",
+                            FieldExpression = "{{amountInWords}}",
+                            Label = "Amount In Words",
+                            SortOrder = 34,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 81,
+                            Category = "Items",
+                            FieldExpression = "{{#each items}}",
+                            Label = "Loop: Items Start",
+                            SortOrder = 40,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 82,
+                            Category = "Items",
+                            FieldExpression = "{{/each}}",
+                            Label = "Loop: End",
+                            SortOrder = 41,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 83,
+                            Category = "Items",
+                            FieldExpression = "{{this.quantity}}",
+                            Label = "Item Quantity (in loop)",
+                            SortOrder = 42,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 84,
+                            Category = "Items",
+                            FieldExpression = "{{this.uom}}",
+                            Label = "Item UOM (in loop)",
+                            SortOrder = 43,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 85,
+                            Category = "Items",
+                            FieldExpression = "{{this.description}}",
+                            Label = "Item Description (in loop)",
+                            SortOrder = 44,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 86,
+                            Category = "Items",
+                            FieldExpression = "{{fmtDec this.valueExclTax}}",
+                            Label = "Value Excl Tax (in loop)",
+                            SortOrder = 45,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 87,
+                            Category = "Items",
+                            FieldExpression = "{{this.gstRate}}",
+                            Label = "GST Rate % (in loop)",
+                            SortOrder = 46,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 88,
+                            Category = "Items",
+                            FieldExpression = "{{fmtDec this.gstAmount}}",
+                            Label = "GST Amount (in loop)",
+                            SortOrder = 47,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 89,
+                            Category = "Items",
+                            FieldExpression = "{{fmtDec this.totalInclTax}}",
+                            Label = "Total Incl Tax (in loop)",
+                            SortOrder = 48,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 90,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if supplierAddress}}",
+                            Label = "If: Has Supplier Address",
+                            SortOrder = 50,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 91,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if supplierPhone}}",
+                            Label = "If: Has Supplier Phone",
+                            SortOrder = 51,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 92,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if supplierSTRN}}",
+                            Label = "If: Has Supplier STRN",
+                            SortOrder = 52,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 93,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if supplierNTN}}",
+                            Label = "If: Has Supplier NTN",
+                            SortOrder = 53,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 94,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if buyerAddress}}",
+                            Label = "If: Has Buyer Address",
+                            SortOrder = 54,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 95,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if buyerPhone}}",
+                            Label = "If: Has Buyer Phone",
+                            SortOrder = 55,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 96,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if buyerSTRN}}",
+                            Label = "If: Has Buyer STRN",
+                            SortOrder = 56,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 97,
+                            Category = "Conditionals",
+                            FieldExpression = "{{#if buyerNTN}}",
+                            Label = "If: Has Buyer NTN",
+                            SortOrder = 57,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 98,
+                            Category = "Conditionals",
+                            FieldExpression = "{{else}}",
+                            Label = "Else",
+                            SortOrder = 58,
+                            TemplateType = "TaxInvoice"
+                        },
+                        new
+                        {
+                            Id = 99,
+                            Category = "Conditionals",
+                            FieldExpression = "{{/if}}",
+                            Label = "End If",
+                            SortOrder = 59,
+                            TemplateType = "TaxInvoice"
+                        });
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.PrintTemplate", b =>
                 {
                     b.Property<int>("Id")
@@ -345,8 +1331,17 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
+                    b.Property<string>("EditorMode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ExcelTemplatePath")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("HtmlContent")
                         .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TemplateJson")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TemplateType")
