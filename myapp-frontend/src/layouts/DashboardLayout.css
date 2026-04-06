@@ -157,6 +157,7 @@
 .dl-submenu {
   overflow: hidden;
   max-height: 0;
+  flex-shrink: 0;
   transition: max-height var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
