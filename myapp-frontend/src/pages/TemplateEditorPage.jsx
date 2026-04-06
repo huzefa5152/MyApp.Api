@@ -14,12 +14,12 @@ import {
   defaultChallanTemplate, defaultBillTemplate, defaultTaxInvoiceTemplate,
 } from "../utils/defaultTemplates";
 import { dropdownStyles } from "../theme";
-import CodeEditor from "../components/templateEditor/CodeEditor";
-import MergeFieldSidebar from "../components/templateEditor/MergeFieldSidebar";
-import PreviewPane from "../components/templateEditor/PreviewPane";
-import SyncWarningModal from "../components/templateEditor/SyncWarningModal";
-import VisualEditor from "../components/templateEditor/VisualEditor";
-import StarterTemplatePicker from "../components/templateEditor/StarterTemplatePicker";
+import CodeEditor from "../Components/templateEditor/CodeEditor";
+import MergeFieldSidebar from "../Components/templateEditor/MergeFieldSidebar";
+import PreviewPane from "../Components/templateEditor/PreviewPane";
+import SyncWarningModal from "../Components/templateEditor/SyncWarningModal";
+import VisualEditor from "../Components/templateEditor/VisualEditor";
+import StarterTemplatePicker from "../Components/templateEditor/StarterTemplatePicker";
 import { useConfirm } from "../Components/ConfirmDialog";
 
 const TEMPLATE_TYPES = [
