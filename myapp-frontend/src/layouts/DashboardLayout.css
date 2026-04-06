@@ -153,10 +153,15 @@
   transform: rotate(180deg);
 }
 
-/* Submenu */
+/* Submenu – pure CSS toggle, no JS measurement needed */
 .dl-submenu {
   overflow: hidden;
+  max-height: 0;
   transition: max-height var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dl-submenu--open {
+  max-height: 300px;
 }
 
 .dl-submenu__inner {
@@ -619,6 +624,33 @@
 
   .filter-clear-btn {
     align-self: flex-end;
+  }
+}
+
+/* ---------- Audit Logs: table on desktop, cards on mobile ---------- */
+.audit-table-wrap { display: block; }
+.audit-cards { display: none; }
+
+@media (max-width: 767.98px) {
+  .audit-table-wrap { display: none; }
+  .audit-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .audit-card {
+    background: #fff;
+    border: 1px solid #e8edf3;
+    border-radius: 10px;
+    padding: 0.85rem;
+    cursor: pointer;
+    transition: box-shadow 0.15s;
+  }
+  .audit-card:active {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  .audit-detail-grid {
+    grid-template-columns: 1fr !important;
   }
 }
 

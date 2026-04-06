@@ -133,9 +133,9 @@ export default function AuditLogsPage() {
         </span>
       </div>
 
-      {/* Table */}
+      {/* Table (desktop) */}
       <div style={{ background: colors.cardBg, borderRadius: 12, border: `1px solid ${colors.cardBorder}`, overflow: "hidden" }}>
-        <div style={{ overflowX: "auto" }}>
+        <div className="audit-table-wrap" style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
             <thead>
               <tr style={{ background: "#f8f9fb", borderBottom: `2px solid ${colors.cardBorder}` }}>
@@ -193,6 +193,34 @@ export default function AuditLogsPage() {
           </table>
         </div>
 
+        {/* Mobile Cards */}
+        <div className="audit-cards">
+          {loading ? (
+            <div style={{ padding: 40, textAlign: "center", color: colors.textSecondary }}>Loading...</div>
+          ) : logs.length === 0 ? (
+            <div style={{ padding: 40, textAlign: "center", color: colors.textSecondary }}>No audit logs found</div>
+          ) : logs.map((log) => {
+            const badge = levelBadge[log.level] || levelBadge.Info;
+            return (
+              <div key={log.id} className="audit-card" onClick={() => setSelectedLog(log)}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 6, background: badge.bg, color: badge.color, fontSize: "0.75rem", fontWeight: 600 }}>
+                    {badge.icon} {log.level}
+                  </span>
+                  <span style={{ fontSize: "0.72rem", color: colors.textSecondary }}>{formatDate(log.timestamp)}</span>
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontWeight: 700, fontSize: "0.78rem", color: methodColor[log.httpMethod] || colors.textPrimary }}>{log.httpMethod}</span>
+                  <span style={{ fontFamily: "monospace", fontSize: "0.78rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: colors.textPrimary }}>{log.requestPath}</span>
+                  <span style={{ fontWeight: 700, fontSize: "0.82rem", color: log.statusCode >= 500 ? colors.danger : log.statusCode >= 400 ? "#fd7e14" : colors.teal, flexShrink: 0 }}>{log.statusCode}</span>
+                </div>
+                {log.userName && <div style={{ fontSize: "0.75rem", color: colors.textSecondary, marginBottom: 4 }}>User: {log.userName}</div>}
+                {log.message && <div style={{ fontSize: "0.8rem", color: colors.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{log.message}</div>}
+              </div>
+            );
+          })}
+        </div>
+
         {/* Pagination */}
         {totalPages > 1 && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", padding: "12px", borderTop: `1px solid ${colors.cardBorder}` }}>
@@ -233,7 +261,7 @@ export default function AuditLogsPage() {
                 <MdClose size={22} color={colors.textSecondary} />
               </button>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 24px", fontSize: "0.88rem", marginBottom: 16 }}>
+            <div className="audit-detail-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 24px", fontSize: "0.88rem", marginBottom: 16 }}>
               <Detail label="Timestamp" value={formatDate(selectedLog.timestamp)} />
               <Detail label="Level" value={selectedLog.level} />
               <Detail label="User" value={selectedLog.userName || "—"} />

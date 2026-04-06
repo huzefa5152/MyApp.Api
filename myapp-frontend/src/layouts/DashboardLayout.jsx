@@ -51,16 +51,7 @@ export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const submenuRef = useRef(null);
   const userMenuRef = useRef(null);
-  const [submenuHeight, setSubmenuHeight] = useState(0);
-
-  // Measure submenu natural height for smooth CSS transition
-  useEffect(() => {
-    if (submenuRef.current) {
-      setSubmenuHeight(submenuRef.current.scrollHeight);
-    }
-  }, []);
 
   // Auto-expand Configuration submenu if a child route is active
   const isConfigActive = location.pathname.startsWith("/companies") || location.pathname.startsWith("/Clients") || location.pathname.startsWith("/item-types") || location.pathname.startsWith("/templates");
@@ -150,12 +141,11 @@ export default function DashboardLayout() {
           {/* Submenu */}
           <div
             id="config-submenu"
-            className="dl-submenu"
-            style={{ maxHeight: configOpen ? `${submenuHeight}px` : "0px" }}
+            className={`dl-submenu${configOpen ? " dl-submenu--open" : ""}`}
             role="region"
             aria-label="Configuration submenu"
           >
-            <div className="dl-submenu__inner" ref={submenuRef}>
+            <div className="dl-submenu__inner">
               <NavLink
                 to="/companies/list"
                 className={({ isActive }) =>
