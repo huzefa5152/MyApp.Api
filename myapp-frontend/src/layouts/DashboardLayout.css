@@ -213,11 +213,11 @@
   font-weight: 600;
 }
 
-/* ---------- Sidebar Footer ---------- */
-.dl-sidebar-footer {
-  padding: 1rem 0.75rem;
-  border-top: 1px solid var(--sidebar-border-accent);
+/* ---------- Sidebar Bottom (Account + Footer – pinned) ---------- */
+.dl-sidebar-bottom {
   flex-shrink: 0;
+  padding: 0 0.75rem 0.75rem;
+  border-top: 1px solid var(--sidebar-border-accent);
 }
 
 .dl-sidebar-footer__copy {
@@ -676,10 +676,13 @@
   .dl-nav__item {
     padding: 0.45rem 0.85rem;
   }
-  .dl-sidebar-footer {
-    padding: 0.6rem 0.75rem;
+  .dl-sidebar-bottom {
+    padding: 0 0.5rem 0.5rem;
+  }
+  .dl-sidebar-bottom .dl-nav__item {
+    padding: 0.4rem 0.85rem;
   }
   .dl-sidebar-footer__copy {
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.3rem;
   }
 }

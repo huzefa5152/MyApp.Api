@@ -229,10 +229,12 @@ export default function DashboardLayout() {
             <span className="dl-nav__label">Audit Logs</span>
           </NavLink>
 
+        </nav>
+
+        {/* Account & Footer – always visible, never scroll */}
+        <div className="dl-sidebar-bottom">
           <hr className="dl-nav__divider" />
           <span className="dl-nav__section-label">Account</span>
-
-          {/* Profile */}
           <NavLink
             to="/profile"
             className={({ isActive }) =>
@@ -246,10 +248,6 @@ export default function DashboardLayout() {
             )}
             <span className="dl-nav__label">My Profile</span>
           </NavLink>
-        </nav>
-
-        {/* Footer */}
-        <div className="dl-sidebar-footer">
           <p className="dl-sidebar-footer__copy">
             &copy; {new Date().getFullYear()} Hakimi Traders
           </p>
