@@ -18,6 +18,9 @@ export const createDeliveryChallan = (companyId, payload) =>
 export const updateChallanItems = (challanId, items) =>
   httpClient.put(`/deliverychallans/${challanId}/items`, items);
 
+export const updateChallanPo = (challanId, payload) =>
+  httpClient.put(`/deliverychallans/${challanId}/po`, payload);
+
 export const cancelChallan = (challanId) =>
   httpClient.put(`/deliverychallans/${challanId}/cancel`);
 

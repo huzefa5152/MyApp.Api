@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { MdSearch } from "react-icons/md";
 import { getPendingChallansByCompany } from "../api/challanApi";
 import { createInvoice } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
@@ -22,6 +23,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
   const [itemPrices, setItemPrices] = useState({});
+  const [commonPoDate, setCommonPoDate] = useState("");
+  const [dcSearch, setDcSearch] = useState("");
   const [gstRate, setGstRate] = useState(18);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
@@ -54,11 +57,24 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
         .sort((a, b) => b.challanNumber - a.challanNumber)
     : [];
 
+  // Further filter by DC search (challan number, PO, or item descriptions)
+  const filteredChallans = useMemo(() => {
+    if (!dcSearch.trim()) return clientChallans;
+    const term = dcSearch.toLowerCase();
+    return clientChallans.filter((c) =>
+      c.challanNumber.toString().includes(term) ||
+      (c.poNumber && c.poNumber.toLowerCase().includes(term)) ||
+      c.items?.some((item) => item.description?.toLowerCase().includes(term))
+    );
+  }, [clientChallans, dcSearch]);
+
   // Reset selections when client changes
   const handleClientChange = (e) => {
     setSelectedClientId(e.target.value);
     setSelectedIds([]);
     setItemPrices({});
+    setCommonPoDate("");
+    setDcSearch("");
     setError("");
   };
 
@@ -70,10 +86,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
   };
 
   const selectAll = () => {
-    if (selectedIds.length === clientChallans.length) {
-      setSelectedIds([]);
+    const visible = filteredChallans.map((c) => c.id);
+    const allSelected = visible.every((id) => selectedIds.includes(id));
+    if (allSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !visible.includes(id)));
     } else {
-      setSelectedIds(clientChallans.map((c) => c.id));
+      setSelectedIds((prev) => [...new Set([...prev, ...visible])]);
     }
   };
 
@@ -107,6 +125,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
 
     setSaving(true);
     try {
+      // Build PO date updates for selected challans that don't have a PO date
+      const poDateUpdates = {};
+      if (commonPoDate) {
+        const isoDate = new Date(commonPoDate).toISOString();
+        for (const dc of selectedChallans) {
+          if (!dc.poDate) {
+            poDateUpdates[dc.id] = isoDate;
+          }
+        }
+      }
+
       await createInvoice({
         date: new Date(invoiceDate).toISOString(),
         companyId,
@@ -118,6 +147,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
           deliveryItemId: item.id,
           unitPrice: parseFloat(itemPrices[item.id]),
         })),
+        poDateUpdates,
       });
       onSaved();
     } catch (err) {
@@ -202,46 +232,82 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
 
                     {/* Challan selection */}
                     <div style={{ marginBottom: "1rem" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem", flexWrap: "wrap", gap: "0.35rem" }}>
                         <label style={{ ...styles.label, marginBottom: 0 }}>
-                          Pending Challans ({clientChallans.length})
+                          Pending Challans ({dcSearch ? `${filteredChallans.length} / ${clientChallans.length}` : clientChallans.length})
                         </label>
-                        {clientChallans.length > 1 && (
-                          <button
-                            type="button"
-                            style={styles.selectAllBtn}
-                            onClick={selectAll}
-                          >
-                            {selectedIds.length === clientChallans.length ? "Deselect All" : "Select All"}
-                          </button>
-                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          {clientChallans.length > 0 && (
+                            <div style={{ position: "relative" }}>
+                              <MdSearch size={14} style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", color: colors.textSecondary }} />
+                              <input
+                                type="text"
+                                placeholder="Search DC#, PO, items..."
+                                style={{ ...styles.input, padding: "0.25rem 0.5rem 0.25rem 1.5rem", fontSize: "0.78rem", width: 180 }}
+                                value={dcSearch}
+                                onChange={(e) => setDcSearch(e.target.value)}
+                              />
+                            </div>
+                          )}
+                          {filteredChallans.length > 1 && (
+                            <button
+                              type="button"
+                              style={styles.selectAllBtn}
+                              onClick={selectAll}
+                            >
+                              {filteredChallans.every((c) => selectedIds.includes(c.id)) ? "Deselect All" : "Select All"}
+                            </button>
+                          )}
+                        </div>
                       </div>
                       {clientChallans.length === 0 ? (
                         <p style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>No pending challans for this client.</p>
+                      ) : filteredChallans.length === 0 ? (
+                        <p style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>No challans match "{dcSearch}".</p>
                       ) : (
-                        <div style={styles.challanGrid}>
-                          {clientChallans.map((c) => (
-                            <label key={c.id} style={{
-                              ...styles.challanCard,
-                              borderColor: selectedIds.includes(c.id) ? colors.blue : colors.cardBorder,
-                              backgroundColor: selectedIds.includes(c.id) ? "#e3f2fd" : "#fff",
-                            }}>
+                        <>
+                          <div style={styles.challanGrid}>
+                            {filteredChallans.map((c) => (
+                              <label key={c.id} style={{
+                                ...styles.challanCard,
+                                borderColor: selectedIds.includes(c.id) ? colors.blue : colors.cardBorder,
+                                backgroundColor: selectedIds.includes(c.id) ? "#e3f2fd" : "#fff",
+                              }}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.includes(c.id)}
+                                  onChange={() => toggleChallan(c.id)}
+                                  style={{ marginRight: "0.5rem", flexShrink: 0 }}
+                                />
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                                  <strong>DC #{c.challanNumber}</strong>
+                                  <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>
+                                    {new Date(c.deliveryDate).toLocaleDateString()} | {c.items?.length} items
+                                    {c.poNumber ? ` | PO: ${c.poNumber}` : ""}
+                                    {c.poDate ? ` | PO Date: ${new Date(c.poDate).toLocaleDateString()}` : ""}
+                                  </span>
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                          {selectedIds.length > 0 && selectedChallans.find((c) => c.poDate) && (
+                            <div style={styles.poDateInfo}>
+                              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: colors.textSecondary }}>PO Date:</span>
+                              <span style={{ fontSize: "0.82rem", color: colors.textPrimary }}>{new Date(selectedChallans.find((c) => c.poDate).poDate).toLocaleDateString()}</span>
+                            </div>
+                          )}
+                          {selectedIds.length > 0 && !selectedChallans.find((c) => c.poDate) && (
+                            <div style={styles.poDateInfo}>
+                              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: colors.textSecondary }}>PO Date (for all selected DCs):</span>
                               <input
-                                type="checkbox"
-                                checked={selectedIds.includes(c.id)}
-                                onChange={() => toggleChallan(c.id)}
-                                style={{ marginRight: "0.5rem", flexShrink: 0 }}
+                                type="date"
+                                style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.82rem", width: "auto" }}
+                                value={commonPoDate}
+                                onChange={(e) => setCommonPoDate(e.target.value)}
                               />
-                              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                                <strong>DC #{c.challanNumber}</strong>
-                                <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>
-                                  {new Date(c.deliveryDate).toLocaleDateString()} | {c.items?.length} items
-                                  {c.poNumber ? ` | PO: ${c.poNumber}` : ""}
-                                </span>
-                              </div>
-                            </label>
-                          ))}
-                        </div>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
 
@@ -332,4 +398,5 @@ const styles = {
   itemRow: { display: "flex", gap: "0.5rem", alignItems: "center", padding: "0.4rem 0.5rem", borderRadius: 6, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fafbfc" },
   totalsBox: { display: "flex", flexDirection: "column", gap: "0.35rem", alignItems: "flex-end", padding: "1rem", backgroundColor: "#f8f9fb", borderRadius: 8, border: `1px solid ${colors.cardBorder}` },
   totalRow: { display: "flex", gap: "2rem", justifyContent: "flex-end", fontSize: "0.9rem", minWidth: 280 },
+  poDateInfo: { display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem", padding: "0.5rem 0.75rem", borderRadius: 8, backgroundColor: "#e3f2fd", border: "1px solid #0d47a130", flexWrap: "wrap" },
 };

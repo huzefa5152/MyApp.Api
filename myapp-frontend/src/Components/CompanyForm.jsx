@@ -70,10 +70,10 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         setError("");
 
         if (!form.name) return setError("Company name is required.");
-        if (!form.startingChallanNumber || form.startingChallanNumber <= 0)
-            return setError("Starting challan number is required.");
-        if (!form.startingInvoiceNumber || form.startingInvoiceNumber <= 0)
-            return setError("Starting invoice number is required.");
+        if (form.startingChallanNumber < 0)
+            return setError("Starting challan number cannot be negative.");
+        if (form.startingInvoiceNumber < 0)
+            return setError("Starting invoice number cannot be negative.");
 
         try {
             let savedCompany;

@@ -277,6 +277,7 @@ export default function ChallanPage() {
               <select className="filter-select" value={statusFilter} onChange={handleFilterChange(setStatusFilter)}>
                 <option value="">All Status</option>
                 <option value="Pending">Pending</option>
+                <option value="No PO">No PO</option>
                 <option value="Invoiced">Invoiced</option>
                 <option value="Cancelled">Cancelled</option>
               </select>
@@ -366,6 +367,7 @@ export default function ChallanPage() {
           onSaved={handleEditSaved}
         />
       )}
+
     </div>
   );
 }

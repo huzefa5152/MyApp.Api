@@ -41,6 +41,7 @@ namespace MyApp.Api.DTOs
         public string? PaymentTerms { get; set; }
         public List<int> ChallanIds { get; set; } = new();
         public List<CreateInvoiceItemDto> Items { get; set; } = new();
+        public Dictionary<int, DateTime> PoDateUpdates { get; set; } = new();
     }
 
     public class CreateInvoiceItemDto

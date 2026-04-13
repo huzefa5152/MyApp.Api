@@ -73,8 +73,6 @@ namespace MyApp.Api.Controllers
             {
                 if (dto.ClientId <= 0)
                     return BadRequest(new { error = "Invalid client." });
-                if (string.IsNullOrWhiteSpace(dto.PoNumber))
-                    return BadRequest(new { error = "PO number is required." });
                 if (!dto.DeliveryDate.HasValue)
                     return BadRequest(new { error = "Delivery date is required." });
                 if (dto.Items == null || !dto.Items.Any())
@@ -99,6 +97,23 @@ namespace MyApp.Api.Controllers
             try
             {
                 var updated = await _service.UpdateItemsAsync(id, items);
+                if (updated == null) return NotFound();
+                return Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpPut("{id}/po")]
+        public async Task<ActionResult<DeliveryChallanDto>> UpdatePo(int id, [FromBody] UpdatePoDto dto)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(dto.PoNumber))
+                    return BadRequest(new { error = "PO number is required." });
+                var updated = await _service.UpdatePoAsync(id, dto.PoNumber, dto.PoDate);
                 if (updated == null) return NotFound();
                 return Ok(updated);
             }

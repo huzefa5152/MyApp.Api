@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
-import { updateChallanItems } from "../api/challanApi";
+import { updateChallanItems, updateChallanPo } from "../api/challanApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { formStyles } from "../theme";
 
@@ -27,6 +27,9 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     }))
   );
   const [itemTypes, setItemTypes] = useState([]);
+  const isNoPo = challan.status === "No PO";
+  const [poNumber, setPoNumber] = useState(challan.poNumber || "");
+  const [poDate, setPoDate] = useState(challan.poDate ? challan.poDate.substring(0, 10) : "");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const containerRef = useRef(null);
@@ -59,13 +62,15 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     setError("");
     const validItems = items.filter((i) => i.description.trim());
     if (validItems.length === 0) { setError("At least one item is required."); return; }
-    if (validItems.some((i) => !i.itemTypeId)) { setError("Select an item type for all items."); return; }
     setSaving(true);
     try {
-      await updateChallanItems(challan.id, validItems);
+      await updateChallanItems(challan.id, validItems.map((i) => ({ ...i, itemTypeId: i.itemTypeId || null })));
+      if (isNoPo && poNumber.trim()) {
+        await updateChallanPo(challan.id, { poNumber: poNumber.trim(), poDate: poDate ? new Date(poDate).toISOString() : null });
+      }
       onSaved();
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to update items.");
+      setError(err.response?.data?.error || "Failed to update.");
     } finally {
       setSaving(false);
     }
@@ -81,6 +86,21 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
             {error && <div style={styles.errorAlert}>{error}</div>}
+            {isNoPo && (
+              <div style={styles.poSection}>
+                <p style={styles.poHint}>This challan has no PO. Add PO details below (optional — save without to keep "No PO" status).</p>
+                <div style={styles.poRow}>
+                  <div style={{ flex: 1 }}>
+                    <label style={styles.label}>PO Number</label>
+                    <input type="text" style={styles.input} placeholder="Enter PO number" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={styles.label}>PO Date</label>
+                    <input type="date" style={styles.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
+                  </div>
+                </div>
+              </div>
+            )}
             <div ref={containerRef} style={styles.itemsContainer}>
               {items.map((item, idx) => (
                 <div key={idx} style={styles.itemRow}>
@@ -134,4 +154,8 @@ const styles = {
   input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
   removeBtn: { display: "flex", alignItems: "center", justifyContent: "center", padding: "0.4rem", marginTop: "0.3rem", borderRadius: 8, border: `1px solid ${colors.danger}25`, backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer" },
   addItemBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", marginTop: "0.6rem", padding: "0.4rem 0.9rem", borderRadius: 8, border: "none", backgroundColor: `${colors.teal}14`, color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
+  poSection: { marginBottom: "1rem", padding: "0.75rem", borderRadius: 10, border: `1px solid #0d47a130`, backgroundColor: "#e3f2fd" },
+  poHint: { margin: "0 0 0.5rem", fontSize: "0.82rem", color: "#0d47a1", fontWeight: 500 },
+  poRow: { display: "flex", gap: "0.75rem", flexWrap: "wrap" },
+  label: { display: "block", marginBottom: 4, fontWeight: 600, fontSize: "0.82rem", color: colors.textSecondary },
 };

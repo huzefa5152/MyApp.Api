@@ -156,9 +156,11 @@ namespace MyApp.Api.Services.Implementations
 
             var created = await _invoiceRepo.CreateAsync(invoice);
 
-            // Transition challans to Invoiced
+            // Transition challans to Invoiced + apply any PO date updates
             foreach (var dc in challans)
             {
+                if (dto.PoDateUpdates.TryGetValue(dc.Id, out var poDate))
+                    dc.PoDate = poDate;
                 dc.Status = "Invoiced";
                 dc.InvoiceId = created.Id;
                 await _challanRepo.UpdateAsync(dc);
@@ -257,27 +259,42 @@ namespace MyApp.Api.Services.Implementations
                 GSTAmount = inv.GSTAmount,
                 GrandTotal = inv.GrandTotal,
                 AmountInWords = inv.AmountInWords,
-                // Group items by ItemTypeName for tax invoice (only when ItemTypeName is set)
-                Items = inv.Items
-                    .GroupBy(ii => string.IsNullOrWhiteSpace(ii.ItemTypeName) ? $"__item_{ii.Id}" : ii.ItemTypeName)
-                    .Select(g =>
-                    {
-                        var totalQty = g.Sum(ii => ii.Quantity);
-                        var totalValue = g.Sum(ii => ii.LineTotal);
-                        var gstAmt = Math.Round(totalValue * inv.GSTRate / 100, 2);
-                        var hasType = !g.Key.StartsWith("__item_");
-                        return new PrintTaxItemDto
+                // Group items by ItemTypeName only if ALL items have an item type; otherwise list individually
+                Items = inv.Items.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName))
+                    ? inv.Items
+                        .GroupBy(ii => ii.ItemTypeName)
+                        .Select(g =>
                         {
-                            ItemTypeName = hasType ? g.Key : "",
-                            Quantity = totalQty,
-                            UOM = g.First().UOM,
-                            Description = hasType ? g.Key : g.First().Description,
-                            ValueExclTax = totalValue,
-                            GSTRate = inv.GSTRate,
-                            GSTAmount = gstAmt,
-                            TotalInclTax = totalValue + gstAmt
-                        };
-                    }).ToList()
+                            var totalQty = g.Sum(ii => ii.Quantity);
+                            var totalValue = g.Sum(ii => ii.LineTotal);
+                            var gstAmt = Math.Round(totalValue * inv.GSTRate / 100, 2);
+                            return new PrintTaxItemDto
+                            {
+                                ItemTypeName = g.Key,
+                                Quantity = totalQty,
+                                UOM = g.First().UOM,
+                                Description = g.Key,
+                                ValueExclTax = totalValue,
+                                GSTRate = inv.GSTRate,
+                                GSTAmount = gstAmt,
+                                TotalInclTax = totalValue + gstAmt
+                            };
+                        }).ToList()
+                    : inv.Items.Select(ii =>
+                        {
+                            var gstAmt = Math.Round(ii.LineTotal * inv.GSTRate / 100, 2);
+                            return new PrintTaxItemDto
+                            {
+                                ItemTypeName = ii.ItemTypeName,
+                                Quantity = ii.Quantity,
+                                UOM = ii.UOM,
+                                Description = ii.Description,
+                                ValueExclTax = ii.LineTotal,
+                                GSTRate = inv.GSTRate,
+                                GSTAmount = gstAmt,
+                                TotalInclTax = ii.LineTotal + gstAmt
+                            };
+                        }).ToList()
             };
         }
 

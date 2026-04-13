@@ -54,10 +54,6 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       setError("Please fill the description of the current item before adding a new one.");
       return;
     }
-    if (!lastItem.itemTypeId) {
-      setError("Please select an item type before adding a new item.");
-      return;
-    }
     setError("");
     setItems([...items, { itemTypeId: "", description: "", quantity: 1, unit: "" }]);
   };
@@ -73,10 +69,6 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       setError("Please add at least one item with a description.");
       return;
     }
-    if (validItems.some((i) => !i.itemTypeId)) {
-      setError("Please select an item type for all items.");
-      return;
-    }
     if (!client) {
       setError("Please select a client.");
       return;
@@ -90,7 +82,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
         poNumber: poNumber.trim(),
         poDate: poDate ? new Date(poDate).toISOString() : null,
         deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : null,
-        items: validItems,
+        items: validItems.map((i) => ({ ...i, itemTypeId: i.itemTypeId || null })),
       });
       onClose();
     } catch (err) {
@@ -100,7 +92,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
     }
   };
 
-  const isDisabled = items.some((i) => !i.description.trim() || !i.itemTypeId) || !client || !poNumber.trim();
+  const isDisabled = items.some((i) => !i.description.trim()) || !client;
 
   return (
     <div style={formStyles.backdrop} onClick={onClose}>

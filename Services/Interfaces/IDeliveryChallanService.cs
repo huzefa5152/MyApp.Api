@@ -12,6 +12,7 @@ namespace MyApp.Api.Services.Interfaces
         Task<DeliveryChallanDto?> GetByIdAsync(int id);
         Task<DeliveryChallanDto> CreateDeliveryChallanAsync(int companyId, DeliveryChallanDto dto);
         Task<DeliveryChallanDto?> UpdateItemsAsync(int challanId, List<DeliveryItemDto> items);
+        Task<DeliveryChallanDto?> UpdatePoAsync(int challanId, string poNumber, DateTime? poDate);
         Task<bool> CancelAsync(int challanId);
         Task<bool> DeleteAsync(int challanId);
         Task<bool> DeleteItemAsync(int itemId);

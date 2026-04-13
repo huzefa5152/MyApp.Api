@@ -13,5 +13,6 @@
         public string Status { get; set; } = "Pending";
         public int? InvoiceId { get; set; }
         public List<DeliveryItemDto> Items { get; set; } = new();
+        public List<string> Warnings { get; set; } = new();
     }
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn } from "react-icons/md";
+import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning } from "react-icons/md";
 import ChallanModal from "./ChallanModal";
 import { cardStyles, cardHover } from "../theme";
 
@@ -16,6 +16,7 @@ const colors = {
 
 const statusColors = {
   Pending: { bg: "#fff3e0", color: "#e65100", border: "#e6510030" },
+  "No PO": { bg: "#e3f2fd", color: "#0d47a1", border: "#0d47a130" },
   Invoiced: { bg: "#e8f5e9", color: "#2e7d32", border: "#2e7d3230" },
   Cancelled: { bg: "#ffebee", color: "#c62828", border: "#c6282830" },
 };
@@ -30,7 +31,8 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
       <div className="card-grid">
         {challans.map((c) => {
           const sc = statusColors[c.status] || statusColors.Pending;
-          const isPending = c.status === "Pending";
+          const isEditable = c.status === "Pending" || c.status === "No PO";
+          const hasWarnings = c.warnings && c.warnings.length > 0;
           return (
             <div
               key={c.id}
@@ -47,9 +49,16 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       <MdReceipt style={{ color: colors.blue, marginRight: 6, verticalAlign: "middle" }} />
                       Challan #{c.challanNumber}
                     </h5>
-                    <span style={{ ...styles.statusBadge, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
-                      {c.status}
-                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                      {hasWarnings && (
+                        <span title={c.warnings.join("\n")} style={{ color: "#e65100", cursor: "help", display: "flex" }}>
+                          <MdWarning size={18} />
+                        </span>
+                      )}
+                      <span style={{ ...styles.statusBadge, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
+                        {c.status}
+                      </span>
+                    </div>
                   </div>
 
                   <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
@@ -100,7 +109,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       {exportingId === c.id + "-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Excel
                     </button>
                   )}
-                  {isPending && (
+                  {isEditable && (
                     <>
                       <button
                         style={{ ...styles.actionBtn, ...styles.editBtn }}
