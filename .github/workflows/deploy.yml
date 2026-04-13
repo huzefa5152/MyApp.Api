@@ -115,3 +115,7 @@ jobs:
           local-dir: ./publish/
           server-dir: /wwwroot/
           dangerous-clean-slate: false
+          exclude: |
+            **/.pdb
+            **/runtimes/linux-*/**
+            **/runtimes/osx-*/**
