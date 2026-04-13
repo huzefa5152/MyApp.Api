@@ -5,7 +5,61 @@ on:
     branches: [master]
 
 jobs:
-  deploy:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'myapp-frontend/**'
+            backend:
+              - '**/*.cs'
+              - '**/*.csproj'
+              - 'appsettings*.json'
+              - 'web.config'
+              - '.github/workflows/**'
+
+  # Fast path: only frontend changed — no .NET build, no app restart
+  deploy-frontend-only:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true' && needs.detect-changes.outputs.backend == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build React Frontend
+        working-directory: myapp-frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy frontend via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: site61833.siteasp.net
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./myapp-frontend/dist/
+          server-dir: /wwwroot/wwwroot/
+          state-name: .frontend-deploy-sync-state.json
+          dangerous-clean-slate: false
+
+  # Full path: backend changed — build everything, restart app
+  # FTP sync only uploads changed files automatically
+  deploy-full:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
