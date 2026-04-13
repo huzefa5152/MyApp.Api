@@ -186,5 +186,8 @@ export const MERGE_FIELDS = {
     { field: "{{this.gstRate}}", label: "GST Rate % (in loop)" },
     { field: "{{fmtDec this.gstAmount}}", label: "GST Amount (in loop)" },
     { field: "{{fmtDec this.totalInclTax}}", label: "Total Incl Tax (in loop)" },
+    { field: "{{fbrIRN}}", label: "FBR Invoice Reference Number (IRN)" },
+    { field: "{{fbrStatus}}", label: "FBR Status (Submitted/Failed)" },
+    { field: "{{fmtDate fbrSubmittedAt}}", label: "FBR Submission Date" },
   ],
 };

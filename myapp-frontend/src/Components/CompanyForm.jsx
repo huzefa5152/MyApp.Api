@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { createCompany, updateCompany, uploadCompanyLogo } from "../api/companyApi";
+import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { formStyles } from "../theme";
 
 const {
@@ -33,9 +34,19 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         currentChallanNumber: 0,
         startingInvoiceNumber: 0,
         currentInvoiceNumber: 0,
+        invoiceNumberPrefix: "",
+        fbrProvinceCode: "",
+        fbrBusinessActivity: "",
+        fbrSector: "",
+        fbrToken: "",
+        fbrEnvironment: "sandbox",
     });
     const [logoFile, setLogoFile] = useState(null);
     const [error, setError] = useState("");
+    const [provinces, setProvinces] = useState([]);
+    const [activities, setActivities] = useState([]);
+    const [sectors, setSectors] = useState([]);
+    const [environments, setEnvironments] = useState([]);
 
     useEffect(() => {
         if (company) {
@@ -50,12 +61,40 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 currentChallanNumber: company.currentChallanNumber || 0,
                 startingInvoiceNumber: company.startingInvoiceNumber || 0,
                 currentInvoiceNumber: company.currentInvoiceNumber || 0,
+                invoiceNumberPrefix: company.invoiceNumberPrefix || "",
+                fbrProvinceCode: company.fbrProvinceCode ?? "",
+                fbrBusinessActivity: company.fbrBusinessActivity || "",
+                fbrSector: company.fbrSector || "",
+                fbrToken: "",
+                fbrEnvironment: company.fbrEnvironment || "sandbox",
             });
         }
     }, [company]);
 
+    useEffect(() => {
+        const loadLookups = async () => {
+            try {
+                const [provRes, actRes, secRes, envRes] = await Promise.all([
+                    getFbrLookupsByCategory("Province"),
+                    getFbrLookupsByCategory("BusinessActivity"),
+                    getFbrLookupsByCategory("Sector"),
+                    getFbrLookupsByCategory("Environment"),
+                ]);
+                setProvinces(provRes.data);
+                setActivities(actRes.data);
+                setSectors(secRes.data);
+                setEnvironments(envRes.data);
+            } catch { /* ignore */ }
+        };
+        loadLookups();
+    }, []);
+
     const handleChange = (e) => {
         const { name, value } = e.target;
+        if (name === "fbrProvinceCode") {
+            setForm({ ...form, [name]: value === "" ? "" : Number(value) });
+            return;
+        }
         if (["startingChallanNumber", "currentChallanNumber", "startingInvoiceNumber", "currentInvoiceNumber"].includes(name)) {
             const numberValue = Number(value);
             if (isNaN(numberValue) || numberValue < 0 || numberValue > INT32_MAX) return;
@@ -76,12 +115,18 @@ export default function CompanyForm({ company, onClose, onSaved }) {
             return setError("Starting invoice number cannot be negative.");
 
         try {
+            const payload = {
+                ...form,
+                fbrProvinceCode: form.fbrProvinceCode === "" ? null : Number(form.fbrProvinceCode),
+                fbrToken: form.fbrToken || null,
+            };
+
             let savedCompany;
             if (company) {
-                const res = await updateCompany(company.id, form);
+                const res = await updateCompany(company.id, payload);
                 savedCompany = res.data;
             } else {
-                const res = await createCompany(form);
+                const res = await createCompany(payload);
                 savedCompany = res.data;
             }
 
@@ -199,6 +244,66 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                     Current invoice number: {company.currentInvoiceNumber}
                                 </span>
                             )}
+                        </div>
+
+                        <div style={{ marginTop: "1rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #0d47a130", backgroundColor: "#e3f2fd" }}>
+                            <p style={{ margin: "0 0 0.6rem", fontWeight: 700, fontSize: "0.88rem", color: "#0d47a1" }}>FBR Digital Invoicing</p>
+
+                            <div style={formGroup}>
+                                <label style={label}>Invoice Number Prefix</label>
+                                <input type="text" name="invoiceNumberPrefix" value={form.invoiceNumberPrefix} onChange={handleChange} style={input} placeholder="e.g. INV-" />
+                            </div>
+
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                                <div style={formGroup}>
+                                    <label style={label}>Province</label>
+                                    <select name="fbrProvinceCode" value={form.fbrProvinceCode} onChange={handleChange} style={input}>
+                                        <option value="">Select...</option>
+                                        {provinces.map((p) => (
+                                            <option key={p.id} value={p.code}>{p.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div style={formGroup}>
+                                    <label style={label}>Environment</label>
+                                    <select name="fbrEnvironment" value={form.fbrEnvironment} onChange={handleChange} style={input}>
+                                        {environments.length > 0 ? environments.map((e) => (
+                                            <option key={e.id} value={e.code}>{e.label}</option>
+                                        )) : (
+                                            <>
+                                                <option value="sandbox">Sandbox</option>
+                                                <option value="production">Production</option>
+                                            </>
+                                        )}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                                <div style={formGroup}>
+                                    <label style={label}>Business Activity</label>
+                                    <select name="fbrBusinessActivity" value={form.fbrBusinessActivity} onChange={handleChange} style={input}>
+                                        <option value="">Select...</option>
+                                        {activities.map((a) => (
+                                            <option key={a.id} value={a.code}>{a.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div style={formGroup}>
+                                    <label style={label}>Sector</label>
+                                    <select name="fbrSector" value={form.fbrSector} onChange={handleChange} style={input}>
+                                        <option value="">Select...</option>
+                                        {sectors.map((s) => (
+                                            <option key={s.id} value={s.code}>{s.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style={formGroup}>
+                                <label style={label}>FBR Bearer Token {company?.hasFbrToken && <span style={{ color: "#28a745", fontSize: "0.75rem" }}>(set)</span>}</label>
+                                <input type="password" name="fbrToken" value={form.fbrToken} onChange={handleChange} style={input} placeholder={company?.hasFbrToken ? "Leave blank to keep current" : "Paste token from IRIS portal"} />
+                            </div>
                         </div>
                     </div>
 

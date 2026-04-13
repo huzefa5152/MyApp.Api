@@ -10,6 +10,9 @@ namespace MyApp.Api.DTOs
         public string? NTN { get; set; }
         public string? STRN { get; set; }
         public string? Site { get; set; }
+        public string? RegistrationType { get; set; }
+        public string? CNIC { get; set; }
+        public int? FbrProvinceCode { get; set; }
         public int CompanyId { get; set; }
         public bool HasInvoices { get; set; }
         public DateTime? CreatedAt { get; set; } // Nullable; set by server

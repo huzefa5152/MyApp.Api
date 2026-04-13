@@ -12,13 +12,15 @@ namespace MyApp.Api.Services.Implementations
         private readonly ICompanyRepository _repository;
         private readonly IDeliveryChallanRepository _challanRepo;
         private readonly IInvoiceRepository _invoiceRepo;
+        private readonly IDeliveryChallanService _challanService;
         private readonly AppDbContext _context;
 
-        public CompanyService(ICompanyRepository repository, IDeliveryChallanRepository challanRepo, IInvoiceRepository invoiceRepo, AppDbContext context)
+        public CompanyService(ICompanyRepository repository, IDeliveryChallanRepository challanRepo, IInvoiceRepository invoiceRepo, IDeliveryChallanService challanService, AppDbContext context)
         {
             _repository = repository;
             _challanRepo = challanRepo;
             _invoiceRepo = invoiceRepo;
+            _challanService = challanService;
             _context = context;
         }
 
@@ -36,6 +38,12 @@ namespace MyApp.Api.Services.Implementations
             CurrentChallanNumber = c.CurrentChallanNumber,
             StartingInvoiceNumber = c.StartingInvoiceNumber,
             CurrentInvoiceNumber = c.CurrentInvoiceNumber,
+            InvoiceNumberPrefix = c.InvoiceNumberPrefix,
+            FbrProvinceCode = c.FbrProvinceCode,
+            FbrBusinessActivity = c.FbrBusinessActivity,
+            FbrSector = c.FbrSector,
+            FbrEnvironment = c.FbrEnvironment,
+            HasFbrToken = !string.IsNullOrEmpty(c.FbrToken),
             HasChallans = hasChallans,
             HasInvoices = hasInvoices
         };
@@ -43,14 +51,25 @@ namespace MyApp.Api.Services.Implementations
         public async Task<IEnumerable<CompanyDto>> GetAllAsync()
         {
             var companies = (await _repository.GetAllAsync()).ToList();
-            var result = new List<CompanyDto>();
-            foreach (var c in companies)
-            {
-                var hasChallans = await _challanRepo.HasChallansForCompanyAsync(c.Id);
-                var hasInvoices = await _invoiceRepo.HasInvoicesForCompanyAsync(c.Id);
-                result.Add(ToDto(c, hasChallans, hasInvoices));
-            }
-            return result;
+            var companyIds = companies.Select(c => c.Id).ToList();
+
+            // Batch queries instead of N+1
+            var companiesWithChallans = await _context.DeliveryChallans
+                .Where(dc => companyIds.Contains(dc.CompanyId))
+                .Select(dc => dc.CompanyId)
+                .Distinct()
+                .ToListAsync();
+
+            var companiesWithInvoices = await _context.Invoices
+                .Where(i => companyIds.Contains(i.CompanyId))
+                .Select(i => i.CompanyId)
+                .Distinct()
+                .ToListAsync();
+
+            var challanSet = new HashSet<int>(companiesWithChallans);
+            var invoiceSet = new HashSet<int>(companiesWithInvoices);
+
+            return companies.Select(c => ToDto(c, challanSet.Contains(c.Id), invoiceSet.Contains(c.Id))).ToList();
         }
 
         public async Task<CompanyDto?> GetByIdAsync(int id)
@@ -78,7 +97,13 @@ namespace MyApp.Api.Services.Implementations
                 StartingChallanNumber = dto.StartingChallanNumber,
                 CurrentChallanNumber = 0,
                 StartingInvoiceNumber = dto.StartingInvoiceNumber,
-                CurrentInvoiceNumber = 0
+                CurrentInvoiceNumber = 0,
+                InvoiceNumberPrefix = dto.InvoiceNumberPrefix,
+                FbrProvinceCode = dto.FbrProvinceCode,
+                FbrBusinessActivity = dto.FbrBusinessActivity,
+                FbrSector = dto.FbrSector,
+                FbrToken = dto.FbrToken,
+                FbrEnvironment = dto.FbrEnvironment
             };
 
             var created = await _repository.AddAsync(company);
@@ -102,6 +127,14 @@ namespace MyApp.Api.Services.Implementations
             company.STRN = dto.STRN;
             if (dto.LogoPath != null) company.LogoPath = dto.LogoPath;
 
+            // FBR fields (always updatable)
+            company.InvoiceNumberPrefix = dto.InvoiceNumberPrefix;
+            company.FbrProvinceCode = dto.FbrProvinceCode;
+            company.FbrBusinessActivity = dto.FbrBusinessActivity;
+            company.FbrSector = dto.FbrSector;
+            company.FbrEnvironment = dto.FbrEnvironment;
+            if (dto.FbrToken != null) company.FbrToken = dto.FbrToken;
+
             // Only allow changing starting challan number if no challans exist
             var hasChallans = await _challanRepo.HasChallansForCompanyAsync(id);
             if (!hasChallans)
@@ -119,6 +152,10 @@ namespace MyApp.Api.Services.Implementations
             }
 
             var updated = await _repository.UpdateAsync(company);
+
+            // Re-evaluate "Setup Required" challans in case FBR fields are now complete
+            await _challanService.ReEvaluateSetupRequiredAsync(id);
+
             return ToDto(updated, hasChallans, hasInvoices);
         }
 
@@ -127,38 +164,47 @@ namespace MyApp.Api.Services.Implementations
             var company = await _repository.GetByIdAsync(id);
             if (company == null) throw new KeyNotFoundException("Company not found");
 
-            // Cascade delete all related data (SQL Server doesn't allow multiple cascade paths)
-            // Order: unlink challans from invoices → delete invoices → delete challans → delete clients → delete company
-
-            // 1. Unlink challans from invoices
-            await _context.DeliveryChallans
-                .Where(dc => dc.CompanyId == id && dc.InvoiceId != null)
-                .ExecuteUpdateAsync(s => s.SetProperty(dc => dc.InvoiceId, (int?)null));
-
-            // 2. Delete invoice items, then invoices
-            var invoiceIds = await _context.Invoices.Where(i => i.CompanyId == id).Select(i => i.Id).ToListAsync();
-            if (invoiceIds.Count > 0)
+            // Cascade delete in a single transaction for atomicity
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                await _context.InvoiceItems.Where(ii => invoiceIds.Contains(ii.InvoiceId)).ExecuteDeleteAsync();
-                await _context.Invoices.Where(i => i.CompanyId == id).ExecuteDeleteAsync();
-            }
+                // 1. Unlink challans from invoices
+                await _context.DeliveryChallans
+                    .Where(dc => dc.CompanyId == id && dc.InvoiceId != null)
+                    .ExecuteUpdateAsync(s => s.SetProperty(dc => dc.InvoiceId, (int?)null));
 
-            // 3. Delete delivery items, then challans
-            var challanIds = await _context.DeliveryChallans.Where(dc => dc.CompanyId == id).Select(dc => dc.Id).ToListAsync();
-            if (challanIds.Count > 0)
+                // 2. Delete invoice items, then invoices
+                var invoiceIds = await _context.Invoices.Where(i => i.CompanyId == id).Select(i => i.Id).ToListAsync();
+                if (invoiceIds.Count > 0)
+                {
+                    await _context.InvoiceItems.Where(ii => invoiceIds.Contains(ii.InvoiceId)).ExecuteDeleteAsync();
+                    await _context.Invoices.Where(i => i.CompanyId == id).ExecuteDeleteAsync();
+                }
+
+                // 3. Delete delivery items, then challans
+                var challanIds = await _context.DeliveryChallans.Where(dc => dc.CompanyId == id).Select(dc => dc.Id).ToListAsync();
+                if (challanIds.Count > 0)
+                {
+                    await _context.DeliveryItems.Where(di => challanIds.Contains(di.DeliveryChallanId)).ExecuteDeleteAsync();
+                    await _context.DeliveryChallans.Where(dc => dc.CompanyId == id).ExecuteDeleteAsync();
+                }
+
+                // 4. Delete clients
+                await _context.Clients.Where(c => c.CompanyId == id).ExecuteDeleteAsync();
+
+                // 5. Delete print templates
+                await _context.PrintTemplates.Where(pt => pt.CompanyId == id).ExecuteDeleteAsync();
+
+                // 6. Delete the company
+                await _repository.DeleteAsync(company);
+
+                await transaction.CommitAsync();
+            }
+            catch
             {
-                await _context.DeliveryItems.Where(di => challanIds.Contains(di.DeliveryChallanId)).ExecuteDeleteAsync();
-                await _context.DeliveryChallans.Where(dc => dc.CompanyId == id).ExecuteDeleteAsync();
+                await transaction.RollbackAsync();
+                throw;
             }
-
-            // 4. Delete clients
-            await _context.Clients.Where(c => c.CompanyId == id).ExecuteDeleteAsync();
-
-            // 5. Delete print templates (already CASCADE in DB, but be explicit)
-            await _context.PrintTemplates.Where(pt => pt.CompanyId == id).ExecuteDeleteAsync();
-
-            // 6. Delete the company
-            await _repository.DeleteAsync(company);
         }
     }
 }

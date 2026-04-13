@@ -489,6 +489,22 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
     </div>
   </div>
 </div>
+
+{{#if fbrIRN}}
+<!-- FBR Digital Invoicing Section -->
+<div style="margin-top:14px;padding:8px 12px;border:1.5px solid #1a5276;border-radius:4px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+  <div style="flex:1">
+    <div style="font-size:9pt;font-weight:bold;color:#1a5276;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">FBR Digital Invoice</div>
+    <div style="font-size:9pt"><strong>IRN:</strong> {{fbrIRN}}</div>
+    <div style="font-size:8pt;color:#555;margin-top:2px">Submitted: {{fmtDate fbrSubmittedAt}}</div>
+    <div style="font-size:7pt;color:#888;margin-top:2px">This invoice is registered with the Federal Board of Revenue (FBR) Digital Invoicing System</div>
+  </div>
+  <div style="text-align:center">
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=96x96&data={{fbrIRN}}" style="width:96px;height:96px" />
+    <div style="font-size:7pt;color:#555;margin-top:2px">Scan to verify</div>
+  </div>
+</div>
+{{/if}}
 </div>
 
 <!-- Footer -->

@@ -20,5 +20,6 @@ namespace MyApp.Api.Services.Interfaces
         Task<PrintChallanDto?> GetPrintDataAsync(int challanId);
         Task<int> GetTotalCountAsync();
         Task<int> GetCountByCompanyAsync(int companyId);
+        Task<int> ReEvaluateSetupRequiredAsync(int companyId, int? clientId = null);
     }
 }

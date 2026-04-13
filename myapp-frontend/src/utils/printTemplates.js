@@ -324,6 +324,15 @@ export function buildTaxInvoicePrintHtml(d) {
 </table>
 <div class="footer-section">
   <div class="words"><strong>Amount in Words:</strong> ${d.amountInWords}</div>
+  ${d.fbrIRN ? `<div style="margin-top:10px;border:2px solid #2c3e50;padding:8px 12px;display:flex;align-items:center;justify-content:space-between">
+    <div style="flex:1">
+      <div style="font-size:12px;font-weight:700;color:#2c3e50;text-transform:uppercase;margin-bottom:4px">FBR Digital Invoice</div>
+      <div style="font-size:10.5px"><strong>IRN:</strong> ${d.fbrIRN}</div>
+      ${d.fbrSubmittedAt ? `<div style="font-size:10.5px"><strong>Submitted:</strong> ${fmtDate(d.fbrSubmittedAt)}</div>` : ""}
+      <div style="font-size:9px;color:#555;margin-top:3px">This invoice has been reported to FBR under the Sales Tax Act, 1990</div>
+    </div>
+    <div style="margin-left:12px"><img src="https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=${encodeURIComponent(d.fbrIRN)}" width="96" height="96" style="display:block" /></div>
+  </div>` : ""}
   <div class="sig-row">
     <div class="sig-block"><div class="line"></div><div class="label">Signature and Stamp</div></div>
     <div class="sig-block"><div class="line"></div><div class="label">Receiver Signature and Stamp</div></div>

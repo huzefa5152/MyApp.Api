@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import httpClient from "../api/httpClient";
 
-export default function LookupAutocomplete({ label, endpoint, value, onChange }) {
+export default function LookupAutocomplete({ label, endpoint, value, onChange, inputClassName, inputStyle }) {
     const [suggestions, setSuggestions] = useState([]);
     const [showDropdown, setShowDropdown] = useState(false);
     const [inputValue, setInputValue] = useState(value || "");
@@ -20,7 +20,10 @@ export default function LookupAutocomplete({ label, endpoint, value, onChange })
             }
         };
         document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+            clearTimeout(debounceRef.current);
+        };
     }, []);
 
     // Update inputValue if parent value changes
@@ -118,11 +121,12 @@ export default function LookupAutocomplete({ label, endpoint, value, onChange })
         <div className="position-relative" ref={wrapperRef}>
             <input
                 type="text"
-                className="form-control"
+                className={inputClassName !== undefined ? inputClassName : "form-control"}
+                style={inputStyle}
                 placeholder={label}
                 value={inputValue}
                 onChange={handleInputChange}
-                onFocus={() => inputValue && setShowDropdown(true)}
+                onFocus={() => { if (inputValue) { setShowDropdown(true); fetchSuggestions(inputValue); } }}
                 onBlur={handleBlur}
                 onKeyDown={handleKeyDown}   // 👈 added
                 autoComplete="off"

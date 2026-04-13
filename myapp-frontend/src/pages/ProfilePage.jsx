@@ -64,6 +64,11 @@ export default function ProfilePage() {
     avatarMsgTimer.current = setTimeout(() => setAvatarMsg(null), 5000);
   }, []);
 
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => clearTimeout(avatarMsgTimer.current);
+  }, []);
+
   const handleEditToggle = () => {
     if (editing) {
       setProfileForm({

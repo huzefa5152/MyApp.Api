@@ -11,6 +11,7 @@ namespace MyApp.Api.Repositories.Interfaces
             DateTime? dateFrom = null, DateTime? dateTo = null);
         Task<Invoice?> GetByIdAsync(int id);
         Task<Invoice> CreateAsync(Invoice invoice);
+        Task UpdateAsync(Invoice invoice);
         Task<int> GetTotalCountAsync();
         Task<int> GetCountByCompanyAsync(int companyId);
         Task<bool> HasInvoicesForClientAsync(int clientId);

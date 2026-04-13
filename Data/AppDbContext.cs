@@ -22,6 +22,7 @@ namespace MyApp.Api.Data
         public DbSet<PrintTemplate> PrintTemplates { get; set; }
         public DbSet<MergeField> MergeFields { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
+        public DbSet<FbrLookup> FbrLookups { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -105,6 +106,39 @@ namespace MyApp.Api.Data
                 .WithMany()
                 .HasForeignKey(ii => ii.DeliveryItemId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // DeliveryChallan -> Client (optional FK, restrict delete)
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasOne(dc => dc.Client)
+                .WithMany(c => c.DeliveryChallans)
+                .HasForeignKey(dc => dc.ClientId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Performance indexes on frequently-queried foreign keys
+            modelBuilder.Entity<Invoice>()
+                .HasIndex(i => i.ClientId);
+
+            modelBuilder.Entity<Invoice>()
+                .HasIndex(i => i.CompanyId);
+
+            // Composite index for paged invoice queries (WHERE CompanyId = X ORDER BY InvoiceNumber DESC)
+            modelBuilder.Entity<Invoice>()
+                .HasIndex(i => new { i.CompanyId, i.InvoiceNumber });
+
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasIndex(dc => dc.ClientId);
+
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasIndex(dc => dc.CompanyId);
+
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasIndex(dc => dc.InvoiceId);
+
+            modelBuilder.Entity<InvoiceItem>()
+                .HasIndex(ii => ii.InvoiceId);
+
+            modelBuilder.Entity<InvoiceItem>()
+                .HasIndex(ii => ii.DeliveryItemId);
 
             // Decimal precision for money columns
             modelBuilder.Entity<Invoice>().Property(i => i.Subtotal).HasPrecision(18, 2);
@@ -272,6 +306,66 @@ namespace MyApp.Api.Data
                 new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{#if buyerNTN}}", Label = "If: Has Buyer NTN", Category = "Conditionals", SortOrder = 57 },
                 new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{else}}", Label = "Else", Category = "Conditionals", SortOrder = 58 },
                 new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{/if}}", Label = "End If", Category = "Conditionals", SortOrder = 59 }
+            );
+
+            // Seed FBR Lookup values
+            var fbrId = 1;
+            modelBuilder.Entity<FbrLookup>().HasData(
+                // ── Province ──
+                new FbrLookup { Id = fbrId++, Category = "Province", Code = "7", Label = "Punjab", SortOrder = 1 },
+                new FbrLookup { Id = fbrId++, Category = "Province", Code = "8", Label = "Sindh", SortOrder = 2 },
+                new FbrLookup { Id = fbrId++, Category = "Province", Code = "9", Label = "KPK", SortOrder = 3 },
+                new FbrLookup { Id = fbrId++, Category = "Province", Code = "10", Label = "Balochistan", SortOrder = 4 },
+                new FbrLookup { Id = fbrId++, Category = "Province", Code = "11", Label = "Islamabad", SortOrder = 5 },
+                new FbrLookup { Id = fbrId++, Category = "Province", Code = "12", Label = "AJK", SortOrder = 6 },
+                new FbrLookup { Id = fbrId++, Category = "Province", Code = "13", Label = "GB", SortOrder = 7 },
+
+                // ── BusinessActivity ──
+                new FbrLookup { Id = fbrId++, Category = "BusinessActivity", Code = "Manufacturer", Label = "Manufacturer", SortOrder = 1 },
+                new FbrLookup { Id = fbrId++, Category = "BusinessActivity", Code = "Importer", Label = "Importer", SortOrder = 2 },
+                new FbrLookup { Id = fbrId++, Category = "BusinessActivity", Code = "Distributor", Label = "Distributor", SortOrder = 3 },
+                new FbrLookup { Id = fbrId++, Category = "BusinessActivity", Code = "Wholesaler", Label = "Wholesaler", SortOrder = 4 },
+                new FbrLookup { Id = fbrId++, Category = "BusinessActivity", Code = "Exporter", Label = "Exporter", SortOrder = 5 },
+                new FbrLookup { Id = fbrId++, Category = "BusinessActivity", Code = "Retailer", Label = "Retailer", SortOrder = 6 },
+                new FbrLookup { Id = fbrId++, Category = "BusinessActivity", Code = "Service Provider", Label = "Service Provider", SortOrder = 7 },
+                new FbrLookup { Id = fbrId++, Category = "BusinessActivity", Code = "Other", Label = "Other", SortOrder = 8 },
+
+                // ── Sector ──
+                new FbrLookup { Id = fbrId++, Category = "Sector", Code = "All Other Sectors", Label = "All Other Sectors", SortOrder = 1 },
+                new FbrLookup { Id = fbrId++, Category = "Sector", Code = "Steel", Label = "Steel", SortOrder = 2 },
+                new FbrLookup { Id = fbrId++, Category = "Sector", Code = "FMCG", Label = "FMCG", SortOrder = 3 },
+                new FbrLookup { Id = fbrId++, Category = "Sector", Code = "Textile", Label = "Textile", SortOrder = 4 },
+                new FbrLookup { Id = fbrId++, Category = "Sector", Code = "Telecom", Label = "Telecom", SortOrder = 5 },
+                new FbrLookup { Id = fbrId++, Category = "Sector", Code = "Petroleum", Label = "Petroleum", SortOrder = 6 },
+                new FbrLookup { Id = fbrId++, Category = "Sector", Code = "Electricity Distribution", Label = "Electricity Distribution", SortOrder = 7 },
+                new FbrLookup { Id = fbrId++, Category = "Sector", Code = "Gas Distribution", Label = "Gas Distribution", SortOrder = 8 },
+                new FbrLookup { Id = fbrId++, Category = "Sector", Code = "Services", Label = "Services", SortOrder = 9 },
+                new FbrLookup { Id = fbrId++, Category = "Sector", Code = "Automobile", Label = "Automobile", SortOrder = 10 },
+                new FbrLookup { Id = fbrId++, Category = "Sector", Code = "CNG Stations", Label = "CNG Stations", SortOrder = 11 },
+                new FbrLookup { Id = fbrId++, Category = "Sector", Code = "Pharmaceuticals", Label = "Pharmaceuticals", SortOrder = 12 },
+                new FbrLookup { Id = fbrId++, Category = "Sector", Code = "Wholesale / Retails", Label = "Wholesale / Retails", SortOrder = 13 },
+
+                // ── RegistrationType ──
+                new FbrLookup { Id = fbrId++, Category = "RegistrationType", Code = "Registered", Label = "Registered", SortOrder = 1 },
+                new FbrLookup { Id = fbrId++, Category = "RegistrationType", Code = "Unregistered", Label = "Unregistered", SortOrder = 2 },
+                new FbrLookup { Id = fbrId++, Category = "RegistrationType", Code = "FTN", Label = "FTN", SortOrder = 3 },
+                new FbrLookup { Id = fbrId++, Category = "RegistrationType", Code = "CNIC", Label = "CNIC", SortOrder = 4 },
+
+                // ── Environment ──
+                new FbrLookup { Id = fbrId++, Category = "Environment", Code = "sandbox", Label = "Sandbox", SortOrder = 1 },
+                new FbrLookup { Id = fbrId++, Category = "Environment", Code = "production", Label = "Production", SortOrder = 2 },
+
+                // ── DocumentType ──
+                new FbrLookup { Id = fbrId++, Category = "DocumentType", Code = "4", Label = "Sale Invoice", SortOrder = 1 },
+                new FbrLookup { Id = fbrId++, Category = "DocumentType", Code = "9", Label = "Debit Note", SortOrder = 2 },
+                new FbrLookup { Id = fbrId++, Category = "DocumentType", Code = "10", Label = "Credit Note", SortOrder = 3 },
+
+                // ── PaymentMode ──
+                new FbrLookup { Id = fbrId++, Category = "PaymentMode", Code = "Cash", Label = "Cash", SortOrder = 1 },
+                new FbrLookup { Id = fbrId++, Category = "PaymentMode", Code = "Credit", Label = "Credit", SortOrder = 2 },
+                new FbrLookup { Id = fbrId++, Category = "PaymentMode", Code = "Bank Transfer", Label = "Bank Transfer", SortOrder = 3 },
+                new FbrLookup { Id = fbrId++, Category = "PaymentMode", Code = "Cheque", Label = "Cheque", SortOrder = 4 },
+                new FbrLookup { Id = fbrId++, Category = "PaymentMode", Code = "Online", Label = "Online", SortOrder = 5 }
             );
         }
 

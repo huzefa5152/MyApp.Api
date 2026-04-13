@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdDelete } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
-import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice } from "../api/invoiceApi";
+import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
+import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
@@ -96,7 +97,8 @@ export default function InvoicePage() {
 
   const handleCreated = () => {
     setShowForm(false);
-    fetchInvoices(selectedCompany.id, page);
+    setPage(1);
+    fetchInvoices(selectedCompany.id, 1);
   };
 
   const handlePrintBill = async (inv) => {
@@ -195,6 +197,144 @@ export default function InvoicePage() {
     finally { setExportingId(null); }
   };
 
+  const [fbrLoading, setFbrLoading] = useState(null);
+  const [fbrValidated, setFbrValidated] = useState(new Set());
+
+  const handleFbrValidate = async (inv) => {
+    setFbrLoading(inv.id + "-validate");
+    try {
+      const { data } = await validateInvoiceWithFbr(inv.id);
+      if (data.success) {
+        notify("FBR validation passed! You can now submit this invoice.", "success");
+        setFbrValidated(prev => new Set(prev).add(inv.id));
+      } else {
+        notify(`FBR validation failed: ${data.errorMessage}`, "error");
+        setFbrValidated(prev => { const s = new Set(prev); s.delete(inv.id); return s; });
+      }
+    } catch (err) {
+      notify(err.response?.data?.errorMessage || "FBR validation failed.", "error");
+      setFbrValidated(prev => { const s = new Set(prev); s.delete(inv.id); return s; });
+    } finally { setFbrLoading(null); }
+  };
+
+  const handleFbrSubmit = async (inv) => {
+    if (!fbrValidated.has(inv.id)) {
+      notify("Please validate with FBR first before submitting.", "error");
+      return;
+    }
+    if (!confirm(`Submit Invoice #${inv.invoiceNumber} to FBR? This action cannot be undone.`)) return;
+    setFbrLoading(inv.id + "-submit");
+    try {
+      const { data } = await submitInvoiceToFbr(inv.id);
+      if (data.success) {
+        notify(`Submitted to FBR! IRN: ${data.irn}`, "success");
+        setFbrValidated(prev => { const s = new Set(prev); s.delete(inv.id); return s; });
+        fetchInvoices(selectedCompany.id, page);
+      } else {
+        notify(`FBR submission failed: ${data.errorMessage}`, "error");
+        fetchInvoices(selectedCompany.id, page);
+      }
+    } catch (err) {
+      notify(err.response?.data?.errorMessage || "FBR submission failed.", "error");
+      fetchInvoices(selectedCompany.id, page);
+    } finally { setFbrLoading(null); }
+  };
+
+  const handleDeleteInvoice = async (inv) => {
+    if (inv.fbrStatus === "Submitted") {
+      notify("Cannot delete an FBR-submitted invoice.", "error");
+      return;
+    }
+    if (!confirm(`Delete Invoice #${inv.invoiceNumber}? This will revert linked challans back to Pending.`)) return;
+    try {
+      await deleteInvoice(inv.id);
+      notify(`Invoice #${inv.invoiceNumber} deleted.`, "success");
+      fetchInvoices(selectedCompany.id, page);
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to delete invoice.", "error");
+    }
+  };
+
+  const [bulkFbrLoading, setBulkFbrLoading] = useState(false);
+
+  // Get unsubmitted invoices for bulk operations
+  const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted");
+  const validatedCount = unsubmittedInvoices.filter(inv => fbrValidated.has(inv.id)).length;
+
+  const handleBulkValidateAll = async () => {
+    if (unsubmittedInvoices.length === 0) { notify("No invoices to validate.", "info"); return; }
+    setBulkFbrLoading(true);
+    let passed = 0, failed = 0;
+    for (const inv of unsubmittedInvoices) {
+      if (fbrValidated.has(inv.id)) { passed++; continue; }
+      setFbrLoading(inv.id + "-validate");
+      try {
+        const { data } = await validateInvoiceWithFbr(inv.id);
+        if (data.success) {
+          setFbrValidated(prev => new Set(prev).add(inv.id));
+          passed++;
+        } else {
+          failed++;
+          // Stop bulk if token/connection error (affects all invoices)
+          const msg = data.errorMessage || "";
+          if (msg.includes("token") || msg.includes("authentication") || msg.includes("Cannot connect")) {
+            notify(msg, "error");
+            break;
+          }
+        }
+      } catch (err) {
+        failed++;
+        const msg = err.response?.data?.errorMessage || err.message || "";
+        if (msg.includes("token") || msg.includes("authentication") || msg.includes("Cannot connect") || err.code === "ERR_NETWORK") {
+          notify(msg || "Cannot connect to FBR. Check your connection and FBR token.", "error");
+          break;
+        }
+      }
+      setFbrLoading(null);
+    }
+    setFbrLoading(null);
+    if (passed > 0 || failed > 0)
+      notify(`Validation complete: ${passed} passed, ${failed} failed.`, failed > 0 ? "error" : "success");
+    setBulkFbrLoading(false);
+  };
+
+  const handleBulkSubmitValidated = async () => {
+    const toSubmit = unsubmittedInvoices.filter(inv => fbrValidated.has(inv.id));
+    if (toSubmit.length === 0) { notify("No validated invoices to submit. Validate first.", "error"); return; }
+    if (!confirm(`Submit ${toSubmit.length} validated invoice(s) to FBR? This cannot be undone.`)) return;
+    setBulkFbrLoading(true);
+    let submitted = 0, failed = 0;
+    for (const inv of toSubmit) {
+      setFbrLoading(inv.id + "-submit");
+      try {
+        const { data } = await submitInvoiceToFbr(inv.id);
+        if (data.success) {
+          setFbrValidated(prev => { const s = new Set(prev); s.delete(inv.id); return s; });
+          submitted++;
+        } else {
+          failed++;
+          const msg = data.errorMessage || "";
+          if (msg.includes("token") || msg.includes("authentication") || msg.includes("Cannot connect")) {
+            notify(msg, "error");
+            break;
+          }
+        }
+      } catch (err) {
+        failed++;
+        const msg = err.response?.data?.errorMessage || err.message || "";
+        if (msg.includes("token") || msg.includes("authentication") || msg.includes("Cannot connect") || err.code === "ERR_NETWORK") {
+          notify(msg || "Cannot connect to FBR. Check your connection and FBR token.", "error");
+          break;
+        }
+      }
+      setFbrLoading(null);
+    }
+    setFbrLoading(null);
+    notify(`FBR submission: ${submitted} submitted, ${failed} failed.`, failed > 0 ? "error" : "success");
+    fetchInvoices(selectedCompany.id, page);
+    setBulkFbrLoading(false);
+  };
+
   const hasFilters = search || clientFilter || dateFrom || dateTo;
 
   return (
@@ -230,6 +370,40 @@ export default function InvoicePage() {
               {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
+
+          {/* FBR Bulk Actions */}
+          {selectedCompany?.hasFbrToken && unsubmittedInvoices.length > 0 && (
+            <div style={styles.fbrBulkBar}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <MdCloudUpload size={18} color="#0d47a1" />
+                <span style={{ fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary }}>
+                  FBR: {unsubmittedInvoices.length} unsubmitted{validatedCount > 0 ? `, ${validatedCount} validated` : ""}
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  style={{ ...styles.fbrBulkBtn, ...styles.fbrBulkValidateBtn }}
+                  disabled={bulkFbrLoading}
+                  onClick={handleBulkValidateAll}
+                >
+                  {bulkFbrLoading ? <span className="btn-spinner" /> : <MdCheckCircle size={15} />}
+                  Validate All
+                </button>
+                <button
+                  style={{
+                    ...styles.fbrBulkBtn, ...styles.fbrBulkSubmitBtn,
+                    opacity: validatedCount === 0 ? 0.4 : 1,
+                    cursor: validatedCount === 0 ? "not-allowed" : "pointer",
+                  }}
+                  disabled={bulkFbrLoading || validatedCount === 0}
+                  onClick={handleBulkSubmitValidated}
+                >
+                  {bulkFbrLoading ? <span className="btn-spinner" /> : <MdCloudUpload size={15} />}
+                  Submit {validatedCount > 0 ? `${validatedCount} ` : ""}to FBR
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Filters */}
           {selectedCompany && (
@@ -294,28 +468,79 @@ export default function InvoicePage() {
                     <p style={{ ...cardStyles.text, fontSize: "0.78rem", color: colors.textSecondary }}>
                       DC#{inv.challanNumbers?.join(", #")} | {inv.items?.length} items
                     </p>
+                    {inv.fbrStatus && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.25rem" }}>
+                        {inv.fbrStatus === "Submitted" && <MdCheckCircle size={14} color="#2e7d32" />}
+                        {inv.fbrStatus === "Failed" && <MdError size={14} color="#c62828" />}
+                        <span style={{ fontSize: "0.76rem", fontWeight: 600, color: inv.fbrStatus === "Submitted" ? "#2e7d32" : inv.fbrStatus === "Failed" ? "#c62828" : colors.textSecondary }}>
+                          FBR: {inv.fbrStatus}
+                        </span>
+                        {inv.fbrIRN && <span style={{ fontSize: "0.72rem", color: colors.textSecondary }}>(IRN: {inv.fbrIRN})</span>}
+                      </div>
+                    )}
+                    {inv.fbrStatus === "Failed" && inv.fbrErrorMessage && (
+                      <p style={{ fontSize: "0.72rem", color: "#c62828", marginTop: "0.15rem", wordBreak: "break-word" }}>{inv.fbrErrorMessage}</p>
+                    )}
                   </div>
                   <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
                     <button style={styles.printBtn} onClick={() => handlePrintBill(inv)}>
                       <MdPrint size={14} /> Bill
                     </button>
+                    {inv.fbrStatus === "Submitted" && (
                     <button style={styles.taxBtn} onClick={() => handlePrintTax(inv)}>
                       <MdDescription size={14} /> Tax Invoice
                     </button>
+                    )}
                     <button style={{ ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportBillPdf(inv)}>
                       {exportingId === inv.id + "-bill-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Bill PDF
                     </button>
+                    {inv.fbrStatus === "Submitted" && (
                     <button style={{ ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxPdf(inv)}>
                       {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Tax PDF
                     </button>
+                    )}
                     {hasExcelBill && (
                       <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportBillExcel(inv)}>
                         {exportingId === inv.id + "-bill-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Bill XLS
                       </button>
                     )}
-                    {hasExcelTax && (
+                    {hasExcelTax && inv.fbrStatus === "Submitted" && (
                       <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxExcel(inv)}>
                         {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Tax XLS
+                      </button>
+                    )}
+                    {selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && (
+                      <>
+                        <button
+                          style={{ ...styles.fbrValidateBtn, opacity: fbrLoading ? 0.5 : 1, ...(fbrValidated.has(inv.id) ? { backgroundColor: "#e8f5e9", color: "#2e7d32" } : {}) }}
+                          disabled={!!fbrLoading}
+                          onClick={() => handleFbrValidate(inv)}
+                          title="Dry-run: checks all invoice data with FBR without recording it. Must pass before you can submit."
+                        >
+                          {fbrLoading === inv.id + "-validate" ? <span className="btn-spinner" /> : <MdCheckCircle size={14} />}
+                          {fbrValidated.has(inv.id) ? "Validated" : "Validate"}
+                        </button>
+                        <button
+                          style={{
+                            ...styles.fbrSubmitBtn,
+                            opacity: fbrLoading || !fbrValidated.has(inv.id) ? 0.4 : 1,
+                            cursor: !fbrValidated.has(inv.id) ? "not-allowed" : "pointer",
+                          }}
+                          disabled={!!fbrLoading || !fbrValidated.has(inv.id)}
+                          onClick={() => handleFbrSubmit(inv)}
+                          title={fbrValidated.has(inv.id) ? "Permanently submit this invoice to FBR. Cannot be undone." : "Validate first before submitting to FBR."}
+                        >
+                          {fbrLoading === inv.id + "-submit" ? <span className="btn-spinner" /> : <MdCloudUpload size={14} />} Submit FBR
+                        </button>
+                      </>
+                    )}
+                    {inv.fbrStatus !== "Submitted" && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#ffebee", color: "#c62828", border: "1px solid #ef9a9a" }}
+                        onClick={() => handleDeleteInvoice(inv)}
+                        title="Delete this invoice and revert challans to Pending"
+                      >
+                        <MdDelete size={14} /> Delete
                       </button>
                     )}
                   </div>
@@ -379,4 +604,10 @@ const styles = {
     border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer",
   },
   pageInfo: { fontSize: "0.82rem", color: colors.textSecondary, fontWeight: 500 },
+  fbrValidateBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#fff3e0", color: "#e65100" },
+  fbrSubmitBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#e3f2fd", color: "#0d47a1" },
+  fbrBulkBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1rem", padding: "0.65rem 1rem", borderRadius: 10, border: "1px solid #e3f2fd", backgroundColor: "#f8faff" },
+  fbrBulkBtn: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 1rem", borderRadius: 8, border: "none", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", transition: "filter 0.2s" },
+  fbrBulkValidateBtn: { backgroundColor: "#fff3e0", color: "#e65100" },
+  fbrBulkSubmitBtn: { backgroundColor: "#0d47a1", color: "#fff", boxShadow: "0 2px 8px rgba(13,71,161,0.2)" },
 };

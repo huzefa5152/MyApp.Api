@@ -1,3 +1,4 @@
+using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
@@ -8,10 +9,36 @@ namespace MyApp.Api.Services.Implementations
     public class DeliveryChallanService : IDeliveryChallanService
     {
         private readonly IDeliveryChallanRepository _repository;
+        private readonly AppDbContext _context;
 
-        public DeliveryChallanService(IDeliveryChallanRepository repository)
+        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context)
         {
             _repository = repository;
+            _context = context;
+        }
+
+        /// <summary>Check if company+client have all required FBR fields filled.</summary>
+        private static bool IsFbrReady(Company company, Client client)
+        {
+            // Company fields
+            if (string.IsNullOrWhiteSpace(company.NTN)) return false;
+            if (string.IsNullOrWhiteSpace(company.STRN)) return false;
+            if (company.FbrProvinceCode == null) return false;
+            if (string.IsNullOrWhiteSpace(company.FbrBusinessActivity)) return false;
+            if (string.IsNullOrWhiteSpace(company.FbrSector)) return false;
+            if (string.IsNullOrWhiteSpace(company.FbrToken)) return false;
+            if (string.IsNullOrWhiteSpace(company.FbrEnvironment)) return false;
+
+            // Client fields
+            if (string.IsNullOrWhiteSpace(client.NTN)) return false;
+            if (string.IsNullOrWhiteSpace(client.STRN)) return false;
+            if (string.IsNullOrWhiteSpace(client.RegistrationType)) return false;
+            if (client.FbrProvinceCode == null) return false;
+            // CNIC required for Unregistered/CNIC registration types
+            if ((client.RegistrationType == "Unregistered" || client.RegistrationType == "CNIC")
+                && string.IsNullOrWhiteSpace(client.CNIC)) return false;
+
+            return true;
         }
 
         private static DeliveryChallanDto ToDto(DeliveryChallan dc)
@@ -39,24 +66,35 @@ namespace MyApp.Api.Services.Implementations
                 }).ToList()
             };
 
-            // Compute warnings for missing tax info
+            // Compute warnings for missing FBR fields
             var company = dc.Company;
             var client = dc.Client;
-            if (company != null && string.IsNullOrWhiteSpace(company.NTN))
-                dto.Warnings.Add("Company NTN missing");
-            if (company != null && string.IsNullOrWhiteSpace(company.STRN))
-                dto.Warnings.Add("Company STRN missing");
-            if (client != null && string.IsNullOrWhiteSpace(client.NTN))
-                dto.Warnings.Add("Client NTN missing");
-            if (client != null && string.IsNullOrWhiteSpace(client.STRN))
-                dto.Warnings.Add("Client STRN missing");
+            if (company != null)
+            {
+                if (string.IsNullOrWhiteSpace(company.NTN)) dto.Warnings.Add("Company NTN missing");
+                if (string.IsNullOrWhiteSpace(company.STRN)) dto.Warnings.Add("Company STRN missing");
+                if (company.FbrProvinceCode == null) dto.Warnings.Add("Company FBR Province missing");
+                if (string.IsNullOrWhiteSpace(company.FbrBusinessActivity)) dto.Warnings.Add("Company Business Activity missing");
+                if (string.IsNullOrWhiteSpace(company.FbrSector)) dto.Warnings.Add("Company Sector missing");
+                if (string.IsNullOrWhiteSpace(company.FbrToken)) dto.Warnings.Add("Company FBR Token missing");
+                if (string.IsNullOrWhiteSpace(company.FbrEnvironment)) dto.Warnings.Add("Company FBR Environment missing");
+            }
+            if (client != null)
+            {
+                if (string.IsNullOrWhiteSpace(client.NTN)) dto.Warnings.Add("Client NTN missing");
+                if (string.IsNullOrWhiteSpace(client.STRN)) dto.Warnings.Add("Client STRN missing");
+                if (string.IsNullOrWhiteSpace(client.RegistrationType)) dto.Warnings.Add("Client Registration Type missing");
+                if (client.FbrProvinceCode == null) dto.Warnings.Add("Client FBR Province missing");
+                if ((client.RegistrationType == "Unregistered" || client.RegistrationType == "CNIC")
+                    && string.IsNullOrWhiteSpace(client.CNIC)) dto.Warnings.Add("Client CNIC missing");
+            }
 
             return dto;
         }
 
         /// <summary>Returns true if the challan is in an editable state.</summary>
         private static bool IsEditable(DeliveryChallan dc) =>
-            dc.Status == "Pending" || dc.Status == "No PO";
+            dc.Status == "Pending" || dc.Status == "No PO" || dc.Status == "Setup Required";
 
         public async Task<List<DeliveryChallanDto>> GetDeliveryChallansByCompanyAsync(int companyId)
         {
@@ -69,6 +107,9 @@ namespace MyApp.Api.Services.Implementations
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null)
         {
+            // Auto-clear "Setup Required" challans where FBR is now ready (runs once per page load)
+            await ReEvaluateSetupRequiredAsync(companyId);
+
             var (items, totalCount) = await _repository.GetPagedByCompanyAsync(
                 companyId, page, pageSize, search, status, clientId, dateFrom, dateTo);
             return new PagedResult<DeliveryChallanDto>
@@ -89,6 +130,20 @@ namespace MyApp.Api.Services.Implementations
         public async Task<DeliveryChallanDto> CreateDeliveryChallanAsync(int companyId, DeliveryChallanDto dto)
         {
             var hasPo = !string.IsNullOrWhiteSpace(dto.PoNumber);
+
+            // Determine status based on FBR readiness
+            var company = await _context.Companies.FindAsync(companyId);
+            var client = await _context.Clients.FindAsync(dto.ClientId);
+            var fbrReady = company != null && client != null && IsFbrReady(company, client);
+
+            string status;
+            if (!fbrReady)
+                status = "Setup Required";
+            else if (hasPo)
+                status = "Pending";
+            else
+                status = "No PO";
+
             var deliveryChallan = new DeliveryChallan
             {
                 CompanyId = companyId,
@@ -97,7 +152,7 @@ namespace MyApp.Api.Services.Implementations
                 PoNumber = dto.PoNumber?.Trim() ?? "",
                 PoDate = hasPo ? dto.PoDate : null,
                 DeliveryDate = dto.DeliveryDate,
-                Status = hasPo ? "Pending" : "No PO",
+                Status = status,
                 Items = dto.Items.Select(i => new DeliveryItem
                 {
                     ItemTypeId = i.ItemTypeId,
@@ -192,12 +247,23 @@ namespace MyApp.Api.Services.Implementations
         {
             var dc = await _repository.GetByIdAsync(challanId);
             if (dc == null) return null;
-            if (dc.Status != "No PO")
-                throw new InvalidOperationException("Can only add PO details to 'No PO' challans.");
+            if (dc.Status != "No PO" && dc.Status != "Setup Required")
+                throw new InvalidOperationException("Can only add PO details to 'No PO' or 'Setup Required' challans.");
 
             dc.PoNumber = poNumber.Trim();
             dc.PoDate = poDate;
-            dc.Status = "Pending";
+
+            // Only transition to Pending if FBR is ready
+            if (dc.Status == "Setup Required")
+            {
+                var fbrReady = IsFbrReady(dc.Company, dc.Client);
+                dc.Status = fbrReady ? "Pending" : "Setup Required";
+            }
+            else
+            {
+                dc.Status = "Pending";
+            }
+
             await _repository.UpdateAsync(dc);
             var reloaded = await _repository.GetByIdAsync(challanId);
             return reloaded == null ? null : ToDto(reloaded);
@@ -244,6 +310,24 @@ namespace MyApp.Api.Services.Implementations
         public async Task<int> GetCountByCompanyAsync(int companyId)
         {
             return await _repository.GetCountByCompanyAsync(companyId);
+        }
+
+        public async Task<int> ReEvaluateSetupRequiredAsync(int companyId, int? clientId = null)
+        {
+            var challans = await _repository.GetSetupRequiredChallansAsync(companyId, clientId);
+            var transitioned = 0;
+
+            foreach (var dc in challans)
+            {
+                if (!IsFbrReady(dc.Company, dc.Client)) continue;
+
+                var hasPo = !string.IsNullOrWhiteSpace(dc.PoNumber);
+                dc.Status = hasPo ? "Pending" : "No PO";
+                await _repository.UpdateAsync(dc);
+                transitioned++;
+            }
+
+            return transitioned;
         }
     }
 }

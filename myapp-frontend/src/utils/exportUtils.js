@@ -42,23 +42,6 @@ function createStyledContainer(css, bodyHtml) {
 }
 
 /**
- * Render full HTML document in a hidden iframe.
- */
-function renderInIframe(html) {
-  return new Promise((resolve) => {
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText =
-      "position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:none;";
-    document.body.appendChild(iframe);
-    const doc = iframe.contentDocument || iframe.contentWindow.document;
-    doc.open();
-    doc.write(html);
-    doc.close();
-    setTimeout(() => resolve({ iframe, doc, win: iframe.contentWindow }), 600);
-  });
-}
-
-/**
  * Export rendered template HTML to PDF.
  */
 export async function exportToPdf(html, filename) {

@@ -14,6 +14,12 @@
         public int CurrentChallanNumber { get; set; }
         public int StartingInvoiceNumber { get; set; }
         public int CurrentInvoiceNumber { get; set; }
+        public string? InvoiceNumberPrefix { get; set; }
+        public int? FbrProvinceCode { get; set; }
+        public string? FbrBusinessActivity { get; set; }
+        public string? FbrSector { get; set; }
+        public string? FbrEnvironment { get; set; }
+        public bool HasFbrToken { get; set; }
         public bool HasChallans { get; set; }
         public bool HasInvoices { get; set; }
     }

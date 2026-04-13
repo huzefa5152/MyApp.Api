@@ -19,5 +19,6 @@ namespace MyApp.Api.Repositories.Interfaces
         Task<int> GetTotalCountAsync();
         Task<int> GetCountByCompanyAsync(int companyId);
         Task<bool> HasChallansForCompanyAsync(int companyId);
+        Task<List<DeliveryChallan>> GetSetupRequiredChallansAsync(int companyId, int? clientId = null);
     }
 }

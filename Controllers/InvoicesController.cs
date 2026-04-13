@@ -67,6 +67,10 @@ namespace MyApp.Api.Controllers
                     return BadRequest(new { error = "At least one challan must be selected." });
                 if (dto.Items == null || !dto.Items.Any())
                     return BadRequest(new { error = "At least one item with unit price is required." });
+                if (dto.Items.Any(i => i.UnitPrice <= 0))
+                    return BadRequest(new { error = "All items must have a positive unit price." });
+                if (dto.GSTRate < 0 || dto.GSTRate > 100)
+                    return BadRequest(new { error = "GST rate must be between 0 and 100." });
 
                 var created = await _service.CreateAsync(dto);
                 return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
@@ -74,6 +78,21 @@ namespace MyApp.Api.Controllers
             catch (KeyNotFoundException ex)
             {
                 return NotFound(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            try
+            {
+                var deleted = await _service.DeleteAsync(id);
+                if (!deleted) return NotFound(new { error = "Invoice not found." });
+                return Ok(new { message = "Invoice deleted and challans reverted to Pending." });
             }
             catch (InvalidOperationException ex)
             {

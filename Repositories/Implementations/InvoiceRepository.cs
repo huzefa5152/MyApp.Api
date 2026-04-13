@@ -83,6 +83,12 @@ namespace MyApp.Api.Repositories.Implementations
             return invoice;
         }
 
+        public async Task UpdateAsync(Invoice invoice)
+        {
+            _context.Invoices.Update(invoice);
+            await _context.SaveChangesAsync();
+        }
+
         public async Task<int> GetTotalCountAsync()
         {
             return await _context.Invoices.CountAsync();

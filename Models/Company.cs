@@ -14,6 +14,14 @@
         public int CurrentChallanNumber { get; set; }
         public int StartingInvoiceNumber { get; set; }
         public int CurrentInvoiceNumber { get; set; }
+        public string? InvoiceNumberPrefix { get; set; }
+
+        // FBR Digital Invoicing
+        public int? FbrProvinceCode { get; set; }
+        public string? FbrBusinessActivity { get; set; }
+        public string? FbrSector { get; set; }
+        public string? FbrToken { get; set; }
+        public string? FbrEnvironment { get; set; }
 
         public List<DeliveryChallan> DeliveryChallans { get; set; } = new();
         public List<Client> Clients { get; set; } = new();

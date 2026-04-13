@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdDescription, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight } from "react-icons/md";
+import { MdDescription, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
 import ChallanForm from "../Components/ChallanForm";
 import ChallanEditForm from "../Components/ChallanEditForm";
+import POImportForm from "../Components/POImportForm";
 import {
   getPagedChallansByCompany,
   createDeliveryChallan,
@@ -38,6 +39,7 @@ export default function ChallanPage() {
   const [clients, setClients] = useState([]);
   const [challans, setChallans] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editChallan, setEditChallan] = useState(null);
   const [loadingChallans, setLoadingChallans] = useState(false);
 
@@ -151,6 +153,7 @@ export default function ChallanPage() {
   };
 
   const handlePrint = async (challan) => {
+    if (!selectedCompany) { notify("No company selected.", "error"); return; }
     const w = window.open("", "_blank");
     if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
     w.document.write("<p>Loading challan...</p>");
@@ -233,9 +236,14 @@ export default function ChallanPage() {
           </div>
         </div>
         {companies.length > 0 && (
-          <button style={styles.addBtn} onClick={handleAddChallan}>
-            <MdAdd size={18} /> New Challan
-          </button>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button style={styles.addBtn} onClick={handleAddChallan}>
+              <MdAdd size={18} /> New Challan
+            </button>
+            <button style={{ ...styles.addBtn, backgroundColor: "#00897b" }} onClick={() => selectedCompany && setShowImport(true)}>
+              <MdUploadFile size={18} /> Import PO
+            </button>
+          </div>
         )}
       </div>
 
@@ -278,6 +286,7 @@ export default function ChallanPage() {
                 <option value="">All Status</option>
                 <option value="Pending">Pending</option>
                 <option value="No PO">No PO</option>
+                <option value="Setup Required">Setup Required</option>
                 <option value="Invoiced">Invoiced</option>
                 <option value="Cancelled">Cancelled</option>
               </select>
@@ -357,6 +366,14 @@ export default function ChallanPage() {
           companyId={selectedCompany.id}
           onClose={() => setShowModal(false)}
           onSaved={handleSaveChallan}
+        />
+      )}
+
+      {showImport && selectedCompany && (
+        <POImportForm
+          companyId={selectedCompany.id}
+          onClose={() => setShowImport(false)}
+          onSaved={() => { setShowImport(false); fetchChallans(selectedCompany.id, page); }}
         />
       )}
 

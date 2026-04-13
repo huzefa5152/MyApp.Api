@@ -11,11 +11,13 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly IClientRepository _repo;
         private readonly IInvoiceRepository _invoiceRepo;
+        private readonly IDeliveryChallanService _challanService;
         private readonly AppDbContext _context;
-        public ClientService(IClientRepository repo, IInvoiceRepository invoiceRepo, AppDbContext context)
+        public ClientService(IClientRepository repo, IInvoiceRepository invoiceRepo, IDeliveryChallanService challanService, AppDbContext context)
         {
             _repo = repo;
             _invoiceRepo = invoiceRepo;
+            _challanService = challanService;
             _context = context;
         }
 
@@ -29,6 +31,9 @@ namespace MyApp.Api.Services.Implementations
             NTN = c.NTN,
             STRN = c.STRN,
             Site = c.Site,
+            RegistrationType = c.RegistrationType,
+            CNIC = c.CNIC,
+            FbrProvinceCode = c.FbrProvinceCode,
             CompanyId = c.CompanyId,
             HasInvoices = hasInvoices,
             CreatedAt = c.CreatedAt
@@ -72,6 +77,9 @@ namespace MyApp.Api.Services.Implementations
                 NTN = dto.NTN,
                 STRN = dto.STRN,
                 Site = dto.Site,
+                RegistrationType = dto.RegistrationType,
+                CNIC = dto.CNIC,
+                FbrProvinceCode = dto.FbrProvinceCode,
                 CompanyId = dto.CompanyId,
                 CreatedAt = DateTime.UtcNow
             };
@@ -97,9 +105,16 @@ namespace MyApp.Api.Services.Implementations
             client.NTN = dto.NTN;
             client.STRN = dto.STRN;
             client.Site = dto.Site;
+            client.RegistrationType = dto.RegistrationType;
+            client.CNIC = dto.CNIC;
+            client.FbrProvinceCode = dto.FbrProvinceCode;
 
             var hasInvoices = await _invoiceRepo.HasInvoicesForClientAsync(client.Id);
             await _repo.UpdateAsync(client);
+
+            // Re-evaluate "Setup Required" challans for this client
+            await _challanService.ReEvaluateSetupRequiredAsync(client.CompanyId, client.Id);
+
             return ToDto(client, hasInvoices);
         }
 
@@ -108,31 +123,41 @@ namespace MyApp.Api.Services.Implementations
             var client = await _repo.GetByIdAsync(id);
             if (client == null) return;
 
-            // Cascade delete: unlink challans from invoices → delete invoices → delete challans → delete client
-
-            // 1. Unlink challans from invoices for this client
-            await _context.DeliveryChallans
-                .Where(dc => dc.ClientId == id && dc.InvoiceId != null)
-                .ExecuteUpdateAsync(s => s.SetProperty(dc => dc.InvoiceId, (int?)null));
-
-            // 2. Delete invoice items, then invoices
-            var invoiceIds = await _context.Invoices.Where(i => i.ClientId == id).Select(i => i.Id).ToListAsync();
-            if (invoiceIds.Count > 0)
+            // Cascade delete in a single transaction for atomicity
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                await _context.InvoiceItems.Where(ii => invoiceIds.Contains(ii.InvoiceId)).ExecuteDeleteAsync();
-                await _context.Invoices.Where(i => i.ClientId == id).ExecuteDeleteAsync();
-            }
+                // 1. Unlink challans from invoices for this client
+                await _context.DeliveryChallans
+                    .Where(dc => dc.ClientId == id && dc.InvoiceId != null)
+                    .ExecuteUpdateAsync(s => s.SetProperty(dc => dc.InvoiceId, (int?)null));
 
-            // 3. Delete delivery items, then challans
-            var challanIds = await _context.DeliveryChallans.Where(dc => dc.ClientId == id).Select(dc => dc.Id).ToListAsync();
-            if (challanIds.Count > 0)
+                // 2. Delete invoice items, then invoices
+                var invoiceIds = await _context.Invoices.Where(i => i.ClientId == id).Select(i => i.Id).ToListAsync();
+                if (invoiceIds.Count > 0)
+                {
+                    await _context.InvoiceItems.Where(ii => invoiceIds.Contains(ii.InvoiceId)).ExecuteDeleteAsync();
+                    await _context.Invoices.Where(i => i.ClientId == id).ExecuteDeleteAsync();
+                }
+
+                // 3. Delete delivery items, then challans
+                var challanIds = await _context.DeliveryChallans.Where(dc => dc.ClientId == id).Select(dc => dc.Id).ToListAsync();
+                if (challanIds.Count > 0)
+                {
+                    await _context.DeliveryItems.Where(di => challanIds.Contains(di.DeliveryChallanId)).ExecuteDeleteAsync();
+                    await _context.DeliveryChallans.Where(dc => dc.ClientId == id).ExecuteDeleteAsync();
+                }
+
+                // 4. Delete the client
+                await _repo.DeleteAsync(client);
+
+                await transaction.CommitAsync();
+            }
+            catch
             {
-                await _context.DeliveryItems.Where(di => challanIds.Contains(di.DeliveryChallanId)).ExecuteDeleteAsync();
-                await _context.DeliveryChallans.Where(dc => dc.ClientId == id).ExecuteDeleteAsync();
+                await transaction.RollbackAsync();
+                throw;
             }
-
-            // 4. Delete the client
-            await _repo.DeleteAsync(client);
         }
     }
 }

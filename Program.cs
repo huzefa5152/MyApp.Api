@@ -59,6 +59,12 @@ builder.Services.AddScoped<IClientService, ClientService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+builder.Services.AddScoped<IFbrService, FbrService>();
+builder.Services.AddScoped<IFbrLookupService, FbrLookupService>();
+builder.Services.AddSingleton<IPOParserService, POParserService>();
+builder.Services.AddSingleton<ILlmPOParserService, LlmPOParserService>();
+builder.Services.AddHttpClient("FBR");
+builder.Services.AddHttpClient("Gemini");
 
 // before builder.Build()
 builder.Services.AddCors(options =>

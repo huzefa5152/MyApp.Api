@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Models;
@@ -12,17 +14,20 @@ namespace MyApp.Api.Services.Implementations
         private readonly IDeliveryChallanRepository _challanRepo;
         private readonly ICompanyRepository _companyRepo;
         private readonly IClientRepository _clientRepo;
+        private readonly AppDbContext _context;
 
         public InvoiceService(
             IInvoiceRepository invoiceRepo,
             IDeliveryChallanRepository challanRepo,
             ICompanyRepository companyRepo,
-            IClientRepository clientRepo)
+            IClientRepository clientRepo,
+            AppDbContext context)
         {
             _invoiceRepo = invoiceRepo;
             _challanRepo = challanRepo;
             _companyRepo = companyRepo;
             _clientRepo = clientRepo;
+            _context = context;
         }
 
         private static InvoiceDto ToDto(Invoice inv) => new()
@@ -40,6 +45,13 @@ namespace MyApp.Api.Services.Implementations
             GrandTotal = inv.GrandTotal,
             AmountInWords = inv.AmountInWords,
             PaymentTerms = inv.PaymentTerms,
+            DocumentType = inv.DocumentType,
+            PaymentMode = inv.PaymentMode,
+            FbrInvoiceNumber = inv.FbrInvoiceNumber,
+            FbrIRN = inv.FbrIRN,
+            FbrStatus = inv.FbrStatus,
+            FbrSubmittedAt = inv.FbrSubmittedAt,
+            FbrErrorMessage = inv.FbrErrorMessage,
             CreatedAt = inv.CreatedAt,
             Items = inv.Items.Select(ii => new InvoiceItemDto
             {
@@ -50,7 +62,11 @@ namespace MyApp.Api.Services.Implementations
                 Quantity = ii.Quantity,
                 UOM = ii.UOM,
                 UnitPrice = ii.UnitPrice,
-                LineTotal = ii.LineTotal
+                LineTotal = ii.LineTotal,
+                HSCode = ii.HSCode,
+                FbrUOMId = ii.FbrUOMId,
+                SaleType = ii.SaleType,
+                RateId = ii.RateId
             }).ToList(),
             ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList()
         };
@@ -113,16 +129,23 @@ namespace MyApp.Api.Services.Implementations
                 if (deliveryItem == null)
                     throw new KeyNotFoundException($"Delivery item {itemDto.DeliveryItemId} not found in selected challans.");
 
+                var description = !string.IsNullOrWhiteSpace(itemDto.Description)
+                    ? itemDto.Description
+                    : deliveryItem.Description;
                 var lineTotal = deliveryItem.Quantity * itemDto.UnitPrice;
                 invoiceItems.Add(new InvoiceItem
                 {
                     DeliveryItemId = deliveryItem.Id,
                     ItemTypeName = deliveryItem.ItemType?.Name ?? "",
-                    Description = deliveryItem.Description,
+                    Description = description,
                     Quantity = deliveryItem.Quantity,
                     UOM = deliveryItem.Unit,
                     UnitPrice = itemDto.UnitPrice,
-                    LineTotal = lineTotal
+                    LineTotal = lineTotal,
+                    HSCode = itemDto.HSCode,
+                    FbrUOMId = itemDto.FbrUOMId,
+                    SaleType = itemDto.SaleType,
+                    RateId = itemDto.RateId
                 });
             }
 
@@ -151,27 +174,98 @@ namespace MyApp.Api.Services.Implementations
                 GrandTotal = grandTotal,
                 AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                 PaymentTerms = dto.PaymentTerms,
+                DocumentType = dto.DocumentType,
+                PaymentMode = dto.PaymentMode,
+                FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
+                    ? nextInvoiceNumber.ToString()
+                    : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
                 Items = invoiceItems
             };
 
-            var created = await _invoiceRepo.CreateAsync(invoice);
-
-            // Transition challans to Invoiced + apply any PO date updates
-            foreach (var dc in challans)
+            // Wrap invoice creation + challan transitions + company update in a single transaction
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                if (dto.PoDateUpdates.TryGetValue(dc.Id, out var poDate))
-                    dc.PoDate = poDate;
-                dc.Status = "Invoiced";
-                dc.InvoiceId = created.Id;
-                await _challanRepo.UpdateAsync(dc);
+                var created = await _invoiceRepo.CreateAsync(invoice);
+
+                // Transition challans to Invoiced + apply any PO date updates
+                foreach (var dc in challans)
+                {
+                    if (dto.PoDateUpdates.TryGetValue(dc.Id, out var poDate))
+                        dc.PoDate = poDate;
+                    dc.Status = "Invoiced";
+                    dc.InvoiceId = created.Id;
+                    await _challanRepo.UpdateAsync(dc);
+                }
+
+                // Update company invoice number
+                await _companyRepo.UpdateAsync(company);
+
+                // Auto-save new item descriptions for future use
+                var newDescs = dto.Items
+                    .Where(i => !string.IsNullOrWhiteSpace(i.Description))
+                    .Select(i => i.Description!)
+                    .Distinct()
+                    .ToList();
+                if (newDescs.Any())
+                {
+                    var existing = await _context.ItemDescriptions
+                        .Where(d => newDescs.Contains(d.Name))
+                        .Select(d => d.Name)
+                        .ToListAsync();
+                    foreach (var desc in newDescs.Where(d => !existing.Contains(d)))
+                    {
+                        _context.ItemDescriptions.Add(new ItemDescription { Name = desc });
+                    }
+                    await _context.SaveChangesAsync();
+                }
+
+                await transaction.CommitAsync();
+
+                // Reload with includes
+                var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
+                return ToDto(loaded!);
             }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
 
-            // Update company invoice number
-            await _companyRepo.UpdateAsync(company);
+        public async Task<bool> DeleteAsync(int id)
+        {
+            var invoice = await _invoiceRepo.GetByIdAsync(id);
+            if (invoice == null) return false;
 
-            // Reload with includes
-            var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
-            return ToDto(loaded!);
+            // Cannot delete FBR-submitted invoices
+            if (invoice.FbrStatus == "Submitted")
+                throw new InvalidOperationException("Cannot delete an invoice that has been submitted to FBR.");
+
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // Revert linked challans from "Invoiced" → "Pending"
+                foreach (var dc in invoice.DeliveryChallans)
+                {
+                    var hasPo = !string.IsNullOrWhiteSpace(dc.PoNumber);
+                    dc.Status = hasPo ? "Pending" : "No PO";
+                    dc.InvoiceId = null;
+                    await _challanRepo.UpdateAsync(dc);
+                }
+
+                // Delete invoice items then invoice
+                await _context.InvoiceItems.Where(ii => ii.InvoiceId == id).ExecuteDeleteAsync();
+                await _context.Invoices.Where(i => i.Id == id).ExecuteDeleteAsync();
+
+                await transaction.CommitAsync();
+                return true;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<PrintBillDto?> GetPrintBillAsync(int invoiceId)
@@ -259,6 +353,9 @@ namespace MyApp.Api.Services.Implementations
                 GSTAmount = inv.GSTAmount,
                 GrandTotal = inv.GrandTotal,
                 AmountInWords = inv.AmountInWords,
+                FbrIRN = inv.FbrIRN,
+                FbrStatus = inv.FbrStatus,
+                FbrSubmittedAt = inv.FbrSubmittedAt,
                 // Group items by ItemTypeName only if ALL items have an item type; otherwise list individually
                 Items = inv.Items.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName))
                     ? inv.Items

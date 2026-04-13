@@ -20,6 +20,7 @@ namespace MyApp.Api.Repositories.Implementations
                                  .Include(dc => dc.Items)
                                      .ThenInclude(i => i.ItemType)
                                  .Include(dc => dc.Client)
+                                 .Include(dc => dc.Company)
                                  .Where(dc => dc.CompanyId == companyId)
                                  .OrderBy(dc => dc.ChallanNumber)
                                  .ToListAsync();
@@ -33,6 +34,7 @@ namespace MyApp.Api.Repositories.Implementations
             var query = _context.DeliveryChallans
                 .Include(dc => dc.Items).ThenInclude(i => i.ItemType)
                 .Include(dc => dc.Client)
+                .Include(dc => dc.Company)
                 .Where(dc => dc.CompanyId == companyId);
 
             if (!string.IsNullOrWhiteSpace(status))
@@ -79,25 +81,37 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<DeliveryChallan> CreateDeliveryChallanAsync(DeliveryChallan deliveryChallan)
         {
-            var company = await _context.Companies
-                                        .FirstOrDefaultAsync(c => c.Id == deliveryChallan.CompanyId);
+            // Wrap in transaction to prevent duplicate challan numbers from concurrent requests
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var company = await _context.Companies
+                                            .FirstOrDefaultAsync(c => c.Id == deliveryChallan.CompanyId);
 
-            if (company == null)
-                throw new Exception("Company not found.");
+                if (company == null)
+                    throw new KeyNotFoundException("Company not found.");
 
-            int nextNumber = company.CurrentChallanNumber > 0
-                             ? company.CurrentChallanNumber + 1
-                             : company.StartingChallanNumber;
+                int nextNumber = company.CurrentChallanNumber > 0
+                                 ? company.CurrentChallanNumber + 1
+                                 : company.StartingChallanNumber;
 
-            deliveryChallan.ChallanNumber = nextNumber;
-            company.CurrentChallanNumber = nextNumber;
+                deliveryChallan.ChallanNumber = nextNumber;
+                company.CurrentChallanNumber = nextNumber;
 
-            _context.DeliveryChallans.Add(deliveryChallan);
-            await _context.SaveChangesAsync();
+                _context.DeliveryChallans.Add(deliveryChallan);
+                await _context.SaveChangesAsync();
 
-            await _context.Entry(deliveryChallan).Reference(dc => dc.Client).LoadAsync();
+                await transaction.CommitAsync();
 
-            return deliveryChallan;
+                await _context.Entry(deliveryChallan).Reference(dc => dc.Client).LoadAsync();
+
+                return deliveryChallan;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<DeliveryChallan> UpdateAsync(DeliveryChallan deliveryChallan)
@@ -150,6 +164,19 @@ namespace MyApp.Api.Repositories.Implementations
         public async Task<bool> HasChallansForCompanyAsync(int companyId)
         {
             return await _context.DeliveryChallans.AnyAsync(dc => dc.CompanyId == companyId);
+        }
+
+        public async Task<List<DeliveryChallan>> GetSetupRequiredChallansAsync(int companyId, int? clientId = null)
+        {
+            var query = _context.DeliveryChallans
+                .Include(dc => dc.Company)
+                .Include(dc => dc.Client)
+                .Where(dc => dc.CompanyId == companyId && dc.Status == "Setup Required");
+
+            if (clientId.HasValue)
+                query = query.Where(dc => dc.ClientId == clientId.Value);
+
+            return await query.ToListAsync();
         }
     }
 }

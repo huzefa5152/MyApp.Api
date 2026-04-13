@@ -10,5 +10,11 @@
         public string? STRN { get; set; }
         public int StartingChallanNumber { get; set; }
         public int StartingInvoiceNumber { get; set; }
+        public string? InvoiceNumberPrefix { get; set; }
+        public int? FbrProvinceCode { get; set; }
+        public string? FbrBusinessActivity { get; set; }
+        public string? FbrSector { get; set; }
+        public string? FbrToken { get; set; }
+        public string? FbrEnvironment { get; set; }
     }
 }

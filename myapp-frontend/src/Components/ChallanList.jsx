@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning } from "react-icons/md";
 import ChallanModal from "./ChallanModal";
 import { cardStyles, cardHover } from "../theme";
@@ -19,7 +20,38 @@ const statusColors = {
   "No PO": { bg: "#e3f2fd", color: "#0d47a1", border: "#0d47a130" },
   Invoiced: { bg: "#e8f5e9", color: "#2e7d32", border: "#2e7d3230" },
   Cancelled: { bg: "#ffebee", color: "#c62828", border: "#c6282830" },
+  "Setup Required": { bg: "#fce4ec", color: "#880e4f", border: "#880e4f30" },
 };
+
+function WarningTooltip({ warnings }) {
+  const [pos, setPos] = useState(null);
+  const ref = useRef(null);
+  const show = useCallback(() => {
+    if (!ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    setPos({ top: r.bottom + 6, left: Math.max(8, r.right - 260) });
+  }, []);
+  return (
+    <span ref={ref} onMouseEnter={show} onMouseLeave={() => setPos(null)} style={{ color: "#e65100", cursor: "help", display: "inline-flex", alignItems: "center" }}>
+      <MdWarning size={18} />
+      {pos && createPortal(
+        <div style={{
+          position: "fixed", top: pos.top, left: pos.left, zIndex: 9999,
+          minWidth: 240, maxWidth: 320, padding: "0.6rem 0.75rem",
+          background: "#fff", border: "1px solid #e65100", borderRadius: 8,
+          boxShadow: "0 4px 16px rgba(0,0,0,0.15)", color: "#333",
+          pointerEvents: "none",
+        }}>
+          <div style={{ fontWeight: 700, marginBottom: 4, fontSize: "0.78rem", color: "#e65100" }}>FBR Setup Required</div>
+          <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.75rem", lineHeight: 1.6 }}>
+            {warnings.map((w, i) => <li key={i}>{w}</li>)}
+          </ul>
+        </div>,
+        document.body
+      )}
+    </span>
+  );
+}
 
 export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, exportingId }) {
   const [selectedChallan, setSelectedChallan] = useState(null);
@@ -31,7 +63,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
       <div className="card-grid">
         {challans.map((c) => {
           const sc = statusColors[c.status] || statusColors.Pending;
-          const isEditable = c.status === "Pending" || c.status === "No PO";
+          const isEditable = c.status === "Pending" || c.status === "No PO" || c.status === "Setup Required";
           const hasWarnings = c.warnings && c.warnings.length > 0;
           return (
             <div
@@ -50,11 +82,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       Challan #{c.challanNumber}
                     </h5>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                      {hasWarnings && (
-                        <span title={c.warnings.join("\n")} style={{ color: "#e65100", cursor: "help", display: "flex" }}>
-                          <MdWarning size={18} />
-                        </span>
-                      )}
+                      {hasWarnings && <WarningTooltip warnings={c.warnings} />}
                       <span style={{ ...styles.statusBadge, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
                         {c.status}
                       </span>

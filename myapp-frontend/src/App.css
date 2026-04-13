@@ -185,3 +185,22 @@ div[style]:hover > div[style*="inset: 0"] {
 .read-the-docs {
   color: #888;
 }
+
+/* Warning tooltip for FBR setup required */
+.warning-tooltip-trigger .warning-tooltip {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  min-width: 240px;
+  max-width: 320px;
+  padding: 0.6rem 0.75rem;
+  background: #fff;
+  border: 1px solid #e65100;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  color: #333;
+  text-align: left;
+}
+.warning-tooltip-trigger:hover .warning-tooltip {
+  display: block;
+}

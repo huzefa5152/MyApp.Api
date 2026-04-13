@@ -10,6 +10,12 @@
         public string? NTN { get; set; }
         public string? STRN { get; set; }
         public string? Site { get; set; }
+
+        // FBR Digital Invoicing
+        public string? RegistrationType { get; set; }
+        public string? CNIC { get; set; }
+        public int? FbrProvinceCode { get; set; }
+
         public int CompanyId { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

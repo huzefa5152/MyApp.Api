@@ -91,6 +91,12 @@ namespace MyApp.Api.DTOs
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
         public string AmountInWords { get; set; } = "";
+
+        // FBR Digital Invoicing
+        public string? FbrIRN { get; set; }
+        public string? FbrStatus { get; set; }
+        public DateTime? FbrSubmittedAt { get; set; }
+
         public List<PrintTaxItemDto> Items { get; set; } = new();
     }
 

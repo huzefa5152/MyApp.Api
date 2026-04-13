@@ -12,6 +12,12 @@ namespace MyApp.Api.Models
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
 
+        // FBR Digital Invoicing
+        public string? HSCode { get; set; }
+        public int? FbrUOMId { get; set; }
+        public string? SaleType { get; set; }
+        public int? RateId { get; set; }
+
         // Navigation
         public Invoice Invoice { get; set; } = null!;
         public DeliveryItem? DeliveryItem { get; set; }

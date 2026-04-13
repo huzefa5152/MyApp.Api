@@ -15,6 +15,13 @@ namespace MyApp.Api.DTOs
         public decimal GrandTotal { get; set; }
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }
+        public int? DocumentType { get; set; }
+        public string? PaymentMode { get; set; }
+        public string? FbrInvoiceNumber { get; set; }
+        public string? FbrIRN { get; set; }
+        public string? FbrStatus { get; set; }
+        public DateTime? FbrSubmittedAt { get; set; }
+        public string? FbrErrorMessage { get; set; }
         public DateTime CreatedAt { get; set; }
         public List<InvoiceItemDto> Items { get; set; } = new();
         public List<int> ChallanNumbers { get; set; } = new();
@@ -30,6 +37,10 @@ namespace MyApp.Api.DTOs
         public string UOM { get; set; } = "";
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
+        public string? HSCode { get; set; }
+        public int? FbrUOMId { get; set; }
+        public string? SaleType { get; set; }
+        public int? RateId { get; set; }
     }
 
     public class CreateInvoiceDto
@@ -39,6 +50,8 @@ namespace MyApp.Api.DTOs
         public int ClientId { get; set; }
         public decimal GSTRate { get; set; }
         public string? PaymentTerms { get; set; }
+        public int? DocumentType { get; set; }
+        public string? PaymentMode { get; set; }
         public List<int> ChallanIds { get; set; } = new();
         public List<CreateInvoiceItemDto> Items { get; set; } = new();
         public Dictionary<int, DateTime> PoDateUpdates { get; set; } = new();
@@ -48,5 +61,10 @@ namespace MyApp.Api.DTOs
     {
         public int DeliveryItemId { get; set; }
         public decimal UnitPrice { get; set; }
+        public string? Description { get; set; }
+        public string? HSCode { get; set; }
+        public int? FbrUOMId { get; set; }
+        public string? SaleType { get; set; }
+        public int? RateId { get; set; }
     }
 }

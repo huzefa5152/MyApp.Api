@@ -4,6 +4,7 @@ import { getPendingChallansByCompany } from "../api/challanApi";
 import { createInvoice } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { formStyles } from "../theme";
+import LookupAutocomplete from "./LookupAutocomplete";
 
 const colors = {
   blue: "#0d47a1",
@@ -23,6 +24,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
   const [itemPrices, setItemPrices] = useState({});
+  const [itemDescriptions, setItemDescriptions] = useState({});
   const [commonPoDate, setCommonPoDate] = useState("");
   const [dcSearch, setDcSearch] = useState("");
   const [gstRate, setGstRate] = useState(18);
@@ -73,6 +75,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
     setSelectedClientId(e.target.value);
     setSelectedIds([]);
     setItemPrices({});
+    setItemDescriptions({});
     setCommonPoDate("");
     setDcSearch("");
     setError("");
@@ -107,8 +110,14 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
   const gstAmount = Math.round(subtotal * gstRate / 100 * 100) / 100;
   const grandTotal = subtotal + gstAmount;
 
+  const allPricesValid = allItems.length > 0 && allItems.every((i) => itemPrices[i.id] && parseFloat(itemPrices[i.id]) > 0);
+
   const handlePriceChange = (itemId, value) => {
     setItemPrices((prev) => ({ ...prev, [itemId]: value }));
+  };
+
+  const handleDescriptionChange = (itemId, value) => {
+    setItemDescriptions((prev) => ({ ...prev, [itemId]: value }));
   };
 
   const handleSubmit = async (e) => {
@@ -146,6 +155,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
         items: allItems.map((item) => ({
           deliveryItemId: item.id,
           unitPrice: parseFloat(itemPrices[item.id]),
+          description: itemDescriptions[item.id] || item.description,
         })),
         poDateUpdates,
       });
@@ -331,7 +341,16 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
                               <div key={item.id} style={styles.itemRow}>
                                 <span style={{ flex: 0.5, fontSize: "0.8rem", color: colors.textSecondary }}>{item.challanNumber}</span>
                                 <span style={{ flex: 0.8, fontSize: "0.8rem", color: colors.teal, fontWeight: 600 }}>{item.itemTypeName || "—"}</span>
-                                <span style={{ flex: 2, fontSize: "0.85rem" }}>{item.description}</span>
+                                <div style={{ flex: 2 }}>
+                                  <LookupAutocomplete
+                                    label="Description"
+                                    endpoint="/lookup/items"
+                                    value={itemDescriptions[item.id] ?? item.description}
+                                    onChange={(val) => handleDescriptionChange(item.id, val)}
+                                    inputClassName=""
+                                    inputStyle={{ ...styles.input, padding: "0.35rem 0.5rem", fontSize: "0.85rem" }}
+                                  />
+                                </div>
                                 <span style={{ flex: 0.5, textAlign: "center", fontSize: "0.85rem" }}>{item.quantity}</span>
                                 <span style={{ flex: 0.5, textAlign: "center", fontSize: "0.85rem" }}>{item.unit}</span>
                                 <div style={{ flex: 1 }}>
@@ -369,11 +388,16 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
             )}
           </div>
           <div style={formStyles.footer}>
+            {allItems.length > 0 && !allPricesValid && (
+              <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
+                All items must have a unit price greater than 0.
+              </span>
+            )}
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button
               type="submit"
-              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !selectedClientId || selectedIds.length === 0 ? 0.6 : 1 }}
-              disabled={saving || !selectedClientId || selectedIds.length === 0}
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid ? 0.6 : 1 }}
+              disabled={saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid}
             >
               {saving ? "Creating..." : "Create Invoice"}
             </button>

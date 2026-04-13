@@ -17,6 +17,7 @@ import {
   MdGroupAdd,
   MdCode,
   MdBugReport,
+  MdTune,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import "./DashboardLayout.css";
@@ -54,7 +55,7 @@ export default function DashboardLayout() {
   const userMenuRef = useRef(null);
 
   // Auto-expand Configuration submenu if a child route is active
-  const isConfigActive = location.pathname.startsWith("/companies") || location.pathname.startsWith("/Clients") || location.pathname.startsWith("/item-types") || location.pathname.startsWith("/templates");
+  const isConfigActive = location.pathname.startsWith("/companies") || location.pathname.startsWith("/Clients") || location.pathname.startsWith("/item-types") || location.pathname.startsWith("/templates") || location.pathname.startsWith("/fbr-settings");
   useEffect(() => {
     if (isConfigActive) setConfigOpen(true);
   }, [isConfigActive]);
@@ -181,6 +182,15 @@ export default function DashboardLayout() {
               >
                 <MdCode aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
                 Print Templates
+              </NavLink>
+              <NavLink
+                to="/fbr-settings"
+                className={({ isActive }) =>
+                  "dl-submenu__item" + (isActive ? " active" : "")
+                }
+              >
+                <MdTune aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
+                FBR Settings
               </NavLink>
             </div>
           </div>
@@ -351,6 +361,7 @@ function getBreadcrumb(pathname) {
     "/profile": "My Profile",
     "/users": "User Management",
     "/templates": "Print Templates",
+    "/fbr-settings": "Configuration / FBR Settings",
     "/audit-logs": "Audit Logs",
   };
   return map[pathname] ?? pathname.replace(/\//g, " / ").replace(/^\s\/\s/, "");

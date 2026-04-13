@@ -86,6 +86,9 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("Address")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("CNIC")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
@@ -95,6 +98,9 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("Email")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("FbrProvinceCode")
+                        .HasColumnType("int");
+
                     b.Property<string>("NTN")
                         .HasColumnType("nvarchar(max)");
 
@@ -103,6 +109,9 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Phone")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RegistrationType")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("STRN")
@@ -135,7 +144,25 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("CurrentInvoiceNumber")
                         .HasColumnType("int");
 
+                    b.Property<string>("FbrBusinessActivity")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FbrEnvironment")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("FbrProvinceCode")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FbrSector")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FbrToken")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("FullAddress")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("InvoiceNumberPrefix")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("LogoPath")
@@ -249,6 +276,417 @@ namespace MyApp.Api.Migrations
                     b.ToTable("DeliveryItems");
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.FbrLookup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("FbrLookups");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Category = "Province",
+                            Code = "7",
+                            IsActive = true,
+                            Label = "Punjab",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Category = "Province",
+                            Code = "8",
+                            IsActive = true,
+                            Label = "Sindh",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Category = "Province",
+                            Code = "9",
+                            IsActive = true,
+                            Label = "KPK",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Category = "Province",
+                            Code = "10",
+                            IsActive = true,
+                            Label = "Balochistan",
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 5,
+                            Category = "Province",
+                            Code = "11",
+                            IsActive = true,
+                            Label = "Islamabad",
+                            SortOrder = 5
+                        },
+                        new
+                        {
+                            Id = 6,
+                            Category = "Province",
+                            Code = "12",
+                            IsActive = true,
+                            Label = "AJK",
+                            SortOrder = 6
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Category = "Province",
+                            Code = "13",
+                            IsActive = true,
+                            Label = "GB",
+                            SortOrder = 7
+                        },
+                        new
+                        {
+                            Id = 8,
+                            Category = "BusinessActivity",
+                            Code = "Manufacturer",
+                            IsActive = true,
+                            Label = "Manufacturer",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 9,
+                            Category = "BusinessActivity",
+                            Code = "Importer",
+                            IsActive = true,
+                            Label = "Importer",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 10,
+                            Category = "BusinessActivity",
+                            Code = "Distributor",
+                            IsActive = true,
+                            Label = "Distributor",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 11,
+                            Category = "BusinessActivity",
+                            Code = "Wholesaler",
+                            IsActive = true,
+                            Label = "Wholesaler",
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Category = "BusinessActivity",
+                            Code = "Exporter",
+                            IsActive = true,
+                            Label = "Exporter",
+                            SortOrder = 5
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Category = "BusinessActivity",
+                            Code = "Retailer",
+                            IsActive = true,
+                            Label = "Retailer",
+                            SortOrder = 6
+                        },
+                        new
+                        {
+                            Id = 14,
+                            Category = "BusinessActivity",
+                            Code = "Service Provider",
+                            IsActive = true,
+                            Label = "Service Provider",
+                            SortOrder = 7
+                        },
+                        new
+                        {
+                            Id = 15,
+                            Category = "BusinessActivity",
+                            Code = "Other",
+                            IsActive = true,
+                            Label = "Other",
+                            SortOrder = 8
+                        },
+                        new
+                        {
+                            Id = 16,
+                            Category = "Sector",
+                            Code = "All Other Sectors",
+                            IsActive = true,
+                            Label = "All Other Sectors",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 17,
+                            Category = "Sector",
+                            Code = "Steel",
+                            IsActive = true,
+                            Label = "Steel",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 18,
+                            Category = "Sector",
+                            Code = "FMCG",
+                            IsActive = true,
+                            Label = "FMCG",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 19,
+                            Category = "Sector",
+                            Code = "Textile",
+                            IsActive = true,
+                            Label = "Textile",
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 20,
+                            Category = "Sector",
+                            Code = "Telecom",
+                            IsActive = true,
+                            Label = "Telecom",
+                            SortOrder = 5
+                        },
+                        new
+                        {
+                            Id = 21,
+                            Category = "Sector",
+                            Code = "Petroleum",
+                            IsActive = true,
+                            Label = "Petroleum",
+                            SortOrder = 6
+                        },
+                        new
+                        {
+                            Id = 22,
+                            Category = "Sector",
+                            Code = "Electricity Distribution",
+                            IsActive = true,
+                            Label = "Electricity Distribution",
+                            SortOrder = 7
+                        },
+                        new
+                        {
+                            Id = 23,
+                            Category = "Sector",
+                            Code = "Gas Distribution",
+                            IsActive = true,
+                            Label = "Gas Distribution",
+                            SortOrder = 8
+                        },
+                        new
+                        {
+                            Id = 24,
+                            Category = "Sector",
+                            Code = "Services",
+                            IsActive = true,
+                            Label = "Services",
+                            SortOrder = 9
+                        },
+                        new
+                        {
+                            Id = 25,
+                            Category = "Sector",
+                            Code = "Automobile",
+                            IsActive = true,
+                            Label = "Automobile",
+                            SortOrder = 10
+                        },
+                        new
+                        {
+                            Id = 26,
+                            Category = "Sector",
+                            Code = "CNG Stations",
+                            IsActive = true,
+                            Label = "CNG Stations",
+                            SortOrder = 11
+                        },
+                        new
+                        {
+                            Id = 27,
+                            Category = "Sector",
+                            Code = "Pharmaceuticals",
+                            IsActive = true,
+                            Label = "Pharmaceuticals",
+                            SortOrder = 12
+                        },
+                        new
+                        {
+                            Id = 28,
+                            Category = "Sector",
+                            Code = "Wholesale / Retails",
+                            IsActive = true,
+                            Label = "Wholesale / Retails",
+                            SortOrder = 13
+                        },
+                        new
+                        {
+                            Id = 29,
+                            Category = "RegistrationType",
+                            Code = "Registered",
+                            IsActive = true,
+                            Label = "Registered",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 30,
+                            Category = "RegistrationType",
+                            Code = "Unregistered",
+                            IsActive = true,
+                            Label = "Unregistered",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 31,
+                            Category = "RegistrationType",
+                            Code = "FTN",
+                            IsActive = true,
+                            Label = "FTN",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 32,
+                            Category = "RegistrationType",
+                            Code = "CNIC",
+                            IsActive = true,
+                            Label = "CNIC",
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 33,
+                            Category = "Environment",
+                            Code = "sandbox",
+                            IsActive = true,
+                            Label = "Sandbox",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 34,
+                            Category = "Environment",
+                            Code = "production",
+                            IsActive = true,
+                            Label = "Production",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 35,
+                            Category = "DocumentType",
+                            Code = "4",
+                            IsActive = true,
+                            Label = "Sale Invoice",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 36,
+                            Category = "DocumentType",
+                            Code = "9",
+                            IsActive = true,
+                            Label = "Debit Note",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 37,
+                            Category = "DocumentType",
+                            Code = "10",
+                            IsActive = true,
+                            Label = "Credit Note",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 38,
+                            Category = "PaymentMode",
+                            Code = "Cash",
+                            IsActive = true,
+                            Label = "Cash",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 39,
+                            Category = "PaymentMode",
+                            Code = "Credit",
+                            IsActive = true,
+                            Label = "Credit",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 40,
+                            Category = "PaymentMode",
+                            Code = "Bank Transfer",
+                            IsActive = true,
+                            Label = "Bank Transfer",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 41,
+                            Category = "PaymentMode",
+                            Code = "Cheque",
+                            IsActive = true,
+                            Label = "Cheque",
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 42,
+                            Category = "PaymentMode",
+                            Code = "Online",
+                            IsActive = true,
+                            Label = "Online",
+                            SortOrder = 5
+                        });
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.Invoice", b =>
                 {
                     b.Property<int>("Id")
@@ -273,6 +711,24 @@ namespace MyApp.Api.Migrations
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("DocumentType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FbrErrorMessage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FbrIRN")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FbrInvoiceNumber")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FbrStatus")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("FbrSubmittedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<decimal>("GSTAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -288,6 +744,9 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("InvoiceNumber")
                         .HasColumnType("int");
 
+                    b.Property<string>("PaymentMode")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("PaymentTerms")
                         .HasColumnType("nvarchar(max)");
 
@@ -300,6 +759,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("ClientId");
 
                     b.HasIndex("CompanyId");
+
+                    b.HasIndex("CompanyId", "InvoiceNumber");
 
                     b.ToTable("Invoices");
                 });
@@ -319,6 +780,12 @@ namespace MyApp.Api.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("FbrUOMId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("HSCode")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("InvoiceId")
                         .HasColumnType("int");
 
@@ -332,6 +799,12 @@ namespace MyApp.Api.Migrations
 
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
+
+                    b.Property<int?>("RateId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SaleType")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("UOM")
                         .IsRequired()
@@ -1444,7 +1917,7 @@ namespace MyApp.Api.Migrations
                     b.HasOne("MyApp.Api.Models.Client", "Client")
                         .WithMany("DeliveryChallans")
                         .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("MyApp.Api.Models.Company", "Company")
