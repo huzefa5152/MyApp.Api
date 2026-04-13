@@ -1,627 +1,776 @@
-# MyApp ERP - Complete User Guide
+# MyApp ERP - User Guide
+
+A step-by-step guide for using the Delivery Challan & Invoicing System. This guide is written for everyday users -- no technical knowledge required.
+
+---
 
 ## Table of Contents
 
-1. [System Overview](#system-overview)
-2. [Getting Started](#getting-started)
-3. [Company Setup](#company-setup)
-4. [Client Management](#client-management)
-5. [Item Types](#item-types)
-6. [Delivery Challans](#delivery-challans)
-7. [PO Import (Smart Challan Creation)](#po-import)
-8. [Invoices](#invoices)
-9. [Print Templates](#print-templates)
-10. [FBR Digital Invoicing Integration](#fbr-digital-invoicing)
-11. [User Management](#user-management)
-12. [Profile Settings](#profile-settings)
-13. [Audit Logs](#audit-logs)
-14. [Deployment & Configuration](#deployment-configuration)
+1. [Logging In](#1-logging-in)
+2. [Dashboard Overview](#2-dashboard-overview)
+3. [Setting Up a Company](#3-setting-up-a-company)
+4. [Adding Clients](#4-adding-clients)
+5. [Creating Delivery Challans](#5-creating-delivery-challans)
+6. [Understanding Challan Statuses](#6-understanding-challan-statuses)
+7. [Importing a Purchase Order (PO)](#7-importing-a-purchase-order-po)
+8. [Creating Invoices](#8-creating-invoices)
+9. [Printing & Exporting Documents](#9-printing--exporting-documents)
+10. [Customizing Print Templates](#10-customizing-print-templates)
+11. [FBR Digital Invoicing](#11-fbr-digital-invoicing)
+12. [Managing Users](#12-managing-users)
+13. [Your Profile](#13-your-profile)
+14. [Audit Logs](#14-audit-logs)
+15. [Quick Reference](#15-quick-reference)
 
 ---
 
-## 1. System Overview <a name="system-overview"></a>
+## 1. Logging In
 
-MyApp ERP is a full-stack business management system built for Pakistani businesses. It handles the complete supply chain document flow:
+When you open the application, you will see the login screen with the company branding on the left and a login form on the right.
 
-**Purchase Order -> Delivery Challan -> Invoice -> FBR Submission**
+**How to log in:**
 
-### Key Features
-- Multi-company support (manage multiple businesses from one system)
-- Delivery challan creation and tracking
-- Invoice generation from challans with GST calculation
-- PO Import from PDF or text (AI-powered with Google Gemini)
-- FBR Digital Invoicing integration (submit invoices to FBR for tax compliance)
-- Customizable print templates (HTML visual editor + Excel export)
-- Role-based user management (Admin / User)
-- Audit logging for all API errors
+1. Enter your **Username** in the first field
+2. Enter your **Password** in the second field (click the eye icon to show/hide your password)
+3. Click the **Login** button
 
-### Technology Stack
-- **Backend:** ASP.NET 9, Entity Framework Core, SQL Server
-- **Frontend:** React (Vite), served from the same backend port
-- **Authentication:** JWT (JSON Web Token), 8-hour session
-- **AI Parser:** Google Gemini 2.0 Flash (free tier)
-- **Deployment:** MonsterASP.NET via GitHub Actions (auto-deploy on push to master)
+> **Default login:** Username: `admin` / Password: `admin123`
+> Change this password immediately after your first login (see [Your Profile](#13-your-profile)).
+
+After a successful login, you will be taken to the Dashboard. Your login session lasts **8 hours**, after which you will need to log in again.
 
 ---
 
-## 2. Getting Started <a name="getting-started"></a>
+## 2. Dashboard Overview
 
-### Logging In
+The Dashboard is your home screen. It shows a quick summary of your business at a glance.
 
-1. Open the application URL in your browser
-2. Enter your **Username** and **Password**
-3. Click **Login**
-4. You will be redirected to the Dashboard
+**What you see:**
 
-Default admin credentials (first-time setup):
-- Username: `admin`
-- Password: `admin123`
+- **Welcome banner** with your name and today's date
+- **Company filter** dropdown -- select "All Companies" or a specific company to filter the counts below
+- **Overview cards** showing totals for:
+  - Companies (how many business entities are registered)
+  - Clients (total customers)
+  - Challans (total delivery challans created)
+  - Invoices (total invoices generated)
+- **Quick Actions** -- shortcut cards to jump directly to Companies, Clients, Challans, or Invoices
 
-> **Important:** Change the default password immediately after first login via Profile > Change Password.
+**Sidebar Navigation** (always visible on the left):
 
-### Dashboard
-
-After login, the Dashboard shows:
-- Total companies, clients, challans, and invoices
-- Quick links to create new challans and invoices
-- Company overview cards
-
-### Navigation
-
-The sidebar contains:
-- **Main:** Dashboard, Companies, Clients, Item Types, Challans, Invoices
-- **Management:** Templates, FBR Settings, Audit Logs (Admin only), Users (Admin only)
-- **Bottom:** Profile, Logout
+| Section | Pages |
+|---------|-------|
+| **Main** | Dashboard |
+| **Management > Configuration** | Companies List, Clients List, Item Types, Print Templates, FBR Settings |
+| **Management** | Challans, Invoices |
+| **Admin** | Users, Audit Logs |
+| **Account** | My Profile, Logout |
 
 ---
 
-## 3. Company Setup <a name="company-setup"></a>
+## 3. Setting Up a Company
 
-Companies are the top-level entities. Each company has its own challans, invoices, clients, and templates.
+Before you can create challans or invoices, you need to register at least one company.
 
-### Creating a Company
+### Creating a New Company
 
-1. Go to **Companies** from the sidebar
-2. Click **Add Company**
-3. Fill in the required fields:
-   - **Company Name** (must be unique)
-   - **Brand Name** (appears on printed documents)
-   - **Full Address**
-   - **Phone**
-   - **NTN** (National Tax Number)
-   - **STRN** (Sales Tax Registration Number)
+1. Go to **Configuration > Companies List** in the sidebar
+2. Click the **+ New Company** button (top right, blue button)
+3. Fill in the company details:
 
-### Numbering Configuration
+| Field | Required? | Description |
+|-------|-----------|-------------|
+| Company Name | Yes | Legal name of the business (e.g., "Hakimi Traders") |
+| Brand Name | No | Trade name if different from legal name |
+| Full Address | No | Complete business address |
+| Phone | No | Contact number |
+| NTN | No* | National Tax Number (required for FBR/invoicing) |
+| STRN | No* | Sales Tax Registration Number (required for FBR/invoicing) |
+| Starting Challan Number | Yes | The first challan number (e.g., 1001) |
+| Starting Invoice Number | Yes | The first invoice number (e.g., 5001) |
+| Invoice Number Prefix | No | Optional text added before invoice numbers (e.g., "INV-" makes invoices show as INV-5001) |
 
-- **Starting Challan Number:** The first challan number for this company (e.g., 1001). Once a challan is created, this cannot be changed.
-- **Starting Invoice Number:** The first invoice number (e.g., 5001). Once an invoice is created, this cannot be changed.
-- **Invoice Number Prefix:** Optional text prepended to invoice numbers for FBR submission. Example: If prefix is `INV-` and invoice number is `5001`, the FBR invoice number becomes `INV-5001`. This is useful because FBR requires alphanumeric invoice numbers, while internally the system uses sequential integers.
+> *Fields marked "No*" are optional for basic use but **required** for FBR Digital Invoicing.
 
-### Company Logo
+4. Click **Save** to create the company
 
-Click the logo area to upload a company logo (JPG/PNG/WebP). This appears on printed challans and invoices.
+### Editing a Company
 
-### FBR Settings (per company)
+- Click the **Edit** button on any company card
+- Make your changes
+- Click **Save**
 
-If you plan to use FBR Digital Invoicing, configure these in the company form:
-- **Province Code:** Select the province where your business operates
-- **Business Activity:** Manufacturer, Importer, Distributor, etc.
-- **Sector:** Steel, FMCG, Textile, etc.
-- **FBR Token:** Bearer token from the FBR IRIS portal
-- **FBR Environment:** Sandbox (testing) or Production (live)
+### Uploading a Company Logo
 
-> These fields are required before you can submit invoices to FBR.
+- Click the **Edit** button on a company card
+- Find the logo upload section
+- Select an image file (JPG, PNG, or WebP)
+- The logo will appear on printed documents if your template uses the `{{companyLogoPath}}` merge field
 
----
+### Company Cards Display
 
-## 4. Client Management <a name="client-management"></a>
-
-Clients are your buyers/customers, linked to a specific company.
-
-### Creating a Client
-
-1. Go to **Clients** from the sidebar
-2. Select the company from the dropdown
-3. Click **Add Client**
-4. Fill in:
-   - **Name** (required)
-   - **Address**
-   - **Phone**
-   - **Email**
-   - **NTN** and **STRN**
-   - **Site** (delivery location)
-
-### FBR Client Fields
-
-For FBR submission, you also need:
-- **Registration Type:** Registered, Unregistered, FTN, or CNIC
-- **CNIC:** Required if the buyer is unregistered (13-digit CNIC number)
-- **Province Code:** Destination province for tax calculation
+Each company card shows:
+- Company name and brand name
+- Address and phone
+- NTN and STRN numbers
+- Challan number range (Starting # and Current #)
+- Invoice number range (Starting # and Current #)
+- Company logo (if uploaded)
 
 ---
 
-## 5. Item Types <a name="item-types"></a>
+## 4. Adding Clients
 
-Item Types are categories for your delivery items (e.g., "Electrical", "Mechanical", "Consumables").
+Clients are the customers you deliver goods to. Each client belongs to one company.
 
-1. Go to **Item Types** from the sidebar
-2. Click **Add Item Type**
-3. Enter the type name
-4. Click Save
+### Creating a New Client
 
-Item types are optional when creating challan items but help organize your inventory.
+1. Go to **Configuration > Clients List** in the sidebar
+2. Use the **company dropdown** at the top to select which company this client belongs to
+3. Click the **+ New Client** button (top right)
+4. Fill in the client details:
 
----
+| Field | Required? | Description |
+|-------|-----------|-------------|
+| Name | Yes | Client/customer name |
+| Address | No | Delivery address |
+| Phone | No | Contact number |
+| Email | No | Email address |
+| NTN | No* | Client's National Tax Number |
+| STRN | No* | Client's Sales Tax Registration Number |
+| Site | No | Default delivery site/location |
 
-## 6. Delivery Challans <a name="delivery-challans"></a>
+**FBR Fields** (needed for FBR Digital Invoicing):
 
-A Delivery Challan (DC) is a document that accompanies goods being delivered to a client. It lists what items are being sent, in what quantity, and to where.
+| Field | When Required | Description |
+|-------|--------------|-------------|
+| Registration Type | For FBR | "Registered", "Unregistered", or "CNIC" |
+| CNIC | If Unregistered/CNIC | Client's 13-digit CNIC number |
+| Province | For FBR | Client's province (Punjab, Sindh, KPK, etc.) |
 
-### Creating a Challan (Manual)
+5. Click **Save**
 
-1. Go to **Challans** from the sidebar
-2. Select a company
-3. Click **New Challan**
-4. Fill in:
-   - **Client:** Select from dropdown (clients of the selected company)
-   - **PO Number:** Purchase order reference (optional but recommended)
-   - **PO Date:** Date of the purchase order
-   - **Delivery Date:** When goods will be delivered
-   - **Site:** Delivery location
-5. Add items:
-   - **Description:** Type to search existing items (autocomplete) or enter new
-   - **Quantity:** Number of items
-   - **Unit:** Select from autocomplete (Pcs, Kg, Mtr, etc.)
-6. Click **Save**
+### Client Cards Display
 
-### Challan Status Lifecycle
+Each client card shows the client name, address, NTN, STRN, site, and action buttons for Edit and Delete.
 
-| Status | Meaning |
-|--------|---------|
-| **Pending** | Challan created, waiting to be invoiced |
-| **No PO** | Challan has no purchase order linked |
-| **Setup Required** | Missing required fields |
-| **Invoiced** | Included in an invoice |
-| **Cancelled** | Cancelled by user |
-
-### Filtering & Search
-
-- Filter by status, client, or date range
-- Search by challan number, PO number, or description
-- Paginated results (configurable page size)
-
-### Printing a Challan
-
-- Click the print icon on any challan
-- Choose PDF or Excel export
-- The system uses the company's configured print template
+> **Note:** You cannot delete a client that has existing delivery challans. Remove the challans first.
 
 ---
 
-## 7. PO Import (Smart Challan Creation) <a name="po-import"></a>
+## 5. Creating Delivery Challans
 
-Instead of manually entering challan items, you can import them from a Purchase Order.
+A **Delivery Challan** (DC) is a document that records what items were delivered to a client. It is the starting point for the invoicing process.
+
+### Creating a New Challan
+
+1. Go to **Challans** in the sidebar
+2. Select the **company** from the dropdown at the top
+3. Click the **+ New Challan** button (top right)
+4. Fill in the challan form:
+
+| Field | Required? | Description |
+|-------|-----------|-------------|
+| Client | Yes | Select the client (dropdown lists all clients for this company) |
+| PO Number | No | Purchase Order reference number |
+| PO Date | No | Date of the purchase order |
+| Delivery Date | No | When the goods were/will be delivered |
+| Site | No | Delivery location (auto-fills from client's default site) |
+
+5. **Add Items** -- for each line item, fill in:
+   - **Item Type** -- select a category (optional)
+   - **Description** -- what was delivered (autocomplete suggests from previous entries)
+   - **Quantity** -- how many
+   - **Unit** -- unit of measure (e.g., pcs, kg, meters -- autocomplete suggests from previous entries)
+
+6. Click the **+ Add Item** button to add more line items
+7. Click **Save** to create the challan
+
+> **The challan number is auto-generated.** It takes the next number in sequence for that company. You do not choose it yourself.
+
+### Viewing Challans
+
+The Challans page shows all challans as cards in a grid layout. Each card displays:
+- **Challan number** (e.g., Challan #44556)
+- **Status badge** (colored label showing current status)
+- **Client name**
+- **PO number and date**
+- **Delivery date**
+- **Number of items**
+
+### Filtering Challans
+
+Use the filter bar at the top to narrow down challans:
+- **Search box** -- search by challan number, client name, or PO number
+- **Status dropdown** -- filter by All Status, Pending, Invoiced, Cancelled, etc.
+- **Client dropdown** -- show challans for a specific client only
+- **Date range** -- filter by delivery date range
+
+### Actions Available on Challans
+
+Depending on the challan's status, different buttons appear:
+
+| Button | What It Does |
+|--------|-------------|
+| **View** | Open challan details in a popup |
+| **Print** | Open print preview of the challan |
+| **PDF** | Download challan as PDF |
+| **Excel** | Download challan as Excel file |
+| **Edit** | Edit items (only for editable challans) |
+| **Cancel** | Mark challan as cancelled |
+| **Delete** | Permanently remove the challan |
+
+---
+
+## 6. Understanding Challan Statuses
+
+Every delivery challan has a **status** that controls what you can do with it. Understanding these statuses is key to using the system correctly.
+
+### Status Flow Diagram
+
+```
+Create Challan
+     |
+     +--[FBR fields OK + has PO]--> PENDING ----> INVOICED
+     |                                 |              |
+     +--[FBR fields OK + no PO]---> NO PO           | (if invoice deleted)
+     |                                |               v
+     +--[FBR fields missing]----> SETUP REQUIRED   PENDING
+     |
+     +-- Any editable status ------> CANCELLED
+```
+
+### Status Descriptions
+
+| Status | Color | Meaning | Can Edit? | Can Invoice? |
+|--------|-------|---------|-----------|-------------|
+| **Pending** | Green | Ready to be included in an invoice | Yes | **Yes** |
+| **No PO** | Orange | Delivery done but PO details not yet entered | Yes | No |
+| **Setup Required** | Yellow | Company or client is missing FBR fields (NTN, STRN, Province, etc.) | Yes | No |
+| **Invoiced** | Blue | Already included in an invoice | No | N/A |
+| **Cancelled** | Red | Cancelled by user | No | No |
+
+### How Status is Determined
+
+When you create a challan, the system automatically checks:
+
+1. **Are all FBR fields filled?** The system checks both the company and client for: NTN, STRN, Province, Business Activity, Sector, FBR Token, FBR Environment (company side) and NTN, STRN, Registration Type, Province (client side).
+
+2. Based on the check:
+   - If FBR fields are **missing** --> Status = **Setup Required** (with a list of what's missing)
+   - If FBR fields are **complete** and challan **has a PO number** --> Status = **Pending**
+   - If FBR fields are **complete** but **no PO number** --> Status = **No PO**
+
+### Moving Between Statuses
+
+| From | To | How |
+|------|----|-----|
+| No PO | Pending | Add PO details (the system auto-checks FBR readiness) |
+| Setup Required | Pending | Fill in the missing FBR fields on the company/client, then the system auto-updates |
+| Setup Required | No PO | Fill FBR fields but still no PO number |
+| Pending | Invoiced | Create an invoice that includes this challan |
+| Invoiced | Pending | Delete the invoice (challan reverts back) |
+| Any editable | Cancelled | Click the Cancel button |
+
+### When Can You Invoice?
+
+**Only challans with "Pending" status can be selected for invoicing.** This means:
+- The challan must have a PO number
+- The company must have all FBR fields filled
+- The client must have all FBR fields filled
+
+If a challan shows "Setup Required", check the warnings (yellow text) on the challan card -- they tell you exactly which fields are missing.
+
+---
+
+## 7. Importing a Purchase Order (PO)
+
+Instead of manually entering challan items one by one, you can import them directly from a Purchase Order document.
+
+### Two Ways to Import
+
+1. **Upload a PDF** -- Upload the PO as a PDF file
+2. **Paste Text** -- Copy-paste the PO text from email, Word document, etc.
 
 ### How to Import a PO
 
-1. Go to **Challans** page
-2. Click the teal **Import PO** button
-3. Choose import method:
+1. Go to **Challans** in the sidebar
+2. Click the **Import PO** button (top right, next to New Challan)
+3. Choose your import method:
 
-**Option A: Upload PDF**
-- Click "Choose PDF File" and select the PO document
-- The system extracts text using PdfPig and parses it with AI (Google Gemini)
-- If AI is unavailable, falls back to regex-based parsing
+**PDF Upload:**
+- Click "Upload PDF"
+- Select your PO file (maximum 10 MB)
+- Wait for the system to process it
 
-**Option B: Paste Text**
-- Copy the PO text from any source (email, website, another PDF viewer)
-- Paste it into the text area
-- Click "Parse Text"
+**Text Paste:**
+- Click "Paste Text"
+- Paste the PO content into the text box
+- Click "Parse"
 
-### After Parsing
+4. The system will extract:
+   - **PO Number** (if found)
+   - **PO Date** (if found)
+   - **Line Items** -- description, quantity, and unit for each item
 
-The system shows an editable preview:
-- **PO Number** and **PO Date** (auto-detected, editable)
-- **Client** (select from dropdown)
-- **Delivery Date** and **Site**
-- **Items table** with Description, Quantity, and Unit (all editable)
-- Add or remove items as needed
+5. Review the extracted data -- you can edit any field before saving
+6. Click **Create Challan** to generate the delivery challan with these items
 
-### How AI Parsing Works
+### How the AI Parser Works
 
-1. **PDF Upload:** Text is extracted from the PDF using word-level coordinates (PdfPig library). Words are grouped into lines by Y-position for accurate layout reconstruction.
-2. **AI Parser (Primary):** The extracted text is sent to Google Gemini 2.0 Flash with a structured prompt. Gemini identifies the PO number, date, supplier, and line items regardless of format.
-3. **Regex Parser (Fallback):** If the AI is unavailable or returns no results, a position-based regex parser handles the text. It detects table headers, maps columns by position, and extracts items.
+The system uses **Google Gemini AI** to intelligently read PO documents:
+- For **PDFs**: AI reads the document first. If AI is unavailable, falls back to pattern-based extraction
+- For **pasted text**: Uses pattern matching first (usually works well for structured text). Falls back to AI if no items found
 
-### Auto-Creation of Items and Units
-
-When you submit an imported PO, the system automatically:
-- Creates any new item descriptions not already in the database
-- Creates any new units not already in the database
-- These become available in autocomplete for future challans
-
-### Supported PO Formats
-
-The AI parser handles virtually any PO format. The regex fallback specifically handles:
-- Row-based tables (Description | Qty | Unit columns)
-- Columnar format (values above headers, common in Pakistani ERP exports like Meko Denim)
-- List-style items with embedded quantities
+> **Tip:** If the parser misses some items, try the "Paste Text" option -- copy the relevant portion of the PO and paste it. Structured text is easier to parse accurately.
 
 ---
 
-## 8. Invoices <a name="invoices"></a>
+## 8. Creating Invoices
 
-Invoices are created from one or more delivery challans for the same client.
+Invoices are generated from one or more **Pending** delivery challans. The system bundles the delivery items and lets you set prices.
 
-### Creating an Invoice
+### Creating a New Invoice
 
-1. Go to **Invoices** from the sidebar
-2. Select a company
-3. Click **Create Invoice**
-4. Select a client — the system shows all pending challans for that client
-5. Check the challans to include
-6. For each item, enter:
-   - **Description:** Pre-filled from challan, but editable (autocomplete from database)
-   - **Unit Price:** Required, must be greater than 0
-7. Set **GST Rate** (percentage, e.g., 18)
-8. Click **Create Invoice**
+1. Go to **Invoices** in the sidebar
+2. Select the **company** from the dropdown
+3. Click the **+ New Invoice** button (top right)
+4. The invoice creation form opens:
 
-### Invoice Calculations
+**Step 1: Select Challans**
+- You will see a list of all **Pending** challans for this company
+- **Check the boxes** next to the challans you want to include
+- All selected challans must be for the **same client** (the system filters automatically)
 
-The system automatically calculates:
-- **Subtotal:** Sum of (Quantity x Unit Price) for all items
-- **GST Amount:** Subtotal x GST Rate / 100
-- **Grand Total:** Subtotal + GST Amount
-- **Amount in Words:** Converted to English words (e.g., "Five Thousand Nine Hundred Only")
+**Step 2: Set Prices**
+- For each delivery item, enter the **Unit Price**
+- The system auto-calculates:
+  - **Line Total** = Quantity x Unit Price
+  - **Subtotal** = Sum of all line totals
+  - **GST Amount** = Subtotal x GST Rate / 100
+  - **Grand Total** = Subtotal + GST Amount
+  - **Amount in Words** (e.g., "Fifty Thousand and 00/100")
 
-### Invoice Number Format
+**Step 3: Invoice Details**
 
-- Internal: Sequential integer (e.g., 5001, 5002, 5003)
-- FBR Number: Prefix + integer (e.g., `INV-5001` if prefix is configured)
-- The prefix is set in Company Settings and is optional
+| Field | Required? | Description |
+|-------|-----------|-------------|
+| Invoice Date | Yes | Date of the invoice |
+| GST Rate | Yes | GST percentage (0-100%) |
+| Payment Terms | No | e.g., "Net 30 days", "Due on Receipt" |
+| Document Type | No | FBR document type (Sale Invoice, Debit Note, Credit Note) |
+| Payment Mode | No | Payment method (Cash, Bank Transfer, etc.) |
 
-### Validation Rules
+5. Click **Create Invoice**
 
-- All items must have a unit price greater than 0
-- The "Create Invoice" button is disabled until all prices are filled
-- A warning message appears if any item has no price
+### What Happens When You Create an Invoice
 
-### Printing an Invoice
+- The invoice is saved with the next auto-generated invoice number
+- All selected challans change from **Pending** to **Invoiced**
+- The items, prices, and GST calculations are locked in
+- New item descriptions are automatically saved for future autocomplete
 
-Two print formats available:
-- **Bill:** Commercial invoice for the buyer
-- **Tax Invoice:** FBR-compliant sales tax invoice
+### Invoice Cards Display
 
-Both use the company's configured print template (HTML or Excel).
+Each invoice card on the Invoices page shows:
+- **Invoice number** (e.g., Invoice #43461)
+- **Client name**
+- **Invoice date**
+- **Grand Total** (in Pakistani Rupees)
+- **Challan numbers** that are included (e.g., DC#44556)
+- **Number of items**
+- Action buttons: Bill, Bill PDF, Bill XLS, Delete
 
 ### Deleting an Invoice
 
-When you delete an invoice:
-- All associated delivery challans revert to "Pending" status
-- They become available for inclusion in a new invoice
+- Click the **Delete** button on an invoice card
+- Confirm the deletion
+- The linked challans revert back to **Pending** status (so you can re-invoice them)
+
+> **Important:** You cannot delete an invoice that has been submitted to FBR.
 
 ---
 
-## 9. Print Templates <a name="print-templates"></a>
+## 9. Printing & Exporting Documents
 
-Each company can have custom print templates for Challans, Bills, and Tax Invoices.
+### Challan Documents
 
-### Template Types
+From any challan card, you have these print/export options:
 
-| Type | Used For |
-|------|----------|
-| **Challan** | Delivery challan printout |
-| **Bill** | Commercial invoice |
-| **TaxInvoice** | FBR sales tax invoice |
+| Button | Format | Description |
+|--------|--------|-------------|
+| **Print** | Browser print | Opens print preview in browser |
+| **PDF** | PDF download | Generates and downloads a PDF file |
+| **Excel** | XLSX download | Exports to Excel using uploaded template |
 
-### Editing Templates
+### Invoice Documents
 
-1. Go to **Templates** from the sidebar
-2. Select a company and template type
-3. Choose editor mode:
-   - **Visual Editor:** Drag-and-drop WYSIWYG editor (powered by GrapeJS)
-   - **Code Editor:** Write HTML/CSS directly
-   - **Starter Templates:** Pick from built-in defaults and customize
+From any invoice card:
+
+| Button | Format | Description |
+|--------|--------|-------------|
+| **Bill** | Browser print | Business invoice (for the client) |
+| **Bill PDF** | PDF download | Business invoice as PDF |
+| **Bill XLS** | XLSX download | Business invoice as Excel |
+
+> **Note:** Tax Invoice printing (with FBR details) is available from the invoice detail view.
+
+### Print Templates
+
+All printed documents use customizable HTML templates. Each company can have its own unique template design for:
+1. **Challan** -- Delivery challan format
+2. **Bill** -- Business invoice format
+3. **Tax Invoice** -- FBR-compliant tax invoice format
+
+See [Customizing Print Templates](#10-customizing-print-templates) for how to edit these.
+
+---
+
+## 10. Customizing Print Templates
+
+The Template Editor lets you design how your printed documents look.
+
+### Accessing the Template Editor
+
+1. Go to **Configuration > Print Templates** in the sidebar
+2. Select the **company** from the first dropdown
+3. Select the **template type** from the second dropdown:
+   - Delivery Challan
+   - Bill
+   - Tax Invoice
+
+### Two Editor Modes
+
+**Code Editor** (default):
+- Write HTML and CSS directly
+- Full control over the layout
+- On the left panel, you see available **Merge Fields** organized by category (Company, Document, Client, Items)
+- Click a merge field to copy it, then paste it into your HTML
+
+**Visual Editor**:
+- Drag-and-drop interface (GrapesJS)
+- Click the **Visual** button to switch
+- Add text blocks, images, tables by dragging from the left panel
+- Double-click text to edit it and insert merge fields
 
 ### Merge Fields
 
-Templates use merge fields (placeholders) that get replaced with actual data when printing:
+Merge fields are placeholders that get replaced with real data when printing. They look like `{{fieldName}}`.
 
-**Company Fields:**
-- `{{companyBrandName}}`, `{{companyFullAddress}}`, `{{companyPhone}}`
-- `{{companyNTN}}`, `{{companySTRN}}`, `{{companyLogoUrl}}`
+**Common merge fields:**
 
-**Client Fields:**
-- `{{clientName}}`, `{{clientAddress}}`, `{{clientPhone}}`
-- `{{clientNTN}}`, `{{clientSTRN}}`
+| Field | Replaced With |
+|-------|--------------|
+| `{{companyBrandName}}` | Company brand name |
+| `{{companyLogoPath}}` | Company logo image URL |
+| `{{{nl2br companyAddress}}}` | Company address (with line breaks) |
+| `{{clientName}}` | Client name |
+| `{{challanNumber}}` | Challan number |
+| `{{invoiceNumber}}` | Invoice number |
+| `{{fmtDate deliveryDate}}` | Formatted delivery date |
+| `{{poNumber}}` | PO number |
+| `{{subtotal}}` | Invoice subtotal |
+| `{{gstRate}}` | GST percentage |
+| `{{grandTotal}}` | Invoice grand total |
+| `{{amountInWords}}` | Total in words |
 
-**Document Fields:**
-- `{{challanNumber}}`, `{{invoiceNumber}}`, `{{date}}`
-- `{{poNumber}}`, `{{poDate}}`, `{{site}}`
-- `{{subtotal}}`, `{{gstRate}}`, `{{gstAmount}}`, `{{grandTotal}}`
-- `{{amountInWords}}`
+**For item rows** (used inside `{{#each items}}...{{/each}}`):
 
-**Item Loop:**
-- `{{#items}}...{{/items}}` — repeats for each item
-- Inside: `{{items.description}}`, `{{items.quantity}}`, `{{items.uom}}`, `{{items.unitPrice}}`, `{{items.lineTotal}}`
+| Field | Replaced With |
+|-------|--------------|
+| `{{description}}` | Item description |
+| `{{quantity}}` | Quantity |
+| `{{unit}}` | Unit of measure |
+| `{{unitPrice}}` | Price per unit |
+| `{{lineTotal}}` | Quantity x Unit Price |
 
 ### Excel Templates
 
-1. Upload an Excel template (.xlsx or .xlsm, max 10MB)
-2. The system fills designated cells with data
-3. Users can export challans/invoices as filled Excel files
-4. Useful for companies that need a specific Excel format
+You can also upload an Excel template (.xlsx or .xlsm) for each template type:
+
+1. In the Template Editor, you'll see "Excel Template: UPLOADED" or a button to upload
+2. Click **Upload** to select your Excel template file
+3. The system fills named cells with data when you click "Excel" on a challan/invoice
+
+### Saving Templates
+
+- Click the **Save** button (top right, green) after making changes
+- Use **Preview** tab to see how the template will look with sample data
+- Use **Templates** button to load a pre-made starter template
+- Use **Reset** to revert to the default template
 
 ---
 
-## 10. FBR Digital Invoicing Integration <a name="fbr-digital-invoicing"></a>
+## 11. FBR Digital Invoicing
 
-The system integrates with Pakistan's Federal Board of Revenue (FBR) Digital Invoicing system for sales tax compliance.
+The system integrates with Pakistan's **Federal Board of Revenue (FBR)** Digital Invoicing portal. This allows you to electronically submit invoices to FBR and receive an **Invoice Reference Number (IRN)**.
 
-### What is FBR Digital Invoicing?
+### Prerequisites for FBR
 
-FBR requires certain businesses to electronically report their sales invoices. When you submit an invoice to FBR:
-1. FBR validates the invoice data
-2. Returns an **Invoice Reference Number (IRN)** — a unique identifier
-3. The IRN must be printed on the invoice (as text and QR code)
+Before you can submit invoices to FBR, you need:
 
-### Setup Requirements
+1. **Company registration** on the FBR IRIS portal
+2. **API Token** from FBR (obtained after IRIS registration)
+3. **IP Whitelisting** -- your server's IP must be registered with FBR
+4. **Sandbox Testing** -- pass 28 test scenarios before going live
 
-Before submitting invoices to FBR, you need:
+### Setting Up FBR - Company Side
 
-#### Step 1: Register on FBR IRIS Portal
-1. Go to the FBR IRIS portal (https://iris.fbr.gov.pk)
-2. Register your business for Digital Invoicing
-3. Choose an integrator (PRAL is free, government-provided)
-4. Get your **Bearer Token** from the portal
+1. Go to **Configuration > Companies List**
+2. Click **Edit** on your company
+3. Fill in the FBR fields:
 
-#### Step 2: IP Whitelisting
-- Your server's IP address must be whitelisted on the IRIS portal
-- For MonsterASP.NET hosting, contact your host for the server IP
+| Field | Description |
+|-------|-------------|
+| **NTN** | Your National Tax Number (must match FBR registration) |
+| **STRN** | Your Sales Tax Registration Number |
+| **Province** | Select your province (Punjab, Sindh, KPK, etc.) |
+| **Business Activity** | Manufacturer, Importer, Distributor, Wholesaler, etc. |
+| **Sector** | Industry sector (Steel, FMCG, Textile, etc.) |
+| **FBR Token** | Bearer token from FBR IRIS portal (paste it in) |
+| **FBR Environment** | "Sandbox" for testing, "Production" for real submissions |
 
-#### Step 3: Configure in MyApp
+### Setting Up FBR - Client Side
 
-**Company Settings:**
-1. Go to Companies > Edit your company
-2. In the FBR Digital Invoicing section, fill in:
-   - **Province Code:** Your business province (e.g., Sindh = 8)
-   - **Business Activity:** Your business type
-   - **Sector:** Your industry sector
-   - **FBR Token:** Paste the bearer token from IRIS
-   - **FBR Environment:** Start with "Sandbox" for testing
+1. Go to **Configuration > Clients List**
+2. Click **Edit** on each client
+3. Fill in:
 
-**Client Settings:**
-1. Go to Clients > Edit the client
-2. Fill in FBR fields:
-   - **Registration Type:** Registered / Unregistered / FTN / CNIC
-   - **CNIC:** If buyer is unregistered
-   - **Province Code:** Buyer's province (destination of supply)
-
-**Invoice Item Settings:**
-When creating invoices, each item needs:
-- **HS Code:** Harmonized System code from FBR reference data
-- **FBR UOM:** FBR's unit of measure ID
-- **Sale Type:** Type of sale (e.g., Goods at Standard Rate)
-- **Rate ID:** FBR tax rate identifier
-
-#### Step 4: Sandbox Testing
-
-FBR requires you to pass 28 test scenarios on the sandbox before going live:
-1. Set FBR Environment to **Sandbox** in company settings
-2. Create test invoices
-3. Use **Validate** to check without submitting
-4. Use **Submit** to send to FBR sandbox
-5. Verify each scenario passes
-
-#### Step 5: Go Live
-
-After passing sandbox tests:
-1. Request production access from FBR
-2. Get production bearer token
-3. Change FBR Environment to **Production** in company settings
-4. Start submitting real invoices
-
-### Submitting an Invoice to FBR
-
-1. Go to **Invoices** > select an invoice
-2. Ensure all FBR fields are filled (company, client, items)
-3. Click **Validate with FBR** first (dry run, no submission)
-4. If validation passes, click **Submit to FBR**
-5. On success:
-   - FBR returns an IRN (Invoice Reference Number)
-   - Status changes to "Submitted"
-   - IRN is stored and can be printed on the invoice
-
-### FBR Reference Data
-
-The system provides dropdown lookups for FBR-required fields, fetched from FBR's API:
-- **Provinces:** Punjab, Sindh, KP, Balochistan, etc.
-- **Document Types:** Sale Invoice, Debit Note, Credit Note
-- **HS Codes:** Thousands of product classification codes (searchable)
-- **Units of Measure:** FBR's standard UOM list
-- **Sale Types & Rates:** Tax rates by province and transaction type
+| Field | Description |
+|-------|-------------|
+| **NTN** | Client's National Tax Number |
+| **STRN** | Client's Sales Tax Registration Number |
+| **Registration Type** | "Registered" (has STRN), "Unregistered", or "CNIC" |
+| **CNIC** | Required if Registration Type is Unregistered or CNIC |
+| **Province** | Client's province |
 
 ### FBR Settings Page
 
-Accessible from the sidebar under Management:
-- View and manage FBR lookup data (provinces, business activities, sectors, etc.)
-- These are cached locally and can be manually updated
-- Categories: Province, Business Activity, Sector, Registration Type, Environment, Document Type, Payment Mode
+Go to **Configuration > FBR Settings** to manage FBR reference data:
 
-### FBR Invoice Status
+- **Provinces** -- Pakistani provinces with FBR codes
+- **Business Activity** -- Types of business activities
+- **Sectors** -- Industry sectors
+- **Document Types** -- Invoice, Debit Note, Credit Note
+- **HS Codes** -- Harmonized System commodity codes
+- **UOM** -- Units of Measure
+
+You can add, edit, or delete values in each category. These appear as dropdown options throughout the system.
+
+### Submitting an Invoice to FBR
+
+1. Create an invoice normally (see [Creating Invoices](#8-creating-invoices))
+2. Make sure all FBR fields are filled on the company and client
+3. Open the invoice detail view
+4. Click **Validate with FBR** (optional dry run)
+5. Click **Submit to FBR**
+6. If successful:
+   - You receive an **IRN** (Invoice Reference Number)
+   - The FBR status changes to "Submitted"
+   - The IRN appears on printed invoices
+7. If it fails:
+   - An error message shows what went wrong
+   - Fix the issue and try again
+
+### FBR Status Values
 
 | Status | Meaning |
 |--------|---------|
-| **Not Submitted** | Invoice created but not sent to FBR |
-| **Validated** | Passed FBR validation (dry run) |
-| **Submitted** | Successfully submitted, IRN received |
-| **Failed** | Submission failed (error message stored) |
+| (none) | Not yet submitted to FBR |
+| Draft | Validated but not submitted |
+| Submitted | Successfully submitted, IRN received |
+| Accepted | FBR accepted the invoice |
+| Rejected | FBR rejected -- check error message |
 
 ---
 
-## 11. User Management <a name="user-management"></a>
+## 12. Managing Users
 
-> Only the primary admin (seed admin) can manage users.
+Only **Admin** users can manage other users. Go to **Users** in the sidebar.
 
-### Roles
+### User List
 
-| Role | Access |
-|------|--------|
-| **Admin** | Full access including user management, audit logs |
-| **User** | Standard access to companies, clients, challans, invoices |
+The Users page shows all registered users with their:
+- Avatar/profile picture
+- Full name
+- Username
+- Role badge (Admin)
+- Join date
 
-### Creating a User
+### Adding a New User
 
-1. Go to **Users** from the sidebar (Admin only)
-2. Click **Add User**
-3. Enter: Username, Full Name, Password, Role
-4. Click Save
+1. Click **+ Add User** (top right)
+2. Fill in:
+   - **Username** -- login name (must be unique)
+   - **Full Name** -- display name
+   - **Password** -- minimum 6 characters
+   - **Role** -- Admin (currently the only role)
+3. Click **Save**
 
 ### Editing a User
 
-- Change username, full name, role
-- Optionally reset password
-- Cannot modify the primary admin account
+- Hover over a user card and click **Edit**
+- Change username, full name, or role
+- Click **Save**
 
 ### Deleting a User
 
-- Click delete on any user (with confirmation)
-- Cannot delete the primary admin or yourself
+- Hover over a user card and click **Delete**
+- Confirm the deletion
+
+> **Important:**
+> - You cannot delete the default admin user (ID 1)
+> - You cannot delete yourself
+> - You cannot change the default admin user's role
 
 ---
 
-## 12. Profile Settings <a name="profile-settings"></a>
+## 13. Your Profile
 
-Access via the **Profile** link at the bottom of the sidebar.
+Go to **My Profile** in the sidebar (bottom left) to manage your account.
 
-### Edit Profile
-- Update your **Username** (must be unique)
-- Update your **Full Name**
+### Profile Page Shows
 
-### Change Password
-- Enter your **Current Password** (verification required)
-- Enter and confirm your **New Password** (minimum 6 characters)
+- Your avatar (with upload option)
+- Your full name and username
+- Your role
 
-### Avatar
-- Click the avatar area to upload a photo (JPG, PNG, or WebP, max 7MB)
-- Click the remove button to delete your avatar
+### Updating Your Profile
 
----
+1. Click the **Edit** button next to "Profile Details"
+2. Change your username or full name
+3. Click **Save**
 
-## 13. Audit Logs <a name="audit-logs"></a>
+### Changing Your Password
 
-> Admin only
+1. Scroll down to find the "Change Password" section
+2. Enter your **Current Password**
+3. Enter your **New Password** (minimum 6 characters)
+4. Click **Change Password**
 
-The system automatically logs all API errors and exceptions.
+### Uploading an Avatar
 
-### Viewing Logs
-
-1. Go to **Audit Logs** from the sidebar
-2. Filter by:
-   - **Level:** Error, Warning, Info
-   - **Search:** Text search across messages, paths, users
-3. Click any log entry to see full details:
-   - HTTP method and path
-   - Status code
-   - Exception type and message
-   - Stack trace (for 500 errors)
-   - Request body
-
-### What Gets Logged
-
-- All HTTP 4xx and 5xx responses
-- Unhandled exceptions
-- Authentication failures (401)
-- Validation errors (400)
+1. Click the **Upload Photo** button
+2. Select an image file (JPG, PNG, or WebP, max 7 MB)
+3. Your new avatar appears immediately and shows in the sidebar and top-right corner
 
 ---
 
-## 14. Deployment & Configuration <a name="deployment-configuration"></a>
+## 14. Audit Logs
 
-### Automatic Deployment
+Audit Logs track all system errors and warnings. Only **Admin** users can view them. Go to **Audit Logs** in the sidebar.
 
-The system deploys automatically when code is pushed to the `master` branch on GitHub:
+### What's Shown
 
-1. GitHub Actions builds the React frontend (`npm run build`)
-2. Publishes the .NET API (`dotnet publish -c Release`)
-3. Deploys to MonsterASP.NET via FTP
-4. The app restarts automatically
+Each log entry shows:
+- **Time** -- when it happened
+- **Level** -- Warning (yellow) or Error (red)
+- **Method** -- HTTP method (GET, POST, PUT, DELETE)
+- **Path** -- which API endpoint was called
+- **Status** -- HTTP status code (e.g., 404, 500)
+- **User** -- who triggered it
+- **Message** -- what went wrong
 
-### Configuration Files
+### Summary Badges
 
-**appsettings.json** (base configuration):
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "your-sql-server-connection-string"
-  },
-  "Gemini": {
-    "ApiKey": "your-google-gemini-api-key",
-    "Model": "gemini-2.0-flash"
-  },
-  "Jwt": {
-    "Key": "your-secret-key-minimum-32-chars",
-    "Issuer": "MyApp.Api",
-    "Audience": "MyApp.Frontend",
-    "ExpirationHours": 8
-  }
-}
+At the top right, you see:
+- **X errors (24h)** -- number of errors in the last 24 hours
+- **X warnings (24h)** -- number of warnings in the last 24 hours
+
+### Filtering Logs
+
+- **Level dropdown** -- filter by All Levels, Error only, or Warning only
+- **Search box** -- search by path, message, or user
+- Click **Search** to apply filters
+
+### When to Check Audit Logs
+
+- When something isn't working as expected
+- When a page shows an error message
+- When FBR submission fails
+- To monitor system health
+
+---
+
+## 15. Quick Reference
+
+### Complete Application Flow
+
+```
+1. Set up Company (with NTN, STRN, FBR fields)
+          |
+2. Add Clients (with NTN, STRN, FBR fields)
+          |
+3. Create Delivery Challans (with items)
+     or Import from PO (PDF/text)
+          |
+4. Challan becomes "Pending" when ready
+          |
+5. Create Invoice (select pending challans, set prices)
+          |
+6. Print/Export (Bill, Tax Invoice, PDF, Excel)
+          |
+7. Submit to FBR (optional, receive IRN)
 ```
 
-**appsettings.Production.json** (overrides for production):
-- Connection string for production SQL Server
-- JWT settings (should match)
+### Status Quick Reference
 
-### Gemini AI Setup (for PO Import)
-
-1. Go to https://aistudio.google.com/apikey
-2. Create an API key (free tier: 1500 requests/day)
-3. Add it to `appsettings.json` under `Gemini:ApiKey`
-4. The PO Import feature will automatically use AI parsing
-5. If no key is configured, the system falls back to regex parsing
-
-### Database
-
-- SQL Server (any edition)
-- Migrations run automatically on startup
-- No manual database setup needed — EF Core handles schema creation
-
-### File Storage
-
-Files are stored in the `data/` folder:
-- `data/uploads/logos/` — Company logos
-- `data/images/avatars/` — User avatars
-- `data/uploads/excel-templates/` — Excel print templates
-
-> This folder must be persistent across deployments. On MonsterASP.NET, it's outside the deploy directory.
-
----
-
-## Quick Reference
-
-### Keyboard Shortcuts
-- **Esc** — Close any open modal/dialog
+| Want to... | Challan Must Be... |
+|-----------|-------------------|
+| Edit items | Pending, No PO, or Setup Required |
+| Add PO details | No PO or Setup Required |
+| Include in invoice | **Pending only** |
+| Print/export | Any status |
+| Cancel | Pending, No PO, or Setup Required |
+| Delete | Pending, No PO, or Setup Required |
 
 ### Common Workflows
 
-**Daily Challan Creation:**
-Companies > Select Company > Challans > New Challan > Add Items > Save
+**"I delivered goods and want to record it"**
+1. Go to Challans > + New Challan
+2. Select client, add items, save
 
-**Quick PO Import:**
-Challans > Import PO > Upload PDF > Review & Edit > Submit
+**"I received a PO and want to create a challan from it"**
+1. Go to Challans > Import PO
+2. Upload PDF or paste text
+3. Review extracted items > Create Challan
 
-**Invoice from Challans:**
-Invoices > Create Invoice > Select Client > Check Challans > Enter Prices > Create
+**"I want to bill a client for deliveries"**
+1. Go to Invoices > + New Invoice
+2. Select the pending challans
+3. Enter unit prices and GST rate
+4. Create Invoice > Print Bill
 
-**FBR Submission:**
-Invoices > Select Invoice > Validate with FBR > Submit to FBR
+**"Challan says Setup Required"**
+1. Check the warning messages on the challan
+2. Go to the company or client edit form
+3. Fill in the missing FBR fields (NTN, STRN, Province, etc.)
+4. Return to challans -- status will auto-update
+
+**"I need to change an invoice"**
+1. Delete the existing invoice (challans revert to Pending)
+2. Create a new invoice with the corrections
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| Enter | Submit forms |
+| Esc | Close modals/popups |
+| Tab | Move to next field |
 
 ### Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| 401 Unauthorized | Log out and log back in (token expired) |
-| PO Import shows no items | Try pasting text manually instead of PDF |
-| FBR submission fails | Check all required FBR fields are filled (company + client + items) |
-| Print template empty | Configure template in Templates page first |
-| Invoice number not incrementing | Check starting invoice number is set in Company settings |
+| Problem | Solution |
+|---------|----------|
+| "Session expired" message | Log in again (sessions last 8 hours) |
+| Cannot delete a client | The client has challans -- delete or re-assign them first |
+| Cannot delete an invoice | The invoice was submitted to FBR -- FBR submissions are permanent |
+| Challan stuck on "Setup Required" | Check warnings -- fill missing FBR fields on company/client |
+| PO import shows no items | Try pasting text instead of PDF, or vice versa |
+| Print looks wrong | Check the Print Template editor -- ensure merge fields are correct |
+| FBR submission fails | Check Audit Logs for details, verify token and FBR environment setting |
+
+---
+
+*This guide covers the MyApp ERP system version 2.0. For technical documentation, see [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md).*

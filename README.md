@@ -1,115 +1,139 @@
-# Delivery Challan Management System
+# MyApp ERP - Delivery Challan & Invoicing System
 
 ![.NET](https://img.shields.io/badge/.NET-9.0-512BD4?logo=dotnet&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
 ![SQL Server](https://img.shields.io/badge/SQL%20Server-2022-CC2927?logo=microsoftsqlserver&logoColor=white)
+![FBR](https://img.shields.io/badge/FBR-DI%20V1.12-green)
+![AI](https://img.shields.io/badge/AI-Gemini%202.0%20Flash-4285F4?logo=google&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
 
-A full-stack web application for managing **delivery challans** (delivery receipts/invoices) across multiple companies and clients. Built with ASP.NET Core 9 and React 19, the system streamlines the creation, tracking, and lookup of delivery documents with automatic challan numbering, dynamic line items, and autocomplete-powered data entry.
+A full-stack ERP system for Pakistani businesses to manage the complete **Purchase Order -> Delivery Challan -> Invoice -> FBR Submission** workflow. Built with ASP.NET Core 9 and React 19, featuring AI-powered PO parsing, FBR Digital Invoicing integration, customizable print templates, and multi-company support.
 
 ---
 
 ## Features
 
-- **Multi-Company Support** -- Manage multiple business entities, each with independent challan numbering sequences
-- **Client Management** -- Full CRUD operations for delivery recipients with search and filtering
-- **Delivery Challan Creation** -- Dynamic form with add/remove line items, autocomplete for descriptions and units, and automatic challan number generation per company
-- **Lookup Autocomplete** -- Item descriptions and units auto-suggest from existing data; new entries are created on the fly
-- **Challan Search & Detail View** -- Browse and inspect delivery challans with full line-item detail
-- **Responsive UI** -- Bootstrap 5 card grids, tables, and draggable modals for a polished user experience
-- **Dockerized** -- Production-ready Dockerfile included
+### Core Business
 
----
+- **Multi-Company Support** - Manage multiple business entities with independent challan/invoice numbering
+- **Client Management** - Clients with FBR-required fields (NTN, STRN, CNIC, Province, Registration Type)
+- **Delivery Challans** - Create, track, and manage deliveries with automatic status workflow
+- **Invoicing** - Bundle multiple challans into invoices with GST calculations and amount-in-words
+- **Item Types & Lookups** - Autocomplete item descriptions and units, auto-create on first use
 
-## Screenshots
+### FBR Digital Invoicing
 
-> _Screenshots coming soon. Add images to a `/docs/screenshots` directory and reference them here._
+- **Full V1.12 API Integration** - Submit invoices to FBR and receive Invoice Reference Numbers (IRN)
+- **Sandbox + Production** - Test with 28 FBR scenarios before going live
+- **Reference Data** - HS codes, provinces, UOM, sale types, SRO schedules from FBR API
+- **FBR Readiness Validation** - Auto-detects missing fields and shows warnings per challan
+- **Registration Status Check** - Verify buyer NTN/STRN against FBR database
 
-| Dashboard | Challan Creation | Company Management |
-|:---------:|:----------------:|:------------------:|
-| _placeholder_ | _placeholder_ | _placeholder_ |
+### AI-Powered PO Import
+
+- **PDF Upload** - Extract PO data from any PDF format using AI
+- **Text Paste** - Parse pasted PO text with regex (LLM fallback)
+- **Google Gemini 2.0 Flash** - Free AI parser (1500 req/day) for unstructured documents
+- **Auto-fill** - Extracted items populate challan form automatically
+- **Smart Lookup** - Auto-creates missing item descriptions and units
+
+### Print & Export
+
+- **3 Template Types** - Delivery Challan, Bill (Business Invoice), Tax Invoice
+- **Visual Editor** - GrapesJS drag-and-drop template builder
+- **Code Editor** - Direct HTML/CSS editing with 200+ merge fields
+- **Excel Export** - Upload Excel templates, export filled documents
+- **PDF Generation** - Client-side PDF via jsPDF + html2canvas
+
+### Administration
+
+- **JWT Authentication** - 8-hour token expiry, BCrypt password hashing
+- **Role-Based Access** - Admin and User roles
+- **User Management** - Create, edit, delete users (Admin only)
+- **Audit Logging** - All errors/warnings logged with request details
+- **Profile Settings** - Avatar upload, password change
 
 ---
 
 ## Tech Stack
 
 | Layer | Technology |
-|------------|--------------------------------------|
+|-------|-----------|
 | **Backend** | ASP.NET Core 9, C# 13 |
 | **ORM** | Entity Framework Core 9 |
-| **Database** | SQL Server |
+| **Database** | SQL Server 2019+ |
 | **Frontend** | React 19, React Router 7 |
 | **UI** | Bootstrap 5 |
-| **Bundler** | Vite |
-| **Container** | Docker |
+| **Build** | Vite 7 |
+| **PDF Parsing** | UglyToad.PdfPig |
+| **AI** | Google Gemini 2.0 Flash |
+| **FBR API** | V1.12 (REST/JSON) |
+| **Excel** | ClosedXML |
+| **PDF Export** | jsPDF + html2canvas |
+| **Template Editor** | GrapesJS + Handlebars |
+| **CI/CD** | GitHub Actions + FTP Deploy |
 
 ---
 
 ## Architecture
 
-The application follows an **N-Tier architecture** with clear separation of concerns:
+```
+                    React SPA (Vite + React 19)
+                              |
+                              v
+               ASP.NET Core 9 Web API (15 controllers)
+                              |
+          +-------------------+-------------------+
+          |                   |                   |
+     Services            Repositories         External APIs
+  (business logic)      (data access)              |
+          |                   |              +-----+-----+
+          v                   v              |           |
+     Entity Framework Core 9            FBR Gateway  Gemini AI
+          |
+          v
+      SQL Server (12 tables, 45+ migrations)
+```
+
+### Domain Model
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      React Frontend                     │
-│          (Vite + React 19 + React Router 7)             │
-└────────────────────────┬────────────────────────────────┘
-                         │  HTTP / JSON
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│                    API Controllers                       │
-│  CompaniesController  ClientsController  LookupController│
-│              DeliveryChallansController                  │
-└────────────────────────┬────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│                   Service Layer                          │
-│         (Business logic & validation)                    │
-│      Services/Interfaces  →  Services/Implementations   │
-└────────────────────────┬────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│                  Repository Layer                        │
-│          (Data access abstraction)                       │
-│   Repositories/Interfaces  →  Repositories/Implementations│
-└────────────────────────┬────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│              Entity Framework Core 9                     │
-│                   AppDbContext                           │
-└────────────────────────┬────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│                     SQL Server                           │
-└─────────────────────────────────────────────────────────┘
+Company ----< Client
+   |              |
+   +----< DeliveryChallan >---- Client
+   |           |         \
+   |           |          +--- Invoice
+   |           |                  |
+   |      DeliveryItem       InvoiceItem
+   |           |                  |
+   +----< PrintTemplate     (linked via DeliveryItemId)
+   |
+   +---- FBR Config (token, province, sector...)
 ```
 
 ---
 
-## Domain Model
+## Delivery Challan Workflow
 
 ```
-Company ──────< DeliveryChallan >────── Client
-                     │
-                     ├──< DeliveryItem
-                     │
-               ItemDescription (lookup)
-               Unit            (lookup)
+Create Challan
+     |
+     +--[FBR Ready + Has PO]--> Pending ----> Invoiced
+     |                              |              |
+     +--[FBR Ready + No PO]---> No PO             | (delete invoice)
+     |                            |                v
+     +--[FBR Not Ready]----> Setup Required    Pending
+     |
+     +-- Any editable status ----> Cancelled
 ```
 
-| Entity | Key Fields |
-|---------------------|-----------------------------------------------------|
-| **Company** | Name, StartingChallanNumber, CurrentChallanNumber |
-| **Client** | Name, Address, Phone, Email |
-| **DeliveryChallan** | ChallanNumber (auto-incremented per company), PoNumber, DeliveryDate |
-| **DeliveryItem** | Description, Quantity, Unit |
-| **ItemDescription** | Description (autocomplete lookup) |
-| **Unit** | Name (autocomplete lookup) |
+| Status | Meaning | Can Edit | Can Invoice |
+|--------|---------|----------|-------------|
+| **Pending** | Ready to invoice | Yes | Yes |
+| **No PO** | Missing PO details | Yes | No |
+| **Setup Required** | Missing FBR fields | Yes | No |
+| **Invoiced** | Linked to invoice | No | N/A |
+| **Cancelled** | User cancelled | No | No |
 
 ---
 
@@ -118,89 +142,82 @@ Company ──────< DeliveryChallan >────── Client
 ### Prerequisites
 
 - [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
-- [Node.js 20+](https://nodejs.org/) and npm
-- [SQL Server](https://www.microsoft.com/en-us/sql-server/) (local or Docker)
+- [Node.js 20+](https://nodejs.org/)
+- [SQL Server](https://www.microsoft.com/en-us/sql-server/) (local or remote)
 
-### Backend Setup
+### Setup
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/your-username/MyApp.Api.git
+# Clone
+git clone https://github.com/huzefa5152/MyApp.Api.git
 cd MyApp.Api
 
-# 2. Update the connection string in appsettings.json
-#    (modify "DefaultConnection" to point to your SQL Server instance)
+# Update connection string in appsettings.json
+# "DefaultConnection": "Server=YOUR_SERVER;Database=DeliveryChallanDb;..."
 
-# 3. Apply database migrations
+# Apply migrations
 dotnet ef database update
 
-# 4. Run the API
-dotnet run
+# Build frontend
+cd myapp-frontend && npm install && npm run build && cd ..
+
+# Copy frontend to wwwroot
+cp -r myapp-frontend/dist/* wwwroot/
+
+# Run (serves both API and frontend)
+dotnet run --urls "http://localhost:5134"
 ```
 
-The API will start at `https://localhost:5001` (or the port configured in `launchSettings.json`).
+Open `http://localhost:5134` - login with `admin` / `admin123`.
 
-### Frontend Setup
+### Configuration
 
-```bash
-# 1. Navigate to the frontend directory
-cd myapp-frontend
+Edit `appsettings.json`:
 
-# 2. Install dependencies
-npm install
-
-# 3. Start the development server
-npm run dev
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=...;Database=DeliveryChallanDb;..."
+  },
+  "Jwt": {
+    "Key": "<256-bit secret key>",
+    "ExpirationHours": 8
+  },
+  "Gemini": {
+    "ApiKey": "<Google AI API key (free tier)>",
+    "Model": "gemini-2.0-flash"
+  }
+}
 ```
 
-The frontend will start at `http://localhost:5173` by default.
-
-### Docker
-
-```bash
-# Build and run the container
-docker build -t myapp-api .
-docker run -p 8080:8080 myapp-api
-```
+| Config | Required | Description |
+|--------|----------|-------------|
+| `ConnectionStrings.DefaultConnection` | Yes | SQL Server connection string |
+| `Jwt.Key` | Yes | Secret key for JWT signing (min 32 chars) |
+| `Gemini.ApiKey` | No | Enables AI PO parsing ([Get free key](https://aistudio.google.com/apikey)) |
+| FBR Token | No | Set per company in UI after FBR IRIS registration |
 
 ---
 
-## API Endpoints
+## API Overview
 
-### Companies
+15 controllers with 70+ endpoints. Full specification in [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md).
 
-| Method | Endpoint | Description |
-|--------|------------------------|--------------------------|
-| GET | `/api/companies` | List all companies |
-| GET | `/api/companies/{id}` | Get company by ID |
-| POST | `/api/companies` | Create a new company |
-| PUT | `/api/companies/{id}` | Update a company |
-| DELETE | `/api/companies/{id}` | Delete a company |
-
-### Clients
-
-| Method | Endpoint | Description |
-|--------|----------------------|--------------------------|
-| GET | `/api/clients` | List all clients |
-| GET | `/api/clients/{id}` | Get client by ID |
-| POST | `/api/clients` | Create a new client |
-| DELETE | `/api/clients/{id}` | Delete a client |
-
-### Delivery Challans
-
-| Method | Endpoint | Description |
-|--------|---------------------------------------------------|---------------------------------------|
-| GET | `/api/deliverychallans/company/{companyId}` | List challans for a company |
-| POST | `/api/deliverychallans/company/{companyId}` | Create a challan for a company |
-
-### Lookups
-
-| Method | Endpoint | Description |
-|--------|------------------------|--------------------------------------|
-| GET | `/api/lookup/items` | Get item description suggestions |
-| POST | `/api/lookup/items` | Add a new item description |
-| GET | `/api/lookup/units` | Get unit suggestions |
-| POST | `/api/lookup/units` | Add a new unit |
+| Area | Base Route | Key Operations |
+|------|-----------|----------------|
+| Auth | `/api/auth` | Login, profile, password, avatar |
+| Companies | `/api/companies` | CRUD, logo upload |
+| Clients | `/api/clients` | CRUD, FBR fields |
+| Challans | `/api/deliverychallans` | CRUD, paged list, print, cancel |
+| Invoices | `/api/invoices` | Create from challans, print bill/tax |
+| PO Import | `/api/poimport` | Parse PDF/text, auto-create lookups |
+| FBR | `/api/fbr` | Submit, validate, reference data |
+| Templates | `/api/printtemplates` | CRUD, Excel upload/export |
+| Users | `/api/users` | Admin CRUD |
+| Audit Logs | `/api/auditlogs` | Paged logs, summary |
+| Lookups | `/api/lookup` | Item descriptions, units |
+| Item Types | `/api/itemtypes` | CRUD |
+| Merge Fields | `/api/mergefields` | Template field definitions |
 
 ---
 
@@ -208,84 +225,92 @@ docker run -p 8080:8080 myapp-api
 
 ```
 MyApp.Api/
-├── Controllers/
-│   ├── ClientsController.cs
-│   ├── CompaniesController.cs
-│   ├── DeliveryChallansController.cs
-│   └── LookupController.cs
-├── DTOs/                          # Data Transfer Objects
-├── Models/
-│   ├── Client.cs
-│   ├── Company.cs
-│   ├── DeliveryChallan.cs
-│   ├── DeliveryItem.cs
-│   ├── ItemDescription.cs
-│   └── Unit.cs
-├── Services/
-│   ├── Interfaces/
-│   └── Implementations/
-├── Repositories/
-│   ├── Interfaces/
-│   └── Implementations/
-├── Data/
-│   ├── AppDbContext.cs
-│   └── AppDbContextFactory.cs
-├── Migrations/
-├── Properties/
-├── myapp-frontend/                # React SPA
-│   └── src/
-│       ├── api/                   # API client functions
-│       ├── Components/
-│       │   ├── ChallanForm.jsx
-│       │   ├── ChallanList.jsx
-│       │   ├── ChallanModal.jsx
-│       │   ├── ClientForm.jsx
-│       │   ├── ClientList.jsx
-│       │   ├── CompanyForm.jsx
-│       │   ├── CompanyList.jsx
-│       │   ├── LookupAutocomplete.jsx
-│       │   └── SelectDropdown.jsx
-│       ├── pages/
-│       │   ├── ChallanPage.jsx
-│       │   ├── ClientsPage.jsx
-│       │   └── CompanyPage.jsx
-│       ├── App.jsx
-│       └── main.jsx
-├── Dockerfile
-├── Program.cs
-├── MyApp.Api.csproj
-├── MyApp.Api.sln
-├── appsettings.json
-└── appsettings.Development.json
++-- Controllers/              # 15 API controllers
++-- Services/
+|   +-- Interfaces/           # Service contracts
+|   +-- Implementations/      # Business logic
+|       +-- DeliveryChallanService.cs   (workflow + FBR validation)
+|       +-- InvoiceService.cs           (creation + calculations)
+|       +-- FbrService.cs               (FBR API V1.12 client)
+|       +-- POParserService.cs          (PDF/text parsing)
+|       +-- LlmPOParserService.cs       (Gemini AI integration)
++-- Repositories/             # Data access layer
++-- Models/                   # 12 entity models
++-- DTOs/                     # 25+ data transfer objects
++-- Data/AppDbContext.cs      # EF Core config + seeding
++-- Migrations/               # 45+ database migrations
++-- Middleware/                # Global exception handler
++-- Helpers/                  # NumberToWords, ExcelEngine
++-- myapp-frontend/
+|   +-- src/
+|       +-- pages/            # 11 page components
+|       +-- Components/       # Forms, lists, editors
+|       +-- api/              # Axios API clients
+|       +-- utils/            # Template engine, helpers
++-- wwwroot/                  # Built frontend (production)
++-- .github/workflows/        # CI/CD pipeline
++-- TECHNICAL_SPEC.md         # Detailed technical docs
++-- USER_GUIDE.md             # End-user documentation
 ```
+
+---
+
+## Deployment
+
+Automated via GitHub Actions on push to `master`:
+
+- **Frontend-only changes** -> Builds React, FTP-deploys static files (no app restart, ~2 min)
+- **Backend changes** -> Full build, publish, stop app, FTP deploy, restart (~5 min)
+- **Incremental FTP** -> Only changed files are uploaded (checksum-based sync)
+
+Publish output optimized from 79 MB to 37 MB via:
+- Excluded design-time DLLs (`PrivateAssets=all`)
+- English-only satellite assemblies
+- No PDB files in Release builds
+
+---
+
+## Documentation
+
+| Document | Audience | Description |
+|----------|----------|-------------|
+| [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md) | Developers | Full API spec, database schema, workflows |
+| [USER_GUIDE.md](USER_GUIDE.md) | End Users | Step-by-step usage guide with screenshots |
 
 ---
 
 ## Roadmap
 
-- [ ] Edit and delete existing delivery challans
-- [ ] User authentication and authorization (ASP.NET Identity / JWT)
-- [ ] Server-side pagination and sorting
-- [ ] Print-friendly challan view / PDF export
-- [ ] Dashboard analytics (challan counts, trends, top clients)
-- [ ] Bulk import/export (CSV, Excel)
-- [ ] Audit log for challan changes
-- [ ] Dark mode support
+- [x] Multi-company delivery challans
+- [x] JWT authentication & role-based access
+- [x] Server-side pagination & filtering
+- [x] Invoice generation from challans
+- [x] GST calculations with amount in words
+- [x] FBR Digital Invoicing (V1.12)
+- [x] AI-powered PO import (Gemini)
+- [x] Customizable print templates (HTML + GrapesJS)
+- [x] Excel export
+- [x] Audit logging
+- [x] User management
+- [ ] Dashboard analytics & charts
+- [ ] Dark mode
+- [ ] Mobile app (React Native)
+- [ ] Multi-language support (Urdu)
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please open an issue first to discuss what you would like to change.
+Contributions welcome! Please open an issue first to discuss changes.
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
 ---
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
