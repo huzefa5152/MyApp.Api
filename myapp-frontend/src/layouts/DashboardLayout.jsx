@@ -214,7 +214,7 @@ export default function DashboardLayout() {
             }
           >
             <MdReceipt className="dl-nav__icon" aria-hidden="true" />
-            <span className="dl-nav__label">Invoices</span>
+            <span className="dl-nav__label">Bills</span>
           </NavLink>
 
           {/* Users */}
@@ -357,7 +357,7 @@ function getBreadcrumb(pathname) {
     "/Clients/list": "Configuration / Clients List",
     "/item-types": "Configuration / Item Types",
     "/challans": "Challans",
-    "/invoices": "Invoices",
+    "/invoices": "Bills",
     "/profile": "My Profile",
     "/users": "User Management",
     "/templates": "Print Templates",

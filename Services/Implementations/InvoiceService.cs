@@ -30,6 +30,11 @@ namespace MyApp.Api.Services.Implementations
             _context = context;
         }
 
+        /// <summary>
+        /// Invoice (bill) is editable until it has been successfully submitted to FBR.
+        /// </summary>
+        private static bool IsInvoiceEditable(Invoice inv) => inv.FbrStatus != "Submitted";
+
         private static InvoiceDto ToDto(Invoice inv) => new()
         {
             Id = inv.Id,
@@ -53,6 +58,7 @@ namespace MyApp.Api.Services.Implementations
             FbrSubmittedAt = inv.FbrSubmittedAt,
             FbrErrorMessage = inv.FbrErrorMessage,
             CreatedAt = inv.CreatedAt,
+            IsEditable = IsInvoiceEditable(inv),
             Items = inv.Items.Select(ii => new InvoiceItemDto
             {
                 Id = ii.Id,
@@ -233,6 +239,119 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
+        public async Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto)
+        {
+            var invoice = await _invoiceRepo.GetByIdAsync(id);
+            if (invoice == null) return null;
+
+            if (!IsInvoiceEditable(invoice))
+                throw new InvalidOperationException("Cannot edit a bill that has been submitted to FBR.");
+
+            if (dto.GSTRate < 0 || dto.GSTRate > 100)
+                throw new InvalidOperationException("GST rate must be between 0 and 100.");
+            if (dto.Items == null || dto.Items.Count == 0)
+                throw new InvalidOperationException("At least one item is required.");
+
+            // A bill's items cannot be added or removed from here — that must happen on the
+            // linked delivery challan (which auto-syncs). Reject any attempt to add or drop items.
+            var incomingIds = dto.Items.Select(i => i.Id).ToHashSet();
+            if (dto.Items.Any(i => i.Id <= 0))
+                throw new InvalidOperationException(
+                    "Cannot add new items directly to a bill. Add the item to the linked delivery challan instead.");
+
+            var existingIds = invoice.Items.Select(ii => ii.Id).ToHashSet();
+            var missingFromPayload = existingIds.Except(incomingIds).ToList();
+            if (missingFromPayload.Count > 0)
+                throw new InvalidOperationException(
+                    "Cannot remove items directly from a bill. Remove the item from the linked delivery challan instead.");
+
+            var extrasInPayload = incomingIds.Except(existingIds).ToList();
+            if (extrasInPayload.Count > 0)
+                throw new InvalidOperationException(
+                    $"Bill item id(s) [{string.Join(", ", extrasInPayload)}] do not belong to this bill.");
+
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // Update invoice-level fields
+                invoice.GSTRate = dto.GSTRate;
+                invoice.PaymentTerms = dto.PaymentTerms;
+                invoice.DocumentType = dto.DocumentType;
+                invoice.PaymentMode = dto.PaymentMode;
+
+                // Update existing items only (description, qty, uom, unit price, HS code, sale type)
+                foreach (var itemDto in dto.Items)
+                {
+                    var existing = invoice.Items.First(ii => ii.Id == itemDto.Id);
+                    var lineTotal = Math.Round(itemDto.Quantity * itemDto.UnitPrice, 2);
+
+                    existing.Description = itemDto.Description;
+                    existing.Quantity = itemDto.Quantity;
+                    existing.UOM = itemDto.UOM;
+                    existing.UnitPrice = itemDto.UnitPrice;
+                    existing.LineTotal = lineTotal;
+                    existing.HSCode = itemDto.HSCode;
+                    existing.FbrUOMId = itemDto.FbrUOMId;
+                    existing.SaleType = itemDto.SaleType;
+                    existing.RateId = itemDto.RateId;
+                }
+
+                // Recalculate totals
+                invoice.Subtotal = invoice.Items.Sum(ii => ii.LineTotal);
+                invoice.GSTAmount = Math.Round(invoice.Subtotal * invoice.GSTRate / 100, 2);
+                invoice.GrandTotal = invoice.Subtotal + invoice.GSTAmount;
+                invoice.AmountInWords = NumberToWordsConverter.Convert(invoice.GrandTotal);
+
+                // Any edit invalidates a previous validation
+                if (invoice.FbrStatus != "Submitted")
+                {
+                    invoice.FbrStatus = null;
+                    invoice.FbrErrorMessage = null;
+                }
+
+                // Keep the underlying delivery item in sync with the bill's changes
+                // (description, quantity, UOM) so the challan reflects the same edits.
+                await SyncDeliveryItemsFromInvoiceEditAsync(invoice);
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                var reloaded = await _invoiceRepo.GetByIdAsync(id);
+                return reloaded == null ? null : ToDto(reloaded);
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// When a bill's items are edited, propagate description/quantity/UOM changes back
+        /// to the source delivery items so the challan stays in sync with the bill.
+        /// Price/HS code/sale type are bill-specific and are not synced back.
+        /// </summary>
+        private async Task SyncDeliveryItemsFromInvoiceEditAsync(Invoice invoice)
+        {
+            var deliveryItemIds = invoice.Items
+                .Where(ii => ii.DeliveryItemId.HasValue)
+                .Select(ii => ii.DeliveryItemId!.Value)
+                .ToList();
+            if (deliveryItemIds.Count == 0) return;
+
+            var deliveryItems = await _context.DeliveryItems
+                .Where(di => deliveryItemIds.Contains(di.Id))
+                .ToListAsync();
+
+            foreach (var di in deliveryItems)
+            {
+                var invItem = invoice.Items.First(ii => ii.DeliveryItemId == di.Id);
+                di.Description = invItem.Description;
+                di.Quantity = invItem.Quantity;
+                di.Unit = invItem.UOM;
+            }
+        }
+
         public async Task<bool> DeleteAsync(int id)
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
@@ -240,24 +359,32 @@ namespace MyApp.Api.Services.Implementations
 
             // Cannot delete FBR-submitted invoices
             if (invoice.FbrStatus == "Submitted")
-                throw new InvalidOperationException("Cannot delete an invoice that has been submitted to FBR.");
+                throw new InvalidOperationException("Cannot delete a bill that has been submitted to FBR.");
 
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Revert linked challans from "Invoiced" → "Pending"
+                // Revert linked challans from "Invoiced" → "Pending" or "No PO"
+                // Note: GetByIdAsync tracks these; we use tracked updates to stay consistent
+                // and avoid issues with ExecuteDelete + tracked entities in same transaction.
                 foreach (var dc in invoice.DeliveryChallans)
                 {
                     var hasPo = !string.IsNullOrWhiteSpace(dc.PoNumber);
                     dc.Status = hasPo ? "Pending" : "No PO";
                     dc.InvoiceId = null;
-                    await _challanRepo.UpdateAsync(dc);
+                    _context.DeliveryChallans.Update(dc);
                 }
 
-                // Delete invoice items then invoice
-                await _context.InvoiceItems.Where(ii => ii.InvoiceId == id).ExecuteDeleteAsync();
-                await _context.Invoices.Where(i => i.Id == id).ExecuteDeleteAsync();
+                // Remove all invoice items via tracked delete (avoids conflict with loaded graph)
+                foreach (var item in invoice.Items.ToList())
+                {
+                    _context.InvoiceItems.Remove(item);
+                }
 
+                // Remove the invoice itself
+                _context.Invoices.Remove(invoice);
+
+                await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
                 return true;
             }

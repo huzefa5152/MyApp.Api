@@ -11,6 +11,7 @@ namespace MyApp.Api.Services.Interfaces
             DateTime? dateFrom = null, DateTime? dateTo = null);
         Task<InvoiceDto?> GetByIdAsync(int id);
         Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto);
+        Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto);
         Task<bool> DeleteAsync(int id);
         Task<PrintBillDto?> GetPrintBillAsync(int invoiceId);
         Task<PrintTaxInvoiceDto?> GetPrintTaxInvoiceAsync(int invoiceId);

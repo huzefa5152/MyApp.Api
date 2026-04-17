@@ -21,6 +21,7 @@ namespace MyApp.Api.Repositories.Implementations
                                      .ThenInclude(i => i.ItemType)
                                  .Include(dc => dc.Client)
                                  .Include(dc => dc.Company)
+                                 .Include(dc => dc.Invoice)
                                  .Where(dc => dc.CompanyId == companyId)
                                  .OrderBy(dc => dc.ChallanNumber)
                                  .ToListAsync();
@@ -35,6 +36,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(dc => dc.Items).ThenInclude(i => i.ItemType)
                 .Include(dc => dc.Client)
                 .Include(dc => dc.Company)
+                .Include(dc => dc.Invoice)
                 .Where(dc => dc.CompanyId == companyId);
 
             if (!string.IsNullOrWhiteSpace(status))
@@ -76,6 +78,8 @@ namespace MyApp.Api.Repositories.Implementations
                                      .ThenInclude(i => i.ItemType)
                                  .Include(dc => dc.Client)
                                  .Include(dc => dc.Company)
+                                 .Include(dc => dc.Invoice)
+                                     .ThenInclude(inv => inv!.Items)
                                  .FirstOrDefaultAsync(dc => dc.Id == id);
         }
 

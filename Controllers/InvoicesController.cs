@@ -85,14 +85,38 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        [HttpPut("{id}")]
+        public async Task<ActionResult<InvoiceDto>> Update(int id, [FromBody] UpdateInvoiceDto dto)
+        {
+            try
+            {
+                if (dto.Items == null || !dto.Items.Any())
+                    return BadRequest(new { error = "At least one item is required." });
+                if (dto.Items.Any(i => i.UnitPrice < 0))
+                    return BadRequest(new { error = "Unit price cannot be negative." });
+                if (dto.Items.Any(i => i.Quantity <= 0))
+                    return BadRequest(new { error = "Quantity must be greater than zero." });
+                if (dto.GSTRate < 0 || dto.GSTRate > 100)
+                    return BadRequest(new { error = "GST rate must be between 0 and 100." });
+
+                var updated = await _service.UpdateAsync(id, dto);
+                if (updated == null) return NotFound(new { error = "Bill not found." });
+                return Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
             try
             {
                 var deleted = await _service.DeleteAsync(id);
-                if (!deleted) return NotFound(new { error = "Invoice not found." });
-                return Ok(new { message = "Invoice deleted and challans reverted to Pending." });
+                if (!deleted) return NotFound(new { error = "Bill not found." });
+                return Ok(new { message = "Bill deleted and challans reverted." });
             }
             catch (InvalidOperationException ex)
             {

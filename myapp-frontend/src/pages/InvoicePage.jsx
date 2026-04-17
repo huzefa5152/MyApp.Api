@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdDelete } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdDelete, MdEdit } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
+import EditBillForm from "../Components/EditBillForm";
 import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
@@ -28,6 +29,7 @@ export default function InvoicePage() {
   const [clients, setClients] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
 
   // Pagination & filters
@@ -181,7 +183,7 @@ export default function InvoicePage() {
         if (res.data?.htmlContent) template = res.data.htmlContent;
       } catch { /* use default */ }
       const html = mergeTemplate(template, data);
-      await exportToPdf(html, `Invoice # ${data.invoiceNumber} ${data.buyerName || data.clientName}`);
+      await exportToPdf(html, `Bill # ${data.invoiceNumber} ${data.buyerName || data.clientName}`);
     } catch { notify("Failed to export Tax Invoice PDF.", "error"); }
     finally { setExportingId(null); }
   };
@@ -192,7 +194,7 @@ export default function InvoicePage() {
     try {
       const { data } = await getInvoicePrintTaxInvoice(inv.id);
       const res = await exportExcel(selectedCompany.id, "TaxInvoice", data);
-      saveAs(res.data, `Invoice # ${data.invoiceNumber} ${data.buyerName || data.clientName}.xlsx`);
+      saveAs(res.data, `Bill # ${data.invoiceNumber} ${data.buyerName || data.clientName}.xlsx`);
     } catch { notify("Failed to export Tax Invoice Excel.", "error"); }
     finally { setExportingId(null); }
   };
@@ -222,7 +224,7 @@ export default function InvoicePage() {
       notify("Please validate with FBR first before submitting.", "error");
       return;
     }
-    if (!confirm(`Submit Invoice #${inv.invoiceNumber} to FBR? This action cannot be undone.`)) return;
+    if (!confirm(`Submit Bill #${inv.invoiceNumber} to FBR? This action cannot be undone.`)) return;
     setFbrLoading(inv.id + "-submit");
     try {
       const { data } = await submitInvoiceToFbr(inv.id);
@@ -242,16 +244,16 @@ export default function InvoicePage() {
 
   const handleDeleteInvoice = async (inv) => {
     if (inv.fbrStatus === "Submitted") {
-      notify("Cannot delete an FBR-submitted invoice.", "error");
+      notify("Cannot delete an FBR-submitted bill.", "error");
       return;
     }
-    if (!confirm(`Delete Invoice #${inv.invoiceNumber}? This will revert linked challans back to Pending.`)) return;
+    if (!confirm(`Delete Bill #${inv.invoiceNumber}? This will revert linked challans back to Pending.`)) return;
     try {
       await deleteInvoice(inv.id);
-      notify(`Invoice #${inv.invoiceNumber} deleted.`, "success");
+      notify(`Bill #${inv.invoiceNumber} deleted.`, "success");
       fetchInvoices(selectedCompany.id, page);
     } catch (err) {
-      notify(err.response?.data?.error || "Failed to delete invoice.", "error");
+      notify(err.response?.data?.error || "Failed to delete bill.", "error");
     }
   };
 
@@ -343,15 +345,15 @@ export default function InvoicePage() {
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={styles.headerIcon}><MdReceipt size={28} color="#fff" /></div>
           <div>
-            <h2 style={styles.pageTitle}>Invoices</h2>
+            <h2 style={styles.pageTitle}>Bills</h2>
             <p style={styles.pageSubtitle}>
-              {selectedCompany ? `${totalCount} invoice${totalCount !== 1 ? "s" : ""} for ${selectedCompany.name}` : "Select a company"}
+              {selectedCompany ? `${totalCount} bill${totalCount !== 1 ? "s" : ""} for ${selectedCompany.name}` : "Select a company"}
             </p>
           </div>
         </div>
         {companies.length > 0 && (
           <button style={styles.addBtn} onClick={() => setShowForm(true)}>
-            <MdAdd size={18} /> New Invoice
+            <MdAdd size={18} /> New Bill
           </button>
         )}
       </div>
@@ -412,7 +414,7 @@ export default function InvoicePage() {
                 <MdSearch size={15} className="filter-search-icon" />
                 <input
                   type="text"
-                  placeholder="Search Invoice#, Client..."
+                  placeholder="Search Bill#, Challan#, PO#, Client, Item..."
                   className="filter-search-input"
                   value={search}
                   onChange={handleFilterChange(setSearch)}
@@ -460,7 +462,7 @@ export default function InvoicePage() {
                   <div>
                     <h5 style={cardStyles.title}>
                       <MdReceipt style={{ color: colors.blue, marginRight: 6 }} />
-                      Invoice #{inv.invoiceNumber}
+                      Bill #{inv.invoiceNumber}
                     </h5>
                     <p style={cardStyles.text}><strong>Client:</strong> {inv.clientName}</p>
                     <p style={cardStyles.text}><strong>Date:</strong> {new Date(inv.date).toLocaleDateString()}</p>
@@ -486,25 +488,21 @@ export default function InvoicePage() {
                     <button style={styles.printBtn} onClick={() => handlePrintBill(inv)}>
                       <MdPrint size={14} /> Bill
                     </button>
-                    {inv.fbrStatus === "Submitted" && (
                     <button style={styles.taxBtn} onClick={() => handlePrintTax(inv)}>
                       <MdDescription size={14} /> Tax Invoice
                     </button>
-                    )}
                     <button style={{ ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportBillPdf(inv)}>
                       {exportingId === inv.id + "-bill-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Bill PDF
                     </button>
-                    {inv.fbrStatus === "Submitted" && (
                     <button style={{ ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxPdf(inv)}>
                       {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Tax PDF
                     </button>
-                    )}
                     {hasExcelBill && (
                       <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportBillExcel(inv)}>
                         {exportingId === inv.id + "-bill-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Bill XLS
                       </button>
                     )}
-                    {hasExcelTax && inv.fbrStatus === "Submitted" && (
+                    {hasExcelTax && (
                       <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxExcel(inv)}>
                         {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Tax XLS
                       </button>
@@ -536,9 +534,18 @@ export default function InvoicePage() {
                     )}
                     {inv.fbrStatus !== "Submitted" && (
                       <button
+                        style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
+                        onClick={() => setEditingId(inv.id)}
+                        title="Edit items and prices on this bill"
+                      >
+                        <MdEdit size={14} /> Edit
+                      </button>
+                    )}
+                    {inv.fbrStatus !== "Submitted" && (
+                      <button
                         style={{ ...styles.printBtn, backgroundColor: "#ffebee", color: "#c62828", border: "1px solid #ef9a9a" }}
                         onClick={() => handleDeleteInvoice(inv)}
-                        title="Delete this invoice and revert challans to Pending"
+                        title="Delete this bill and revert challans to Pending"
                       >
                         <MdDelete size={14} /> Delete
                       </button>
@@ -579,6 +586,24 @@ export default function InvoicePage() {
           company={selectedCompany}
           onClose={() => setShowForm(false)}
           onSaved={handleCreated}
+        />
+      )}
+
+      {editingId && (
+        <EditBillForm
+          invoiceId={editingId}
+          onClose={() => setEditingId(null)}
+          onSaved={() => {
+            setEditingId(null);
+            notify("Bill updated.", "success");
+            fetchInvoices(selectedCompany.id, page);
+            // clear any stale validation state for this bill
+            setFbrValidated((prev) => {
+              const next = new Set(prev);
+              next.delete(editingId);
+              return next;
+            });
+          }}
         />
       )}
     </div>

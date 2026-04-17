@@ -63,7 +63,10 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
       <div className="card-grid">
         {challans.map((c) => {
           const sc = statusColors[c.status] || statusColors.Pending;
-          const isEditable = c.status === "Pending" || c.status === "No PO" || c.status === "Setup Required";
+          // Backend now sends `isEditable` — use it so billed-but-not-FBR-submitted challans can also be edited
+          const isEditable = c.isEditable ?? (c.status === "Pending" || c.status === "No PO" || c.status === "Setup Required");
+          // Separate flag: delete/cancel is only allowed when NOT billed
+          const canDeleteOrCancel = c.status !== "Invoiced" && isEditable;
           const hasWarnings = c.warnings && c.warnings.length > 0;
           return (
             <div
@@ -84,7 +87,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                     <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
                       {hasWarnings && <WarningTooltip warnings={c.warnings} />}
                       <span style={{ ...styles.statusBadge, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
-                        {c.status}
+                        {c.status === "Invoiced" ? "Billed" : c.status}
                       </span>
                     </div>
                   </div>
@@ -138,13 +141,16 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                     </button>
                   )}
                   {isEditable && (
+                    <button
+                      style={{ ...styles.actionBtn, ...styles.editBtn }}
+                      onClick={() => onEditItems?.(c)}
+                      title={c.status === "Invoiced" ? "Edit items (bill will auto-sync)" : "Edit items"}
+                    >
+                      <MdEdit size={14} /> Edit
+                    </button>
+                  )}
+                  {canDeleteOrCancel && (
                     <>
-                      <button
-                        style={{ ...styles.actionBtn, ...styles.editBtn }}
-                        onClick={() => onEditItems?.(c)}
-                      >
-                        <MdEdit size={14} /> Edit
-                      </button>
                       <button
                         style={{ ...styles.actionBtn, ...styles.cancelBtn }}
                         onClick={() => onCancel?.(c)}

@@ -12,6 +12,9 @@ export const getInvoiceById = (id) =>
 export const createInvoice = (payload) =>
   httpClient.post("/invoices", payload);
 
+export const updateInvoice = (id, payload) =>
+  httpClient.put(`/invoices/${id}`, payload);
+
 export const deleteInvoice = (id) =>
   httpClient.delete(`/invoices/${id}`);
 

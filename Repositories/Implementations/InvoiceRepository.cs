@@ -50,8 +50,11 @@ namespace MyApp.Api.Repositories.Implementations
                 var term = search.ToLower();
                 query = query.Where(i =>
                     i.InvoiceNumber.ToString().Contains(term) ||
+                    (i.FbrInvoiceNumber != null && i.FbrInvoiceNumber.ToLower().Contains(term)) ||
                     (i.Client != null && i.Client.Name.ToLower().Contains(term)) ||
-                    i.Items.Any(item => item.Description.ToLower().Contains(term)));
+                    i.Items.Any(item => item.Description.ToLower().Contains(term)) ||
+                    i.DeliveryChallans.Any(dc => dc.ChallanNumber.ToString().Contains(term) ||
+                                                  (dc.PoNumber != null && dc.PoNumber.ToLower().Contains(term))));
             }
 
             var totalCount = await query.CountAsync();

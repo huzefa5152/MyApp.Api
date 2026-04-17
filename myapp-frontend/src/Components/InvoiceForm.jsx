@@ -176,7 +176,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
     <div style={formStyles.backdrop} onClick={onClose}>
       <div style={{ ...formStyles.modal, maxWidth: 850, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
-          <h5 style={formStyles.title}>Create Invoice</h5>
+          <h5 style={formStyles.title}>Create Bill</h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
@@ -211,12 +211,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
                   )}
                   {company && company.startingInvoiceNumber === 0 && (
                     <div style={{ ...styles.errorAlert, marginTop: "0.5rem", marginBottom: 0 }}>
-                      Starting invoice number not set for this company. Please configure it in the Companies page.
+                      Starting bill number not set for this company. Please configure it in the Companies page.
                     </div>
                   )}
                   {company && company.startingInvoiceNumber > 0 && (
                     <span style={{ fontSize: "0.78rem", color: colors.textSecondary, marginTop: "0.3rem", display: "block" }}>
-                      Next invoice #: {company.currentInvoiceNumber > 0 ? company.currentInvoiceNumber + 1 : company.startingInvoiceNumber}
+                      Next bill #: {company.currentInvoiceNumber > 0 ? company.currentInvoiceNumber + 1 : company.startingInvoiceNumber}
                     </span>
                   )}
                 </div>
@@ -227,7 +227,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
                     {/* Date & GST */}
                     <div style={styles.row}>
                       <div style={{ flex: 1 }}>
-                        <label style={styles.label}>Invoice Date</label>
+                        <label style={styles.label}>Bill Date</label>
                         <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
                       </div>
                       <div style={{ flex: 1 }}>
@@ -399,7 +399,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
               style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid ? 0.6 : 1 }}
               disabled={saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid}
             >
-              {saving ? "Creating..." : "Create Invoice"}
+              {saving ? "Creating..." : "Create Bill"}
             </button>
           </div>
         </form>

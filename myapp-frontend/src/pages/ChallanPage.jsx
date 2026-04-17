@@ -287,7 +287,7 @@ export default function ChallanPage() {
                 <option value="Pending">Pending</option>
                 <option value="No PO">No PO</option>
                 <option value="Setup Required">Setup Required</option>
-                <option value="Invoiced">Invoiced</option>
+                <option value="Invoiced">Billed</option>
                 <option value="Cancelled">Cancelled</option>
               </select>
               <select className="filter-select" value={clientFilter} onChange={handleFilterChange(setClientFilter)}>

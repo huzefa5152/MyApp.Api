@@ -261,7 +261,7 @@ export default function DashboardPage() {
       gradient: "linear-gradient(135deg, #1565c0 30%, #00897b 100%)",
     },
     {
-      label: "Invoices",
+      label: "Bills",
       count: counts.invoices,
       icon: <MdReceipt style={styles.statIcon} />,
       gradient: "linear-gradient(135deg, #6a1b9a 0%, #8e24aa 100%)",
@@ -298,13 +298,13 @@ export default function DashboardPage() {
       btnLabel: "Go to Challans",
     },
     {
-      title: "Invoices",
+      title: "Bills",
       icon: <MdReceipt style={{ color: "#6a1b9a", fontSize: "1.2rem" }} />,
-      desc: "Create invoices from pending challans, print bills and sales tax invoices.",
+      desc: "Create bills from pending challans, print bills and submit tax invoices to FBR.",
       borderColor: "#e1bee7",
       btnColor: "#6a1b9a",
       path: "/invoices",
-      btnLabel: "Go to Invoices",
+      btnLabel: "Go to Bills",
     },
   ];
 
