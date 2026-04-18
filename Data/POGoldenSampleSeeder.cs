@@ -84,14 +84,17 @@ namespace MyApp.Api.Data
                 RawText: LottePO505Text,
                 Expected: new ExpectedResultDto
                 {
-                    PoNumber = "POGI-001-2626-0000505",
+                    // Document-class prefix "POGI-" is stripped by the rule; we
+                    // store only the numeric tail so bills/challans match the
+                    // number the operator types off the PDF.
+                    PoNumber = "001-2626-0000505",
                     PoDate = new DateTime(2026, 4, 17),
                     Items = new List<ExpectedItemDto>
                     {
                         new() { Description = "Oil Paint (Ash White) (3.64 Ltr)", Quantity = 2, Unit = "Nos" },
                     },
                 },
-                Notes: "Alphanumeric PO number, dd/MM/yyyy date format."
+                Notes: "Alphanumeric PO number with document-class prefix ('POGI-') stripped; dd/MM/yyyy date format."
             );
 
             yield return new SeedEntry(

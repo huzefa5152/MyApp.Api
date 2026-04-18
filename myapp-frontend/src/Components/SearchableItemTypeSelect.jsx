@@ -17,6 +17,10 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightIdx, setHighlightIdx] = useState(-1);
+  // triggerRect drives the portaled dropdown's position. We recompute it on
+  // every ancestor scroll + viewport resize so the list stays glued to the
+  // trigger even when the dashboard layout (and not <body>) is the scroller.
+  const [triggerRect, setTriggerRect] = useState(null);
   const triggerRef = useRef(null);
   const searchRef = useRef(null);
   const wrapperRef = useRef(null);
@@ -69,6 +73,24 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
       // Focus search after the dropdown is rendered
       requestAnimationFrame(() => searchRef.current?.focus());
     }
+  }, [open]);
+
+  // Keep the portaled dropdown anchored to the trigger through ANY scroll —
+  // not just window scroll, because in the dashboard layout the scroll
+  // container is an inner <div>, not <body>. `capture: true` catches scroll
+  // events as they bubble up from every nested scroller.
+  useEffect(() => {
+    if (!open) return;
+    const recompute = () => {
+      if (triggerRef.current) setTriggerRect(triggerRef.current.getBoundingClientRect());
+    };
+    recompute();
+    window.addEventListener("scroll", recompute, true);
+    window.addEventListener("resize", recompute);
+    return () => {
+      window.removeEventListener("scroll", recompute, true);
+      window.removeEventListener("resize", recompute);
+    };
   }, [open]);
 
   const handlePick = (it) => {
@@ -128,10 +150,10 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
         <MdArrowDropDown size={18} style={{ flexShrink: 0 }} />
       </button>
 
-      {open && triggerRef.current && createPortal(
+      {open && triggerRect && createPortal(
         <div
           ref={wrapperRef}
-          style={styles.dropdown(triggerRef.current.getBoundingClientRect())}
+          style={styles.dropdown(triggerRect)}
           onKeyDown={handleKeyDown}
         >
           <div style={styles.searchRow}>
@@ -230,20 +252,30 @@ const styles = {
     lineHeight: 1,
   },
   hsInline: { color: "#5f6d7e", fontFamily: "monospace", fontSize: "0.75rem", marginLeft: 4 },
-  dropdown: (rect) => ({
-    position: "absolute",
-    top: rect.bottom + window.scrollY + 2,
-    left: rect.left + window.scrollX,
-    width: Math.max(rect.width, 360),
-    maxHeight: 420,
-    backgroundColor: "#fff",
-    border: "1px solid #d0d7e2",
-    borderRadius: 8,
-    boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-    zIndex: 9999,
-    display: "flex",
-    flexDirection: "column",
-  }),
+  // position: fixed uses viewport coords (no scrollY math). Anchored directly
+  // to the trigger's getBoundingClientRect(), and the component re-measures
+  // on every ancestor scroll/resize so the list tracks the trigger exactly.
+  // If the dropdown would run off the bottom of the viewport we flip it above.
+  dropdown: (rect) => {
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const listHeight = 420;
+    const flipAbove = spaceBelow < 240 && rect.top > spaceBelow;
+    return {
+      position: "fixed",
+      top: flipAbove ? undefined : rect.bottom + 2,
+      bottom: flipAbove ? window.innerHeight - rect.top + 2 : undefined,
+      left: rect.left,
+      width: Math.max(rect.width, 360),
+      maxHeight: flipAbove ? Math.min(listHeight, rect.top - 10) : Math.min(listHeight, spaceBelow - 10),
+      backgroundColor: "#fff",
+      border: "1px solid #d0d7e2",
+      borderRadius: 8,
+      boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+      zIndex: 9999,
+      display: "flex",
+      flexDirection: "column",
+    };
+  },
   searchRow: {
     display: "flex",
     alignItems: "center",

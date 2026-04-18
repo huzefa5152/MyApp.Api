@@ -101,7 +101,7 @@ namespace MyApp.Api.Data
                 "Lotte Kolson PO v1",
                 LotteSample,
                 LotteRules,
-                "Lotte Kolson (Pvt) Ltd Non-Inventory purchase orders. PO numbers are alphanumeric (POGI-...)."
+                "Lotte Kolson (Pvt) Ltd Non-Inventory purchase orders. PO numbers start with a document-class alpha prefix (e.g. 'POGI-') which is stripped — we record only the numeric tail, e.g. '001-2626-0000505'."
             );
 
             yield return (
@@ -232,11 +232,16 @@ Printed By :  Noman Aslam  Page No :1 of 1
 Print Date : 17-APR-2026 17:56:39  It's a Product of LOTTE Kolson (Pvt.) Limited
 ===PAGE-BREAK===";
 
+        // PO numbers on Lotte Kolson POs look like "POGI-001-2626-0000505".
+        // Operator prefers the numeric tail "001-2626-0000505" (the "POGI" /
+        // "POGC" / etc prefix is Lotte's internal document-class code and gets
+        // dropped in our records). The (?:[A-Za-z]+-)? optional group eats the
+        // prefix without capturing it, then group 1 captures the digit-led tail.
         private const string LotteRules = @"{
   ""version"": 1,
   ""engine"": ""anchored-v1"",
   ""fields"": {
-    ""poNumber"": { ""regex"": ""P\\.\\s*O\\.\\s*#\\s+([A-Za-z0-9/\\-]+)"", ""group"": 1, ""flags"": ""im"" },
+    ""poNumber"": { ""regex"": ""P\\.\\s*O\\.\\s*#\\s+(?:[A-Za-z]+-)?(\\d[A-Za-z0-9\\-/]*)"", ""group"": 1, ""flags"": ""im"" },
     ""poDate"":   { ""regex"": ""P\\.\\s*O\\.\\s*Date\\s+(\\d{1,2}[/\\-]\\d{1,2}[/\\-]\\d{2,4})"", ""group"": 1, ""flags"": ""im"", ""dateFormats"": [""dd/MM/yyyy"",""d/M/yyyy"",""dd-MM-yyyy""] },
     ""supplier"": { ""regex"": ""Supplier\\s*Name:?\\s+(.+?)(?:\\s{2,}|\\s+P\\.\\s*O\\.|$)"", ""group"": 1, ""flags"": ""im"" }
   },

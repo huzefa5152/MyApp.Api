@@ -391,45 +391,84 @@ namespace MyApp.Api.Services.Implementations
             return result;
         }
 
-        // Words that should never be accepted as PO numbers
+        // Words that should never be accepted as PO numbers — these show up right
+        // after "PO No" / "Purchase Order" labels when the value is on the NEXT line
+        // or when the regex accidentally captures a different label.
         private static readonly HashSet<string> _invalidPoNumbers = new(StringComparer.OrdinalIgnoreCase)
         {
             "the", "to", "a", "an", "is", "in", "on", "at", "or", "and", "of", "for", "by",
             "this", "that", "with", "from", "be", "must", "shall", "will", "may", "can",
             "not", "no", "yes", "all", "any", "each", "every", "both", "such", "other",
             "customer", "vendor", "supplier", "company", "additional", "number", "order",
-            "date", "total", "amount", "price", "qty", "quantity", "unit", "item",
-            "purchase", "invoice", "payment", "terms", "delivery", "ship", "bill"
+            "date", "total", "amount", "price", "qty", "quantity", "unit", "item", "items",
+            "purchase", "invoice", "payment", "terms", "delivery", "ship", "bill",
+            // Common false-positive labels that sit next to PO# labels in complex layouts
+            "reference", "ref", "control", "scm", "rfq", "quotation", "contact", "person",
+            "page", "print", "printed", "status", "flag", "attn", "fax", "sales", "tax",
+            "approved", "new", "valid", "yes", "bank", "other", "address", "telephone",
         };
 
+        /// <summary>
+        /// Extracts the PO number from the raw text. Tries multiple patterns in order
+        /// of specificity. Each candidate is validated against the known-bad list AND
+        /// a structural check (must look like a real PO# — alphanumeric with optional
+        /// separators, no spaces, reasonable length).
+        /// </summary>
         private static string? ExtractPONumber(string text)
         {
-            // Patterns for PO number, ordered by specificity
+            // Normalize: collapse whitespace within lines so "P.O. Number  21620" parses cleanly
+            var normalized = text;
+
+            // Ordered from most-specific to least-specific. The first valid match wins.
+            // Each pattern captures the PO value in group 1. We require word boundaries
+            // (\b) or end-of-line after the value so we don't accidentally eat the next
+            // word (which was the "Reference" bug on the Soorty PDF).
             var patterns = new[]
             {
-                @"(?:Purchase\s*Order\s*(?:No|Number|#|Num)\.?\s*[:=\-]?\s*)([A-Za-z0-9\-/\.]+)",
-                // "P. O. No 262445" or "P.O.No 262445" — allow spaces between P, O, No
-                @"(?:P\.?\s*O\.?\s*No\.?\s*[:=\-]?\s*)([A-Za-z0-9\-/\.]+)",
-                // "PO # 12345" or "PO: 12345"
-                @"(?:PO\s*[:=\-#]\s*)([A-Za-z0-9\-/\.]+)",
-                // "Purchase Order: EXAMPLE PO NUMBER" — grab alphanumeric with hyphens
-                @"(?:Purchase\s*Order\s*[:=]\s*)([A-Za-z0-9\-/\.\s]+?)(?:\n|$)",
-                // Reversed: value before label (concatenated PDF text: "262445P. O. No")
-                @"(\d{4,})\s*P\.?\s*O\.?\s*No",
+                // "P.O. Number 21620" / "P.O. Number: POGI-001-2626-0000505"
+                @"P\.?\s*O\.?\s*Number\s*[:=\-]?\s*([A-Za-z0-9][A-Za-z0-9\-/\._]*)",
+                // "Purchase Order No/Number/# 12345"
+                @"Purchase\s*Order\s*(?:No\.?|Number|#|Num\.?)\s*[:=\-]?\s*([A-Za-z0-9][A-Za-z0-9\-/\._]*)",
+                // "Purchase Order: POGI-001-2626-0000505"
+                @"Purchase\s*Order\s*[:=]\s*([A-Za-z][A-Za-z0-9\-/\._]{2,})",
+                // "P.O. # 12345" / "PO # 12345" / "PO: 12345"
+                @"P\.?\s*O\.?\s*[#:]\s*([A-Za-z0-9][A-Za-z0-9\-/\._]*)",
+                // "P. O. No 262445" — the compact "No." label
+                @"P\.?\s*O\.?\s*No\.?\s*[:=\-]?\s*([A-Za-z0-9][A-Za-z0-9\-/\._]*)",
+                // "Order No 12345"
+                @"Order\s*No\.?\s*[:=\-]?\s*([A-Za-z0-9][A-Za-z0-9\-/\._]*)",
+                // Reversed: value BEFORE the label (concatenated PDF text: "262445P. O. No")
+                @"([A-Za-z0-9][A-Za-z0-9\-/\._]{3,})\s*P\.?\s*O\.?\s*No",
             };
 
             foreach (var pattern in patterns)
             {
-                var match = Regex.Match(text, pattern, RegexOptions.IgnoreCase | RegexOptions.Multiline);
-                if (match.Success)
+                foreach (Match match in Regex.Matches(normalized, pattern, RegexOptions.IgnoreCase | RegexOptions.Multiline))
                 {
-                    var value = match.Groups[1].Value.Trim();
-                    if (value.Length >= 2 && value.Length <= 50 && !_invalidPoNumbers.Contains(value))
+                    var value = match.Groups[1].Value.Trim().TrimEnd('.', ',', ';', ':');
+                    if (IsValidPONumber(value))
                         return value;
                 }
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Structural check for PO number candidates. Rejects common false positives
+        /// (label words, too short / too long, pure punctuation, etc.).
+        /// </summary>
+        private static bool IsValidPONumber(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            if (value.Length < 2 || value.Length > 50) return false;
+            if (_invalidPoNumbers.Contains(value)) return false;
+            // Must contain at least one digit OR be recognizably alphanumeric.
+            // Pure alphabetic strings like "Reference", "Control" would fail here.
+            if (!value.Any(char.IsDigit) && value.Length < 6) return false;
+            // Not just punctuation
+            if (!value.Any(char.IsLetterOrDigit)) return false;
+            return true;
         }
 
         private static DateTime? ExtractPODate(string text)
