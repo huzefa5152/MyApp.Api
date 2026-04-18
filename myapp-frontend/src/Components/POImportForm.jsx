@@ -6,9 +6,7 @@ import { getItemTypes } from "../api/itemTypeApi";
 import { createDeliveryChallan } from "../api/challanApi";
 import { formStyles } from "../theme";
 import LookupAutocomplete from "./LookupAutocomplete";
-import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
-import { saveItemFbrDefaults } from "../api/lookupApi";
 
 const colors = {
   blue: "#0d47a1",
@@ -335,25 +333,13 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                           />
                         </div>
                         <div style={{ flex: 2.5 }}>
-                          <SmartItemAutocomplete
-                            companyId={companyId}
+                          <LookupAutocomplete
+                            label="Description"
+                            endpoint="/lookup/items"
                             value={item.description}
                             onChange={(val) => handleItemChange(idx, "description", val)}
-                            onPick={(picked) => {
-                              handleItemChange(idx, "description", picked.name || item.description);
-                              if (picked.uom) handleItemChange(idx, "unit", picked.uom);
-                              if (picked.name && (picked.hsCode || picked.saleType || picked.fbrUOMId)) {
-                                saveItemFbrDefaults({
-                                  name: picked.name,
-                                  hsCode: picked.hsCode || null,
-                                  saleType: picked.saleType || null,
-                                  fbrUOMId: picked.fbrUOMId || null,
-                                  uom: picked.uom || null,
-                                }).catch(() => {});
-                              }
-                            }}
-                            style={{ ...styles.input, padding: "0.35rem 0.5rem", fontSize: "0.85rem" }}
-                            placeholder="Search FBR or type…"
+                            inputClassName=""
+                            inputStyle={{ ...styles.input, padding: "0.35rem 0.5rem", fontSize: "0.85rem" }}
                           />
                         </div>
                         <div style={{ flex: 0.6 }}>
