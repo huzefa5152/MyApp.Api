@@ -35,7 +35,35 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         private static bool IsInvoiceEditable(Invoice inv) => inv.FbrStatus != "Submitted";
 
-        private static InvoiceDto ToDto(Invoice inv) => new()
+        /// <summary>
+        /// Computes which per-item FBR fields are missing so the UI can show a
+        /// friendly "FBR Setup Incomplete" status with actionable details.
+        /// </summary>
+        private static List<string> ComputeFbrMissing(Invoice inv)
+        {
+            var missing = new List<string>();
+            if (inv.Items == null || !inv.Items.Any()) return missing;
+            var items = inv.Items.ToList();
+            for (int i = 0; i < items.Count; i++)
+            {
+                var it = items[i];
+                var n = i + 1;
+                if (string.IsNullOrWhiteSpace(it.HSCode))
+                    missing.Add($"Item {n}: HS Code");
+                if (string.IsNullOrWhiteSpace(it.SaleType))
+                    missing.Add($"Item {n}: Sale Type");
+                if (it.FbrUOMId == null && string.IsNullOrWhiteSpace(it.UOM))
+                    missing.Add($"Item {n}: UOM");
+                if (it.UnitPrice <= 0)
+                    missing.Add($"Item {n}: Unit Price");
+            }
+            return missing;
+        }
+
+        private static InvoiceDto ToDto(Invoice inv)
+        {
+            var missing = ComputeFbrMissing(inv);
+            return new InvoiceDto
         {
             Id = inv.Id,
             InvoiceNumber = inv.InvoiceNumber,
@@ -59,11 +87,14 @@ namespace MyApp.Api.Services.Implementations
             FbrErrorMessage = inv.FbrErrorMessage,
             CreatedAt = inv.CreatedAt,
             IsEditable = IsInvoiceEditable(inv),
+            FbrReady = missing.Count == 0,
+            FbrMissing = missing,
             Items = inv.Items.Select(ii => new InvoiceItemDto
             {
                 Id = ii.Id,
                 DeliveryItemId = ii.DeliveryItemId,
-                ItemTypeName = ii.ItemTypeName,
+                ItemTypeId = ii.ItemTypeId,
+                ItemTypeName = ii.ItemType?.Name ?? ii.ItemTypeName,
                 Description = ii.Description,
                 Quantity = ii.Quantity,
                 UOM = ii.UOM,
@@ -75,7 +106,8 @@ namespace MyApp.Api.Services.Implementations
                 RateId = ii.RateId
             }).ToList(),
             ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList()
-        };
+            };
+        }
 
         public async Task<List<InvoiceDto>> GetByCompanyAsync(int companyId)
         {
@@ -139,20 +171,50 @@ namespace MyApp.Api.Services.Implementations
                     ? itemDto.Description
                     : deliveryItem.Description;
                 var lineTotal = deliveryItem.Quantity * itemDto.UnitPrice;
+
+                // ── Inherit FBR fields from the ItemType (user's catalog) if not
+                //    explicitly supplied on this line. This is the whole point of
+                //    the Item Catalog: each FBR item in the catalog carries its
+                //    HS Code / UOM / SaleType, and bill lines referencing it pick
+                //    those up automatically so the user doesn't re-enter them.
+                var itemType = deliveryItem.ItemType;
+                var effectiveUOM = !string.IsNullOrWhiteSpace(itemDto.UOM)
+                    ? itemDto.UOM!
+                    : !string.IsNullOrWhiteSpace(itemType?.UOM)
+                        ? itemType!.UOM!
+                        : deliveryItem.Unit;
+                var effectiveHSCode = !string.IsNullOrWhiteSpace(itemDto.HSCode)
+                    ? itemDto.HSCode
+                    : itemType?.HSCode;
+                var effectiveFbrUOMId = itemDto.FbrUOMId ?? itemType?.FbrUOMId;
+                var effectiveSaleType = !string.IsNullOrWhiteSpace(itemDto.SaleType)
+                    ? itemDto.SaleType
+                    : itemType?.SaleType;
+
                 invoiceItems.Add(new InvoiceItem
                 {
                     DeliveryItemId = deliveryItem.Id,
-                    ItemTypeName = deliveryItem.ItemType?.Name ?? "",
+                    ItemTypeId = itemType?.Id,        // flow the catalog linkage through
+                    ItemTypeName = itemType?.Name ?? "",
                     Description = description,
                     Quantity = deliveryItem.Quantity,
-                    UOM = deliveryItem.Unit,
+                    UOM = effectiveUOM,
                     UnitPrice = itemDto.UnitPrice,
                     LineTotal = lineTotal,
-                    HSCode = itemDto.HSCode,
-                    FbrUOMId = itemDto.FbrUOMId,
-                    SaleType = itemDto.SaleType,
+                    HSCode = effectiveHSCode,
+                    FbrUOMId = effectiveFbrUOMId,
+                    SaleType = effectiveSaleType,
                     RateId = itemDto.RateId
                 });
+
+                // Bump usage counter on the ItemType so favorites dropdowns show
+                // most-used items first.
+                if (itemType != null)
+                {
+                    itemType.UsageCount += 1;
+                    itemType.LastUsedAt = DateTime.UtcNow;
+                    _context.ItemTypes.Update(itemType);
+                }
             }
 
             var subtotal = invoiceItems.Sum(i => i.LineTotal);
@@ -279,21 +341,55 @@ namespace MyApp.Api.Services.Implementations
                 invoice.DocumentType = dto.DocumentType;
                 invoice.PaymentMode = dto.PaymentMode;
 
-                // Update existing items only (description, qty, uom, unit price, HS code, sale type)
+                // Preload any referenced ItemTypes in one round-trip
+                var referencedTypeIds = dto.Items
+                    .Where(i => i.ItemTypeId.HasValue)
+                    .Select(i => i.ItemTypeId!.Value)
+                    .Distinct()
+                    .ToList();
+                var typeMap = referencedTypeIds.Count == 0
+                    ? new Dictionary<int, ItemType>()
+                    : await _context.ItemTypes
+                        .Where(t => referencedTypeIds.Contains(t.Id))
+                        .ToDictionaryAsync(t => t.Id);
+
+                // Update existing items. If the line has an ItemTypeId set, re-derive
+                // UOM / HS Code / Sale Type / FbrUOMId from that ItemType — the user
+                // edits these indirectly by picking a different ItemType on the bill.
                 foreach (var itemDto in dto.Items)
                 {
                     var existing = invoice.Items.First(ii => ii.Id == itemDto.Id);
                     var lineTotal = Math.Round(itemDto.Quantity * itemDto.UnitPrice, 2);
 
+                    ItemType? pickedType = null;
+                    if (itemDto.ItemTypeId.HasValue && typeMap.TryGetValue(itemDto.ItemTypeId.Value, out var t))
+                        pickedType = t;
+
                     existing.Description = itemDto.Description;
                     existing.Quantity = itemDto.Quantity;
-                    existing.UOM = itemDto.UOM;
                     existing.UnitPrice = itemDto.UnitPrice;
                     existing.LineTotal = lineTotal;
-                    existing.HSCode = itemDto.HSCode;
-                    existing.FbrUOMId = itemDto.FbrUOMId;
-                    existing.SaleType = itemDto.SaleType;
                     existing.RateId = itemDto.RateId;
+
+                    if (pickedType != null)
+                    {
+                        // Item Type drives FBR fields — overwrite with catalog values
+                        existing.ItemTypeId = pickedType.Id;
+                        existing.ItemTypeName = pickedType.Name;
+                        existing.UOM = pickedType.UOM ?? "";
+                        existing.FbrUOMId = pickedType.FbrUOMId;
+                        existing.HSCode = pickedType.HSCode;
+                        existing.SaleType = pickedType.SaleType;
+                    }
+                    else
+                    {
+                        // No ItemType on the line → fall back to DTO-supplied FBR fields
+                        existing.ItemTypeId = null;
+                        existing.UOM = itemDto.UOM;
+                        existing.HSCode = itemDto.HSCode;
+                        existing.FbrUOMId = itemDto.FbrUOMId;
+                        existing.SaleType = itemDto.SaleType;
+                    }
                 }
 
                 // Recalculate totals

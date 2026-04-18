@@ -1,8 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { MdAdd, MdClose, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
+import SmartItemAutocomplete from "./SmartItemAutocomplete";
+import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import SelectDropdown from "./SelectDropdown";
 import { getItemTypes } from "../api/itemTypeApi";
+import { saveItemFbrDefaults } from "../api/lookupApi";
 import { formStyles } from "../theme";
 
 const colors = {
@@ -46,6 +49,28 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
     const newItems = [...items];
     newItems[index][field] = value;
     setItems(newItems);
+  };
+
+  // Fires when user picks from the SmartItemAutocomplete dropdown
+  // (either a SAVED local item or an FBR catalog entry).
+  // Fills description + unit in one shot, and also remembers the HS code /
+  // sale type per description so the bill can auto-fill them later.
+  const handleItemPick = (index, picked) => {
+    const newItems = [...items];
+    if (picked.name) newItems[index].description = picked.name;
+    if (picked.uom) newItems[index].unit = picked.uom;
+    setItems(newItems);
+
+    // Remember FBR defaults for this description so future bills auto-fill
+    if (picked.name && (picked.hsCode || picked.saleType || picked.fbrUOMId)) {
+      saveItemFbrDefaults({
+        name: picked.name,
+        hsCode: picked.hsCode || null,
+        saleType: picked.saleType || null,
+        fbrUOMId: picked.fbrUOMId || null,
+        uom: picked.uom || null,
+      }).catch(() => {});
+    }
   };
 
   const addItem = () => {
@@ -157,22 +182,34 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                   <div key={idx} style={styles.itemRow}>
                     <div style={styles.itemIndex}>{idx + 1}</div>
 
-                    {/* Item Type */}
-                    <div style={{ width: 120, flexShrink: 0 }}>
-                      <select
-                        style={{ ...styles.input, padding: "0.55rem 0.35rem", fontSize: "0.82rem" }}
-                        value={item.itemTypeId}
-                        onChange={(e) => handleItemChange(idx, "itemTypeId", parseInt(e.target.value) || "")}
-                      >
-                        <option value="">Type...</option>
-                        {itemTypes.map((t) => (
-                          <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
-                      </select>
+                    {/* Item Type — searchable dropdown; picking one auto-fills description + unit */}
+                    <div style={{ width: 180, flexShrink: 0 }}>
+                      <SearchableItemTypeSelect
+                        items={itemTypes}
+                        value={item.itemTypeId || ""}
+                        onChange={(newId, picked) => {
+                          const newItems = [...items];
+                          newItems[idx].itemTypeId = newId ? parseInt(newId) : "";
+                          if (picked) {
+                            if (!newItems[idx].description?.trim()) newItems[idx].description = picked.name;
+                            if (picked.uom) newItems[idx].unit = picked.uom;
+                          }
+                          setItems(newItems);
+                        }}
+                        placeholder="Pick item…"
+                        style={{ padding: "0.55rem 0.55rem", fontSize: "0.82rem" }}
+                      />
                     </div>
 
                     <div style={{ flex: 2, minWidth: 0 }}>
-                      <LookupAutocomplete label="Description" endpoint="/lookup/items" value={item.description} onChange={(val) => handleItemChange(idx, "description", val)} />
+                      <SmartItemAutocomplete
+                        companyId={companyId}
+                        value={item.description}
+                        onChange={(val) => handleItemChange(idx, "description", val)}
+                        onPick={(picked) => handleItemPick(idx, picked)}
+                        style={{ ...styles.input, padding: "0.55rem 0.5rem", fontSize: "0.82rem" }}
+                        placeholder="Search FBR or type…"
+                      />
                     </div>
 
                     <div style={{ width: 58, flexShrink: 0 }}>

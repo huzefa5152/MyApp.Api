@@ -24,6 +24,15 @@ namespace MyApp.Api.DTOs
         public string? FbrErrorMessage { get; set; }
         public DateTime CreatedAt { get; set; }
         public bool IsEditable { get; set; }
+        /// <summary>
+        /// True when every item has HSCode + SaleType + UOM (either FbrUOMId or a non-empty UOM string),
+        /// meaning the bill has enough data to be validated/submitted to FBR.
+        /// </summary>
+        public bool FbrReady { get; set; }
+        /// <summary>
+        /// Human-readable list of what's missing for FBR submission. Empty when FbrReady == true.
+        /// </summary>
+        public List<string> FbrMissing { get; set; } = new();
         public List<InvoiceItemDto> Items { get; set; } = new();
         public List<int> ChallanNumbers { get; set; } = new();
     }
@@ -32,6 +41,8 @@ namespace MyApp.Api.DTOs
     {
         public int Id { get; set; }
         public int? DeliveryItemId { get; set; }
+        /// <summary>FK to ItemType (FBR catalog entry) driving HS/UOM/Sale Type on this line.</summary>
+        public int? ItemTypeId { get; set; }
         public string ItemTypeName { get; set; } = "";
         public string Description { get; set; } = "";
         public int Quantity { get; set; }
@@ -51,7 +62,9 @@ namespace MyApp.Api.DTOs
         public int ClientId { get; set; }
         public decimal GSTRate { get; set; }
         public string? PaymentTerms { get; set; }
+        /// <summary>FBR document type: 4 = Sale Invoice (default), 9 = Debit Note, 10 = Credit Note.</summary>
         public int? DocumentType { get; set; }
+        /// <summary>Optional payment mode (Cash / Credit / Bank Transfer / Cheque / Online).</summary>
         public string? PaymentMode { get; set; }
         public List<int> ChallanIds { get; set; } = new();
         public List<CreateInvoiceItemDto> Items { get; set; } = new();
@@ -63,6 +76,8 @@ namespace MyApp.Api.DTOs
         public int DeliveryItemId { get; set; }
         public decimal UnitPrice { get; set; }
         public string? Description { get; set; }
+        /// <summary>Optional override of the delivery item's UOM (e.g. the FBR-matched UOM).</summary>
+        public string? UOM { get; set; }
         public string? HSCode { get; set; }
         public int? FbrUOMId { get; set; }
         public string? SaleType { get; set; }
@@ -87,6 +102,12 @@ namespace MyApp.Api.DTOs
     {
         public int Id { get; set; }  // 0 for new items, >0 for existing
         public int? DeliveryItemId { get; set; }
+        /// <summary>
+        /// When set, the server re-derives HS Code / UOM / Sale Type / FbrUOMId
+        /// from this ItemType — overriding whatever was on the line before.
+        /// The UOM/HSCode/SaleType fields in this DTO are ignored when ItemTypeId is set.
+        /// </summary>
+        public int? ItemTypeId { get; set; }
         public string Description { get; set; } = "";
         public int Quantity { get; set; }
         public string UOM { get; set; } = "";

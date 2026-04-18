@@ -9,6 +9,11 @@ export const getFbrDocTypes = (companyId) =>
 export const getFbrHSCodes = (companyId, search) =>
   httpClient.get(`/fbr/hscodes/${companyId}`, { params: { search } });
 
+// Get allowed UOMs for a specific HS code (FBR V1.12 §5.9).
+// annexureId = 3 for sales annexure (default).
+export const getFbrHsUom = (companyId, hsCode, annexureId = 3) =>
+  httpClient.get(`/fbr/hsuom/${companyId}`, { params: { hsCode, annexureId } });
+
 export const getFbrUOMs = (companyId) =>
   httpClient.get(`/fbr/uom/${companyId}`);
 

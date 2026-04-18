@@ -74,6 +74,8 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                     .ThenInclude(ii => ii.DeliveryItem)
+                .Include(i => i.Items)
+                    .ThenInclude(ii => ii.ItemType)
                 .Include(i => i.DeliveryChallans)
                     .ThenInclude(dc => dc.Items)
                 .FirstOrDefaultAsync(i => i.Id == id);

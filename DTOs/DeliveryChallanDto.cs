@@ -4,6 +4,7 @@
     {
         public int Id { get; set; }
         public int ChallanNumber { get; set; }
+        public int CompanyId { get; set; }
         public int ClientId { get; set; }
         public string ClientName { get; set; } = "";
         public string PoNumber { get; set; } = "";

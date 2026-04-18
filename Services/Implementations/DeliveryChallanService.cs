@@ -48,6 +48,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 Id = dc.Id,
                 ChallanNumber = dc.ChallanNumber,
+                CompanyId = dc.CompanyId,
                 ClientId = dc.ClientId,
                 ClientName = dc.Client?.Name ?? "",
                 PoNumber = dc.PoNumber,

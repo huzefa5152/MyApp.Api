@@ -60,6 +60,34 @@ namespace MyApp.Api.Services.Implementations
             _auditLog = auditLogService;
         }
 
+        // ── Text sanitization for FBR payloads ──────────────────
+        //
+        // FBR's JSON parser rejects control characters (newlines, tabs, CR) even
+        // when they're properly escaped as \n / \t / \r in JSON strings — it
+        // returns {"Code":"03","error":"Requested JSON in Malformed"}. We also
+        // collapse runs of whitespace and trim so addresses stored with line
+        // breaks in the DB (e.g. multi-line business addresses) go through as
+        // single-line text.
+        private static string SanitizeForFbr(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "";
+            // Replace newlines, carriage returns, tabs with a single space
+            var cleaned = new System.Text.StringBuilder(value.Length);
+            foreach (var c in value)
+            {
+                if (c == '\n' || c == '\r' || c == '\t')
+                    cleaned.Append(' ');
+                else if (char.IsControl(c))
+                    continue; // skip other control characters
+                else
+                    cleaned.Append(c);
+            }
+            // Collapse multiple spaces to one, then trim
+            return System.Text.RegularExpressions.Regex
+                .Replace(cleaned.ToString(), @"\s+", " ")
+                .Trim();
+        }
+
         // ── URL helpers ─────────────────────────────────────────
 
         private static string GetSubmitUrl(Company company)
@@ -104,22 +132,45 @@ namespace MyApp.Api.Services.Implementations
             return map.TryGetValue(provinceCode.Value, out var name) ? name : "";
         }
 
+        /// <summary>
+        /// Resolves a UOM for the FBR payload.
+        ///  1. If FbrUOMId is set and maps to an FBR UOM description → use that.
+        ///  2. Else if the fallback (local UOM) matches an FBR UOM description
+        ///     (case-insensitive, punctuation-tolerant) → use the FBR description.
+        ///  3. Else fall back to the raw local UOM.
+        /// This lets users submit to FBR even if they didn't explicitly pick an
+        /// FBR UOM id, as long as their local unit name matches the FBR catalog.
+        /// </summary>
         private async Task<string> ResolveUomDesc(Company company, int? uomId, string? fallback)
         {
-            if (uomId == null) return fallback ?? "";
-
             if (!_uomCache.TryGetValue(company.Id, out var map))
             {
                 try
                 {
                     var uoms = await GetUOMsAsync(company.Id);
                     map = uoms.ToDictionary(u => u.UOM_ID, u => u.Description);
-                    _uomCache.TryAdd(company.Id, map); // Thread-safe, only cache successful results
+                    _uomCache.TryAdd(company.Id, map);
                 }
                 catch { map = new Dictionary<int, string>(); }
             }
 
-            return map.TryGetValue(uomId.Value, out var desc) ? desc : fallback ?? "";
+            // 1. Explicit FBR UOM id wins
+            if (uomId.HasValue && map.TryGetValue(uomId.Value, out var desc))
+                return desc;
+
+            // 2. Try to fuzzy-match the local UOM string against FBR descriptions
+            if (!string.IsNullOrWhiteSpace(fallback))
+            {
+                var normalized = Normalize(fallback);
+                var match = map.Values.FirstOrDefault(v => Normalize(v) == normalized);
+                if (match != null) return match;
+            }
+
+            // 3. Fall back to the local UOM string (FBR may still accept it)
+            return fallback ?? "";
+
+            static string Normalize(string s) =>
+                new string(s.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
         }
 
         // ── Pre-validation (before calling FBR) ─────────────────
@@ -216,8 +267,10 @@ namespace MyApp.Api.Services.Implementations
                         errors.Add($"Item {n}: HS Code is required. [FBR 0019]");
                     if (string.IsNullOrWhiteSpace(item.SaleType))
                         errors.Add($"Item {n}: Sale Type is required. [FBR 0013]");
-                    if (item.FbrUOMId == null)
-                        errors.Add($"Item {n}: FBR UOM is required. Select a UOM from the FBR reference list.");
+                    // UOM: we accept either FbrUOMId (preferred) OR a non-empty UOM string
+                    // that will be matched against the FBR UOM list at submit time.
+                    if (item.FbrUOMId == null && string.IsNullOrWhiteSpace(item.UOM))
+                        errors.Add($"Item {n}: UOM is required.");
                     if (item.Quantity <= 0)
                         errors.Add($"Item {n}: Quantity must be greater than zero. [FBR 0098]");
                     if (item.LineTotal <= 0)
@@ -331,13 +384,13 @@ namespace MyApp.Api.Services.Implementations
                 InvoiceType = DocTypeMap.GetValueOrDefault(invoice.DocumentType ?? 4, "Sale Invoice"),
                 InvoiceDate = invoice.Date.ToString("yyyy-MM-dd"),
                 SellerNTNCNIC = sellerNtnCnic,
-                SellerBusinessName = company.Name,
+                SellerBusinessName = SanitizeForFbr(company.Name),
                 SellerProvince = sellerProvince,
-                SellerAddress = company.FullAddress ?? "",
+                SellerAddress = SanitizeForFbr(company.FullAddress),
                 BuyerNTNCNIC = buyerNtnCnic,
-                BuyerBusinessName = buyer.Name,
+                BuyerBusinessName = SanitizeForFbr(buyer.Name),
                 BuyerProvince = buyerProvince,
-                BuyerAddress = buyer.Address ?? "",
+                BuyerAddress = SanitizeForFbr(buyer.Address),
                 BuyerRegistrationType = buyerRegType,
                 InvoiceRefNo = (invoice.DocumentType == 9 || invoice.DocumentType == 10) ? (invoice.FbrIRN ?? "") : "",
                 ScenarioId = isSandbox ? (scenarioId ?? "SN001") : null,
@@ -352,7 +405,7 @@ namespace MyApp.Api.Services.Implementations
                 fbrRequest.Items.Add(new FbrInvoiceItemRequest
                 {
                     HsCode = item.HSCode ?? "",
-                    ProductDescription = item.Description,
+                    ProductDescription = SanitizeForFbr(item.Description),
                     Rate = $"{invoice.GSTRate:0.##}%",
                     UoM = uomDesc,
                     Quantity = item.Quantity,

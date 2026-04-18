@@ -106,6 +106,10 @@ using (var scope = app.Services.CreateScope())
     ");
 
     db.Database.Migrate();
+
+    // Seed the starter catalog of FBR-mapped item types (idempotent — skips
+    // any HS code / name already present, so it's safe to run on every boot)
+    await MyApp.Api.Data.ItemTypeSeeder.SeedAsync(db);
 }
 
 // Configure the HTTP request pipeline

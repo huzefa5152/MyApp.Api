@@ -21,16 +21,62 @@ namespace MyApp.Api.Controllers
             _context = context;
         }
 
-        // Search item descriptions
+        // Search item descriptions (now returns FBR defaults so the caller can auto-fill
+        // HS Code / Sale Type / UOM when a known item is picked).
+        // Results are ordered: favorites first, then by usage count, then alphabetically.
         [HttpGet("items")]
         public async Task<IActionResult> GetItems([FromQuery] string query)
         {
             var items = await _context.ItemDescriptions
                 .Where(i => i.Name.Contains(query))
-                .OrderBy(i => i.Name)
+                .OrderByDescending(i => i.IsFavorite)
+                .ThenByDescending(i => i.UsageCount)
+                .ThenBy(i => i.Name)
                 .Take(10)
                 .ToListAsync();
             return Ok(items);
+        }
+
+        // Top items — favorites + most-used — returned without needing a search term.
+        // The SmartItemAutocomplete uses this to pre-populate its dropdown on focus,
+        // giving users a short curated list instead of an empty starting state.
+        [HttpGet("items/top")]
+        public async Task<IActionResult> GetTopItems([FromQuery] int take = 15)
+        {
+            if (take <= 0) take = 15;
+            if (take > 100) take = 100;
+            var items = await _context.ItemDescriptions
+                // Only surface items that have FBR data configured — a plain-text
+                // description without HS code isn't useful as a "favorite".
+                .Where(i => i.IsFavorite || i.UsageCount > 0)
+                .OrderByDescending(i => i.IsFavorite)
+                .ThenByDescending(i => i.UsageCount)
+                .ThenByDescending(i => i.LastUsedAt)
+                .Take(take)
+                .ToListAsync();
+            return Ok(items);
+        }
+
+        // Toggle favorite flag on an item description (by id).
+        [HttpPut("items/{id}/favorite")]
+        public async Task<IActionResult> ToggleFavorite(int id, [FromBody] ToggleFavoriteDto dto)
+        {
+            var item = await _context.ItemDescriptions.FindAsync(id);
+            if (item == null) return NotFound();
+            item.IsFavorite = dto.IsFavorite;
+            await _context.SaveChangesAsync();
+            return Ok(item);
+        }
+
+        // Exact-name lookup — used to fetch saved FBR defaults for a description
+        [HttpGet("items/by-name")]
+        public async Task<IActionResult> GetItemByName([FromQuery] string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return NotFound();
+            var item = await _context.ItemDescriptions
+                .FirstOrDefaultAsync(i => i.Name == name);
+            if (item == null) return NotFound();
+            return Ok(item);
         }
 
         // Add new item description
@@ -50,6 +96,37 @@ namespace MyApp.Api.Controllers
                 // 2601 = Cannot insert duplicate key row
                 return BadRequest("Item already exists.");
             }
+        }
+
+        // Save/update FBR defaults for an item description (by name — upserts the row).
+        // Called automatically when the user picks FBR fields for an item in the bill form.
+        [HttpPost("items/fbr-defaults")]
+        public async Task<IActionResult> SaveFbrDefaults([FromBody] SaveItemFbrDefaultsDto dto)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Name)) return BadRequest("Name is required.");
+
+            var existing = await _context.ItemDescriptions
+                .FirstOrDefaultAsync(i => i.Name == dto.Name);
+
+            if (existing == null)
+            {
+                existing = new ItemDescription { Name = dto.Name };
+                _context.ItemDescriptions.Add(existing);
+            }
+
+            // Only overwrite values that are actually supplied; leave the rest alone
+            if (!string.IsNullOrWhiteSpace(dto.HSCode)) existing.HSCode = dto.HSCode;
+            if (!string.IsNullOrWhiteSpace(dto.SaleType)) existing.SaleType = dto.SaleType;
+            if (dto.FbrUOMId.HasValue) existing.FbrUOMId = dto.FbrUOMId;
+            if (!string.IsNullOrWhiteSpace(dto.UOM)) existing.UOM = dto.UOM;
+
+            // Saving FBR defaults counts as "using" the item — bump the counter so
+            // it rises in the top-used / suggested list.
+            existing.UsageCount += 1;
+            existing.LastUsedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            return Ok(existing);
         }
 
 

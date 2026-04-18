@@ -1,8 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
+import SmartItemAutocomplete from "./SmartItemAutocomplete";
+import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import { updateChallanItems, updateChallanPo } from "../api/challanApi";
 import { getItemTypes } from "../api/itemTypeApi";
+import { saveItemFbrDefaults } from "../api/lookupApi";
 import { formStyles } from "../theme";
 
 const colors = {
@@ -46,6 +49,25 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     const next = [...items];
     next[index][field] = value;
     setItems(next);
+  };
+
+  // Fires when user picks from the SmartItemAutocomplete dropdown.
+  // Auto-fills description + unit, and remembers FBR metadata for future bills.
+  const handleItemPick = (index, picked) => {
+    const next = [...items];
+    if (picked.name) next[index].description = picked.name;
+    if (picked.uom) next[index].unit = picked.uom;
+    setItems(next);
+
+    if (picked.name && (picked.hsCode || picked.saleType || picked.fbrUOMId)) {
+      saveItemFbrDefaults({
+        name: picked.name,
+        hsCode: picked.hsCode || null,
+        saleType: picked.saleType || null,
+        fbrUOMId: picked.fbrUOMId || null,
+        uom: picked.uom || null,
+      }).catch(() => {});
+    }
   };
 
   const addItem = () => {
@@ -105,18 +127,32 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               {items.map((item, idx) => (
                 <div key={idx} style={styles.itemRow}>
                   <div style={styles.itemIndex}>{idx + 1}</div>
-                  <div style={{ width: 120, flexShrink: 0 }}>
-                    <select
-                      style={{ ...styles.input, padding: "0.55rem 0.35rem", fontSize: "0.82rem" }}
-                      value={item.itemTypeId}
-                      onChange={(e) => handleItemChange(idx, "itemTypeId", parseInt(e.target.value) || "")}
-                    >
-                      <option value="">Type...</option>
-                      {itemTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                    </select>
+                  <div style={{ width: 180, flexShrink: 0 }}>
+                    <SearchableItemTypeSelect
+                      items={itemTypes}
+                      value={item.itemTypeId || ""}
+                      onChange={(newId, picked) => {
+                        const next = [...items];
+                        next[idx].itemTypeId = newId ? parseInt(newId) : "";
+                        if (picked) {
+                          if (!next[idx].description?.trim()) next[idx].description = picked.name;
+                          if (picked.uom) next[idx].unit = picked.uom;
+                        }
+                        setItems(next);
+                      }}
+                      placeholder="Pick item…"
+                      style={{ padding: "0.55rem 0.55rem", fontSize: "0.82rem" }}
+                    />
                   </div>
                   <div style={{ flex: 2, minWidth: 0 }}>
-                    <LookupAutocomplete label="Description" endpoint="/lookup/items" value={item.description} onChange={(val) => handleItemChange(idx, "description", val)} />
+                    <SmartItemAutocomplete
+                      companyId={challan.companyId}
+                      value={item.description}
+                      onChange={(val) => handleItemChange(idx, "description", val)}
+                      onPick={(picked) => handleItemPick(idx, picked)}
+                      style={{ ...styles.input, padding: "0.55rem 0.5rem", fontSize: "0.82rem" }}
+                      placeholder="Search FBR or type…"
+                    />
                   </div>
                   <div style={{ width: 58, flexShrink: 0 }}>
                     <input type="number" min={1} style={{ ...styles.input, textAlign: "center", padding: "0.55rem 0.25rem" }} value={item.quantity} onChange={(e) => handleItemChange(idx, "quantity", parseInt(e.target.value) || 1)} />

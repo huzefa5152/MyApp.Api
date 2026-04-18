@@ -259,8 +259,11 @@ export default function InvoicePage() {
 
   const [bulkFbrLoading, setBulkFbrLoading] = useState(false);
 
-  // Get unsubmitted invoices for bulk operations
-  const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted");
+  // Get unsubmitted invoices for bulk operations — only those that are FBR-ready
+  // (have HS Code + Sale Type + UOM on every item). Others are surfaced as
+  // "FBR Setup Incomplete" on the card itself.
+  const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted" && inv.fbrReady);
+  const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.fbrReady).length;
   const validatedCount = unsubmittedInvoices.filter(inv => fbrValidated.has(inv.id)).length;
 
   const handleBulkValidateAll = async () => {
@@ -374,13 +377,19 @@ export default function InvoicePage() {
           </div>
 
           {/* FBR Bulk Actions */}
-          {selectedCompany?.hasFbrToken && unsubmittedInvoices.length > 0 && (
+          {selectedCompany?.hasFbrToken && (unsubmittedInvoices.length > 0 || incompleteCount > 0) && (
             <div style={styles.fbrBulkBar}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                 <MdCloudUpload size={18} color="#0d47a1" />
                 <span style={{ fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary }}>
-                  FBR: {unsubmittedInvoices.length} unsubmitted{validatedCount > 0 ? `, ${validatedCount} validated` : ""}
+                  FBR: {unsubmittedInvoices.length} ready to submit
+                  {validatedCount > 0 ? `, ${validatedCount} validated` : ""}
                 </span>
+                {incompleteCount > 0 && (
+                  <span style={{ fontSize: "0.78rem", padding: "0.15rem 0.5rem", borderRadius: 12, backgroundColor: "#fff8e1", color: "#e65100", border: "1px solid #ffcc80", fontWeight: 700 }}>
+                    {incompleteCount} setup incomplete
+                  </span>
+                )}
               </div>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
@@ -470,18 +479,49 @@ export default function InvoicePage() {
                     <p style={{ ...cardStyles.text, fontSize: "0.78rem", color: colors.textSecondary }}>
                       DC#{inv.challanNumbers?.join(", #")} | {inv.items?.length} items
                     </p>
-                    {inv.fbrStatus && (
+                    {/* FBR status row — shows current status OR 'Setup Incomplete' when fields are missing */}
+                    {inv.fbrStatus === "Submitted" && (
                       <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.25rem" }}>
-                        {inv.fbrStatus === "Submitted" && <MdCheckCircle size={14} color="#2e7d32" />}
-                        {inv.fbrStatus === "Failed" && <MdError size={14} color="#c62828" />}
-                        <span style={{ fontSize: "0.76rem", fontWeight: 600, color: inv.fbrStatus === "Submitted" ? "#2e7d32" : inv.fbrStatus === "Failed" ? "#c62828" : colors.textSecondary }}>
-                          FBR: {inv.fbrStatus}
+                        <MdCheckCircle size={14} color="#2e7d32" />
+                        <span style={{ fontSize: "0.76rem", fontWeight: 600, color: "#2e7d32" }}>
+                          FBR: Submitted
                         </span>
                         {inv.fbrIRN && <span style={{ fontSize: "0.72rem", color: colors.textSecondary }}>(IRN: {inv.fbrIRN})</span>}
                       </div>
                     )}
+                    {inv.fbrStatus === "Failed" && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.25rem" }}>
+                        <MdError size={14} color="#c62828" />
+                        <span style={{ fontSize: "0.76rem", fontWeight: 600, color: "#c62828" }}>FBR: Failed</span>
+                      </div>
+                    )}
                     {inv.fbrStatus === "Failed" && inv.fbrErrorMessage && (
                       <p style={{ fontSize: "0.72rem", color: "#c62828", marginTop: "0.15rem", wordBreak: "break-word" }}>{inv.fbrErrorMessage}</p>
+                    )}
+                    {inv.fbrStatus !== "Submitted" && !inv.fbrReady && (
+                      <div
+                        style={{ display: "flex", alignItems: "flex-start", gap: "0.35rem", marginTop: "0.25rem", padding: "0.35rem 0.5rem", backgroundColor: "#fff8e1", border: "1px solid #ffcc80", borderRadius: 4 }}
+                        title={inv.fbrMissing?.length ? `Missing:\n• ${inv.fbrMissing.join("\n• ")}` : ""}
+                      >
+                        <MdError size={14} color="#e65100" style={{ flexShrink: 0, marginTop: 1 }} />
+                        <div style={{ fontSize: "0.74rem", color: "#e65100", lineHeight: 1.3 }}>
+                          <b>FBR Setup Incomplete</b>
+                          {inv.fbrMissing?.length > 0 && (
+                            <div style={{ fontSize: "0.7rem", color: "#bf360c", marginTop: 1 }}>
+                              {inv.fbrMissing.slice(0, 3).join(", ")}
+                              {inv.fbrMissing.length > 3 && ` +${inv.fbrMissing.length - 3} more`}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {inv.fbrStatus !== "Submitted" && inv.fbrReady && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.25rem" }}>
+                        <MdCheckCircle size={14} color="#0d47a1" />
+                        <span style={{ fontSize: "0.76rem", fontWeight: 600, color: "#0d47a1" }}>
+                          FBR: Ready to Validate
+                        </span>
+                      </div>
                     )}
                   </div>
                   <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
@@ -510,10 +550,19 @@ export default function InvoicePage() {
                     {selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && (
                       <>
                         <button
-                          style={{ ...styles.fbrValidateBtn, opacity: fbrLoading ? 0.5 : 1, ...(fbrValidated.has(inv.id) ? { backgroundColor: "#e8f5e9", color: "#2e7d32" } : {}) }}
-                          disabled={!!fbrLoading}
+                          style={{
+                            ...styles.fbrValidateBtn,
+                            opacity: fbrLoading || !inv.fbrReady ? 0.4 : 1,
+                            cursor: !inv.fbrReady ? "not-allowed" : "pointer",
+                            ...(fbrValidated.has(inv.id) ? { backgroundColor: "#e8f5e9", color: "#2e7d32" } : {}),
+                          }}
+                          disabled={!!fbrLoading || !inv.fbrReady}
                           onClick={() => handleFbrValidate(inv)}
-                          title="Dry-run: checks all invoice data with FBR without recording it. Must pass before you can submit."
+                          title={
+                            !inv.fbrReady
+                              ? `Complete FBR setup first:\n• ${inv.fbrMissing?.join("\n• ") || "Missing FBR fields"}`
+                              : "Dry-run: checks all bill data with FBR without recording it. Must pass before you can submit."
+                          }
                         >
                           {fbrLoading === inv.id + "-validate" ? <span className="btn-spinner" /> : <MdCheckCircle size={14} />}
                           {fbrValidated.has(inv.id) ? "Validated" : "Validate"}
@@ -521,12 +570,18 @@ export default function InvoicePage() {
                         <button
                           style={{
                             ...styles.fbrSubmitBtn,
-                            opacity: fbrLoading || !fbrValidated.has(inv.id) ? 0.4 : 1,
-                            cursor: !fbrValidated.has(inv.id) ? "not-allowed" : "pointer",
+                            opacity: fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady ? 0.4 : 1,
+                            cursor: !fbrValidated.has(inv.id) || !inv.fbrReady ? "not-allowed" : "pointer",
                           }}
-                          disabled={!!fbrLoading || !fbrValidated.has(inv.id)}
+                          disabled={!!fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady}
                           onClick={() => handleFbrSubmit(inv)}
-                          title={fbrValidated.has(inv.id) ? "Permanently submit this invoice to FBR. Cannot be undone." : "Validate first before submitting to FBR."}
+                          title={
+                            !inv.fbrReady
+                              ? "Complete FBR setup first."
+                              : fbrValidated.has(inv.id)
+                              ? "Permanently submit this bill to FBR. Cannot be undone."
+                              : "Validate first before submitting to FBR."
+                          }
                         >
                           {fbrLoading === inv.id + "-submit" ? <span className="btn-spinner" /> : <MdCloudUpload size={14} />} Submit FBR
                         </button>

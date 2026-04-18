@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyApp.Api.Data;
 
@@ -11,9 +12,11 @@ using MyApp.Api.Data;
 namespace MyApp.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260417225558_AddFbrFieldsToItemType")]
+    partial class AddFbrFieldsToItemType
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -789,9 +792,6 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("InvoiceId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("ItemTypeId")
-                        .HasColumnType("int");
-
                     b.Property<string>("ItemTypeName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -822,8 +822,6 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("DeliveryItemId");
 
                     b.HasIndex("InvoiceId");
-
-                    b.HasIndex("ItemTypeId");
 
                     b.ToTable("InvoiceItems");
                 });
@@ -2038,15 +2036,9 @@ namespace MyApp.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("MyApp.Api.Models.ItemType", "ItemType")
-                        .WithMany()
-                        .HasForeignKey("ItemTypeId");
-
                     b.Navigation("DeliveryItem");
 
                     b.Navigation("Invoice");
-
-                    b.Navigation("ItemType");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.PrintTemplate", b =>
