@@ -1,0 +1,30 @@
+MEKO DENIM MILLS (PVT) LTD.
+A-MAIN STORE. KOTRI
+Purchase Order
+INDENT
+P. O. No  262447  Account Code  10100004  ST No  32-77-8761-758-52
+Date  13-APR-26
+Supplier Title  HAKIMI TRADERS (PNEUMATIC)
+Dlv Date
+Contact
+REPLACEMENT
+VALID  Address  OFFICE NO.111, 1ST FLOOR INDUSTRIAL
+TOWER PLAZA, SARAI ROAD-KARACHI
+WEAVING MDM
+Telephone No
+Code  Item Name  Unit  Qty  Rate  Excl-Tax AmoST RateS/Tax AmoET Rate ET Amt Total Amount
+33100102 PENUMATIC PIPE 10MM  COIL  1  15000.00  15,000 18.00  2,700  0  17,700
+Total  15,000
+Sales Tax Amount  2,700
+ET Amount  0
+Grand Total  17,700
+Rupees Seventeen Thousand Seven Hundred Only
+Remarks
+Payment Terms
+For Meko Denim (Private) Limited
+Director / Purchase Officer
+Head Office : Plot No. F - 131, Hub River Road , S.I.T.E Karachi.
+Email: info@mekodenim.com.pk
+Printed On
+13-APR-26 11:44 AM
+===PAGE-BREAK===

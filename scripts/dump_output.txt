@@ -1,0 +1,4406 @@
+
+====================================================================================================
+FILE: Hakimi DC - xls
+PATH: C:\Users\hussahuz\Downloads\DC # 4161 Afroz Textile.xls
+====================================================================================================
+
+--- Sheet: 'Packing slip' | Rows: 37 | Cols: 12 ---
+
+  MERGED CELLS (30 ranges):
+    rows 0-0, cols 5-6  (xlrd: 0:1, 5:7)
+    rows 4-7, cols 1-1  (xlrd: 4:8, 1:2)
+    rows 0-1, cols 1-1  (xlrd: 0:2, 1:2)
+    rows 0-1, cols 2-4  (xlrd: 0:2, 2:5)
+    rows 1-1, cols 5-6  (xlrd: 1:2, 5:7)
+    rows 12-12, cols 2-6  (xlrd: 12:13, 2:7)
+    rows 22-22, cols 2-6  (xlrd: 22:23, 2:7)
+    rows 28-28, cols 2-6  (xlrd: 28:29, 2:7)
+    rows 23-23, cols 2-6  (xlrd: 23:24, 2:7)
+    rows 16-16, cols 2-6  (xlrd: 16:17, 2:7)
+    rows 18-18, cols 2-6  (xlrd: 18:19, 2:7)
+    rows 19-19, cols 2-6  (xlrd: 19:20, 2:7)
+    rows 20-20, cols 2-6  (xlrd: 20:21, 2:7)
+    rows 21-21, cols 2-6  (xlrd: 21:22, 2:7)
+    rows 36-36, cols 4-6  (xlrd: 36:37, 4:7)
+    rows 36-36, cols 1-2  (xlrd: 36:37, 1:3)
+    rows 26-26, cols 2-6  (xlrd: 26:27, 2:7)
+    rows 25-25, cols 2-6  (xlrd: 25:26, 2:7)
+    rows 27-27, cols 2-6  (xlrd: 27:28, 2:7)
+    rows 24-24, cols 2-6  (xlrd: 24:25, 2:7)
+    rows 31-31, cols 1-6  (xlrd: 31:32, 1:7)
+    rows 29-29, cols 2-6  (xlrd: 29:30, 2:7)
+    rows 13-13, cols 2-6  (xlrd: 13:14, 2:7)
+    rows 14-14, cols 2-6  (xlrd: 14:15, 2:7)
+    rows 15-15, cols 2-6  (xlrd: 15:16, 2:7)
+    rows 3-3, cols 5-6  (xlrd: 3:4, 5:7)
+    rows 17-17, cols 2-6  (xlrd: 17:18, 2:7)
+    rows 2-3, cols 1-2  (xlrd: 2:4, 1:3)
+    rows 8-9, cols 2-5  (xlrd: 8:10, 2:6)
+    rows 10-10, cols 4-6  (xlrd: 10:11, 4:7)
+
+  COLUMN WIDTHS:
+    Col 0: 256 units (1.00 chars)
+    Col 1: 4233 units (16.54 chars)
+    Col 2: 2875 units (11.23 chars)
+    Col 3: 7463 units (29.15 chars)
+    Col 4: 2737 units (10.69 chars)
+    Col 5: 2008 units (7.84 chars)
+    Col 6: 5848 units (22.84 chars)
+    Col 7: 2343 units (9.15 chars)
+    Col 8: 2343 units (9.15 chars)
+    Col 9: 2343 units (9.15 chars)
+    Col 10: 2343 units (9.15 chars)
+    Col 11: 2343 units (9.15 chars)
+
+  ROW HEIGHTS (explicit only):
+    Row 0: 540 twips (27.0 pt)
+    Row 1: 645 twips (32.2 pt)
+    Row 2: 330 twips (16.5 pt)
+    Row 3: 330 twips (16.5 pt)
+    Row 4: 330 twips (16.5 pt)
+    Row 5: 330 twips (16.5 pt)
+    Row 6: 165 twips (8.2 pt)
+    Row 7: 480 twips (24.0 pt)
+    Row 8: 480 twips (24.0 pt)
+    Row 9: 300 twips (15.0 pt)
+    Row 10: 510 twips (25.5 pt)
+    Row 11: 300 twips (15.0 pt)
+    Row 12: 403 twips (20.1 pt)
+    Row 13: 438 twips (21.9 pt)
+    Row 14: 403 twips (20.1 pt)
+    Row 15: 403 twips (20.1 pt)
+    Row 16: 403 twips (20.1 pt)
+    Row 17: 403 twips (20.1 pt)
+    Row 18: 403 twips (20.1 pt)
+    Row 19: 360 twips (18.0 pt)
+    Row 20: 403 twips (20.1 pt)
+    Row 21: 405 twips (20.2 pt)
+    Row 22: 315 twips (15.8 pt)
+    Row 23: 403 twips (20.1 pt)
+    Row 24: 403 twips (20.1 pt)
+    Row 25: 403 twips (20.1 pt)
+    Row 26: 403 twips (20.1 pt)
+    Row 27: 403 twips (20.1 pt)
+    Row 28: 403 twips (20.1 pt)
+    Row 29: 403 twips (20.1 pt)
+    Row 30: 390 twips (19.5 pt)
+    Row 31: 390 twips (19.5 pt)
+    Row 32: 345 twips (17.2 pt)
+    Row 33: 225 twips (11.2 pt)
+    Row 34: 249 twips (12.4 pt)
+    Row 35: 249 twips (12.4 pt)
+    Row 36: 249 twips (12.4 pt)
+
+  CELL VALUES:
+    R0 C1: [BLANK] 
+    R0 C2: [TEXT] HAKIMI TRADERS
+    R0 C3: [BLANK] 
+    R0 C4: [BLANK] 
+    R0 C5: [TEXT] Delivery Challan
+    R0 C6: [BLANK] 
+    R1 C1: [BLANK] 
+    R1 C2: [BLANK] 
+    R1 C3: [BLANK] 
+    R1 C4: [BLANK] 
+    R1 C5: [DATE] 46114.0
+    R1 C6: [BLANK] 
+    R2 C1: [TEXT] Office # 111, Industrial Town Plaza,
+Serai Road, Opposite S.M.Science College, K...
+    R2 C2: [BLANK] 
+    R2 C3: [BLANK] 
+    R2 C4: [BLANK] 
+    R2 C5: [BLANK] 
+    R2 C6: [BLANK] 
+    R2 C7: [BLANK] 
+    R2 C8: [BLANK] 
+    R2 C9: [BLANK] 
+    R2 C10: [BLANK] 
+    R2 C11: [BLANK] 
+    R3 C1: [BLANK] 
+    R3 C2: [BLANK] 
+    R3 C3: [BLANK] 
+    R3 C5: [TEXT] DC # 4161
+    R3 C6: [BLANK] 
+    R4 C1: [TEXT] Murtaza
+0331-3368883
+
+
+    R4 C2: [BLANK] 
+    R4 C4: [BLANK] 
+    R4 C5: [BLANK] 
+    R5 C1: [BLANK] 
+    R5 C2: [BLANK] 
+    R5 C4: [BLANK] 
+    R5 C5: [BLANK] 
+    R6 C1: [BLANK] 
+    R6 C4: [BLANK] 
+    R6 C5: [BLANK] 
+    R7 C1: [BLANK] 
+    R7 C2: [BLANK] 
+    R7 C3: [BLANK] 
+    R8 C1: [TEXT] Messers:  
+    R8 C2: [TEXT] AFROZE TEXTILE INDUSTRIES Pvt Ltd
+    R8 C3: [BLANK] 
+    R8 C4: [BLANK] 
+    R8 C5: [BLANK] 
+    R8 C6: [BLANK] 
+    R9 C1: [BLANK] 
+    R9 C2: [BLANK] 
+    R9 C3: [BLANK] 
+    R9 C4: [BLANK] 
+    R9 C5: [BLANK] 
+    R10 C1: [TEXT] Purchase Order:
+    R10 C2: [BLANK] 
+    R10 C3: [TEXT] 2025-2867-023
+    R10 C4: [BLANK] 
+    R10 C5: [BLANK] 
+    R10 C6: [BLANK] 
+    R11 C3: [BLANK] 
+    R11 C4: [BLANK] 
+    R11 C5: [BLANK] 
+    R12 C0: [BLANK] 
+    R12 C1: [TEXT] Quantity
+    R12 C2: [TEXT] Item
+    R12 C3: [BLANK] 
+    R12 C4: [BLANK] 
+    R12 C5: [BLANK] 
+    R12 C6: [BLANK] 
+    R13 C0: [BLANK] 
+    R13 C1: [NUMBER] 6.0
+    R13 C2: [TEXT] Valve Solenoid 1/4" 5/2Way 24v DC D/C
+    R13 C3: [BLANK] 
+    R13 C4: [BLANK] 
+    R13 C5: [BLANK] 
+    R13 C6: [BLANK] 
+    R14 C0: [BLANK] 
+    R14 C1: [NUMBER] 6.0
+    R14 C2: [TEXT] Valve Solenoid 1/4" 3/2Way 220v AC S/C
+    R14 C3: [BLANK] 
+    R14 C4: [BLANK] 
+    R14 C5: [BLANK] 
+    R14 C6: [BLANK] 
+    R15 C0: [BLANK] 
+    R15 C1: [BLANK] 
+    R15 C2: [BLANK] 
+    R15 C3: [BLANK] 
+    R15 C4: [BLANK] 
+    R15 C5: [BLANK] 
+    R15 C6: [BLANK] 
+    R16 C0: [BLANK] 
+    R16 C1: [BLANK] 
+    R16 C2: [BLANK] 
+    R16 C3: [BLANK] 
+    R16 C4: [BLANK] 
+    R16 C5: [BLANK] 
+    R16 C6: [BLANK] 
+    R17 C0: [NUMBER] 10.0
+    R17 C1: [BLANK] 
+    R17 C2: [BLANK] 
+    R17 C3: [BLANK] 
+    R17 C4: [BLANK] 
+    R17 C5: [BLANK] 
+    R17 C6: [BLANK] 
+    R18 C0: [NUMBER] 10.0
+    R18 C1: [BLANK] 
+    R18 C2: [BLANK] 
+    R18 C3: [BLANK] 
+    R18 C4: [BLANK] 
+    R18 C5: [BLANK] 
+    R18 C6: [BLANK] 
+    R19 C0: [BLANK] 
+    R19 C1: [BLANK] 
+    R19 C2: [BLANK] 
+    R19 C3: [BLANK] 
+    R19 C4: [BLANK] 
+    R19 C5: [BLANK] 
+    R19 C6: [BLANK] 
+    R20 C0: [BLANK] 
+    R20 C1: [BLANK] 
+    R20 C2: [BLANK] 
+    R20 C3: [BLANK] 
+    R20 C4: [BLANK] 
+    R20 C5: [BLANK] 
+    R20 C6: [BLANK] 
+    R21 C0: [BLANK] 
+    R21 C1: [BLANK] 
+    R21 C2: [BLANK] 
+    R21 C3: [BLANK] 
+    R21 C4: [BLANK] 
+    R21 C5: [BLANK] 
+    R21 C6: [BLANK] 
+    R22 C0: [BLANK] 
+    R22 C1: [BLANK] 
+    R22 C2: [BLANK] 
+    R22 C3: [BLANK] 
+    R22 C4: [BLANK] 
+    R22 C5: [BLANK] 
+    R22 C6: [BLANK] 
+    R23 C0: [BLANK] 
+    R23 C1: [BLANK] 
+    R23 C2: [BLANK] 
+    R23 C3: [BLANK] 
+    R23 C4: [BLANK] 
+    R23 C5: [BLANK] 
+    R23 C6: [BLANK] 
+    R24 C0: [BLANK] 
+    R24 C1: [BLANK] 
+    R24 C2: [BLANK] 
+    R24 C3: [BLANK] 
+    R24 C4: [BLANK] 
+    R24 C5: [BLANK] 
+    R24 C6: [BLANK] 
+    R25 C0: [BLANK] 
+    R25 C1: [BLANK] 
+    R25 C2: [BLANK] 
+    R25 C3: [BLANK] 
+    R25 C4: [BLANK] 
+    R25 C5: [BLANK] 
+    R25 C6: [BLANK] 
+    R26 C0: [BLANK] 
+    R26 C1: [BLANK] 
+    R26 C2: [BLANK] 
+    R26 C3: [BLANK] 
+    R26 C4: [BLANK] 
+    R26 C5: [BLANK] 
+    R26 C6: [BLANK] 
+    R27 C0: [BLANK] 
+    R27 C1: [BLANK] 
+    R27 C2: [BLANK] 
+    R27 C3: [BLANK] 
+    R27 C4: [BLANK] 
+    R27 C5: [BLANK] 
+    R27 C6: [BLANK] 
+    R28 C0: [BLANK] 
+    R28 C1: [BLANK] 
+    R28 C2: [BLANK] 
+    R28 C3: [BLANK] 
+    R28 C4: [BLANK] 
+    R28 C5: [BLANK] 
+    R28 C6: [BLANK] 
+    R29 C0: [BLANK] 
+    R29 C1: [BLANK] 
+    R29 C2: [BLANK] 
+    R29 C3: [BLANK] 
+    R29 C4: [BLANK] 
+    R29 C5: [BLANK] 
+    R29 C6: [BLANK] 
+    R30 C1: [BLANK] 
+    R30 C2: [BLANK] 
+    R30 C3: [BLANK] 
+    R30 C4: [BLANK] 
+    R30 C5: [BLANK] 
+    R30 C6: [BLANK] 
+    R31 C1: [TEXT] Thank you for your business!
+    R31 C2: [BLANK] 
+    R31 C3: [BLANK] 
+    R31 C4: [BLANK] 
+    R31 C5: [BLANK] 
+    R31 C6: [BLANK] 
+    R34 C1: [BLANK] 
+    R34 C2: [BLANK] 
+    R34 C3: [BLANK] 
+    R34 C4: [BLANK] 
+    R34 C5: [BLANK] 
+    R34 C6: [BLANK] 
+    R35 C1: [BLANK] 
+    R35 C2: [BLANK] 
+    R35 C3: [BLANK] 
+    R35 C4: [BLANK] 
+    R35 C5: [BLANK] 
+    R35 C6: [BLANK] 
+    R36 C1: [TEXT] Signature and Stamp 
+    R36 C2: [BLANK] 
+    R36 C4: [TEXT] Receiver Signature and Stamp
+    R36 C5: [BLANK] 
+    R36 C6: [BLANK] 
+
+====================================================================================================
+FILE: Roshan DC - xls
+PATH: C:\Users\hussahuz\Downloads\DC # 1073 MEKO DENIM.xls
+====================================================================================================
+
+--- Sheet: 'Delivery Note 1' | Rows: 54 | Cols: 15 ---
+
+  MERGED CELLS (48 ranges):
+    rows 4-4, cols 6-7  (xlrd: 4:5, 6:8)
+    rows 4-4, cols 8-9  (xlrd: 4:5, 8:10)
+    rows 5-5, cols 8-9  (xlrd: 5:6, 8:10)
+    rows 16-16, cols 2-9  (xlrd: 16:17, 2:10)
+    rows 9-9, cols 1-4  (xlrd: 9:10, 1:5)
+    rows 9-9, cols 6-9  (xlrd: 9:10, 6:10)
+    rows 0-5, cols 1-5  (xlrd: 0:6, 1:6)
+    rows 0-0, cols 6-9  (xlrd: 0:1, 6:10)
+    rows 2-2, cols 8-9  (xlrd: 2:3, 8:10)
+    rows 3-3, cols 6-7  (xlrd: 3:4, 6:8)
+    rows 3-3, cols 8-9  (xlrd: 3:4, 8:10)
+    rows 6-6, cols 8-9  (xlrd: 6:7, 8:10)
+    rows 7-7, cols 8-9  (xlrd: 7:8, 8:10)
+    rows 17-17, cols 2-9  (xlrd: 17:18, 2:10)
+    rows 11-11, cols 1-4  (xlrd: 11:12, 1:5)
+    rows 12-12, cols 1-4  (xlrd: 12:13, 1:5)
+    rows 12-12, cols 6-9  (xlrd: 12:13, 6:10)
+    rows 13-13, cols 1-4  (xlrd: 13:14, 1:5)
+    rows 13-13, cols 6-9  (xlrd: 13:14, 6:10)
+    rows 10-11, cols 6-9  (xlrd: 10:12, 6:10)
+    rows 28-28, cols 2-9  (xlrd: 28:29, 2:10)
+    rows 29-29, cols 2-9  (xlrd: 29:30, 2:10)
+    rows 10-10, cols 1-4  (xlrd: 10:11, 1:5)
+    rows 14-14, cols 1-4  (xlrd: 14:15, 1:5)
+    rows 14-14, cols 6-9  (xlrd: 14:15, 6:10)
+    rows 18-18, cols 2-9  (xlrd: 18:19, 2:10)
+    rows 19-19, cols 2-9  (xlrd: 19:20, 2:10)
+    rows 20-20, cols 2-9  (xlrd: 20:21, 2:10)
+    rows 36-36, cols 2-9  (xlrd: 36:37, 2:10)
+    rows 43-43, cols 1-4  (xlrd: 43:44, 1:5)
+    rows 21-21, cols 2-9  (xlrd: 21:22, 2:10)
+    rows 22-22, cols 2-9  (xlrd: 22:23, 2:10)
+    rows 23-23, cols 2-9  (xlrd: 23:24, 2:10)
+    rows 24-24, cols 2-9  (xlrd: 24:25, 2:10)
+    rows 25-25, cols 2-9  (xlrd: 25:26, 2:10)
+    rows 43-43, cols 6-9  (xlrd: 43:44, 6:10)
+    rows 26-26, cols 2-9  (xlrd: 26:27, 2:10)
+    rows 27-27, cols 2-9  (xlrd: 27:28, 2:10)
+    rows 30-30, cols 2-9  (xlrd: 30:31, 2:10)
+    rows 31-31, cols 2-9  (xlrd: 31:32, 2:10)
+    rows 44-48, cols 1-9  (xlrd: 44:49, 1:10)
+    rows 49-50, cols 1-9  (xlrd: 49:51, 1:10)
+    rows 51-51, cols 1-9  (xlrd: 51:52, 1:10)
+    rows 52-52, cols 1-9  (xlrd: 52:53, 1:10)
+    rows 32-32, cols 2-9  (xlrd: 32:33, 2:10)
+    rows 33-33, cols 2-9  (xlrd: 33:34, 2:10)
+    rows 34-34, cols 2-9  (xlrd: 34:35, 2:10)
+    rows 35-35, cols 2-9  (xlrd: 35:36, 2:10)
+
+  COLUMN WIDTHS:
+    Col 0: 2953 units (11.54 chars)
+    Col 1: 3190 units (12.46 chars)
+    Col 2: 2343 units (9.15 chars)
+    Col 3: 2343 units (9.15 chars)
+    Col 4: 2953 units (11.54 chars)
+    Col 5: 5947 units (23.23 chars)
+    Col 6: 2658 units (10.38 chars)
+    Col 7: 2737 units (10.69 chars)
+    Col 8: 2816 units (11.00 chars)
+    Col 9: 6242 units (24.38 chars)
+    Col 10: 2343 units (9.15 chars)
+    Col 11: 2343 units (9.15 chars)
+    Col 12: 2343 units (9.15 chars)
+    Col 13: 2343 units (9.15 chars)
+    Col 14: 2343 units (9.15 chars)
+
+  ROW HEIGHTS (explicit only):
+    Row 0: 909 twips (45.5 pt)
+    Row 1: 360 twips (18.0 pt)
+    Row 2: 360 twips (18.0 pt)
+    Row 3: 360 twips (18.0 pt)
+    Row 4: 360 twips (18.0 pt)
+    Row 5: 360 twips (18.0 pt)
+    Row 6: 360 twips (18.0 pt)
+    Row 7: 360 twips (18.0 pt)
+    Row 8: 150 twips (7.5 pt)
+    Row 9: 360 twips (18.0 pt)
+    Row 10: 780 twips (39.0 pt)
+    Row 11: 735 twips (36.8 pt)
+    Row 12: 495 twips (24.8 pt)
+    Row 13: 360 twips (18.0 pt)
+    Row 14: 360 twips (18.0 pt)
+    Row 15: 150 twips (7.5 pt)
+    Row 16: 600 twips (30.0 pt)
+    Row 17: 500 twips (25.0 pt)
+    Row 18: 500 twips (25.0 pt)
+    Row 19: 500 twips (25.0 pt)
+    Row 20: 500 twips (25.0 pt)
+    Row 21: 500 twips (25.0 pt)
+    Row 22: 500 twips (25.0 pt)
+    Row 23: 500 twips (25.0 pt)
+    Row 24: 500 twips (25.0 pt)
+    Row 25: 500 twips (25.0 pt)
+    Row 26: 500 twips (25.0 pt)
+    Row 27: 500 twips (25.0 pt)
+    Row 28: 500 twips (25.0 pt)
+    Row 29: 500 twips (25.0 pt)
+    Row 30: 500 twips (25.0 pt)
+    Row 31: 500 twips (25.0 pt)
+    Row 32: 500 twips (25.0 pt)
+    Row 33: 500 twips (25.0 pt)
+    Row 34: 500 twips (25.0 pt)
+    Row 35: 500 twips (25.0 pt)
+    Row 36: 500 twips (25.0 pt)
+    Row 37: 150 twips (7.5 pt)
+    Row 38: 255 twips (12.8 pt)
+    Row 39: 255 twips (12.8 pt)
+    Row 40: 255 twips (12.8 pt)
+    Row 41: 255 twips (12.8 pt)
+    Row 42: 255 twips (12.8 pt)
+    Row 43: 510 twips (25.5 pt)
+    Row 44: 255 twips (12.8 pt)
+    Row 45: 255 twips (12.8 pt)
+    Row 46: 255 twips (12.8 pt)
+    Row 47: 255 twips (12.8 pt)
+    Row 48: 255 twips (12.8 pt)
+    Row 49: 360 twips (18.0 pt)
+    Row 50: 360 twips (18.0 pt)
+    Row 51: 360 twips (18.0 pt)
+    Row 52: 360 twips (18.0 pt)
+    Row 53: 249 twips (12.4 pt)
+
+  CELL VALUES:
+    R0 C1: [TEXT] ROSHAN TRADERS
+    R0 C2: [BLANK] 
+    R0 C3: [BLANK] 
+    R0 C4: [BLANK] 
+    R0 C5: [BLANK] 
+    R0 C6: [TEXT] Delivery Challan
+    R0 C7: [BLANK] 
+    R0 C8: [BLANK] 
+    R0 C9: [BLANK] 
+    R1 C1: [BLANK] 
+    R1 C2: [BLANK] 
+    R1 C3: [BLANK] 
+    R1 C4: [BLANK] 
+    R1 C5: [BLANK] 
+    R1 C10: [ERROR] 23
+    R2 C1: [BLANK] 
+    R2 C2: [BLANK] 
+    R2 C3: [BLANK] 
+    R2 C4: [BLANK] 
+    R2 C5: [BLANK] 
+    R2 C6: [BLANK] 
+    R2 C7: [TEXT] Order Date
+    R2 C8: [DATE] 46113.0
+    R2 C9: [BLANK] 
+    R3 C1: [BLANK] 
+    R3 C2: [BLANK] 
+    R3 C3: [BLANK] 
+    R3 C4: [BLANK] 
+    R3 C5: [BLANK] 
+    R3 C6: [TEXT] Purchase Order #
+    R3 C7: [BLANK] 
+    R3 C8: [NUMBER] 260771.0
+    R3 C9: [BLANK] 
+    R4 C1: [BLANK] 
+    R4 C2: [BLANK] 
+    R4 C3: [BLANK] 
+    R4 C4: [BLANK] 
+    R4 C5: [BLANK] 
+    R4 C6: [TEXT] Delivery Challan #
+    R4 C7: [BLANK] 
+    R4 C8: [TEXT] 1073
+    R4 C9: [BLANK] 
+    R5 C1: [BLANK] 
+    R5 C2: [BLANK] 
+    R5 C3: [BLANK] 
+    R5 C4: [BLANK] 
+    R5 C5: [BLANK] 
+    R5 C6: [BLANK] 
+    R5 C7: [TEXT] INDENT No.
+    R5 C8: [BLANK] 
+    R5 C9: [BLANK] 
+    R6 C1: [TEXT] General Order Supplies / Stockiest in All Kinds of Hardware Tools 
+    R6 C2: [BLANK] 
+    R6 C3: [BLANK] 
+    R6 C4: [BLANK] 
+    R6 C5: [BLANK] 
+    R6 C6: [BLANK] 
+    R6 C7: [TEXT] Delivery Date
+    R6 C8: [DATE] 46116.0
+    R6 C9: [BLANK] 
+    R7 C1: [BLANK] 
+    R7 C2: [BLANK] 
+    R7 C3: [BLANK] 
+    R7 C4: [BLANK] 
+    R7 C7: [BLANK] 
+    R7 C8: [BLANK] 
+    R7 C9: [BLANK] 
+    R7 C14: [BLANK] 
+    R8 C1: [BLANK] 
+    R8 C2: [BLANK] 
+    R8 C3: [BLANK] 
+    R8 C4: [BLANK] 
+    R9 C1: [TEXT] Address
+    R9 C2: [BLANK] 
+    R9 C3: [BLANK] 
+    R9 C4: [BLANK] 
+    R9 C5: [BLANK] 
+    R9 C6: [TEXT] Delivery Address
+    R9 C7: [BLANK] 
+    R9 C8: [BLANK] 
+    R9 C9: [BLANK] 
+    R10 C1: [TEXT] Shop # F-44, 1st Floor, Falak City Tower
+    R10 C2: [BLANK] 
+    R10 C3: [BLANK] 
+    R10 C4: [BLANK] 
+    R10 C5: [BLANK] 
+    R10 C6: [TEXT] MEKO DENIM MILLS (Pvt) Ltd.
+    R10 C7: [BLANK] 
+    R10 C8: [BLANK] 
+    R10 C9: [BLANK] 
+    R11 C1: [TEXT] Opposite Karachi Chamber Of Commerce
+    R11 C2: [BLANK] 
+    R11 C3: [BLANK] 
+    R11 C4: [BLANK] 
+    R11 C5: [BLANK] 
+    R11 C6: [BLANK] 
+    R11 C7: [BLANK] 
+    R11 C8: [BLANK] 
+    R11 C9: [BLANK] 
+    R12 C1: [TEXT] Talpur Road
+    R12 C2: [BLANK] 
+    R12 C3: [BLANK] 
+    R12 C4: [BLANK] 
+    R12 C5: [BLANK] 
+    R12 C6: [TEXT] F-MDMSITE-2
+    R12 C7: [BLANK] 
+    R12 C8: [BLANK] 
+    R12 C9: [BLANK] 
+    R13 C1: [TEXT] Karachi
+    R13 C2: [BLANK] 
+    R13 C3: [BLANK] 
+    R13 C4: [BLANK] 
+    R13 C5: [BLANK] 
+    R13 C6: [TEXT] KARACHI
+    R13 C7: [BLANK] 
+    R13 C8: [BLANK] 
+    R13 C9: [BLANK] 
+    R14 C1: [TEXT] 0333 - 1665253
+    R14 C2: [BLANK] 
+    R14 C3: [BLANK] 
+    R14 C4: [BLANK] 
+    R14 C5: [BLANK] 
+    R14 C6: [BLANK] 
+    R14 C7: [BLANK] 
+    R14 C8: [BLANK] 
+    R14 C9: [BLANK] 
+    R16 C1: [TEXT] Qty
+    R16 C2: [TEXT] Description
+    R16 C3: [BLANK] 
+    R16 C4: [BLANK] 
+    R16 C5: [BLANK] 
+    R16 C6: [BLANK] 
+    R16 C7: [BLANK] 
+    R16 C8: [BLANK] 
+    R16 C9: [BLANK] 
+    R17 C1: [TEXT] 4
+    R17 C2: [TEXT] Measuring Tape 16'
+    R17 C3: [BLANK] 
+    R17 C4: [BLANK] 
+    R17 C5: [BLANK] 
+    R17 C6: [BLANK] 
+    R17 C7: [BLANK] 
+    R17 C8: [BLANK] 
+    R17 C9: [BLANK] 
+    R18 C1: [TEXT] 1
+    R18 C2: [TEXT] Measuring Tape 7.5mtr
+    R18 C3: [BLANK] 
+    R18 C4: [BLANK] 
+    R18 C5: [BLANK] 
+    R18 C6: [BLANK] 
+    R18 C7: [BLANK] 
+    R18 C8: [BLANK] 
+    R18 C9: [BLANK] 
+    R19 C1: [BLANK] 
+    R19 C2: [BLANK] 
+    R19 C3: [BLANK] 
+    R19 C4: [BLANK] 
+    R19 C5: [BLANK] 
+    R19 C6: [BLANK] 
+    R19 C7: [BLANK] 
+    R19 C8: [BLANK] 
+    R19 C9: [BLANK] 
+    R20 C1: [BLANK] 
+    R20 C2: [BLANK] 
+    R20 C3: [BLANK] 
+    R20 C4: [BLANK] 
+    R20 C5: [BLANK] 
+    R20 C6: [BLANK] 
+    R20 C7: [BLANK] 
+    R20 C8: [BLANK] 
+    R20 C9: [BLANK] 
+    R21 C1: [BLANK] 
+    R21 C2: [BLANK] 
+    R21 C3: [BLANK] 
+    R21 C4: [BLANK] 
+    R21 C5: [BLANK] 
+    R21 C6: [BLANK] 
+    R21 C7: [BLANK] 
+    R21 C8: [BLANK] 
+    R21 C9: [BLANK] 
+    R22 C1: [BLANK] 
+    R22 C2: [BLANK] 
+    R22 C3: [BLANK] 
+    R22 C4: [BLANK] 
+    R22 C5: [BLANK] 
+    R22 C6: [BLANK] 
+    R22 C7: [BLANK] 
+    R22 C8: [BLANK] 
+    R22 C9: [BLANK] 
+    R23 C1: [BLANK] 
+    R23 C2: [BLANK] 
+    R23 C3: [BLANK] 
+    R23 C4: [BLANK] 
+    R23 C5: [BLANK] 
+    R23 C6: [BLANK] 
+    R23 C7: [BLANK] 
+    R23 C8: [BLANK] 
+    R23 C9: [BLANK] 
+    R24 C1: [BLANK] 
+    R24 C2: [BLANK] 
+    R24 C3: [BLANK] 
+    R24 C4: [BLANK] 
+    R24 C5: [BLANK] 
+    R24 C6: [BLANK] 
+    R24 C7: [BLANK] 
+    R24 C8: [BLANK] 
+    R24 C9: [BLANK] 
+    R25 C1: [BLANK] 
+    R25 C2: [BLANK] 
+    R25 C3: [BLANK] 
+    R25 C4: [BLANK] 
+    R25 C5: [BLANK] 
+    R25 C6: [BLANK] 
+    R25 C7: [BLANK] 
+    R25 C8: [BLANK] 
+    R25 C9: [BLANK] 
+    R26 C1: [BLANK] 
+    R26 C2: [BLANK] 
+    R26 C3: [BLANK] 
+    R26 C4: [BLANK] 
+    R26 C5: [BLANK] 
+    R26 C6: [BLANK] 
+    R26 C7: [BLANK] 
+    R26 C8: [BLANK] 
+    R26 C9: [BLANK] 
+    R27 C1: [BLANK] 
+    R27 C2: [BLANK] 
+    R27 C3: [BLANK] 
+    R27 C4: [BLANK] 
+    R27 C5: [BLANK] 
+    R27 C6: [BLANK] 
+    R27 C7: [BLANK] 
+    R27 C8: [BLANK] 
+    R27 C9: [BLANK] 
+    R28 C1: [BLANK] 
+    R28 C2: [BLANK] 
+    R28 C3: [BLANK] 
+    R28 C4: [BLANK] 
+    R28 C5: [BLANK] 
+    R28 C6: [BLANK] 
+    R28 C7: [BLANK] 
+    R28 C8: [BLANK] 
+    R28 C9: [BLANK] 
+    R29 C1: [BLANK] 
+    R29 C2: [BLANK] 
+    R29 C3: [BLANK] 
+    R29 C4: [BLANK] 
+    R29 C5: [BLANK] 
+    R29 C6: [BLANK] 
+    R29 C7: [BLANK] 
+    R29 C8: [BLANK] 
+    R29 C9: [BLANK] 
+    R30 C1: [BLANK] 
+    R30 C2: [BLANK] 
+    R30 C3: [BLANK] 
+    R30 C4: [BLANK] 
+    R30 C5: [BLANK] 
+    R30 C6: [BLANK] 
+    R30 C7: [BLANK] 
+    R30 C8: [BLANK] 
+    R30 C9: [BLANK] 
+    R31 C1: [BLANK] 
+    R31 C2: [BLANK] 
+    R31 C3: [BLANK] 
+    R31 C4: [BLANK] 
+    R31 C5: [BLANK] 
+    R31 C6: [BLANK] 
+    R31 C7: [BLANK] 
+    R31 C8: [BLANK] 
+    R31 C9: [BLANK] 
+    R32 C1: [BLANK] 
+    R32 C2: [BLANK] 
+    R32 C3: [BLANK] 
+    R32 C4: [BLANK] 
+    R32 C5: [BLANK] 
+    R32 C6: [BLANK] 
+    R32 C7: [BLANK] 
+    R32 C8: [BLANK] 
+    R32 C9: [BLANK] 
+    R33 C1: [BLANK] 
+    R33 C2: [BLANK] 
+    R33 C3: [BLANK] 
+    R33 C4: [BLANK] 
+    R33 C5: [BLANK] 
+    R33 C6: [BLANK] 
+    R33 C7: [BLANK] 
+    R33 C8: [BLANK] 
+    R33 C9: [BLANK] 
+    R34 C1: [BLANK] 
+    R34 C2: [BLANK] 
+    R34 C3: [BLANK] 
+    R34 C4: [BLANK] 
+    R34 C5: [BLANK] 
+    R34 C6: [BLANK] 
+    R34 C7: [BLANK] 
+    R34 C8: [BLANK] 
+    R34 C9: [BLANK] 
+    R35 C1: [BLANK] 
+    R35 C2: [BLANK] 
+    R35 C3: [BLANK] 
+    R35 C4: [BLANK] 
+    R35 C5: [BLANK] 
+    R35 C6: [BLANK] 
+    R35 C7: [BLANK] 
+    R35 C8: [BLANK] 
+    R35 C9: [BLANK] 
+    R36 C1: [BLANK] 
+    R36 C2: [BLANK] 
+    R36 C3: [BLANK] 
+    R36 C4: [BLANK] 
+    R36 C5: [BLANK] 
+    R36 C6: [BLANK] 
+    R36 C7: [BLANK] 
+    R36 C8: [BLANK] 
+    R36 C9: [BLANK] 
+    R37 C1: [BLANK] 
+    R37 C2: [BLANK] 
+    R37 C3: [BLANK] 
+    R37 C4: [BLANK] 
+    R37 C5: [BLANK] 
+    R37 C6: [BLANK] 
+    R37 C7: [BLANK] 
+    R37 C8: [BLANK] 
+    R37 C9: [BLANK] 
+    R38 C1: [BLANK] 
+    R38 C2: [BLANK] 
+    R38 C3: [BLANK] 
+    R38 C4: [BLANK] 
+    R38 C5: [BLANK] 
+    R38 C6: [BLANK] 
+    R38 C7: [BLANK] 
+    R38 C8: [BLANK] 
+    R38 C9: [BLANK] 
+    R39 C1: [BLANK] 
+    R39 C2: [BLANK] 
+    R39 C3: [BLANK] 
+    R39 C4: [BLANK] 
+    R39 C5: [BLANK] 
+    R39 C6: [BLANK] 
+    R39 C7: [BLANK] 
+    R39 C8: [BLANK] 
+    R39 C9: [BLANK] 
+    R40 C1: [BLANK] 
+    R40 C2: [BLANK] 
+    R40 C3: [BLANK] 
+    R40 C4: [BLANK] 
+    R40 C5: [BLANK] 
+    R40 C6: [BLANK] 
+    R40 C7: [BLANK] 
+    R40 C8: [BLANK] 
+    R40 C9: [BLANK] 
+    R41 C1: [BLANK] 
+    R41 C2: [BLANK] 
+    R41 C3: [BLANK] 
+    R41 C4: [BLANK] 
+    R41 C5: [BLANK] 
+    R41 C6: [BLANK] 
+    R41 C7: [BLANK] 
+    R41 C8: [BLANK] 
+    R41 C9: [BLANK] 
+    R42 C1: [BLANK] 
+    R42 C2: [BLANK] 
+    R42 C3: [BLANK] 
+    R42 C4: [BLANK] 
+    R42 C5: [BLANK] 
+    R42 C6: [BLANK] 
+    R42 C7: [BLANK] 
+    R42 C8: [BLANK] 
+    R42 C9: [BLANK] 
+    R43 C1: [TEXT] Signature and Stamp
+    R43 C2: [BLANK] 
+    R43 C3: [BLANK] 
+    R43 C4: [BLANK] 
+    R43 C5: [BLANK] 
+    R43 C6: [TEXT] Receiver Signature and Stamp
+    R43 C7: [BLANK] 
+    R43 C8: [BLANK] 
+    R43 C9: [BLANK] 
+    R44 C1: [TEXT] Thank you for your business!
+    R44 C2: [BLANK] 
+    R44 C3: [BLANK] 
+    R44 C4: [BLANK] 
+    R44 C5: [BLANK] 
+    R44 C6: [BLANK] 
+    R44 C7: [BLANK] 
+    R44 C8: [BLANK] 
+    R44 C9: [BLANK] 
+    R45 C1: [BLANK] 
+    R45 C2: [BLANK] 
+    R45 C3: [BLANK] 
+    R45 C4: [BLANK] 
+    R45 C5: [BLANK] 
+    R45 C6: [BLANK] 
+    R45 C7: [BLANK] 
+    R45 C8: [BLANK] 
+    R45 C9: [BLANK] 
+    R46 C1: [BLANK] 
+    R46 C2: [BLANK] 
+    R46 C3: [BLANK] 
+    R46 C4: [BLANK] 
+    R46 C5: [BLANK] 
+    R46 C6: [BLANK] 
+    R46 C7: [BLANK] 
+    R46 C8: [BLANK] 
+    R46 C9: [BLANK] 
+    R47 C1: [BLANK] 
+    R47 C2: [BLANK] 
+    R47 C3: [BLANK] 
+    R47 C4: [BLANK] 
+    R47 C5: [BLANK] 
+    R47 C6: [BLANK] 
+    R47 C7: [BLANK] 
+    R47 C8: [BLANK] 
+    R47 C9: [BLANK] 
+    R48 C1: [BLANK] 
+    R48 C2: [BLANK] 
+    R48 C3: [BLANK] 
+    R48 C4: [BLANK] 
+    R48 C5: [BLANK] 
+    R48 C6: [BLANK] 
+    R48 C7: [BLANK] 
+    R48 C8: [BLANK] 
+    R48 C9: [BLANK] 
+    R49 C1: [TEXT] Should you have any enquiries concerning this delivery note, please contact: 
+Mr...
+    R49 C2: [BLANK] 
+    R49 C3: [BLANK] 
+    R49 C4: [BLANK] 
+    R49 C5: [BLANK] 
+    R49 C6: [BLANK] 
+    R49 C7: [BLANK] 
+    R49 C8: [BLANK] 
+    R49 C9: [BLANK] 
+    R50 C1: [BLANK] 
+    R50 C2: [BLANK] 
+    R50 C3: [BLANK] 
+    R50 C4: [BLANK] 
+    R50 C5: [BLANK] 
+    R50 C6: [BLANK] 
+    R50 C7: [BLANK] 
+    R50 C8: [BLANK] 
+    R50 C9: [BLANK] 
+    R50 C14: [BLANK] 
+    R51 C1: [BLANK] 
+    R51 C2: [BLANK] 
+    R51 C3: [BLANK] 
+    R51 C4: [BLANK] 
+    R51 C5: [BLANK] 
+    R51 C6: [BLANK] 
+    R51 C7: [BLANK] 
+    R51 C8: [BLANK] 
+    R51 C9: [BLANK] 
+    R52 C1: [BLANK] 
+    R52 C2: [BLANK] 
+    R52 C3: [BLANK] 
+    R52 C4: [BLANK] 
+    R52 C5: [BLANK] 
+    R52 C6: [BLANK] 
+    R52 C7: [BLANK] 
+    R52 C8: [BLANK] 
+    R52 C9: [BLANK] 
+    R53 C1: [BLANK] 
+    R53 C2: [BLANK] 
+    R53 C3: [BLANK] 
+    R53 C4: [BLANK] 
+    R53 C5: [BLANK] 
+    R53 C6: [BLANK] 
+    R53 C7: [BLANK] 
+    R53 C8: [BLANK] 
+    R53 C9: [BLANK] 
+
+====================================================================================================
+FILE: Hakimi Bill - xlsx
+PATH: C:\Users\hussahuz\Downloads\Bill # 3719 AFROZE TEXTILE.xlsx
+====================================================================================================
+
+--- Sheet: 'Invoice' | Rows: 47 | Cols: 5 ---
+
+  MERGED CELLS (14 ranges):
+    D10:E10
+    A1:C1
+    D1:E1
+    B2:C4
+    D3:E4
+    A5:B8
+    A45:B45
+    A38:C39
+    D5:E6
+    A13:B13
+    A47:E47
+    D9:E9
+    B9:C10
+    D45:E45
+
+  COLUMN WIDTHS:
+    Col A: 8.0
+    Col B: 12.21875
+    Col C: 44.33203125
+    Col D: 14.109375
+    Col E: 15.33203125
+    Col F: 8.88671875
+
+  ROW HEIGHTS (explicit only):
+    Row 1: 39.0 pt
+    Row 2: 15.0 pt
+    Row 3: 15.0 pt
+    Row 4: 15.0 pt
+    Row 5: 15.0 pt
+    Row 6: 15.0 pt
+    Row 7: 13.5 pt
+    Row 8: 11.4 pt
+    Row 9: 21.0 pt
+    Row 10: 15.0 pt
+    Row 11: 15.0 pt
+    Row 12: 15.0 pt
+    Row 13: 15.0 pt
+    Row 14: 15.0 pt
+    Row 15: 15.0 pt
+    Row 16: 26.55 pt
+    Row 17: 18.0 pt
+    Row 18: 15.0 pt
+    Row 19: 18.0 pt
+    Row 20: 21.6 pt
+    Row 21: 15.0 pt
+    Row 22: 15.0 pt
+    Row 23: 15.0 pt
+    Row 24: 15.0 pt
+    Row 25: 15.0 pt
+    Row 26: 15.75 pt
+    Row 27: 15.75 pt
+    Row 28: 15.75 pt
+    Row 29: 15.75 pt
+    Row 30: 15.75 pt
+    Row 31: 15.75 pt
+    Row 32: 15.75 pt
+    Row 33: 15.75 pt
+    Row 34: 15.75 pt
+    Row 35: 15.0 pt
+    Row 36: 18.75 pt
+    Row 37: 18.75 pt
+    Row 38: 18.75 pt
+    Row 39: 23.25 pt
+    Row 40: 18.75 pt
+    Row 41: 18.75 pt
+    Row 42: 18.75 pt
+    Row 43: 18.75 pt
+    Row 44: 27.6 pt
+    Row 45: 18.75 pt
+    Row 46: 18.75 pt
+    Row 47: 18.75 pt
+    Row 48: 18.75 pt
+    Row 49: 18.75 pt
+    Row 50: 18.75 pt
+    Row 51: 18.75 pt
+    Row 52: 18.75 pt
+    Row 53: 18.75 pt
+    Row 54: 18.75 pt
+    Row 55: 18.75 pt
+    Row 56: 18.75 pt
+    Row 57: 18.75 pt
+
+  CELL VALUES:
+    R1 C1 (A1): HAKIMI TRADERS
+    R1 C4 (D1): BILL
+    R2 C2 (B2): 1st Floor, Office # 111,
+Industrial Town Plaza, Serai Road, Karachi
+    R2 C4 (D2): Date:
+    R2 C5 (E2): 2026-03-27 00:00:00
+    R3 C4 (D3): BILL # 3719
+    R5 C1 (A5): Murtaza
+0331-3368883
+
+    R5 C4 (D5): DC # 4160
+    R7 C4 (D7): D.C Date 
+    R7 C5 (E7): 2026-04-02 00:00:00
+    R9 C1 (A9): To;
+    R9 C2 (B9): AFROZE TEXTILE INDUSTRIES Pvt Ltd
+    R9 C4 (D9): NTN # 4228937-8
+    R10 C4 (D10): GST # 3277876175852
+    R12 C1 (A12): Purchase Order # 
+    R12 C3 (C12): 2026-2867-010
+    R13 C1 (A13): P.O  Date
+    R13 C3 (C13): 2026-02-09 00:00:00
+    R15 C1 (A15): S #
+    R15 C2 (B15): Quantity
+    R15 C3 (C15): Item Details
+    R15 C4 (D15): Unit Price
+    R15 C5 (E15): Total Price
+    R16 C1 (A16): 1
+    R16 C2 (B16): 6
+    R16 C3 (C16): Valve Pneumatic SY5320-5Yo-01F
+    R16 C4 (D16): 5200
+    R16 C5 (E16): 31200
+    R17 C5 (E17): 0
+    R18 C5 (E18): 0
+    R19 C5 (E19): 0
+    R20 C5 (E20): 0
+    R21 C5 (E21): 0
+    R22 C5 (E22): 0
+    R23 C5 (E23): 0
+    R24 C5 (E24): 0
+    R25 C5 (E25): 0
+    R26 C5 (E26): 0
+    R27 C5 (E27): 0
+    R28 C5 (E28): 0
+    R29 C5 (E29): 0
+    R30 C5 (E30): 0
+    R31 C5 (E31): 0
+    R32 C5 (E32): 0
+    R33 C5 (E33): 0
+    R34 C5 (E34): 0
+    R35 C5 (E35): 0
+    R36 C5 (E36): 0
+    R37 C1 (A37): Amount In Words:
+    R37 C4 (D37): SUB TOTAL
+    R37 C5 (E37): 31200
+    R38 C1 (A38): Thirty Six Thousand Eight Hundred Sixteen Only.
+    R38 C4 (D38): GST (18%)
+    R38 C5 (E38): 5616
+    R39 C4 (D39): GRAND TOTAL
+    R39 C5 (E39): 36816
+    R45 C1 (A45): Signature and Stamp
+    R45 C4 (D45): Receiver Signature and Stamp
+    R47 C1 (A47): SALES | HARDWARE | GENERAL ORDER | 
+
+====================================================================================================
+FILE: Roshan Bill - xls
+PATH: C:\Users\hussahuz\Downloads\Bill # 970 MEKO DENIM.xls
+====================================================================================================
+
+--- Sheet: 'Sales Invoice 1' | Rows: 54 | Cols: 14 ---
+
+  MERGED CELLS (68 ranges):
+    rows 26-26, cols 1-7  (xlrd: 26:27, 1:8)
+    rows 26-26, cols 10-11  (xlrd: 26:27, 10:12)
+    rows 27-27, cols 10-11  (xlrd: 27:28, 10:12)
+    rows 23-23, cols 10-11  (xlrd: 23:24, 10:12)
+    rows 17-17, cols 8-9  (xlrd: 17:18, 8:10)
+    rows 17-17, cols 10-11  (xlrd: 17:18, 10:12)
+    rows 19-19, cols 10-11  (xlrd: 19:20, 10:12)
+    rows 25-25, cols 1-7  (xlrd: 25:26, 1:8)
+    rows 25-25, cols 10-11  (xlrd: 25:26, 10:12)
+    rows 17-17, cols 0-1  (xlrd: 17:18, 0:2)
+    rows 31-31, cols 10-11  (xlrd: 31:32, 10:12)
+    rows 32-32, cols 1-7  (xlrd: 32:33, 1:8)
+    rows 28-28, cols 1-7  (xlrd: 28:29, 1:8)
+    rows 29-29, cols 1-7  (xlrd: 29:30, 1:8)
+    rows 27-27, cols 1-7  (xlrd: 27:28, 1:8)
+    rows 28-28, cols 10-11  (xlrd: 28:29, 10:12)
+    rows 30-30, cols 1-7  (xlrd: 30:31, 1:8)
+    rows 30-30, cols 10-11  (xlrd: 30:31, 10:12)
+    rows 24-24, cols 1-7  (xlrd: 24:25, 1:8)
+    rows 24-24, cols 10-11  (xlrd: 24:25, 10:12)
+    rows 21-21, cols 10-11  (xlrd: 21:22, 10:12)
+    rows 23-23, cols 1-7  (xlrd: 23:24, 1:8)
+    rows 22-22, cols 10-11  (xlrd: 22:23, 10:12)
+    rows 19-19, cols 1-7  (xlrd: 19:20, 1:8)
+    rows 11-11, cols 7-11  (xlrd: 11:12, 7:12)
+    rows 4-4, cols 10-11  (xlrd: 4:5, 10:12)
+    rows 10-11, cols 0-5  (xlrd: 10:12, 0:6)
+    rows 6-6, cols 10-11  (xlrd: 6:7, 10:12)
+    rows 7-7, cols 10-11  (xlrd: 7:8, 10:12)
+    rows 12-12, cols 8-11  (xlrd: 12:13, 8:12)
+    rows 10-10, cols 8-11  (xlrd: 10:11, 8:12)
+    rows 33-33, cols 1-7  (xlrd: 33:34, 1:8)
+    rows 0-3, cols 0-5  (xlrd: 0:4, 0:6)
+    rows 4-5, cols 0-5  (xlrd: 4:6, 0:6)
+    rows 9-9, cols 0-11  (xlrd: 9:10, 0:12)
+    rows 16-16, cols 10-11  (xlrd: 16:17, 10:12)
+    rows 16-16, cols 8-9  (xlrd: 16:17, 8:10)
+    rows 22-22, cols 1-7  (xlrd: 22:23, 1:8)
+    rows 0-1, cols 9-11  (xlrd: 0:2, 9:12)
+    rows 3-3, cols 10-11  (xlrd: 3:4, 10:12)
+    rows 12-16, cols 0-5  (xlrd: 12:17, 0:6)
+    rows 17-17, cols 2-3  (xlrd: 17:18, 2:4)
+    rows 39-40, cols 10-11  (xlrd: 39:41, 10:12)
+    rows 42-42, cols 0-11  (xlrd: 42:43, 0:12)
+    rows 48-48, cols 0-11  (xlrd: 48:49, 0:12)
+    rows 35-35, cols 0-7  (xlrd: 35:36, 0:8)
+    rows 29-29, cols 10-11  (xlrd: 29:30, 10:12)
+    rows 36-36, cols 10-11  (xlrd: 36:37, 10:12)
+    rows 31-31, cols 1-7  (xlrd: 31:32, 1:8)
+    rows 32-32, cols 10-11  (xlrd: 32:33, 10:12)
+    rows 33-33, cols 10-11  (xlrd: 33:34, 10:12)
+    rows 53-53, cols 0-11  (xlrd: 53:54, 0:12)
+    rows 52-52, cols 0-11  (xlrd: 52:53, 0:12)
+    rows 50-51, cols 0-11  (xlrd: 50:52, 0:12)
+    rows 45-45, cols 0-2  (xlrd: 45:46, 0:3)
+    rows 39-40, cols 9-9  (xlrd: 39:41, 9:10)
+    rows 36-40, cols 0-7  (xlrd: 36:41, 0:8)
+    rows 45-45, cols 9-11  (xlrd: 45:46, 9:12)
+    rows 13-14, cols 7-11  (xlrd: 13:15, 7:12)
+    rows 17-17, cols 6-7  (xlrd: 17:18, 6:8)
+    rows 5-5, cols 10-11  (xlrd: 5:6, 10:12)
+    rows 20-20, cols 1-7  (xlrd: 20:21, 1:8)
+    rows 21-21, cols 1-7  (xlrd: 21:22, 1:8)
+    rows 20-20, cols 10-11  (xlrd: 20:21, 10:12)
+    rows 16-16, cols 6-7  (xlrd: 16:17, 6:8)
+    rows 6-6, cols 1-3  (xlrd: 6:7, 1:4)
+    rows 7-7, cols 1-3  (xlrd: 7:8, 1:4)
+    rows 17-17, cols 4-5  (xlrd: 17:18, 4:6)
+
+  COLUMN WIDTHS:
+    Col 0: 2343 units (9.15 chars)
+    Col 1: 2107 units (8.23 chars)
+    Col 2: 2343 units (9.15 chars)
+    Col 3: 1536 units (6.00 chars)
+    Col 4: 2343 units (9.15 chars)
+    Col 5: 1890 units (7.38 chars)
+    Col 6: 1792 units (7.00 chars)
+    Col 7: 2343 units (9.15 chars)
+    Col 8: 1693 units (6.61 chars)
+    Col 9: 4194 units (16.38 chars)
+    Col 10: 905 units (3.54 chars)
+    Col 11: 3899 units (15.23 chars)
+    Col 12: 0 units (0.00 chars)
+    Col 13: 2343 units (9.15 chars)
+
+  ROW HEIGHTS (explicit only):
+    Row 0: 600 twips (30.0 pt)
+    Row 1: 360 twips (18.0 pt)
+    Row 2: 315 twips (15.8 pt)
+    Row 3: 600 twips (30.0 pt)
+    Row 4: 360 twips (18.0 pt)
+    Row 5: 360 twips (18.0 pt)
+    Row 6: 360 twips (18.0 pt)
+    Row 7: 360 twips (18.0 pt)
+    Row 8: 150 twips (7.5 pt)
+    Row 9: 450 twips (22.5 pt)
+    Row 10: 360 twips (18.0 pt)
+    Row 11: 360 twips (18.0 pt)
+    Row 12: 360 twips (18.0 pt)
+    Row 13: 360 twips (18.0 pt)
+    Row 14: 360 twips (18.0 pt)
+    Row 15: 150 twips (7.5 pt)
+    Row 16: 360 twips (18.0 pt)
+    Row 17: 360 twips (18.0 pt)
+    Row 18: 150 twips (7.5 pt)
+    Row 19: 360 twips (18.0 pt)
+    Row 20: 360 twips (18.0 pt)
+    Row 21: 360 twips (18.0 pt)
+    Row 22: 360 twips (18.0 pt)
+    Row 23: 360 twips (18.0 pt)
+    Row 24: 360 twips (18.0 pt)
+    Row 25: 360 twips (18.0 pt)
+    Row 26: 360 twips (18.0 pt)
+    Row 27: 360 twips (18.0 pt)
+    Row 28: 360 twips (18.0 pt)
+    Row 29: 360 twips (18.0 pt)
+    Row 30: 360 twips (18.0 pt)
+    Row 31: 360 twips (18.0 pt)
+    Row 32: 360 twips (18.0 pt)
+    Row 33: 360 twips (18.0 pt)
+    Row 34: 150 twips (7.5 pt)
+    Row 35: 360 twips (18.0 pt)
+    Row 36: 360 twips (18.0 pt)
+    Row 37: 360 twips (18.0 pt)
+    Row 38: 360 twips (18.0 pt)
+    Row 39: 360 twips (18.0 pt)
+    Row 40: 360 twips (18.0 pt)
+    Row 41: 150 twips (7.5 pt)
+    Row 42: 360 twips (18.0 pt)
+    Row 43: 360 twips (18.0 pt)
+    Row 44: 360 twips (18.0 pt)
+    Row 45: 360 twips (18.0 pt)
+    Row 46: 360 twips (18.0 pt)
+    Row 47: 249 twips (12.4 pt)
+    Row 48: 360 twips (18.0 pt)
+    Row 49: 150 twips (7.5 pt)
+    Row 50: 255 twips (12.8 pt)
+    Row 51: 465 twips (23.2 pt)
+    Row 52: 360 twips (18.0 pt)
+    Row 53: 360 twips (18.0 pt)
+
+  CELL VALUES:
+    R0 C0: [TEXT] ROSHAN TRADERS
+    R0 C1: [BLANK] 
+    R0 C2: [BLANK] 
+    R0 C3: [BLANK] 
+    R0 C4: [BLANK] 
+    R0 C5: [BLANK] 
+    R0 C6: [BLANK] 
+    R0 C7: [BLANK] 
+    R0 C8: [BLANK] 
+    R0 C9: [TEXT] Bill 
+    R0 C10: [BLANK] 
+    R0 C11: [BLANK] 
+    R1 C0: [BLANK] 
+    R1 C1: [BLANK] 
+    R1 C2: [BLANK] 
+    R1 C3: [BLANK] 
+    R1 C4: [BLANK] 
+    R1 C5: [BLANK] 
+    R1 C6: [BLANK] 
+    R1 C7: [BLANK] 
+    R1 C8: [BLANK] 
+    R1 C9: [BLANK] 
+    R1 C10: [BLANK] 
+    R1 C11: [BLANK] 
+    R1 C12: [ERROR] 23
+    R1 C13: [BLANK] 
+    R2 C0: [BLANK] 
+    R2 C1: [BLANK] 
+    R2 C2: [BLANK] 
+    R2 C3: [BLANK] 
+    R2 C4: [BLANK] 
+    R2 C5: [BLANK] 
+    R2 C6: [BLANK] 
+    R2 C7: [BLANK] 
+    R2 C8: [BLANK] 
+    R2 C9: [BLANK] 
+    R2 C10: [BLANK] 
+    R2 C11: [BLANK] 
+    R2 C12: [BLANK] 
+    R2 C13: [BLANK] 
+    R3 C0: [BLANK] 
+    R3 C1: [BLANK] 
+    R3 C2: [BLANK] 
+    R3 C3: [BLANK] 
+    R3 C4: [BLANK] 
+    R3 C5: [BLANK] 
+    R3 C8: [TEXT] Date:
+    R3 C9: [BLANK] 
+    R3 C10: [DATE] 46103.0
+    R3 C11: [BLANK] 
+    R4 C0: [TEXT] General Order Supplies / Stockiest in All Kinds Of Hardware Tools
+    R4 C1: [BLANK] 
+    R4 C2: [BLANK] 
+    R4 C3: [BLANK] 
+    R4 C4: [BLANK] 
+    R4 C5: [BLANK] 
+    R4 C8: [TEXT] Bill #:
+    R4 C9: [BLANK] 
+    R4 C10: [TEXT] 970
+    R4 C11: [BLANK] 
+    R4 C12: [BLANK] 
+    R5 C0: [BLANK] 
+    R5 C1: [BLANK] 
+    R5 C2: [BLANK] 
+    R5 C3: [BLANK] 
+    R5 C4: [BLANK] 
+    R5 C5: [BLANK] 
+    R5 C8: [TEXT] Delivery Challan #
+    R5 C9: [BLANK] 
+    R5 C10: [TEXT] 1071
+    R5 C11: [BLANK] 
+    R5 C12: [BLANK] 
+    R6 C0: [TEXT] STRN # 
+    R6 C1: [NUMBER] 4230140207959.0
+    R6 C2: [BLANK] 
+    R6 C3: [BLANK] 
+    R6 C4: [BLANK] 
+    R6 C8: [TEXT] Purchase Order #
+    R6 C9: [BLANK] 
+    R6 C10: [NUMBER] 260765.0
+    R6 C11: [BLANK] 
+    R6 C12: [BLANK] 
+    R7 C0: [TEXT] NTN # 
+    R7 C1: [TEXT] 8183300-5
+    R7 C2: [BLANK] 
+    R7 C3: [BLANK] 
+    R7 C8: [TEXT] Payment Due by:
+    R7 C9: [BLANK] 
+    R7 C10: [TEXT] As Per Required Date
+    R7 C11: [BLANK] 
+    R7 C12: [BLANK] 
+    R7 C13: [BLANK] 
+    R8 C0: [BLANK] 
+    R8 C1: [BLANK] 
+    R8 C2: [BLANK] 
+    R8 C3: [BLANK] 
+    R8 C8: [BLANK] 
+    R8 C9: [BLANK] 
+    R8 C10: [BLANK] 
+    R8 C11: [BLANK] 
+    R9 C0: [TEXT] Bill To:
+    R9 C1: [BLANK] 
+    R9 C2: [BLANK] 
+    R9 C3: [BLANK] 
+    R9 C4: [BLANK] 
+    R9 C5: [BLANK] 
+    R9 C6: [BLANK] 
+    R9 C7: [BLANK] 
+    R9 C8: [BLANK] 
+    R9 C9: [BLANK] 
+    R9 C10: [BLANK] 
+    R9 C11: [BLANK] 
+    R10 C0: [TEXT] Company Name
+    R10 C1: [BLANK] 
+    R10 C2: [BLANK] 
+    R10 C3: [BLANK] 
+    R10 C4: [BLANK] 
+    R10 C5: [BLANK] 
+    R10 C6: [BLANK] 
+    R10 C7: [BLANK] 
+    R10 C8: [BLANK] 
+    R10 C9: [BLANK] 
+    R10 C10: [BLANK] 
+    R10 C11: [BLANK] 
+    R10 C12: [BLANK] 
+    R11 C0: [BLANK] 
+    R11 C1: [BLANK] 
+    R11 C2: [BLANK] 
+    R11 C3: [BLANK] 
+    R11 C4: [BLANK] 
+    R11 C5: [BLANK] 
+    R11 C6: [BLANK] 
+    R11 C7: [TEXT] Concern Deparment
+    R11 C8: [BLANK] 
+    R11 C9: [BLANK] 
+    R11 C10: [BLANK] 
+    R11 C11: [BLANK] 
+    R11 C12: [BLANK] 
+    R11 C13: [BLANK] 
+    R12 C0: [TEXT] MEKO DENIM MILLS (Pvt) Ltd.
+    R12 C1: [BLANK] 
+    R12 C2: [BLANK] 
+    R12 C3: [BLANK] 
+    R12 C4: [BLANK] 
+    R12 C5: [BLANK] 
+    R12 C6: [BLANK] 
+    R12 C7: [BLANK] 
+    R12 C8: [BLANK] 
+    R12 C9: [BLANK] 
+    R12 C10: [BLANK] 
+    R12 C11: [BLANK] 
+    R12 C12: [BLANK] 
+    R13 C0: [BLANK] 
+    R13 C1: [BLANK] 
+    R13 C2: [BLANK] 
+    R13 C3: [BLANK] 
+    R13 C4: [BLANK] 
+    R13 C5: [BLANK] 
+    R13 C6: [BLANK] 
+    R13 C7: [TEXT] F-MDMSITE-2
+    R13 C8: [BLANK] 
+    R13 C9: [BLANK] 
+    R13 C10: [BLANK] 
+    R13 C11: [BLANK] 
+    R13 C12: [BLANK] 
+    R14 C0: [BLANK] 
+    R14 C1: [BLANK] 
+    R14 C2: [BLANK] 
+    R14 C3: [BLANK] 
+    R14 C4: [BLANK] 
+    R14 C5: [BLANK] 
+    R14 C6: [BLANK] 
+    R14 C7: [BLANK] 
+    R14 C8: [BLANK] 
+    R14 C9: [BLANK] 
+    R14 C10: [BLANK] 
+    R14 C11: [BLANK] 
+    R14 C12: [BLANK] 
+    R15 C0: [BLANK] 
+    R15 C1: [BLANK] 
+    R15 C2: [BLANK] 
+    R15 C3: [BLANK] 
+    R15 C4: [BLANK] 
+    R15 C5: [BLANK] 
+    R15 C6: [BLANK] 
+    R15 C7: [BLANK] 
+    R15 C8: [BLANK] 
+    R15 C9: [BLANK] 
+    R15 C10: [BLANK] 
+    R15 C11: [BLANK] 
+    R15 C12: [BLANK] 
+    R16 C0: [BLANK] 
+    R16 C1: [BLANK] 
+    R16 C2: [BLANK] 
+    R16 C3: [BLANK] 
+    R16 C4: [BLANK] 
+    R16 C5: [BLANK] 
+    R16 C6: [BLANK] 
+    R16 C7: [BLANK] 
+    R16 C8: [BLANK] 
+    R16 C9: [BLANK] 
+    R16 C10: [BLANK] 
+    R16 C11: [BLANK] 
+    R17 C0: [BLANK] 
+    R17 C1: [BLANK] 
+    R17 C2: [BLANK] 
+    R17 C3: [BLANK] 
+    R17 C4: [BLANK] 
+    R17 C5: [BLANK] 
+    R17 C6: [BLANK] 
+    R17 C7: [BLANK] 
+    R17 C8: [BLANK] 
+    R17 C9: [BLANK] 
+    R17 C10: [BLANK] 
+    R17 C11: [BLANK] 
+    R18 C0: [BLANK] 
+    R18 C1: [BLANK] 
+    R18 C2: [BLANK] 
+    R18 C3: [BLANK] 
+    R18 C4: [BLANK] 
+    R18 C5: [BLANK] 
+    R18 C6: [BLANK] 
+    R18 C7: [BLANK] 
+    R18 C8: [BLANK] 
+    R18 C9: [BLANK] 
+    R18 C10: [BLANK] 
+    R18 C11: [BLANK] 
+    R19 C0: [TEXT] Item #
+    R19 C1: [TEXT] Description
+    R19 C2: [BLANK] 
+    R19 C3: [BLANK] 
+    R19 C4: [BLANK] 
+    R19 C5: [BLANK] 
+    R19 C6: [BLANK] 
+    R19 C7: [BLANK] 
+    R19 C8: [TEXT] Qty
+    R19 C9: [TEXT] Unit Price
+    R19 C10: [TEXT] Line Total
+    R19 C11: [BLANK] 
+    R19 C12: [BLANK] 
+    R20 C0: [NUMBER] 1.0
+    R20 C1: [TEXT] Scissor 4" First Aid 
+    R20 C2: [BLANK] 
+    R20 C3: [BLANK] 
+    R20 C4: [BLANK] 
+    R20 C5: [BLANK] 
+    R20 C6: [BLANK] 
+    R20 C7: [BLANK] 
+    R20 C8: [NUMBER] 5.0
+    R20 C9: [NUMBER] 150.0
+    R20 C10: [NUMBER] 750.0
+    R20 C11: [BLANK] 
+    R20 C12: [BLANK] 
+    R21 C0: [NUMBER] 2.0
+    R21 C1: [TEXT] Crap Bandage
+    R21 C2: [BLANK] 
+    R21 C3: [BLANK] 
+    R21 C4: [BLANK] 
+    R21 C5: [BLANK] 
+    R21 C6: [BLANK] 
+    R21 C7: [BLANK] 
+    R21 C8: [TEXT] 1 Pkt
+    R21 C9: [NUMBER] 1200.0
+    R21 C10: [NUMBER] 1200.0
+    R21 C11: [BLANK] 
+    R21 C12: [BLANK] 
+    R22 C0: [BLANK] 
+    R22 C1: [BLANK] 
+    R22 C2: [BLANK] 
+    R22 C3: [BLANK] 
+    R22 C4: [BLANK] 
+    R22 C5: [BLANK] 
+    R22 C6: [BLANK] 
+    R22 C7: [BLANK] 
+    R22 C8: [BLANK] 
+    R22 C9: [BLANK] 
+    R22 C10: [NUMBER] 0.0
+    R22 C11: [BLANK] 
+    R22 C12: [BLANK] 
+    R23 C0: [BLANK] 
+    R23 C1: [BLANK] 
+    R23 C2: [BLANK] 
+    R23 C3: [BLANK] 
+    R23 C4: [BLANK] 
+    R23 C5: [BLANK] 
+    R23 C6: [BLANK] 
+    R23 C7: [BLANK] 
+    R23 C8: [BLANK] 
+    R23 C9: [BLANK] 
+    R23 C10: [NUMBER] 0.0
+    R23 C11: [BLANK] 
+    R23 C12: [BLANK] 
+    R24 C0: [BLANK] 
+    R24 C1: [BLANK] 
+    R24 C2: [BLANK] 
+    R24 C3: [BLANK] 
+    R24 C4: [BLANK] 
+    R24 C5: [BLANK] 
+    R24 C6: [BLANK] 
+    R24 C7: [BLANK] 
+    R24 C8: [BLANK] 
+    R24 C9: [BLANK] 
+    R24 C10: [NUMBER] 0.0
+    R24 C11: [BLANK] 
+    R24 C12: [BLANK] 
+    R25 C0: [BLANK] 
+    R25 C1: [BLANK] 
+    R25 C2: [BLANK] 
+    R25 C3: [BLANK] 
+    R25 C4: [BLANK] 
+    R25 C5: [BLANK] 
+    R25 C6: [BLANK] 
+    R25 C7: [BLANK] 
+    R25 C8: [BLANK] 
+    R25 C9: [BLANK] 
+    R25 C10: [NUMBER] 0.0
+    R25 C11: [BLANK] 
+    R25 C12: [BLANK] 
+    R26 C0: [BLANK] 
+    R26 C1: [BLANK] 
+    R26 C2: [BLANK] 
+    R26 C3: [BLANK] 
+    R26 C4: [BLANK] 
+    R26 C5: [BLANK] 
+    R26 C6: [BLANK] 
+    R26 C7: [BLANK] 
+    R26 C8: [BLANK] 
+    R26 C9: [BLANK] 
+    R26 C10: [NUMBER] 0.0
+    R26 C11: [BLANK] 
+    R26 C12: [BLANK] 
+    R27 C0: [BLANK] 
+    R27 C1: [BLANK] 
+    R27 C2: [BLANK] 
+    R27 C3: [BLANK] 
+    R27 C4: [BLANK] 
+    R27 C5: [BLANK] 
+    R27 C6: [BLANK] 
+    R27 C7: [BLANK] 
+    R27 C8: [BLANK] 
+    R27 C9: [BLANK] 
+    R27 C10: [NUMBER] 0.0
+    R27 C11: [BLANK] 
+    R27 C12: [BLANK] 
+    R28 C0: [BLANK] 
+    R28 C1: [BLANK] 
+    R28 C2: [BLANK] 
+    R28 C3: [BLANK] 
+    R28 C4: [BLANK] 
+    R28 C5: [BLANK] 
+    R28 C6: [BLANK] 
+    R28 C7: [BLANK] 
+    R28 C8: [BLANK] 
+    R28 C9: [BLANK] 
+    R28 C10: [NUMBER] 0.0
+    R28 C11: [BLANK] 
+    R28 C12: [BLANK] 
+    R29 C0: [BLANK] 
+    R29 C1: [BLANK] 
+    R29 C2: [BLANK] 
+    R29 C3: [BLANK] 
+    R29 C4: [BLANK] 
+    R29 C5: [BLANK] 
+    R29 C6: [BLANK] 
+    R29 C7: [BLANK] 
+    R29 C8: [BLANK] 
+    R29 C9: [BLANK] 
+    R29 C10: [NUMBER] 0.0
+    R29 C11: [BLANK] 
+    R29 C12: [BLANK] 
+    R30 C0: [BLANK] 
+    R30 C1: [BLANK] 
+    R30 C2: [BLANK] 
+    R30 C3: [BLANK] 
+    R30 C4: [BLANK] 
+    R30 C5: [BLANK] 
+    R30 C6: [BLANK] 
+    R30 C7: [BLANK] 
+    R30 C8: [BLANK] 
+    R30 C9: [BLANK] 
+    R30 C10: [NUMBER] 0.0
+    R30 C11: [BLANK] 
+    R30 C12: [BLANK] 
+    R31 C0: [BLANK] 
+    R31 C1: [BLANK] 
+    R31 C2: [BLANK] 
+    R31 C3: [BLANK] 
+    R31 C4: [BLANK] 
+    R31 C5: [BLANK] 
+    R31 C6: [BLANK] 
+    R31 C7: [BLANK] 
+    R31 C8: [BLANK] 
+    R31 C9: [BLANK] 
+    R31 C10: [NUMBER] 0.0
+    R31 C11: [BLANK] 
+    R31 C12: [BLANK] 
+    R32 C0: [BLANK] 
+    R32 C1: [BLANK] 
+    R32 C2: [BLANK] 
+    R32 C3: [BLANK] 
+    R32 C4: [BLANK] 
+    R32 C5: [BLANK] 
+    R32 C6: [BLANK] 
+    R32 C7: [BLANK] 
+    R32 C8: [BLANK] 
+    R32 C9: [BLANK] 
+    R32 C10: [NUMBER] 0.0
+    R32 C11: [BLANK] 
+    R32 C12: [BLANK] 
+    R33 C0: [BLANK] 
+    R33 C1: [BLANK] 
+    R33 C2: [BLANK] 
+    R33 C3: [BLANK] 
+    R33 C4: [BLANK] 
+    R33 C5: [BLANK] 
+    R33 C6: [BLANK] 
+    R33 C7: [BLANK] 
+    R33 C8: [BLANK] 
+    R33 C9: [BLANK] 
+    R33 C10: [NUMBER] 0.0
+    R33 C11: [BLANK] 
+    R33 C12: [BLANK] 
+    R34 C0: [BLANK] 
+    R34 C1: [BLANK] 
+    R34 C2: [BLANK] 
+    R34 C3: [BLANK] 
+    R34 C4: [BLANK] 
+    R34 C5: [BLANK] 
+    R34 C6: [BLANK] 
+    R34 C7: [BLANK] 
+    R34 C8: [BLANK] 
+    R34 C9: [BLANK] 
+    R34 C10: [BLANK] 
+    R34 C11: [BLANK] 
+    R34 C12: [BLANK] 
+    R35 C0: [TEXT] Amount In Words:
+    R35 C1: [BLANK] 
+    R35 C2: [BLANK] 
+    R35 C3: [BLANK] 
+    R35 C4: [BLANK] 
+    R35 C5: [BLANK] 
+    R35 C6: [BLANK] 
+    R35 C7: [BLANK] 
+    R35 C8: [BLANK] 
+    R35 C9: [TEXT] Subtotal
+    R35 C10: [BLANK] 
+    R35 C11: [NUMBER] 1950.0
+    R35 C13: [TEXT] ←
+    R36 C0: [TEXT] Two Thousand Three Hundred One Only.
+    R36 C1: [BLANK] 
+    R36 C2: [BLANK] 
+    R36 C3: [BLANK] 
+    R36 C4: [BLANK] 
+    R36 C5: [BLANK] 
+    R36 C6: [BLANK] 
+    R36 C7: [BLANK] 
+    R36 C8: [BLANK] 
+    R36 C9: [TEXT] Sales Tax Rate
+    R36 C10: [NUMBER] 0.18
+    R36 C11: [BLANK] 
+    R36 C12: [BLANK] 
+    R36 C13: [TEXT] ←
+    R37 C0: [BLANK] 
+    R37 C1: [BLANK] 
+    R37 C2: [BLANK] 
+    R37 C3: [BLANK] 
+    R37 C4: [BLANK] 
+    R37 C5: [BLANK] 
+    R37 C6: [BLANK] 
+    R37 C7: [BLANK] 
+    R37 C8: [BLANK] 
+    R37 C9: [TEXT] Sales Tax Amount
+    R37 C10: [BLANK] 
+    R37 C11: [NUMBER] 351.0
+    R37 C12: [BLANK] 
+    R38 C0: [BLANK] 
+    R38 C1: [BLANK] 
+    R38 C2: [BLANK] 
+    R38 C3: [BLANK] 
+    R38 C4: [BLANK] 
+    R38 C5: [BLANK] 
+    R38 C6: [BLANK] 
+    R38 C7: [BLANK] 
+    R38 C8: [BLANK] 
+    R38 C9: [TEXT] Cartridge
+    R38 C10: [BLANK] 
+    R38 C11: [NUMBER] 0.0
+    R38 C13: [TEXT] ←
+    R39 C0: [BLANK] 
+    R39 C1: [BLANK] 
+    R39 C2: [BLANK] 
+    R39 C3: [BLANK] 
+    R39 C4: [BLANK] 
+    R39 C5: [BLANK] 
+    R39 C6: [BLANK] 
+    R39 C7: [BLANK] 
+    R39 C8: [BLANK] 
+    R39 C9: [TEXT] Total
+    R39 C10: [NUMBER] 2301.0
+    R39 C11: [BLANK] 
+    R39 C12: [BLANK] 
+    R39 C13: [TEXT] ←
+    R40 C0: [BLANK] 
+    R40 C1: [BLANK] 
+    R40 C2: [BLANK] 
+    R40 C3: [BLANK] 
+    R40 C4: [BLANK] 
+    R40 C5: [BLANK] 
+    R40 C6: [BLANK] 
+    R40 C7: [BLANK] 
+    R40 C8: [BLANK] 
+    R40 C9: [BLANK] 
+    R40 C10: [BLANK] 
+    R40 C11: [BLANK] 
+    R40 C12: [BLANK] 
+    R41 C0: [BLANK] 
+    R41 C1: [BLANK] 
+    R41 C2: [BLANK] 
+    R41 C3: [BLANK] 
+    R41 C4: [BLANK] 
+    R41 C5: [BLANK] 
+    R41 C6: [BLANK] 
+    R41 C7: [BLANK] 
+    R41 C9: [BLANK] 
+    R41 C10: [BLANK] 
+    R41 C11: [BLANK] 
+    R42 C0: [BLANK] 
+    R42 C1: [BLANK] 
+    R42 C2: [BLANK] 
+    R42 C3: [BLANK] 
+    R42 C4: [BLANK] 
+    R42 C5: [BLANK] 
+    R42 C6: [BLANK] 
+    R42 C7: [BLANK] 
+    R42 C8: [BLANK] 
+    R42 C9: [BLANK] 
+    R42 C10: [BLANK] 
+    R42 C11: [BLANK] 
+    R43 C0: [BLANK] 
+    R43 C1: [BLANK] 
+    R43 C2: [BLANK] 
+    R43 C3: [BLANK] 
+    R43 C4: [BLANK] 
+    R43 C5: [BLANK] 
+    R43 C6: [BLANK] 
+    R43 C7: [BLANK] 
+    R43 C8: [BLANK] 
+    R43 C9: [BLANK] 
+    R43 C10: [BLANK] 
+    R43 C11: [BLANK] 
+    R44 C0: [BLANK] 
+    R44 C1: [BLANK] 
+    R44 C2: [BLANK] 
+    R44 C3: [BLANK] 
+    R44 C4: [BLANK] 
+    R44 C5: [BLANK] 
+    R44 C6: [BLANK] 
+    R44 C7: [BLANK] 
+    R44 C8: [BLANK] 
+    R44 C9: [BLANK] 
+    R44 C10: [BLANK] 
+    R44 C11: [BLANK] 
+    R45 C0: [TEXT] Signature and Stamp
+    R45 C1: [BLANK] 
+    R45 C2: [BLANK] 
+    R45 C3: [BLANK] 
+    R45 C4: [BLANK] 
+    R45 C5: [BLANK] 
+    R45 C6: [BLANK] 
+    R45 C7: [BLANK] 
+    R45 C8: [BLANK] 
+    R45 C9: [TEXT] Reciever Signature and Stamp
+    R45 C10: [BLANK] 
+    R45 C11: [BLANK] 
+    R46 C0: [BLANK] 
+    R46 C1: [BLANK] 
+    R46 C2: [BLANK] 
+    R46 C3: [BLANK] 
+    R46 C4: [BLANK] 
+    R46 C5: [BLANK] 
+    R46 C6: [BLANK] 
+    R46 C7: [BLANK] 
+    R46 C8: [BLANK] 
+    R46 C9: [BLANK] 
+    R46 C10: [BLANK] 
+    R46 C11: [BLANK] 
+    R47 C8: [BLANK] 
+    R47 C9: [BLANK] 
+    R47 C10: [BLANK] 
+    R48 C0: [TEXT] Thank you for your business!
+    R48 C1: [BLANK] 
+    R48 C2: [BLANK] 
+    R48 C3: [BLANK] 
+    R48 C4: [BLANK] 
+    R48 C5: [BLANK] 
+    R48 C6: [BLANK] 
+    R48 C7: [BLANK] 
+    R48 C8: [BLANK] 
+    R48 C9: [BLANK] 
+    R48 C10: [BLANK] 
+    R48 C11: [BLANK] 
+    R49 C0: [BLANK] 
+    R49 C1: [BLANK] 
+    R49 C2: [BLANK] 
+    R49 C3: [BLANK] 
+    R49 C4: [BLANK] 
+    R49 C5: [BLANK] 
+    R49 C6: [BLANK] 
+    R49 C7: [BLANK] 
+    R49 C8: [BLANK] 
+    R49 C9: [BLANK] 
+    R49 C10: [BLANK] 
+    R49 C11: [BLANK] 
+    R50 C0: [TEXT] Should you have any enquiries concerning this invoice, please contact
+ Mr. Hussa...
+    R50 C1: [BLANK] 
+    R50 C2: [BLANK] 
+    R50 C3: [BLANK] 
+    R50 C4: [BLANK] 
+    R50 C5: [BLANK] 
+    R50 C6: [BLANK] 
+    R50 C7: [BLANK] 
+    R50 C8: [BLANK] 
+    R50 C9: [BLANK] 
+    R50 C10: [BLANK] 
+    R50 C11: [BLANK] 
+    R51 C0: [BLANK] 
+    R51 C1: [BLANK] 
+    R51 C2: [BLANK] 
+    R51 C3: [BLANK] 
+    R51 C4: [BLANK] 
+    R51 C5: [BLANK] 
+    R51 C6: [BLANK] 
+    R51 C7: [BLANK] 
+    R51 C8: [BLANK] 
+    R51 C9: [BLANK] 
+    R51 C10: [BLANK] 
+    R51 C11: [BLANK] 
+    R52 C0: [BLANK] 
+    R52 C1: [BLANK] 
+    R52 C2: [BLANK] 
+    R52 C3: [BLANK] 
+    R52 C4: [BLANK] 
+    R52 C5: [BLANK] 
+    R52 C6: [BLANK] 
+    R52 C7: [BLANK] 
+    R52 C8: [BLANK] 
+    R52 C9: [BLANK] 
+    R52 C10: [BLANK] 
+    R52 C11: [BLANK] 
+    R52 C12: [BLANK] 
+    R53 C0: [BLANK] 
+    R53 C1: [BLANK] 
+    R53 C2: [BLANK] 
+    R53 C3: [BLANK] 
+    R53 C4: [BLANK] 
+    R53 C5: [BLANK] 
+    R53 C6: [BLANK] 
+    R53 C7: [BLANK] 
+    R53 C8: [BLANK] 
+    R53 C9: [BLANK] 
+    R53 C10: [BLANK] 
+    R53 C11: [BLANK] 
+
+====================================================================================================
+FILE: Hakimi Tax Invoice - xlsx
+PATH: C:\Users\hussahuz\Downloads\INVOICE # 3719 AFROZE TEXTILE.xlsx
+====================================================================================================
+
+--- Sheet: 'Sheet2' | Rows: 56 | Cols: 11 ---
+
+  MERGED CELLS (84 ranges):
+    A15:B15
+    F16:G16
+    F25:G25
+    I56:K56
+    C45:G45
+    A21:B22
+    C29:G29
+    A7:B7
+    F15:G15
+    C47:G47
+    I54:K55
+    C44:G44
+    I17:K17
+    C31:G31
+    C40:G40
+    C10:E11
+    A18:K18
+    F13:G13
+    A17:B17
+    C21:G23
+    A56:D56
+    A2:K4
+    H21:H23
+    A19:K19
+    C25:E25
+    A9:K9
+    C34:G34
+    F10:G10
+    C42:G42
+    A11:B11
+    A49:E49
+    I12:K12
+    C12:E12
+    I14:K14
+    H51:K52
+    F17:G17
+    C13:E13
+    C46:G46
+    K21:K23
+    C39:G39
+    C15:E15
+    C48:G48
+    A8:K8
+    C32:G32
+    C38:G38
+    A10:B10
+    C16:E16
+    C24:G24
+    C33:G33
+    A1:K1
+    F7:G7
+    C26:G26
+    C35:G35
+    A12:B12
+    I13:K13
+    A14:B14
+    I15:K15
+    C14:E14
+    C28:G28
+    F49:G49
+    C37:G37
+    F14:G14
+    I16:K16
+    F11:G11
+    A24:B24
+    C30:G30
+    I10:K11
+    A54:D55
+    A6:K6
+    F12:G12
+    A16:B16
+    J21:J23
+    A25:B25
+    C41:G41
+    C17:E17
+    E51:G52
+    C43:G43
+    C27:G27
+    C36:G36
+    A5:K5
+    A20:K20
+    A13:B13
+    I21:I23
+    H7:K7
+
+  COLUMN WIDTHS:
+    Col A: 7.0
+    Col C: 11.69140625
+    Col D: 13.69140625
+    Col E: 9.84375
+    Col F: 7.69140625
+    Col G: 2.84375
+    Col H: 16.3828125
+    Col I: 7.23046875
+    Col J: 13.84375
+    Col K: 17.3828125
+
+  ROW HEIGHTS (explicit only):
+    Row 1: 12.9 pt
+    Row 4: 12.9 pt
+    Row 7: 15.0 pt
+    Row 9: 12.9 pt
+    Row 10: 21.75 pt
+    Row 11: 21.75 pt
+    Row 12: 16.5 pt
+    Row 13: 16.5 pt
+    Row 14: 16.5 pt
+    Row 15: 16.5 pt
+    Row 16: 16.5 pt
+    Row 17: 16.5 pt
+    Row 19: 17.6 pt
+    Row 20: 12.9 pt
+    Row 21: 16.5 pt
+    Row 22: 16.5 pt
+    Row 23: 16.5 pt
+    Row 26: 15.45 pt
+    Row 27: 15.45 pt
+    Row 28: 15.45 pt
+    Row 29: 15.45 pt
+    Row 30: 15.45 pt
+    Row 31: 15.45 pt
+    Row 32: 15.45 pt
+    Row 33: 15.45 pt
+    Row 34: 15.45 pt
+    Row 35: 15.45 pt
+    Row 36: 15.45 pt
+    Row 37: 15.45 pt
+    Row 38: 15.45 pt
+    Row 39: 15.45 pt
+    Row 40: 15.45 pt
+    Row 41: 15.45 pt
+    Row 42: 15.45 pt
+    Row 43: 15.45 pt
+    Row 44: 15.45 pt
+    Row 45: 15.45 pt
+    Row 46: 15.45 pt
+    Row 47: 15.45 pt
+    Row 48: 15.9 pt
+    Row 49: 24.75 pt
+    Row 50: 12.9 pt
+    Row 52: 12.9 pt
+
+  CELL VALUES:
+    R2 C1 (A2): SALES TAX INVOICE
+    R7 C1 (A7): Invoice No:
+    R7 C3 (C7): 3719
+    R7 C4 (D7): Date :
+    R7 C5 (E7): 2026-03-27 00:00:00
+    R7 C8 (H7): Time Of Supply: 
+    R10 C1 (A10): Supplier's 
+    R10 C3 (C10): HAKIMI TRADERS
+    R10 C8 (H10): Buyer's
+    R10 C9 (I10): AFROZE TEXTILE INDUSTRIES Pvt Ltd.
+    R11 C1 (A11): Name:
+    R11 C8 (H11): Name:
+    R12 C1 (A12): Address :
+    R12 C3 (C12): 1st Floor, Office # 111,
+    R12 C8 (H12): Address :
+    R12 C9 (I12): LA-1/A Block-22, 
+    R13 C3 (C13): Industrial Town Plaza,
+    R13 C9 (I13): F.B.AREA 
+    R14 C3 (C14): Serai Road, Karachi
+    R14 C9 (I14): Karachi, 754950
+    R15 C1 (A15): Telephone # :
+    R15 C3 (C15): 0331-3368883 / 0333-1665253
+    R15 C8 (H15): Telephone # :
+    R16 C1 (A16): STRN #:
+    R16 C3 (C16): 3277876175852
+    R16 C8 (H16): STRN #:
+    R16 C9 (I16): 11-00-6001-010-73
+    R17 C1 (A17): NTN # :
+    R17 C3 (C17): 4228937-8
+    R17 C8 (H17): NTN # :
+    R17 C9 (I17): 0676893-8
+    R19 C1 (A19): Term Of Sale: Credit
+    R21 C1 (A21): Quantity
+    R21 C3 (C21): Description
+    R21 C8 (H21): Value Excluding Sales Tax
+    R21 C9 (I21): Rate Of Sales Tax
+    R21 C10 (J21): Total Sales Tax Payable
+    R21 C11 (K21): Value Including Sales Tax
+    R23 C1 (A23): Qty
+    R23 C2 (B23): Unit
+    R24 C3 (C24): 1
+    R24 C8 (H24): 2
+    R24 C9 (I24): 3
+    R24 C10 (J24): 4
+    R24 C11 (K24): 5
+    R26 C1 (A26): 6
+    R26 C2 (B26): Pcs
+    R26 C3 (C26): Pneumatic Item
+    R26 C8 (H26): 31200
+    R26 C9 (I26): 0.18
+    R26 C10 (J26): 5616
+    R26 C11 (K26): 36816
+    R27 C8 (H27): 0
+    R27 C10 (J27): 0
+    R27 C11 (K27): 0
+    R28 C8 (H28): 0
+    R28 C10 (J28): 0
+    R28 C11 (K28): 0
+    R29 C8 (H29): 0
+    R29 C10 (J29): 0
+    R29 C11 (K29): 0
+    R30 C8 (H30): 0
+    R30 C10 (J30): 0
+    R30 C11 (K30): 0
+    R31 C8 (H31): 0
+    R31 C10 (J31): 0
+    R31 C11 (K31): 0
+    R32 C8 (H32): 0
+    R32 C10 (J32): 0
+    R32 C11 (K32): 0
+    R33 C8 (H33): 0
+    R33 C10 (J33): 0
+    R33 C11 (K33): 0
+    R34 C8 (H34): 0
+    R34 C10 (J34): 0
+    R34 C11 (K34): 0
+    R35 C8 (H35): 0
+    R35 C10 (J35): 0
+    R35 C11 (K35): 0
+    R36 C8 (H36): 0
+    R36 C10 (J36): 0
+    R36 C11 (K36): 0
+    R37 C8 (H37): 0
+    R37 C10 (J37): 0
+    R37 C11 (K37): 0
+    R38 C8 (H38): 0
+    R38 C10 (J38): 0
+    R38 C11 (K38): 0
+    R39 C8 (H39): 0
+    R39 C10 (J39): 0
+    R39 C11 (K39): 0
+    R40 C8 (H40): 0
+    R40 C10 (J40): 0
+    R40 C11 (K40): 0
+    R41 C8 (H41): 0
+    R41 C10 (J41): 0
+    R41 C11 (K41): 0
+    R42 C8 (H42): 0
+    R42 C10 (J42): 0
+    R42 C11 (K42): 0
+    R43 C8 (H43): 0
+    R43 C10 (J43): 0
+    R43 C11 (K43): 0
+    R44 C8 (H44): 0
+    R44 C10 (J44): 0
+    R44 C11 (K44): 0
+    R45 C8 (H45): 0
+    R45 C10 (J45): 0
+    R45 C11 (K45): 0
+    R46 C8 (H46): 0
+    R46 C10 (J46): 0
+    R46 C11 (K46): 0
+    R47 C8 (H47): 0
+    R47 C10 (J47): 0
+    R47 C11 (K47): 0
+    R48 C8 (H48): 0
+    R48 C10 (J48): 0
+    R48 C11 (K48): 0
+    R49 C6 (F49): TOTAL :
+    R49 C8 (H49): 31200
+    R49 C9 (I49): 0.18
+    R49 C10 (J49): 5616
+    R49 C11 (K49): 36816
+    R51 C5 (E51): Amount In Words
+    R51 C8 (H51): Thirty Six Thousand Eight Hundred Sixteen Only.
+    R56 C1 (A56): SIGNATURE AND STAMP
+    R56 C9 (I56): RECEIVER SIGNATURE AND STAMP
+
+--- Sheet: 'Sheet3' | Rows: 1 | Cols: 1 ---
+
+  MERGED CELLS: none
+
+  COLUMN WIDTHS:
+    (none)
+
+  ROW HEIGHTS (explicit only):
+    (none)
+
+  CELL VALUES:
+
+====================================================================================================
+FILE: Roshan Tax Invoice - xlsx
+PATH: C:\Users\hussahuz\Downloads\Invoice # 970 Meko DENIM.xlsx
+====================================================================================================
+
+--- Sheet: 'Sheet2' | Rows: 56 | Cols: 11 ---
+
+  MERGED CELLS (77 ranges):
+    A15:B15
+    F16:G16
+    A20:A22
+    I56:K56
+    C45:G45
+    C29:G29
+    F15:G15
+    B20:B22
+    I54:K55
+    C47:G47
+    C20:G22
+    A48:G48
+    A10:B11
+    C44:G44
+    C31:G31
+    C40:G40
+    C10:E11
+    A18:K18
+    D7:E7
+    C23:G23
+    F13:G13
+    A17:K17
+    A56:D56
+    A2:K4
+    A19:K19
+    H10:H11
+    A9:K9
+    C34:G34
+    F10:G10
+    C42:G42
+    I20:I22
+    I12:K12
+    C12:E12
+    I14:K14
+    C13:E13
+    C46:G46
+    H20:H22
+    C39:G39
+    C15:E15
+    A8:K8
+    A51:K52
+    C32:G32
+    C38:G38
+    J20:J22
+    A7:C7
+    C16:E16
+    C24:G24
+    C33:G33
+    A1:K1
+    C26:G26
+    F7:G7
+    C35:G35
+    C25:G25
+    I13:K13
+    A12:B14
+    I15:K15
+    C14:E14
+    C28:G28
+    C37:G37
+    F14:G14
+    I16:K16
+    F11:G11
+    C30:G30
+    I10:K11
+    A54:D55
+    H12:H14
+    A6:K6
+    F12:G12
+    A16:B16
+    C41:G41
+    C43:G43
+    J7:K7
+    C27:G27
+    K20:K22
+    C36:G36
+    A5:K5
+    A50:D50
+
+  COLUMN WIDTHS:
+    Col A: 7.69140625
+    Col B: 7.0
+    Col C: 11.69140625
+    Col D: 13.69140625
+    Col E: 9.84375
+    Col F: 7.69140625
+    Col G: 15.23046875
+    Col H: 16.3828125
+    Col I: 7.23046875
+    Col J: 13.84375
+    Col K: 15.23046875
+    Col L: 8.69140625
+
+  ROW HEIGHTS (explicit only):
+    Row 1: 12.75 pt
+    Row 2: 12.75 pt
+    Row 3: 12.75 pt
+    Row 4: 12.75 pt
+    Row 5: 12.75 pt
+    Row 6: 12.75 pt
+    Row 7: 12.75 pt
+    Row 8: 12.75 pt
+    Row 9: 12.75 pt
+    Row 10: 21.75 pt
+    Row 11: 21.75 pt
+    Row 12: 16.5 pt
+    Row 13: 16.5 pt
+    Row 14: 16.5 pt
+    Row 15: 16.5 pt
+    Row 16: 16.5 pt
+    Row 17: 12.75 pt
+    Row 18: 12.75 pt
+    Row 19: 12.75 pt
+    Row 20: 16.5 pt
+    Row 21: 16.5 pt
+    Row 22: 16.5 pt
+    Row 23: 12.75 pt
+    Row 24: 12.75 pt
+    Row 25: 12.75 pt
+    Row 26: 12.75 pt
+    Row 27: 12.75 pt
+    Row 28: 12.75 pt
+    Row 29: 12.75 pt
+    Row 30: 12.75 pt
+    Row 31: 12.75 pt
+    Row 32: 12.75 pt
+    Row 33: 12.75 pt
+    Row 34: 12.75 pt
+    Row 35: 12.75 pt
+    Row 36: 12.75 pt
+    Row 37: 12.75 pt
+    Row 38: 12.75 pt
+    Row 39: 12.75 pt
+    Row 40: 12.75 pt
+    Row 41: 12.75 pt
+    Row 42: 12.75 pt
+    Row 43: 12.75 pt
+    Row 44: 12.75 pt
+    Row 45: 12.75 pt
+    Row 46: 12.75 pt
+    Row 47: 12.75 pt
+    Row 48: 24.75 pt
+    Row 49: 24.75 pt
+    Row 50: 12.75 pt
+    Row 51: 12.75 pt
+    Row 52: 12.75 pt
+    Row 53: 12.75 pt
+    Row 54: 12.75 pt
+    Row 55: 12.75 pt
+    Row 56: 12.75 pt
+    Row 57: 12.75 pt
+    Row 58: 12.75 pt
+    Row 59: 12.75 pt
+    Row 60: 12.75 pt
+    Row 61: 12.75 pt
+    Row 62: 12.75 pt
+    Row 63: 12.75 pt
+    Row 64: 12.75 pt
+    Row 65: 12.75 pt
+    Row 66: 12.75 pt
+    Row 67: 12.75 pt
+    Row 68: 12.75 pt
+    Row 69: 12.75 pt
+    Row 70: 12.75 pt
+    Row 71: 12.75 pt
+    Row 72: 12.75 pt
+    Row 73: 12.75 pt
+    Row 74: 12.75 pt
+    Row 75: 12.75 pt
+    Row 76: 12.75 pt
+    Row 77: 12.75 pt
+    Row 78: 12.75 pt
+    Row 79: 12.75 pt
+    Row 80: 12.75 pt
+    Row 81: 12.75 pt
+    Row 82: 12.75 pt
+    Row 83: 12.75 pt
+    Row 84: 12.75 pt
+    Row 85: 12.75 pt
+    Row 86: 12.75 pt
+    Row 87: 12.75 pt
+    Row 88: 12.75 pt
+    Row 89: 12.75 pt
+    Row 90: 12.75 pt
+    Row 91: 12.75 pt
+    Row 92: 12.75 pt
+    Row 93: 12.75 pt
+    Row 94: 12.75 pt
+    Row 95: 12.75 pt
+    Row 96: 12.75 pt
+    Row 97: 12.75 pt
+    Row 98: 12.75 pt
+    Row 99: 12.75 pt
+    Row 100: 12.75 pt
+    Row 101: 12.75 pt
+    Row 102: 12.75 pt
+    Row 103: 12.75 pt
+    Row 104: 12.75 pt
+    Row 105: 12.75 pt
+    Row 106: 12.75 pt
+    Row 107: 12.75 pt
+    Row 108: 12.75 pt
+    Row 109: 12.75 pt
+    Row 110: 12.75 pt
+    Row 111: 12.75 pt
+    Row 112: 12.75 pt
+    Row 113: 12.75 pt
+    Row 114: 12.75 pt
+    Row 115: 12.75 pt
+    Row 116: 12.75 pt
+    Row 117: 12.75 pt
+    Row 118: 12.75 pt
+    Row 119: 12.75 pt
+    Row 120: 12.75 pt
+    Row 121: 12.75 pt
+    Row 122: 12.75 pt
+    Row 123: 12.75 pt
+    Row 124: 12.75 pt
+    Row 125: 12.75 pt
+    Row 126: 12.75 pt
+    Row 127: 12.75 pt
+    Row 128: 12.75 pt
+    Row 129: 12.75 pt
+    Row 130: 12.75 pt
+    Row 131: 12.75 pt
+    Row 132: 12.75 pt
+    Row 133: 12.75 pt
+    Row 134: 12.75 pt
+    Row 135: 12.75 pt
+    Row 136: 12.75 pt
+    Row 137: 12.75 pt
+    Row 138: 12.75 pt
+    Row 139: 12.75 pt
+    Row 140: 12.75 pt
+    Row 141: 12.75 pt
+    Row 142: 12.75 pt
+    Row 143: 12.75 pt
+    Row 144: 12.75 pt
+    Row 145: 12.75 pt
+    Row 146: 12.75 pt
+    Row 147: 12.75 pt
+    Row 148: 12.75 pt
+    Row 149: 12.75 pt
+    Row 150: 12.75 pt
+    Row 151: 12.75 pt
+    Row 152: 12.75 pt
+    Row 153: 12.75 pt
+    Row 154: 12.75 pt
+    Row 155: 12.75 pt
+    Row 156: 12.75 pt
+    Row 157: 12.75 pt
+    Row 158: 12.75 pt
+    Row 159: 12.75 pt
+    Row 160: 12.75 pt
+    Row 161: 12.75 pt
+    Row 162: 12.75 pt
+    Row 163: 12.75 pt
+    Row 164: 12.75 pt
+    Row 165: 12.75 pt
+    Row 166: 12.75 pt
+    Row 167: 12.75 pt
+    Row 168: 12.75 pt
+    Row 169: 12.75 pt
+    Row 170: 12.75 pt
+    Row 171: 12.75 pt
+    Row 172: 12.75 pt
+    Row 173: 12.75 pt
+    Row 174: 12.75 pt
+    Row 175: 12.75 pt
+    Row 176: 12.75 pt
+    Row 177: 12.75 pt
+    Row 178: 12.75 pt
+    Row 179: 12.75 pt
+    Row 180: 12.75 pt
+    Row 181: 12.75 pt
+    Row 182: 12.75 pt
+    Row 183: 12.75 pt
+    Row 184: 12.75 pt
+    Row 185: 12.75 pt
+    Row 186: 12.75 pt
+    Row 187: 12.75 pt
+    Row 188: 12.75 pt
+    Row 189: 12.75 pt
+    Row 190: 12.75 pt
+    Row 191: 12.75 pt
+    Row 192: 12.75 pt
+    Row 193: 12.75 pt
+    Row 194: 12.75 pt
+    Row 195: 12.75 pt
+    Row 196: 12.75 pt
+    Row 197: 12.75 pt
+    Row 198: 12.75 pt
+    Row 199: 12.75 pt
+    Row 200: 12.75 pt
+    Row 201: 12.75 pt
+    Row 202: 12.75 pt
+    Row 203: 12.75 pt
+    Row 204: 12.75 pt
+    Row 205: 12.75 pt
+    Row 206: 12.75 pt
+    Row 207: 12.75 pt
+    Row 208: 12.75 pt
+    Row 209: 12.75 pt
+    Row 210: 12.75 pt
+    Row 211: 12.75 pt
+    Row 212: 12.75 pt
+    Row 213: 12.75 pt
+    Row 214: 12.75 pt
+    Row 215: 12.75 pt
+    Row 216: 12.75 pt
+    Row 217: 12.75 pt
+    Row 218: 12.75 pt
+    Row 219: 12.75 pt
+    Row 220: 12.75 pt
+    Row 221: 12.75 pt
+    Row 222: 12.75 pt
+    Row 223: 12.75 pt
+    Row 224: 12.75 pt
+    Row 225: 12.75 pt
+    Row 226: 12.75 pt
+    Row 227: 12.75 pt
+    Row 228: 12.75 pt
+    Row 229: 12.75 pt
+    Row 230: 12.75 pt
+    Row 231: 12.75 pt
+    Row 232: 12.75 pt
+    Row 233: 12.75 pt
+    Row 234: 12.75 pt
+    Row 235: 12.75 pt
+    Row 236: 12.75 pt
+    Row 237: 12.75 pt
+    Row 238: 12.75 pt
+    Row 239: 12.75 pt
+    Row 240: 12.75 pt
+    Row 241: 12.75 pt
+    Row 242: 12.75 pt
+    Row 243: 12.75 pt
+    Row 244: 12.75 pt
+    Row 245: 12.75 pt
+    Row 246: 12.75 pt
+    Row 247: 12.75 pt
+    Row 248: 12.75 pt
+    Row 249: 12.75 pt
+    Row 250: 12.75 pt
+    Row 251: 12.75 pt
+    Row 252: 12.75 pt
+    Row 253: 12.75 pt
+    Row 254: 12.75 pt
+    Row 255: 12.75 pt
+    Row 256: 12.75 pt
+    Row 257: 12.75 pt
+    Row 258: 12.75 pt
+    Row 259: 12.75 pt
+    Row 260: 12.75 pt
+    Row 261: 12.75 pt
+    Row 262: 12.75 pt
+    Row 263: 12.75 pt
+    Row 264: 12.75 pt
+    Row 265: 12.75 pt
+    Row 266: 12.75 pt
+    Row 267: 12.75 pt
+    Row 268: 12.75 pt
+    Row 269: 12.75 pt
+    Row 270: 12.75 pt
+    Row 271: 12.75 pt
+    Row 272: 12.75 pt
+    Row 273: 12.75 pt
+    Row 274: 12.75 pt
+    Row 275: 12.75 pt
+    Row 276: 12.75 pt
+    Row 277: 12.75 pt
+    Row 278: 12.75 pt
+    Row 279: 12.75 pt
+    Row 280: 12.75 pt
+    Row 281: 12.75 pt
+    Row 282: 12.75 pt
+    Row 283: 12.75 pt
+    Row 284: 12.75 pt
+    Row 285: 12.75 pt
+    Row 286: 12.75 pt
+    Row 287: 12.75 pt
+    Row 288: 12.75 pt
+    Row 289: 12.75 pt
+    Row 290: 12.75 pt
+    Row 291: 12.75 pt
+    Row 292: 12.75 pt
+    Row 293: 12.75 pt
+    Row 294: 12.75 pt
+    Row 295: 12.75 pt
+    Row 296: 12.75 pt
+    Row 297: 12.75 pt
+    Row 298: 12.75 pt
+    Row 299: 12.75 pt
+    Row 300: 12.75 pt
+    Row 301: 12.75 pt
+    Row 302: 12.75 pt
+    Row 303: 12.75 pt
+    Row 304: 12.75 pt
+    Row 305: 12.75 pt
+    Row 306: 12.75 pt
+    Row 307: 12.75 pt
+    Row 308: 12.75 pt
+    Row 309: 12.75 pt
+    Row 310: 12.75 pt
+    Row 311: 12.75 pt
+    Row 312: 12.75 pt
+    Row 313: 12.75 pt
+    Row 314: 12.75 pt
+    Row 315: 12.75 pt
+    Row 316: 12.75 pt
+    Row 317: 12.75 pt
+    Row 318: 12.75 pt
+    Row 319: 12.75 pt
+    Row 320: 12.75 pt
+    Row 321: 12.75 pt
+    Row 322: 12.75 pt
+    Row 323: 12.75 pt
+    Row 324: 12.75 pt
+    Row 325: 12.75 pt
+    Row 326: 12.75 pt
+    Row 327: 12.75 pt
+    Row 328: 12.75 pt
+    Row 329: 12.75 pt
+    Row 330: 12.75 pt
+    Row 331: 12.75 pt
+    Row 332: 12.75 pt
+    Row 333: 12.75 pt
+    Row 334: 12.75 pt
+    Row 335: 12.75 pt
+    Row 336: 12.75 pt
+    Row 337: 12.75 pt
+    Row 338: 12.75 pt
+    Row 339: 12.75 pt
+    Row 340: 12.75 pt
+    Row 341: 12.75 pt
+    Row 342: 12.75 pt
+    Row 343: 12.75 pt
+    Row 344: 12.75 pt
+    Row 345: 12.75 pt
+    Row 346: 12.75 pt
+    Row 347: 12.75 pt
+    Row 348: 12.75 pt
+    Row 349: 12.75 pt
+    Row 350: 12.75 pt
+    Row 351: 12.75 pt
+    Row 352: 12.75 pt
+    Row 353: 12.75 pt
+    Row 354: 12.75 pt
+    Row 355: 12.75 pt
+    Row 356: 12.75 pt
+    Row 357: 12.75 pt
+    Row 358: 12.75 pt
+    Row 359: 12.75 pt
+    Row 360: 12.75 pt
+    Row 361: 12.75 pt
+    Row 362: 12.75 pt
+    Row 363: 12.75 pt
+    Row 364: 12.75 pt
+    Row 365: 12.75 pt
+    Row 366: 12.75 pt
+    Row 367: 12.75 pt
+    Row 368: 12.75 pt
+    Row 369: 12.75 pt
+    Row 370: 12.75 pt
+    Row 371: 12.75 pt
+    Row 372: 12.75 pt
+    Row 373: 12.75 pt
+    Row 374: 12.75 pt
+    Row 375: 12.75 pt
+    Row 376: 12.75 pt
+    Row 377: 12.75 pt
+    Row 378: 12.75 pt
+    Row 379: 12.75 pt
+    Row 380: 12.75 pt
+    Row 381: 12.75 pt
+    Row 382: 12.75 pt
+    Row 383: 12.75 pt
+    Row 384: 12.75 pt
+    Row 385: 12.75 pt
+    Row 386: 12.75 pt
+    Row 387: 12.75 pt
+    Row 388: 12.75 pt
+    Row 389: 12.75 pt
+    Row 390: 12.75 pt
+    Row 391: 12.75 pt
+    Row 392: 12.75 pt
+    Row 393: 12.75 pt
+    Row 394: 12.75 pt
+    Row 395: 12.75 pt
+    Row 396: 12.75 pt
+    Row 397: 12.75 pt
+    Row 398: 12.75 pt
+    Row 399: 12.75 pt
+    Row 400: 12.75 pt
+    Row 401: 12.75 pt
+    Row 402: 12.75 pt
+    Row 403: 12.75 pt
+    Row 404: 12.75 pt
+    Row 405: 12.75 pt
+    Row 406: 12.75 pt
+    Row 407: 12.75 pt
+    Row 408: 12.75 pt
+    Row 409: 12.75 pt
+    Row 410: 12.75 pt
+    Row 411: 12.75 pt
+    Row 412: 12.75 pt
+    Row 413: 12.75 pt
+    Row 414: 12.75 pt
+    Row 415: 12.75 pt
+    Row 416: 12.75 pt
+    Row 417: 12.75 pt
+    Row 418: 12.75 pt
+    Row 419: 12.75 pt
+    Row 420: 12.75 pt
+    Row 421: 12.75 pt
+    Row 422: 12.75 pt
+    Row 423: 12.75 pt
+    Row 424: 12.75 pt
+    Row 425: 12.75 pt
+    Row 426: 12.75 pt
+    Row 427: 12.75 pt
+    Row 428: 12.75 pt
+    Row 429: 12.75 pt
+    Row 430: 12.75 pt
+    Row 431: 12.75 pt
+    Row 432: 12.75 pt
+    Row 433: 12.75 pt
+    Row 434: 12.75 pt
+    Row 435: 12.75 pt
+    Row 436: 12.75 pt
+    Row 437: 12.75 pt
+    Row 438: 12.75 pt
+    Row 439: 12.75 pt
+    Row 440: 12.75 pt
+    Row 441: 12.75 pt
+    Row 442: 12.75 pt
+    Row 443: 12.75 pt
+    Row 444: 12.75 pt
+    Row 445: 12.75 pt
+    Row 446: 12.75 pt
+    Row 447: 12.75 pt
+    Row 448: 12.75 pt
+    Row 449: 12.75 pt
+    Row 450: 12.75 pt
+    Row 451: 12.75 pt
+    Row 452: 12.75 pt
+    Row 453: 12.75 pt
+    Row 454: 12.75 pt
+    Row 455: 12.75 pt
+    Row 456: 12.75 pt
+    Row 457: 12.75 pt
+    Row 458: 12.75 pt
+    Row 459: 12.75 pt
+    Row 460: 12.75 pt
+    Row 461: 12.75 pt
+    Row 462: 12.75 pt
+    Row 463: 12.75 pt
+    Row 464: 12.75 pt
+    Row 465: 12.75 pt
+    Row 466: 12.75 pt
+    Row 467: 12.75 pt
+    Row 468: 12.75 pt
+    Row 469: 12.75 pt
+    Row 470: 12.75 pt
+    Row 471: 12.75 pt
+    Row 472: 12.75 pt
+    Row 473: 12.75 pt
+    Row 474: 12.75 pt
+    Row 475: 12.75 pt
+    Row 476: 12.75 pt
+    Row 477: 12.75 pt
+    Row 478: 12.75 pt
+    Row 479: 12.75 pt
+    Row 480: 12.75 pt
+    Row 481: 12.75 pt
+    Row 482: 12.75 pt
+    Row 483: 12.75 pt
+    Row 484: 12.75 pt
+    Row 485: 12.75 pt
+    Row 486: 12.75 pt
+    Row 487: 12.75 pt
+    Row 488: 12.75 pt
+    Row 489: 12.75 pt
+    Row 490: 12.75 pt
+    Row 491: 12.75 pt
+    Row 492: 12.75 pt
+    Row 493: 12.75 pt
+    Row 494: 12.75 pt
+    Row 495: 12.75 pt
+    Row 496: 12.75 pt
+    Row 497: 12.75 pt
+    Row 498: 12.75 pt
+    Row 499: 12.75 pt
+    Row 500: 12.75 pt
+    Row 501: 12.75 pt
+    Row 502: 12.75 pt
+    Row 503: 12.75 pt
+    Row 504: 12.75 pt
+    Row 505: 12.75 pt
+    Row 506: 12.75 pt
+    Row 507: 12.75 pt
+    Row 508: 12.75 pt
+    Row 509: 12.75 pt
+    Row 510: 12.75 pt
+    Row 511: 12.75 pt
+    Row 512: 12.75 pt
+    Row 513: 12.75 pt
+    Row 514: 12.75 pt
+    Row 515: 12.75 pt
+    Row 516: 12.75 pt
+    Row 517: 12.75 pt
+    Row 518: 12.75 pt
+    Row 519: 12.75 pt
+    Row 520: 12.75 pt
+    Row 521: 12.75 pt
+    Row 522: 12.75 pt
+    Row 523: 12.75 pt
+    Row 524: 12.75 pt
+    Row 525: 12.75 pt
+    Row 526: 12.75 pt
+    Row 527: 12.75 pt
+    Row 528: 12.75 pt
+    Row 529: 12.75 pt
+    Row 530: 12.75 pt
+    Row 531: 12.75 pt
+    Row 532: 12.75 pt
+    Row 533: 12.75 pt
+    Row 534: 12.75 pt
+    Row 535: 12.75 pt
+    Row 536: 12.75 pt
+    Row 537: 12.75 pt
+    Row 538: 12.75 pt
+    Row 539: 12.75 pt
+    Row 540: 12.75 pt
+    Row 541: 12.75 pt
+    Row 542: 12.75 pt
+    Row 543: 12.75 pt
+    Row 544: 12.75 pt
+    Row 545: 12.75 pt
+    Row 546: 12.75 pt
+    Row 547: 12.75 pt
+    Row 548: 12.75 pt
+    Row 549: 12.75 pt
+    Row 550: 12.75 pt
+    Row 551: 12.75 pt
+    Row 552: 12.75 pt
+    Row 553: 12.75 pt
+    Row 554: 12.75 pt
+    Row 555: 12.75 pt
+    Row 556: 12.75 pt
+    Row 557: 12.75 pt
+    Row 558: 12.75 pt
+    Row 559: 12.75 pt
+    Row 560: 12.75 pt
+    Row 561: 12.75 pt
+    Row 562: 12.75 pt
+    Row 563: 12.75 pt
+    Row 564: 12.75 pt
+    Row 565: 12.75 pt
+    Row 566: 12.75 pt
+    Row 567: 12.75 pt
+    Row 568: 12.75 pt
+    Row 569: 12.75 pt
+    Row 570: 12.75 pt
+    Row 571: 12.75 pt
+    Row 572: 12.75 pt
+    Row 573: 12.75 pt
+    Row 574: 12.75 pt
+    Row 575: 12.75 pt
+    Row 576: 12.75 pt
+    Row 577: 12.75 pt
+    Row 578: 12.75 pt
+    Row 579: 12.75 pt
+    Row 580: 12.75 pt
+    Row 581: 12.75 pt
+    Row 582: 12.75 pt
+    Row 583: 12.75 pt
+    Row 584: 12.75 pt
+    Row 585: 12.75 pt
+    Row 586: 12.75 pt
+    Row 587: 12.75 pt
+    Row 588: 12.75 pt
+    Row 589: 12.75 pt
+    Row 590: 12.75 pt
+    Row 591: 12.75 pt
+    Row 592: 12.75 pt
+    Row 593: 12.75 pt
+    Row 594: 12.75 pt
+    Row 595: 12.75 pt
+    Row 596: 12.75 pt
+    Row 597: 12.75 pt
+    Row 598: 12.75 pt
+    Row 599: 12.75 pt
+    Row 600: 12.75 pt
+    Row 601: 12.75 pt
+    Row 602: 12.75 pt
+    Row 603: 12.75 pt
+    Row 604: 12.75 pt
+    Row 605: 12.75 pt
+    Row 606: 12.75 pt
+    Row 607: 12.75 pt
+    Row 608: 12.75 pt
+    Row 609: 12.75 pt
+    Row 610: 12.75 pt
+    Row 611: 12.75 pt
+    Row 612: 12.75 pt
+    Row 613: 12.75 pt
+    Row 614: 12.75 pt
+    Row 615: 12.75 pt
+    Row 616: 12.75 pt
+    Row 617: 12.75 pt
+    Row 618: 12.75 pt
+    Row 619: 12.75 pt
+    Row 620: 12.75 pt
+    Row 621: 12.75 pt
+    Row 622: 12.75 pt
+    Row 623: 12.75 pt
+    Row 624: 12.75 pt
+    Row 625: 12.75 pt
+    Row 626: 12.75 pt
+    Row 627: 12.75 pt
+    Row 628: 12.75 pt
+    Row 629: 12.75 pt
+    Row 630: 12.75 pt
+    Row 631: 12.75 pt
+    Row 632: 12.75 pt
+    Row 633: 12.75 pt
+    Row 634: 12.75 pt
+    Row 635: 12.75 pt
+    Row 636: 12.75 pt
+    Row 637: 12.75 pt
+    Row 638: 12.75 pt
+    Row 639: 12.75 pt
+    Row 640: 12.75 pt
+    Row 641: 12.75 pt
+    Row 642: 12.75 pt
+    Row 643: 12.75 pt
+    Row 644: 12.75 pt
+    Row 645: 12.75 pt
+    Row 646: 12.75 pt
+    Row 647: 12.75 pt
+    Row 648: 12.75 pt
+    Row 649: 12.75 pt
+    Row 650: 12.75 pt
+    Row 651: 12.75 pt
+    Row 652: 12.75 pt
+    Row 653: 12.75 pt
+    Row 654: 12.75 pt
+    Row 655: 12.75 pt
+    Row 656: 12.75 pt
+    Row 657: 12.75 pt
+    Row 658: 12.75 pt
+    Row 659: 12.75 pt
+    Row 660: 12.75 pt
+    Row 661: 12.75 pt
+    Row 662: 12.75 pt
+    Row 663: 12.75 pt
+    Row 664: 12.75 pt
+    Row 665: 12.75 pt
+    Row 666: 12.75 pt
+    Row 667: 12.75 pt
+    Row 668: 12.75 pt
+    Row 669: 12.75 pt
+    Row 670: 12.75 pt
+    Row 671: 12.75 pt
+    Row 672: 12.75 pt
+    Row 673: 12.75 pt
+    Row 674: 12.75 pt
+    Row 675: 12.75 pt
+    Row 676: 12.75 pt
+    Row 677: 12.75 pt
+    Row 678: 12.75 pt
+    Row 679: 12.75 pt
+    Row 680: 12.75 pt
+    Row 681: 12.75 pt
+    Row 682: 12.75 pt
+    Row 683: 12.75 pt
+    Row 684: 12.75 pt
+    Row 685: 12.75 pt
+    Row 686: 12.75 pt
+    Row 687: 12.75 pt
+    Row 688: 12.75 pt
+    Row 689: 12.75 pt
+    Row 690: 12.75 pt
+    Row 691: 12.75 pt
+    Row 692: 12.75 pt
+    Row 693: 12.75 pt
+    Row 694: 12.75 pt
+    Row 695: 12.75 pt
+    Row 696: 12.75 pt
+    Row 697: 12.75 pt
+    Row 698: 12.75 pt
+    Row 699: 12.75 pt
+    Row 700: 12.75 pt
+    Row 701: 12.75 pt
+    Row 702: 12.75 pt
+    Row 703: 12.75 pt
+    Row 704: 12.75 pt
+    Row 705: 12.75 pt
+    Row 706: 12.75 pt
+    Row 707: 12.75 pt
+    Row 708: 12.75 pt
+    Row 709: 12.75 pt
+    Row 710: 12.75 pt
+    Row 711: 12.75 pt
+    Row 712: 12.75 pt
+    Row 713: 12.75 pt
+    Row 714: 12.75 pt
+    Row 715: 12.75 pt
+    Row 716: 12.75 pt
+    Row 717: 12.75 pt
+    Row 718: 12.75 pt
+    Row 719: 12.75 pt
+    Row 720: 12.75 pt
+    Row 721: 12.75 pt
+    Row 722: 12.75 pt
+    Row 723: 12.75 pt
+    Row 724: 12.75 pt
+    Row 725: 12.75 pt
+    Row 726: 12.75 pt
+    Row 727: 12.75 pt
+    Row 728: 12.75 pt
+    Row 729: 12.75 pt
+    Row 730: 12.75 pt
+    Row 731: 12.75 pt
+    Row 732: 12.75 pt
+    Row 733: 12.75 pt
+    Row 734: 12.75 pt
+    Row 735: 12.75 pt
+    Row 736: 12.75 pt
+    Row 737: 12.75 pt
+    Row 738: 12.75 pt
+    Row 739: 12.75 pt
+    Row 740: 12.75 pt
+    Row 741: 12.75 pt
+    Row 742: 12.75 pt
+    Row 743: 12.75 pt
+    Row 744: 12.75 pt
+    Row 745: 12.75 pt
+    Row 746: 12.75 pt
+    Row 747: 12.75 pt
+    Row 748: 12.75 pt
+    Row 749: 12.75 pt
+    Row 750: 12.75 pt
+    Row 751: 12.75 pt
+    Row 752: 12.75 pt
+    Row 753: 12.75 pt
+    Row 754: 12.75 pt
+    Row 755: 12.75 pt
+    Row 756: 12.75 pt
+    Row 757: 12.75 pt
+    Row 758: 12.75 pt
+    Row 759: 12.75 pt
+    Row 760: 12.75 pt
+    Row 761: 12.75 pt
+    Row 762: 12.75 pt
+    Row 763: 12.75 pt
+    Row 764: 12.75 pt
+    Row 765: 12.75 pt
+    Row 766: 12.75 pt
+    Row 767: 12.75 pt
+    Row 768: 12.75 pt
+    Row 769: 12.75 pt
+    Row 770: 12.75 pt
+    Row 771: 12.75 pt
+    Row 772: 12.75 pt
+    Row 773: 12.75 pt
+    Row 774: 12.75 pt
+    Row 775: 12.75 pt
+    Row 776: 12.75 pt
+    Row 777: 12.75 pt
+    Row 778: 12.75 pt
+    Row 779: 12.75 pt
+    Row 780: 12.75 pt
+    Row 781: 12.75 pt
+    Row 782: 12.75 pt
+    Row 783: 12.75 pt
+    Row 784: 12.75 pt
+    Row 785: 12.75 pt
+    Row 786: 12.75 pt
+    Row 787: 12.75 pt
+    Row 788: 12.75 pt
+    Row 789: 12.75 pt
+    Row 790: 12.75 pt
+    Row 791: 12.75 pt
+    Row 792: 12.75 pt
+    Row 793: 12.75 pt
+    Row 794: 12.75 pt
+    Row 795: 12.75 pt
+    Row 796: 12.75 pt
+    Row 797: 12.75 pt
+    Row 798: 12.75 pt
+    Row 799: 12.75 pt
+    Row 800: 12.75 pt
+    Row 801: 12.75 pt
+    Row 802: 12.75 pt
+    Row 803: 12.75 pt
+    Row 804: 12.75 pt
+    Row 805: 12.75 pt
+    Row 806: 12.75 pt
+    Row 807: 12.75 pt
+    Row 808: 12.75 pt
+    Row 809: 12.75 pt
+    Row 810: 12.75 pt
+    Row 811: 12.75 pt
+    Row 812: 12.75 pt
+    Row 813: 12.75 pt
+    Row 814: 12.75 pt
+    Row 815: 12.75 pt
+    Row 816: 12.75 pt
+    Row 817: 12.75 pt
+    Row 818: 12.75 pt
+    Row 819: 12.75 pt
+    Row 820: 12.75 pt
+    Row 821: 12.75 pt
+    Row 822: 12.75 pt
+    Row 823: 12.75 pt
+    Row 824: 12.75 pt
+    Row 825: 12.75 pt
+    Row 826: 12.75 pt
+    Row 827: 12.75 pt
+    Row 828: 12.75 pt
+    Row 829: 12.75 pt
+    Row 830: 12.75 pt
+    Row 831: 12.75 pt
+    Row 832: 12.75 pt
+    Row 833: 12.75 pt
+    Row 834: 12.75 pt
+    Row 835: 12.75 pt
+    Row 836: 12.75 pt
+    Row 837: 12.75 pt
+    Row 838: 12.75 pt
+    Row 839: 12.75 pt
+    Row 840: 12.75 pt
+    Row 841: 12.75 pt
+    Row 842: 12.75 pt
+    Row 843: 12.75 pt
+    Row 844: 12.75 pt
+    Row 845: 12.75 pt
+    Row 846: 12.75 pt
+    Row 847: 12.75 pt
+    Row 848: 12.75 pt
+    Row 849: 12.75 pt
+    Row 850: 12.75 pt
+    Row 851: 12.75 pt
+    Row 852: 12.75 pt
+    Row 853: 12.75 pt
+    Row 854: 12.75 pt
+    Row 855: 12.75 pt
+    Row 856: 12.75 pt
+    Row 857: 12.75 pt
+    Row 858: 12.75 pt
+    Row 859: 12.75 pt
+    Row 860: 12.75 pt
+    Row 861: 12.75 pt
+    Row 862: 12.75 pt
+    Row 863: 12.75 pt
+    Row 864: 12.75 pt
+    Row 865: 12.75 pt
+    Row 866: 12.75 pt
+    Row 867: 12.75 pt
+    Row 868: 12.75 pt
+    Row 869: 12.75 pt
+    Row 870: 12.75 pt
+    Row 871: 12.75 pt
+    Row 872: 12.75 pt
+    Row 873: 12.75 pt
+    Row 874: 12.75 pt
+    Row 875: 12.75 pt
+    Row 876: 12.75 pt
+    Row 877: 12.75 pt
+    Row 878: 12.75 pt
+    Row 879: 12.75 pt
+    Row 880: 12.75 pt
+    Row 881: 12.75 pt
+    Row 882: 12.75 pt
+    Row 883: 12.75 pt
+    Row 884: 12.75 pt
+    Row 885: 12.75 pt
+    Row 886: 12.75 pt
+    Row 887: 12.75 pt
+    Row 888: 12.75 pt
+    Row 889: 12.75 pt
+    Row 890: 12.75 pt
+    Row 891: 12.75 pt
+    Row 892: 12.75 pt
+    Row 893: 12.75 pt
+    Row 894: 12.75 pt
+    Row 895: 12.75 pt
+    Row 896: 12.75 pt
+    Row 897: 12.75 pt
+    Row 898: 12.75 pt
+    Row 899: 12.75 pt
+    Row 900: 12.75 pt
+    Row 901: 12.75 pt
+    Row 902: 12.75 pt
+    Row 903: 12.75 pt
+    Row 904: 12.75 pt
+    Row 905: 12.75 pt
+    Row 906: 12.75 pt
+    Row 907: 12.75 pt
+    Row 908: 12.75 pt
+    Row 909: 12.75 pt
+    Row 910: 12.75 pt
+    Row 911: 12.75 pt
+    Row 912: 12.75 pt
+    Row 913: 12.75 pt
+    Row 914: 12.75 pt
+    Row 915: 12.75 pt
+    Row 916: 12.75 pt
+    Row 917: 12.75 pt
+    Row 918: 12.75 pt
+    Row 919: 12.75 pt
+    Row 920: 12.75 pt
+    Row 921: 12.75 pt
+    Row 922: 12.75 pt
+    Row 923: 12.75 pt
+    Row 924: 12.75 pt
+    Row 925: 12.75 pt
+    Row 926: 12.75 pt
+    Row 927: 12.75 pt
+    Row 928: 12.75 pt
+    Row 929: 12.75 pt
+    Row 930: 12.75 pt
+    Row 931: 12.75 pt
+    Row 932: 12.75 pt
+    Row 933: 12.75 pt
+    Row 934: 12.75 pt
+    Row 935: 12.75 pt
+    Row 936: 12.75 pt
+    Row 937: 12.75 pt
+    Row 938: 12.75 pt
+    Row 939: 12.75 pt
+    Row 940: 12.75 pt
+    Row 941: 12.75 pt
+    Row 942: 12.75 pt
+    Row 943: 12.75 pt
+    Row 944: 12.75 pt
+    Row 945: 12.75 pt
+    Row 946: 12.75 pt
+    Row 947: 12.75 pt
+    Row 948: 12.75 pt
+    Row 949: 12.75 pt
+    Row 950: 12.75 pt
+    Row 951: 12.75 pt
+    Row 952: 12.75 pt
+    Row 953: 12.75 pt
+    Row 954: 12.75 pt
+    Row 955: 12.75 pt
+    Row 956: 12.75 pt
+    Row 957: 12.75 pt
+    Row 958: 12.75 pt
+    Row 959: 12.75 pt
+    Row 960: 12.75 pt
+    Row 961: 12.75 pt
+    Row 962: 12.75 pt
+    Row 963: 12.75 pt
+    Row 964: 12.75 pt
+    Row 965: 12.75 pt
+    Row 966: 12.75 pt
+    Row 967: 12.75 pt
+    Row 968: 12.75 pt
+    Row 969: 12.75 pt
+    Row 970: 12.75 pt
+    Row 971: 12.75 pt
+    Row 972: 12.75 pt
+    Row 973: 12.75 pt
+    Row 974: 12.75 pt
+    Row 975: 12.75 pt
+    Row 976: 12.75 pt
+    Row 977: 12.75 pt
+    Row 978: 12.75 pt
+    Row 979: 12.75 pt
+    Row 980: 12.75 pt
+    Row 981: 12.75 pt
+    Row 982: 12.75 pt
+    Row 983: 12.75 pt
+    Row 984: 12.75 pt
+    Row 985: 12.75 pt
+    Row 986: 12.75 pt
+    Row 987: 12.75 pt
+    Row 988: 12.75 pt
+    Row 989: 12.75 pt
+    Row 990: 12.75 pt
+    Row 991: 12.75 pt
+    Row 992: 12.75 pt
+    Row 993: 12.75 pt
+    Row 994: 12.75 pt
+    Row 995: 12.75 pt
+    Row 996: 12.75 pt
+    Row 997: 12.75 pt
+    Row 998: 12.75 pt
+    Row 999: 12.75 pt
+    Row 1000: 12.75 pt
+    Row 1001: 12.75 pt
+
+  CELL VALUES:
+    R2 C1 (A2): SALES TAX INVOICE
+    R7 C1 (A7): Date Of Invoice 
+    R7 C4 (D7): 2026-03-22 00:00:00
+    R7 C8 (H7): Invoice Number :-
+    R7 C9 (I7): 970
+    R10 C1 (A10): Client Name 
+    R10 C3 (C10): MEKO DENIM MILLS (Pvt) Ltd.
+    R10 C8 (H10): Invoice Generated 
+From
+    R10 C9 (I10): Roshan Traders
+    R12 C1 (A12): Client Address
+    R12 C3 (C12): Plot F-131
+    R12 C8 (H12): Address :
+    R12 C9 (I12): 1st Floor, Shop # F-44
+    R13 C3 (C13):  Hub River Road, SITE. Karachi
+    R13 C9 (I13): Falak City Tower
+    R14 C9 (I14): Talpur Road Karachi.
+    R15 C1 (A15): NTN # :
+    R15 C3 (C15): 8826050-2
+    R15 C8 (H15): NTN # :
+    R15 C9 (I15): 8183300-5
+    R16 C1 (A16): Sales Tax #
+    R16 C3 (C16): 327787622231-3
+    R16 C8 (H16): Sales Tax # 
+    R16 C9 (I16): 4230140207959
+    R20 C1 (A20): Qty
+    R20 C2 (B20): UOM
+    R20 C3 (C20): Item Description
+    R20 C8 (H20): Amount (Excluding GST)
+    R20 C9 (I20): GST %
+18%
+    R20 C10 (J20): GST Amount Only
+    R20 C11 (K20): Total Amount Including GST (18%)
+    R25 C1 (A25): 6
+    R25 C2 (B25): Pcs
+    R25 C3 (C25): Hardware Item
+    R25 C8 (H25): 1950
+    R25 C9 (I25): 0.18
+    R25 C10 (J25): 351
+    R25 C11 (K25): 2301
+    R26 C9 (I26): 0.18
+    R26 C10 (J26): 0
+    R26 C11 (K26): 0
+    R27 C8 (H27): 0
+    R27 C10 (J27): 0
+    R27 C11 (K27): 0
+    R28 C8 (H28): 0
+    R28 C10 (J28): 0
+    R28 C11 (K28): 0
+    R29 C8 (H29): 0
+    R29 C10 (J29): 0
+    R29 C11 (K29): 0
+    R30 C8 (H30): 0
+    R30 C10 (J30): 0
+    R30 C11 (K30): 0
+    R31 C8 (H31): 0
+    R31 C10 (J31): 0
+    R31 C11 (K31): 0
+    R32 C8 (H32): 0
+    R32 C10 (J32): 0
+    R32 C11 (K32): 0
+    R33 C8 (H33): 0
+    R33 C10 (J33): 0
+    R33 C11 (K33): 0
+    R34 C8 (H34): 0
+    R34 C10 (J34): 0
+    R34 C11 (K34): 0
+    R35 C8 (H35): 0
+    R35 C10 (J35): 0
+    R35 C11 (K35): 0
+    R36 C8 (H36): 0
+    R36 C10 (J36): 0
+    R36 C11 (K36): 0
+    R37 C8 (H37): 0
+    R37 C10 (J37): 0
+    R37 C11 (K37): 0
+    R38 C8 (H38): 0
+    R38 C10 (J38): 0
+    R38 C11 (K38): 0
+    R39 C8 (H39): 0
+    R39 C10 (J39): 0
+    R39 C11 (K39): 0
+    R40 C8 (H40): 0
+    R40 C10 (J40): 0
+    R40 C11 (K40): 0
+    R41 C8 (H41): 0
+    R41 C10 (J41): 0
+    R41 C11 (K41): 0
+    R42 C8 (H42): 0
+    R42 C10 (J42): 0
+    R42 C11 (K42): 0
+    R43 C8 (H43): 0
+    R43 C10 (J43): 0
+    R43 C11 (K43): 0
+    R44 C8 (H44): 0
+    R44 C10 (J44): 0
+    R44 C11 (K44): 0
+    R45 C8 (H45): 0
+    R45 C10 (J45): 0
+    R45 C11 (K45): 0
+    R46 C8 (H46): 0
+    R46 C10 (J46): 0
+    R46 C11 (K46): 0
+    R47 C8 (H47): 0
+    R47 C10 (J47): 0
+    R47 C11 (K47): 0
+    R48 C1 (A48): Total Sales Tax Amount Outstanding
+    R48 C8 (H48): 1950
+    R48 C10 (J48): 351
+    R48 C11 (K48): 2301
+    R50 C1 (A50): Amount in Words
+    R51 C1 (A51): Two Thousand Three Hundred One Only.
+    R56 C1 (A56): SIGNATURE AND STAMP
+    R56 C9 (I56): RECEIVER SIGNATURE AND STAMP
+
+--- Sheet: 'Sheet3' | Rows: 1 | Cols: 1 ---
+
+  MERGED CELLS: none
+
+  COLUMN WIDTHS:
+    Col A: 8.69140625
+
+  ROW HEIGHTS (explicit only):
+    Row 1: 12.75 pt
+    Row 2: 12.75 pt
+    Row 3: 12.75 pt
+    Row 4: 12.75 pt
+    Row 5: 12.75 pt
+    Row 6: 12.75 pt
+    Row 7: 12.75 pt
+    Row 8: 12.75 pt
+    Row 9: 12.75 pt
+    Row 10: 12.75 pt
+    Row 11: 12.75 pt
+    Row 12: 12.75 pt
+    Row 13: 12.75 pt
+    Row 14: 12.75 pt
+    Row 15: 12.75 pt
+    Row 16: 12.75 pt
+    Row 17: 12.75 pt
+    Row 18: 12.75 pt
+    Row 19: 12.75 pt
+    Row 20: 12.75 pt
+    Row 21: 12.75 pt
+    Row 22: 12.75 pt
+    Row 23: 12.75 pt
+    Row 24: 12.75 pt
+    Row 25: 12.75 pt
+    Row 26: 12.75 pt
+    Row 27: 12.75 pt
+    Row 28: 12.75 pt
+    Row 29: 12.75 pt
+    Row 30: 12.75 pt
+    Row 31: 12.75 pt
+    Row 32: 12.75 pt
+    Row 33: 12.75 pt
+    Row 34: 12.75 pt
+    Row 35: 12.75 pt
+    Row 36: 12.75 pt
+    Row 37: 12.75 pt
+    Row 38: 12.75 pt
+    Row 39: 12.75 pt
+    Row 40: 12.75 pt
+    Row 41: 12.75 pt
+    Row 42: 12.75 pt
+    Row 43: 12.75 pt
+    Row 44: 12.75 pt
+    Row 45: 12.75 pt
+    Row 46: 12.75 pt
+    Row 47: 12.75 pt
+    Row 48: 12.75 pt
+    Row 49: 12.75 pt
+    Row 50: 12.75 pt
+    Row 51: 12.75 pt
+    Row 52: 12.75 pt
+    Row 53: 12.75 pt
+    Row 54: 12.75 pt
+    Row 55: 12.75 pt
+    Row 56: 12.75 pt
+    Row 57: 12.75 pt
+    Row 58: 12.75 pt
+    Row 59: 12.75 pt
+    Row 60: 12.75 pt
+    Row 61: 12.75 pt
+    Row 62: 12.75 pt
+    Row 63: 12.75 pt
+    Row 64: 12.75 pt
+    Row 65: 12.75 pt
+    Row 66: 12.75 pt
+    Row 67: 12.75 pt
+    Row 68: 12.75 pt
+    Row 69: 12.75 pt
+    Row 70: 12.75 pt
+    Row 71: 12.75 pt
+    Row 72: 12.75 pt
+    Row 73: 12.75 pt
+    Row 74: 12.75 pt
+    Row 75: 12.75 pt
+    Row 76: 12.75 pt
+    Row 77: 12.75 pt
+    Row 78: 12.75 pt
+    Row 79: 12.75 pt
+    Row 80: 12.75 pt
+    Row 81: 12.75 pt
+    Row 82: 12.75 pt
+    Row 83: 12.75 pt
+    Row 84: 12.75 pt
+    Row 85: 12.75 pt
+    Row 86: 12.75 pt
+    Row 87: 12.75 pt
+    Row 88: 12.75 pt
+    Row 89: 12.75 pt
+    Row 90: 12.75 pt
+    Row 91: 12.75 pt
+    Row 92: 12.75 pt
+    Row 93: 12.75 pt
+    Row 94: 12.75 pt
+    Row 95: 12.75 pt
+    Row 96: 12.75 pt
+    Row 97: 12.75 pt
+    Row 98: 12.75 pt
+    Row 99: 12.75 pt
+    Row 100: 12.75 pt
+    Row 101: 12.75 pt
+    Row 102: 12.75 pt
+    Row 103: 12.75 pt
+    Row 104: 12.75 pt
+    Row 105: 12.75 pt
+    Row 106: 12.75 pt
+    Row 107: 12.75 pt
+    Row 108: 12.75 pt
+    Row 109: 12.75 pt
+    Row 110: 12.75 pt
+    Row 111: 12.75 pt
+    Row 112: 12.75 pt
+    Row 113: 12.75 pt
+    Row 114: 12.75 pt
+    Row 115: 12.75 pt
+    Row 116: 12.75 pt
+    Row 117: 12.75 pt
+    Row 118: 12.75 pt
+    Row 119: 12.75 pt
+    Row 120: 12.75 pt
+    Row 121: 12.75 pt
+    Row 122: 12.75 pt
+    Row 123: 12.75 pt
+    Row 124: 12.75 pt
+    Row 125: 12.75 pt
+    Row 126: 12.75 pt
+    Row 127: 12.75 pt
+    Row 128: 12.75 pt
+    Row 129: 12.75 pt
+    Row 130: 12.75 pt
+    Row 131: 12.75 pt
+    Row 132: 12.75 pt
+    Row 133: 12.75 pt
+    Row 134: 12.75 pt
+    Row 135: 12.75 pt
+    Row 136: 12.75 pt
+    Row 137: 12.75 pt
+    Row 138: 12.75 pt
+    Row 139: 12.75 pt
+    Row 140: 12.75 pt
+    Row 141: 12.75 pt
+    Row 142: 12.75 pt
+    Row 143: 12.75 pt
+    Row 144: 12.75 pt
+    Row 145: 12.75 pt
+    Row 146: 12.75 pt
+    Row 147: 12.75 pt
+    Row 148: 12.75 pt
+    Row 149: 12.75 pt
+    Row 150: 12.75 pt
+    Row 151: 12.75 pt
+    Row 152: 12.75 pt
+    Row 153: 12.75 pt
+    Row 154: 12.75 pt
+    Row 155: 12.75 pt
+    Row 156: 12.75 pt
+    Row 157: 12.75 pt
+    Row 158: 12.75 pt
+    Row 159: 12.75 pt
+    Row 160: 12.75 pt
+    Row 161: 12.75 pt
+    Row 162: 12.75 pt
+    Row 163: 12.75 pt
+    Row 164: 12.75 pt
+    Row 165: 12.75 pt
+    Row 166: 12.75 pt
+    Row 167: 12.75 pt
+    Row 168: 12.75 pt
+    Row 169: 12.75 pt
+    Row 170: 12.75 pt
+    Row 171: 12.75 pt
+    Row 172: 12.75 pt
+    Row 173: 12.75 pt
+    Row 174: 12.75 pt
+    Row 175: 12.75 pt
+    Row 176: 12.75 pt
+    Row 177: 12.75 pt
+    Row 178: 12.75 pt
+    Row 179: 12.75 pt
+    Row 180: 12.75 pt
+    Row 181: 12.75 pt
+    Row 182: 12.75 pt
+    Row 183: 12.75 pt
+    Row 184: 12.75 pt
+    Row 185: 12.75 pt
+    Row 186: 12.75 pt
+    Row 187: 12.75 pt
+    Row 188: 12.75 pt
+    Row 189: 12.75 pt
+    Row 190: 12.75 pt
+    Row 191: 12.75 pt
+    Row 192: 12.75 pt
+    Row 193: 12.75 pt
+    Row 194: 12.75 pt
+    Row 195: 12.75 pt
+    Row 196: 12.75 pt
+    Row 197: 12.75 pt
+    Row 198: 12.75 pt
+    Row 199: 12.75 pt
+    Row 200: 12.75 pt
+    Row 201: 12.75 pt
+    Row 202: 12.75 pt
+    Row 203: 12.75 pt
+    Row 204: 12.75 pt
+    Row 205: 12.75 pt
+    Row 206: 12.75 pt
+    Row 207: 12.75 pt
+    Row 208: 12.75 pt
+    Row 209: 12.75 pt
+    Row 210: 12.75 pt
+    Row 211: 12.75 pt
+    Row 212: 12.75 pt
+    Row 213: 12.75 pt
+    Row 214: 12.75 pt
+    Row 215: 12.75 pt
+    Row 216: 12.75 pt
+    Row 217: 12.75 pt
+    Row 218: 12.75 pt
+    Row 219: 12.75 pt
+    Row 220: 12.75 pt
+    Row 221: 12.75 pt
+    Row 222: 12.75 pt
+    Row 223: 12.75 pt
+    Row 224: 12.75 pt
+    Row 225: 12.75 pt
+    Row 226: 12.75 pt
+    Row 227: 12.75 pt
+    Row 228: 12.75 pt
+    Row 229: 12.75 pt
+    Row 230: 12.75 pt
+    Row 231: 12.75 pt
+    Row 232: 12.75 pt
+    Row 233: 12.75 pt
+    Row 234: 12.75 pt
+    Row 235: 12.75 pt
+    Row 236: 12.75 pt
+    Row 237: 12.75 pt
+    Row 238: 12.75 pt
+    Row 239: 12.75 pt
+    Row 240: 12.75 pt
+    Row 241: 12.75 pt
+    Row 242: 12.75 pt
+    Row 243: 12.75 pt
+    Row 244: 12.75 pt
+    Row 245: 12.75 pt
+    Row 246: 12.75 pt
+    Row 247: 12.75 pt
+    Row 248: 12.75 pt
+    Row 249: 12.75 pt
+    Row 250: 12.75 pt
+    Row 251: 12.75 pt
+    Row 252: 12.75 pt
+    Row 253: 12.75 pt
+    Row 254: 12.75 pt
+    Row 255: 12.75 pt
+    Row 256: 12.75 pt
+    Row 257: 12.75 pt
+    Row 258: 12.75 pt
+    Row 259: 12.75 pt
+    Row 260: 12.75 pt
+    Row 261: 12.75 pt
+    Row 262: 12.75 pt
+    Row 263: 12.75 pt
+    Row 264: 12.75 pt
+    Row 265: 12.75 pt
+    Row 266: 12.75 pt
+    Row 267: 12.75 pt
+    Row 268: 12.75 pt
+    Row 269: 12.75 pt
+    Row 270: 12.75 pt
+    Row 271: 12.75 pt
+    Row 272: 12.75 pt
+    Row 273: 12.75 pt
+    Row 274: 12.75 pt
+    Row 275: 12.75 pt
+    Row 276: 12.75 pt
+    Row 277: 12.75 pt
+    Row 278: 12.75 pt
+    Row 279: 12.75 pt
+    Row 280: 12.75 pt
+    Row 281: 12.75 pt
+    Row 282: 12.75 pt
+    Row 283: 12.75 pt
+    Row 284: 12.75 pt
+    Row 285: 12.75 pt
+    Row 286: 12.75 pt
+    Row 287: 12.75 pt
+    Row 288: 12.75 pt
+    Row 289: 12.75 pt
+    Row 290: 12.75 pt
+    Row 291: 12.75 pt
+    Row 292: 12.75 pt
+    Row 293: 12.75 pt
+    Row 294: 12.75 pt
+    Row 295: 12.75 pt
+    Row 296: 12.75 pt
+    Row 297: 12.75 pt
+    Row 298: 12.75 pt
+    Row 299: 12.75 pt
+    Row 300: 12.75 pt
+    Row 301: 12.75 pt
+    Row 302: 12.75 pt
+    Row 303: 12.75 pt
+    Row 304: 12.75 pt
+    Row 305: 12.75 pt
+    Row 306: 12.75 pt
+    Row 307: 12.75 pt
+    Row 308: 12.75 pt
+    Row 309: 12.75 pt
+    Row 310: 12.75 pt
+    Row 311: 12.75 pt
+    Row 312: 12.75 pt
+    Row 313: 12.75 pt
+    Row 314: 12.75 pt
+    Row 315: 12.75 pt
+    Row 316: 12.75 pt
+    Row 317: 12.75 pt
+    Row 318: 12.75 pt
+    Row 319: 12.75 pt
+    Row 320: 12.75 pt
+    Row 321: 12.75 pt
+    Row 322: 12.75 pt
+    Row 323: 12.75 pt
+    Row 324: 12.75 pt
+    Row 325: 12.75 pt
+    Row 326: 12.75 pt
+    Row 327: 12.75 pt
+    Row 328: 12.75 pt
+    Row 329: 12.75 pt
+    Row 330: 12.75 pt
+    Row 331: 12.75 pt
+    Row 332: 12.75 pt
+    Row 333: 12.75 pt
+    Row 334: 12.75 pt
+    Row 335: 12.75 pt
+    Row 336: 12.75 pt
+    Row 337: 12.75 pt
+    Row 338: 12.75 pt
+    Row 339: 12.75 pt
+    Row 340: 12.75 pt
+    Row 341: 12.75 pt
+    Row 342: 12.75 pt
+    Row 343: 12.75 pt
+    Row 344: 12.75 pt
+    Row 345: 12.75 pt
+    Row 346: 12.75 pt
+    Row 347: 12.75 pt
+    Row 348: 12.75 pt
+    Row 349: 12.75 pt
+    Row 350: 12.75 pt
+    Row 351: 12.75 pt
+    Row 352: 12.75 pt
+    Row 353: 12.75 pt
+    Row 354: 12.75 pt
+    Row 355: 12.75 pt
+    Row 356: 12.75 pt
+    Row 357: 12.75 pt
+    Row 358: 12.75 pt
+    Row 359: 12.75 pt
+    Row 360: 12.75 pt
+    Row 361: 12.75 pt
+    Row 362: 12.75 pt
+    Row 363: 12.75 pt
+    Row 364: 12.75 pt
+    Row 365: 12.75 pt
+    Row 366: 12.75 pt
+    Row 367: 12.75 pt
+    Row 368: 12.75 pt
+    Row 369: 12.75 pt
+    Row 370: 12.75 pt
+    Row 371: 12.75 pt
+    Row 372: 12.75 pt
+    Row 373: 12.75 pt
+    Row 374: 12.75 pt
+    Row 375: 12.75 pt
+    Row 376: 12.75 pt
+    Row 377: 12.75 pt
+    Row 378: 12.75 pt
+    Row 379: 12.75 pt
+    Row 380: 12.75 pt
+    Row 381: 12.75 pt
+    Row 382: 12.75 pt
+    Row 383: 12.75 pt
+    Row 384: 12.75 pt
+    Row 385: 12.75 pt
+    Row 386: 12.75 pt
+    Row 387: 12.75 pt
+    Row 388: 12.75 pt
+    Row 389: 12.75 pt
+    Row 390: 12.75 pt
+    Row 391: 12.75 pt
+    Row 392: 12.75 pt
+    Row 393: 12.75 pt
+    Row 394: 12.75 pt
+    Row 395: 12.75 pt
+    Row 396: 12.75 pt
+    Row 397: 12.75 pt
+    Row 398: 12.75 pt
+    Row 399: 12.75 pt
+    Row 400: 12.75 pt
+    Row 401: 12.75 pt
+    Row 402: 12.75 pt
+    Row 403: 12.75 pt
+    Row 404: 12.75 pt
+    Row 405: 12.75 pt
+    Row 406: 12.75 pt
+    Row 407: 12.75 pt
+    Row 408: 12.75 pt
+    Row 409: 12.75 pt
+    Row 410: 12.75 pt
+    Row 411: 12.75 pt
+    Row 412: 12.75 pt
+    Row 413: 12.75 pt
+    Row 414: 12.75 pt
+    Row 415: 12.75 pt
+    Row 416: 12.75 pt
+    Row 417: 12.75 pt
+    Row 418: 12.75 pt
+    Row 419: 12.75 pt
+    Row 420: 12.75 pt
+    Row 421: 12.75 pt
+    Row 422: 12.75 pt
+    Row 423: 12.75 pt
+    Row 424: 12.75 pt
+    Row 425: 12.75 pt
+    Row 426: 12.75 pt
+    Row 427: 12.75 pt
+    Row 428: 12.75 pt
+    Row 429: 12.75 pt
+    Row 430: 12.75 pt
+    Row 431: 12.75 pt
+    Row 432: 12.75 pt
+    Row 433: 12.75 pt
+    Row 434: 12.75 pt
+    Row 435: 12.75 pt
+    Row 436: 12.75 pt
+    Row 437: 12.75 pt
+    Row 438: 12.75 pt
+    Row 439: 12.75 pt
+    Row 440: 12.75 pt
+    Row 441: 12.75 pt
+    Row 442: 12.75 pt
+    Row 443: 12.75 pt
+    Row 444: 12.75 pt
+    Row 445: 12.75 pt
+    Row 446: 12.75 pt
+    Row 447: 12.75 pt
+    Row 448: 12.75 pt
+    Row 449: 12.75 pt
+    Row 450: 12.75 pt
+    Row 451: 12.75 pt
+    Row 452: 12.75 pt
+    Row 453: 12.75 pt
+    Row 454: 12.75 pt
+    Row 455: 12.75 pt
+    Row 456: 12.75 pt
+    Row 457: 12.75 pt
+    Row 458: 12.75 pt
+    Row 459: 12.75 pt
+    Row 460: 12.75 pt
+    Row 461: 12.75 pt
+    Row 462: 12.75 pt
+    Row 463: 12.75 pt
+    Row 464: 12.75 pt
+    Row 465: 12.75 pt
+    Row 466: 12.75 pt
+    Row 467: 12.75 pt
+    Row 468: 12.75 pt
+    Row 469: 12.75 pt
+    Row 470: 12.75 pt
+    Row 471: 12.75 pt
+    Row 472: 12.75 pt
+    Row 473: 12.75 pt
+    Row 474: 12.75 pt
+    Row 475: 12.75 pt
+    Row 476: 12.75 pt
+    Row 477: 12.75 pt
+    Row 478: 12.75 pt
+    Row 479: 12.75 pt
+    Row 480: 12.75 pt
+    Row 481: 12.75 pt
+    Row 482: 12.75 pt
+    Row 483: 12.75 pt
+    Row 484: 12.75 pt
+    Row 485: 12.75 pt
+    Row 486: 12.75 pt
+    Row 487: 12.75 pt
+    Row 488: 12.75 pt
+    Row 489: 12.75 pt
+    Row 490: 12.75 pt
+    Row 491: 12.75 pt
+    Row 492: 12.75 pt
+    Row 493: 12.75 pt
+    Row 494: 12.75 pt
+    Row 495: 12.75 pt
+    Row 496: 12.75 pt
+    Row 497: 12.75 pt
+    Row 498: 12.75 pt
+    Row 499: 12.75 pt
+    Row 500: 12.75 pt
+    Row 501: 12.75 pt
+    Row 502: 12.75 pt
+    Row 503: 12.75 pt
+    Row 504: 12.75 pt
+    Row 505: 12.75 pt
+    Row 506: 12.75 pt
+    Row 507: 12.75 pt
+    Row 508: 12.75 pt
+    Row 509: 12.75 pt
+    Row 510: 12.75 pt
+    Row 511: 12.75 pt
+    Row 512: 12.75 pt
+    Row 513: 12.75 pt
+    Row 514: 12.75 pt
+    Row 515: 12.75 pt
+    Row 516: 12.75 pt
+    Row 517: 12.75 pt
+    Row 518: 12.75 pt
+    Row 519: 12.75 pt
+    Row 520: 12.75 pt
+    Row 521: 12.75 pt
+    Row 522: 12.75 pt
+    Row 523: 12.75 pt
+    Row 524: 12.75 pt
+    Row 525: 12.75 pt
+    Row 526: 12.75 pt
+    Row 527: 12.75 pt
+    Row 528: 12.75 pt
+    Row 529: 12.75 pt
+    Row 530: 12.75 pt
+    Row 531: 12.75 pt
+    Row 532: 12.75 pt
+    Row 533: 12.75 pt
+    Row 534: 12.75 pt
+    Row 535: 12.75 pt
+    Row 536: 12.75 pt
+    Row 537: 12.75 pt
+    Row 538: 12.75 pt
+    Row 539: 12.75 pt
+    Row 540: 12.75 pt
+    Row 541: 12.75 pt
+    Row 542: 12.75 pt
+    Row 543: 12.75 pt
+    Row 544: 12.75 pt
+    Row 545: 12.75 pt
+    Row 546: 12.75 pt
+    Row 547: 12.75 pt
+    Row 548: 12.75 pt
+    Row 549: 12.75 pt
+    Row 550: 12.75 pt
+    Row 551: 12.75 pt
+    Row 552: 12.75 pt
+    Row 553: 12.75 pt
+    Row 554: 12.75 pt
+    Row 555: 12.75 pt
+    Row 556: 12.75 pt
+    Row 557: 12.75 pt
+    Row 558: 12.75 pt
+    Row 559: 12.75 pt
+    Row 560: 12.75 pt
+    Row 561: 12.75 pt
+    Row 562: 12.75 pt
+    Row 563: 12.75 pt
+    Row 564: 12.75 pt
+    Row 565: 12.75 pt
+    Row 566: 12.75 pt
+    Row 567: 12.75 pt
+    Row 568: 12.75 pt
+    Row 569: 12.75 pt
+    Row 570: 12.75 pt
+    Row 571: 12.75 pt
+    Row 572: 12.75 pt
+    Row 573: 12.75 pt
+    Row 574: 12.75 pt
+    Row 575: 12.75 pt
+    Row 576: 12.75 pt
+    Row 577: 12.75 pt
+    Row 578: 12.75 pt
+    Row 579: 12.75 pt
+    Row 580: 12.75 pt
+    Row 581: 12.75 pt
+    Row 582: 12.75 pt
+    Row 583: 12.75 pt
+    Row 584: 12.75 pt
+    Row 585: 12.75 pt
+    Row 586: 12.75 pt
+    Row 587: 12.75 pt
+    Row 588: 12.75 pt
+    Row 589: 12.75 pt
+    Row 590: 12.75 pt
+    Row 591: 12.75 pt
+    Row 592: 12.75 pt
+    Row 593: 12.75 pt
+    Row 594: 12.75 pt
+    Row 595: 12.75 pt
+    Row 596: 12.75 pt
+    Row 597: 12.75 pt
+    Row 598: 12.75 pt
+    Row 599: 12.75 pt
+    Row 600: 12.75 pt
+    Row 601: 12.75 pt
+    Row 602: 12.75 pt
+    Row 603: 12.75 pt
+    Row 604: 12.75 pt
+    Row 605: 12.75 pt
+    Row 606: 12.75 pt
+    Row 607: 12.75 pt
+    Row 608: 12.75 pt
+    Row 609: 12.75 pt
+    Row 610: 12.75 pt
+    Row 611: 12.75 pt
+    Row 612: 12.75 pt
+    Row 613: 12.75 pt
+    Row 614: 12.75 pt
+    Row 615: 12.75 pt
+    Row 616: 12.75 pt
+    Row 617: 12.75 pt
+    Row 618: 12.75 pt
+    Row 619: 12.75 pt
+    Row 620: 12.75 pt
+    Row 621: 12.75 pt
+    Row 622: 12.75 pt
+    Row 623: 12.75 pt
+    Row 624: 12.75 pt
+    Row 625: 12.75 pt
+    Row 626: 12.75 pt
+    Row 627: 12.75 pt
+    Row 628: 12.75 pt
+    Row 629: 12.75 pt
+    Row 630: 12.75 pt
+    Row 631: 12.75 pt
+    Row 632: 12.75 pt
+    Row 633: 12.75 pt
+    Row 634: 12.75 pt
+    Row 635: 12.75 pt
+    Row 636: 12.75 pt
+    Row 637: 12.75 pt
+    Row 638: 12.75 pt
+    Row 639: 12.75 pt
+    Row 640: 12.75 pt
+    Row 641: 12.75 pt
+    Row 642: 12.75 pt
+    Row 643: 12.75 pt
+    Row 644: 12.75 pt
+    Row 645: 12.75 pt
+    Row 646: 12.75 pt
+    Row 647: 12.75 pt
+    Row 648: 12.75 pt
+    Row 649: 12.75 pt
+    Row 650: 12.75 pt
+    Row 651: 12.75 pt
+    Row 652: 12.75 pt
+    Row 653: 12.75 pt
+    Row 654: 12.75 pt
+    Row 655: 12.75 pt
+    Row 656: 12.75 pt
+    Row 657: 12.75 pt
+    Row 658: 12.75 pt
+    Row 659: 12.75 pt
+    Row 660: 12.75 pt
+    Row 661: 12.75 pt
+    Row 662: 12.75 pt
+    Row 663: 12.75 pt
+    Row 664: 12.75 pt
+    Row 665: 12.75 pt
+    Row 666: 12.75 pt
+    Row 667: 12.75 pt
+    Row 668: 12.75 pt
+    Row 669: 12.75 pt
+    Row 670: 12.75 pt
+    Row 671: 12.75 pt
+    Row 672: 12.75 pt
+    Row 673: 12.75 pt
+    Row 674: 12.75 pt
+    Row 675: 12.75 pt
+    Row 676: 12.75 pt
+    Row 677: 12.75 pt
+    Row 678: 12.75 pt
+    Row 679: 12.75 pt
+    Row 680: 12.75 pt
+    Row 681: 12.75 pt
+    Row 682: 12.75 pt
+    Row 683: 12.75 pt
+    Row 684: 12.75 pt
+    Row 685: 12.75 pt
+    Row 686: 12.75 pt
+    Row 687: 12.75 pt
+    Row 688: 12.75 pt
+    Row 689: 12.75 pt
+    Row 690: 12.75 pt
+    Row 691: 12.75 pt
+    Row 692: 12.75 pt
+    Row 693: 12.75 pt
+    Row 694: 12.75 pt
+    Row 695: 12.75 pt
+    Row 696: 12.75 pt
+    Row 697: 12.75 pt
+    Row 698: 12.75 pt
+    Row 699: 12.75 pt
+    Row 700: 12.75 pt
+    Row 701: 12.75 pt
+    Row 702: 12.75 pt
+    Row 703: 12.75 pt
+    Row 704: 12.75 pt
+    Row 705: 12.75 pt
+    Row 706: 12.75 pt
+    Row 707: 12.75 pt
+    Row 708: 12.75 pt
+    Row 709: 12.75 pt
+    Row 710: 12.75 pt
+    Row 711: 12.75 pt
+    Row 712: 12.75 pt
+    Row 713: 12.75 pt
+    Row 714: 12.75 pt
+    Row 715: 12.75 pt
+    Row 716: 12.75 pt
+    Row 717: 12.75 pt
+    Row 718: 12.75 pt
+    Row 719: 12.75 pt
+    Row 720: 12.75 pt
+    Row 721: 12.75 pt
+    Row 722: 12.75 pt
+    Row 723: 12.75 pt
+    Row 724: 12.75 pt
+    Row 725: 12.75 pt
+    Row 726: 12.75 pt
+    Row 727: 12.75 pt
+    Row 728: 12.75 pt
+    Row 729: 12.75 pt
+    Row 730: 12.75 pt
+    Row 731: 12.75 pt
+    Row 732: 12.75 pt
+    Row 733: 12.75 pt
+    Row 734: 12.75 pt
+    Row 735: 12.75 pt
+    Row 736: 12.75 pt
+    Row 737: 12.75 pt
+    Row 738: 12.75 pt
+    Row 739: 12.75 pt
+    Row 740: 12.75 pt
+    Row 741: 12.75 pt
+    Row 742: 12.75 pt
+    Row 743: 12.75 pt
+    Row 744: 12.75 pt
+    Row 745: 12.75 pt
+    Row 746: 12.75 pt
+    Row 747: 12.75 pt
+    Row 748: 12.75 pt
+    Row 749: 12.75 pt
+    Row 750: 12.75 pt
+    Row 751: 12.75 pt
+    Row 752: 12.75 pt
+    Row 753: 12.75 pt
+    Row 754: 12.75 pt
+    Row 755: 12.75 pt
+    Row 756: 12.75 pt
+    Row 757: 12.75 pt
+    Row 758: 12.75 pt
+    Row 759: 12.75 pt
+    Row 760: 12.75 pt
+    Row 761: 12.75 pt
+    Row 762: 12.75 pt
+    Row 763: 12.75 pt
+    Row 764: 12.75 pt
+    Row 765: 12.75 pt
+    Row 766: 12.75 pt
+    Row 767: 12.75 pt
+    Row 768: 12.75 pt
+    Row 769: 12.75 pt
+    Row 770: 12.75 pt
+    Row 771: 12.75 pt
+    Row 772: 12.75 pt
+    Row 773: 12.75 pt
+    Row 774: 12.75 pt
+    Row 775: 12.75 pt
+    Row 776: 12.75 pt
+    Row 777: 12.75 pt
+    Row 778: 12.75 pt
+    Row 779: 12.75 pt
+    Row 780: 12.75 pt
+    Row 781: 12.75 pt
+    Row 782: 12.75 pt
+    Row 783: 12.75 pt
+    Row 784: 12.75 pt
+    Row 785: 12.75 pt
+    Row 786: 12.75 pt
+    Row 787: 12.75 pt
+    Row 788: 12.75 pt
+    Row 789: 12.75 pt
+    Row 790: 12.75 pt
+    Row 791: 12.75 pt
+    Row 792: 12.75 pt
+    Row 793: 12.75 pt
+    Row 794: 12.75 pt
+    Row 795: 12.75 pt
+    Row 796: 12.75 pt
+    Row 797: 12.75 pt
+    Row 798: 12.75 pt
+    Row 799: 12.75 pt
+    Row 800: 12.75 pt
+    Row 801: 12.75 pt
+    Row 802: 12.75 pt
+    Row 803: 12.75 pt
+    Row 804: 12.75 pt
+    Row 805: 12.75 pt
+    Row 806: 12.75 pt
+    Row 807: 12.75 pt
+    Row 808: 12.75 pt
+    Row 809: 12.75 pt
+    Row 810: 12.75 pt
+    Row 811: 12.75 pt
+    Row 812: 12.75 pt
+    Row 813: 12.75 pt
+    Row 814: 12.75 pt
+    Row 815: 12.75 pt
+    Row 816: 12.75 pt
+    Row 817: 12.75 pt
+    Row 818: 12.75 pt
+    Row 819: 12.75 pt
+    Row 820: 12.75 pt
+    Row 821: 12.75 pt
+    Row 822: 12.75 pt
+    Row 823: 12.75 pt
+    Row 824: 12.75 pt
+    Row 825: 12.75 pt
+    Row 826: 12.75 pt
+    Row 827: 12.75 pt
+    Row 828: 12.75 pt
+    Row 829: 12.75 pt
+    Row 830: 12.75 pt
+    Row 831: 12.75 pt
+    Row 832: 12.75 pt
+    Row 833: 12.75 pt
+    Row 834: 12.75 pt
+    Row 835: 12.75 pt
+    Row 836: 12.75 pt
+    Row 837: 12.75 pt
+    Row 838: 12.75 pt
+    Row 839: 12.75 pt
+    Row 840: 12.75 pt
+    Row 841: 12.75 pt
+    Row 842: 12.75 pt
+    Row 843: 12.75 pt
+    Row 844: 12.75 pt
+    Row 845: 12.75 pt
+    Row 846: 12.75 pt
+    Row 847: 12.75 pt
+    Row 848: 12.75 pt
+    Row 849: 12.75 pt
+    Row 850: 12.75 pt
+    Row 851: 12.75 pt
+    Row 852: 12.75 pt
+    Row 853: 12.75 pt
+    Row 854: 12.75 pt
+    Row 855: 12.75 pt
+    Row 856: 12.75 pt
+    Row 857: 12.75 pt
+    Row 858: 12.75 pt
+    Row 859: 12.75 pt
+    Row 860: 12.75 pt
+    Row 861: 12.75 pt
+    Row 862: 12.75 pt
+    Row 863: 12.75 pt
+    Row 864: 12.75 pt
+    Row 865: 12.75 pt
+    Row 866: 12.75 pt
+    Row 867: 12.75 pt
+    Row 868: 12.75 pt
+    Row 869: 12.75 pt
+    Row 870: 12.75 pt
+    Row 871: 12.75 pt
+    Row 872: 12.75 pt
+    Row 873: 12.75 pt
+    Row 874: 12.75 pt
+    Row 875: 12.75 pt
+    Row 876: 12.75 pt
+    Row 877: 12.75 pt
+    Row 878: 12.75 pt
+    Row 879: 12.75 pt
+    Row 880: 12.75 pt
+    Row 881: 12.75 pt
+    Row 882: 12.75 pt
+    Row 883: 12.75 pt
+    Row 884: 12.75 pt
+    Row 885: 12.75 pt
+    Row 886: 12.75 pt
+    Row 887: 12.75 pt
+    Row 888: 12.75 pt
+    Row 889: 12.75 pt
+    Row 890: 12.75 pt
+    Row 891: 12.75 pt
+    Row 892: 12.75 pt
+    Row 893: 12.75 pt
+    Row 894: 12.75 pt
+    Row 895: 12.75 pt
+    Row 896: 12.75 pt
+    Row 897: 12.75 pt
+    Row 898: 12.75 pt
+    Row 899: 12.75 pt
+    Row 900: 12.75 pt
+    Row 901: 12.75 pt
+    Row 902: 12.75 pt
+    Row 903: 12.75 pt
+    Row 904: 12.75 pt
+    Row 905: 12.75 pt
+    Row 906: 12.75 pt
+    Row 907: 12.75 pt
+    Row 908: 12.75 pt
+    Row 909: 12.75 pt
+    Row 910: 12.75 pt
+    Row 911: 12.75 pt
+    Row 912: 12.75 pt
+    Row 913: 12.75 pt
+    Row 914: 12.75 pt
+    Row 915: 12.75 pt
+    Row 916: 12.75 pt
+    Row 917: 12.75 pt
+    Row 918: 12.75 pt
+    Row 919: 12.75 pt
+    Row 920: 12.75 pt
+    Row 921: 12.75 pt
+    Row 922: 12.75 pt
+    Row 923: 12.75 pt
+    Row 924: 12.75 pt
+    Row 925: 12.75 pt
+    Row 926: 12.75 pt
+    Row 927: 12.75 pt
+    Row 928: 12.75 pt
+    Row 929: 12.75 pt
+    Row 930: 12.75 pt
+    Row 931: 12.75 pt
+    Row 932: 12.75 pt
+    Row 933: 12.75 pt
+    Row 934: 12.75 pt
+    Row 935: 12.75 pt
+    Row 936: 12.75 pt
+    Row 937: 12.75 pt
+    Row 938: 12.75 pt
+    Row 939: 12.75 pt
+    Row 940: 12.75 pt
+    Row 941: 12.75 pt
+    Row 942: 12.75 pt
+    Row 943: 12.75 pt
+    Row 944: 12.75 pt
+    Row 945: 12.75 pt
+    Row 946: 12.75 pt
+    Row 947: 12.75 pt
+    Row 948: 12.75 pt
+    Row 949: 12.75 pt
+    Row 950: 12.75 pt
+    Row 951: 12.75 pt
+    Row 952: 12.75 pt
+    Row 953: 12.75 pt
+    Row 954: 12.75 pt
+    Row 955: 12.75 pt
+    Row 956: 12.75 pt
+    Row 957: 12.75 pt
+    Row 958: 12.75 pt
+    Row 959: 12.75 pt
+    Row 960: 12.75 pt
+    Row 961: 12.75 pt
+    Row 962: 12.75 pt
+    Row 963: 12.75 pt
+    Row 964: 12.75 pt
+    Row 965: 12.75 pt
+    Row 966: 12.75 pt
+    Row 967: 12.75 pt
+    Row 968: 12.75 pt
+    Row 969: 12.75 pt
+    Row 970: 12.75 pt
+    Row 971: 12.75 pt
+    Row 972: 12.75 pt
+    Row 973: 12.75 pt
+    Row 974: 12.75 pt
+    Row 975: 12.75 pt
+    Row 976: 12.75 pt
+    Row 977: 12.75 pt
+    Row 978: 12.75 pt
+    Row 979: 12.75 pt
+    Row 980: 12.75 pt
+    Row 981: 12.75 pt
+    Row 982: 12.75 pt
+    Row 983: 12.75 pt
+    Row 984: 12.75 pt
+    Row 985: 12.75 pt
+    Row 986: 12.75 pt
+    Row 987: 12.75 pt
+    Row 988: 12.75 pt
+    Row 989: 12.75 pt
+    Row 990: 12.75 pt
+    Row 991: 12.75 pt
+    Row 992: 12.75 pt
+    Row 993: 12.75 pt
+    Row 994: 12.75 pt
+    Row 995: 12.75 pt
+    Row 996: 12.75 pt
+    Row 997: 12.75 pt
+    Row 998: 12.75 pt
+    Row 999: 12.75 pt
+    Row 1000: 12.75 pt
+
+  CELL VALUES:

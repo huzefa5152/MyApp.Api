@@ -367,3 +367,9 @@ migration.sql
 
 # User-uploaded files (logos, avatars)
 data/
+
+# Claude Code user-local state
+.claude/
+
+# Temporary debug snapshots
+roshan_dc_current.html

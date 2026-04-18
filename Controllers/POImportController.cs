@@ -16,18 +16,30 @@ namespace MyApp.Api.Controllers
     {
         private readonly IPOParserService _parser;
         private readonly ILlmPOParserService _llmParser;
+        private readonly IPOFormatRegistry _formatRegistry;
+        private readonly IRuleBasedPOParser _ruleParser;
         private readonly AppDbContext _context;
+        private readonly ILogger<POImportController> _logger;
 
-        public POImportController(IPOParserService parser, ILlmPOParserService llmParser, AppDbContext context)
+        public POImportController(
+            IPOParserService parser,
+            ILlmPOParserService llmParser,
+            IPOFormatRegistry formatRegistry,
+            IRuleBasedPOParser ruleParser,
+            AppDbContext context,
+            ILogger<POImportController> logger)
         {
             _parser = parser;
             _llmParser = llmParser;
+            _formatRegistry = formatRegistry;
+            _ruleParser = ruleParser;
             _context = context;
+            _logger = logger;
         }
 
         [HttpPost("parse-pdf")]
         [RequestSizeLimit(10 * 1024 * 1024)] // 10 MB
-        public async Task<IActionResult> ParsePdf(IFormFile file)
+        public async Task<IActionResult> ParsePdf(IFormFile file, [FromQuery] int? companyId)
         {
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file uploaded." });
@@ -50,17 +62,54 @@ namespace MyApp.Api.Controllers
                         Warnings = new List<string> { "Could not extract text from PDF. The file may be scanned/image-based. Please try pasting the text manually." }
                     });
 
-                // Step 2: Try LLM parser first (if configured)
+                // Step 2: Rule-based parser (deterministic, no LLM). If the
+                // format fingerprint matches a seeded/onboarded POFormat and
+                // the rule-set actually produces items, we short-circuit here
+                // and never call Gemini — this is the goal of the whole system.
+                var match = await _formatRegistry.FindMatchAsync(rawText, companyId);
+                if (match != null && match.IsExactMatch)
+                {
+                    var ruleResult = _ruleParser.Parse(rawText, match.Format);
+                    if (ruleResult.Items.Count > 0 || !string.IsNullOrEmpty(ruleResult.PONumber))
+                    {
+                        ruleResult.MatchedFormatId = match.Format.Id;
+                        ruleResult.MatchedFormatName = match.Format.Name;
+                        ruleResult.MatchedFormatVersion = match.Format.CurrentVersion;
+                        ruleResult.Warnings.Insert(0, $"✓ Parsed using saved format: {match.Format.Name} (v{match.Format.CurrentVersion})");
+                        _logger.LogInformation("Parsed via rule-set: formatId={Id} items={Items}", match.Format.Id, ruleResult.Items.Count);
+                        return Ok(ruleResult);
+                    }
+                    _logger.LogInformation("Rule-set for format {Id} matched but produced no output — falling back", match.Format.Id);
+                }
+
+                // Step 3: Try LLM parser (Gemini) for unknown formats.
+                var llmFailed = false;
                 if (_llmParser.IsConfigured)
                 {
                     var llmResult = await _llmParser.ParseWithLlmAsync(rawText);
                     if (llmResult != null && (llmResult.Items.Count > 0 || llmResult.PONumber != null))
+                    {
+                        // If we had a fuzzy (non-exact) format match, surface the suggestion
+                        // so the operator can decide whether to onboard this as a new format.
+                        if (match != null && !match.IsExactMatch)
+                            llmResult.Warnings.Insert(0, $"ℹ This layout resembles '{match.Format.Name}' ({match.Similarity:P0} similar). Consider onboarding it.");
                         return Ok(llmResult);
+                    }
+                    llmFailed = true;
                 }
 
-                // Step 3: Fall back to position-based PDF parser
+                // Step 4: Fall back to position-based PDF parser.
                 stream.Position = 0;
                 var result = _parser.ParsePdf(stream);
+
+                if (llmFailed)
+                {
+                    result.Warnings.Insert(0,
+                        "⚠ AI parser (Gemini) unavailable — likely daily free-tier quota hit. " +
+                        "Using basic fallback parser; results may be inaccurate. Please review each " +
+                        "field carefully, or try again tomorrow. For reliable high-volume parsing " +
+                        "consider upgrading to a paid Gemini API key.");
+                }
 
                 if (string.IsNullOrWhiteSpace(result.RawText))
                 {
@@ -77,12 +126,27 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPost("parse-text")]
-        public async Task<IActionResult> ParseText([FromBody] ParseTextRequest request)
+        public async Task<IActionResult> ParseText([FromBody] ParseTextRequest request, [FromQuery] int? companyId)
         {
             if (string.IsNullOrWhiteSpace(request.Text))
                 return BadRequest(new { error = "No text provided." });
 
-            // Regex first for text paste (user-pasted text is usually well-structured)
+            // Same pipeline as parse-pdf: rule-set first, then LLM, then regex.
+            var match = await _formatRegistry.FindMatchAsync(request.Text, companyId);
+            if (match != null && match.IsExactMatch)
+            {
+                var ruleResult = _ruleParser.Parse(request.Text, match.Format);
+                if (ruleResult.Items.Count > 0 || !string.IsNullOrEmpty(ruleResult.PONumber))
+                {
+                    ruleResult.MatchedFormatId = match.Format.Id;
+                    ruleResult.MatchedFormatName = match.Format.Name;
+                    ruleResult.MatchedFormatVersion = match.Format.CurrentVersion;
+                    ruleResult.Warnings.Insert(0, $"✓ Parsed using saved format: {match.Format.Name} (v{match.Format.CurrentVersion})");
+                    return Ok(ruleResult);
+                }
+            }
+
+            // Regex for text paste (user-pasted text is usually well-structured)
             var result = _parser.ParsePO(request.Text);
             if (result.Items.Count > 0)
                 return Ok(result);

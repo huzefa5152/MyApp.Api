@@ -1,0 +1,53 @@
+SOORTY ENTERPRISES (PRIVATE) LIMITED
+Factory  SEL 05 OU
+Plot No 53-54 Sector 15 Korangi Industrial Area, KARACHI, PakistanKarachi,
+PURCHASE ORDER - GENERAL PURCHASES
+Sales Tax #  02-16-6114-001-55  Control No:  ERP-002-PO/GD
+NTN # :  13-02-0676470-3 CIRCLE A-2, ZONE COMPANIES V KARACHI
+P.O. Number  21620
+Contact Person:  MUHAMMAD.DANIYAL
+Quotation No.
+Bank:  Yes
+Supplier  HAKIMI TRADERS - NTN # 4228937-8
+RFQ Number
+Sales Tax #  32-77-8761-758-52
+P.O. Date  03-FEB-26
+Address #  Shop No., F-23, Floor M2, Falak Corporate City, Talpur Road, Opposite City Post Office,
+Karachi,PK  Reference # 1
+Attn:  SAKINA,  Fax: -0335-5285350, 0331-3368883
+SCM P.O. No.
+Reference # 3
+SUPPLIER COPY
+TSor.l#.%  Item  Narration  Department  Parent Tol% Quantity  Unit  Unit Rate Disc. Rate  Amount
+1 0 (076-006530-01)  SOLENOID COIL 220VAC  COIL FOR SOLENOID  GWP DRY PROCESS  12143,  0  10.00  Piece  400.000  400.000  4,000.00
+( G-ELECTRICAL ITEMS 6.0VA  VALVE, AC220V,6.0.V,  (GENERAL)
+)  VOLT RANGE AC 187V-
+253V, 100%ED,IP65
+Total:  Total Items Value  4,000.00
+Amount in Words: Four Thousand Seven Hundred Twenty Only /-  Discount
+0.00
+Sales Tax Amount  18.00%  720.00
+Other Information
+SED Amount  0%  0.00
+Payment Terms  15 Days Credit
+PO Charges 1  0.00
+Flag Status  NEW
+Charges 2
+PO Status
+APPROVED
+Charges 3  0.00
+Total Amount In  PKR  4,720.00
+SPECIAL COMMENTS
+MUHAMMAD.DANIYAL
+Prepared By  Verified By  Authorised Signatory  Managing Director
+TERMS & CONDITIONS.
+1. Please mention our Purchase order number on all your delivery challans and invoices.
+2. Delivery of goods must be made strictly in accordance with the Purchase Order. If the goods are delivered in damaged condition or/and not in accordance with the specifications
+mentioned in this Purchase Order shall be rejected and returned by us.
+3. Payment will be made on the basis of approved order quantity or actual quantity received whichever is lower and subject to quantity approval. Our record will be considered final
+and decisive at this point.
+4. Payment will be subject to deduction of Income Tax at source at prevailing rate if applicable.
+5. Payment will be made within specified period on submission of invoice along with acknowledgement of goods.
+HEAD OFFICE: ( 26 - A, S.M.C.H.S, SHAHRA-E-FAISAL, PAKISTAN : )  Page 1 of 1
+04-FEB-26 11:29 AM
+===PAGE-BREAK===

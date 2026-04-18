@@ -7,6 +7,14 @@ namespace MyApp.Api.DTOs
         public List<ParsedPOItemDto> Items { get; set; } = new();
         public List<string> Warnings { get; set; } = new();
         public string? RawText { get; set; }
+
+        // When the deterministic rule-based parser routed this text to a
+        // known POFormat, we surface the id/name/version so the UI can
+        // display a badge and offer "save as verified sample" without
+        // parsing our warning strings.
+        public int? MatchedFormatId { get; set; }
+        public string? MatchedFormatName { get; set; }
+        public int? MatchedFormatVersion { get; set; }
     }
 
     public class ParsedPOItemDto

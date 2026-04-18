@@ -1,0 +1,29 @@
+MEKO DENIM MILLS (PVT) LTD.
+A-MAIN STORE. KOTRI
+Purchase Order
+INDENT
+P. O. No  262475  Account Code  10100113  ST No  42301-4020795-9
+Date  16-APR-26
+Supplier Title  ROSHAN TRADERS
+Dlv Date
+Contact
+CONSUMEABLE
+VALID  Address  F-44 FALAK CITY TOWER KARACHI
+WEAVING MDM
+Telephone No  +92-333-1665253
+Code  Item Name  Unit  Qty  Rate  Excl-Tax AmoST RateS/Tax AmoET Rate ET Amt Total Amount
+43010027 GAS CYLINDER R-410  PC  2  52500.00  105,000 18.00  18,900  0  123,900
+Total  105,000
+Sales Tax Amount  18,900
+ET Amount  0
+Grand Total  123,900
+Rupees One Hundred Twenty-Three Thousand Nine Hundred Only
+Remarks
+Payment Terms
+For Meko Denim (Private) Limited
+Director / Purchase Officer
+Head Office : Plot No. F - 131, Hub River Road , S.I.T.E Karachi.
+Email: info@mekodenim.com.pk
+Printed On
+16-APR-26 04:11 PM
+===PAGE-BREAK===

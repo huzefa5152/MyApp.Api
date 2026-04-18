@@ -1,0 +1,39 @@
+MEKO FABRICS (PVT) LTD
+NTN # 8655568
+Purchase Order
+INDENT
+P. O. No  S 260475  Account Code  0500100175 ST No
+Date  31-JAN-26
+Supplier Title  HAKIMI TRADERS
+Dlv Date
+Contact
+CARDING UNIT-3A
+VALID  Address  Office # 111, 1st Floor Industrial Tower Plaza Sarai
+Road Karachi
+SPINNING UNIT-KOTRI
+Telephone No
+Local
+Code  Item Name  Unit  Qty  Rate  Excl-Tax AmoST RateS/Tax AmoET Rate ET Amt Total Amount
+35020014 SOLONIDE VALVE 358-015-02IL P-MAX PC  8  9500.00  76,000 18.00  13,680  0  89,680
+10 BAR CAMOZZI
+35020013 AIR CYLINDER P.MAX 10 BAR 24N2A  PC  4  6500.00  26,000 18.00  4,680  0  30,680
+25A050 CAMOZZI
+35020012 PNEUMATIC CYLINDER DSNU-16-150- PC  6  6000.00  36,000 18.00  6,480  0  42,480
+P-A
+35020011 MINI BALL VALVE 1/4" (C-51 CARD)  PC  10  600.00  6,000 18.00  1,080  0  7,080
+35020009 SOLENOID VALVE CAMOZZI 638M-  PC  8  9500.00  76,000 18.00  13,680  0  89,680
+101-A63 24VDC 1/8" 10BAR
+35020008 SOLONIDE VALVE 438-015-22 10BAR  PC  4  13000.00  52,000 18.00  9,360  0  61,360
+Total  272,000
+Sales Tax Amount  48,960
+ET Amount  0
+Grand Total  320,960
+Rupees Three Hundred Twenty Thousand Nine Hundred Sixty Only
+Remarks
+Payment Terms
+For Meko Fabrics (Private) Limited
+Director / Purchase Officer
+NOTE : This is system generated P.O and does not required signature
+Printed On
+31-JAN-26 02:51 PM  Head Office : WH 25,3/A Korangi Creek Industrial Park,Karachi.
+===PAGE-BREAK===

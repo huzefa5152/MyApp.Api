@@ -9,6 +9,15 @@
     <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 
+  <!-- scripts/ contains standalone dev tools (PdfDumper) that must not be
+       compiled into the main web API assembly — each has its own .csproj. -->
+  <ItemGroup>
+    <Compile Remove="scripts/**/*.cs" />
+    <Content Remove="scripts/**/*" />
+    <None Remove="scripts/**/*" />
+    <EmbeddedResource Remove="scripts/**/*" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
     <PackageReference Include="ClosedXML" Version="0.104.2" />

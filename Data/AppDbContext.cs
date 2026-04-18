@@ -23,6 +23,9 @@ namespace MyApp.Api.Data
         public DbSet<MergeField> MergeFields { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
         public DbSet<FbrLookup> FbrLookups { get; set; }
+        public DbSet<POFormat> POFormats { get; set; }
+        public DbSet<POFormatVersion> POFormatVersions { get; set; }
+        public DbSet<POGoldenSample> POGoldenSamples { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -184,6 +187,64 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<MergeField>()
                 .HasIndex(mf => new { mf.TemplateType, mf.FieldExpression })
                 .IsUnique();
+
+            // POFormat: fingerprint hash is the primary routing key — indexed
+            // for O(1) lookup. Not unique because different companies can
+            // legitimately have different names for the same structural format.
+            modelBuilder.Entity<POFormat>()
+                .HasIndex(f => f.SignatureHash);
+            modelBuilder.Entity<POFormat>()
+                .HasIndex(f => new { f.CompanyId, f.IsActive });
+            modelBuilder.Entity<POFormat>()
+                .Property(f => f.RuleSetJson)
+                .HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<POFormat>()
+                .Property(f => f.KeywordSignature)
+                .HasMaxLength(4000);
+            modelBuilder.Entity<POFormat>()
+                .Property(f => f.SignatureHash)
+                .HasMaxLength(64);
+            modelBuilder.Entity<POFormat>()
+                .Property(f => f.Name)
+                .HasMaxLength(200);
+            modelBuilder.Entity<POFormat>()
+                .HasOne(f => f.Company)
+                .WithMany()
+                .HasForeignKey(f => f.CompanyId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<POFormatVersion>()
+                .HasIndex(v => new { v.POFormatId, v.Version })
+                .IsUnique();
+            modelBuilder.Entity<POFormatVersion>()
+                .Property(v => v.RuleSetJson)
+                .HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<POFormatVersion>()
+                .HasOne(v => v.POFormat)
+                .WithMany()
+                .HasForeignKey(v => v.POFormatId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // POGoldenSample: replayed on every rule-set update to prevent regressions.
+            modelBuilder.Entity<POGoldenSample>()
+                .HasIndex(s => new { s.POFormatId, s.Status });
+            modelBuilder.Entity<POGoldenSample>()
+                .Property(s => s.RawText)
+                .HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<POGoldenSample>()
+                .Property(s => s.ExpectedJson)
+                .HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<POGoldenSample>()
+                .Property(s => s.Name)
+                .HasMaxLength(300);
+            modelBuilder.Entity<POGoldenSample>()
+                .Property(s => s.Status)
+                .HasMaxLength(32);
+            modelBuilder.Entity<POGoldenSample>()
+                .HasOne(s => s.POFormat)
+                .WithMany()
+                .HasForeignKey(s => s.POFormatId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // Seed merge fields — all fields used in actual templates
             var id = 1;

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyApp.Api.Data;
 
@@ -11,9 +12,11 @@ using MyApp.Api.Data;
 namespace MyApp.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260418022739_AddPOFormatRegistry")]
+    partial class AddPOFormatRegistry
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1932,57 +1935,6 @@ namespace MyApp.Api.Migrations
                     b.ToTable("POFormatVersions");
                 });
 
-            modelBuilder.Entity("MyApp.Api.Models.POGoldenSample", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ExpectedJson")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("OriginalFileName")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("POFormatId")
-                        .HasColumnType("int");
-
-                    b.Property<byte[]>("PdfBlob")
-                        .HasColumnType("varbinary(max)");
-
-                    b.Property<string>("RawText")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("POFormatId", "Status");
-
-                    b.ToTable("POGoldenSamples");
-                });
-
             modelBuilder.Entity("MyApp.Api.Models.PrintTemplate", b =>
                 {
                     b.Property<int>("Id")
@@ -2200,17 +2152,6 @@ namespace MyApp.Api.Migrations
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.POFormatVersion", b =>
-                {
-                    b.HasOne("MyApp.Api.Models.POFormat", "POFormat")
-                        .WithMany()
-                        .HasForeignKey("POFormatId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("POFormat");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.POGoldenSample", b =>
                 {
                     b.HasOne("MyApp.Api.Models.POFormat", "POFormat")
                         .WithMany()
