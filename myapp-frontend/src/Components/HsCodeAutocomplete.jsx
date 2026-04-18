@@ -12,8 +12,12 @@ import { getFbrHSCodes } from "../api/fbrApi";
  *
  * The displayed selection is just the code (e.g. "8481.8090"); the dropdown
  * shows "code — description" so the user can verify which one fits.
+ *
+ * Props:
+ *   excludeHsCodes — optional array of HS codes to hide from results.
+ *     Used by Item Catalog so the user can't pick a code already saved.
  */
-export default function HsCodeAutocomplete({ companyId, value, onChange, style, placeholder }) {
+export default function HsCodeAutocomplete({ companyId, value, onChange, style, placeholder, excludeHsCodes }) {
   const [query, setQuery] = useState(value || "");
   const [suggestions, setSuggestions] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -52,7 +56,10 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
       setLoading(true);
       try {
         const { data } = await getFbrHSCodes(companyId, term);
-        setSuggestions(data || []);
+        // Hide HS codes already used elsewhere in the user's catalog
+        const exclude = new Set((excludeHsCodes || []).map((c) => (c || "").trim()));
+        const filtered = (data || []).filter((h) => !exclude.has((h.hS_CODE || "").trim()));
+        setSuggestions(filtered);
       } catch (err) {
         console.error("HS code lookup error:", err);
         setSuggestions([]);
@@ -60,7 +67,7 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
         setLoading(false);
       }
     }, 350);
-  }, [companyId]);
+  }, [companyId, excludeHsCodes]);
 
   const handleSelect = (code) => {
     setQuery(code);

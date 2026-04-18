@@ -46,5 +46,24 @@ namespace MyApp.Api.Repositories.Implementations
                 .AnyAsync(it => it.Name.ToLower() == name.ToLower() &&
                                (!excludeId.HasValue || it.Id != excludeId.Value));
         }
+
+        public async Task<bool> ExistsByHsCodeAsync(string hsCode, int? excludeId = null)
+        {
+            var normalized = (hsCode ?? "").Trim();
+            if (string.IsNullOrEmpty(normalized)) return false;
+            return await _context.ItemTypes
+                .AnyAsync(it => it.HSCode != null &&
+                                it.HSCode == normalized &&
+                                (!excludeId.HasValue || it.Id != excludeId.Value));
+        }
+
+        public async Task<List<string>> GetSavedHsCodesAsync()
+        {
+            return await _context.ItemTypes
+                .Where(it => it.HSCode != null && it.HSCode != "")
+                .Select(it => it.HSCode!)
+                .Distinct()
+                .ToListAsync();
+        }
     }
 }

@@ -7,6 +7,7 @@ import { createDeliveryChallan } from "../api/challanApi";
 import { formStyles } from "../theme";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
+import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 
 const colors = {
@@ -309,7 +310,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                     {/* Header */}
                     <div style={styles.itemsHeader}>
                       <span style={{ flex: 0.5 }}>#</span>
-                      <span style={{ flex: 1 }}>Type</span>
+                      <span style={{ flex: 1.2 }}>Item Type (FBR)</span>
                       <span style={{ flex: 2.5 }}>Description *</span>
                       <span style={{ flex: 0.6, textAlign: "center" }}>Qty *</span>
                       <span style={{ flex: 1 }}>Unit</span>
@@ -318,17 +319,20 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                     {items.map((item, idx) => (
                       <div key={item.id} style={styles.itemRow}>
                         <span style={{ flex: 0.5, fontSize: "0.8rem", color: colors.textSecondary, paddingTop: 6 }}>{idx + 1}</span>
-                        <div style={{ flex: 1 }}>
-                          <select
-                            style={{ ...styles.input, padding: "0.35rem 0.4rem", fontSize: "0.82rem" }}
-                            value={item.itemTypeId}
-                            onChange={(e) => handleItemChange(idx, "itemTypeId", e.target.value)}
-                          >
-                            <option value="">—</option>
-                            {itemTypes.map((t) => (
-                              <option key={t.id} value={t.id}>{t.name}</option>
-                            ))}
-                          </select>
+                        <div style={{ flex: 1.2 }}>
+                          <SearchableItemTypeSelect
+                            items={itemTypes}
+                            value={item.itemTypeId || ""}
+                            onChange={(newId, picked) => {
+                              handleItemChange(idx, "itemTypeId", newId ? parseInt(newId) : "");
+                              // Auto-fill UOM from the catalog (description stays user/PO-driven)
+                              if (picked && picked.uom && !item.unit?.trim()) {
+                                handleItemChange(idx, "unit", picked.uom);
+                              }
+                            }}
+                            placeholder="Item (optional)"
+                            style={{ padding: "0.35rem 0.4rem", fontSize: "0.82rem" }}
+                          />
                         </div>
                         <div style={{ flex: 2.5 }}>
                           <SmartItemAutocomplete

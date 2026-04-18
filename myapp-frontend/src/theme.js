@@ -114,17 +114,27 @@ export const formStyles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 1000,
+    padding: "2vh 1rem", // guarantees modal never touches viewport edges on any resolution
+    // IMPORTANT: sit above the fixed sidebar (z-index: 1040 in DashboardLayout.css)
+    // so zoomed / narrow-screen modals don't get hidden behind the nav.
+    zIndex: 1100,
+    // Fallback: if a modal is somehow taller than viewport (e.g. browser zoomed in),
+    // the backdrop itself becomes scrollable so users can still reach the footer.
+    overflowY: "auto",
   },
   modal: {
     backgroundColor: colors.cardBg,
     borderRadius: "16px",
     width: "100%",
     maxWidth: "500px",
+    maxHeight: "96vh", // cap at 96% of viewport so header + footer always stay visible
     boxShadow: "0 20px 60px rgba(13,71,161,0.2)",
     overflow: "hidden",
     color: colors.textPrimary,
     animation: "fadeIn 0.3s ease",
+    // Flex column so header / body / footer stack and body can scroll independently
+    display: "flex",
+    flexDirection: "column",
   },
   header: {
     background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
@@ -132,6 +142,7 @@ export const formStyles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    flexShrink: 0, // header never compresses
   },
   title: {
     margin: 0,
@@ -155,6 +166,16 @@ export const formStyles = {
   },
   body: {
     padding: "1.5rem",
+    // Body takes remaining space and scrolls internally when content exceeds it —
+    // this is the key fix for tall modals on high-resolution screens.
+    overflowY: "auto",
+    flex: "1 1 auto",
+    minHeight: 0, // required for flex child to actually shrink
+    // Hard cap as a fallback for modals that wrap the body inside a <form> or
+    // other non-flex container — without this, flex:1 gets ignored and the
+    // body balloons to its natural height, pushing the footer off-screen.
+    // Math: 96vh modal cap − ~75px header − ~65px footer ≈ 140px safety room.
+    maxHeight: "calc(96vh - 140px)",
   },
   error: {
     backgroundColor: colors.dangerLight,
@@ -194,6 +215,7 @@ export const formStyles = {
     gap: "0.6rem",
     backgroundColor: "#f5f7fa",
     borderTop: `1px solid ${colors.cardBorder}`,
+    flexShrink: 0, // footer always visible (buttons like Save/Cancel)
   },
   button: {
     padding: "0.5rem 1.25rem",

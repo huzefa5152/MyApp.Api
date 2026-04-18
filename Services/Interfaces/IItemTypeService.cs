@@ -9,5 +9,6 @@ namespace MyApp.Api.Services.Interfaces
         Task<ItemTypeDto> CreateAsync(ItemTypeDto dto);
         Task<ItemTypeDto?> UpdateAsync(int id, ItemTypeDto dto);
         Task DeleteAsync(int id);
+        Task<List<string>> GetSavedHsCodesAsync();
     }
 }

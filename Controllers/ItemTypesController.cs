@@ -24,6 +24,17 @@ namespace MyApp.Api.Controllers
             return Ok(items);
         }
 
+        /// <summary>
+        /// Returns all HS codes already used by existing item types. The Item
+        /// Types page uses this to hide already-saved codes from the HS Code
+        /// catalog search, so users only see codes they haven't mapped yet.
+        /// </summary>
+        [HttpGet("saved-hscodes")]
+        public async Task<ActionResult<List<string>>> GetSavedHsCodes()
+        {
+            return Ok(await _service.GetSavedHsCodesAsync());
+        }
+
         [HttpGet("{id}")]
         public async Task<ActionResult<ItemTypeDto>> GetById(int id)
         {

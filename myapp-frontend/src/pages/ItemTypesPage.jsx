@@ -349,9 +349,18 @@ export default function ItemTypesPage() {
                     onChange={handleHsCodeChange}
                     style={styles.input}
                     placeholder="Type 'valve', 'pipe', 'bolt'… to search FBR catalog"
+                    excludeHsCodes={
+                      // Hide HS codes already used by OTHER items (allow the current
+                      // edit target to keep its own code)
+                      itemTypes
+                        .filter((t) => t.hsCode && t.id !== editItem?.id)
+                        .map((t) => t.hsCode)
+                    }
                   />
                   <p style={styles.hint}>
-                    Must be picked from FBR's official catalog (you cannot free-type). UOM below auto-fills from the HS_UOM lookup.
+                    Must be picked from FBR's official catalog (no free-type).
+                    HS codes already saved in your catalog are hidden — each code maps to one item.
+                    UOM below auto-fills from the HS_UOM lookup.
                   </p>
                 </div>
 

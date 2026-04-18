@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdDelete, MdEdit } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdDelete, MdEdit, MdVisibility } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import EditBillForm from "../Components/EditBillForm";
 import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice } from "../api/invoiceApi";
@@ -30,6 +30,7 @@ export default function InvoicePage() {
   const [invoices, setInvoices] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [viewingId, setViewingId] = useState(null);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
 
   // Pagination & filters
@@ -525,6 +526,13 @@ export default function InvoicePage() {
                     )}
                   </div>
                   <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
+                    <button
+                      style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
+                      onClick={() => setViewingId(inv.id)}
+                      title="View bill details (read-only)"
+                    >
+                      <MdVisibility size={14} /> View
+                    </button>
                     <button style={styles.printBtn} onClick={() => handlePrintBill(inv)}>
                       <MdPrint size={14} /> Bill
                     </button>
@@ -659,6 +667,15 @@ export default function InvoicePage() {
               return next;
             });
           }}
+        />
+      )}
+
+      {viewingId && (
+        <EditBillForm
+          invoiceId={viewingId}
+          readOnly
+          onClose={() => setViewingId(null)}
+          onSaved={() => setViewingId(null)}
         />
       )}
     </div>

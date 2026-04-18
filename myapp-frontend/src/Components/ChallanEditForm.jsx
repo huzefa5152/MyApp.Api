@@ -100,7 +100,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
 
   return (
     <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: 800, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ ...formStyles.modal, maxWidth: 1100, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>Edit Challan #{challan.challanNumber} Items</h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
@@ -134,30 +134,26 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                       onChange={(newId, picked) => {
                         const next = [...items];
                         next[idx].itemTypeId = newId ? parseInt(newId) : "";
-                        if (picked) {
-                          if (!next[idx].description?.trim()) next[idx].description = picked.name;
-                          if (picked.uom) next[idx].unit = picked.uom;
-                        }
+                        // Only UOM auto-fills; user types description themselves
+                        if (picked && picked.uom) next[idx].unit = picked.uom;
                         setItems(next);
                       }}
-                      placeholder="Pick item…"
+                      placeholder="Item (optional)"
                       style={{ padding: "0.55rem 0.55rem", fontSize: "0.82rem" }}
                     />
                   </div>
                   <div style={{ flex: 2, minWidth: 0 }}>
-                    <SmartItemAutocomplete
-                      companyId={challan.companyId}
+                    <LookupAutocomplete
+                      label="Description"
+                      endpoint="/lookup/items"
                       value={item.description}
                       onChange={(val) => handleItemChange(idx, "description", val)}
-                      onPick={(picked) => handleItemPick(idx, picked)}
-                      style={{ ...styles.input, padding: "0.55rem 0.5rem", fontSize: "0.82rem" }}
-                      placeholder="Search FBR or type…"
                     />
                   </div>
-                  <div style={{ width: 58, flexShrink: 0 }}>
-                    <input type="number" min={1} style={{ ...styles.input, textAlign: "center", padding: "0.55rem 0.25rem" }} value={item.quantity} onChange={(e) => handleItemChange(idx, "quantity", parseInt(e.target.value) || 1)} />
+                  <div style={{ width: 80, flexShrink: 0 }}>
+                    <input type="number" min={1} style={{ ...styles.input, textAlign: "center", padding: "0.55rem 0.35rem" }} value={item.quantity} onChange={(e) => handleItemChange(idx, "quantity", parseInt(e.target.value) || 1)} />
                   </div>
-                  <div style={{ width: 90, flexShrink: 0 }}>
+                  <div style={{ width: 180, flexShrink: 0 }}>
                     <LookupAutocomplete label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(val) => handleItemChange(idx, "unit", val)} />
                   </div>
                   <div style={{ flexShrink: 0 }}>

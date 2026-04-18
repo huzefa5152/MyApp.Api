@@ -3,6 +3,7 @@ import { MdInfo } from "react-icons/md";
 import { getInvoiceById, updateInvoice } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { formStyles } from "../theme";
+import LookupAutocomplete from "./LookupAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 
 const colors = {
@@ -32,7 +33,7 @@ const colors = {
  * Description and UOM use LookupAutocomplete with /api/lookup/items and /api/lookup/units,
  * matching the delivery challan form — picks existing values, creates new ones if needed.
  */
-export default function EditBillForm({ invoiceId, onClose, onSaved }) {
+export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = false }) {
   const [invoice, setInvoice] = useState(null);
   const [items, setItems] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -151,10 +152,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved }) {
 
   return (
     <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: 1100, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ ...formStyles.modal, maxWidth: 1300, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>
-            Edit Bill {invoice?.fbrInvoiceNumber || `#${invoice?.invoiceNumber || ""}`}
+            {readOnly ? "View Bill" : "Edit Bill"} {invoice?.fbrInvoiceNumber || `#${invoice?.invoiceNumber || ""}`}
           </h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
@@ -164,7 +165,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved }) {
               <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading...</div>
             ) : !invoice ? (
               <div style={styles.errorAlert}>Bill not found.</div>
-            ) : !invoice.isEditable ? (
+            ) : !invoice.isEditable && !readOnly ? (
               <div style={styles.errorAlert}>
                 This bill has been submitted to FBR and cannot be edited.
               </div>
@@ -172,16 +173,30 @@ export default function EditBillForm({ invoiceId, onClose, onSaved }) {
               <>
                 {error && <div style={styles.errorAlert}>{error}</div>}
 
-                <div style={styles.infoBox}>
-                  <MdInfo size={16} style={{ color: colors.blue, flexShrink: 0, marginTop: 2 }} />
-                  <div>
-                    To <b>add or remove items</b>, edit the linked delivery challan
-                    {invoice.challanNumbers?.length > 0 && (
-                      <> (<b>DC#{invoice.challanNumbers.join(", DC#")}</b>)</>
-                    )}.
-                    The bill will sync automatically.
+                {!readOnly && (
+                  <div style={styles.infoBox}>
+                    <MdInfo size={16} style={{ color: colors.blue, flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      To <b>add or remove items</b>, edit the linked delivery challan
+                      {invoice.challanNumbers?.length > 0 && (
+                        <> (<b>DC#{invoice.challanNumbers.join(", DC#")}</b>)</>
+                      )}.
+                      The bill will sync automatically.
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {readOnly && (
+                  <div style={styles.infoBox}>
+                    <MdInfo size={16} style={{ color: colors.blue, flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      <b>Client:</b> {invoice.clientName} · <b>Date:</b> {invoice.date ? new Date(invoice.date).toLocaleDateString() : "—"}
+                      {invoice.challanNumbers?.length > 0 && <> · <b>DC#{invoice.challanNumbers.join(", #")}</b></>}
+                      {invoice.fbrStatus && <> · <b>FBR:</b> {invoice.fbrStatus}</>}
+                      {invoice.fbrIRN && <> · <b>IRN:</b> {invoice.fbrIRN}</>}
+                    </div>
+                  </div>
+                )}
 
                 {/* Bill-level fields */}
                 <div style={styles.row}>
@@ -189,30 +204,33 @@ export default function EditBillForm({ invoiceId, onClose, onSaved }) {
                     <label style={styles.label}>GST Rate (%)</label>
                     <input
                       type="number"
-                      style={styles.input}
+                      style={{ ...styles.input, ...(readOnly ? styles.readOnlyInput : {}) }}
                       value={gstRate}
                       onChange={(e) => setGstRate(e.target.value)}
                       min={0}
                       max={100}
                       step={0.5}
+                      readOnly={readOnly}
                     />
                   </div>
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <label style={styles.label}>Payment Terms</label>
                     <input
                       type="text"
-                      style={styles.input}
+                      style={{ ...styles.input, ...(readOnly ? styles.readOnlyInput : {}) }}
                       value={paymentTerms}
                       onChange={(e) => setPaymentTerms(e.target.value)}
                       placeholder="Optional"
+                      readOnly={readOnly}
                     />
                   </div>
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <label style={styles.label}>Payment Mode</label>
                     <select
-                      style={styles.input}
+                      style={{ ...styles.input, ...(readOnly ? styles.readOnlyInput : {}) }}
                       value={paymentMode}
                       onChange={(e) => setPaymentMode(e.target.value)}
+                      disabled={readOnly}
                     >
                       <option value="">— none —</option>
                       <option>Cash</option>
@@ -225,9 +243,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved }) {
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <label style={styles.label}>Document Type</label>
                     <select
-                      style={styles.input}
+                      style={{ ...styles.input, ...(readOnly ? styles.readOnlyInput : {}) }}
                       value={documentType}
                       onChange={(e) => setDocumentType(parseInt(e.target.value))}
+                      disabled={readOnly}
                     >
                       <option value={4}>Sale Invoice</option>
                       <option value={9}>Debit Note</option>
@@ -239,23 +258,25 @@ export default function EditBillForm({ invoiceId, onClose, onSaved }) {
                 {/* Items table — no add/remove; only field edits */}
                 <h6 style={styles.sectionHeading}>Items ({items.length})</h6>
 
-                <p style={styles.gridHint}>
-                  Pick an <b>Item Type</b> — UOM, HS Code &amp; Sale Type auto-fill from the catalog and
-                  <b> cannot be edited inline</b>. To change them, pick a different Item Type or edit the Item Type row on the catalog page.
-                </p>
+                {!readOnly && (
+                  <p style={styles.gridHint}>
+                    Pick an <b>Item Type</b> — UOM, HS Code &amp; Sale Type auto-fill from the catalog and
+                    <b> cannot be edited inline</b>. To change them, pick a different Item Type or edit the Item Type row on the catalog page.
+                  </p>
+                )}
 
                 <div style={styles.tableWrap}>
                   <table style={styles.table}>
                     <thead>
                       <tr style={styles.thead}>
-                        <th style={{ ...styles.th, width: "22%" }}>Item Type (FBR)</th>
-                        <th style={{ ...styles.th, width: "22%" }}>Description</th>
-                        <th style={{ ...styles.th, width: "6%" }}>Qty</th>
-                        <th style={{ ...styles.th, width: "8%" }}>UOM</th>
-                        <th style={{ ...styles.th, width: "10%" }}>Unit Price</th>
-                        <th style={{ ...styles.th, width: "10%" }}>Line Total</th>
-                        <th style={{ ...styles.th, width: "8%" }}>HS Code</th>
-                        <th style={{ ...styles.th, width: "14%" }}>Sale Type</th>
+                        <th style={{ ...styles.th, width: 180, minWidth: 180 }}>Item Type (FBR)</th>
+                        <th style={{ ...styles.th, minWidth: 140 }}>Description</th>
+                        <th style={{ ...styles.th, width: 70, minWidth: 70 }}>Qty</th>
+                        <th style={{ ...styles.th, width: 110, minWidth: 110 }}>UOM</th>
+                        <th style={{ ...styles.th, width: 100, minWidth: 100 }}>Unit Price</th>
+                        <th style={{ ...styles.th, width: 100, minWidth: 100 }}>Line Total</th>
+                        <th style={{ ...styles.th, width: 90, minWidth: 90 }}>HS Code</th>
+                        <th style={{ ...styles.th, minWidth: 140 }}>Sale Type</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -264,30 +285,40 @@ export default function EditBillForm({ invoiceId, onClose, onSaved }) {
                         return (
                           <tr key={item.id || `new-${idx}`}>
                             <td style={styles.td}>
-                              <SearchableItemTypeSelect
-                                items={itemTypes}
-                                value={item.itemTypeId || ""}
-                                onChange={(newId, picked) => updateItemType(idx, newId ? parseInt(newId) : null, picked)}
-                                placeholder="Pick item…"
-                                style={styles.tableInput}
-                              />
+                              {readOnly ? (
+                                <div style={styles.readOnlyText}>{item.itemTypeName || <span style={styles.muted}>—</span>}</div>
+                              ) : (
+                                <SearchableItemTypeSelect
+                                  items={itemTypes}
+                                  value={item.itemTypeId || ""}
+                                  onChange={(newId, picked) => updateItemType(idx, newId ? parseInt(newId) : null, picked)}
+                                  placeholder="Pick item…"
+                                  style={styles.tableInput}
+                                />
+                              )}
                             </td>
                             <td style={styles.td}>
-                              <input
-                                type="text"
-                                style={styles.tableInput}
-                                value={item.description || ""}
-                                onChange={(e) => updateItem(idx, "description", e.target.value)}
-                                placeholder={hasItemType ? item.itemTypeName : "Description"}
-                              />
+                              {readOnly ? (
+                                <div style={styles.readOnlyText}>{item.description || <span style={styles.muted}>—</span>}</div>
+                              ) : (
+                                <LookupAutocomplete
+                                  label="Description"
+                                  endpoint="/lookup/items"
+                                  value={item.description || ""}
+                                  onChange={(v) => updateItem(idx, "description", v)}
+                                  inputClassName=""
+                                  inputStyle={styles.tableInput}
+                                />
+                              )}
                             </td>
                             <td style={styles.td}>
                               <input
                                 type="number"
-                                style={styles.tableInput}
+                                style={{ ...styles.tableInput, ...(readOnly ? styles.readOnlyInput : {}), textAlign: "right" }}
                                 value={item.quantity ?? 0}
                                 onChange={(e) => updateItem(idx, "quantity", e.target.value)}
                                 min={1}
+                                readOnly={readOnly}
                               />
                             </td>
                             <td style={{ ...styles.td, ...styles.readOnlyCell }} title="Comes from Item Type">
@@ -296,14 +327,15 @@ export default function EditBillForm({ invoiceId, onClose, onSaved }) {
                             <td style={styles.td}>
                               <input
                                 type="number"
-                                style={styles.tableInput}
+                                style={{ ...styles.tableInput, ...(readOnly ? styles.readOnlyInput : {}), textAlign: "right" }}
                                 value={item.unitPrice ?? 0}
                                 onChange={(e) => updateItem(idx, "unitPrice", e.target.value)}
                                 min={0}
                                 step={0.01}
+                                readOnly={readOnly}
                               />
                             </td>
-                            <td style={{ ...styles.td, fontWeight: 600, color: colors.textPrimary }}>
+                            <td style={{ ...styles.td, fontWeight: 600, color: colors.textPrimary, textAlign: "right" }}>
                               {(parseFloat(item.lineTotal) || 0).toLocaleString()}
                             </td>
                             <td style={{ ...styles.td, ...styles.readOnlyCell, fontFamily: "monospace" }} title="Comes from Item Type">
@@ -345,9 +377,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved }) {
           </div>
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
-              Cancel
+              {readOnly ? "Close" : "Cancel"}
             </button>
-            {invoice?.isEditable && (
+            {!readOnly && invoice?.isEditable && (
               <button
                 type="submit"
                 style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}
@@ -377,12 +409,14 @@ const styles = {
   input: { width: "100%", padding: "0.55rem 0.75rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 6, fontSize: "0.85rem", backgroundColor: colors.inputBg },
   sectionHeading: { margin: "1rem 0 0.5rem", fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary },
   tableWrap: { width: "100%", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 8 },
-  table: { width: "100%", borderCollapse: "collapse", minWidth: 900 },
+  table: { width: "100%", borderCollapse: "collapse", minWidth: 1100, tableLayout: "fixed" },
   thead: { backgroundColor: "#f5f7fa" },
   th: { padding: "0.6rem 0.5rem", textAlign: "left", fontSize: "0.75rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
   td: { padding: "0.4rem 0.5rem", fontSize: "0.82rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
   tableInput: { width: "100%", padding: "0.35rem 0.5rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 4, fontSize: "0.8rem", backgroundColor: "#fff" },
   readOnlyCell: { backgroundColor: "#f5f7fa", color: colors.textPrimary, fontSize: "0.78rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  readOnlyInput: { backgroundColor: "#f5f7fa", cursor: "not-allowed", pointerEvents: "none" },
+  readOnlyText: { padding: "0.35rem 0.5rem", fontSize: "0.8rem", color: colors.textPrimary, fontWeight: 600 },
   muted: { color: "#9ca3af", fontStyle: "italic" },
   gridHint: { margin: "0.5rem 0 0.6rem", fontSize: "0.75rem", color: colors.textSecondary, lineHeight: 1.4 },
   totalsBox: { marginTop: "1rem", padding: "0.75rem 1rem", backgroundColor: "#f5f7fa", borderRadius: 8, maxWidth: 360, marginLeft: "auto" },

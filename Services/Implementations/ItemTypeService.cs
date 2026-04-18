@@ -53,7 +53,12 @@ namespace MyApp.Api.Services.Implementations
         public async Task<ItemTypeDto> CreateAsync(ItemTypeDto dto)
         {
             if (await _repo.ExistsByNameAsync(dto.Name))
-                throw new InvalidOperationException($"Item type '{dto.Name}' already exists.");
+                throw new InvalidOperationException($"An item with name '{dto.Name}' already exists.");
+
+            if (!string.IsNullOrWhiteSpace(dto.HSCode) && await _repo.ExistsByHsCodeAsync(dto.HSCode))
+                throw new InvalidOperationException(
+                    $"An item with HS Code '{dto.HSCode}' already exists in your catalog. " +
+                    "Each HS Code can only be mapped to one item.");
 
             var created = await _repo.CreateAsync(new ItemType
             {
@@ -74,7 +79,12 @@ namespace MyApp.Api.Services.Implementations
             if (it == null) return null;
 
             if (await _repo.ExistsByNameAsync(dto.Name, id))
-                throw new InvalidOperationException($"Item type '{dto.Name}' already exists.");
+                throw new InvalidOperationException($"An item with name '{dto.Name}' already exists.");
+
+            if (!string.IsNullOrWhiteSpace(dto.HSCode) && await _repo.ExistsByHsCodeAsync(dto.HSCode, id))
+                throw new InvalidOperationException(
+                    $"Another item in your catalog already uses HS Code '{dto.HSCode}'. " +
+                    "Each HS Code can only be mapped to one item.");
 
             it.Name = dto.Name;
             it.HSCode = dto.HSCode;
@@ -86,6 +96,13 @@ namespace MyApp.Api.Services.Implementations
             var updated = await _repo.UpdateAsync(it);
             return ToDto(updated);
         }
+
+        /// <summary>
+        /// HS codes already in use by any existing item type. Frontend passes this
+        /// to HsCodeAutocomplete so the FBR catalog search hides codes already saved.
+        /// </summary>
+        public async Task<List<string>> GetSavedHsCodesAsync()
+            => await _repo.GetSavedHsCodesAsync();
 
         public async Task DeleteAsync(int id)
         {
