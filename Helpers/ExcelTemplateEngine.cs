@@ -19,11 +19,78 @@ namespace MyApp.Api.Helpers
         /// </summary>
         public static void Process(XLWorkbook workbook, Dictionary<string, object?> data)
         {
+            // Excel templates edited in LibreOffice / older Excel builds sometimes
+            // leave behind "defined names" (named ranges) with empty or malformed
+            // RefersTo formulas. On any row shift (#each expansion / deletion)
+            // ClosedXML re-parses every defined name to update its formula — and
+            // an empty formula crashes the parser with:
+            //     "Error at char 0 of '': Unexpected token EofSymbolId"
+            // Remove those before we touch any rows.
+            RemoveBrokenDefinedNames(workbook);
+
             foreach (var ws in workbook.Worksheets)
             {
                 ProcessEachBlocks(ws, data);
                 ReplaceSimpleFields(ws, data);
             }
+        }
+
+        /// <summary>
+        /// Drop any defined name (workbook-level or sheet-level) whose RefersTo
+        /// formula is null / empty / not parseable. Without this, ClosedXML's
+        /// FormulaParser throws on the first row delete and aborts the whole
+        /// export. Safe because these names weren't resolving to anything
+        /// anyway — removing them is a no-op for template rendering.
+        /// </summary>
+        private static void RemoveBrokenDefinedNames(XLWorkbook workbook)
+        {
+            // Collect first, then remove — mutating while enumerating would throw.
+            var toRemoveWorkbook = new List<string>();
+            foreach (var dn in workbook.DefinedNames)
+            {
+                if (IsBrokenRefersTo(dn))
+                    toRemoveWorkbook.Add(dn.Name);
+            }
+            foreach (var name in toRemoveWorkbook)
+            {
+                try { workbook.DefinedNames.Delete(name); } catch { /* best effort */ }
+            }
+
+            foreach (var ws in workbook.Worksheets)
+            {
+                var toRemoveSheet = new List<string>();
+                foreach (var dn in ws.DefinedNames)
+                {
+                    if (IsBrokenRefersTo(dn))
+                        toRemoveSheet.Add(dn.Name);
+                }
+                foreach (var name in toRemoveSheet)
+                {
+                    try { ws.DefinedNames.Delete(name); } catch { /* best effort */ }
+                }
+            }
+        }
+
+        private static bool IsBrokenRefersTo(IXLDefinedName dn)
+        {
+            string? formula = null;
+            try { formula = dn.RefersTo; }
+            catch { return true; }  // even reading the property threw → definitely broken
+
+            if (string.IsNullOrWhiteSpace(formula)) return true;
+            var trimmed = formula.TrimStart('=').Trim();
+            if (string.IsNullOrEmpty(trimmed)) return true;
+
+            // #REF! means the formula pointed at cells that have since been
+            // deleted. It's "valid" to read but when ClosedXML tries to shift
+            // it during a row operation the transformer may emit "" and crash.
+            // Same for #NAME? / #VALUE! / any error literal.
+            // Real-world trigger: template opened + edited in LibreOffice where
+            // someone deleted a range whose name they didn't clean up.
+            if (trimmed == "#REF!" || trimmed.Contains("#REF!")) return true;
+            if (trimmed.StartsWith("#") && trimmed.EndsWith("!")) return true;  // generic #ERROR!
+
+            return false;
         }
 
         private static void ProcessEachBlocks(IXLWorksheet ws, Dictionary<string, object?> data)

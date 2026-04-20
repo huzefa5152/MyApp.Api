@@ -17,5 +17,9 @@
         public string? FbrSector { get; set; }
         public string? FbrToken { get; set; }
         public string? FbrEnvironment { get; set; }
+        public string? FbrDefaultSaleType { get; set; }
+        public string? FbrDefaultUOM { get; set; }
+        public string? FbrDefaultPaymentModeRegistered { get; set; }
+        public string? FbrDefaultPaymentModeUnregistered { get; set; }
     }
 }

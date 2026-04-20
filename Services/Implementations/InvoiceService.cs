@@ -103,7 +103,8 @@ namespace MyApp.Api.Services.Implementations
                 HSCode = ii.HSCode,
                 FbrUOMId = ii.FbrUOMId,
                 SaleType = ii.SaleType,
-                RateId = ii.RateId
+                RateId = ii.RateId,
+                FixedNotifiedValueOrRetailPrice = ii.FixedNotifiedValueOrRetailPrice
             }).ToList(),
             ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList()
             };
@@ -178,18 +179,49 @@ namespace MyApp.Api.Services.Implementations
                 //    HS Code / UOM / SaleType, and bill lines referencing it pick
                 //    those up automatically so the user doesn't re-enter them.
                 var itemType = deliveryItem.ItemType;
+
+                // ── Per-company FBR defaults (configurable via Company settings) ──
+                //
+                // Precedence, first non-empty wins:
+                //   1. Explicit field on the incoming DTO  (operator's current edit)
+                //   2. ItemType catalog entry              (picked on the delivery item)
+                //   3. DeliveryItem.Unit                   (the unit that was written
+                //                                          on the challan originally)
+                //   4. Company.FbrDefault*                 (editable per-company on
+                //                                          the Company Settings page)
+                //   5. Built-in seed value                 (backstop for pre-migration
+                //                                          companies that haven't set
+                //                                          a default yet — "Numbers,
+                //                                          pieces, units" / "Goods at
+                //                                          Standard Rate (default)",
+                //                                          same as FBR reference docs)
+                //
+                // 3rd-schedule / reduced-rate / zero-rate sales are opt-in per line
+                // via the ItemType catalog entry or direct edit, so the default only
+                // covers the common-case SN001/SN002/SN026 standard-rate flow.
+                var companyDefaultUOM      = !string.IsNullOrWhiteSpace(company.FbrDefaultUOM)
+                    ? company.FbrDefaultUOM
+                    : "Numbers, pieces, units";
+                var companyDefaultSaleType = !string.IsNullOrWhiteSpace(company.FbrDefaultSaleType)
+                    ? company.FbrDefaultSaleType
+                    : "Goods at Standard Rate (default)";
+
                 var effectiveUOM = !string.IsNullOrWhiteSpace(itemDto.UOM)
                     ? itemDto.UOM!
                     : !string.IsNullOrWhiteSpace(itemType?.UOM)
                         ? itemType!.UOM!
-                        : deliveryItem.Unit;
+                        : !string.IsNullOrWhiteSpace(deliveryItem.Unit)
+                            ? deliveryItem.Unit
+                            : companyDefaultUOM;
                 var effectiveHSCode = !string.IsNullOrWhiteSpace(itemDto.HSCode)
                     ? itemDto.HSCode
                     : itemType?.HSCode;
                 var effectiveFbrUOMId = itemDto.FbrUOMId ?? itemType?.FbrUOMId;
                 var effectiveSaleType = !string.IsNullOrWhiteSpace(itemDto.SaleType)
                     ? itemDto.SaleType
-                    : itemType?.SaleType;
+                    : !string.IsNullOrWhiteSpace(itemType?.SaleType)
+                        ? itemType!.SaleType
+                        : companyDefaultSaleType;
 
                 invoiceItems.Add(new InvoiceItem
                 {
@@ -204,7 +236,8 @@ namespace MyApp.Api.Services.Implementations
                     HSCode = effectiveHSCode,
                     FbrUOMId = effectiveFbrUOMId,
                     SaleType = effectiveSaleType,
-                    RateId = itemDto.RateId
+                    RateId = itemDto.RateId,
+                    FixedNotifiedValueOrRetailPrice = itemDto.FixedNotifiedValueOrRetailPrice
                 });
 
                 // Bump usage counter on the ItemType so favorites dropdowns show
@@ -215,6 +248,42 @@ namespace MyApp.Api.Services.Implementations
                     itemType.LastUsedAt = DateTime.UtcNow;
                     _context.ItemTypes.Update(itemType);
                 }
+            }
+
+            // ── Bill-header defaults ──
+            //
+            //   DocumentType  → 4 (Sale Invoice). Never defaults to 9 (Debit
+            //                   Note) or 10 (Credit Note); those require a
+            //                   reference IRN and the operator always picks
+            //                   them explicitly.
+            //   PaymentMode   → if the operator left it blank, look up the
+            //                   company's configured default for this buyer's
+            //                   registration type (Registered uses
+            //                   FbrDefaultPaymentModeRegistered, Unregistered
+            //                   uses FbrDefaultPaymentModeUnregistered).
+            //                   If neither is set on the company we fall back
+            //                   to the sensible seed values: Registered →
+            //                   "Credit" (B2B wholesale), Unregistered →
+            //                   "Cash" (typical walk-in retail).
+            //
+            //   GSTRate is NOT defaulted here — a literal 0 is a valid choice
+            //   for SN006 exempt goods / SN007 zero-rated. Frontend sets 18
+            //   as the sensible starting value in the bill form.
+            const int SeededDefaultDocType = 4;  // Sale Invoice
+            var effectiveDocType = dto.DocumentType ?? SeededDefaultDocType;
+
+            string? effectivePaymentMode = dto.PaymentMode;
+            if (string.IsNullOrWhiteSpace(effectivePaymentMode))
+            {
+                var buyer = await _context.Clients.FindAsync(dto.ClientId);
+                var isRegistered = buyer?.RegistrationType == "Registered";
+                effectivePaymentMode = isRegistered
+                    ? (!string.IsNullOrWhiteSpace(company.FbrDefaultPaymentModeRegistered)
+                        ? company.FbrDefaultPaymentModeRegistered
+                        : "Credit")
+                    : (!string.IsNullOrWhiteSpace(company.FbrDefaultPaymentModeUnregistered)
+                        ? company.FbrDefaultPaymentModeUnregistered
+                        : "Cash");
             }
 
             var subtotal = invoiceItems.Sum(i => i.LineTotal);
@@ -242,8 +311,8 @@ namespace MyApp.Api.Services.Implementations
                 GrandTotal = grandTotal,
                 AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                 PaymentTerms = dto.PaymentTerms,
-                DocumentType = dto.DocumentType,
-                PaymentMode = dto.PaymentMode,
+                DocumentType = effectiveDocType,
+                PaymentMode = effectivePaymentMode,
                 FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
                     ? nextInvoiceNumber.ToString()
                     : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
@@ -370,6 +439,10 @@ namespace MyApp.Api.Services.Implementations
                     existing.UnitPrice = itemDto.UnitPrice;
                     existing.LineTotal = lineTotal;
                     existing.RateId = itemDto.RateId;
+                    // 3rd-schedule retail price is always edit-driven (never inherited
+                    // from the ItemType catalog), so it's applied the same way in both
+                    // branches below.
+                    existing.FixedNotifiedValueOrRetailPrice = itemDto.FixedNotifiedValueOrRetailPrice;
 
                     if (pickedType != null)
                     {

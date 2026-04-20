@@ -21,6 +21,12 @@ export const updateChallanItems = (challanId, items) =>
 export const updateChallanPo = (challanId, payload) =>
   httpClient.put(`/deliverychallans/${challanId}/po`, payload);
 
+// Full-field challan update: client, site, delivery date, PO number (clearable),
+// PO date, and items — in a single request. Empty/blank PO number transitions
+// the challan to "No PO" status; populated PO number → "Pending".
+export const updateChallan = (challanId, payload) =>
+  httpClient.put(`/deliverychallans/${challanId}`, payload);
+
 export const cancelChallan = (challanId) =>
   httpClient.put(`/deliverychallans/${challanId}/cancel`);
 

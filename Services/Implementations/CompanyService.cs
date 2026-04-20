@@ -45,7 +45,11 @@ namespace MyApp.Api.Services.Implementations
             FbrEnvironment = c.FbrEnvironment,
             HasFbrToken = !string.IsNullOrEmpty(c.FbrToken),
             HasChallans = hasChallans,
-            HasInvoices = hasInvoices
+            HasInvoices = hasInvoices,
+            FbrDefaultSaleType = c.FbrDefaultSaleType,
+            FbrDefaultUOM = c.FbrDefaultUOM,
+            FbrDefaultPaymentModeRegistered = c.FbrDefaultPaymentModeRegistered,
+            FbrDefaultPaymentModeUnregistered = c.FbrDefaultPaymentModeUnregistered
         };
 
         public async Task<IEnumerable<CompanyDto>> GetAllAsync()
@@ -103,7 +107,11 @@ namespace MyApp.Api.Services.Implementations
                 FbrBusinessActivity = dto.FbrBusinessActivity,
                 FbrSector = dto.FbrSector,
                 FbrToken = dto.FbrToken,
-                FbrEnvironment = dto.FbrEnvironment
+                FbrEnvironment = dto.FbrEnvironment,
+                FbrDefaultSaleType = dto.FbrDefaultSaleType,
+                FbrDefaultUOM = dto.FbrDefaultUOM,
+                FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered,
+                FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered
             };
 
             var created = await _repository.AddAsync(company);
@@ -134,6 +142,12 @@ namespace MyApp.Api.Services.Implementations
             company.FbrSector = dto.FbrSector;
             company.FbrEnvironment = dto.FbrEnvironment;
             if (dto.FbrToken != null) company.FbrToken = dto.FbrToken;
+
+            // Per-company FBR defaults — null is a valid "clear this default" signal
+            company.FbrDefaultSaleType = dto.FbrDefaultSaleType;
+            company.FbrDefaultUOM = dto.FbrDefaultUOM;
+            company.FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered;
+            company.FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered;
 
             // Only allow changing starting challan number if no challans exist
             var hasChallans = await _challanRepo.HasChallansForCompanyAsync(id);

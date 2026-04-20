@@ -1,8 +1,11 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
+using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
@@ -16,6 +19,7 @@ namespace MyApp.Api.Services.Implementations
         private readonly ICompanyRepository _companyRepo;
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IAuditLogService _auditLog;
+        private readonly AppDbContext _db;
 
         // ── V1.12 API URLs ──────────────────────────────────────
         // Submit/Validate: sandbox adds "_sb" suffix; routing also based on token
@@ -33,14 +37,26 @@ namespace MyApp.Api.Services.Implementations
         // UOM ID → FBR description (from reference API 5.6)
         private static readonly ConcurrentDictionary<int, Dictionary<int, string>> _uomCache = new();
 
+        // Encoder note:
+        // FBR's JSON parser rejects payloads that contain \uXXXX unicode escapes.
+        // .NET's default encoder aggressively escapes anything non-ASCII to \uXXXX
+        // — including the " (0x22) character inside strings, which gets serialised
+        // as "\u0022" instead of "\"". FBR then responds:
+        //     {"Code":"03","error":"Requested JSON in Malformed"}
+        // UnsafeRelaxedJsonEscaping restricts escaping to characters that would
+        // actually break JSON syntax ("\", control chars), letting printable
+        // ASCII + quotes go through as the plain \" form FBR's parser accepts.
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             PropertyNameCaseInsensitive = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
 
-        // Document type int → FBR string
+        // Document type int → FBR string. Fallback if FbrLookups has no row
+        // for the given doc type. Kept in code because the 3 values are
+        // fixed by FBR spec §5.2 and changing them would break submission.
         private static readonly Dictionary<int, string> DocTypeMap = new()
         {
             { 4, "Sale Invoice" },
@@ -48,39 +64,141 @@ namespace MyApp.Api.Services.Implementations
             { 10, "Credit Note" }
         };
 
+        // Look up a document-type label from FbrLookups if the operator has
+        // customised it there; otherwise fall back to the built-in map.
+        private async Task<string> ResolveDocTypeAsync(int? docTypeId)
+        {
+            var code = docTypeId ?? 4;
+            var label = await _db.FbrLookups
+                .AsNoTracking()
+                .Where(l => l.Category == "DocumentType" && l.IsActive && l.Code == code.ToString())
+                .Select(l => l.Label)
+                .FirstOrDefaultAsync();
+            return !string.IsNullOrEmpty(label) ? label : DocTypeMap.GetValueOrDefault(code, "Sale Invoice");
+        }
+
+        // ── NTN / CNIC normalisation (shared by pre-validate and payload build) ──
+        //
+        // FBR accepts 7-digit NTN or 13-digit CNIC. IRIS stores NTNs in three
+        // formats that our DB keeps verbatim:
+        //
+        //   "NNNNNNN-C"          individual / small-business (e.g. "4228937-8")
+        //                        → take 7 digits, drop check digit
+        //
+        //   "NN-NN-NNNNNNN-C"    corporate (zone-circle-NTN-check, e.g.
+        //                        "13-02-0676470-3" for SOORTY)
+        //                        → skip first 4 digits, take next 7
+        //                        (naïve "split at first dash" would return "13"
+        //                        → FBR 0002 "must be 7 digits")
+        //
+        //   "NNNNNNN" / "NNNNNNNN"  unsuffixed (old paper format, or 8-digit
+        //                           with trailing check digit)
+        //                        → take first 7
+        internal static string SanitizeNtn(string? ntn)
+        {
+            if (string.IsNullOrWhiteSpace(ntn)) return "";
+            var digits = new string(ntn.Where(char.IsDigit).ToArray());
+            if (digits.Length < 7) return digits;
+            var dashCount = ntn.Count(c => c == '-');
+            if (dashCount >= 3 && digits.Length >= 11)
+                return digits.Substring(4, 7);  // corporate "NN-NN-NNNNNNN-C"
+            return digits.Substring(0, 7);
+        }
+
+        internal static string StripAllDigits(string? v)
+        {
+            if (string.IsNullOrWhiteSpace(v)) return "";
+            return new string(v.Where(char.IsDigit).ToArray());
+        }
+
         public FbrService(
             IInvoiceRepository invoiceRepo,
             ICompanyRepository companyRepo,
             IHttpClientFactory httpClientFactory,
-            IAuditLogService auditLogService)
+            IAuditLogService auditLogService,
+            AppDbContext db)
         {
             _invoiceRepo = invoiceRepo;
             _companyRepo = companyRepo;
             _httpClientFactory = httpClientFactory;
             _auditLog = auditLogService;
+            _db = db;
         }
 
         // ── Text sanitization for FBR payloads ──────────────────
         //
-        // FBR's JSON parser rejects control characters (newlines, tabs, CR) even
-        // when they're properly escaped as \n / \t / \r in JSON strings — it
-        // returns {"Code":"03","error":"Requested JSON in Malformed"}. We also
-        // collapse runs of whitespace and trim so addresses stored with line
-        // breaks in the DB (e.g. multi-line business addresses) go through as
-        // single-line text.
+        // FBR's JSON parser rejects two classes of input:
+        //  (1) control characters (newlines, tabs, CR) even when properly
+        //      escaped as \n / \t / \r
+        //  (2) \uXXXX unicode escape sequences — which .NET emits for any
+        //      non-ASCII char AND for " by default.
+        //
+        // Both return: {"Code":"03","error":"Requested JSON in Malformed"}.
+        //
+        // Mitigation is layered:
+        //  • JsonOptions uses UnsafeRelaxedJsonEscaping so " stays as \"
+        //  • SanitizeForFbr here replaces non-ASCII punctuation with the
+        //    closest ASCII equivalent (em-dash → "-", curly quotes → plain
+        //    quotes, etc.) so descriptions pasted from Word/Excel don't
+        //    cause malformed-JSON rejections
+        //  • Anything above U+007F that we can't map is dropped
         private static string SanitizeForFbr(string? value)
         {
             if (string.IsNullOrWhiteSpace(value)) return "";
-            // Replace newlines, carriage returns, tabs with a single space
             var cleaned = new System.Text.StringBuilder(value.Length);
             foreach (var c in value)
             {
-                if (c == '\n' || c == '\r' || c == '\t')
-                    cleaned.Append(' ');
-                else if (char.IsControl(c))
-                    continue; // skip other control characters
-                else
-                    cleaned.Append(c);
+                // (1) whitespace/control handling
+                if (c == '\n' || c == '\r' || c == '\t') { cleaned.Append(' '); continue; }
+                if (char.IsControl(c)) continue;
+
+                // (2) map common non-ASCII punctuation to ASCII equivalents
+                switch (c)
+                {
+                    case '\u2013':                    // en-dash –
+                    case '\u2014':                    // em-dash —
+                    case '\u2212':                    // minus sign −
+                        cleaned.Append('-'); continue;
+                    case '\u2018':                    // left single quote '
+                    case '\u2019':                    // right single quote '
+                    case '\u02BC':                    // modifier letter apostrophe
+                        cleaned.Append('\''); continue;
+                    case '\u201C':                    // left double quote "
+                    case '\u201D':                    // right double quote "
+                    case '\u00AB':                    // «
+                    case '\u00BB':                    // »
+                        // FBR's JSON parser rejects strings containing the plain
+                        // ASCII " character (escaped as \" in JSON, which is valid
+                        // per RFC 8259 but their parser returns "Requested JSON in
+                        // Malformed"). Replace with single-quote which is commonly
+                        // used in industrial catalogs for inch/minute/etc.
+                        cleaned.Append('\''); continue;
+                    case '\u00A0':                    // non-breaking space
+                    case '\u2009':                    // thin space
+                    case '\u200B':                    // zero-width space
+                        cleaned.Append(' '); continue;
+                    case '\u2026':                    // ellipsis …
+                        cleaned.Append("..."); continue;
+                    case '\u00D7':                    // multiplication ×
+                        cleaned.Append('x'); continue;
+                    case '\u00BD': cleaned.Append("1/2"); continue;  // ½
+                    case '\u00BC': cleaned.Append("1/4"); continue;  // ¼
+                    case '\u00BE': cleaned.Append("3/4"); continue;  // ¾
+                }
+
+                // (3) ASCII " → ' (same reason as curly quotes above — FBR's
+                // parser mis-handles "..." strings containing escaped quotes)
+                if (c == '"') { cleaned.Append('\''); continue; }
+
+                // (4) backslash causes similar issues; normalise Windows paths
+                // and escape-like sequences to forward slash / space
+                if (c == '\\') { cleaned.Append('/'); continue; }
+
+                // (5) drop anything else outside printable ASCII so the
+                // serializer never emits a \uXXXX escape for it
+                if (c > 0x7E) continue;
+
+                cleaned.Append(c);
             }
             // Collapse multiple spaces to one, then trim
             return System.Text.RegularExpressions.Regex
@@ -109,27 +227,59 @@ namespace MyApp.Api.Services.Implementations
         }
 
         // ── Province code → name resolution ─────────────────────
-
+        //
+        // FBR expects the province NAME (e.g. "Sindh") in the submit payload, but
+        // our DB stores the numeric CODE on Company / Client. The mapping is small
+        // (8 rows) and stable, so we resolve it in priority order:
+        //
+        //   1. Live FBR /pdi/v1/provinces result (if we've already successfully
+        //      fetched it for this company — freshest + authoritative)
+        //   2. FbrLookups table where Category='Province' (operator-maintained,
+        //      survives token bootstrap, can be edited without a code change)
+        //   3. Opportunistic live fetch (populates the in-memory cache for future
+        //      calls; silently falls through if token is bad / network down)
+        //
+        // Anything still unresolved after step 3 returns "" — caller treats that
+        // as a genuinely invalid province code.
         private async Task<string> ResolveProvinceNameAsync(Company company, int? provinceCode)
         {
             if (provinceCode == null) return "";
 
-            if (!_provinceCache.TryGetValue(company.Id, out var map))
+            // 1) In-memory cache (populated by a prior live fetch in this process)
+            if (_provinceCache.TryGetValue(company.Id, out var cachedMap)
+                && cachedMap.TryGetValue(provinceCode.Value, out var cachedName))
+                return cachedName;
+
+            // 2) FbrLookups table — authoritative operator-maintained source.
+            //    This is what the Company/Client dropdowns are populated from, so
+            //    picking "Sindh" (code 8) on the form always round-trips cleanly.
+            var lookupLabel = await _db.FbrLookups
+                .AsNoTracking()
+                .Where(l => l.Category == "Province" && l.IsActive && l.Code == provinceCode.Value.ToString())
+                .Select(l => l.Label)
+                .FirstOrDefaultAsync();
+            if (!string.IsNullOrEmpty(lookupLabel)) return lookupLabel;
+
+            // 3) Live FBR lookup — gives us the canonical FBR-accepted string
+            //    (e.g. "SINDH" uppercase). If the token works, we populate the
+            //    cache so subsequent calls skip straight to step 1.
+            if (!_provinceCache.ContainsKey(company.Id))
             {
                 try
                 {
                     var provinces = await GetProvincesAsync(company.Id);
-                    map = provinces.ToDictionary(p => p.StateProvinceCode, p => p.StateProvinceDesc);
-                    _provinceCache.TryAdd(company.Id, map); // Thread-safe, only cache successful results
+                    if (provinces != null && provinces.Count > 0)
+                    {
+                        var fresh = provinces.ToDictionary(p => p.StateProvinceCode, p => p.StateProvinceDesc);
+                        _provinceCache.TryAdd(company.Id, fresh);
+                        if (fresh.TryGetValue(provinceCode.Value, out var freshName))
+                            return freshName;
+                    }
                 }
-                catch
-                {
-                    map = new Dictionary<int, string>();
-                    // Don't cache failed lookups — retry next time
-                }
+                catch { /* token bad / network down — resolved via step 2 already */ }
             }
 
-            return map.TryGetValue(provinceCode.Value, out var name) ? name : "";
+            return "";
         }
 
         /// <summary>
@@ -175,25 +325,14 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Pre-validation (before calling FBR) ─────────────────
 
-        private FbrSubmissionResult? PreValidate(Invoice invoice, Company company, Client buyer)
+        private async Task<FbrSubmissionResult?> PreValidate(Invoice invoice, Company company, Client buyer)
         {
             var errors = new List<string>();
-            // Strip all non-digit characters from NTN/CNIC
-            // Pakistan NTN: "XXXXXXX-Y" → "XXXXXXXY" → take first 7 via Split, or just digits
-            // Pakistan CNIC: "XXXXX-XXXXXXX-X" → "XXXXXXXXXXXXX" (13 digits)
-            static string StripDigits(string? v)
-            {
-                if (string.IsNullOrWhiteSpace(v)) return "";
-                return new string(v.Where(char.IsDigit).ToArray());
-            }
-            // For NTN specifically: extract base 7 digits (strip check digit)
-            static string StripNtn(string? v)
-            {
-                if (string.IsNullOrWhiteSpace(v)) return "";
-                v = v.Trim();
-                if (v.Contains('-')) v = v.Split('-')[0];
-                return new string(v.Where(char.IsDigit).ToArray());
-            }
+            // NTN / CNIC normalisation — delegate to the class-level shared helpers
+            // so pre-validate and payload build always agree on the sanitised value.
+            // The local aliases keep the call sites below readable.
+            static string StripDigits(string? v) => StripAllDigits(v);
+            static string StripNtn(string? v)    => SanitizeNtn(v);
 
             // ─ Seller ─
             var sellerNtn = StripNtn(company.NTN);
@@ -237,7 +376,9 @@ namespace MyApp.Api.Services.Implementations
                 errors.Add("Self-invoicing not allowed — buyer and seller registration numbers cannot be the same. [FBR 0058]");
 
             // ─ Invoice header ─
-            var invoiceTypeStr = DocTypeMap.GetValueOrDefault(invoice.DocumentType ?? 4, "Sale Invoice");
+            // Use FbrLookups (with DocTypeMap fallback) — operator-editable, so a
+            // future FBR rename doesn't need a code deploy.
+            var invoiceTypeStr = await ResolveDocTypeAsync(invoice.DocumentType);
             if (invoiceTypeStr == "Debit Note" || invoiceTypeStr == "Credit Note")
             {
                 if (string.IsNullOrWhiteSpace(invoice.FbrIRN))
@@ -331,17 +472,20 @@ namespace MyApp.Api.Services.Implementations
             bool isSandbox = company.FbrEnvironment != "production";
 
             // ── Pre-validate ──
-            var preResult = PreValidate(invoice, company, buyer);
+            var preResult = await PreValidate(invoice, company, buyer);
             if (preResult != null) return preResult;
 
             // ── Resolve province names ──
             var sellerProvince = await ResolveProvinceNameAsync(company, company.FbrProvinceCode);
             var buyerProvince = await ResolveProvinceNameAsync(company, buyer.FbrProvinceCode);
 
+            // With the static-fallback in ResolveProvinceNameAsync, these errors
+            // only fire for province codes outside the FBR-published 1..8 range —
+            // a genuine data issue on the Company/Client record.
             if (string.IsNullOrEmpty(sellerProvince))
-                return Fail($"Could not resolve seller province code {company.FbrProvinceCode} to a name. Check FBR Province in Company settings or verify FBR token is valid.");
+                return Fail($"Seller province code {company.FbrProvinceCode} is not a valid FBR province. Valid codes: 1..8 (see FBR /pdi/v1/provinces). Fix on Company → FBR Settings.");
             if (string.IsNullOrEmpty(buyerProvince))
-                return Fail($"Could not resolve buyer province code {buyer.FbrProvinceCode} to a name. Check FBR Province on the Client.");
+                return Fail($"Buyer province code {buyer.FbrProvinceCode} is not a valid FBR province. Valid codes: 1..8. Fix on the Client record.");
 
             // ── Determine buyer NTN/CNIC ──
             var buyerRegType = MapBuyerRegType(buyer.RegistrationType);
@@ -353,22 +497,9 @@ namespace MyApp.Api.Services.Implementations
                 buyerNtnCnic = "";
 
             // ── Sanitize NTN/CNIC ──
-            // NTN: "XXXXXXX-Y" → strip check digit after dash → 7 digits
-            // CNIC: "XXXXX-XXXXXXX-X" → strip ALL non-digits → 13 digits
-            static string StripAllDigits(string? v)
-            {
-                if (string.IsNullOrWhiteSpace(v)) return "";
-                return new string(v.Where(char.IsDigit).ToArray());
-            }
-            static string SanitizeNtn(string? ntn)
-            {
-                if (string.IsNullOrWhiteSpace(ntn)) return "";
-                ntn = ntn.Trim();
-                if (ntn.Contains('-')) ntn = ntn.Split('-')[0];
-                return new string(ntn.Where(char.IsDigit).ToArray());
-            }
-
-            // Seller is always NTN (7 digits)
+            // Uses the shared class-level helpers (FbrService.SanitizeNtn /
+            // StripAllDigits) so pre-validate and payload build can't drift.
+            // Seller is always NTN (7 digits).
             var sellerNtnCnic = SanitizeNtn(company.NTN);
             // Buyer: if NTN use SanitizeNtn (7 digits), if CNIC strip all non-digits (13 digits)
             if (!string.IsNullOrEmpty(buyer.NTN))
@@ -381,7 +512,7 @@ namespace MyApp.Api.Services.Implementations
             // ── Build V1.12 request ──
             var fbrRequest = new FbrInvoiceRequest
             {
-                InvoiceType = DocTypeMap.GetValueOrDefault(invoice.DocumentType ?? 4, "Sale Invoice"),
+                InvoiceType = await ResolveDocTypeAsync(invoice.DocumentType),
                 InvoiceDate = invoice.Date.ToString("yyyy-MM-dd"),
                 SellerNTNCNIC = sellerNtnCnic,
                 SellerBusinessName = SanitizeForFbr(company.Name),
@@ -397,10 +528,16 @@ namespace MyApp.Api.Services.Implementations
                 Items = new List<FbrInvoiceItemRequest>()
             };
 
-            // Resolve UOM descriptions from FBR reference (async, so can't use LINQ Select)
+            // Resolve UOM descriptions + compute FBR-compliant tax numbers per item.
+            // ComputeFbrTaxes encodes the three rules that differ from plain "line × rate":
+            //   1) 3rd Schedule Goods: tax is BACKED OUT of tax-inclusive MRP
+            //      salesTax = retailPrice × rate / (1 + rate)
+            //   2) Unregistered-buyer standard-rate: add 4% further tax
+            //   3) End-consumer retail (SN026/027/028): NO further tax even if unregistered
             foreach (var item in invoice.Items)
             {
-                var salesTax = Math.Round(item.LineTotal * invoice.GSTRate / 100, 2);
+                var (salesTax, furtherTax, retailPrice) =
+                    ComputeFbrTaxes(item, invoice.GSTRate, buyerRegType, fbrRequest.ScenarioId);
                 var uomDesc = await ResolveUomDesc(company, item.FbrUOMId, item.UOM);
                 fbrRequest.Items.Add(new FbrInvoiceItemRequest
                 {
@@ -411,11 +548,11 @@ namespace MyApp.Api.Services.Implementations
                     Quantity = item.Quantity,
                     TotalValues = 0,
                     ValueSalesExcludingST = item.LineTotal,
-                    FixedNotifiedValueOrRetailPrice = 0,
+                    FixedNotifiedValueOrRetailPrice = retailPrice,
                     SalesTaxApplicable = salesTax,
                     SalesTaxWithheldAtSource = 0,
                     ExtraTax = 0,
-                    FurtherTax = 0,
+                    FurtherTax = furtherTax,
                     SroScheduleNo = "",
                     FedPayable = 0,
                     Discount = 0,
@@ -570,6 +707,67 @@ namespace MyApp.Api.Services.Implementations
 
         private static FbrSubmissionResult Fail(string message)
             => new() { Success = false, ErrorMessage = message };
+
+        // ═══════════════════════════════════════════════════════════
+        //  FBR tax computation — the math FBR validates against
+        // ═══════════════════════════════════════════════════════════
+        //
+        // Encodes three rules that differ from the naïve "line × rate":
+        //
+        //  (1) 3rd Schedule Goods (SN008, SN027)
+        //      salesTax = retailPrice × rate / (1 + rate)
+        //      (FBR treats the MRP as tax-INCLUSIVE; tax is backed out.
+        //       Without this, FBR error 0102 "Calculated tax not matched in 3rd schedule".)
+        //
+        //  (2) Standard-rate + Unregistered buyer (SN002)
+        //      furtherTax = lineTotal × 4%
+        //      (Section 236G of Income Tax Ordinance. Skipping this triggers
+        //       FBR error 0102.)
+        //
+        //  (3) End-consumer retail (SN026, SN027, SN028)
+        //      furtherTax = 0 even though buyer is Unregistered
+        //      (FBR exempts end-consumer retail from further tax — that's the
+        //       whole point of the SN026/27/28 scenario family.)
+        //
+        // Returns (salesTax, furtherTax, fixedNotifiedValueOrRetailPrice) — every
+        // caller needs all three to fill the FBR payload.
+        private static (decimal salesTax, decimal furtherTax, decimal retailPrice)
+            ComputeFbrTaxes(InvoiceItem item, decimal gstRate, string buyerRegType, string? scenarioId)
+        {
+            var rate = gstRate / 100m;
+            var retail = item.FixedNotifiedValueOrRetailPrice ?? 0m;
+            decimal salesTax;
+            decimal furtherTax = 0m;
+
+            var isThirdSchedule = string.Equals(
+                item.SaleType, "3rd Schedule Goods", StringComparison.OrdinalIgnoreCase);
+            var isStandardRate = string.Equals(
+                item.SaleType, "Goods at Standard Rate (default)", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
+                    item.SaleType, "Goods at standard rate (default)", StringComparison.OrdinalIgnoreCase);
+
+            // (1) 3rd Schedule: tax backed out of MRP
+            if (isThirdSchedule && retail > 0m)
+            {
+                salesTax = Math.Round(retail * rate / (1m + rate), 2, MidpointRounding.AwayFromZero);
+            }
+            else
+            {
+                salesTax = Math.Round(item.LineTotal * rate, 2, MidpointRounding.AwayFromZero);
+            }
+
+            // (2) Unregistered + standard-rate ⇒ 4% further tax
+            // (3) …except SN026/027/028 end-consumer retail (exempt)
+            var isEndConsumerRetail =
+                scenarioId is "SN026" or "SN027" or "SN028";
+
+            if (buyerRegType == "Unregistered" && isStandardRate && !isEndConsumerRetail)
+            {
+                furtherTax = Math.Round(item.LineTotal * 0.04m, 2, MidpointRounding.AwayFromZero);
+            }
+
+            return (salesTax, furtherTax, retail);
+        }
 
         private async Task AuditFbr(string level, string action, int invoiceId,
             string url, string? requestBody, string? responseBody, int httpStatus, string message)

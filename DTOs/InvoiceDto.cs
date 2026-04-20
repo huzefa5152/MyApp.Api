@@ -53,6 +53,11 @@ namespace MyApp.Api.DTOs
         public int? FbrUOMId { get; set; }
         public string? SaleType { get; set; }
         public int? RateId { get; set; }
+        /// <summary>
+        /// 3rd Schedule retail price (MRP × qty). Required when SaleType is
+        /// "3rd Schedule Goods" to satisfy FBR error 0090.
+        /// </summary>
+        public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
     }
 
     public class CreateInvoiceDto
@@ -82,6 +87,8 @@ namespace MyApp.Api.DTOs
         public int? FbrUOMId { get; set; }
         public string? SaleType { get; set; }
         public int? RateId { get; set; }
+        /// <summary>3rd Schedule retail price (MRP × qty) — required for "3rd Schedule Goods" sale type.</summary>
+        public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
     }
 
     /// <summary>
@@ -116,5 +123,7 @@ namespace MyApp.Api.DTOs
         public int? FbrUOMId { get; set; }
         public string? SaleType { get; set; }
         public int? RateId { get; set; }
+        /// <summary>3rd Schedule retail price (MRP × qty) — required for "3rd Schedule Goods" sale type.</summary>
+        public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
     }
 }

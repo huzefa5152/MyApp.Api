@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyApp.Api.Data;
 
@@ -11,9 +12,11 @@ using MyApp.Api.Data;
 namespace MyApp.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260418133155_AddFixedNotifiedValueToInvoiceItem")]
+    partial class AddFixedNotifiedValueToInvoiceItem
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -145,18 +148,6 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("FbrBusinessActivity")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("FbrDefaultPaymentModeRegistered")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("FbrDefaultPaymentModeUnregistered")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("FbrDefaultSaleType")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("FbrDefaultUOM")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("FbrEnvironment")

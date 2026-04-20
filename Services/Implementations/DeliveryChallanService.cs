@@ -422,6 +422,91 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
+        /// <summary>
+        /// Consolidated edit flow for a challan. Accepts any of:
+        ///   • ClientId          — switch to a different buyer
+        ///   • Site              — new delivery site (from client's site list)
+        ///   • DeliveryDate      — corrected/rescheduled delivery
+        ///   • PoNumber          — set/update/CLEAR (empty string → transitions to "No PO")
+        ///   • PoDate            — paired with PO number
+        ///   • Items             — full replacement of line items
+        ///
+        /// Status handling mirrors creation:
+        ///   • If challan is already linked to a SUBMITTED bill        → refuse
+        ///   • If Cancelled                                            → refuse
+        ///   • Otherwise recompute from (FBR readiness + hasPo):
+        ///         FBR-ready + hasPo  → Pending
+        ///         FBR-ready + no-po  → No PO
+        ///         !FBR-ready         → Setup Required
+        ///     Invoiced (with non-submitted bill) keeps status = "Invoiced" so
+        ///     the bill relationship isn't silently invalidated; the bill
+        ///     inherits the edits via existing delivery-item sync logic.
+        /// </summary>
+        public async Task<DeliveryChallanDto?> UpdateChallanAsync(int challanId, DeliveryChallanDto dto)
+        {
+            var dc = await _repository.GetByIdAsync(challanId);
+            if (dc == null) return null;
+
+            // Editability guard (same rules as IsEditable() but explicit here so
+            // the operator gets a useful error instead of a silent no-op).
+            if (dc.Status == "Cancelled")
+                throw new InvalidOperationException("Cannot edit a cancelled challan.");
+            if (dc.Status == "Invoiced" && dc.Invoice?.FbrStatus == "Submitted")
+                throw new InvalidOperationException("Cannot edit a challan whose bill has been submitted to FBR.");
+
+            // Validate the incoming client — must exist and belong to the same company
+            if (dto.ClientId > 0 && dto.ClientId != dc.ClientId)
+            {
+                var newClient = await _context.Clients.FindAsync(dto.ClientId);
+                if (newClient == null)
+                    throw new InvalidOperationException($"Client {dto.ClientId} not found.");
+                if (newClient.CompanyId != dc.CompanyId)
+                    throw new InvalidOperationException($"Client {dto.ClientId} does not belong to this company.");
+                dc.ClientId = dto.ClientId;
+                dc.Client = newClient;
+            }
+
+            if (dto.DeliveryDate.HasValue) dc.DeliveryDate = dto.DeliveryDate.Value;
+
+            // Site: null or empty string clears it
+            dc.Site = string.IsNullOrWhiteSpace(dto.Site) ? null : dto.Site.Trim();
+
+            // PO: empty/whitespace = operator wants to clear the PO (→ No PO status)
+            var poNumber = (dto.PoNumber ?? "").Trim();
+            var hasPo = !string.IsNullOrWhiteSpace(poNumber);
+            dc.PoNumber = poNumber;
+            dc.PoDate = hasPo ? dto.PoDate : null;
+
+            // Items: full replace (same semantics as UpdateItemsAsync but inline
+            // so we don't do two DB round-trips)
+            if (dto.Items != null && dto.Items.Any())
+            {
+                // Clear existing items, add new ones
+                _context.DeliveryItems.RemoveRange(dc.Items);
+                dc.Items = dto.Items.Select(i => new Models.DeliveryItem
+                {
+                    DeliveryChallanId = dc.Id,
+                    ItemTypeId = i.ItemTypeId,
+                    Description = i.Description,
+                    Quantity = i.Quantity,
+                    Unit = i.Unit
+                }).ToList();
+            }
+
+            // Recompute status — preserve "Invoiced" for challans already billed
+            if (dc.Status != "Invoiced")
+            {
+                var fbrReady = IsFbrReady(dc.Company, dc.Client);
+                dc.Status = !fbrReady ? "Setup Required"
+                          : hasPo     ? "Pending"
+                                      : "No PO";
+            }
+
+            await _repository.UpdateAsync(dc);
+            var reloaded = await _repository.GetByIdAsync(challanId);
+            return reloaded == null ? null : ToDto(reloaded);
+        }
+
         public async Task<DeliveryChallanDto?> UpdatePoAsync(int challanId, string poNumber, DateTime? poDate)
         {
             var dc = await _repository.GetByIdAsync(challanId);

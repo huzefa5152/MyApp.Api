@@ -263,16 +263,61 @@ export default function InvoicePage() {
   // Get unsubmitted invoices for bulk operations — only those that are FBR-ready
   // (have HS Code + Sale Type + UOM on every item). Others are surfaced as
   // "FBR Setup Incomplete" on the card itself.
+  //
+  // IMPORTANT: these counts are per-PAGE (for the badges in the header). The
+  // actual Validate All / Submit All actions below re-fetch the ENTIRE filtered
+  // set across all pages, so users with 30 bills on page 1 of 4 can click once
+  // and have all 120 (or whatever the filter returns) processed in a single go.
   const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted" && inv.fbrReady);
   const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.fbrReady).length;
   const validatedCount = unsubmittedInvoices.filter(inv => fbrValidated.has(inv.id)).length;
 
+  // Fetches every bill matching the current filters (client / date range /
+  // search) across all pages, not just the current page. Uses a large pageSize
+  // to pull everything in a single round-trip. Returns only bills eligible for
+  // the given action:
+  //   action="validate" → not yet Submitted AND FBR-ready
+  //   action="submit"   → not yet Submitted AND already locally validated
+  //                       (user must Validate All first, or click Validate per bill)
+  const fetchAllFilteredBills = async (action) => {
+    const params = { page: 1, pageSize: 10000 };
+    if (search) params.search = search;
+    if (clientFilter) params.clientId = clientFilter;
+    if (dateFrom) params.dateFrom = dateFrom;
+    if (dateTo) params.dateTo = dateTo;
+    const { data } = await getPagedInvoicesByCompany(selectedCompany.id, params);
+    const all = data.items || [];
+    if (action === "validate") {
+      return all.filter(inv => inv.fbrStatus !== "Submitted" && inv.fbrReady);
+    }
+    if (action === "submit") {
+      return all.filter(inv => inv.fbrStatus !== "Submitted" && fbrValidated.has(inv.id));
+    }
+    return all;
+  };
+
   const handleBulkValidateAll = async () => {
-    if (unsubmittedInvoices.length === 0) { notify("No invoices to validate.", "info"); return; }
+    const filterNote = hasFilters
+      ? " matching current filters"
+      : "";
     setBulkFbrLoading(true);
-    let passed = 0, failed = 0;
-    for (const inv of unsubmittedInvoices) {
-      if (fbrValidated.has(inv.id)) { passed++; continue; }
+    setFbrLoading("bulk-validate-fetching");
+    let candidates = [];
+    try { candidates = await fetchAllFilteredBills("validate"); }
+    catch { notify("Failed to fetch bill list for validation.", "error"); setBulkFbrLoading(false); setFbrLoading(null); return; }
+    if (candidates.length === 0) {
+      notify(`No FBR-ready unsubmitted bills${filterNote}.`, "info");
+      setBulkFbrLoading(false); setFbrLoading(null); return;
+    }
+    let passed = 0, failed = 0, skipped = 0, notAttempted = 0;
+    // Once we see a token/auth/connectivity error we stop making new FBR calls
+    // (they will all fail the same way) but keep COUNTING the remaining bills as
+    // "not attempted" so the operator's report is truthful about scope.
+    let stopFurtherCalls = false;
+    let stopReason = "";
+    for (const inv of candidates) {
+      if (fbrValidated.has(inv.id)) { passed++; skipped++; continue; }
+      if (stopFurtherCalls) { failed++; notAttempted++; continue; }
       setFbrLoading(inv.id + "-validate");
       try {
         const { data } = await validateInvoiceWithFbr(inv.id);
@@ -281,34 +326,46 @@ export default function InvoicePage() {
           passed++;
         } else {
           failed++;
-          // Stop bulk if token/connection error (affects all invoices)
           const msg = data.errorMessage || "";
           if (msg.includes("token") || msg.includes("authentication") || msg.includes("Cannot connect")) {
-            notify(msg, "error");
-            break;
+            stopFurtherCalls = true; stopReason = msg;
           }
         }
       } catch (err) {
         failed++;
         const msg = err.response?.data?.errorMessage || err.message || "";
         if (msg.includes("token") || msg.includes("authentication") || msg.includes("Cannot connect") || err.code === "ERR_NETWORK") {
-          notify(msg || "Cannot connect to FBR. Check your connection and FBR token.", "error");
-          break;
+          stopFurtherCalls = true;
+          stopReason = msg || "Cannot connect to FBR. Check your connection and FBR token.";
         }
       }
-      setFbrLoading(null);
     }
     setFbrLoading(null);
-    if (passed > 0 || failed > 0)
-      notify(`Validation complete: ${passed} passed, ${failed} failed.`, failed > 0 ? "error" : "success");
+    const total = candidates.length;
+    const parts = [];
+    parts.push(`${passed} passed`);
+    parts.push(`${failed} failed`);
+    if (skipped > 0) parts.push(`${skipped} already validated`);
+    if (notAttempted > 0) parts.push(`${notAttempted} not attempted (token/connectivity block)`);
+    const summary = `Validated ${total} bill${total !== 1 ? "s" : ""}${filterNote}: ${parts.join(", ")}.`;
+    notify(stopReason ? `${summary} ${stopReason}` : summary, failed > 0 ? "error" : "success");
     setBulkFbrLoading(false);
   };
 
   const handleBulkSubmitValidated = async () => {
-    const toSubmit = unsubmittedInvoices.filter(inv => fbrValidated.has(inv.id));
-    if (toSubmit.length === 0) { notify("No validated invoices to submit. Validate first.", "error"); return; }
-    if (!confirm(`Submit ${toSubmit.length} validated invoice(s) to FBR? This cannot be undone.`)) return;
+    const filterNote = hasFilters ? " matching current filters" : "";
     setBulkFbrLoading(true);
+    setFbrLoading("bulk-submit-fetching");
+    let toSubmit = [];
+    try { toSubmit = await fetchAllFilteredBills("submit"); }
+    catch { notify("Failed to fetch bill list for submission.", "error"); setBulkFbrLoading(false); setFbrLoading(null); return; }
+    if (toSubmit.length === 0) {
+      notify(`No locally-validated bills to submit${filterNote}. Click Validate All first.`, "error");
+      setBulkFbrLoading(false); setFbrLoading(null); return;
+    }
+    if (!confirm(`Submit ${toSubmit.length} validated bill${toSubmit.length !== 1 ? "s" : ""}${filterNote} to FBR? This cannot be undone.`)) {
+      setBulkFbrLoading(false); setFbrLoading(null); return;
+    }
     let submitted = 0, failed = 0;
     for (const inv of toSubmit) {
       setFbrLoading(inv.id + "-submit");
@@ -333,10 +390,10 @@ export default function InvoicePage() {
           break;
         }
       }
-      setFbrLoading(null);
     }
     setFbrLoading(null);
-    notify(`FBR submission: ${submitted} submitted, ${failed} failed.`, failed > 0 ? "error" : "success");
+    notify(`Submitted ${toSubmit.length} bill${toSubmit.length !== 1 ? "s" : ""}${filterNote}: ${submitted} succeeded, ${failed} failed.`,
+           failed > 0 ? "error" : "success");
     fetchInvoices(selectedCompany.id, page);
     setBulkFbrLoading(false);
   };

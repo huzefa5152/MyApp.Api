@@ -40,6 +40,13 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         fbrSector: "",
         fbrToken: "",
         fbrEnvironment: "sandbox",
+        // Per-company FBR defaults applied when a new bill is created without
+        // these fields set on the line/header. Null/empty means "use built-in
+        // fallback" in InvoiceService.
+        fbrDefaultSaleType: "",
+        fbrDefaultUOM: "",
+        fbrDefaultPaymentModeRegistered: "",
+        fbrDefaultPaymentModeUnregistered: "",
     });
     const [logoFile, setLogoFile] = useState(null);
     const [error, setError] = useState("");
@@ -47,6 +54,12 @@ export default function CompanyForm({ company, onClose, onSaved }) {
     const [activities, setActivities] = useState([]);
     const [sectors, setSectors] = useState([]);
     const [environments, setEnvironments] = useState([]);
+    // FBR-default dropdowns — populated from the same FbrLookups table the
+    // rest of the app reads from, so if operator adds a new SaleType /
+    // PaymentMode to the lookup table it automatically appears here.
+    const [saleTypeOptions, setSaleTypeOptions] = useState([]);
+    const [uomOptions, setUomOptions] = useState([]);
+    const [paymentModeOptions, setPaymentModeOptions] = useState([]);
 
     useEffect(() => {
         if (company) {
@@ -67,6 +80,10 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 fbrSector: company.fbrSector || "",
                 fbrToken: "",
                 fbrEnvironment: company.fbrEnvironment || "sandbox",
+                fbrDefaultSaleType: company.fbrDefaultSaleType || "",
+                fbrDefaultUOM: company.fbrDefaultUOM || "",
+                fbrDefaultPaymentModeRegistered: company.fbrDefaultPaymentModeRegistered || "",
+                fbrDefaultPaymentModeUnregistered: company.fbrDefaultPaymentModeUnregistered || "",
             });
         }
     }, [company]);
@@ -74,16 +91,25 @@ export default function CompanyForm({ company, onClose, onSaved }) {
     useEffect(() => {
         const loadLookups = async () => {
             try {
-                const [provRes, actRes, secRes, envRes] = await Promise.all([
+                const [provRes, actRes, secRes, envRes, saleRes, uomRes, pmRes] = await Promise.all([
                     getFbrLookupsByCategory("Province"),
                     getFbrLookupsByCategory("BusinessActivity"),
                     getFbrLookupsByCategory("Sector"),
                     getFbrLookupsByCategory("Environment"),
+                    // SaleType / UOM / PaymentMode may not exist in FbrLookups yet
+                    // on upgraded dbs — each call falls back to [] so the form
+                    // still renders with free-text inputs.
+                    getFbrLookupsByCategory("SaleType").catch(() => ({ data: [] })),
+                    getFbrLookupsByCategory("UOM").catch(() => ({ data: [] })),
+                    getFbrLookupsByCategory("PaymentMode").catch(() => ({ data: [] })),
                 ]);
                 setProvinces(provRes.data);
                 setActivities(actRes.data);
                 setSectors(secRes.data);
                 setEnvironments(envRes.data);
+                setSaleTypeOptions(saleRes.data || []);
+                setUomOptions(uomRes.data || []);
+                setPaymentModeOptions(pmRes.data || []);
             } catch { /* ignore */ }
         };
         loadLookups();
@@ -119,6 +145,12 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 ...form,
                 fbrProvinceCode: form.fbrProvinceCode === "" ? null : Number(form.fbrProvinceCode),
                 fbrToken: form.fbrToken || null,
+                // Normalise empty strings to null so the backend treats them as
+                // "use built-in fallback" rather than "operator chose empty string".
+                fbrDefaultSaleType: form.fbrDefaultSaleType || null,
+                fbrDefaultUOM: form.fbrDefaultUOM || null,
+                fbrDefaultPaymentModeRegistered: form.fbrDefaultPaymentModeRegistered || null,
+                fbrDefaultPaymentModeUnregistered: form.fbrDefaultPaymentModeUnregistered || null,
             };
 
             let savedCompany;
@@ -303,6 +335,77 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                             <div style={formGroup}>
                                 <label style={label}>FBR Bearer Token {company?.hasFbrToken && <span style={{ color: "#28a745", fontSize: "0.75rem" }}>(set)</span>}</label>
                                 <input type="password" name="fbrToken" value={form.fbrToken} onChange={handleChange} style={input} placeholder={company?.hasFbrToken ? "Leave blank to keep current" : "Paste token from IRIS portal"} />
+                            </div>
+
+                            {/* ── Per-company defaults for new bills ──
+                                These pre-fill line items + bill header when the
+                                operator hasn't made an explicit choice, so
+                                day-to-day bill entry doesn't require setting
+                                the same FBR fields over and over. Empty values
+                                fall back to built-in sensible defaults. */}
+                            <div style={{ marginTop: "1.25rem", paddingTop: "0.9rem", borderTop: "1px dashed #d0d7e2" }}>
+                                <h6 style={{ margin: "0 0 0.5rem", fontSize: "0.82rem", fontWeight: 700, color: "#455a64", letterSpacing: "0.03em", textTransform: "uppercase" }}>
+                                    Default values for new bills
+                                </h6>
+                                <p style={{ margin: "0 0 0.75rem", fontSize: "0.76rem", color: "#5f6d7e" }}>
+                                    Used when creating a bill if the line/header didn't specify. Leave blank to use the built-in fallback.
+                                </p>
+                                <div style={{ display: "flex", gap: "0.75rem" }}>
+                                    <div style={formGroup}>
+                                        <label style={label}>Default Sale Type</label>
+                                        {saleTypeOptions.length > 0 ? (
+                                            <select name="fbrDefaultSaleType" value={form.fbrDefaultSaleType} onChange={handleChange} style={input}>
+                                                <option value="">(Use fallback: Goods at Standard Rate)</option>
+                                                {saleTypeOptions.map((s) => (
+                                                    <option key={s.id} value={s.code}>{s.label}</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <input type="text" name="fbrDefaultSaleType" value={form.fbrDefaultSaleType} onChange={handleChange} style={input} placeholder="e.g. Goods at Standard Rate (default)" />
+                                        )}
+                                    </div>
+                                    <div style={formGroup}>
+                                        <label style={label}>Default UOM</label>
+                                        {uomOptions.length > 0 ? (
+                                            <select name="fbrDefaultUOM" value={form.fbrDefaultUOM} onChange={handleChange} style={input}>
+                                                <option value="">(Use fallback: Numbers, pieces, units)</option>
+                                                {uomOptions.map((u) => (
+                                                    <option key={u.id} value={u.code}>{u.label}</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <input type="text" name="fbrDefaultUOM" value={form.fbrDefaultUOM} onChange={handleChange} style={input} placeholder="e.g. Numbers, pieces, units" />
+                                        )}
+                                    </div>
+                                </div>
+                                <div style={{ display: "flex", gap: "0.75rem" }}>
+                                    <div style={formGroup}>
+                                        <label style={label}>Default Payment Mode — Registered buyers</label>
+                                        {paymentModeOptions.length > 0 ? (
+                                            <select name="fbrDefaultPaymentModeRegistered" value={form.fbrDefaultPaymentModeRegistered} onChange={handleChange} style={input}>
+                                                <option value="">(Use fallback: Credit)</option>
+                                                {paymentModeOptions.map((p) => (
+                                                    <option key={p.id} value={p.code}>{p.label}</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <input type="text" name="fbrDefaultPaymentModeRegistered" value={form.fbrDefaultPaymentModeRegistered} onChange={handleChange} style={input} placeholder="Credit / Bank Transfer / …" />
+                                        )}
+                                    </div>
+                                    <div style={formGroup}>
+                                        <label style={label}>Default Payment Mode — Unregistered buyers</label>
+                                        {paymentModeOptions.length > 0 ? (
+                                            <select name="fbrDefaultPaymentModeUnregistered" value={form.fbrDefaultPaymentModeUnregistered} onChange={handleChange} style={input}>
+                                                <option value="">(Use fallback: Cash)</option>
+                                                {paymentModeOptions.map((p) => (
+                                                    <option key={p.id} value={p.code}>{p.label}</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <input type="text" name="fbrDefaultPaymentModeUnregistered" value={form.fbrDefaultPaymentModeUnregistered} onChange={handleChange} style={input} placeholder="Cash / Online / …" />
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

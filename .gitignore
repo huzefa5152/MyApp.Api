@@ -373,3 +373,15 @@ data/
 
 # Temporary debug snapshots
 roshan_dc_current.html
+
+# ── Project-specific ignores ──────────────────────────────────
+# Temp artifacts dropped by helper scripts (seed_fbr_scenarios.py,
+# verify_fbr_scenarios.py, ad-hoc smoke tests). These are workspace
+# debris, not project code — never commit them.
+scripts/*.json
+scripts/*.xlsx
+scripts/*.txt
+!scripts/dump_output.txt
+!scripts/*.py
+!scripts/*.sh
+!scripts/*.csproj

@@ -28,6 +28,15 @@ namespace MyApp.Api.Models
         public string? SaleType { get; set; }
         public int? RateId { get; set; }
 
+        /// <summary>
+        /// Printed MRP × quantity for 3rd Schedule goods (SN008 / SN027).
+        /// When SaleType = "3rd Schedule Goods", FBR requires this to be > 0 and
+        /// the sales tax must be backed OUT of this retail price using the
+        /// formula: salesTax = retailPrice × rate ÷ (1 + rate).
+        /// Null for non-3rd-schedule items (FBR accepts 0.00 there).
+        /// </summary>
+        public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
+
         // Navigation
         public Invoice Invoice { get; set; } = null!;
         public DeliveryItem? DeliveryItem { get; set; }

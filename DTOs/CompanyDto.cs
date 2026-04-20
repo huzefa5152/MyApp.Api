@@ -22,5 +22,9 @@
         public bool HasFbrToken { get; set; }
         public bool HasChallans { get; set; }
         public bool HasInvoices { get; set; }
+        public string? FbrDefaultSaleType { get; set; }
+        public string? FbrDefaultUOM { get; set; }
+        public string? FbrDefaultPaymentModeRegistered { get; set; }
+        public string? FbrDefaultPaymentModeUnregistered { get; set; }
     }
 }

@@ -123,6 +123,39 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Full-field challan update. Lets the operator change client, site,
+        /// delivery date, PO number (including CLEARING it → "No PO"), PO date,
+        /// and items in a single request. Replaces the old two-step
+        /// "update items" + "update PO" flow.
+        /// </summary>
+        [HttpPut("{id}")]
+        public async Task<ActionResult<DeliveryChallanDto>> UpdateChallan(int id, [FromBody] DeliveryChallanDto dto)
+        {
+            try
+            {
+                // Items must still contain at least one row and have valid data.
+                // PO number and site are optional — empty string on PO transitions
+                // the challan to "No PO" status (operator's intent).
+                if (dto.Items == null || !dto.Items.Any())
+                    return BadRequest(new { error = "At least one item is required." });
+                if (dto.Items.Any(i => string.IsNullOrWhiteSpace(i.Description)))
+                    return BadRequest(new { error = "Item descriptions cannot be empty." });
+                if (dto.Items.Any(i => i.Quantity <= 0))
+                    return BadRequest(new { error = "Item quantity must be greater than zero." });
+                if (!dto.DeliveryDate.HasValue)
+                    return BadRequest(new { error = "Delivery date is required." });
+
+                var updated = await _service.UpdateChallanAsync(id, dto);
+                if (updated == null) return NotFound();
+                return Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
         [HttpPut("{id}/cancel")]
         public async Task<IActionResult> Cancel(int id)
         {
