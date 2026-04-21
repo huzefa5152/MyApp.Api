@@ -377,7 +377,25 @@ namespace MyApp.Api.Services.Implementations
             if (!IsEditable(dc))
                 throw new InvalidOperationException("Can only delete Pending, No PO, or Setup Required challans.");
 
+            var companyId = dc.CompanyId;
             await _repository.DeleteAsync(dc);
+
+            // If this was the last challan for the company, reset the counter
+            // so the operator can re-seed challan numbering. Same rationale as
+            // the equivalent invoice-delete reset — keeps the "Starting number"
+            // UI field semantically honest once unlocked.
+            var anyChallansLeft = await _context.DeliveryChallans.AnyAsync(x => x.CompanyId == companyId);
+            if (!anyChallansLeft)
+            {
+                var company = await _context.Companies.FindAsync(companyId);
+                if (company != null && company.CurrentChallanNumber != 0)
+                {
+                    company.CurrentChallanNumber = 0;
+                    _context.Companies.Update(company);
+                    await _context.SaveChangesAsync();
+                }
+            }
+
             return true;
         }
 

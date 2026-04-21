@@ -3,9 +3,11 @@ import { MdSearch } from "react-icons/md";
 import { getPendingChallansByCompany } from "../api/challanApi";
 import { createInvoice } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
+import { getItemTypes } from "../api/itemTypeApi";
 import { getItemByName, saveItemFbrDefaults } from "../api/lookupApi";
 import { formStyles } from "../theme";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
+import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 
 const colors = {
   blue: "#0d47a1",
@@ -44,16 +46,24 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
   // user picks an FBR catalog item that has its own UOM)
   const [itemUoms, setItemUoms] = useState({});
   const [itemFbrUomIds, setItemFbrUomIds] = useState({});
+  // ── Per-item ItemType (FBR catalog entry) ──
+  // When the operator picks an ItemType, HS Code / UOM / Sale Type auto-fill
+  // from the catalog entry — same UX as the Edit Bill form. ItemTypeId flows
+  // to the backend so the bill line is permanently linked to the catalog.
+  const [itemTypes, setItemTypes] = useState([]);
+  const [itemTypeIds, setItemTypeIds] = useState({});
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [challanRes, clientRes] = await Promise.all([
+        const [challanRes, clientRes, typesRes] = await Promise.all([
           getPendingChallansByCompany(companyId),
           getClientsByCompany(companyId),
+          getItemTypes().catch(() => ({ data: [] })),
         ]);
         setAllChallans(challanRes.data);
         setClients(clientRes.data);
+        setItemTypes(typesRes.data || []);
       } catch {
         setError("Failed to load data.");
       } finally {
@@ -180,7 +190,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
           deliveryItemId: item.id,
           unitPrice: parseFloat(itemPrices[item.id]),
           description: itemDescriptions[item.id] || item.description,
-          // Optional FBR fields — sent only if user filled them in
+          // ItemType link (new) — when set, backend re-derives HS/UOM/SaleType from catalog
+          itemTypeId: itemTypeIds[item.id] || null,
+          // Optional FBR fields — sent only if user filled them in (or auto-filled from picked ItemType)
           uom: itemUoms[item.id]?.trim() || null,
           fbrUOMId: itemFbrUomIds[item.id] || null,
           hsCode: itemHsCodes[item.id]?.trim() || null,
@@ -425,13 +437,14 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
                             <thead>
                               <tr style={styles.unifiedThead}>
                                 <th style={{ ...styles.unifiedTh, width: "4%" }}>DC#</th>
-                                <th style={{ ...styles.unifiedTh, width: "26%" }}>Description</th>
-                                <th style={{ ...styles.unifiedTh, width: "6%" }}>Qty</th>
-                                <th style={{ ...styles.unifiedTh, width: "9%" }}>UOM</th>
-                                <th style={{ ...styles.unifiedTh, width: "9%" }}>Unit Price *</th>
-                                <th style={{ ...styles.unifiedTh, width: "10%" }}>Line Total</th>
-                                <th style={{ ...styles.unifiedTh, width: "11%" }}>HS Code</th>
-                                <th style={{ ...styles.unifiedTh, width: "25%" }}>Sale Type</th>
+                                <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type (FBR)</th>
+                                <th style={{ ...styles.unifiedTh, width: "20%" }}>Description</th>
+                                <th style={{ ...styles.unifiedTh, width: "5%" }}>Qty</th>
+                                <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
+                                <th style={{ ...styles.unifiedTh, width: "8%" }}>Unit Price *</th>
+                                <th style={{ ...styles.unifiedTh, width: "9%" }}>Line Total</th>
+                                <th style={{ ...styles.unifiedTh, width: "10%" }}>HS Code</th>
+                                <th style={{ ...styles.unifiedTh, width: "22%" }}>Sale Type</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -442,6 +455,25 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
                                   <tr key={item.id} style={styles.unifiedRow}>
                                     <td style={{ ...styles.unifiedTd, fontSize: "0.76rem", color: colors.textSecondary }}>
                                       {item.challanNumber}
+                                    </td>
+                                    <td style={styles.unifiedTd}>
+                                      {/* Picking an ItemType auto-fills HS Code, UOM, SaleType,
+                                          FbrUOMId on this row — identical behaviour to EditBillForm. */}
+                                      <SearchableItemTypeSelect
+                                        items={itemTypes}
+                                        value={itemTypeIds[item.id] || ""}
+                                        onChange={(newId, picked) => {
+                                          setItemTypeIds((p) => ({ ...p, [item.id]: newId ? parseInt(newId) : null }));
+                                          if (picked) {
+                                            if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [item.id]: picked.hsCode }));
+                                            if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [item.id]: picked.saleType }));
+                                            if (picked.uom) setItemUoms((p) => ({ ...p, [item.id]: picked.uom }));
+                                            if (picked.fbrUOMId) setItemFbrUomIds((p) => ({ ...p, [item.id]: picked.fbrUOMId }));
+                                          }
+                                        }}
+                                        placeholder="— optional —"
+                                        style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                                      />
                                     </td>
                                     <td style={styles.unifiedTd}>
                                       <SmartItemAutocomplete

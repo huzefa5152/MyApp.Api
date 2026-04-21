@@ -530,6 +530,8 @@ namespace MyApp.Api.Services.Implementations
             if (invoice.FbrStatus == "Submitted")
                 throw new InvalidOperationException("Cannot delete a bill that has been submitted to FBR.");
 
+            var companyId = invoice.CompanyId;
+
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
@@ -554,6 +556,24 @@ namespace MyApp.Api.Services.Implementations
                 _context.Invoices.Remove(invoice);
 
                 await _context.SaveChangesAsync();
+
+                // ── If this was the LAST invoice for the company, reset the
+                // counter so the operator can re-seed numbering and new bills
+                // start from StartingInvoiceNumber again. Without this, the
+                // Starting field stays unlocked but the next bill still uses
+                // (last + 1) — confusing UX.
+                var anyInvoicesLeft = await _context.Invoices.AnyAsync(i => i.CompanyId == companyId);
+                if (!anyInvoicesLeft)
+                {
+                    var company = await _companyRepo.GetByIdAsync(companyId);
+                    if (company != null && company.CurrentInvoiceNumber != 0)
+                    {
+                        company.CurrentInvoiceNumber = 0;
+                        _context.Companies.Update(company);
+                        await _context.SaveChangesAsync();
+                    }
+                }
+
                 await transaction.CommitAsync();
                 return true;
             }

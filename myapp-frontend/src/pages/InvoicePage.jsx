@@ -184,7 +184,9 @@ export default function InvoicePage() {
         if (res.data?.htmlContent) template = res.data.htmlContent;
       } catch { /* use default */ }
       const html = mergeTemplate(template, data);
-      await exportToPdf(html, `Bill # ${data.invoiceNumber} ${data.buyerName || data.clientName}`);
+      // Tax invoice uses "INVOICE # ..." prefix to distinguish from the non-tax
+      // Bill exports (which keep the "Bill # ..." prefix on lines 160 + 171 above).
+      await exportToPdf(html, `INVOICE # ${data.invoiceNumber} ${data.buyerName || data.clientName}`);
     } catch { notify("Failed to export Tax Invoice PDF.", "error"); }
     finally { setExportingId(null); }
   };
@@ -195,7 +197,10 @@ export default function InvoicePage() {
     try {
       const { data } = await getInvoicePrintTaxInvoice(inv.id);
       const res = await exportExcel(selectedCompany.id, "TaxInvoice", data);
-      saveAs(res.data, `Bill # ${data.invoiceNumber} ${data.buyerName || data.clientName}.xlsx`);
+      // Same "INVOICE # ..." convention as the PDF tax export above.
+      // saveAs() overrides the server's Content-Disposition filename, so the
+      // prefix MUST be correct on this line — fixing only the backend wasn't enough.
+      saveAs(res.data, `INVOICE # ${data.invoiceNumber} ${data.buyerName || data.clientName}.xlsx`);
     } catch { notify("Failed to export Tax Invoice Excel.", "error"); }
     finally { setExportingId(null); }
   };

@@ -155,8 +155,10 @@ namespace MyApp.Api.Controllers
         [HttpPost("company/{companyId}/TaxInvoice/export-excel")]
         public async Task<IActionResult> ExportTaxInvoiceExcel(int companyId, [FromBody] PrintTaxInvoiceDto dto)
         {
+            // Uppercase INVOICE prefix — matches operator convention for tax invoices
+            // (distinguishes from the standard non-tax "Bill # ..." export filename).
             return await ProcessExcelExport(companyId, "TaxInvoice", ExcelTemplateEngine.TaxInvoiceToDict(dto),
-                $"Invoice # {dto.InvoiceNumber} {dto.BuyerName}");
+                $"INVOICE # {dto.InvoiceNumber} {dto.BuyerName}");
         }
 
         private async Task<IActionResult> ProcessExcelExport(int companyId, string templateType,

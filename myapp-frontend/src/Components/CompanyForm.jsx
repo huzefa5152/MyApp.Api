@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { createCompany, updateCompany, uploadCompanyLogo } from "../api/companyApi";
+import { createCompany, updateCompany, uploadCompanyLogo, getCompanyById } from "../api/companyApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { formStyles } from "../theme";
 
@@ -61,32 +61,52 @@ export default function CompanyForm({ company, onClose, onSaved }) {
     const [uomOptions, setUomOptions] = useState([]);
     const [paymentModeOptions, setPaymentModeOptions] = useState([]);
 
+    // Fresh company snapshot — mirrors the cached list DTO but guaranteed to
+    // reflect hasInvoices / hasChallans as-of RIGHT NOW. Without this, the
+    // "Starting number" fields stay locked even after the operator deletes all
+    // bills/challans, because the list-level DTO was fetched earlier.
+    const [freshCompany, setFreshCompany] = useState(company);
+
     useEffect(() => {
-        if (company) {
+        let cancelled = false;
+        if (company?.id) {
+            // Re-fetch on open so hasInvoices / hasChallans are not stale.
+            // Falls back to the passed-in company object if the fetch fails.
+            getCompanyById(company.id)
+                .then(({ data }) => { if (!cancelled) setFreshCompany(data); })
+                .catch(() => { if (!cancelled) setFreshCompany(company); });
+        } else {
+            setFreshCompany(company);
+        }
+        return () => { cancelled = true; };
+    }, [company?.id]);
+
+    useEffect(() => {
+        if (freshCompany) {
             setForm({
-                name: company.name || "",
-                brandName: company.brandName || "",
-                fullAddress: company.fullAddress || "",
-                phone: company.phone || "",
-                ntn: company.ntn || "",
-                strn: company.strn || "",
-                startingChallanNumber: company.startingChallanNumber || 0,
-                currentChallanNumber: company.currentChallanNumber || 0,
-                startingInvoiceNumber: company.startingInvoiceNumber || 0,
-                currentInvoiceNumber: company.currentInvoiceNumber || 0,
-                invoiceNumberPrefix: company.invoiceNumberPrefix || "",
-                fbrProvinceCode: company.fbrProvinceCode ?? "",
-                fbrBusinessActivity: company.fbrBusinessActivity || "",
-                fbrSector: company.fbrSector || "",
+                name: freshCompany.name || "",
+                brandName: freshCompany.brandName || "",
+                fullAddress: freshCompany.fullAddress || "",
+                phone: freshCompany.phone || "",
+                ntn: freshCompany.ntn || "",
+                strn: freshCompany.strn || "",
+                startingChallanNumber: freshCompany.startingChallanNumber || 0,
+                currentChallanNumber: freshCompany.currentChallanNumber || 0,
+                startingInvoiceNumber: freshCompany.startingInvoiceNumber || 0,
+                currentInvoiceNumber: freshCompany.currentInvoiceNumber || 0,
+                invoiceNumberPrefix: freshCompany.invoiceNumberPrefix || "",
+                fbrProvinceCode: freshCompany.fbrProvinceCode ?? "",
+                fbrBusinessActivity: freshCompany.fbrBusinessActivity || "",
+                fbrSector: freshCompany.fbrSector || "",
                 fbrToken: "",
-                fbrEnvironment: company.fbrEnvironment || "sandbox",
-                fbrDefaultSaleType: company.fbrDefaultSaleType || "",
-                fbrDefaultUOM: company.fbrDefaultUOM || "",
-                fbrDefaultPaymentModeRegistered: company.fbrDefaultPaymentModeRegistered || "",
-                fbrDefaultPaymentModeUnregistered: company.fbrDefaultPaymentModeUnregistered || "",
+                fbrEnvironment: freshCompany.fbrEnvironment || "sandbox",
+                fbrDefaultSaleType: freshCompany.fbrDefaultSaleType || "",
+                fbrDefaultUOM: freshCompany.fbrDefaultUOM || "",
+                fbrDefaultPaymentModeRegistered: freshCompany.fbrDefaultPaymentModeRegistered || "",
+                fbrDefaultPaymentModeUnregistered: freshCompany.fbrDefaultPaymentModeUnregistered || "",
             });
         }
-    }, [company]);
+    }, [freshCompany]);
 
     useEffect(() => {
         const loadLookups = async () => {
@@ -233,7 +253,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                         <div style={formGroup}>
                             <label style={label}>
                                 Starting Challan Number
-                                {company?.hasChallans && (
+                                {freshCompany?.hasChallans && (
                                     <span style={{ fontSize: "0.75rem", color: "#5f6d7e", fontWeight: 400, marginLeft: "0.5rem" }}>
                                         (locked — challans exist)
                                     </span>
@@ -244,8 +264,8 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 name="startingChallanNumber"
                                 value={form.startingChallanNumber}
                                 onChange={handleChange}
-                                style={{ ...input, ...(company?.hasChallans ? { backgroundColor: "#f0f0f0", color: "#999", cursor: "not-allowed" } : {}) }}
-                                disabled={company?.hasChallans}
+                                style={{ ...input, ...(freshCompany?.hasChallans ? { backgroundColor: "#f0f0f0", color: "#999", cursor: "not-allowed" } : {}) }}
+                                disabled={freshCompany?.hasChallans}
                             />
                             {company?.currentChallanNumber > 0 && (
                                 <span style={{ fontSize: "0.78rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
@@ -257,7 +277,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                         <div style={formGroup}>
                             <label style={label}>
                                 Starting Invoice Number
-                                {company?.hasInvoices && (
+                                {freshCompany?.hasInvoices && (
                                     <span style={{ fontSize: "0.75rem", color: "#5f6d7e", fontWeight: 400, marginLeft: "0.5rem" }}>
                                         (locked — invoices exist)
                                     </span>
@@ -268,8 +288,8 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 name="startingInvoiceNumber"
                                 value={form.startingInvoiceNumber}
                                 onChange={handleChange}
-                                style={{ ...input, ...(company?.hasInvoices ? { backgroundColor: "#f0f0f0", color: "#999", cursor: "not-allowed" } : {}) }}
-                                disabled={company?.hasInvoices}
+                                style={{ ...input, ...(freshCompany?.hasInvoices ? { backgroundColor: "#f0f0f0", color: "#999", cursor: "not-allowed" } : {}) }}
+                                disabled={freshCompany?.hasInvoices}
                             />
                             {company?.currentInvoiceNumber > 0 && (
                                 <span style={{ fontSize: "0.78rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
