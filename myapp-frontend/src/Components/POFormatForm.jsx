@@ -181,7 +181,7 @@ export default function POFormatForm({ companyId, format, onClose, onSaved }) {
           {selectedCompany && (
             <div style={styles.companyChip}>
               <MdBusiness size={14} />
-              <span>Company: <strong>{selectedCompany.name}</strong></span>
+              <span>Company: <strong>{selectedCompany.brandName || selectedCompany.name}</strong></span>
             </div>
           )}
 

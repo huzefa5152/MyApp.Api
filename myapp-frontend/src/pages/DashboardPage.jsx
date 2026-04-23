@@ -343,7 +343,7 @@ export default function DashboardPage() {
           >
             <option value="">All Companies</option>
             {companies.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+              <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
             ))}
           </select>
         </div>

@@ -230,7 +230,7 @@ export default function ChallanPage() {
             <h2 style={styles.pageTitle}>Delivery Challans</h2>
             <p style={styles.pageSubtitle}>
               {selectedCompany
-                ? `${totalCount} challan${totalCount !== 1 ? "s" : ""} for ${selectedCompany.name}`
+                ? `${totalCount} challan${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
                 : "Select a company to view challans"}
             </p>
           </div>
@@ -264,7 +264,7 @@ export default function ChallanPage() {
               }
             >
               {companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
               ))}
             </select>
           </div>

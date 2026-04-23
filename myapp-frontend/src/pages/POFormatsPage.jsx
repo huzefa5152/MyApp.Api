@@ -120,7 +120,7 @@ export default function POFormatsPage() {
           }
         >
           {companies.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
+            <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
           ))}
         </select>
         <span style={{ fontSize: "0.82rem", color: colors.textSecondary }}>

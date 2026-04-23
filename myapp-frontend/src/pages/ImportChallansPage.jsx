@@ -339,7 +339,7 @@ function UploadStep({
         >
           {companies.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.name}
+              {c.brandName || c.name}
             </option>
           ))}
         </select>

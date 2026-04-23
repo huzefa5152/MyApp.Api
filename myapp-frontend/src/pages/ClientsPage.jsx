@@ -68,7 +68,7 @@ export default function ClientsPage() {
             <h2 style={styles.pageTitle}>Clients</h2>
             <p style={styles.pageSubtitle}>
               {selectedCompany
-                ? `${clients.length} client${clients.length !== 1 ? "s" : ""} for ${selectedCompany.name}`
+                ? `${clients.length} client${clients.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
                 : "Select a company to view clients"}
             </p>
           </div>
@@ -102,7 +102,7 @@ export default function ClientsPage() {
             }
           >
             {companies.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+              <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
             ))}
           </select>
         </div>

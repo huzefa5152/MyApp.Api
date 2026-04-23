@@ -413,7 +413,7 @@ export default function InvoicePage() {
           <div>
             <h2 style={styles.pageTitle}>Bills</h2>
             <p style={styles.pageSubtitle}>
-              {selectedCompany ? `${totalCount} bill${totalCount !== 1 ? "s" : ""} for ${selectedCompany.name}` : "Select a company"}
+              {selectedCompany ? `${totalCount} bill${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` : "Select a company"}
             </p>
           </div>
         </div>
@@ -435,7 +435,7 @@ export default function InvoicePage() {
               value={selectedCompany?.id || ""}
               onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}
             >
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
             </select>
           </div>
 
