@@ -59,6 +59,7 @@ namespace MyApp.Api.Services.Implementations
                 InvoiceId = dc.InvoiceId,
                 InvoiceFbrStatus = dc.Invoice?.FbrStatus,
                 IsEditable = IsEditable(dc),
+                IsImported = dc.IsImported,
                 Items = dc.Items.Select(i => new DeliveryItemDto
                 {
                     Id = i.Id,
@@ -98,13 +99,17 @@ namespace MyApp.Api.Services.Implementations
 
         /// <summary>
         /// Returns true if the challan is in an editable state.
-        /// Editable: Pending, No PO, Setup Required, OR Invoiced (as long as linked invoice
-        /// has NOT been successfully submitted to FBR).
+        /// Editable: Pending, Imported, No PO, Setup Required, OR Invoiced
+        /// (as long as linked invoice has NOT been successfully submitted to FBR).
         /// Only blocked for: Cancelled, or Invoiced with FbrStatus == "Submitted".
+        ///
+        /// "Imported" is the counterpart of "Pending" for historical challans
+        /// loaded via the bulk Excel import. Both statuses are billable.
         /// </summary>
         private static bool IsEditable(DeliveryChallan dc)
         {
-            if (dc.Status == "Pending" || dc.Status == "No PO" || dc.Status == "Setup Required")
+            if (dc.Status == "Pending" || dc.Status == "Imported" ||
+                dc.Status == "No PO" || dc.Status == "Setup Required")
                 return true;
             if (dc.Status == "Invoiced")
             {
@@ -113,6 +118,31 @@ namespace MyApp.Api.Services.Implementations
             }
             // Cancelled and any other unknown status → not editable
             return false;
+        }
+
+        /// <summary>
+        /// Native-created challans settle at "Pending" when FBR-ready + PO.
+        /// Historical/imported challans settle at "Imported" in the same
+        /// situation so reports can tell the two populations apart. Both are
+        /// billable.
+        ///
+        /// Detection: (a) the explicit IsImported flag set by the bulk import
+        /// flow OR (b) the challan's number is below the company's current
+        /// starting number — which is the definition of "historical" per the
+        /// operator. The fallback (b) covers legacy rows that predate the
+        /// IsImported column; without it, editing an old challan to add a PO
+        /// would incorrectly demote it to "Pending".
+        /// </summary>
+        private static string ReadyStatusFor(DeliveryChallan dc)
+        {
+            if (dc.IsImported) return "Imported";
+            var company = dc.Company;
+            if (company != null
+                && company.StartingChallanNumber > 0
+                && dc.ChallanNumber > 0
+                && dc.ChallanNumber < company.StartingChallanNumber)
+                return "Imported";
+            return "Pending";
         }
 
         public async Task<List<DeliveryChallanDto>> GetDeliveryChallansByCompanyAsync(int companyId)
@@ -539,7 +569,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 var fbrReady = IsFbrReady(dc.Company, dc.Client);
                 dc.Status = !fbrReady ? "Setup Required"
-                          : hasPo     ? "Pending"
+                          : hasPo     ? ReadyStatusFor(dc)
                                       : "No PO";
             }
 
@@ -558,15 +588,16 @@ namespace MyApp.Api.Services.Implementations
             dc.PoNumber = poNumber.Trim();
             dc.PoDate = poDate;
 
-            // Only transition to Pending if FBR is ready
+            // Only transition to ready state if FBR is ready. Imported challans
+            // go to "Imported"; native ones go to "Pending".
             if (dc.Status == "Setup Required")
             {
                 var fbrReady = IsFbrReady(dc.Company, dc.Client);
-                dc.Status = fbrReady ? "Pending" : "Setup Required";
+                dc.Status = fbrReady ? ReadyStatusFor(dc) : "Setup Required";
             }
             else
             {
-                dc.Status = "Pending";
+                dc.Status = ReadyStatusFor(dc);
             }
 
             await _repository.UpdateAsync(dc);
@@ -627,12 +658,92 @@ namespace MyApp.Api.Services.Implementations
                 if (!IsFbrReady(dc.Company, dc.Client)) continue;
 
                 var hasPo = !string.IsNullOrWhiteSpace(dc.PoNumber);
-                dc.Status = hasPo ? "Pending" : "No PO";
+                // Imported challans go to "Imported" when they become ready;
+                // native ones go to "Pending".
+                dc.Status = hasPo ? ReadyStatusFor(dc) : "No PO";
                 await _repository.UpdateAsync(dc);
                 transitioned++;
             }
 
             return transitioned;
+        }
+
+        public async Task<ChallanImportResultDto> ImportHistoricalAsync(int companyId, ChallanImportPreviewDto dto)
+        {
+            var result = new ChallanImportResultDto
+            {
+                FileName = dto.FileName,
+                ChallanNumber = dto.ChallanNumber,
+                Success = false
+            };
+
+            // ── Validation ───────────────────────────────────────────────────
+            if (dto.ChallanNumber <= 0)
+            {
+                result.Error = "Challan number is missing or invalid.";
+                return result;
+            }
+            if (dto.ClientId == null || dto.ClientId <= 0)
+            {
+                result.Error = "Client is required.";
+                return result;
+            }
+
+            var client = await _context.Clients.FindAsync(dto.ClientId.Value);
+            if (client == null || client.CompanyId != companyId)
+            {
+                result.Error = $"Client {dto.ClientId} does not belong to this company.";
+                return result;
+            }
+
+            if (await _repository.ChallanNumberExistsAsync(companyId, dto.ChallanNumber))
+            {
+                result.Error = $"Challan #{dto.ChallanNumber} already exists for this company.";
+                return result;
+            }
+
+            // Historical imports settle at:
+            //   • "Imported"        — FBR-ready and a PO is known (billable, same as Pending)
+            //   • "No PO"           — FBR-ready but no PO known (will move to "Imported" when PO added)
+            //   • "Setup Required"  — FBR fields incomplete (will move to "Imported"/"No PO" when fixed)
+            // "Pending" is intentionally NOT used — it's reserved for natively-
+            // created challans so reports can distinguish the two populations.
+            var company = await _context.Companies.FindAsync(companyId);
+            var fbrReady = company != null && IsFbrReady(company, client);
+            var hasPo = !string.IsNullOrWhiteSpace(dto.PoNumber);
+            string status = !fbrReady ? "Setup Required" : (hasPo ? "Imported" : "No PO");
+
+            var challan = new DeliveryChallan
+            {
+                CompanyId = companyId,
+                ClientId = dto.ClientId.Value,
+                ChallanNumber = dto.ChallanNumber,
+                Site = string.IsNullOrWhiteSpace(dto.Site) ? null : dto.Site.Trim(),
+                PoNumber = (dto.PoNumber ?? "").Trim(),
+                PoDate = hasPo ? dto.PoDate : null,
+                DeliveryDate = dto.DeliveryDate,
+                Status = status,
+                IsImported = true,
+                Items = dto.Items.Select(i => new DeliveryItem
+                {
+                    ItemTypeId = i.ItemTypeId,
+                    Description = i.Description,
+                    Quantity = i.Quantity,
+                    Unit = i.Unit ?? ""
+                }).ToList()
+            };
+
+            try
+            {
+                var inserted = await _repository.CreateImportedChallanAsync(challan);
+                result.Success = true;
+                result.InsertedId = inserted.Id;
+            }
+            catch (Exception ex)
+            {
+                result.Error = ex.Message;
+            }
+            return result;
         }
     }
 }

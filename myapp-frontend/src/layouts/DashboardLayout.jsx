@@ -18,6 +18,7 @@ import {
   MdCode,
   MdBugReport,
   MdTune,
+  MdFileUpload,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import "./DashboardLayout.css";
@@ -215,6 +216,17 @@ export default function DashboardLayout() {
             <span className="dl-nav__label">Challans</span>
           </NavLink>
 
+          {/* Import Historical Challans */}
+          <NavLink
+            to="/challans/import"
+            className={({ isActive }) =>
+              "dl-nav__item" + (isActive ? " active" : "")
+            }
+          >
+            <MdFileUpload className="dl-nav__icon" aria-hidden="true" />
+            <span className="dl-nav__label">Import Challans</span>
+          </NavLink>
+
           {/* Invoices */}
           <NavLink
             to="/invoices"
@@ -366,6 +378,7 @@ function getBreadcrumb(pathname) {
     "/Clients/list": "Configuration / Clients List",
     "/item-types": "Configuration / Item Types",
     "/challans": "Challans",
+    "/challans/import": "Challans / Import Historical",
     "/invoices": "Bills",
     "/profile": "My Profile",
     "/users": "User Management",

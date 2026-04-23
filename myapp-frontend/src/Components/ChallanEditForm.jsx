@@ -143,12 +143,13 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     if (challan.status === "Invoiced") return "Invoiced (unchanged — bill already exists)";
     if (challan.status === "Cancelled") return "Cancelled";
     const hasPo = poNumber.trim().length > 0;
-    // We can't check FBR-readiness client-side without the company — so the
-    // preview only distinguishes No PO vs Pending. Setup Required is possible
-    // but we just call it "Pending" optimistically; the backend will correct.
-    if (challan.status === "Setup Required") return hasPo ? "Pending (if FBR-ready)" : "No PO";
-    return hasPo ? "Pending" : "No PO";
-  }, [poNumber, challan.status]);
+    // Imported challans keep the "Imported" label when they have a PO; native
+    // ones use "Pending". Setup Required is possible but the preview just
+    // shows the ready state optimistically; the backend corrects if not FBR-ready.
+    const readyLabel = challan.isImported ? "Imported" : "Pending";
+    if (challan.status === "Setup Required") return hasPo ? `${readyLabel} (if FBR-ready)` : "No PO";
+    return hasPo ? readyLabel : "No PO";
+  }, [poNumber, challan.status, challan.isImported]);
 
   const statusWillChange = previewStatus !== challan.status;
 

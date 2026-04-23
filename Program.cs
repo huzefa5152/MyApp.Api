@@ -66,6 +66,12 @@ builder.Services.AddSingleton<IPOFormatFingerprintService, POFormatFingerprintSe
 builder.Services.AddScoped<IPOFormatRegistry, POFormatRegistry>();
 builder.Services.AddSingleton<IRuleBasedPOParser, RuleBasedPOParser>();
 builder.Services.AddScoped<IRegressionService, RegressionService>();
+// Historical challan import (reverse Excel template → preview → commit).
+// Reverse mapper is a Singleton because it holds an in-memory cache keyed on
+// the template file path + lastWriteTime — rebuilds automatically when the
+// operator re-uploads a template, and shared safely across requests.
+builder.Services.AddSingleton<IExcelTemplateReverseMapper, ExcelTemplateReverseMapper>();
+builder.Services.AddScoped<IChallanExcelImporter, ChallanExcelImporter>();
 builder.Services.AddHttpClient("FBR");
 
 // before builder.Build()

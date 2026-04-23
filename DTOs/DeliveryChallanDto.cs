@@ -22,6 +22,13 @@
         /// be edited instead to keep the numbering sequence gap-free.
         /// </summary>
         public bool IsLatest { get; set; }
+        /// <summary>
+        /// True when the challan originated from the Excel bulk-import flow
+        /// (see <see cref="MyApp.Api.Controllers.DeliveryChallanImportController"/>).
+        /// Surfaced to the UI so operators can filter/tag imported rows and
+        /// so downstream reports can distinguish hand-created vs. imported.
+        /// </summary>
+        public bool IsImported { get; set; }
         public List<DeliveryItemDto> Items { get; set; } = new();
         public List<string> Warnings { get; set; } = new();
     }

@@ -15,6 +15,11 @@
         public string Status { get; set; } = "Pending";
         public int? InvoiceId { get; set; }
 
+        // Flag for challans created via the historical Excel import flow.
+        // Informational only — MUST NOT gate billing or any core flow; imported
+        // challans participate in Bill/Invoice creation just like native ones.
+        public bool IsImported { get; set; }
+
         // Navigation
         public Company Company { get; set; } = null!;
         public Client Client { get; set; } = null!;

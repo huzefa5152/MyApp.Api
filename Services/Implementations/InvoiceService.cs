@@ -160,7 +160,11 @@ namespace MyApp.Api.Services.Implementations
             {
                 var dc = await _challanRepo.GetByIdAsync(challanId);
                 if (dc == null) throw new KeyNotFoundException($"Challan {challanId} not found.");
-                if (dc.Status != "Pending") throw new InvalidOperationException($"Challan {dc.ChallanNumber} is not in Pending status.");
+                // Both "Pending" (natively-created) and "Imported" (back-filled)
+                // are billable. Anything else (Invoiced, Cancelled, Setup Required, No PO)
+                // blocks bill creation.
+                if (dc.Status != "Pending" && dc.Status != "Imported")
+                    throw new InvalidOperationException($"Challan {dc.ChallanNumber} is not in a billable status (got '{dc.Status}').");
                 if (dc.CompanyId != dto.CompanyId) throw new InvalidOperationException($"Challan {dc.ChallanNumber} does not belong to this company.");
                 challans.Add(dc);
             }
@@ -564,13 +568,15 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Revert linked challans from "Invoiced" → "Pending" or "No PO"
+                // Revert linked challans from "Invoiced" → their billable state.
+                // - Imported challans revert to "Imported" (or "No PO" if PO was cleared)
+                // - Native challans revert to "Pending" (or "No PO")
                 // Note: GetByIdAsync tracks these; we use tracked updates to stay consistent
                 // and avoid issues with ExecuteDelete + tracked entities in same transaction.
                 foreach (var dc in invoice.DeliveryChallans)
                 {
                     var hasPo = !string.IsNullOrWhiteSpace(dc.PoNumber);
-                    dc.Status = hasPo ? "Pending" : "No PO";
+                    dc.Status = hasPo ? (dc.IsImported ? "Imported" : "Pending") : "No PO";
                     dc.InvoiceId = null;
                     _context.DeliveryChallans.Update(dc);
                 }

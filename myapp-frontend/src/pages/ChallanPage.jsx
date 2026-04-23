@@ -285,6 +285,7 @@ export default function ChallanPage() {
               <select className="filter-select" value={statusFilter} onChange={handleFilterChange(setStatusFilter)}>
                 <option value="">All Status</option>
                 <option value="Pending">Pending</option>
+                <option value="Imported">Imported</option>
                 <option value="No PO">No PO</option>
                 <option value="Setup Required">Setup Required</option>
                 <option value="Invoiced">Billed</option>

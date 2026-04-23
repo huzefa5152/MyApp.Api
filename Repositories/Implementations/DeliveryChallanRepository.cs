@@ -153,11 +153,14 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<List<DeliveryChallan>> GetPendingChallansByCompanyAsync(int companyId)
         {
+            // Both "Pending" (natively-created) and "Imported" (historical back-fill)
+            // are billable — the bill-creation picker shows both populations.
             return await _context.DeliveryChallans
                                  .Include(dc => dc.Items)
                                      .ThenInclude(i => i.ItemType)
                                  .Include(dc => dc.Client)
-                                 .Where(dc => dc.CompanyId == companyId && dc.Status == "Pending")
+                                 .Where(dc => dc.CompanyId == companyId
+                                           && (dc.Status == "Pending" || dc.Status == "Imported"))
                                  .OrderBy(dc => dc.ChallanNumber)
                                  .ToListAsync();
         }
@@ -188,6 +191,36 @@ namespace MyApp.Api.Repositories.Implementations
                 query = query.Where(dc => dc.ClientId == clientId.Value);
 
             return await query.ToListAsync();
+        }
+
+        public async Task<DeliveryChallan> CreateImportedChallanAsync(DeliveryChallan deliveryChallan)
+        {
+            // Intentionally does NOT bump Company.CurrentChallanNumber — the live
+            // series must stay untouched when back-filling historical records.
+            // Uniqueness is enforced by the caller (service layer); this method
+            // only persists the row.
+            _context.DeliveryChallans.Add(deliveryChallan);
+            await _context.SaveChangesAsync();
+            await _context.Entry(deliveryChallan).Reference(dc => dc.Client).LoadAsync();
+            return deliveryChallan;
+        }
+
+        public async Task<bool> ChallanNumberExistsAsync(int companyId, int challanNumber)
+        {
+            return await _context.DeliveryChallans
+                .AnyAsync(dc => dc.CompanyId == companyId && dc.ChallanNumber == challanNumber);
+        }
+
+        public async Task<HashSet<int>> GetExistingChallanNumbersAsync(int companyId, IEnumerable<int> candidateNumbers)
+        {
+            var list = candidateNumbers?.Where(n => n > 0).Distinct().ToList() ?? new List<int>();
+            if (list.Count == 0) return new HashSet<int>();
+
+            var hits = await _context.DeliveryChallans
+                .Where(dc => dc.CompanyId == companyId && list.Contains(dc.ChallanNumber))
+                .Select(dc => dc.ChallanNumber)
+                .ToListAsync();
+            return hits.ToHashSet();
         }
     }
 }

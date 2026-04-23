@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyApp.Api.Data;
 
@@ -11,9 +12,11 @@ using MyApp.Api.Data;
 namespace MyApp.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260421213346_AddImportedFlagToDeliveryChallan")]
+    partial class AddImportedFlagToDeliveryChallan
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -136,9 +139,6 @@ namespace MyApp.Api.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("BrandName")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("CNIC")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("CurrentChallanNumber")
@@ -828,12 +828,6 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("SaleType")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("SroItemSerialNo")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("SroScheduleNo")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("UOM")
@@ -1878,9 +1872,6 @@ namespace MyApp.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("ClientId")
-                        .HasColumnType("int");
-
                     b.Property<int?>("CompanyId")
                         .HasColumnType("int");
 
@@ -1920,11 +1911,7 @@ namespace MyApp.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ClientId");
-
                     b.HasIndex("SignatureHash");
-
-                    b.HasIndex("CompanyId", "ClientId");
 
                     b.HasIndex("CompanyId", "IsActive");
 
@@ -2225,17 +2212,10 @@ namespace MyApp.Api.Migrations
 
             modelBuilder.Entity("MyApp.Api.Models.POFormat", b =>
                 {
-                    b.HasOne("MyApp.Api.Models.Client", "Client")
-                        .WithMany()
-                        .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("MyApp.Api.Models.Company", "Company")
                         .WithMany()
                         .HasForeignKey("CompanyId")
                         .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Client");
 
                     b.Navigation("Company");
                 });

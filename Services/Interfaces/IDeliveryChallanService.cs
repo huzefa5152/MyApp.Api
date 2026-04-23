@@ -29,5 +29,13 @@ namespace MyApp.Api.Services.Interfaces
         Task<int> GetTotalCountAsync();
         Task<int> GetCountByCompanyAsync(int companyId);
         Task<int> ReEvaluateSetupRequiredAsync(int companyId, int? clientId = null);
+
+        /// <summary>
+        /// Insert a historical challan with an explicit challan number (from an
+        /// imported old Excel file). Does NOT bump the company's live challan
+        /// counter — imports back-fill history only. Fails if the number is
+        /// already taken on this company. Marks the row as IsImported.
+        /// </summary>
+        Task<ChallanImportResultDto> ImportHistoricalAsync(int companyId, ChallanImportPreviewDto dto);
     }
 }

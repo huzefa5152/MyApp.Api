@@ -17,6 +17,9 @@ const colors = {
 
 const statusColors = {
   Pending: { bg: "#fff3e0", color: "#e65100", border: "#e6510030" },
+  // Imported = historical back-fill, billable same as Pending.
+  // Purple tint so operators can tell at a glance which rows came from import.
+  Imported: { bg: "#f3e5f5", color: "#6a1b9a", border: "#6a1b9a30" },
   "No PO": { bg: "#e3f2fd", color: "#0d47a1", border: "#0d47a130" },
   Invoiced: { bg: "#e8f5e9", color: "#2e7d32", border: "#2e7d3230" },
   Cancelled: { bg: "#ffebee", color: "#c62828", border: "#c6282830" },
@@ -64,7 +67,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
         {challans.map((c) => {
           const sc = statusColors[c.status] || statusColors.Pending;
           // Backend now sends `isEditable` — use it so billed-but-not-FBR-submitted challans can also be edited
-          const isEditable = c.isEditable ?? (c.status === "Pending" || c.status === "No PO" || c.status === "Setup Required");
+          const isEditable = c.isEditable ?? (c.status === "Pending" || c.status === "Imported" || c.status === "No PO" || c.status === "Setup Required");
           // Separate flag: delete/cancel is only allowed when NOT billed
           const canCancel = c.status !== "Invoiced" && isEditable;
           // Delete is only allowed on the LATEST challan so numbering stays
