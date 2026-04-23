@@ -40,7 +40,14 @@ namespace MyApp.Api.DTOs
         public decimal FixedNotifiedValueOrRetailPrice { get; set; }
         public decimal SalesTaxApplicable { get; set; }
         public decimal SalesTaxWithheldAtSource { get; set; }
-        public decimal ExtraTax { get; set; }
+        /// <summary>
+        /// FBR quirk: for reduced-rate items (SN028) this must serialise as
+        /// an empty string "" — sending `0` triggers error [0091] "Extra tax
+        /// provided where sale is of reduced rate goods". For every other
+        /// scenario it's a plain number. Typed as object so the JSON writer
+        /// emits whichever we set.
+        /// </summary>
+        public object ExtraTax { get; set; } = 0m;
         public decimal FurtherTax { get; set; }
         public string SroScheduleNo { get; set; } = "";
         public decimal FedPayable { get; set; }

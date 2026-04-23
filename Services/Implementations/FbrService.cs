@@ -567,21 +567,21 @@ namespace MyApp.Api.Services.Implementations
                 var saleType = item.SaleType ?? "Goods at standard rate (default)";
 
                 // FBR rule [0077]: "Valid SRO/Schedule No. is mandatory where rate
-                // is not 18%." For reduced-rate goods (SN028) we default to the
-                // EIGHTH SCHEDULE Table 1 + serial 70 — the canonical bucket for
-                // books / educational items and the baseline the PRAL sandbox
-                // accepts during scenario-test runs.
-                string sroScheduleNo = "";
-                string sroItemSerialNo = "";
+                // is not 18%." Prefer the operator-set value on the item; fall
+                // back to the canonical EIGHTH SCHEDULE Table 1 + serial 82 for
+                // reduced-rate scenarios so users aren't forced to configure
+                // it when they're just running the sandbox tests.
+                string sroScheduleNo = item.SroScheduleNo ?? "";
+                string sroItemSerialNo = item.SroItemSerialNo ?? "";
                 var isReducedRate = saleType.IndexOf("Reduced", StringComparison.OrdinalIgnoreCase) >= 0;
-                if (isReducedRate && invoice.GSTRate != 18m)
+                if (isReducedRate && invoice.GSTRate != 18m
+                    && string.IsNullOrWhiteSpace(sroScheduleNo))
                 {
-                    // Eighth-Schedule-Table-1 is the canonical reduced-rate
-                    // bucket accepted by the PRAL sandbox. Serial "9" is the
-                    // first entry returned by the sroitemcodes reference
-                    // endpoint and is valid across the most common items.
+                    // Per PRAL's published SN028 sample payload, the sandbox
+                    // accepts "EIGHTH SCHEDULE Table 1" + serial "70" at a 1%
+                    // rate for reduced-rate end-consumer goods.
                     sroScheduleNo = "EIGHTH SCHEDULE Table 1";
-                    sroItemSerialNo = "9";
+                    sroItemSerialNo = "70";
                 }
 
                 fbrRequest.Items.Add(new FbrInvoiceItemRequest
@@ -596,7 +596,9 @@ namespace MyApp.Api.Services.Implementations
                     FixedNotifiedValueOrRetailPrice = retailPrice,
                     SalesTaxApplicable = salesTax,
                     SalesTaxWithheldAtSource = 0,
-                    ExtraTax = 0,
+                    // Reduced-rate: FBR rejects numeric 0 with [0091], so
+                    // serialise as empty string. All other scenarios use 0.
+                    ExtraTax = isReducedRate ? (object)"" : (object)0m,
                     FurtherTax = furtherTax,
                     SroScheduleNo = sroScheduleNo,
                     FedPayable = 0,

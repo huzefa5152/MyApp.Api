@@ -37,6 +37,21 @@ namespace MyApp.Api.Models
         /// </summary>
         public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
 
+        /// <summary>
+        /// FBR SRO / Schedule reference for reduced-rate or exempt items. FBR
+        /// rejects non-18% submissions with [0077] unless this is populated.
+        /// Common values: "EIGHTH SCHEDULE Table 1", "SRO 297(I)/2023".
+        /// Null for standard-rate items.
+        /// </summary>
+        public string? SroScheduleNo { get; set; }
+
+        /// <summary>
+        /// Serial No. from the referenced SRO/Schedule's item table. FBR
+        /// rejects with [0078] if SroScheduleNo is set but this is missing
+        /// or invalid. Values are lookups from PRAL's sroitemcodes API.
+        /// </summary>
+        public string? SroItemSerialNo { get; set; }
+
         // Navigation
         public Invoice Invoice { get; set; } = null!;
         public DeliveryItem? DeliveryItem { get; set; }
