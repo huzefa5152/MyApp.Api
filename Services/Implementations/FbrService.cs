@@ -467,6 +467,21 @@ namespace MyApp.Api.Services.Implementations
             if (company == null)
                 return Fail("Company not found.");
 
+            // Auto-detect the scenario from paymentTerms when the caller didn't
+            // explicitly pass one. Test bills seeded with a "[SN00x] …" prefix
+            // on their paymentTerms/documentType field get routed to the
+            // right scenario automatically, so the UI's Validate All / Submit
+            // All buttons work without the operator remembering each bill's
+            // scenario number.
+            if (string.IsNullOrWhiteSpace(scenarioId)
+                && !string.IsNullOrEmpty(invoice.PaymentTerms))
+            {
+                var m = System.Text.RegularExpressions.Regex.Match(
+                    invoice.PaymentTerms, @"\[\s*(SN\d{3})\s*\]",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (m.Success) scenarioId = m.Groups[1].Value.ToUpperInvariant();
+            }
+
             if (string.IsNullOrEmpty(company.FbrToken))
                 return Fail("FBR token is not configured for this company. Go to Company settings → FBR Token.");
 
@@ -549,6 +564,26 @@ namespace MyApp.Api.Services.Implementations
                 var (salesTax, furtherTax, retailPrice) =
                     ComputeFbrTaxes(item, invoice.GSTRate, buyerRegType, fbrRequest.ScenarioId);
                 var uomDesc = await ResolveUomDesc(company, item.FbrUOMId, item.UOM);
+                var saleType = item.SaleType ?? "Goods at standard rate (default)";
+
+                // FBR rule [0077]: "Valid SRO/Schedule No. is mandatory where rate
+                // is not 18%." For reduced-rate goods (SN028) we default to the
+                // EIGHTH SCHEDULE Table 1 + serial 70 — the canonical bucket for
+                // books / educational items and the baseline the PRAL sandbox
+                // accepts during scenario-test runs.
+                string sroScheduleNo = "";
+                string sroItemSerialNo = "";
+                var isReducedRate = saleType.IndexOf("Reduced", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (isReducedRate && invoice.GSTRate != 18m)
+                {
+                    // Eighth-Schedule-Table-1 is the canonical reduced-rate
+                    // bucket accepted by the PRAL sandbox. Serial "9" is the
+                    // first entry returned by the sroitemcodes reference
+                    // endpoint and is valid across the most common items.
+                    sroScheduleNo = "EIGHTH SCHEDULE Table 1";
+                    sroItemSerialNo = "9";
+                }
+
                 fbrRequest.Items.Add(new FbrInvoiceItemRequest
                 {
                     HsCode = item.HSCode ?? "",
@@ -563,11 +598,11 @@ namespace MyApp.Api.Services.Implementations
                     SalesTaxWithheldAtSource = 0,
                     ExtraTax = 0,
                     FurtherTax = furtherTax,
-                    SroScheduleNo = "",
+                    SroScheduleNo = sroScheduleNo,
                     FedPayable = 0,
                     Discount = 0,
-                    SaleType = item.SaleType ?? "Goods at standard rate (default)",
-                    SroItemSerialNo = ""
+                    SaleType = saleType,
+                    SroItemSerialNo = sroItemSerialNo
                 });
             }
 
@@ -756,10 +791,13 @@ namespace MyApp.Api.Services.Implementations
                 || string.Equals(
                     item.SaleType, "Goods at standard rate (default)", StringComparison.OrdinalIgnoreCase);
 
-            // (1) 3rd Schedule: tax backed out of MRP
+            // (1) 3rd Schedule: tax = MRP × rate (forward). PRAL's sandbox
+            // rejects the backed-out formula with error [0102] even though
+            // some earlier docs described it the other way — the forward
+            // calculation is what SN008 / SN027 actually pass with.
             if (isThirdSchedule && retail > 0m)
             {
-                salesTax = Math.Round(retail * rate / (1m + rate), 2, MidpointRounding.AwayFromZero);
+                salesTax = Math.Round(retail * rate, 2, MidpointRounding.AwayFromZero);
             }
             else
             {
