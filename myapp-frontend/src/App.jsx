@@ -8,6 +8,7 @@ import ChallansPage from "./pages/ChallanPage";
 import InvoicePage from "./pages/InvoicePage";
 import ClientsPage from "./pages/ClientsPage";
 import ItemTypesPage from "./pages/ItemTypesPage";
+import POFormatsPage from "./pages/POFormatsPage";
 import ProfilePage from "./pages/ProfilePage";
 import UsersPage from "./pages/UsersPage";
 import TemplateEditorPage from "./pages/TemplateEditorPage";
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="/companies/*" element={<CompanyPage />} />
           <Route path="/Clients/*" element={<ClientsPage />} />
           <Route path="/item-types" element={<ItemTypesPage />} />
+          <Route path="/po-formats" element={<POFormatsPage />} />
           <Route path="/challans" element={<ChallansPage />} />
           <Route path="/invoices" element={<InvoicePage />} />
           <Route path="/profile" element={<ProfilePage />} />

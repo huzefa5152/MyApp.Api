@@ -212,6 +212,13 @@ namespace MyApp.Api.Data
                 .WithMany()
                 .HasForeignKey(f => f.CompanyId)
                 .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<POFormat>()
+                .HasOne(f => f.Client)
+                .WithMany()
+                .HasForeignKey(f => f.ClientId)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<POFormat>()
+                .HasIndex(f => new { f.CompanyId, f.ClientId });
 
             modelBuilder.Entity<POFormatVersion>()
                 .HasIndex(v => new { v.POFormatId, v.Version })

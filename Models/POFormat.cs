@@ -11,9 +11,16 @@ namespace MyApp.Api.Models
         // Human-friendly label set during onboarding, e.g. "Acme Industries PO v1".
         public string Name { get; set; } = "";
 
-        // Optional company scope. Null = globally available across all companies.
+        // Company scope. POFormats are always owned by one of our companies
+        // (the buyer's side). Required in the new onboarding UI.
         public int? CompanyId { get; set; }
         public Company? Company { get; set; }
+
+        // Client scope — which client (vendor) this PO template belongs to.
+        // Each (CompanyId, ClientId) pair has exactly one format in the
+        // Configuration UI; null = legacy pre-ClientId format.
+        public int? ClientId { get; set; }
+        public Client? Client { get; set; }
 
         // SHA-256 (hex) of the normalised, sorted keyword signature.
         // Exact match on this is the primary routing mechanism.

@@ -131,9 +131,20 @@ namespace MyApp.Api.Services.Implementations
 
             var (items, totalCount) = await _repository.GetPagedByCompanyAsync(
                 companyId, page, pageSize, search, status, clientId, dateFrom, dateTo);
+
+            // Gate the Delete button client-side — only the highest-numbered
+            // challan for this company is deletable.
+            var maxNumber = await _context.DeliveryChallans
+                .Where(c => c.CompanyId == companyId)
+                .MaxAsync(c => (int?)c.ChallanNumber) ?? 0;
+
+            var dtos = items.Select(ToDto).ToList();
+            foreach (var d in dtos)
+                d.IsLatest = d.ChallanNumber == maxNumber;
+
             return new PagedResult<DeliveryChallanDto>
             {
-                Items = items.Select(ToDto).ToList(),
+                Items = dtos,
                 TotalCount = totalCount,
                 Page = page,
                 PageSize = pageSize
@@ -376,6 +387,18 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("Cannot delete a challan that has been billed. Delete the bill first to revert the challan.");
             if (!IsEditable(dc))
                 throw new InvalidOperationException("Can only delete Pending, No PO, or Setup Required challans.");
+
+            // Only the LAST challan (highest number) can be deleted so the
+            // numbering sequence stays gap-free. If someone tries to delete
+            // an earlier one, they should edit it instead.
+            var maxNumber = await _context.DeliveryChallans
+                .Where(c => c.CompanyId == dc.CompanyId)
+                .MaxAsync(c => (int?)c.ChallanNumber) ?? 0;
+            if (dc.ChallanNumber != maxNumber)
+                throw new InvalidOperationException(
+                    $"Only the latest challan can be deleted (currently #{maxNumber}). " +
+                    $"To change challan #{dc.ChallanNumber}, edit it instead — " +
+                    "deleting earlier challans would leave gaps in the numbering.");
 
             var companyId = dc.CompanyId;
             await _repository.DeleteAsync(dc);

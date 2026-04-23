@@ -7,6 +7,7 @@
         public string? FullAddress { get; set; }
         public string? Phone { get; set; }
         public string? NTN { get; set; }
+        public string? CNIC { get; set; }
         public string? STRN { get; set; }
         public string? LogoPath { get; set; }
         public int StartingChallanNumber { get; set; }

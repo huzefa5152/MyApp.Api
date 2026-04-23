@@ -9,13 +9,17 @@ using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
 {
+    // Thin router around the rule-based parser. Every incoming PDF is
+    // fingerprinted and routed to the POFormat an operator onboarded for
+    // that layout. If no format matches we return HTTP 404 with a clean
+    // "format not saved" payload — the UI then asks the user to fill the
+    // challan manually instead of surfacing half-parsed garbage.
     [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class POImportController : ControllerBase
     {
         private readonly IPOParserService _parser;
-        private readonly ILlmPOParserService _llmParser;
         private readonly IPOFormatRegistry _formatRegistry;
         private readonly IRuleBasedPOParser _ruleParser;
         private readonly AppDbContext _context;
@@ -23,14 +27,12 @@ namespace MyApp.Api.Controllers
 
         public POImportController(
             IPOParserService parser,
-            ILlmPOParserService llmParser,
             IPOFormatRegistry formatRegistry,
             IRuleBasedPOParser ruleParser,
             AppDbContext context,
             ILogger<POImportController> logger)
         {
             _parser = parser;
-            _llmParser = llmParser;
             _formatRegistry = formatRegistry;
             _ruleParser = ruleParser;
             _context = context;
@@ -38,7 +40,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPost("parse-pdf")]
-        [RequestSizeLimit(10 * 1024 * 1024)] // 10 MB
+        [RequestSizeLimit(10 * 1024 * 1024)]
         public async Task<IActionResult> ParsePdf(IFormFile file, [FromQuery] int? companyId)
         {
             if (file == null || file.Length == 0)
@@ -51,76 +53,21 @@ namespace MyApp.Api.Controllers
             try
             {
                 using var stream = file.OpenReadStream();
-
-                // Step 1: Extract text from PDF (always needed)
                 var rawText = _parser.ExtractTextFromPdf(stream);
 
                 if (string.IsNullOrWhiteSpace(rawText))
-                    return Ok(new ParsedPODto
+                    return UnprocessableEntity(new ParseMissDto
                     {
+                        Reason = "unreadable",
+                        Message = "Could not extract text from this PDF — it may be scanned/image-based. Please fill the challan manually.",
                         RawText = "",
-                        Warnings = new List<string> { "Could not extract text from PDF. The file may be scanned/image-based. Please try pasting the text manually." }
                     });
 
-                // Step 2: Rule-based parser (deterministic, no LLM). If the
-                // format fingerprint matches a seeded/onboarded POFormat and
-                // the rule-set actually produces items, we short-circuit here
-                // and never call Gemini — this is the goal of the whole system.
-                var match = await _formatRegistry.FindMatchAsync(rawText, companyId);
-                if (match != null && match.IsExactMatch)
-                {
-                    var ruleResult = _ruleParser.Parse(rawText, match.Format);
-                    if (ruleResult.Items.Count > 0 || !string.IsNullOrEmpty(ruleResult.PONumber))
-                    {
-                        ruleResult.MatchedFormatId = match.Format.Id;
-                        ruleResult.MatchedFormatName = match.Format.Name;
-                        ruleResult.MatchedFormatVersion = match.Format.CurrentVersion;
-                        ruleResult.Warnings.Insert(0, $"✓ Parsed using saved format: {match.Format.Name} (v{match.Format.CurrentVersion})");
-                        _logger.LogInformation("Parsed via rule-set: formatId={Id} items={Items}", match.Format.Id, ruleResult.Items.Count);
-                        return Ok(ruleResult);
-                    }
-                    _logger.LogInformation("Rule-set for format {Id} matched but produced no output — falling back", match.Format.Id);
-                }
-
-                // Step 3: Try LLM parser (Gemini) for unknown formats.
-                var llmFailed = false;
-                if (_llmParser.IsConfigured)
-                {
-                    var llmResult = await _llmParser.ParseWithLlmAsync(rawText);
-                    if (llmResult != null && (llmResult.Items.Count > 0 || llmResult.PONumber != null))
-                    {
-                        // If we had a fuzzy (non-exact) format match, surface the suggestion
-                        // so the operator can decide whether to onboard this as a new format.
-                        if (match != null && !match.IsExactMatch)
-                            llmResult.Warnings.Insert(0, $"ℹ This layout resembles '{match.Format.Name}' ({match.Similarity:P0} similar). Consider onboarding it.");
-                        return Ok(llmResult);
-                    }
-                    llmFailed = true;
-                }
-
-                // Step 4: Fall back to position-based PDF parser.
-                stream.Position = 0;
-                var result = _parser.ParsePdf(stream);
-
-                if (llmFailed)
-                {
-                    result.Warnings.Insert(0,
-                        "⚠ AI parser (Gemini) unavailable — likely daily free-tier quota hit. " +
-                        "Using basic fallback parser; results may be inaccurate. Please review each " +
-                        "field carefully, or try again tomorrow. For reliable high-volume parsing " +
-                        "consider upgrading to a paid Gemini API key.");
-                }
-
-                if (string.IsNullOrWhiteSpace(result.RawText))
-                {
-                    result.RawText = rawText;
-                    result.Warnings.Add("Could not extract text from PDF. The file may be scanned/image-based. Please try pasting the text manually.");
-                }
-
-                return Ok(result);
+                return await RouteParseAsync(rawText, companyId);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "PO PDF parse failed");
                 return BadRequest(new { error = $"Failed to process PDF: {ex.Message}" });
             }
         }
@@ -131,35 +78,54 @@ namespace MyApp.Api.Controllers
             if (string.IsNullOrWhiteSpace(request.Text))
                 return BadRequest(new { error = "No text provided." });
 
-            // Same pipeline as parse-pdf: rule-set first, then LLM, then regex.
-            var match = await _formatRegistry.FindMatchAsync(request.Text, companyId);
-            if (match != null && match.IsExactMatch)
+            return await RouteParseAsync(request.Text, companyId);
+        }
+
+        // Common routing. Finds the onboarded POFormat whose fingerprint
+        // matches the incoming PDF text and runs the stored rules against
+        // it. No LLM, no generic fallback — operator onboards each client
+        // layout once through the Configuration UI.
+        private async Task<IActionResult> RouteParseAsync(string rawText, int? companyId)
+        {
+            var match = await _formatRegistry.FindMatchAsync(rawText, companyId);
+            // Accept both exact hash matches AND high-confidence fuzzy matches
+            // (Jaccard ≥ 0.70, enforced upstream in POFormatRegistry). Fuzzy
+            // matches catch the common case where two POs from the same client
+            // share all template labels but differ by a single stray `#` in
+            // the Remarks section (e.g. "For unit # 1 Lhr..." vs "For QC Depart").
+            if (match == null)
             {
-                var ruleResult = _ruleParser.Parse(request.Text, match.Format);
-                if (ruleResult.Items.Count > 0 || !string.IsNullOrEmpty(ruleResult.PONumber))
+                _logger.LogInformation("No PO format matched — returning miss payload");
+                return UnprocessableEntity(new ParseMissDto
                 {
-                    ruleResult.MatchedFormatId = match.Format.Id;
-                    ruleResult.MatchedFormatName = match.Format.Name;
-                    ruleResult.MatchedFormatVersion = match.Format.CurrentVersion;
-                    ruleResult.Warnings.Insert(0, $"✓ Parsed using saved format: {match.Format.Name} (v{match.Format.CurrentVersion})");
-                    return Ok(ruleResult);
-                }
+                    Reason = "no-format",
+                    Message = "No PO format has been saved for this client yet. Go to Configuration → PO Formats, add a format using a sample PDF, and try again. For now please fill the challan details manually.",
+                    RawText = rawText,
+                });
             }
 
-            // Regex for text paste (user-pasted text is usually well-structured)
-            var result = _parser.ParsePO(request.Text);
-            if (result.Items.Count > 0)
-                return Ok(result);
-
-            // LLM fallback when regex finds no items
-            if (_llmParser.IsConfigured)
+            var ruleResult = _ruleParser.Parse(rawText, match.Format);
+            if (ruleResult.Items.Count == 0 && string.IsNullOrEmpty(ruleResult.PONumber))
             {
-                var llmResult = await _llmParser.ParseWithLlmAsync(request.Text);
-                if (llmResult != null && (llmResult.Items.Count > 0 || llmResult.PONumber != null))
-                    return Ok(llmResult);
+                _logger.LogInformation("Format {Id} matched but rule-set produced empty result", match.Format.Id);
+                return UnprocessableEntity(new ParseMissDto
+                {
+                    Reason = "rules-empty",
+                    Message = $"The PO format '{match.Format.Name}' matched this PDF but didn't produce any fields. The sample or headers may be stale — edit the format in Configuration → PO Formats.",
+                    RawText = rawText,
+                    MatchedFormatId = match.Format.Id,
+                    MatchedFormatName = match.Format.Name,
+                });
             }
 
-            return Ok(result);
+            ruleResult.MatchedFormatId = match.Format.Id;
+            ruleResult.MatchedFormatName = match.Format.Name;
+            ruleResult.MatchedFormatVersion = match.Format.CurrentVersion;
+            // Strip internal diagnostic warnings from the response — the UI
+            // only cares about the extracted fields now.
+            ruleResult.Warnings = new List<string>();
+            _logger.LogInformation("Parsed via rule-set: formatId={Id} items={Items}", match.Format.Id, ruleResult.Items.Count);
+            return Ok(ruleResult);
         }
 
         [HttpPost("ensure-lookups")]
@@ -168,7 +134,6 @@ namespace MyApp.Api.Controllers
             var createdItems = new List<string>();
             var createdUnits = new List<string>();
 
-            // Auto-create missing item descriptions
             if (request.Descriptions?.Any() == true)
             {
                 var distinct = request.Descriptions
@@ -189,7 +154,6 @@ namespace MyApp.Api.Controllers
                 }
             }
 
-            // Auto-create missing units
             if (request.Units?.Any() == true)
             {
                 var distinct = request.Units
@@ -216,7 +180,7 @@ namespace MyApp.Api.Controllers
             }
             catch (DbUpdateException ex) when (ex.InnerException is SqlException sqlEx && (sqlEx.Number == 2601 || sqlEx.Number == 2627))
             {
-                // Ignore duplicate key errors (race condition)
+                // Race on concurrent inserts — ignore, the row we'd have added already exists.
             }
 
             return Ok(new { createdItems, createdUnits });
@@ -227,5 +191,16 @@ namespace MyApp.Api.Controllers
     {
         public List<string> Descriptions { get; set; } = new();
         public List<string> Units { get; set; } = new();
+    }
+
+    // Returned with HTTP 422 when we couldn't parse the PDF — tells the UI
+    // exactly why and whether the raw text is worth showing.
+    public class ParseMissDto
+    {
+        public string Reason { get; set; } = "";       // "no-format", "rules-empty", "unreadable"
+        public string Message { get; set; } = "";
+        public string RawText { get; set; } = "";
+        public int? MatchedFormatId { get; set; }
+        public string? MatchedFormatName { get; set; }
     }
 }

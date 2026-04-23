@@ -55,7 +55,7 @@ export default function DashboardLayout() {
   const userMenuRef = useRef(null);
 
   // Auto-expand Configuration submenu if a child route is active
-  const isConfigActive = location.pathname.startsWith("/companies") || location.pathname.startsWith("/Clients") || location.pathname.startsWith("/item-types") || location.pathname.startsWith("/templates") || location.pathname.startsWith("/fbr-settings");
+  const isConfigActive = location.pathname.startsWith("/companies") || location.pathname.startsWith("/Clients") || location.pathname.startsWith("/item-types") || location.pathname.startsWith("/po-formats") || location.pathname.startsWith("/templates") || location.pathname.startsWith("/fbr-settings");
   useEffect(() => {
     if (isConfigActive) setConfigOpen(true);
   }, [isConfigActive]);
@@ -173,6 +173,15 @@ export default function DashboardLayout() {
               >
                 <MdCategory aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
                 Item Types
+              </NavLink>
+              <NavLink
+                to="/po-formats"
+                className={({ isActive }) =>
+                  "dl-submenu__item" + (isActive ? " active" : "")
+                }
+              >
+                <MdDescription aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
+                PO Formats
               </NavLink>
               <NavLink
                 to="/templates"

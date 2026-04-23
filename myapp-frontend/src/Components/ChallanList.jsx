@@ -66,7 +66,10 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
           // Backend now sends `isEditable` — use it so billed-but-not-FBR-submitted challans can also be edited
           const isEditable = c.isEditable ?? (c.status === "Pending" || c.status === "No PO" || c.status === "Setup Required");
           // Separate flag: delete/cancel is only allowed when NOT billed
-          const canDeleteOrCancel = c.status !== "Invoiced" && isEditable;
+          const canCancel = c.status !== "Invoiced" && isEditable;
+          // Delete is only allowed on the LATEST challan so numbering stays
+          // gap-free — earlier challans must be edited instead.
+          const canDelete = canCancel && c.isLatest === true;
           const hasWarnings = c.warnings && c.warnings.length > 0;
           return (
             <div
@@ -149,21 +152,22 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       <MdEdit size={14} /> Edit
                     </button>
                   )}
-                  {canDeleteOrCancel && (
-                    <>
-                      <button
-                        style={{ ...styles.actionBtn, ...styles.cancelBtn }}
-                        onClick={() => onCancel?.(c)}
-                      >
-                        <MdCancel size={14} /> Cancel
-                      </button>
-                      <button
-                        style={{ ...styles.actionBtn, ...styles.deleteBtn }}
-                        onClick={() => onDelete?.(c)}
-                      >
-                        <MdDelete size={14} /> Delete
-                      </button>
-                    </>
+                  {canCancel && (
+                    <button
+                      style={{ ...styles.actionBtn, ...styles.cancelBtn }}
+                      onClick={() => onCancel?.(c)}
+                    >
+                      <MdCancel size={14} /> Cancel
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button
+                      style={{ ...styles.actionBtn, ...styles.deleteBtn }}
+                      onClick={() => onDelete?.(c)}
+                      title="Only the latest challan can be deleted — earlier ones must be edited to keep numbering gap-free."
+                    >
+                      <MdDelete size={14} /> Delete
+                    </button>
                   )}
                 </div>
               </div>

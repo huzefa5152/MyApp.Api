@@ -9,6 +9,13 @@ using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
 {
+    // PO format authoring surface. Each client's PO layout is onboarded once
+    // through the Configuration → PO Formats UI:
+    //   1. Operator uploads a sample PDF → we extract text + compute a hash
+    //   2. Operator picks the client + fills 5 label/header strings
+    //   3. We store a "simple-headers-v1" rule-set keyed on the hash
+    // Future PDFs with the same layout route through these rules with no
+    // LLM call or regex authoring needed.
     [Authorize]
     [ApiController]
     [Route("api/[controller]")]
@@ -17,7 +24,6 @@ namespace MyApp.Api.Controllers
         private readonly IPOFormatRegistry _registry;
         private readonly IPOFormatFingerprintService _fingerprint;
         private readonly IPOParserService _rawParser;
-        private readonly IRegressionService _regression;
         private readonly AppDbContext _db;
 
         private static readonly JsonSerializerOptions JsonOpts = new()
@@ -30,67 +36,52 @@ namespace MyApp.Api.Controllers
             IPOFormatRegistry registry,
             IPOFormatFingerprintService fingerprint,
             IPOParserService rawParser,
-            IRegressionService regression,
             AppDbContext db)
         {
             _registry = registry;
             _fingerprint = fingerprint;
             _rawParser = rawParser;
-            _regression = regression;
             _db = db;
         }
 
+        // List formats, optionally filtered by companyId and/or clientId.
         [HttpGet]
-        public async Task<ActionResult<List<POFormatListItemDto>>> List([FromQuery] int? companyId)
+        public async Task<ActionResult<List<POFormatListItemDto>>> List([FromQuery] int? companyId, [FromQuery] int? clientId)
         {
-            var formats = await _registry.ListAsync(companyId);
+            var q = _db.POFormats
+                .AsNoTracking()
+                .Include(f => f.Company)
+                .Include(f => f.Client)
+                .AsQueryable();
+
+            if (companyId.HasValue)
+                q = q.Where(f => f.CompanyId == companyId.Value || f.CompanyId == null);
+            if (clientId.HasValue)
+                q = q.Where(f => f.ClientId == clientId.Value);
+
+            var formats = await q.OrderByDescending(f => f.UpdatedAt).ToListAsync();
             return Ok(formats.Select(ToListItemDto).ToList());
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<POFormatDto>> Get(int id)
         {
-            var f = await _registry.GetAsync(id);
+            var f = await _db.POFormats
+                .AsNoTracking()
+                .Include(x => x.Company)
+                .Include(x => x.Client)
+                .FirstOrDefaultAsync(x => x.Id == id);
             if (f == null) return NotFound();
             return Ok(ToDto(f));
         }
 
-        [HttpGet("{id}/versions")]
-        public async Task<ActionResult<List<POFormatVersionDto>>> Versions(int id)
-        {
-            var versions = await _registry.GetVersionsAsync(id);
-            return Ok(versions.Select(ToVersionDto).ToList());
-        }
-
-        // Takes either { rawText } or a PDF upload and returns the fingerprint
-        // + any format match. The operator UI uses this during onboarding to
-        // check "is this format already known?" before starting a rule-authoring
-        // session with the LLM.
-        [HttpPost("fingerprint")]
-        public async Task<ActionResult<FingerprintResponseDto>> Fingerprint([FromBody] FingerprintRequestDto req)
-        {
-            if (string.IsNullOrWhiteSpace(req.RawText))
-                return BadRequest(new { error = "rawText is required." });
-
-            var fp = _fingerprint.Compute(req.RawText);
-            var match = await _registry.FindMatchAsync(req.RawText, req.CompanyId);
-
-            return Ok(new FingerprintResponseDto
-            {
-                Hash = fp.Hash,
-                Signature = fp.Signature,
-                Keywords = fp.Keywords.ToList(),
-                MatchedFormat = match != null ? ToDto(match.Format) : null,
-                MatchSimilarity = match?.Similarity,
-                IsExactMatch = match?.IsExactMatch ?? false,
-            });
-        }
-
-        // Convenience endpoint: upload a PDF, extract text server-side, return
-        // fingerprint + match. Avoids the caller having to run PdfPig itself.
+        // Upload a sample PDF, get back the extracted raw text + any existing
+        // format that matches the fingerprint. The UI uses this during
+        // onboarding to show "this layout is already saved as X" before the
+        // operator creates a duplicate.
         [HttpPost("fingerprint-pdf")]
         [RequestSizeLimit(10 * 1024 * 1024)]
-        public async Task<ActionResult<FingerprintResponseDto>> FingerprintPdf(IFormFile file, [FromQuery] int? companyId)
+        public async Task<ActionResult<FingerprintPdfResponseDto>> FingerprintPdf(IFormFile file, [FromQuery] int? companyId)
         {
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file uploaded." });
@@ -98,22 +89,25 @@ namespace MyApp.Api.Controllers
             using var stream = file.OpenReadStream();
             var rawText = _rawParser.ExtractTextFromPdf(stream);
             if (string.IsNullOrWhiteSpace(rawText))
-                return Ok(new FingerprintResponseDto());
+                return BadRequest(new { error = "Could not extract text from the PDF. It may be scanned/image-based." });
 
             var fp = _fingerprint.Compute(rawText);
             var match = await _registry.FindMatchAsync(rawText, companyId);
 
-            return Ok(new FingerprintResponseDto
+            return Ok(new FingerprintPdfResponseDto
             {
+                RawText = rawText,
                 Hash = fp.Hash,
-                Signature = fp.Signature,
                 Keywords = fp.Keywords.ToList(),
                 MatchedFormat = match != null ? ToDto(match.Format) : null,
-                MatchSimilarity = match?.Similarity,
                 IsExactMatch = match?.IsExactMatch ?? false,
             });
         }
 
+        // Power-user path: full ruleset JSON. Exposed for the rare case where
+        // simple-headers-v1 can't handle a layout (e.g. Lotte Kolson PDFs
+        // with a delivery-date column between description and qty). 99% of
+        // clients should use /simple instead.
         [HttpPost]
         public async Task<ActionResult<POFormatDto>> Create([FromBody] POFormatCreateDto dto)
         {
@@ -127,133 +121,151 @@ namespace MyApp.Api.Controllers
             return CreatedAtAction(nameof(Get), new { id = format.Id }, ToDto(format));
         }
 
-        // Gated rule update. Regression harness runs against every verified
-        // golden sample before the change is committed. If anything regresses
-        // OR the candidate rule leaks into another format's samples, the
-        // update is refused with HTTP 409 and the full regression report.
-        // Pass ?force=true to bypass the gate (dangerous — operator override
-        // for bootstrap scenarios where the regression set itself is wrong).
-        [HttpPut("{id}/rules")]
-        public async Task<ActionResult<object>> UpdateRules(int id, [FromBody] POFormatUpdateRulesDto dto, [FromQuery] bool force = false)
+        // Primary onboarding path. Operator gives us 5 label/header strings
+        // + the sample PDF's raw text. Server builds a simple-headers-v1
+        // rule-set and saves the format.
+        [HttpPost("simple")]
+        public async Task<ActionResult<POFormatDto>> CreateSimple([FromBody] POFormatSimpleCreateDto dto)
         {
-            var updatedBy = User?.Identity?.Name;
-            var (format, report) = await _registry.UpdateRulesAsync(id, dto.RuleSetJson, dto.ChangeNote, updatedBy, enforceRegression: !force);
+            if (string.IsNullOrWhiteSpace(dto.Name))
+                return BadRequest(new { error = "name is required." });
+            if (string.IsNullOrWhiteSpace(dto.RawText))
+                return BadRequest(new { error = "rawText is required — upload a sample PDF first." });
+            if (string.IsNullOrWhiteSpace(dto.DescriptionHeader)
+                || string.IsNullOrWhiteSpace(dto.QuantityHeader)
+                || string.IsNullOrWhiteSpace(dto.UnitHeader))
+                return BadRequest(new { error = "descriptionHeader, quantityHeader and unitHeader are all required." });
 
-            if (format == null)
+            // Dedup — one format per (company, client) pair. Operator should
+            // edit the existing one instead of creating a duplicate.
+            if (dto.ClientId.HasValue)
             {
-                if (report.TotalSamples == 0 && !force)
-                    return NotFound();
-                return Conflict(new
-                {
-                    error = "Regression gate refused the rule-set update. Previously-verified samples would regress or the candidate rule leaks into another format.",
-                    report
-                });
+                var existing = await _db.POFormats
+                    .FirstOrDefaultAsync(f => f.CompanyId == dto.CompanyId && f.ClientId == dto.ClientId);
+                if (existing != null)
+                    return Conflict(new { error = $"A PO format already exists for this client ('{existing.Name}'). Edit it instead of creating a duplicate.", existingId = existing.Id });
             }
 
-            return Ok(new { format = ToDto(format), report });
-        }
+            var ruleSet = BuildSimpleRuleSet(dto);
+            var ruleSetJson = JsonSerializer.Serialize(ruleSet, JsonOpts);
 
-        // Manual test — run a candidate rule-set against stored samples or
-        // arbitrary text WITHOUT committing. Powers the preview/diff view
-        // before the operator clicks "Save".
-        [HttpPost("{id}/test")]
-        public async Task<ActionResult<RegressionReportDto>> TestRules(int id, [FromBody] TestRuleSetRequestDto dto)
-        {
-            if (string.IsNullOrWhiteSpace(dto.RuleSetJson))
-                return BadRequest(new { error = "ruleSetJson is required." });
-
-            var report = await _regression.TestRuleSetAsync(id, dto.RuleSetJson, crossFormatCheck: true);
-
-            if (!string.IsNullOrWhiteSpace(dto.AdditionalRawText))
+            var createDto = new POFormatCreateDto
             {
-                var format = await _db.POFormats.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id);
-                var dryRun = _regression.DryRun(dto.RuleSetJson, dto.AdditionalRawText, format?.Name ?? $"format#{id}");
-                report.Outcomes.AddRange(dryRun.Outcomes);
-                report.TotalSamples += dryRun.TotalSamples;
-                report.PassedSamples += dryRun.PassedSamples;
-            }
+                Name = dto.Name,
+                CompanyId = dto.CompanyId,
+                ClientId = dto.ClientId,
+                RawText = dto.RawText,
+                RuleSetJson = ruleSetJson,
+                Notes = dto.Notes,
+            };
 
-            return Ok(report);
+            var createdBy = User?.Identity?.Name;
+            var format = await _registry.CreateAsync(createDto, createdBy);
+            return CreatedAtAction(nameof(Get), new { id = format.Id }, ToDto(format));
         }
 
-        // --- golden samples ---
-
-        [HttpGet("{id}/samples")]
-        public async Task<ActionResult<List<POGoldenSampleDto>>> ListSamples(int id)
-        {
-            var samples = await _db.POGoldenSamples.AsNoTracking()
-                .Where(s => s.POFormatId == id)
-                .OrderByDescending(s => s.CreatedAt)
-                .ToListAsync();
-            return Ok(samples.Select(ToSampleDto).ToList());
-        }
-
-        // Store a verified extraction example for a format. Subsequent rule
-        // changes will be replayed against this to guarantee they don't
-        // regress. Status defaults to "verified" — callers can pass the
-        // raw text that was parsed + the expected output the operator
-        // confirmed was correct.
-        [HttpPost("{id}/samples")]
-        public async Task<ActionResult<POGoldenSampleDto>> AddSample(int id, [FromBody] POGoldenSampleCreateDto dto)
+        // Edit the 5 fields + metadata in place. If the operator uploads a
+        // new sample PDF (RawText is passed), we also recompute the
+        // fingerprint hash — useful when the client's template changed.
+        [HttpPut("{id}/simple")]
+        public async Task<ActionResult<POFormatDto>> UpdateSimple(int id, [FromBody] POFormatSimpleUpdateDto dto)
         {
             var format = await _db.POFormats.FirstOrDefaultAsync(f => f.Id == id);
             if (format == null) return NotFound();
-            if (string.IsNullOrWhiteSpace(dto.RawText))
-                return BadRequest(new { error = "rawText is required." });
-            if (string.IsNullOrWhiteSpace(dto.Name))
-                return BadRequest(new { error = "name is required." });
+            if (string.IsNullOrWhiteSpace(dto.DescriptionHeader)
+                || string.IsNullOrWhiteSpace(dto.QuantityHeader)
+                || string.IsNullOrWhiteSpace(dto.UnitHeader))
+                return BadRequest(new { error = "descriptionHeader, quantityHeader and unitHeader are all required." });
 
-            byte[]? pdfBlob = null;
-            if (!string.IsNullOrWhiteSpace(dto.PdfBase64))
+            // Dedup on edit — if the operator re-assigns to a different
+            // client that already has a format, surface a clear conflict.
+            if (dto.ClientId.HasValue && dto.ClientId != format.ClientId)
             {
-                try { pdfBlob = Convert.FromBase64String(dto.PdfBase64); }
-                catch { /* ignore malformed — sample is still usable without the PDF */ }
+                var dupe = await _db.POFormats
+                    .FirstOrDefaultAsync(f => f.Id != id && f.CompanyId == format.CompanyId && f.ClientId == dto.ClientId);
+                if (dupe != null)
+                    return Conflict(new { error = $"Another PO format already exists for that client ('{dupe.Name}').", existingId = dupe.Id });
             }
 
-            var sample = new POGoldenSample
+            format.Name = dto.Name?.Trim() ?? format.Name;
+            format.IsActive = dto.IsActive;
+            format.ClientId = dto.ClientId;
+            format.Notes = dto.Notes;
+
+            // Optional: replace sample text + recompute fingerprint
+            if (!string.IsNullOrWhiteSpace(dto.RawText))
             {
-                POFormatId = id,
-                Name = dto.Name.Trim(),
-                OriginalFileName = dto.OriginalFileName,
-                RawText = dto.RawText,
-                ExpectedJson = JsonSerializer.Serialize(dto.Expected, JsonOpts),
-                Notes = dto.Notes,
-                PdfBlob = pdfBlob,
-                Status = "verified",
+                var fp = _fingerprint.Compute(dto.RawText);
+                format.SignatureHash = fp.Hash;
+                format.KeywordSignature = fp.Signature;
+            }
+
+            var ruleSet = BuildSimpleRuleSet(new POFormatSimpleCreateDto
+            {
+                PoNumberLabel = dto.PoNumberLabel,
+                PoDateLabel = dto.PoDateLabel,
+                DescriptionHeader = dto.DescriptionHeader,
+                QuantityHeader = dto.QuantityHeader,
+                UnitHeader = dto.UnitHeader,
+            });
+            format.RuleSetJson = JsonSerializer.Serialize(ruleSet, JsonOpts);
+            format.CurrentVersion += 1;
+            format.UpdatedAt = DateTime.UtcNow;
+
+            _db.POFormatVersions.Add(new POFormatVersion
+            {
+                POFormatId = format.Id,
+                Version = format.CurrentVersion,
+                RuleSetJson = format.RuleSetJson,
+                ChangeNote = "Edited via simple form",
                 CreatedBy = User?.Identity?.Name,
                 CreatedAt = DateTime.UtcNow,
-            };
-            _db.POGoldenSamples.Add(sample);
+            });
+
             await _db.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(ListSamples), new { id }, ToSampleDto(sample));
+            var reloaded = await _db.POFormats
+                .AsNoTracking()
+                .Include(f => f.Company)
+                .Include(f => f.Client)
+                .FirstAsync(f => f.Id == id);
+            return Ok(ToDto(reloaded));
         }
 
-        [HttpDelete("samples/{sampleId}")]
-        public async Task<IActionResult> DeleteSample(int sampleId)
+        // Hard delete. The versions and any golden samples cascade via FK
+        // config in AppDbContext.
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(int id)
         {
-            var sample = await _db.POGoldenSamples.FirstOrDefaultAsync(s => s.Id == sampleId);
-            if (sample == null) return NotFound();
-            _db.POGoldenSamples.Remove(sample);
+            var format = await _db.POFormats.FirstOrDefaultAsync(f => f.Id == id);
+            if (format == null) return NotFound();
+
+            _db.POFormats.Remove(format);
             await _db.SaveChangesAsync();
             return NoContent();
         }
 
-        [HttpPut("{id}")]
-        public async Task<ActionResult<POFormatDto>> UpdateMeta(int id, [FromBody] POFormatUpdateMetaDto dto)
-        {
-            var format = await _registry.UpdateMetaAsync(id, dto);
-            if (format == null) return NotFound();
-            return Ok(ToDto(format));
-        }
+        // ----- helpers -----
 
-        // ----- mappers -----
+        private static object BuildSimpleRuleSet(POFormatSimpleCreateDto dto) => new
+        {
+            version = 1,
+            engine = "simple-headers-v1",
+            poNumberLabel = dto.PoNumberLabel ?? "",
+            poDateLabel = dto.PoDateLabel ?? "",
+            descriptionHeader = dto.DescriptionHeader,
+            quantityHeader = dto.QuantityHeader,
+            unitHeader = dto.UnitHeader,
+        };
 
         private static POFormatDto ToDto(POFormat f) => new()
         {
             Id = f.Id,
             Name = f.Name,
             CompanyId = f.CompanyId,
+            CompanyName = f.Company?.Name,
+            ClientId = f.ClientId,
+            ClientName = f.Client?.Name,
             SignatureHash = f.SignatureHash,
             KeywordSignature = f.KeywordSignature,
             RuleSetJson = f.RuleSetJson,
@@ -269,46 +281,21 @@ namespace MyApp.Api.Controllers
             Id = f.Id,
             Name = f.Name,
             CompanyId = f.CompanyId,
+            CompanyName = f.Company?.Name,
+            ClientId = f.ClientId,
+            ClientName = f.Client?.Name,
             CurrentVersion = f.CurrentVersion,
             IsActive = f.IsActive,
             UpdatedAt = f.UpdatedAt,
         };
+    }
 
-        private static POFormatVersionDto ToVersionDto(POFormatVersion v) => new()
-        {
-            Id = v.Id,
-            Version = v.Version,
-            RuleSetJson = v.RuleSetJson,
-            ChangeNote = v.ChangeNote,
-            CreatedBy = v.CreatedBy,
-            CreatedAt = v.CreatedAt,
-        };
-
-        private static POGoldenSampleDto ToSampleDto(POGoldenSample s)
-        {
-            ExpectedResultDto expected;
-            try
-            {
-                expected = JsonSerializer.Deserialize<ExpectedResultDto>(s.ExpectedJson, JsonOpts) ?? new ExpectedResultDto();
-            }
-            catch
-            {
-                expected = new ExpectedResultDto();
-            }
-
-            return new POGoldenSampleDto
-            {
-                Id = s.Id,
-                POFormatId = s.POFormatId,
-                Name = s.Name,
-                OriginalFileName = s.OriginalFileName,
-                RawText = s.RawText,
-                Expected = expected,
-                Notes = s.Notes,
-                Status = s.Status,
-                CreatedBy = s.CreatedBy,
-                CreatedAt = s.CreatedAt,
-            };
-        }
+    public class FingerprintPdfResponseDto
+    {
+        public string RawText { get; set; } = "";
+        public string Hash { get; set; } = "";
+        public List<string> Keywords { get; set; } = new();
+        public POFormatDto? MatchedFormat { get; set; }
+        public bool IsExactMatch { get; set; }
     }
 }

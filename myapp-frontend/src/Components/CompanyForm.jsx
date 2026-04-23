@@ -29,6 +29,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         fullAddress: "",
         phone: "",
         ntn: "",
+        cnic: "",
         strn: "",
         startingChallanNumber: 0,
         currentChallanNumber: 0,
@@ -89,6 +90,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 fullAddress: freshCompany.fullAddress || "",
                 phone: freshCompany.phone || "",
                 ntn: freshCompany.ntn || "",
+                cnic: freshCompany.cnic || "",
                 strn: freshCompany.strn || "",
                 startingChallanNumber: freshCompany.startingChallanNumber || 0,
                 currentChallanNumber: freshCompany.currentChallanNumber || 0,
@@ -155,6 +157,12 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         setError("");
 
         if (!form.name) return setError("Company name is required.");
+        // CNIC is required — FBR submissions use this as SellerNTNCNIC.
+        // Must be 13 digits after stripping non-numerics.
+        const cnicDigits = (form.cnic || "").replace(/\D/g, "");
+        if (!cnicDigits) return setError("CNIC is required — it's used as SellerNTNCNIC on FBR submissions.");
+        if (cnicDigits.length !== 13)
+            return setError(`CNIC must be exactly 13 digits (current: ${cnicDigits.length}).`);
         if (form.startingChallanNumber < 0)
             return setError("Starting challan number cannot be negative.");
         if (form.startingInvoiceNumber < 0)
@@ -232,9 +240,24 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                             </div>
                         </div>
 
-                        <div style={formGroup}>
-                            <label style={label}>STRN</label>
-                            <input type="text" name="strn" value={form.strn} onChange={handleChange} style={input} />
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                            <div style={formGroup}>
+                                <label style={label}>CNIC *</label>
+                                <input
+                                    type="text"
+                                    name="cnic"
+                                    value={form.cnic}
+                                    onChange={handleChange}
+                                    style={input}
+                                    required
+                                    maxLength={15}
+                                    placeholder="13-digit CNIC (used as SellerNTNCNIC on FBR submissions)"
+                                />
+                            </div>
+                            <div style={formGroup}>
+                                <label style={label}>STRN</label>
+                                <input type="text" name="strn" value={form.strn} onChange={handleChange} style={input} />
+                            </div>
                         </div>
 
                         <div style={formGroup}>

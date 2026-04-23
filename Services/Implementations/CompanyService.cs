@@ -33,6 +33,7 @@ namespace MyApp.Api.Services.Implementations
             FullAddress = c.FullAddress,
             Phone = c.Phone,
             NTN = c.NTN,
+            CNIC = c.CNIC,
             STRN = c.STRN,
             StartingChallanNumber = c.StartingChallanNumber,
             CurrentChallanNumber = c.CurrentChallanNumber,
@@ -97,6 +98,7 @@ namespace MyApp.Api.Services.Implementations
                 FullAddress = dto.FullAddress,
                 Phone = dto.Phone,
                 NTN = dto.NTN,
+                CNIC = dto.CNIC,
                 STRN = dto.STRN,
                 StartingChallanNumber = dto.StartingChallanNumber,
                 CurrentChallanNumber = 0,
@@ -132,6 +134,7 @@ namespace MyApp.Api.Services.Implementations
             company.FullAddress = dto.FullAddress;
             company.Phone = dto.Phone;
             company.NTN = dto.NTN;
+            company.CNIC = dto.CNIC;
             company.STRN = dto.STRN;
             if (dto.LogoPath != null) company.LogoPath = dto.LogoPath;
 

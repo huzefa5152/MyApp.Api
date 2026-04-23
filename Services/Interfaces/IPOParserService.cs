@@ -8,10 +8,4 @@ namespace MyApp.Api.Services.Interfaces
         ParsedPODto ParsePO(string text);
         ParsedPODto ParsePdf(Stream pdfStream);
     }
-
-    public interface ILlmPOParserService
-    {
-        bool IsConfigured { get; }
-        Task<ParsedPODto?> ParseWithLlmAsync(string rawText);
-    }
 }

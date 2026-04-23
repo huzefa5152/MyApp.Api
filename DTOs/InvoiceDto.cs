@@ -25,6 +25,12 @@ namespace MyApp.Api.DTOs
         public DateTime CreatedAt { get; set; }
         public bool IsEditable { get; set; }
         /// <summary>
+        /// True when this is the LATEST (highest-numbered) bill for its
+        /// company — only the latest bill can be deleted. Earlier bills
+        /// must be edited instead to keep the numbering sequence gap-free.
+        /// </summary>
+        public bool IsLatest { get; set; }
+        /// <summary>
         /// True when every item has HSCode + SaleType + UOM (either FbrUOMId or a non-empty UOM string),
         /// meaning the bill has enough data to be validated/submitted to FBR.
         /// </summary>

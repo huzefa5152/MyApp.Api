@@ -95,8 +95,15 @@ namespace MyApp.Api.Repositories.Implementations
                 if (company == null)
                     throw new KeyNotFoundException("Company not found.");
 
-                int nextNumber = company.CurrentChallanNumber > 0
-                                 ? company.CurrentChallanNumber + 1
+                // Use MAX(ChallanNumber) so a deleted trailing number is reused on the next
+                // create (no gaps after deleting the last challan). If nothing exists yet
+                // for this company, fall back to the configured StartingChallanNumber.
+                var maxExisting = await _context.DeliveryChallans
+                                                .Where(c => c.CompanyId == deliveryChallan.CompanyId)
+                                                .MaxAsync(c => (int?)c.ChallanNumber) ?? 0;
+
+                int nextNumber = maxExisting > 0
+                                 ? maxExisting + 1
                                  : company.StartingChallanNumber;
 
                 deliveryChallan.ChallanNumber = nextNumber;

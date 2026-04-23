@@ -666,11 +666,11 @@ export default function InvoicePage() {
                         <MdEdit size={14} /> Edit
                       </button>
                     )}
-                    {inv.fbrStatus !== "Submitted" && (
+                    {inv.fbrStatus !== "Submitted" && inv.isLatest && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#ffebee", color: "#c62828", border: "1px solid #ef9a9a" }}
                         onClick={() => handleDeleteInvoice(inv)}
-                        title="Delete this bill and revert challans to Pending"
+                        title="Only the latest bill can be deleted — earlier bills must be edited to keep numbering gap-free."
                       >
                         <MdDelete size={14} /> Delete
                       </button>

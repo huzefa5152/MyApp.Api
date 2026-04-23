@@ -123,9 +123,20 @@ namespace MyApp.Api.Services.Implementations
         {
             var (items, totalCount) = await _invoiceRepo.GetPagedByCompanyAsync(
                 companyId, page, pageSize, search, clientId, dateFrom, dateTo);
+
+            // Gate the Delete button client-side — only the highest-numbered
+            // bill for this company is deletable. Earlier bills must be edited.
+            var maxNumber = await _context.Invoices
+                .Where(i => i.CompanyId == companyId)
+                .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+
+            var dtos = items.Select(ToDto).ToList();
+            foreach (var d in dtos)
+                d.IsLatest = d.InvoiceNumber == maxNumber;
+
             return new PagedResult<InvoiceDto>
             {
-                Items = items.Select(ToDto).ToList(),
+                Items = dtos,
                 TotalCount = totalCount,
                 Page = page,
                 PageSize = pageSize
@@ -294,8 +305,15 @@ namespace MyApp.Api.Services.Implementations
             if (company.StartingInvoiceNumber == 0)
                 throw new InvalidOperationException("Starting invoice number has not been set for this company. Please set it first.");
 
-            int nextInvoiceNumber = company.CurrentInvoiceNumber > 0
-                ? company.CurrentInvoiceNumber + 1
+            // Use MAX(InvoiceNumber) so a deleted trailing number is reused on the next
+            // create (no gaps after deleting the last bill). Falls back to StartingInvoiceNumber
+            // when the company has no invoices yet.
+            int maxExistingInvoice = await _context.Invoices
+                .Where(i => i.CompanyId == dto.CompanyId)
+                .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+
+            int nextInvoiceNumber = maxExistingInvoice > 0
+                ? maxExistingInvoice + 1
                 : company.StartingInvoiceNumber;
             company.CurrentInvoiceNumber = nextInvoiceNumber;
 
@@ -529,6 +547,17 @@ namespace MyApp.Api.Services.Implementations
             // Cannot delete FBR-submitted invoices
             if (invoice.FbrStatus == "Submitted")
                 throw new InvalidOperationException("Cannot delete a bill that has been submitted to FBR.");
+
+            // Only the LAST bill (highest invoice number) can be deleted so
+            // numbering stays gap-free. Earlier bills must be edited in place.
+            var maxNumber = await _context.Invoices
+                .Where(i => i.CompanyId == invoice.CompanyId)
+                .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+            if (invoice.InvoiceNumber != maxNumber)
+                throw new InvalidOperationException(
+                    $"Only the latest bill can be deleted (currently #{maxNumber}). " +
+                    $"To change bill #{invoice.InvoiceNumber}, edit it instead — " +
+                    "deleting earlier bills would leave gaps in the numbering.");
 
             var companyId = invoice.CompanyId;
 

@@ -5,6 +5,9 @@ namespace MyApp.Api.DTOs
         public int Id { get; set; }
         public string Name { get; set; } = "";
         public int? CompanyId { get; set; }
+        public string? CompanyName { get; set; }
+        public int? ClientId { get; set; }
+        public string? ClientName { get; set; }
         public string SignatureHash { get; set; } = "";
         public string KeywordSignature { get; set; } = "";
         public string RuleSetJson { get; set; } = "{}";
@@ -20,6 +23,9 @@ namespace MyApp.Api.DTOs
         public int Id { get; set; }
         public string Name { get; set; } = "";
         public int? CompanyId { get; set; }
+        public string? CompanyName { get; set; }
+        public int? ClientId { get; set; }
+        public string? ClientName { get; set; }
         public int CurrentVersion { get; set; }
         public bool IsActive { get; set; }
         public DateTime UpdatedAt { get; set; }
@@ -29,9 +35,46 @@ namespace MyApp.Api.DTOs
     {
         public string Name { get; set; } = "";
         public int? CompanyId { get; set; }
+        public int? ClientId { get; set; }
         public string RawText { get; set; } = "";     // the sample PDF's raw text — we derive the fingerprint server-side
-        public string? RuleSetJson { get; set; }      // optional on Phase 1 (defaults to empty {})
+        public string? RuleSetJson { get; set; }      // optional (defaults to empty {}) — power users can paste a full anchored-v1 ruleset
         public string? Notes { get; set; }
+    }
+
+    // Lightweight onboarding payload. The operator gives us the 5 label/header
+    // strings they see on the PDF — server transforms that into a full
+    // "simple-headers-v1" rule-set, so no hand-crafted regex is needed.
+    public class POFormatSimpleCreateDto
+    {
+        public string Name { get; set; } = "";
+        public int? CompanyId { get; set; }
+        public int? ClientId { get; set; }
+        public string RawText { get; set; } = "";         // paste the extracted text from a sample PDF
+        public string PoNumberLabel { get; set; } = "";   // e.g. "P.O. #"
+        public string PoDateLabel { get; set; } = "";     // e.g. "P.O. Date"
+        public string DescriptionHeader { get; set; } = "";   // e.g. "Item Name"
+        public string QuantityHeader { get; set; } = "";      // e.g. "Quantity"
+        public string UnitHeader { get; set; } = "";          // e.g. "Unit"
+        public string? Notes { get; set; }
+    }
+
+    // Edit payload — same 5 strings + metadata. RawText is optional: pass
+    // it to replace the sample text and recompute the fingerprint hash
+    // (useful when the client's template has changed and the old hash no
+    // longer matches incoming PDFs). Omit to keep the existing fingerprint.
+    public class POFormatSimpleUpdateDto
+    {
+        public string Name { get; set; } = "";
+        public bool IsActive { get; set; } = true;
+        public int? ClientId { get; set; }
+        public string PoNumberLabel { get; set; } = "";
+        public string PoDateLabel { get; set; } = "";
+        public string DescriptionHeader { get; set; } = "";
+        public string QuantityHeader { get; set; } = "";
+        public string UnitHeader { get; set; } = "";
+        public string? Notes { get; set; }
+        /// <summary>Optional — pass to replace the sample + recompute fingerprint.</summary>
+        public string? RawText { get; set; }
     }
 
     public class POFormatUpdateRulesDto

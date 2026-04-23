@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { MdUploadFile, MdTextSnippet, MdAdd, MdDelete, MdWarning, MdCheckCircle, MdArrowBack, MdArrowForward, MdBookmarkAdd, MdVerified } from "react-icons/md";
-import { parsePdf, parseText, ensureLookups, addSample } from "../api/poImportApi";
+import { MdUploadFile, MdTextSnippet, MdAdd, MdDelete, MdWarning, MdCheckCircle, MdArrowBack, MdArrowForward, MdVerified, MdErrorOutline } from "react-icons/md";
+import { parsePdf, parseText, ensureLookups } from "../api/poImportApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { createDeliveryChallan } from "../api/challanApi";
@@ -39,17 +39,17 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
   const [selectedClientId, setSelectedClientId] = useState("");
   const [site, setSite] = useState("");
   const [items, setItems] = useState([]);
-  const [warnings, setWarnings] = useState([]);
   const [rawText, setRawText] = useState("");
 
-  // Format match metadata (populated when rule-based parser handled this PDF).
-  // Enables the "save as verified sample" affordance for operator-in-the-loop.
+  // Format match metadata (populated when a saved POFormat handled this PDF)
   const [matchedFormatId, setMatchedFormatId] = useState(null);
   const [matchedFormatName, setMatchedFormatName] = useState("");
   const [matchedFormatVersion, setMatchedFormatVersion] = useState(null);
-  const [sampleSaving, setSampleSaving] = useState(false);
-  const [sampleSaveStatus, setSampleSaveStatus] = useState(null); // {type: 'success'|'error', message: '...'}
-  const [sampleFileBase64, setSampleFileBase64] = useState(null);
+
+  // When the server returns 422 (no format saved for this client's layout),
+  // we flip into manual-entry mode: the form fields start empty and a clear
+  // error banner tells the operator what to do.
+  const [noFormatMessage, setNoFormatMessage] = useState("");
 
   // Lookups
   const [clients, setClients] = useState([]);
@@ -74,16 +74,17 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
 
   const handleParse = async () => {
     setError("");
+    setNoFormatMessage("");
     setParsing(true);
 
     try {
       let res;
       if (importMode === "pdf") {
         if (!selectedFile) { setError("Please select a PDF file."); setParsing(false); return; }
-        res = await parsePdf(selectedFile);
+        res = await parsePdf(selectedFile, companyId);
       } else {
         if (!pastedText.trim()) { setError("Please paste some text."); setParsing(false); return; }
-        res = await parseText(pastedText);
+        res = await parseText(pastedText, companyId);
       }
 
       const data = res.data;
@@ -96,32 +97,28 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
         unit: item.unit || "Pcs",
         itemTypeId: "",
       })) || []);
-      setWarnings(data.warnings || []);
       setRawText(data.rawText || "");
       setMatchedFormatId(data.matchedFormatId ?? null);
       setMatchedFormatName(data.matchedFormatName || "");
       setMatchedFormatVersion(data.matchedFormatVersion ?? null);
-      setSampleSaveStatus(null);
       setStep(2);
-
-      // Stash the PDF as base64 so a "save as verified sample" action can
-      // persist the original PDF alongside the extraction. Cheap + reliable
-      // — operator can always upload the same PDF again if they skip this.
-      if (importMode === "pdf" && selectedFile) {
-        try {
-          const buf = await selectedFile.arrayBuffer();
-          const bytes = new Uint8Array(buf);
-          let bin = "";
-          for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-          setSampleFileBase64(btoa(bin));
-        } catch {
-          setSampleFileBase64(null);
-        }
-      } else {
-        setSampleFileBase64(null);
-      }
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to parse. Please try again.");
+      // 422 = no format saved for this client's layout (or rules empty).
+      // Flip into manual-entry mode with an explicit error message.
+      if (err.response?.status === 422) {
+        const miss = err.response.data || {};
+        setPoNumber("");
+        setPoDate("");
+        setItems([]);
+        setMatchedFormatId(null);
+        setMatchedFormatName("");
+        setMatchedFormatVersion(null);
+        setRawText(miss.rawText || "");
+        setNoFormatMessage(miss.message || "No PO format saved for this client — please fill the fields manually.");
+        setStep(2);
+      } else {
+        setError(err.response?.data?.error || "Failed to parse. Please try again.");
+      }
     } finally {
       setParsing(false);
     }
@@ -145,48 +142,6 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
 
   const removeItem = (idx) => {
     setItems((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  // Capture the currently-edited extraction as a verified golden sample for
-  // the matched format. The server will replay it against every subsequent
-  // rule-set change to prevent regressions on THIS exact PDF.
-  const handleSaveAsSample = async () => {
-    if (!matchedFormatId || !rawText || items.length === 0) return;
-    setSampleSaveStatus(null);
-    setSampleSaving(true);
-    try {
-      const defaultName = selectedFile?.name
-        ? `${selectedFile.name.replace(/\.pdf$/i, "")} — PO ${poNumber || "?"}`
-        : `PO ${poNumber || "(no number)"} — ${new Date().toISOString().slice(0, 10)}`;
-      const payload = {
-        name: defaultName.slice(0, 250),
-        originalFileName: selectedFile?.name || null,
-        rawText,
-        expected: {
-          poNumber: poNumber || null,
-          poDate: poDate ? new Date(poDate).toISOString() : null,
-          items: items.map((i) => ({
-            description: (i.description || "").trim(),
-            quantity: parseInt(i.quantity) || 0,
-            unit: i.unit || "Pcs",
-          })),
-        },
-        notes: "Captured from import screen after operator confirmation.",
-        pdfBase64: sampleFileBase64 || null,
-      };
-      await addSample(matchedFormatId, payload);
-      setSampleSaveStatus({
-        type: "success",
-        message: `Saved as verified sample. Future rule changes for '${matchedFormatName}' must keep this PDF parsing correctly.`,
-      });
-    } catch (err) {
-      setSampleSaveStatus({
-        type: "error",
-        message: err.response?.data?.error || "Failed to save sample.",
-      });
-    } finally {
-      setSampleSaving(false);
-    }
   };
 
   const selectedClient = clients.find((c) => c.id === parseInt(selectedClientId));
@@ -297,66 +252,34 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                 </div>
               )}
 
-              <div style={{ marginTop: "0.75rem", padding: "0.75rem", backgroundColor: colors.warningLight, borderRadius: 8, fontSize: "0.82rem", color: "#5d4037" }}>
-                <MdWarning size={16} style={{ verticalAlign: "middle", marginRight: 4 }} />
-                The system will attempt to extract PO number, date, and items automatically.
-                You can review and edit everything before creating the challan.
-              </div>
             </>
           )}
 
           {step === 2 && (
             <>
-              {/* Format-match banner (only when the deterministic rule-based
-                  parser handled the PDF — a saved format plus a "lock in as
-                  verified sample" CTA that feeds the regression harness). */}
+              {/* When a saved POFormat handled the PDF — quiet confirmation */}
               {matchedFormatId && (
-                <div style={styles.formatMatchBanner}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flex: 1 }}>
-                    <MdVerified size={20} color={colors.success} />
-                    <div>
-                      <div style={{ fontWeight: 600, color: colors.textPrimary, fontSize: "0.9rem" }}>
-                        Matched format: {matchedFormatName}{matchedFormatVersion ? ` (v${matchedFormatVersion})` : ""}
-                      </div>
-                      <div style={{ fontSize: "0.78rem", color: colors.textSecondary }}>
-                        Parsed deterministically — no AI call. If the extraction below is correct, lock it in as a verified sample so future rule changes can't regress it.
-                      </div>
+                <div style={styles.matchedBanner}>
+                  <MdVerified size={18} color={colors.success} />
+                  <span style={{ fontSize: "0.85rem" }}>
+                    Parsed using saved format <strong>{matchedFormatName}</strong>
+                    {matchedFormatVersion ? ` (v${matchedFormatVersion})` : ""}. Review and edit below if needed.
+                  </span>
+                </div>
+              )}
+
+              {/* No format saved for this client's layout — explicit error */}
+              {noFormatMessage && (
+                <div style={styles.noFormatAlert}>
+                  <MdErrorOutline size={20} style={{ flexShrink: 0, marginTop: 2 }} />
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: "0.15rem" }}>
+                      No PO format saved for this client's layout
+                    </div>
+                    <div style={{ fontSize: "0.82rem", opacity: 0.9 }}>
+                      {noFormatMessage}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    style={{ ...styles.saveSampleBtn, opacity: sampleSaving ? 0.6 : 1 }}
-                    disabled={sampleSaving || sampleSaveStatus?.type === "success"}
-                    onClick={handleSaveAsSample}
-                    title="Save this extraction as a verified regression sample"
-                  >
-                    <MdBookmarkAdd size={16} />
-                    {sampleSaving ? "Saving…" : sampleSaveStatus?.type === "success" ? "Sample Saved" : "Save as Verified Sample"}
-                  </button>
-                </div>
-              )}
-
-              {/* Feedback from the save-as-sample action */}
-              {sampleSaveStatus && (
-                <div
-                  style={{
-                    ...(sampleSaveStatus.type === "success" ? styles.successAlert : styles.errorAlert),
-                    marginBottom: "1rem",
-                  }}
-                >
-                  {sampleSaveStatus.type === "success" ? <MdCheckCircle size={14} style={{ verticalAlign: "middle", marginRight: 6 }} /> : null}
-                  {sampleSaveStatus.message}
-                </div>
-              )}
-
-              {/* Warnings from parser */}
-              {warnings.length > 0 && (
-                <div style={{ marginBottom: "1rem" }}>
-                  {warnings.map((w, i) => (
-                    <div key={i} style={{ ...styles.warningAlert, marginBottom: "0.35rem" }}>
-                      <MdWarning size={14} style={{ flexShrink: 0, marginTop: 2 }} /> {w}
-                    </div>
-                  ))}
                 </div>
               )}
 
@@ -564,38 +487,26 @@ const styles = {
   itemRow: { display: "flex", gap: "0.5rem", alignItems: "flex-start", padding: "0.5rem", borderRadius: 6, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fafbfc" },
   addItemBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.35rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.teal}`, backgroundColor: "#fff", color: colors.teal, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
   deleteItemBtn: { border: "none", background: "none", color: colors.danger, cursor: "pointer", padding: "0.25rem", borderRadius: 4 },
-  formatMatchBanner: {
+  matchedBanner: {
     display: "flex",
     alignItems: "center",
-    gap: "0.75rem",
+    gap: "0.5rem",
     backgroundColor: colors.successLight,
     border: `1px solid ${colors.success}40`,
-    borderRadius: 10,
+    borderRadius: 8,
+    padding: "0.55rem 0.85rem",
+    marginBottom: "1rem",
+    color: "#1b5e20",
+  },
+  noFormatAlert: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "0.6rem",
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    border: `1px solid ${colors.danger}40`,
+    borderRadius: 8,
     padding: "0.75rem 1rem",
     marginBottom: "1rem",
-    flexWrap: "wrap",
-  },
-  saveSampleBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.4rem",
-    padding: "0.45rem 0.9rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.success}`,
-    backgroundColor: "#fff",
-    color: colors.success,
-    fontSize: "0.82rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-  successAlert: {
-    backgroundColor: colors.successLight,
-    color: "#1b5e20",
-    padding: "0.6rem 1rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.success}30`,
-    fontSize: "0.85rem",
-    fontWeight: 500,
   },
 };

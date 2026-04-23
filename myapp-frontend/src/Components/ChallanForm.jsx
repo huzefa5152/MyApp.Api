@@ -33,6 +33,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   ]);
   const [itemTypes, setItemTypes] = useState([]);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const itemsContainerRef = useRef(null);
 
   useEffect(() => {
@@ -87,6 +88,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (saving) return;
     setError("");
 
     const validItems = items.filter((item) => item.description.trim());
@@ -99,6 +101,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       return;
     }
 
+    setSaving(true);
     try {
       await onSaved({
         clientId: client.id,
@@ -114,10 +117,11 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       if (err.response?.data?.error) setError(err.response.data.error);
       else if (err.message) setError(err.message);
       else setError("Something went wrong.");
+      setSaving(false);
     }
   };
 
-  const isDisabled = items.some((i) => !i.description.trim()) || !client;
+  const isDisabled = items.some((i) => !i.description.trim()) || !client || saving;
 
   return (
     <div style={formStyles.backdrop} onClick={onClose}>
@@ -231,7 +235,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: isDisabled ? 0.6 : 1 }} disabled={isDisabled}>Save Challan</button>
+            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: isDisabled ? 0.6 : 1 }} disabled={isDisabled}>{saving ? "Saving..." : "Save Challan"}</button>
           </div>
         </form>
       </div>

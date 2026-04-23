@@ -62,13 +62,11 @@ builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<IFbrService, FbrService>();
 builder.Services.AddScoped<IFbrLookupService, FbrLookupService>();
 builder.Services.AddSingleton<IPOParserService, POParserService>();
-builder.Services.AddSingleton<ILlmPOParserService, LlmPOParserService>();
 builder.Services.AddSingleton<IPOFormatFingerprintService, POFormatFingerprintService>();
 builder.Services.AddScoped<IPOFormatRegistry, POFormatRegistry>();
 builder.Services.AddSingleton<IRuleBasedPOParser, RuleBasedPOParser>();
 builder.Services.AddScoped<IRegressionService, RegressionService>();
 builder.Services.AddHttpClient("FBR");
-builder.Services.AddHttpClient("Gemini");
 
 // before builder.Build()
 builder.Services.AddCors(options =>
@@ -115,17 +113,11 @@ using (var scope = app.Services.CreateScope())
     // any HS code / name already present, so it's safe to run on every boot)
     await MyApp.Api.Data.ItemTypeSeeder.SeedAsync(db);
 
-    // Seed baseline PO formats (Soorty, Lotte, Meko) so the rule-based parser
-    // has something to match on out of the box. Idempotent — each seeded
-    // format is keyed by name and skipped if already present, so operator
-    // edits to the rule-set are preserved across restarts.
+    // Baseline PO formats (Lotte Kolson, Soorty, Meko) — runs ONCE when the
+    // POFormats table is empty. Operator-curated formats added via the
+    // Configuration → PO Formats UI are preserved across restarts.
     var fp = scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.IPOFormatFingerprintService>();
     await MyApp.Api.Data.POFormatSeeder.SeedAsync(db, fp);
-
-    // Seed the golden-sample regression set (runs after POFormats so it can
-    // look them up by name). These are the "previously verified" samples the
-    // promotion gate replays before allowing any rule-set change.
-    await MyApp.Api.Data.POGoldenSampleSeeder.SeedAsync(db);
 }
 
 // Configure the HTTP request pipeline

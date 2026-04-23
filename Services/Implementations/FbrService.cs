@@ -335,7 +335,12 @@ namespace MyApp.Api.Services.Implementations
             static string StripNtn(string? v)    => SanitizeNtn(v);
 
             // ─ Seller ─
-            var sellerNtn = StripNtn(company.NTN);
+            // Seller identity: prefer CNIC (13 digits) if set, otherwise NTN
+            // (7 digits). FBR accepts either, but Hakimi Traders submissions
+            // must use CNIC per the tax consultant's instruction.
+            var sellerNtn = !string.IsNullOrWhiteSpace(company.CNIC)
+                ? StripDigits(company.CNIC)
+                : StripNtn(company.NTN);
             if (string.IsNullOrWhiteSpace(sellerNtn))
                 errors.Add("Seller NTN/CNIC is required. Configure it in Company settings. [FBR 0001]");
             else if (sellerNtn.Length != 7 && sellerNtn.Length != 13)
@@ -499,8 +504,13 @@ namespace MyApp.Api.Services.Implementations
             // ── Sanitize NTN/CNIC ──
             // Uses the shared class-level helpers (FbrService.SanitizeNtn /
             // StripAllDigits) so pre-validate and payload build can't drift.
-            // Seller is always NTN (7 digits).
-            var sellerNtnCnic = SanitizeNtn(company.NTN);
+            // Seller: prefer CNIC (13 digits) when configured; fall back to
+            // NTN (7 digits). CNIC is required for Hakimi Traders per the
+            // tax consultant; NTN-only submissions are supported as a legacy
+            // path for other companies.
+            var sellerNtnCnic = !string.IsNullOrWhiteSpace(company.CNIC)
+                ? StripAllDigits(company.CNIC)
+                : SanitizeNtn(company.NTN);
             // Buyer: if NTN use SanitizeNtn (7 digits), if CNIC strip all non-digits (13 digits)
             if (!string.IsNullOrEmpty(buyer.NTN))
                 buyerNtnCnic = SanitizeNtn(buyer.NTN);
