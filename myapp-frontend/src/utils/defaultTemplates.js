@@ -428,8 +428,10 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
   </div>
 </div>
 
-<!-- Term of Sale -->
-<div class="term-line">Term Of Sale: Credit</div>
+<!-- Term of Sale + conditional PO number for Lotte Kolson -->
+<div class="term-line">
+  Term Of Sale: Credit{{#if (eq buyerName "LOTTE Kolson (Pvt.) Limited")}}{{#if poNumber}} &nbsp;&nbsp;&nbsp; PO NO: {{poNumber}}{{/if}}{{/if}}
+</div>
 
 <!-- Items Table -->
 <table class="items">
