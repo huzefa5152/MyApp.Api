@@ -30,10 +30,17 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
     [items, value]
   );
 
-  // Sort: favorites first, then by usage desc, then alphabetical
+  // Sort:
+  //   1. Quick-entry items (no HS code) first — operators want these at the
+  //      top for draft/non-FBR lines and for in-progress cataloguing.
+  //   2. Favorites next.
+  //   3. Then by usage desc.
+  //   4. Alphabetical tiebreaker.
   const sortedItems = useMemo(() => {
     const arr = [...(items || [])];
+    const hasHs = (it) => !!(it.hsCode && it.hsCode.trim());
     arr.sort((a, b) => {
+      if (hasHs(a) !== hasHs(b)) return hasHs(a) ? 1 : -1;
       if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
       if ((b.usageCount || 0) !== (a.usageCount || 0)) return (b.usageCount || 0) - (a.usageCount || 0);
       return (a.name || "").localeCompare(b.name || "");
@@ -121,9 +128,12 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
     }
   };
 
-  // Split favorites/rest so we can render section headers
-  const favorites = filteredItems.filter((it) => it.isFavorite);
-  const others = filteredItems.filter((it) => !it.isFavorite);
+  // Split into three groups so the dropdown reads: Quick-entry (no HS)
+  // first for drafts and unclassified items, then Favorites, then Other.
+  const hasHs = (it) => !!(it.hsCode && it.hsCode.trim());
+  const quick = filteredItems.filter((it) => !hasHs(it));
+  const favorites = filteredItems.filter((it) => hasHs(it) && it.isFavorite);
+  const others = filteredItems.filter((it) => hasHs(it) && !it.isFavorite);
 
   return (
     <div style={{ position: "relative", width: "100%" }}>
@@ -178,17 +188,27 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
               </div>
             )}
 
+            {quick.length > 0 && (
+              <>
+                <div style={styles.sectionHeader}>⚡ QUICK (no HS code)</div>
+                {quick.map((it, i) => renderItem(it, i, highlightIdx, setHighlightIdx, handlePick))}
+              </>
+            )}
             {favorites.length > 0 && (
               <>
-                <div style={styles.sectionHeader}>★ FAVORITES</div>
-                {favorites.map((it, i) => renderItem(it, i, highlightIdx, setHighlightIdx, handlePick))}
+                {quick.length > 0 && <div style={styles.sectionHeader}>★ FAVORITES</div>}
+                {quick.length === 0 && <div style={styles.sectionHeader}>★ FAVORITES</div>}
+                {favorites.map((it, i) => {
+                  const realIdx = quick.length + i;
+                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
+                })}
               </>
             )}
             {others.length > 0 && (
               <>
-                {favorites.length > 0 && <div style={styles.sectionHeader}>OTHER</div>}
+                {(quick.length > 0 || favorites.length > 0) && <div style={styles.sectionHeader}>OTHER</div>}
                 {others.map((it, i) => {
-                  const realIdx = favorites.length + i;
+                  const realIdx = quick.length + favorites.length + i;
                   return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
                 })}
               </>

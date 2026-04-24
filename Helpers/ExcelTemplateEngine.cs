@@ -282,6 +282,27 @@ namespace MyApp.Api.Helpers
             return true;
         }
 
+        /// <summary>
+        /// Returns true if any of the cell's rich-text runs is bold. Operators
+        /// often bold a conditional output like "PO NO: {{poNumber}}" inside
+        /// a rich-text cell — when we collapse the runs to a single plain
+        /// string, that bold gets wiped. We use this to detect that case so
+        /// the caller can re-apply bold on the whole cell after collapsing.
+        /// </summary>
+        private static bool CellHasBoldRun(IXLCell cell)
+        {
+            try
+            {
+                if (!cell.HasRichText) return cell.Style?.Font?.Bold == true;
+                foreach (var run in cell.GetRichText())
+                {
+                    if (run.Bold) return true;
+                }
+            }
+            catch { /* HasRichText false-positives or API mismatch — ignore */ }
+            return false;
+        }
+
         // Cross-cell {{#if}}/{{/if}} resolver. Walks cells in row-major
         // order tracking an active if-stack so an operator can split
         // "{{#if (eq buyerName \"X\")}}" into one cell, content into
@@ -313,6 +334,12 @@ namespace MyApp.Api.Helpers
                     if (cell.HasFormula) continue;
                     var val = cell.GetString() ?? "";
 
+                    // Before we collapse the rich text, capture whether
+                    // the original cell had ANY bold run — operators often
+                    // bold "PO NO: {{poNumber}}" inside a conditional so
+                    // we need to preserve that on the collapsed output.
+                    bool hadBoldRun = CellHasBoldRun(cell);
+
                     // Quick win: if the cell has a self-contained if block,
                     // resolve it in place before the cross-cell scanner sees
                     // the remaining markers.
@@ -339,7 +366,24 @@ namespace MyApp.Api.Helpers
                         // confused.
                         if (val != original)
                         {
-                            cell.Value = val;
+                            if (val.Length > 0 && hadBoldRun)
+                            {
+                                // Preserve operator's intent: the surviving
+                                // text had a bold run in the template (e.g.
+                                // "PO NO: {{poNumber}}"). Clear the cell
+                                // value THEN add a single bold rich-text
+                                // run. Order matters — assigning Value=val
+                                // after the rich-text setup wipes the run.
+                                cell.Clear(XLClearOptions.Contents);
+                                var rt = cell.GetRichText();
+                                rt.ClearText();
+                                var run = rt.AddText(val);
+                                run.Bold = true;
+                            }
+                            else
+                            {
+                                cell.Value = val;
+                            }
                         }
                     }
 

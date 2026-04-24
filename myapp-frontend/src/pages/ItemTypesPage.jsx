@@ -139,19 +139,19 @@ export default function ItemTypesPage() {
     e.preventDefault();
     setFormError("");
     if (!form.name.trim()) return setFormError("Name is required.");
-    // Enforce FBR-only item types — every item MUST have an HS code from FBR's
-    // catalog so bills built from this item pass FBR validation automatically.
-    if (!form.hsCode?.trim())
-      return setFormError("HS Code is required. Please pick one from the FBR catalog above.");
+    // HS code is OPTIONAL — operators can save a quick-entry item type
+    // with just a name. Bills built from HS-less items won't pass FBR
+    // validation until someone fills in the HS/UOM/SaleType later, but
+    // that's fine for non-FBR workflows and draft entries.
 
     setSaving(true);
     try {
       const payload = {
         name: form.name.trim(),
-        hsCode: form.hsCode.trim(),
+        hsCode: form.hsCode?.trim() || null,
         uom: form.uom?.trim() || null,
         fbrUOMId: form.fbrUOMId || null,
-        saleType: form.saleType || "Goods at standard rate (default)",
+        saleType: form.saleType || null,
         fbrDescription: form.fbrDescription?.trim() || null,
         isFavorite: !!form.isFavorite,
       };
