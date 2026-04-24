@@ -10,9 +10,23 @@ namespace MyApp.Api.Helpers
     /// </summary>
     public static class ExcelTemplateEngine
     {
-        private static readonly Regex FieldRegex = new(@"\{\{([^}]+)\}\}", RegexOptions.Compiled);
+        private static readonly Regex FieldRegex = new(@"\{\{([^}#/]+)\}\}", RegexOptions.Compiled);
         private static readonly Regex EachStartRegex = new(@"\{\{#each\s+(\w+)(?:\s+(\d+))?\}\}", RegexOptions.Compiled);
         private static readonly Regex EachEndRegex = new(@"\{\{/each\}\}", RegexOptions.Compiled);
+
+        // Intra-cell conditional blocks. Supports two forms:
+        //   {{#if fieldName}}…{{/if}}
+        //   {{#if (eq fieldName "literal")}}…{{/if}}
+        // Nested {{#if}} blocks are handled by running the regex in a loop
+        // (inner blocks resolve first, then outer). Use a non-greedy match
+        // that stops at the FIRST {{/if}} so single-cell blocks behave
+        // predictably.
+        private static readonly Regex IfPlainRegex = new(
+            @"\{\{#if\s+([A-Za-z_][A-Za-z0-9_\.]*)\s*\}\}(.*?)\{\{/if\}\}",
+            RegexOptions.Compiled | RegexOptions.Singleline);
+        private static readonly Regex IfEqRegex = new(
+            @"\{\{#if\s*\(\s*eq\s+([A-Za-z_][A-Za-z0-9_\.]*)\s+""([^""]*)""\s*\)\s*\}\}(.*?)\{\{/if\}\}",
+            RegexOptions.Compiled | RegexOptions.Singleline);
 
         /// <summary>
         /// Process the template workbook in-place, replacing merge fields with values from the data dictionary.
@@ -31,6 +45,12 @@ namespace MyApp.Api.Helpers
             foreach (var ws in workbook.Worksheets)
             {
                 ProcessEachBlocks(ws, data);
+                // Resolve cross-cell {{#if}}/{{/if}} blocks BEFORE field
+                // replacement. Excel users routinely split a conditional
+                // across adjacent cells (e.g. "{{#if foo}}" in A5,
+                // "content" in A6, "{{/if}}" in A7) — my intra-cell regex
+                // alone would miss that.
+                ApplyCrossCellConditionals(ws, data);
                 ReplaceSimpleFields(ws, data);
             }
         }
@@ -210,7 +230,11 @@ namespace MyApp.Api.Helpers
                     var val = cell.GetString();
                     if (string.IsNullOrEmpty(val) || !val.Contains("{{")) continue;
 
-                    var replaced = FieldRegex.Replace(val, m =>
+                    // Resolve intra-cell conditional blocks FIRST so simple-
+                    // field replacement only sees surviving `{{field}}` tokens.
+                    var preprocessed = ApplyConditionals(val, data);
+
+                    var replaced = FieldRegex.Replace(preprocessed, m =>
                     {
                         string expr = m.Groups[1].Value.Trim();
                         return ResolveExpression(expr, data, 0);
@@ -219,6 +243,174 @@ namespace MyApp.Api.Helpers
                     SetCellValue(cell, replaced, val);
                 }
             }
+        }
+
+        // Resolves {{#if field}}…{{/if}} and {{#if (eq field "literal")}}…{{/if}}
+        // blocks inside a single cell's text. Loops until stable so nested
+        // conditionals evaluate inside-out.
+        private static string ApplyConditionals(string input, Dictionary<string, object?> data)
+        {
+            string prev;
+            string current = input;
+            int safety = 16; // bound the loop so a malformed template can't spin forever
+            do
+            {
+                prev = current;
+                current = IfEqRegex.Replace(current, m =>
+                {
+                    var key = m.Groups[1].Value.Trim();
+                    var literal = m.Groups[2].Value;
+                    var inner = m.Groups[3].Value;
+                    var actual = ResolveExpression(key, data, 0);
+                    return string.Equals(actual, literal, StringComparison.Ordinal) ? inner : "";
+                });
+                current = IfPlainRegex.Replace(current, m =>
+                {
+                    var key = m.Groups[1].Value.Trim();
+                    var inner = m.Groups[2].Value;
+                    var actual = ResolveExpression(key, data, 0);
+                    return IsTruthy(actual) ? inner : "";
+                });
+            } while (current != prev && --safety > 0);
+            return current;
+        }
+
+        private static bool IsTruthy(string? s)
+        {
+            if (string.IsNullOrEmpty(s)) return false;
+            if (s == "0" || s == "0.00" || s == "false" || s == "False") return false;
+            return true;
+        }
+
+        // Cross-cell {{#if}}/{{/if}} resolver. Walks cells in row-major
+        // order tracking an active if-stack so an operator can split
+        // "{{#if (eq buyerName \"X\")}}" into one cell, content into
+        // another, and "{{/if}}" into a third. When a branch is false,
+        // every intermediate cell is cleared (empty string). When true,
+        // the markers are stripped and the inner cells pass through to
+        // the normal field-replacement pass untouched.
+        //
+        // Also calls ApplyConditionals per cell first so cells that
+        // contain a FULL {{#if}}…{{/if}} block in one go still resolve
+        // (the intra-cell regex is faster and preserves multi-line
+        // formatting).
+        private static void ApplyCrossCellConditionals(IXLWorksheet ws, Dictionary<string, object?> data)
+        {
+            int lastRow = ws.LastRowUsed()?.RowNumber() ?? 0;
+            int lastCol = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
+
+            // Stack of per-frame render flags. ShouldRender() is true only
+            // when every frame on the stack is true (all enclosing
+            // conditions pass).
+            var stack = new Stack<bool>();
+            bool ShouldRender() => !stack.Any(f => !f);
+
+            for (int r = 1; r <= lastRow; r++)
+            {
+                for (int c = 1; c <= lastCol; c++)
+                {
+                    var cell = ws.Cell(r, c);
+                    if (cell.HasFormula) continue;
+                    var val = cell.GetString() ?? "";
+
+                    if (val.Contains("{{#if") || val.Contains("{{/if"))
+                    {
+                        Console.Error.WriteLine($"[XlTpl] cell {cell.Address}: IN  = {val}");
+                    }
+
+                    // Quick win: if the cell has a self-contained if block,
+                    // resolve it in place before the cross-cell scanner sees
+                    // the remaining markers.
+                    var original = val;
+                    if (val.Contains("{{#if") && val.Contains("{{/if}}"))
+                    {
+                        val = ApplyConditionals(val, data);
+                        Console.Error.WriteLine($"[XlTpl] cell {cell.Address}: AFT = {val}");
+                        // If the conditional collapsed the whole cell (Lotte
+                        // / Afroze case with rich-text spanning all three
+                        // runs), write the resolved string back NOW so
+                        // ClosedXML replaces the multi-run string storage
+                        // with a simple string. If we leave it until after
+                        // the cross-cell scanner, ClosedXML still returns
+                        // the original rich-text via cell.GetString() and
+                        // our "result != cell.GetString()" check gets
+                        // confused.
+                        if (val != original)
+                        {
+                            cell.Value = val;
+                        }
+                    }
+
+                    if (val.Length == 0 && stack.Count == 0) continue;
+
+                    var sb = new System.Text.StringBuilder();
+                    int pos = 0;
+                    while (pos < val.Length)
+                    {
+                        int ifOpen = val.IndexOf("{{#if", pos, StringComparison.Ordinal);
+                        int ifClose = val.IndexOf("{{/if}}", pos, StringComparison.Ordinal);
+                        int next = -1;
+                        if (ifOpen >= 0 && ifClose >= 0) next = Math.Min(ifOpen, ifClose);
+                        else if (ifOpen >= 0) next = ifOpen;
+                        else if (ifClose >= 0) next = ifClose;
+
+                        if (next < 0)
+                        {
+                            if (ShouldRender()) sb.Append(val, pos, val.Length - pos);
+                            break;
+                        }
+
+                        // Emit the literal text between `pos` and the marker,
+                        // but only if we're in a rendering frame.
+                        if (ShouldRender()) sb.Append(val, pos, next - pos);
+
+                        if (next == ifOpen)
+                        {
+                            int end = val.IndexOf("}}", next, StringComparison.Ordinal);
+                            if (end < 0) { pos = val.Length; break; }
+                            var header = val.Substring(next, end - next + 2);
+                            bool cond = ShouldRender() && EvaluateIfHeader(header, data);
+                            stack.Push(cond);
+                            pos = end + 2;
+                        }
+                        else
+                        {
+                            if (stack.Count > 0) stack.Pop();
+                            pos = next + 7; // length of "{{/if}}"
+                        }
+                    }
+
+                    var result = sb.ToString();
+                    // Align with the rest of the engine — use `cell.Value =`
+                    // rather than cell.Clear() because ClosedXML sometimes
+                    // preserves the shared-string reference after Clear(),
+                    // which re-introduces the unconditional text.
+                    if (result != cell.GetString())
+                    {
+                        cell.Value = result;
+                    }
+                }
+            }
+        }
+
+        private static bool EvaluateIfHeader(string header, Dictionary<string, object?> data)
+        {
+            var eq = Regex.Match(header,
+                @"\{\{#if\s*\(\s*eq\s+([A-Za-z_][A-Za-z0-9_\.]*)\s+""([^""]*)""\s*\)\s*\}\}");
+            if (eq.Success)
+            {
+                var key = eq.Groups[1].Value;
+                var lit = eq.Groups[2].Value;
+                return string.Equals(ResolveExpression(key, data, 0), lit, StringComparison.Ordinal);
+            }
+            var plain = Regex.Match(header, @"\{\{#if\s+([A-Za-z_][A-Za-z0-9_\.]*)\s*\}\}");
+            if (plain.Success)
+            {
+                var key = plain.Groups[1].Value;
+                return IsTruthy(ResolveExpression(key, data, 0));
+            }
+            // Malformed header — fail closed (don't render).
+            return false;
         }
 
         private static void ReplaceFieldsInRow(IXLWorksheet ws, int row, Dictionary<string, object?> itemData, int index)
@@ -232,7 +424,12 @@ namespace MyApp.Api.Helpers
                 var val = cell.GetString();
                 if (string.IsNullOrEmpty(val) || !val.Contains("{{")) continue;
 
-                var replaced = FieldRegex.Replace(val, m =>
+                // Same pre-pass as the header path — resolve intra-cell
+                // conditionals first so each-loop rows can show/hide text
+                // per item too.
+                var preprocessed = ApplyConditionals(val, itemData);
+
+                var replaced = FieldRegex.Replace(preprocessed, m =>
                 {
                     string expr = m.Groups[1].Value.Trim();
                     return ResolveExpression(expr, itemData, index);
