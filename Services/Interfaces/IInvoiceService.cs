@@ -13,6 +13,12 @@ namespace MyApp.Api.Services.Interfaces
         Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto);
         Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto);
         Task<bool> DeleteAsync(int id);
+        /// <summary>
+        /// Flip the IsFbrExcluded flag. Excluded bills are skipped by the
+        /// bulk Validate All / Submit All endpoints; per-bill validate and
+        /// submit still work. Returns the updated bill or null if not found.
+        /// </summary>
+        Task<InvoiceDto?> SetFbrExcludedAsync(int id, bool excluded);
         Task<PrintBillDto?> GetPrintBillAsync(int invoiceId);
         Task<PrintTaxInvoiceDto?> GetPrintTaxInvoiceAsync(int invoiceId);
         Task<int> GetTotalCountAsync();

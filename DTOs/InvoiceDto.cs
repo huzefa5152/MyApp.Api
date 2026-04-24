@@ -31,6 +31,12 @@ namespace MyApp.Api.DTOs
         /// </summary>
         public bool IsLatest { get; set; }
         /// <summary>
+        /// When true, the bulk Validate All / Submit All buttons skip this
+        /// bill. Per-bill Validate / Submit remain available — the toggle
+        /// is strictly about bulk opt-out.
+        /// </summary>
+        public bool IsFbrExcluded { get; set; }
+        /// <summary>
         /// True when every item has HSCode + SaleType + UOM (either FbrUOMId or a non-empty UOM string),
         /// meaning the bill has enough data to be validated/submitted to FBR.
         /// </summary>

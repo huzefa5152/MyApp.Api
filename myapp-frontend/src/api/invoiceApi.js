@@ -18,6 +18,12 @@ export const updateInvoice = (id, payload) =>
 export const deleteInvoice = (id) =>
   httpClient.delete(`/invoices/${id}`);
 
+// Toggle the "exclude from FBR bulk actions" flag on a bill.
+// When excluded=true, Validate All / Submit All skip this bill.
+// Per-bill Validate / Submit buttons still work regardless.
+export const setInvoiceFbrExcluded = (id, excluded) =>
+  httpClient.put(`/invoices/${id}/fbr-excluded`, { excluded });
+
 export const getInvoicePrintBill = (invoiceId) =>
   httpClient.get(`/invoices/${invoiceId}/print/bill`);
 

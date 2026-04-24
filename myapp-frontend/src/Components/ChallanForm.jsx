@@ -152,21 +152,37 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
               </div>
             </div>
 
-            {client?.site && (
-              <div style={{ marginBottom: "1rem" }}>
-                <label style={styles.label}>Site</label>
-                <select
-                  style={styles.input}
-                  value={site}
-                  onChange={(e) => setSite(e.target.value)}
-                >
-                  <option value="">Select site...</option>
-                  {client.site.split(";").map((s) => s.trim()).filter(Boolean).map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+            {/* Site / Department — dropdown when the picked client has presets,
+                free-text input otherwise so operators can still type a one-off. */}
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={styles.label}>Site / Department</label>
+              {(() => {
+                const clientSites = client?.site
+                  ? client.site.split(";").map((s) => s.trim()).filter(Boolean)
+                  : [];
+                return clientSites.length > 0 ? (
+                  <select
+                    style={styles.input}
+                    value={site}
+                    onChange={(e) => setSite(e.target.value)}
+                  >
+                    <option value="">(none)</option>
+                    {clientSites.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    style={styles.input}
+                    placeholder={client ? "Optional — type a site or department" : "Pick a client first"}
+                    value={site}
+                    onChange={(e) => setSite(e.target.value)}
+                    disabled={!client}
+                  />
+                );
+              })()}
+            </div>
 
             <div style={styles.row}>
               <div style={{ flex: 1, minWidth: 0 }}>

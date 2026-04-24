@@ -87,6 +87,7 @@ namespace MyApp.Api.Services.Implementations
             FbrErrorMessage = inv.FbrErrorMessage,
             CreatedAt = inv.CreatedAt,
             IsEditable = IsInvoiceEditable(inv),
+            IsFbrExcluded = inv.IsFbrExcluded,
             FbrReady = missing.Count == 0,
             FbrMissing = missing,
             Items = inv.Items.Select(ii => new InvoiceItemDto
@@ -541,6 +542,24 @@ namespace MyApp.Api.Services.Implementations
                 di.Quantity = invItem.Quantity;
                 di.Unit = invItem.UOM;
             }
+        }
+
+        public async Task<InvoiceDto?> SetFbrExcludedAsync(int id, bool excluded)
+        {
+            // Tracked fetch via DbContext so EF picks up the flag change —
+            // the repository's GetByIdAsync uses AsNoTracking for performance
+            // which would silently drop the update.
+            var invoice = await _context.Invoices
+                .Include(i => i.Items)
+                .Include(i => i.Company)
+                .Include(i => i.Client)
+                .Include(i => i.DeliveryChallans)
+                .FirstOrDefaultAsync(i => i.Id == id);
+            if (invoice == null) return null;
+
+            invoice.IsFbrExcluded = excluded;
+            await _context.SaveChangesAsync();
+            return ToDto(invoice);
         }
 
         public async Task<bool> DeleteAsync(int id)

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdDelete, MdEdit, MdVisibility } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdDelete, MdEdit, MdVisibility, MdBlock, MdRestore } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import EditBillForm from "../Components/EditBillForm";
-import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice } from "../api/invoiceApi";
+import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
@@ -273,9 +273,33 @@ export default function InvoicePage() {
   // actual Validate All / Submit All actions below re-fetch the ENTIRE filtered
   // set across all pages, so users with 30 bills on page 1 of 4 can click once
   // and have all 120 (or whatever the filter returns) processed in a single go.
-  const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted" && inv.fbrReady);
-  const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.fbrReady).length;
+  // Bills the operator has flagged as "FBR-excluded" are deliberately skipped
+  // by Validate All / Submit All (bulk actions) but the per-bill buttons still
+  // work. So we exclude them from these counts too — the badges are about what
+  // the bulk buttons will process.
+  const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded);
+  const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.fbrReady && !inv.isFbrExcluded).length;
   const validatedCount = unsubmittedInvoices.filter(inv => fbrValidated.has(inv.id)).length;
+
+  const handleToggleFbrExcluded = async (inv) => {
+    const nextExcluded = !inv.isFbrExcluded;
+    const confirmMsg = nextExcluded
+      ? `Exclude Bill #${inv.invoiceNumber} from FBR bulk actions?\n\nValidate All / Submit All will skip this bill. Per-bill Validate / Submit still work.`
+      : `Include Bill #${inv.invoiceNumber} back in FBR bulk actions?`;
+    if (!confirm(confirmMsg)) return;
+    try {
+      await setInvoiceFbrExcluded(inv.id, nextExcluded);
+      notify(
+        nextExcluded
+          ? `Bill #${inv.invoiceNumber} excluded from FBR bulk actions.`
+          : `Bill #${inv.invoiceNumber} re-enabled for FBR bulk actions.`,
+        "success"
+      );
+      fetchInvoices(selectedCompany.id, page);
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to update FBR exclusion.", "error");
+    }
+  };
 
   // Fetches every bill matching the current filters (client / date range /
   // search) across all pages, not just the current page. Uses a large pageSize
@@ -293,10 +317,11 @@ export default function InvoicePage() {
     const { data } = await getPagedInvoicesByCompany(selectedCompany.id, params);
     const all = data.items || [];
     if (action === "validate") {
-      return all.filter(inv => inv.fbrStatus !== "Submitted" && inv.fbrReady);
+      // Skip FBR-excluded bills — operator explicitly opted them out of bulk actions.
+      return all.filter(inv => inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded);
     }
     if (action === "submit") {
-      return all.filter(inv => inv.fbrStatus !== "Submitted" && fbrValidated.has(inv.id));
+      return all.filter(inv => inv.fbrStatus !== "Submitted" && fbrValidated.has(inv.id) && !inv.isFbrExcluded);
     }
     return all;
   };
@@ -578,11 +603,22 @@ export default function InvoicePage() {
                         </div>
                       </div>
                     )}
-                    {inv.fbrStatus !== "Submitted" && inv.fbrReady && (
+                    {inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded && (
                       <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.25rem" }}>
                         <MdCheckCircle size={14} color="#0d47a1" />
                         <span style={{ fontSize: "0.76rem", fontWeight: 600, color: "#0d47a1" }}>
                           FBR: Ready to Validate
+                        </span>
+                      </div>
+                    )}
+                    {inv.fbrStatus !== "Submitted" && inv.isFbrExcluded && (
+                      <div
+                        style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.25rem", padding: "0.25rem 0.5rem", backgroundColor: "#eceff1", border: "1px solid #b0bec5", borderRadius: 4 }}
+                        title="This bill is excluded from Validate All / Submit All bulk actions. Per-bill Validate / Submit still work."
+                      >
+                        <MdBlock size={14} color="#546e7a" />
+                        <span style={{ fontSize: "0.74rem", fontWeight: 600, color: "#546e7a" }}>
+                          FBR-excluded (bulk skipped)
                         </span>
                       </div>
                     )}
@@ -664,6 +700,25 @@ export default function InvoicePage() {
                         title="Edit items and prices on this bill"
                       >
                         <MdEdit size={14} /> Edit
+                      </button>
+                    )}
+                    {inv.fbrStatus !== "Submitted" && (
+                      <button
+                        style={{
+                          ...styles.printBtn,
+                          backgroundColor: inv.isFbrExcluded ? "#e8f5e9" : "#eceff1",
+                          color: inv.isFbrExcluded ? "#2e7d32" : "#546e7a",
+                          border: `1px solid ${inv.isFbrExcluded ? "#a5d6a7" : "#b0bec5"}`,
+                        }}
+                        onClick={() => handleToggleFbrExcluded(inv)}
+                        title={
+                          inv.isFbrExcluded
+                            ? "Re-enable this bill for Validate All / Submit All bulk actions."
+                            : "Exclude this bill from Validate All / Submit All. Per-bill Validate / Submit still work."
+                        }
+                      >
+                        {inv.isFbrExcluded ? <MdRestore size={14} /> : <MdBlock size={14} />}
+                        {inv.isFbrExcluded ? "Include in FBR" : "Exclude from FBR"}
                       </button>
                     )}
                     {inv.fbrStatus !== "Submitted" && inv.isLatest && (

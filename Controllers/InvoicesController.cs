@@ -124,6 +124,24 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Flip the FBR-exclusion flag on a bill. Excluded bills are skipped
+        /// by Validate All / Submit All; per-bill validate/submit still work.
+        /// Returns the updated DTO so the UI can re-render without a refetch.
+        /// </summary>
+        [HttpPut("{id}/fbr-excluded")]
+        public async Task<ActionResult<InvoiceDto>> SetFbrExcluded(int id, [FromBody] SetFbrExcludedRequest body)
+        {
+            var updated = await _service.SetFbrExcludedAsync(id, body.Excluded);
+            if (updated == null) return NotFound(new { error = "Bill not found." });
+            return Ok(updated);
+        }
+
+        public class SetFbrExcludedRequest
+        {
+            public bool Excluded { get; set; }
+        }
+
         [HttpGet("{id}/print/bill")]
         public async Task<ActionResult<PrintBillDto>> GetPrintBill(int id)
         {

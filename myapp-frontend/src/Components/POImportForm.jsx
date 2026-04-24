@@ -309,17 +309,26 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                     ))}
                   </select>
                 </div>
-                {clientSites.length > 0 && (
-                  <div style={{ flex: 1 }}>
-                    <label style={styles.label}>Site / Department</label>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>Site / Department</label>
+                  {clientSites.length > 0 ? (
                     <select style={styles.select} value={site} onChange={(e) => setSite(e.target.value)}>
                       <option value="">— Select Site —</option>
                       {clientSites.map((s) => (
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
-                  </div>
-                )}
+                  ) : (
+                    <input
+                      type="text"
+                      style={styles.input}
+                      placeholder={selectedClientId ? "Optional — type a site or department" : "Pick a client first"}
+                      value={site}
+                      onChange={(e) => setSite(e.target.value)}
+                      disabled={!selectedClientId}
+                    />
+                  )}
+                </div>
               </div>
 
               {/* Items Table */}

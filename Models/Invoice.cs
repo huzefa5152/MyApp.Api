@@ -23,6 +23,15 @@ namespace MyApp.Api.Models
         public DateTime? FbrSubmittedAt { get; set; }
         public string? FbrErrorMessage { get; set; }
 
+        /// <summary>
+        /// When true, this bill is excluded from the Validate All / Submit All
+        /// bulk buttons. Operators toggle this for bills they deliberately
+        /// don't want to report to FBR (e.g. internal sample invoices,
+        /// cancelled-but-retained records). The per-bill Validate / Submit
+        /// buttons still work — the flag only gates BULK actions.
+        /// </summary>
+        public bool IsFbrExcluded { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation
