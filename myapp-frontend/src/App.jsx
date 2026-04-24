@@ -12,6 +12,7 @@ import ItemTypesPage from "./pages/ItemTypesPage";
 import POFormatsPage from "./pages/POFormatsPage";
 import ProfilePage from "./pages/ProfilePage";
 import UsersPage from "./pages/UsersPage";
+import RolesPage from "./pages/RolesPage";
 import TemplateEditorPage from "./pages/TemplateEditorPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import FbrSettingsPage from "./pages/FbrSettingsPage";
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/invoices" element={<InvoicePage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/users" element={<UsersPage />} />
+          <Route path="/roles" element={<RolesPage />} />
           <Route path="/templates" element={<TemplateEditorPage />} />
           <Route path="/fbr-settings" element={<FbrSettingsPage />} />
           <Route path="/audit-logs" element={<AuditLogsPage />} />

@@ -11,8 +11,10 @@ import {
   MdLock,
   MdBadge,
   MdShield,
+  MdAdminPanelSettings,
 } from "react-icons/md";
 import { getUsers, createUser, updateUser, deleteUser } from "../api/usersApi";
+import { getRoles, getUserRoles, assignUserRoles } from "../api/rbacApi";
 import { useAuth } from "../contexts/AuthContext";
 import { notify } from "../utils/notify";
 
@@ -46,6 +48,14 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+  // Role-assignment modal state
+  const [rolesModalUser, setRolesModalUser] = useState(null);
+  const [allRoles, setAllRoles] = useState([]);
+  const [assignedRoleIds, setAssignedRoleIds] = useState(new Set());
+  const [rolesLoading, setRolesLoading] = useState(false);
+  const [rolesSaving, setRolesSaving] = useState(false);
+  const [rolesMsg, setRolesMsg] = useState(null);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -112,6 +122,53 @@ export default function UsersPage() {
     } catch (err) {
       notify(err.response?.data?.message || "Failed to delete user", "error");
       setDeleteConfirm(null);
+    }
+  };
+
+  const openRolesModal = async (u) => {
+    setRolesModalUser(u);
+    setRolesMsg(null);
+    setRolesLoading(true);
+    try {
+      const [rolesRes, userRolesRes] = await Promise.all([getRoles(), getUserRoles(u.id)]);
+      setAllRoles(rolesRes.data);
+      setAssignedRoleIds(new Set(userRolesRes.data.roles.map((r) => r.id)));
+    } catch {
+      setRolesMsg({ type: "error", text: "Failed to load roles" });
+    } finally {
+      setRolesLoading(false);
+    }
+  };
+
+  const closeRolesModal = () => {
+    if (rolesSaving) return;
+    setRolesModalUser(null);
+    setRolesMsg(null);
+    setAssignedRoleIds(new Set());
+  };
+
+  const toggleRoleAssignment = (roleId) => {
+    setAssignedRoleIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(roleId)) next.delete(roleId);
+      else next.add(roleId);
+      return next;
+    });
+  };
+
+  const handleSaveRoles = async () => {
+    if (!rolesModalUser) return;
+    setRolesSaving(true);
+    setRolesMsg(null);
+    try {
+      await assignUserRoles(rolesModalUser.id, Array.from(assignedRoleIds));
+      setRolesMsg({ type: "success", text: "Roles updated" });
+      setTimeout(closeRolesModal, 700);
+    } catch (err) {
+      const m = err.response?.data?.message || "Could not update roles";
+      setRolesMsg({ type: "error", text: m });
+    } finally {
+      setRolesSaving(false);
     }
   };
 
@@ -201,7 +258,11 @@ export default function UsersPage() {
                     Joined {new Date(u.createdAt).toLocaleDateString()}
                   </span>
                   {isSeedAdmin && u.id !== seedAdminUserId && (
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <button style={styles.rolesBtn} onClick={() => openRolesModal(u)} title="Manage roles">
+                        <MdAdminPanelSettings style={{ fontSize: "1rem" }} />
+                        <span>Roles</span>
+                      </button>
                       <button style={styles.editBtn} onClick={() => openEdit(u)} title="Edit user">
                         <MdEdit style={{ fontSize: "1rem" }} />
                         <span>Edit</span>
@@ -314,6 +375,117 @@ export default function UsersPage() {
               >
                 <MdSave style={{ fontSize: "1.1rem" }} />
                 {saving ? "Saving..." : editUser ? "Update" : "Create"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Role Assignment Modal ---- */}
+      {rolesModalUser && (
+        <div style={styles.overlay} onClick={closeRolesModal}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={{ margin: 0, fontSize: "1.1rem", color: colors.textPrimary }}>
+                Manage roles — {rolesModalUser.fullName}
+              </h3>
+              <button style={styles.modalClose} onClick={closeRolesModal}>
+                <MdClose style={{ fontSize: "1.25rem" }} />
+              </button>
+            </div>
+
+            <div style={styles.modalBody}>
+              {rolesMsg && (
+                <div style={rolesMsg.type === "success" ? styles.successMsg : styles.errorMsg}>
+                  {rolesMsg.text}
+                </div>
+              )}
+
+              <p style={{ margin: "0 0 0.75rem", color: colors.textSecondary, fontSize: "0.85rem" }}>
+                Select the roles this user should have. Their permissions are the union
+                of everything granted by their assigned roles.
+              </p>
+
+              {rolesLoading ? (
+                <p style={{ padding: "1.5rem", textAlign: "center", color: colors.textSecondary }}>
+                  Loading roles...
+                </p>
+              ) : allRoles.length === 0 ? (
+                <p style={{ padding: "1.5rem", textAlign: "center", color: colors.textSecondary }}>
+                  No roles defined yet. Go to <strong>Roles &amp; Permissions</strong> to create one.
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {allRoles.map((role) => {
+                    const checked = assignedRoleIds.has(role.id);
+                    return (
+                      <label
+                        key={role.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: "0.75rem",
+                          padding: "0.75rem 0.9rem",
+                          border: `1px solid ${checked ? colors.blue : colors.cardBorder}`,
+                          borderRadius: 10,
+                          background: checked ? `${colors.blue}0c` : "#fff",
+                          cursor: "pointer",
+                          transition: "background 0.15s, border-color 0.15s",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleRoleAssignment(role.id)}
+                          style={{ accentColor: colors.blue, marginTop: 3 }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                            <span style={{ fontWeight: 600, color: colors.textPrimary, fontSize: "0.92rem" }}>
+                              {role.name}
+                            </span>
+                            {role.isSystemRole && (
+                              <span
+                                style={{
+                                  display: "inline-block",
+                                  padding: "0.1rem 0.45rem",
+                                  borderRadius: 50,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  background: `${colors.teal}18`,
+                                  color: colors.teal,
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.03em",
+                                }}
+                              >
+                                System
+                              </span>
+                            )}
+                            <span style={{ marginLeft: "auto", fontSize: "0.78rem", color: colors.textSecondary }}>
+                              {role.permissionKeys.length} permission
+                              {role.permissionKeys.length !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                          {role.description && (
+                            <p style={{ margin: "0.25rem 0 0", color: colors.textSecondary, fontSize: "0.82rem" }}>
+                              {role.description}
+                            </p>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div style={styles.modalFooter}>
+              <button style={styles.cancelBtn} onClick={closeRolesModal} disabled={rolesSaving}>
+                Cancel
+              </button>
+              <button style={styles.saveBtn} onClick={handleSaveRoles} disabled={rolesSaving || rolesLoading}>
+                <MdSave style={{ fontSize: "1.1rem" }} />
+                {rolesSaving ? "Saving..." : "Save roles"}
               </button>
             </div>
           </div>
@@ -473,6 +645,19 @@ const styles = {
     background: "#fff",
     cursor: "pointer",
     color: colors.blue,
+    fontSize: "0.82rem",
+    fontWeight: 600,
+  },
+  rolesBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.4rem 0.85rem",
+    border: `1px solid ${colors.teal}30`,
+    borderRadius: 8,
+    background: `${colors.teal}0f`,
+    cursor: "pointer",
+    color: colors.teal,
     fontSize: "0.82rem",
     fontWeight: 600,
   },

@@ -41,6 +41,15 @@ export function AuthProvider({ children }) {
     localStorage.setItem("token", newToken);
     setToken(newToken);
     setUser(userData);
+
+    // Login response carries only basic profile fields; refetch /auth/me so
+    // flags like isSeedAdmin are available immediately (without a page reload).
+    try {
+      const meRes = await getCurrentUser();
+      setUser(meRes.data);
+    } catch {
+      /* non-fatal — /me will be retried on next mount */
+    }
   }, []);
 
   const logout = useCallback(() => {

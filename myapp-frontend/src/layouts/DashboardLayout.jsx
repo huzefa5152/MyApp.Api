@@ -19,6 +19,7 @@ import {
   MdBugReport,
   MdTune,
   MdFileUpload,
+  MdAdminPanelSettings,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import "./DashboardLayout.css";
@@ -249,6 +250,19 @@ export default function DashboardLayout() {
             <span className="dl-nav__label">Users</span>
           </NavLink>
 
+          {/* Roles & Permissions — seed-admin only */}
+          {user?.isSeedAdmin && (
+            <NavLink
+              to="/roles"
+              className={({ isActive }) =>
+                "dl-nav__item" + (isActive ? " active" : "")
+              }
+            >
+              <MdAdminPanelSettings className="dl-nav__icon" aria-hidden="true" />
+              <span className="dl-nav__label">Roles &amp; Permissions</span>
+            </NavLink>
+          )}
+
           {/* Audit Logs */}
           <NavLink
             to="/audit-logs"
@@ -382,6 +396,7 @@ function getBreadcrumb(pathname) {
     "/invoices": "Bills",
     "/profile": "My Profile",
     "/users": "User Management",
+    "/roles": "Roles & Permissions",
     "/templates": "Print Templates",
     "/fbr-settings": "Configuration / FBR Settings",
     "/audit-logs": "Audit Logs",
