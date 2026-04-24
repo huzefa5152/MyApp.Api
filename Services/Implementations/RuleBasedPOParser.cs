@@ -210,6 +210,12 @@ namespace MyApp.Api.Services.Implementations
                 var line = rawLine.TrimEnd();
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
+                // Per-page chrome — skip without treating as a stop or as a
+                // description continuation. Makes multi-page POs work: the
+                // footer of page 1 ("Page No :1 of 3", "Printed By", etc.)
+                // no longer ends the scan before pages 2+ items are seen.
+                if (PageChromeRegex.IsMatch(line)) continue;
+
                 if (stopRegex != null && stopRegex.IsMatch(line))
                 {
                     if (current != null) { items.Add(current); current = null; }
@@ -276,6 +282,11 @@ namespace MyApp.Api.Services.Implementations
             {
                 var line = raw.TrimEnd();
                 if (string.IsNullOrWhiteSpace(line)) continue;
+
+                // Per-page chrome — skip without stopping or appending.
+                // Keeps multi-page POs parsing past page 1's footer.
+                if (PageChromeRegex.IsMatch(line)) continue;
+
                 if (stopRegex != null && stopRegex.IsMatch(line))
                 {
                     if (current != null) { items.Add(current); current = null; }
@@ -413,8 +424,37 @@ namespace MyApp.Api.Services.Implementations
         //    don't fit the pattern are appended as continuations to the
         //    previous row's description.
         // ==============================================================
+        // Real end-of-items markers. Hitting one of these means the item
+        // table is actually over — flush current and break. Keep this list
+        // tight: only things that appear ONCE, after all items are listed.
+        // (Earlier this list also included "Terms", "Page No", "Printed By"
+        // etc. which appear on every page's footer — that caused multi-page
+        // POs to stop parsing at the bottom of page 1.)
         private static readonly Regex SimpleStopRegex = new(
-            @"^\s*(In\s+words|Amount\s+in\s+Words|Sub-?\s*Total|Sales\s+Tax|Excise\s+Duty|Total|Grand|Payable\s+Amount|Discount\s+Amount|Remarks|Terms|Special\s+Instructions|Payment\s+Terms|Prepared\s+By|Page\s+No|Printed\s+By|Rupees|For\s+Meko|HEAD\s+OFFICE|Email:)\b",
+            @"^\s*(In\s+words|Amount\s+in\s+Words|Sub-?\s*Total|Sales\s+Tax\s*@|Excise\s+Duty|Grand\s+Total|Payable\s+Amount|Discount\s+Amount|Total\s+Amount|Freight\s*/?\s*Cartage|Remarks\s*:|For\s+Meko|HEAD\s+OFFICE|Email:|Rupees\s+Only)\b",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // Per-page chrome: header/footer lines that REPEAT on every page of
+        // a multi-page PO. These are skipped (continue) rather than treated
+        // as stops, so the parser keeps scanning into pages 2, 3, ... after
+        // page 1's footer and finds the remaining items. Covers all saved
+        // formats — on continuation pages we only care about description,
+        // quantity, unit.
+        //
+        // Matched either at the start of a line OR anywhere in the line
+        // (some chrome markers come in the middle of wrapped lines, e.g.
+        // "22-APR-26 10:37:56 AM  registered person must issue Sales T").
+        // No trailing word-boundary — many markers end in `#` or `:` which
+        // are non-word characters and would break a trailing `\b`.
+        private static readonly Regex PageChromeRegex = new(
+            @"(^\s*|\s)(Print\s+Date|Printed\s+By|Prepared\s+By|Special\s+Instructions|U\s*/\s*S\s+\d+\s+of\s+Sales\s+Tax|registered\s+person|It'?s\s+a\s+Product\s+of|\d+\s*\)\s+(Payment|Supplier|Documents|Lotte|Freight|Goods|Delivery|Shelf)|Terms\s*:|SCM\s*-|Purchase\s+Order\s+for|Documents\s+Required|Page\s+No|Page\s+\d+\s+of\s+\d+|Supplier\s+Name|Supplier\s+Address|Address\s*:|Location\s*:|P\.?O\.?\s*Date|P\.?O\.?\s*#|P\.?R\.?\s*#|Pur\.?\s*Req\.?|Purchase\s+Req|N\.?T\.?N\.?\s*No|G\.?S\.?T\.?\s*No|Phone\s*#|Fax\s*#|LOTTE\s+Kolson|MEKO\s+DENIM|SOORTY|Noman\s+Aslam|L-\d+\s*,\s*Block|F\.B\.?\s*Industrial|Rs\.\s*$|Item\s+Name\s*$|Item\s+Id|Unit\s+Price|Total\s+Price|Required\s+Delivery\s+Date|Payment\s+Terms|Delivery\s+Terms|Delivery\s+Location|Non-Inventory\s+Items|Dispensary\s*:)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // Standalone timestamp / page-printed-on stamp like
+        // "22-APR-26 10:37:56 AM" that appears only in footers — never in
+        // an item row.
+        private static readonly Regex PageStampRegex = new(
+            @"\b\d{1,2}-[A-Za-z]{3}-\d{2,4}\s+\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?\b",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         // Row value-pair, qty-then-unit direction (description  …  QTY  UNIT  rate…).
@@ -448,9 +488,27 @@ namespace MyApp.Api.Services.Implementations
             // --- PO number ---
             if (!string.IsNullOrWhiteSpace(poNumLabel))
             {
-                var labelPattern = @"(?i)" + Regex.Escape(poNumLabel) + @"\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-/.]*)";
+                // After the label, optionally skip a leading "[A-Za-z]+-"
+                // document-class prefix (e.g. Lotte's POGI-) so the captured
+                // PO number is the digit-led business identifier the user
+                // enters on bills and challans. The non-capturing prefix
+                // group is optional — PO numbers that don't start with an
+                // alpha-dash prefix (e.g. pure numeric, or "2026/001") are
+                // captured unchanged.
+                var labelPattern = @"(?i)" + Regex.Escape(poNumLabel) + @"\s*[:#]?\s*(?:[A-Za-z]+-)?(\d[A-Za-z0-9\-/.]*)";
                 var m = Regex.Match(text, labelPattern);
-                if (m.Success) result.PONumber = m.Groups[1].Value.Trim();
+                if (m.Success)
+                {
+                    result.PONumber = m.Groups[1].Value.Trim();
+                }
+                else
+                {
+                    // Fallback: token starts with alpha (client without the
+                    // document-class prefix pattern). Capture whatever follows.
+                    var fallback = @"(?i)" + Regex.Escape(poNumLabel) + @"\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-/.]*)";
+                    var m2 = Regex.Match(text, fallback);
+                    if (m2.Success) result.PONumber = m2.Groups[1].Value.Trim();
+                }
             }
 
             // --- PO date ---
@@ -525,6 +583,36 @@ namespace MyApp.Api.Services.Implementations
                 if (i <= headerIdx + 2 && !line.Any(char.IsDigit) && line.Trim().Split(' ').All(t => t.All(char.IsLetter) || t.Length <= 2))
                     continue;
 
+                // Per-page chrome (repeating page header/footer across multi-
+                // page POs). We FLUSH `current` here before skipping — any
+                // legitimate multi-line continuation for the last item would
+                // have already arrived before the chrome intervenes, so
+                // nothing on or after this line belongs to `current`.
+                // Prevents stray wrap-lines like "Karachi" or "Unit - 2"
+                // from leaking into the previous item's description when
+                // they sit between the page 1 footer and page 2 items.
+                if (PageChromeRegex.IsMatch(line))
+                {
+                    if (current != null) { items.Add(current); current = null; }
+                    continue;
+                }
+
+                // Standalone timestamp line from the page footer, e.g.
+                // "22-APR-26 10:37:56 AM".
+                if (PageStampRegex.IsMatch(line) && !Regex.IsMatch(line, @"\b[A-Za-z]{3,}\b.*\d+\.\d+"))
+                {
+                    if (current != null) { items.Add(current); current = null; }
+                    continue;
+                }
+
+                // Repeated column header on page 2+ — a line that holds all
+                // three configured headers as whole words. Skip silently.
+                if (ContainsWord(line, descHdr) && ContainsWord(line, qtyHdr) && ContainsWord(line, unitHdr))
+                {
+                    if (current != null) { items.Add(current); current = null; }
+                    continue;
+                }
+
                 if (SimpleStopRegex.IsMatch(line))
                 {
                     if (current != null) { items.Add(current); current = null; }
@@ -554,7 +642,11 @@ namespace MyApp.Api.Services.Implementations
                     var qtyRaw = m.Groups["qty"].Value;
                     var unit = m.Groups["unit"].Value;
                     if (IsNonUnitToken(unit)) continue;
-                    if (qtyRaw.Replace(",", "").Length > 4) continue;
+                    // Reject absurdly large qty tokens. Use the NUMERIC value
+                    // rather than character length so "10.00" (5 chars) still
+                    // passes while "004539" (item ID, len 6, value 4539) is
+                    // rejected by being > 9999.
+                    if (IsImplausibleQty(qtyRaw)) continue;
                     if (!unitBeforeQty && m.Index == 0) continue;
                     if (IsInsideParens(line, m.Index)) continue;
                     if (!IsRecognisedUnit(unit)) continue;
@@ -584,7 +676,7 @@ namespace MyApp.Api.Services.Implementations
                         var qtyRaw = m.Groups["qty"].Value;
                         var unit = m.Groups["unit"].Value;
                         if (IsNonUnitToken(unit)) continue;
-                        if (qtyRaw.Replace(",", "").Length > 4) continue;
+                        if (IsImplausibleQty(qtyRaw)) continue;
                         if (!unitBeforeQty && m.Index == 0) continue;
                         picked = m;
                         break;
@@ -594,9 +686,11 @@ namespace MyApp.Api.Services.Implementations
                 if (picked != null)
                 {
                     // Description = everything on this line before the qty
-                    // token, minus the leading S.No + Item-Id prefix.
+                    // token, minus the leading S.No + Item-Id prefix and
+                    // any trailing delivery-date / timestamp column that
+                    // sat between description and qty in the source layout.
                     var prefix = line[..picked.Index].TrimEnd();
-                    var desc = StripRowLeader(prefix);
+                    var desc = SanitiseDescription(StripRowLeader(prefix));
 
                     var qty = ParseQuantity(picked.Groups["qty"].Value);
                     var unit = picked.Groups["unit"].Value;
@@ -618,6 +712,7 @@ namespace MyApp.Api.Services.Implementations
                 else if (current != null)
                 {
                     var clean = Regex.Replace(line.Trim(), @"^[\(\)\s,]+|[\(\)\s,]+$", "").Trim();
+                    clean = SanitiseDescription(clean);
                     if (clean.Length > 0)
                         current.Description = $"{current.Description} {clean}".Trim();
                 }
@@ -625,6 +720,42 @@ namespace MyApp.Api.Services.Implementations
 
             if (current != null) items.Add(current);
             return items.Where(x => !string.IsNullOrWhiteSpace(x.Description) && x.Quantity > 0).ToList();
+        }
+
+        // Strip leading date / page-chrome fragments and trailing date/
+        // timestamp columns from a description string. The PDF table has
+        // the Required Delivery Date column between description and qty —
+        // we don't want that date ending up on the item description.
+        private static readonly Regex DateTokenRegex = new(
+            @"\b\d{1,2}[-\/][A-Za-z]{3}[-\/]\d{2,4}\b|\b\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}\b",
+            RegexOptions.Compiled);
+
+        private static string SanitiseDescription(string desc)
+        {
+            if (string.IsNullOrWhiteSpace(desc)) return "";
+            // Strip repeating page-chrome fragments (Phone #, Address:,
+            // Terms :, Page No, timestamps, etc.) that may have been
+            // concatenated onto the real description text.
+            desc = PageChromeRegex.Replace(desc, " ");
+            desc = PageStampRegex.Replace(desc, " ");
+            desc = DateTokenRegex.Replace(desc, " ");
+            // Collapse multiple spaces, strip edge punctuation noise.
+            desc = Regex.Replace(desc, @"\s{2,}", " ").Trim();
+            desc = Regex.Replace(desc, @"^[\(\)\s,\.\-:;]+|[\(\)\s,\.\-:;]+$", "").Trim();
+            return desc;
+        }
+
+        // True when a numeric qty candidate is clearly too large to be a
+        // real order quantity in this domain (> 9999) — typically an item
+        // ID or part number that got paired with a description word.
+        private static bool IsImplausibleQty(string qtyRaw)
+        {
+            if (string.IsNullOrWhiteSpace(qtyRaw)) return true;
+            var s = qtyRaw.Replace(",", "").Trim();
+            var dot = s.IndexOf('.');
+            if (dot >= 0) s = s[..dot];
+            if (!int.TryParse(s, out var n)) return true;
+            return n > 9999;
         }
 
         private static bool ContainsWord(string haystack, string needle)
