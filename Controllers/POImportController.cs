@@ -106,6 +106,18 @@ namespace MyApp.Api.Controllers
                 });
             }
 
+            // If the matched format has a ClientId, resolve the name so the
+            // import review screen can pre-select it (name is shown in the
+            // dropdown).
+            string? matchedClientName = null;
+            if (match.Format.ClientId.HasValue)
+            {
+                matchedClientName = await _context.Clients
+                    .Where(c => c.Id == match.Format.ClientId.Value)
+                    .Select(c => c.Name)
+                    .FirstOrDefaultAsync();
+            }
+
             var ruleResult = _ruleParser.Parse(rawText, match.Format);
             if (ruleResult.Items.Count == 0 && string.IsNullOrEmpty(ruleResult.PONumber))
             {
@@ -117,12 +129,16 @@ namespace MyApp.Api.Controllers
                     RawText = rawText,
                     MatchedFormatId = match.Format.Id,
                     MatchedFormatName = match.Format.Name,
+                    MatchedClientId = match.Format.ClientId,
+                    MatchedClientName = matchedClientName,
                 });
             }
 
             ruleResult.MatchedFormatId = match.Format.Id;
             ruleResult.MatchedFormatName = match.Format.Name;
             ruleResult.MatchedFormatVersion = match.Format.CurrentVersion;
+            ruleResult.MatchedClientId = match.Format.ClientId;
+            ruleResult.MatchedClientName = matchedClientName;
             // Strip internal diagnostic warnings from the response — the UI
             // only cares about the extracted fields now.
             ruleResult.Warnings = new List<string>();
@@ -204,5 +220,7 @@ namespace MyApp.Api.Controllers
         public string RawText { get; set; } = "";
         public int? MatchedFormatId { get; set; }
         public string? MatchedFormatName { get; set; }
+        public int? MatchedClientId { get; set; }
+        public string? MatchedClientName { get; set; }
     }
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { MdUploadFile, MdCheckCircle, MdWarning, MdInfoOutline, MdBusiness } from "react-icons/md";
-import { getClientsByCompany } from "../api/clientApi";
+import { getClientsByCompany, getClientById } from "../api/clientApi";
 import { useCompany } from "../contexts/CompanyContext";
 import {
   fingerprintPdf,
@@ -47,7 +47,10 @@ export default function POFormatForm({ companyId, format, onClose, onSaved }) {
   const { selectedCompany } = useCompany();
 
   const [clients, setClients] = useState([]);
-  const [clientId, setClientId] = useState(format?.clientId || "");
+  // Coerce to string — React's <select value> compares via string equality
+  // with <option value>, and `e.target.value` is always a string. Keeping
+  // the state in one type avoids subtle mismatches.
+  const [clientId, setClientId] = useState(format?.clientId != null ? String(format.clientId) : "");
   const [name, setName] = useState(format?.name || "");
   const [isActive, setIsActive] = useState(format?.isActive ?? true);
 
@@ -67,13 +70,38 @@ export default function POFormatForm({ companyId, format, onClose, onSaved }) {
   const [error, setError] = useState("");
   const fileInputRef = useRef(null);
 
-  // Preload client list
+  // Preload client list for the currently-selected company. If we're editing
+  // a format whose saved clientId belongs to a DIFFERENT company (happens
+  // with the seeded baseline formats whose CompanyId is null — they appear
+  // in every company's list but their client sits under one specific
+  // company), fetch that specific client and merge it into the options so
+  // the select can actually render the persisted value.
   useEffect(() => {
     if (!companyId) return;
-    getClientsByCompany(companyId)
-      .then(({ data }) => setClients(data))
-      .catch(() => setClients([]));
-  }, [companyId]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await getClientsByCompany(companyId);
+        let list = data;
+        const savedClientId = format?.clientId;
+        if (savedClientId && !data.some((c) => c.id === savedClientId)) {
+          try {
+            const { data: own } = await getClientById(savedClientId);
+            // Prepend so the persisted client shows at the top — makes it
+            // obvious in the dropdown that this format is bound to a
+            // different company's client.
+            list = [own, ...data];
+          } catch {
+            /* client may have been deleted — leave list as-is, select will fall back to blank */
+          }
+        }
+        if (!cancelled) setClients(list);
+      } catch {
+        if (!cancelled) setClients([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [companyId, format?.clientId]);
 
   // Preload the 5 fields when editing — parse them out of RuleSetJson
   useEffect(() => {

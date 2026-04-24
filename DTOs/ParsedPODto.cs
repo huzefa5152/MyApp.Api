@@ -15,6 +15,12 @@ namespace MyApp.Api.DTOs
         public int? MatchedFormatId { get; set; }
         public string? MatchedFormatName { get; set; }
         public int? MatchedFormatVersion { get; set; }
+
+        // The client that the matched POFormat was authored for. Surfacing
+        // this lets the import review screen pre-select the client instead
+        // of making the operator re-pick it on every import.
+        public int? MatchedClientId { get; set; }
+        public string? MatchedClientName { get; set; }
     }
 
     public class ParsedPOItemDto

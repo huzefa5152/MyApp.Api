@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { MdUploadFile, MdTextSnippet, MdAdd, MdDelete, MdWarning, MdCheckCircle, MdArrowBack, MdArrowForward, MdVerified, MdErrorOutline } from "react-icons/md";
 import { parsePdf, parseText, ensureLookups } from "../api/poImportApi";
-import { getClientsByCompany } from "../api/clientApi";
+import { getClientsByCompany, getClientById } from "../api/clientApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { createDeliveryChallan } from "../api/challanApi";
 import { formStyles } from "../theme";
@@ -72,6 +72,20 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
     load();
   }, [companyId]);
 
+  // If the parse response carries a matchedClientId but it's not in the
+  // current company's client list, fetch that one client and merge it in —
+  // otherwise the <select> can't render the pre-selected option and the
+  // operator sees a blank client field despite the match.
+  const ensureClientInList = async (clientId) => {
+    if (!clientId) return;
+    try {
+      const { data } = await getClientById(clientId);
+      setClients((prev) => (prev.some((c) => c.id === data.id) ? prev : [data, ...prev]));
+    } catch {
+      /* client deleted or no permission — fall through; select will show blank */
+    }
+  };
+
   const handleParse = async () => {
     setError("");
     setNoFormatMessage("");
@@ -101,6 +115,13 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
       setMatchedFormatId(data.matchedFormatId ?? null);
       setMatchedFormatName(data.matchedFormatName || "");
       setMatchedFormatVersion(data.matchedFormatVersion ?? null);
+      // Pre-select the client from the matched POFormat so the operator
+      // doesn't have to re-pick it on every import. String-coerced because
+      // select options compare as strings.
+      if (data.matchedClientId) {
+        await ensureClientInList(data.matchedClientId);
+        setSelectedClientId(String(data.matchedClientId));
+      }
       setStep(2);
     } catch (err) {
       // 422 = no format saved for this client's layout (or rules empty).
