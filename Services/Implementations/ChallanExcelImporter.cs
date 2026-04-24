@@ -14,6 +14,13 @@ namespace MyApp.Api.Services.Implementations
         private static readonly Regex FilenameNumberRegex = new(@"(?:DC|CHALLAN)\s*#?\s*(\d+)",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+        // Hand-typed qty cells often collapse qty + UOM into one cell, e.g.
+        // "2 PKT", "2  PCS", "10 Gallon", "1,200 Mtr". Capture the leading
+        // number (allowing thousand separators and a decimal part we'll round
+        // down) and the trailing unit text separately.
+        private static readonly Regex QtyUnitRegex = new(@"^\s*([\d]+(?:[,\s][\d]{3})*(?:\.\d+)?)\s*([^\d\s][^\d]*?)?\s*$",
+            RegexOptions.Compiled);
+
         public ChallanExcelImporter(AppDbContext context)
         {
             _context = context;
@@ -172,8 +179,19 @@ namespace MyApp.Api.Services.Implementations
                 // the description column (common in hand-maintained files).
                 if (IsLikelyFooterRow(desc)) break;
 
-                var qty = qtyCol > 0 ? (wb.GetInt(sheet, r, qtyCol) ?? 0) : 0;
+                // Read qty tolerantly — if the cell is "2 PKT" / "10 Gallon"
+                // native GetInt returns null and we used to land on 0. Split
+                // into number + unit, and fall back on the unit column only
+                // when the qty cell didn't carry one.
+                int qty = 0;
+                string qtyCellUnit = "";
+                if (qtyCol > 0)
+                {
+                    (qty, qtyCellUnit) = ReadQtyCell(wb, sheet, r, qtyCol);
+                }
                 var unit = unitCol > 0 ? (wb.GetString(sheet, r, unitCol) ?? "") : "";
+                if (string.IsNullOrWhiteSpace(unit) && !string.IsNullOrWhiteSpace(qtyCellUnit))
+                    unit = qtyCellUnit;
                 var itemTypeName = itemTypeCol > 0 ? wb.GetString(sheet, r, itemTypeCol) : null;
 
                 preview.Items.Add(new ChallanImportItemDto
@@ -191,6 +209,41 @@ namespace MyApp.Api.Services.Implementations
             var d = description.Trim().ToLowerInvariant();
             return d.StartsWith("total") || d.StartsWith("grand total") ||
                    d.StartsWith("subtotal") || d.StartsWith("amount in words");
+        }
+
+        /// <summary>
+        /// Read a quantity cell that may be a pure number (2) OR a
+        /// hand-typed "qty + unit" string like "2 PKT", "2  PCS", "10 Gallon",
+        /// "1,200 Mtr". Returns (qty, unitFromCell) — unitFromCell is ""
+        /// when the cell was just a number. Silently returns (0, "") for
+        /// truly unparseable cells.
+        /// </summary>
+        private static (int qty, string unit) ReadQtyCell(IImportedWorkbook wb, int sheet, int row, int col)
+        {
+            // Fast path — native numeric cell parses cleanly.
+            var asInt = wb.GetInt(sheet, row, col);
+            if (asInt.HasValue) return (asInt.Value, "");
+
+            // Decimal-only cell (e.g. 2.5) — round down; Quantity DTO is int.
+            var asDec = wb.GetDecimal(sheet, row, col);
+            if (asDec.HasValue) return ((int)Math.Truncate(asDec.Value), "");
+
+            var raw = wb.GetString(sheet, row, col);
+            if (string.IsNullOrWhiteSpace(raw)) return (0, "");
+
+            var m = QtyUnitRegex.Match(raw);
+            if (!m.Success) return (0, "");
+
+            // Strip thousand separators before parsing, tolerate "1 200" too.
+            var numberText = m.Groups[1].Value.Replace(",", "").Replace(" ", "");
+            if (!decimal.TryParse(numberText, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var number))
+            {
+                return (0, "");
+            }
+
+            var unit = m.Groups[2].Success ? m.Groups[2].Value.Trim() : "";
+            return ((int)Math.Truncate(number), unit);
         }
 
         /// <summary>
