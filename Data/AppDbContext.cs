@@ -27,6 +27,12 @@ namespace MyApp.Api.Data
         public DbSet<POFormatVersion> POFormatVersions { get; set; }
         public DbSet<POGoldenSample> POGoldenSamples { get; set; }
 
+        // RBAC
+        public DbSet<Permission> Permissions { get; set; }
+        public DbSet<Role> Roles { get; set; }
+        public DbSet<RolePermission> RolePermissions { get; set; }
+        public DbSet<UserRole> UserRoles { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<AuditLog>()
@@ -435,6 +441,54 @@ namespace MyApp.Api.Data
                 new FbrLookup { Id = fbrId++, Category = "PaymentMode", Code = "Cheque", Label = "Cheque", SortOrder = 4 },
                 new FbrLookup { Id = fbrId++, Category = "PaymentMode", Code = "Online", Label = "Online", SortOrder = 5 }
             );
+
+            // ── RBAC ────────────────────────────────────────────────────────
+            // Permission.Key is the application-facing identifier (e.g.
+            // "users.manage.create"). Catalog is seeded from code at startup,
+            // not HasData — see PermissionSeeder.
+            modelBuilder.Entity<Permission>()
+                .HasIndex(p => p.Key)
+                .IsUnique();
+            modelBuilder.Entity<Permission>().Property(p => p.Key).HasMaxLength(200);
+            modelBuilder.Entity<Permission>().Property(p => p.Module).HasMaxLength(100);
+            modelBuilder.Entity<Permission>().Property(p => p.Page).HasMaxLength(100);
+            modelBuilder.Entity<Permission>().Property(p => p.Action).HasMaxLength(100);
+            modelBuilder.Entity<Permission>().Property(p => p.Description).HasMaxLength(500);
+
+            modelBuilder.Entity<Role>()
+                .HasIndex(r => r.Name)
+                .IsUnique();
+            modelBuilder.Entity<Role>().Property(r => r.Name).HasMaxLength(100);
+            modelBuilder.Entity<Role>().Property(r => r.Description).HasMaxLength(500);
+
+            // Composite PK on join tables.
+            modelBuilder.Entity<RolePermission>()
+                .HasKey(rp => new { rp.RoleId, rp.PermissionId });
+            modelBuilder.Entity<RolePermission>()
+                .HasOne(rp => rp.Role)
+                .WithMany(r => r.RolePermissions)
+                .HasForeignKey(rp => rp.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<RolePermission>()
+                .HasOne(rp => rp.Permission)
+                .WithMany(p => p.RolePermissions)
+                .HasForeignKey(rp => rp.PermissionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<UserRole>()
+                .HasKey(ur => new { ur.UserId, ur.RoleId });
+            modelBuilder.Entity<UserRole>()
+                .HasOne(ur => ur.User)
+                .WithMany()
+                .HasForeignKey(ur => ur.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UserRole>()
+                .HasOne(ur => ur.Role)
+                .WithMany(r => r.UserRoles)
+                .HasForeignKey(ur => ur.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UserRole>()
+                .HasIndex(ur => ur.RoleId);
         }
 
     }

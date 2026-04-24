@@ -74,6 +74,11 @@ builder.Services.AddSingleton<IExcelTemplateReverseMapper, ExcelTemplateReverseM
 builder.Services.AddScoped<IChallanExcelImporter, ChallanExcelImporter>();
 builder.Services.AddHttpClient("FBR");
 
+// RBAC: permission service needs an in-process cache for the per-user
+// permission-set TTL.
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<IPermissionService, PermissionService>();
+
 // before builder.Build()
 builder.Services.AddCors(options =>
 {
@@ -127,6 +132,12 @@ using (var scope = app.Services.CreateScope())
     // Configuration → PO Formats UI are preserved across restarts.
     var fp = scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.IPOFormatFingerprintService>();
     await MyApp.Api.Data.POFormatSeeder.SeedAsync(db, fp);
+
+    // RBAC: sync PermissionCatalog into the Permissions table and ensure the
+    // built-in "Administrator" system role exists and is wired to the seed
+    // admin user. Idempotent — runs every start.
+    var seedAdminUserId = builder.Configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
+    await MyApp.Api.Data.RbacSeeder.SeedAsync(db, seedAdminUserId);
 }
 
 // Configure the HTTP request pipeline
