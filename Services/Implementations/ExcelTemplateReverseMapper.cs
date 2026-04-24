@@ -132,11 +132,15 @@ namespace MyApp.Api.Services.Implementations
 
             if (eachRow > 0 && eachEndRow > eachRow)
             {
-                // Items template lives between the markers. When #each sits on its
-                // own row the data starts one row below; when it shares a row with
-                // placeholders (rare), use that row.
-                map.ItemsStartRow = eachRow + 1;
-                map.ItemsEndMarkerRow = eachEndRow;
+                // When the template is EXPORTED, ExcelTemplateEngine deletes
+                // the {{#each items N}} marker row AND the {{/each}} row and
+                // writes item data starting at the position of the deleted
+                // #each row (every later row shifts up by 1). So in a
+                // filled-in challan file the first item sits on `eachRow`,
+                // not `eachRow + 1`. Using +1 here silently skipped the
+                // first item on every import.
+                map.ItemsStartRow = eachRow;
+                map.ItemsEndMarkerRow = eachEndRow - 1;
             }
 
             return map;

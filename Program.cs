@@ -101,9 +101,12 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-    // Fix: remove bad migration records that ran as no-ops (Users table was never created)
+    // Fix: remove bad migration records that ran as no-ops (Users table was never created).
+    // Gated on __EFMigrationsHistory existing — fresh databases don't have it yet
+    // and the DELETE would crash before the first Migrate() call could create it.
     db.Database.ExecuteSqlRaw(@"
-        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users')
+        IF OBJECT_ID(N'[__EFMigrationsHistory]', N'U') IS NOT NULL
+           AND NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users')
         BEGIN
             DELETE FROM [__EFMigrationsHistory] WHERE [MigrationId] IN (
                 '20260403164225_AddUsersTable',
