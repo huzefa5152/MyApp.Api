@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
+using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
@@ -20,6 +21,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("count")]
+        [HasPermission("invoices.list.view")]
         public async Task<ActionResult<int>> GetTotalCount([FromQuery] int? companyId)
         {
             if (companyId.HasValue)
@@ -28,6 +30,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("company/{companyId}")]
+        [HasPermission("invoices.list.view")]
         public async Task<ActionResult<List<InvoiceDto>>> GetByCompany(int companyId)
         {
             var invoices = await _service.GetByCompanyAsync(companyId);
@@ -35,6 +38,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("company/{companyId}/paged")]
+        [HasPermission("invoices.list.view")]
         public async Task<ActionResult<PagedResult<InvoiceDto>>> GetPagedByCompany(
             int companyId,
             [FromQuery] int page = 1,
@@ -51,6 +55,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("{id}")]
+        [HasPermission("invoices.list.view")]
         public async Task<ActionResult<InvoiceDto>> GetById(int id)
         {
             var invoice = await _service.GetByIdAsync(id);
@@ -59,6 +64,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPost]
+        [HasPermission("invoices.manage.create")]
         public async Task<ActionResult<InvoiceDto>> Create([FromBody] CreateInvoiceDto dto)
         {
             try
@@ -86,6 +92,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPut("{id}")]
+        [HasPermission("invoices.manage.update")]
         public async Task<ActionResult<InvoiceDto>> Update(int id, [FromBody] UpdateInvoiceDto dto)
         {
             try
@@ -110,6 +117,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpDelete("{id}")]
+        [HasPermission("invoices.manage.delete")]
         public async Task<IActionResult> Delete(int id)
         {
             try
@@ -130,6 +138,7 @@ namespace MyApp.Api.Controllers
         /// Returns the updated DTO so the UI can re-render without a refetch.
         /// </summary>
         [HttpPut("{id}/fbr-excluded")]
+        [HasPermission("invoices.manage.update")]
         public async Task<ActionResult<InvoiceDto>> SetFbrExcluded(int id, [FromBody] SetFbrExcludedRequest body)
         {
             var updated = await _service.SetFbrExcludedAsync(id, body.Excluded);
@@ -143,6 +152,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("{id}/print/bill")]
+        [HasPermission("invoices.print.view")]
         public async Task<ActionResult<PrintBillDto>> GetPrintBill(int id)
         {
             var dto = await _service.GetPrintBillAsync(id);
@@ -151,6 +161,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("{id}/print/tax-invoice")]
+        [HasPermission("invoices.print.view")]
         public async Task<ActionResult<PrintTaxInvoiceDto>> GetPrintTaxInvoice(int id)
         {
             var dto = await _service.GetPrintTaxInvoiceAsync(id);

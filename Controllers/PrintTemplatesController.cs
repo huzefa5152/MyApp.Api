@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
+using MyApp.Api.Middleware;
 using MyApp.Api.Repositories.Interfaces;
 
 namespace MyApp.Api.Controllers
@@ -44,6 +45,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPut("company/{companyId}/{templateType}")]
+        [HasPermission("printtemplates.manage.update")]
         public async Task<IActionResult> Upsert(int companyId, string templateType, [FromBody] UpsertPrintTemplateDto dto)
         {
             var validTypes = new[] { "Challan", "Bill", "TaxInvoice" };
@@ -57,6 +59,7 @@ namespace MyApp.Api.Controllers
         // ───────── Excel Template Upload / Download / Delete ─────────
 
         [HttpPost("company/{companyId}/{templateType}/excel-template")]
+        [HasPermission("printtemplates.manage.update")]
         public async Task<IActionResult> UploadExcelTemplate(int companyId, string templateType, IFormFile file)
         {
             var validTypes = new[] { "Challan", "Bill", "TaxInvoice" };
@@ -111,6 +114,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpDelete("company/{companyId}/{templateType}/excel-template")]
+        [HasPermission("printtemplates.manage.update")]
         public async Task<IActionResult> DeleteExcelTemplate(int companyId, string templateType)
         {
             var template = await _repo.GetByCompanyAndTypeAsync(companyId, templateType);

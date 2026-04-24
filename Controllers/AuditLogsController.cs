@@ -1,13 +1,15 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
+using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "Admin")]
+    [Authorize]
+    [HasPermission("auditlogs.view")]
     public class AuditLogsController : ControllerBase
     {
         private readonly IAuditLogService _service;

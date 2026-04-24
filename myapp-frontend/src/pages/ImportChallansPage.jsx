@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
-import { MdFileUpload, MdCheckCircle, MdError, MdDelete, MdArrowBack, MdDownload } from "react-icons/md";
+import { MdFileUpload, MdCheckCircle, MdError, MdDelete, MdArrowBack, MdDownload, MdLock } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { getClientsByCompany } from "../api/clientApi";
 import { hasExcelTemplate } from "../api/printTemplateApi";
 import { previewChallanImport, commitChallanImport } from "../api/challanImportApi";
@@ -50,6 +51,8 @@ export function parseDcFilename(name) {
 /* ------------------------------------------------------------------ */
 export default function ImportChallansPage() {
   const { companies, selectedCompany } = useCompany();
+  const { has } = usePermissions();
+  const canImport = has("challans.import.create");
 
   // Target company: defaults to the globally-selected one but user can
   // override without polluting the rest of the app.
@@ -169,6 +172,16 @@ export default function ImportChallansPage() {
       <div style={styles.empty}>
         <MdFileUpload size={48} color={colors.textSecondary} />
         <p>No companies available. Please create one first.</p>
+      </div>
+    );
+  }
+
+  if (!canImport) {
+    return (
+      <div style={{ textAlign: "center", padding: "4rem 1.5rem", background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 14 }}>
+        <MdLock style={{ fontSize: "2.5rem", color: colors.textSecondary }} />
+        <h3 style={{ margin: "0.75rem 0 0.25rem" }}>Access denied</h3>
+        <p style={{ margin: 0, color: colors.textSecondary, fontSize: "0.9rem" }}>You don&apos;t have permission to import challans.</p>
       </div>
     );
   }

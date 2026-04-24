@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
+using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
@@ -20,6 +21,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("count")]
+        [HasPermission("challans.list.view")]
         public async Task<ActionResult<int>> GetTotalCount([FromQuery] int? companyId)
         {
             if (companyId.HasValue)
@@ -28,6 +30,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("company/{companyId}")]
+        [HasPermission("challans.list.view")]
         public async Task<ActionResult<List<DeliveryChallanDto>>> GetByCompany(int companyId)
         {
             var challans = await _service.GetDeliveryChallansByCompanyAsync(companyId);
@@ -35,6 +38,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("company/{companyId}/paged")]
+        [HasPermission("challans.list.view")]
         public async Task<ActionResult<PagedResult<DeliveryChallanDto>>> GetPagedByCompany(
             int companyId,
             [FromQuery] int page = 1,
@@ -52,6 +56,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("company/{companyId}/pending")]
+        [HasPermission("challans.list.view")]
         public async Task<ActionResult<List<DeliveryChallanDto>>> GetPendingByCompany(int companyId)
         {
             var challans = await _service.GetPendingChallansByCompanyAsync(companyId);
@@ -59,6 +64,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("{id}")]
+        [HasPermission("challans.list.view")]
         public async Task<ActionResult<DeliveryChallanDto>> GetById(int id)
         {
             var challan = await _service.GetByIdAsync(id);
@@ -67,6 +73,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPost("company/{companyId}")]
+        [HasPermission("challans.manage.create")]
         public async Task<ActionResult<DeliveryChallanDto>> Create(int companyId, [FromBody] DeliveryChallanDto dto)
         {
             try
@@ -92,6 +99,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPut("{id}/items")]
+        [HasPermission("challans.manage.update")]
         public async Task<ActionResult<DeliveryChallanDto>> UpdateItems(int id, [FromBody] List<DeliveryItemDto> items)
         {
             try
@@ -107,6 +115,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPut("{id}/po")]
+        [HasPermission("challans.manage.update")]
         public async Task<ActionResult<DeliveryChallanDto>> UpdatePo(int id, [FromBody] UpdatePoDto dto)
         {
             try
@@ -130,6 +139,7 @@ namespace MyApp.Api.Controllers
         /// "update items" + "update PO" flow.
         /// </summary>
         [HttpPut("{id}")]
+        [HasPermission("challans.manage.update")]
         public async Task<ActionResult<DeliveryChallanDto>> UpdateChallan(int id, [FromBody] DeliveryChallanDto dto)
         {
             try
@@ -157,6 +167,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPut("{id}/cancel")]
+        [HasPermission("challans.manage.update")]
         public async Task<IActionResult> Cancel(int id)
         {
             try
@@ -172,6 +183,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpDelete("{id}")]
+        [HasPermission("challans.manage.delete")]
         public async Task<IActionResult> Delete(int id)
         {
             try
@@ -187,6 +199,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpDelete("items/{itemId}")]
+        [HasPermission("challans.manage.update")]
         public async Task<IActionResult> DeleteItem(int itemId)
         {
             try
@@ -202,6 +215,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("{id}/print")]
+        [HasPermission("challans.print.view")]
         public async Task<ActionResult<PrintChallanDto>> GetPrintData(int id)
         {
             var dto = await _service.GetPrintDataAsync(id);

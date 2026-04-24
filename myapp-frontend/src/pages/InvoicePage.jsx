@@ -7,6 +7,7 @@ import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { defaultBillTemplate, defaultTaxInvoiceTemplate } from "../utils/defaultTemplates";
@@ -26,6 +27,12 @@ const colors = {
 
 export default function InvoicePage() {
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const { has } = usePermissions();
+  const canCreate = has("invoices.manage.create");
+  const canUpdate = has("invoices.manage.update");
+  const canDelete = has("invoices.manage.delete");
+  const canPrint = has("invoices.print.view");
+  const canFbr = has("invoices.fbr.post");
   const [clients, setClients] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -442,7 +449,7 @@ export default function InvoicePage() {
             </p>
           </div>
         </div>
-        {companies.length > 0 && (
+        {companies.length > 0 && canCreate && (
           <button style={styles.addBtn} onClick={() => setShowForm(true)}>
             <MdAdd size={18} /> New Bill
           </button>
@@ -464,8 +471,8 @@ export default function InvoicePage() {
             </select>
           </div>
 
-          {/* FBR Bulk Actions */}
-          {selectedCompany?.hasFbrToken && (unsubmittedInvoices.length > 0 || incompleteCount > 0) && (
+          {/* FBR Bulk Actions — hidden unless caller can post to FBR */}
+          {canFbr && selectedCompany?.hasFbrToken && (unsubmittedInvoices.length > 0 || incompleteCount > 0) && (
             <div style={styles.fbrBulkBar}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                 <MdCloudUpload size={18} color="#0d47a1" />
@@ -631,29 +638,37 @@ export default function InvoicePage() {
                     >
                       <MdVisibility size={14} /> View
                     </button>
-                    <button style={styles.printBtn} onClick={() => handlePrintBill(inv)}>
-                      <MdPrint size={14} /> Bill
-                    </button>
-                    <button style={styles.taxBtn} onClick={() => handlePrintTax(inv)}>
-                      <MdDescription size={14} /> Tax Invoice
-                    </button>
-                    <button style={{ ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportBillPdf(inv)}>
-                      {exportingId === inv.id + "-bill-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Bill PDF
-                    </button>
-                    <button style={{ ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxPdf(inv)}>
-                      {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Tax PDF
-                    </button>
-                    {hasExcelBill && (
+                    {canPrint && (
+                      <button style={styles.printBtn} onClick={() => handlePrintBill(inv)}>
+                        <MdPrint size={14} /> Bill
+                      </button>
+                    )}
+                    {canPrint && (
+                      <button style={styles.taxBtn} onClick={() => handlePrintTax(inv)}>
+                        <MdDescription size={14} /> Tax Invoice
+                      </button>
+                    )}
+                    {canPrint && (
+                      <button style={{ ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportBillPdf(inv)}>
+                        {exportingId === inv.id + "-bill-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Bill PDF
+                      </button>
+                    )}
+                    {canPrint && (
+                      <button style={{ ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxPdf(inv)}>
+                        {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Tax PDF
+                      </button>
+                    )}
+                    {canPrint && hasExcelBill && (
                       <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportBillExcel(inv)}>
                         {exportingId === inv.id + "-bill-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Bill XLS
                       </button>
                     )}
-                    {hasExcelTax && (
+                    {canPrint && hasExcelTax && (
                       <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxExcel(inv)}>
                         {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Tax XLS
                       </button>
                     )}
-                    {selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && (
+                    {canFbr && selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && (
                       <>
                         <button
                           style={{
@@ -693,7 +708,7 @@ export default function InvoicePage() {
                         </button>
                       </>
                     )}
-                    {inv.fbrStatus !== "Submitted" && (
+                    {canUpdate && inv.fbrStatus !== "Submitted" && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
@@ -702,7 +717,7 @@ export default function InvoicePage() {
                         <MdEdit size={14} /> Edit
                       </button>
                     )}
-                    {inv.fbrStatus !== "Submitted" && (
+                    {canUpdate && inv.fbrStatus !== "Submitted" && (
                       <button
                         style={{
                           ...styles.printBtn,
@@ -721,7 +736,7 @@ export default function InvoicePage() {
                         {inv.isFbrExcluded ? "Include in FBR" : "Exclude from FBR"}
                       </button>
                     )}
-                    {inv.fbrStatus !== "Submitted" && inv.isLatest && (
+                    {canDelete && inv.fbrStatus !== "Submitted" && inv.isLatest && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#ffebee", color: "#c62828", border: "1px solid #ef9a9a" }}
                         onClick={() => handleDeleteInvoice(inv)}

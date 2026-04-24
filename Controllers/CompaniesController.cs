@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 using MyApp.Api.DTOs;
 
@@ -20,6 +21,9 @@ namespace MyApp.Api.Controllers
         }
 
         // GET: api/companies
+        // Reads are open to any authenticated user — the company list is a
+        // foundational dependency for challan/invoice/client flows. Write
+        // operations below require explicit companies.manage.* permissions.
         [HttpGet]
         public async Task<ActionResult<IEnumerable<CompanyDto>>> GetCompanies()
         {
@@ -40,6 +44,7 @@ namespace MyApp.Api.Controllers
 
         // POST: api/companies
         [HttpPost]
+        [HasPermission("companies.manage.create")]
         public async Task<ActionResult<CompanyDto>> CreateCompany([FromBody] CreateCompanyDto dto)
         {
             if (!ModelState.IsValid)
@@ -59,6 +64,7 @@ namespace MyApp.Api.Controllers
 
         // PUT: api/companies/{id}
         [HttpPut("{id}")]
+        [HasPermission("companies.manage.update")]
         public async Task<ActionResult<CompanyDto>> UpdateCompany(int id, [FromBody] UpdateCompanyDto dto)
         {
             if (!ModelState.IsValid)
@@ -82,6 +88,7 @@ namespace MyApp.Api.Controllers
 
         // DELETE: api/companies/{id}
         [HttpDelete("{id}")]
+        [HasPermission("companies.manage.delete")]
         public async Task<IActionResult> DeleteCompany(int id)
         {
             await _companyService.DeleteAsync(id);
@@ -90,6 +97,7 @@ namespace MyApp.Api.Controllers
 
         // POST: api/companies/{id}/logo
         [HttpPost("{id}/logo")]
+        [HasPermission("companies.manage.update")]
         public async Task<ActionResult<CompanyDto>> UploadLogo(int id, IFormFile file)
         {
             if (file == null || file.Length == 0)

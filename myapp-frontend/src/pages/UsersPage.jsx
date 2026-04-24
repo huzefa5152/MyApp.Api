@@ -16,6 +16,7 @@ import {
 import { getUsers, createUser, updateUser, deleteUser } from "../api/usersApi";
 import { getRoles, getUserRoles, assignUserRoles } from "../api/rbacApi";
 import { useAuth } from "../contexts/AuthContext";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 
 const colors = {
@@ -37,8 +38,12 @@ const colors = {
 
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
-  const isSeedAdmin = currentUser?.isSeedAdmin === true;
+  const { has } = usePermissions();
   const seedAdminUserId = currentUser?.seedAdminUserId;
+  const canCreate = has("users.manage.create");
+  const canUpdate = has("users.manage.update");
+  const canDelete = has("users.manage.delete");
+  const canAssignRoles = has("rbac.userroles.assign");
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -201,7 +206,7 @@ export default function UsersPage() {
             <p style={styles.headerSub}>Manage admin users and their access</p>
           </div>
         </div>
-        {isSeedAdmin && (
+        {canCreate && (
           <button style={styles.addBtn} onClick={openAdd}>
             <MdAdd style={{ fontSize: "1.2rem" }} />
             Add User
@@ -257,20 +262,26 @@ export default function UsersPage() {
                   <span style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>
                     Joined {new Date(u.createdAt).toLocaleDateString()}
                   </span>
-                  {isSeedAdmin && u.id !== seedAdminUserId && (
+                  {u.id !== seedAdminUserId && (canAssignRoles || canUpdate || canDelete) && (
                     <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                      <button style={styles.rolesBtn} onClick={() => openRolesModal(u)} title="Manage roles">
-                        <MdAdminPanelSettings style={{ fontSize: "1rem" }} />
-                        <span>Roles</span>
-                      </button>
-                      <button style={styles.editBtn} onClick={() => openEdit(u)} title="Edit user">
-                        <MdEdit style={{ fontSize: "1rem" }} />
-                        <span>Edit</span>
-                      </button>
-                      <button style={styles.deleteBtn} onClick={() => setDeleteConfirm(u)} title="Delete user">
-                        <MdDelete style={{ fontSize: "1rem" }} />
-                        <span>Delete</span>
-                      </button>
+                      {canAssignRoles && (
+                        <button style={styles.rolesBtn} onClick={() => openRolesModal(u)} title="Manage roles">
+                          <MdAdminPanelSettings style={{ fontSize: "1rem" }} />
+                          <span>Roles</span>
+                        </button>
+                      )}
+                      {canUpdate && (
+                        <button style={styles.editBtn} onClick={() => openEdit(u)} title="Edit user">
+                          <MdEdit style={{ fontSize: "1rem" }} />
+                          <span>Edit</span>
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button style={styles.deleteBtn} onClick={() => setDeleteConfirm(u)} title="Delete user">
+                          <MdDelete style={{ fontSize: "1rem" }} />
+                          <span>Delete</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

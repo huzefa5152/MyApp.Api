@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
@@ -19,6 +20,7 @@ namespace MyApp.Api.Controllers
         // ── Submit & Validate ────────────────────────────────────
 
         [HttpPost("{invoiceId}/submit")]
+        [HasPermission("invoices.fbr.post")]
         public async Task<IActionResult> SubmitInvoice(
             int invoiceId, [FromQuery] string? scenarioId = null)
         {
@@ -29,6 +31,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPost("{invoiceId}/validate")]
+        [HasPermission("invoices.fbr.post")]
         public async Task<IActionResult> ValidateInvoice(
             int invoiceId, [FromQuery] string? scenarioId = null)
         {
@@ -97,6 +100,7 @@ namespace MyApp.Api.Controllers
         // ── STATL / Registration ────────────────────────────────
 
         [HttpPost("regstatus/{companyId}")]
+        [HasPermission("fbr.config.view")]
         public async Task<IActionResult> CheckRegistrationStatus(
             int companyId,
             [FromQuery] string regNo,
@@ -107,6 +111,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPost("regtype/{companyId}")]
+        [HasPermission("fbr.config.view")]
         public async Task<IActionResult> GetRegistrationType(
             int companyId,
             [FromQuery] string regNo)

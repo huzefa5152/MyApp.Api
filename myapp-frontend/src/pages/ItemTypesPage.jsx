@@ -6,6 +6,7 @@ import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { useCompany } from "../contexts/CompanyContext";
+import { usePermissions } from "../contexts/PermissionsContext";
 import HsCodeAutocomplete from "../Components/HsCodeAutocomplete";
 
 const colors = {
@@ -52,6 +53,10 @@ const SALE_TYPES = [
 export default function ItemTypesPage() {
   const confirm = useConfirm();
   const { companies, selectedCompany } = useCompany();
+  const { has } = usePermissions();
+  const canCreate = has("itemtypes.manage.create");
+  const canUpdate = has("itemtypes.manage.update");
+  const canDelete = has("itemtypes.manage.delete");
   const [itemTypes, setItemTypes] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState(null);
@@ -224,9 +229,11 @@ export default function ItemTypesPage() {
             </p>
           </div>
         </div>
-        <button style={styles.addBtn} onClick={openAdd} disabled={!selectedCompany}>
-          <MdAdd size={18} /> New Item
-        </button>
+        {canCreate && (
+          <button style={styles.addBtn} onClick={openAdd} disabled={!selectedCompany}>
+            <MdAdd size={18} /> New Item
+          </button>
+        )}
       </div>
 
       {!selectedCompany && companies?.length > 0 && (
@@ -307,8 +314,12 @@ export default function ItemTypesPage() {
                 {it.usageCount > 0 ? `${it.usageCount}×` : "—"}
               </span>
               <div style={{ width: 90, display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
-                <button style={styles.editBtn} onClick={() => openEdit(it)} title="Edit"><MdEdit size={16} /></button>
-                <button style={styles.deleteBtn} onClick={() => handleDelete(it)} title="Delete"><MdDelete size={16} /></button>
+                {canUpdate && (
+                  <button style={styles.editBtn} onClick={() => openEdit(it)} title="Edit"><MdEdit size={16} /></button>
+                )}
+                {canDelete && (
+                  <button style={styles.deleteBtn} onClick={() => handleDelete(it)} title="Delete"><MdDelete size={16} /></button>
+                )}
               </div>
             </div>
           ))}

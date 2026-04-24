@@ -3,9 +3,13 @@ import { deleteCompany } from "../api/companyApi";
 import { notify } from "../utils/notify";
 import { cardStyles, cardHover } from "../theme";
 import { useConfirm } from "./ConfirmDialog";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 export default function CompanyList({ companies, onEdit, fetchCompanies }) {
   const confirm = useConfirm();
+  const { has } = usePermissions();
+  const canUpdate = has("companies.manage.update");
+  const canDelete = has("companies.manage.delete");
 
   const handleDelete = async (id) => {
     const ok = await confirm({ title: "Delete Company?", message: "Are you sure you want to delete this company? This action cannot be undone.", variant: "danger", confirmText: "Delete" });
@@ -75,24 +79,30 @@ export default function CompanyList({ companies, onEdit, fetchCompanies }) {
                 </div>
               )}
             </div>
-            <div style={cardStyles.buttonGroup}>
-              <button
-                style={{ ...cardStyles.button, ...cardStyles.edit, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                onClick={() => onEdit(c)}
-                onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.08)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
-              >
-                <MdEdit /> Edit
-              </button>
-              <button
-                style={{ ...cardStyles.button, ...cardStyles.delete, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                onClick={() => handleDelete(c.id)}
-                onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(0.95)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
-              >
-                <MdDelete /> Delete
-              </button>
-            </div>
+            {(canUpdate || canDelete) && (
+              <div style={cardStyles.buttonGroup}>
+                {canUpdate && (
+                  <button
+                    style={{ ...cardStyles.button, ...cardStyles.edit, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+                    onClick={() => onEdit(c)}
+                    onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.08)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
+                  >
+                    <MdEdit /> Edit
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    style={{ ...cardStyles.button, ...cardStyles.delete, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+                    onClick={() => handleDelete(c.id)}
+                    onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(0.95)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
+                  >
+                    <MdDelete /> Delete
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       ))}

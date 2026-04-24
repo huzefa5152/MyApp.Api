@@ -23,6 +23,7 @@ import {
   getPermissionTree,
 } from "../api/rbacApi";
 import { useAuth } from "../contexts/AuthContext";
+import { Can, usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 
 const colors = {
@@ -45,7 +46,11 @@ const colors = {
 
 export default function RolesPage() {
   const { user: currentUser } = useAuth();
-  const isSeedAdmin = currentUser?.isSeedAdmin === true;
+  const { has } = usePermissions();
+  const canView = has("rbac.roles.view");
+  const canCreate = has("rbac.roles.create");
+  const canUpdate = has("rbac.roles.update");
+  const canDelete = has("rbac.roles.delete");
 
   const [roles, setRoles] = useState([]);
   const [tree, setTree] = useState([]);
@@ -207,13 +212,13 @@ export default function RolesPage() {
   );
 
   // ── Render ───────────────────────────────────────────────────────────────
-  if (!isSeedAdmin) {
+  if (!canView) {
     return (
       <div style={styles.forbidden}>
         <MdLock style={{ fontSize: "2.5rem", color: colors.textSecondary }} />
-        <h3 style={{ margin: "0.75rem 0 0.25rem" }}>Seed admin only</h3>
+        <h3 style={{ margin: "0.75rem 0 0.25rem" }}>Access denied</h3>
         <p style={{ margin: 0, color: colors.textSecondary, fontSize: "0.9rem" }}>
-          Only the primary admin can create and edit roles.
+          You don&apos;t have permission to view roles.
         </p>
       </div>
     );
@@ -234,10 +239,12 @@ export default function RolesPage() {
             </p>
           </div>
         </div>
-        <button style={styles.addBtn} onClick={openCreate}>
-          <MdAdd style={{ fontSize: "1.2rem" }} />
-          New Role
-        </button>
+        {canCreate && (
+          <button style={styles.addBtn} onClick={openCreate}>
+            <MdAdd style={{ fontSize: "1.2rem" }} />
+            New Role
+          </button>
+        )}
       </div>
 
       {/* Search */}
@@ -270,22 +277,26 @@ export default function RolesPage() {
                   <h3 style={styles.cardTitle}>{role.name}</h3>
                   {role.isSystemRole && <span style={styles.systemBadge}>System</span>}
                 </div>
-                {!role.isSystemRole && (
+                {!role.isSystemRole && (canUpdate || canDelete) && (
                   <div style={{ display: "flex", gap: "0.4rem" }}>
-                    <button
-                      style={styles.iconBtn}
-                      onClick={() => openEdit(role)}
-                      title="Edit role"
-                    >
-                      <MdEdit style={{ fontSize: "1rem" }} />
-                    </button>
-                    <button
-                      style={styles.iconBtnDanger}
-                      onClick={() => setDeleteConfirm(role)}
-                      title="Delete role"
-                    >
-                      <MdDelete style={{ fontSize: "1rem" }} />
-                    </button>
+                    {canUpdate && (
+                      <button
+                        style={styles.iconBtn}
+                        onClick={() => openEdit(role)}
+                        title="Edit role"
+                      >
+                        <MdEdit style={{ fontSize: "1rem" }} />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        style={styles.iconBtnDanger}
+                        onClick={() => setDeleteConfirm(role)}
+                        title="Delete role"
+                      >
+                        <MdDelete style={{ fontSize: "1rem" }} />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./contexts/AuthContext";
+import { PermissionsProvider } from "./contexts/PermissionsContext";
 import { CompanyProvider } from "./contexts/CompanyContext";
 import ErrorBoundary from "./Components/ErrorBoundary";
 import NotificationProvider from "./Components/NotificationProvider";
@@ -26,9 +27,11 @@ root.render(
         <NotificationProvider>
           <ConfirmProvider>
             <AuthProvider>
-              <CompanyProvider>
-                <App />
-              </CompanyProvider>
+              <PermissionsProvider>
+                <CompanyProvider>
+                  <App />
+                </CompanyProvider>
+              </PermissionsProvider>
             </AuthProvider>
           </ConfirmProvider>
         </NotificationProvider>

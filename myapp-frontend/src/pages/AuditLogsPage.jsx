@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdBugReport, MdWarning, MdInfo, MdSearch, MdChevronLeft, MdChevronRight, MdClose } from "react-icons/md";
+import { MdBugReport, MdWarning, MdInfo, MdSearch, MdChevronLeft, MdChevronRight, MdClose, MdLock } from "react-icons/md";
 import { getAuditLogs, getAuditSummary } from "../api/auditLogApi";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 const colors = {
   blue: "#0d47a1",
@@ -36,6 +37,8 @@ function formatDate(iso) {
 }
 
 export default function AuditLogsPage() {
+  const { has } = usePermissions();
+  const canView = has("auditlogs.view");
   const [logs, setLogs] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -77,6 +80,16 @@ export default function AuditLogsPage() {
     setPage(1);
     setSearch(searchInput);
   };
+
+  if (!canView) {
+    return (
+      <div style={{ textAlign: "center", padding: "4rem 1.5rem", background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 14 }}>
+        <MdLock style={{ fontSize: "2.5rem", color: colors.textSecondary }} />
+        <h3 style={{ margin: "0.75rem 0 0.25rem" }}>Access denied</h3>
+        <p style={{ margin: 0, color: colors.textSecondary, fontSize: "0.9rem" }}>You don&apos;t have permission to view audit logs.</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: "1.5rem", maxWidth: 1200, margin: "0 auto" }}>

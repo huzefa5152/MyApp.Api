@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning } from "react-icons/md";
 import ChallanModal from "./ChallanModal";
 import { cardStyles, cardHover } from "../theme";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 const colors = {
   blue: "#0d47a1",
@@ -57,6 +58,10 @@ function WarningTooltip({ warnings }) {
 }
 
 export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, exportingId }) {
+  const { has } = usePermissions();
+  const permUpdate = has("challans.manage.update");
+  const permDelete = has("challans.manage.delete");
+  const permPrint = has("challans.print.view");
   const [selectedChallan, setSelectedChallan] = useState(null);
 
   if (!challans || challans.length === 0) return null;
@@ -124,20 +129,24 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                   >
                     <MdVisibility size={14} /> View
                   </button>
-                  <button
-                    style={{ ...styles.actionBtn, ...styles.printBtn }}
-                    onClick={() => onPrint?.(c)}
-                  >
-                    <MdPrint size={14} /> Print
-                  </button>
-                  <button
-                    style={{ ...styles.actionBtn, ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }}
-                    disabled={!!exportingId}
-                    onClick={() => onExportPdf?.(c)}
-                  >
-                    {exportingId === c.id + "-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} PDF
-                  </button>
-                  {onExportExcel && (
+                  {permPrint && (
+                    <button
+                      style={{ ...styles.actionBtn, ...styles.printBtn }}
+                      onClick={() => onPrint?.(c)}
+                    >
+                      <MdPrint size={14} /> Print
+                    </button>
+                  )}
+                  {permPrint && (
+                    <button
+                      style={{ ...styles.actionBtn, ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }}
+                      disabled={!!exportingId}
+                      onClick={() => onExportPdf?.(c)}
+                    >
+                      {exportingId === c.id + "-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} PDF
+                    </button>
+                  )}
+                  {permPrint && onExportExcel && (
                     <button
                       style={{ ...styles.actionBtn, ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }}
                       disabled={!!exportingId}
@@ -146,7 +155,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       {exportingId === c.id + "-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Excel
                     </button>
                   )}
-                  {isEditable && (
+                  {permUpdate && isEditable && (
                     <button
                       style={{ ...styles.actionBtn, ...styles.editBtn }}
                       onClick={() => onEditItems?.(c)}
@@ -155,7 +164,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       <MdEdit size={14} /> Edit
                     </button>
                   )}
-                  {canCancel && (
+                  {permUpdate && canCancel && (
                     <button
                       style={{ ...styles.actionBtn, ...styles.cancelBtn }}
                       onClick={() => onCancel?.(c)}
@@ -163,7 +172,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       <MdCancel size={14} /> Cancel
                     </button>
                   )}
-                  {canDelete && (
+                  {permDelete && canDelete && (
                     <button
                       style={{ ...styles.actionBtn, ...styles.deleteBtn }}
                       onClick={() => onDelete?.(c)}

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Middleware;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
 
@@ -46,6 +47,7 @@ namespace MyApp.Api.Controllers
 
         // List formats, optionally filtered by companyId and/or clientId.
         [HttpGet]
+        [HasPermission("poformats.manage.view")]
         public async Task<ActionResult<List<POFormatListItemDto>>> List([FromQuery] int? companyId, [FromQuery] int? clientId)
         {
             var q = _db.POFormats
@@ -64,6 +66,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("{id}")]
+        [HasPermission("poformats.manage.view")]
         public async Task<ActionResult<POFormatDto>> Get(int id)
         {
             var f = await _db.POFormats
@@ -80,6 +83,7 @@ namespace MyApp.Api.Controllers
         // onboarding to show "this layout is already saved as X" before the
         // operator creates a duplicate.
         [HttpPost("fingerprint-pdf")]
+        [HasPermission("poformats.manage.create")]
         [RequestSizeLimit(10 * 1024 * 1024)]
         public async Task<ActionResult<FingerprintPdfResponseDto>> FingerprintPdf(IFormFile file, [FromQuery] int? companyId)
         {
@@ -109,6 +113,7 @@ namespace MyApp.Api.Controllers
         // with a delivery-date column between description and qty). 99% of
         // clients should use /simple instead.
         [HttpPost]
+        [HasPermission("poformats.manage.create")]
         public async Task<ActionResult<POFormatDto>> Create([FromBody] POFormatCreateDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto.RawText))
@@ -125,6 +130,7 @@ namespace MyApp.Api.Controllers
         // + the sample PDF's raw text. Server builds a simple-headers-v1
         // rule-set and saves the format.
         [HttpPost("simple")]
+        [HasPermission("poformats.manage.create")]
         public async Task<ActionResult<POFormatDto>> CreateSimple([FromBody] POFormatSimpleCreateDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto.Name))
@@ -168,6 +174,7 @@ namespace MyApp.Api.Controllers
         // new sample PDF (RawText is passed), we also recompute the
         // fingerprint hash — useful when the client's template changed.
         [HttpPut("{id}/simple")]
+        [HasPermission("poformats.manage.update")]
         public async Task<ActionResult<POFormatDto>> UpdateSimple(int id, [FromBody] POFormatSimpleUpdateDto dto)
         {
             var format = await _db.POFormats.FirstOrDefaultAsync(f => f.Id == id);
@@ -235,6 +242,7 @@ namespace MyApp.Api.Controllers
         // Hard delete. The versions and any golden samples cascade via FK
         // config in AppDbContext.
         [HttpDelete("{id}")]
+        [HasPermission("poformats.manage.delete")]
         public async Task<IActionResult> Delete(int id)
         {
             var format = await _db.POFormats.FirstOrDefaultAsync(f => f.Id == id);

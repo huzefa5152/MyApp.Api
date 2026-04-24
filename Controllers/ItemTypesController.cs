@@ -1,10 +1,14 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
+using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
 {
+    // Item types are used by autocomplete widgets on challan/invoice forms,
+    // so READ endpoints are open to any authenticated user. WRITE endpoints
+    // (catalog management) require explicit itemtypes.manage.* permissions.
     [Authorize]
     [ApiController]
     [Route("api/[controller]")]
@@ -44,6 +48,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPost]
+        [HasPermission("itemtypes.manage.create")]
         public async Task<ActionResult<ItemTypeDto>> Create([FromBody] ItemTypeDto dto)
         {
             try
@@ -58,6 +63,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPut("{id}")]
+        [HasPermission("itemtypes.manage.update")]
         public async Task<ActionResult<ItemTypeDto>> Update(int id, [FromBody] ItemTypeDto dto)
         {
             try
@@ -73,6 +79,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpDelete("{id}")]
+        [HasPermission("itemtypes.manage.delete")]
         public async Task<IActionResult> Delete(int id)
         {
             try

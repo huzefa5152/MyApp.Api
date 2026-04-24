@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
+using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
@@ -42,6 +43,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPost]
+        [HasPermission("clients.manage.create")]
         public async Task<ActionResult<ClientDto>> CreateClient([FromBody] ClientDto dto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -58,6 +60,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPut("{id}")]
+        [HasPermission("clients.manage.update")]
         public async Task<ActionResult<ClientDto>> UpdateClient(int id, [FromBody] ClientDto dto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -79,6 +82,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpDelete("{id}")]
+        [HasPermission("clients.manage.delete")]
         public async Task<IActionResult> DeleteClient(int id)
         {
             await _service.DeleteAsync(id);

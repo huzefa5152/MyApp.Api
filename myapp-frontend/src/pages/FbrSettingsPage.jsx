@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { MdTune, MdAdd, MdEdit, MdDelete, MdSearch } from "react-icons/md";
+import { MdTune, MdAdd, MdEdit, MdDelete, MdSearch, MdLock } from "react-icons/md";
 import { getFbrLookups, createFbrLookup, updateFbrLookup, deleteFbrLookup } from "../api/fbrLookupApi";
 import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 const colors = {
   blue: "#0d47a1",
@@ -36,6 +37,8 @@ const categoryLabels = {
 
 export default function FbrSettingsPage() {
   const confirm = useConfirm();
+  const { has } = usePermissions();
+  const canManage = has("fbr.config.update");
   const [lookups, setLookups] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState(null);
@@ -121,6 +124,16 @@ export default function FbrSettingsPage() {
     if (items.length > 0 || (!filterCategory || filterCategory === cat)) acc[cat] = items;
     return acc;
   }, {});
+
+  if (!canManage) {
+    return (
+      <div style={{ textAlign: "center", padding: "4rem 1.5rem", background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 14 }}>
+        <MdLock style={{ fontSize: "2.5rem", color: colors.textSecondary }} />
+        <h3 style={{ margin: "0.75rem 0 0.25rem" }}>Access denied</h3>
+        <p style={{ margin: 0, color: colors.textSecondary, fontSize: "0.9rem" }}>You don&apos;t have permission to manage FBR settings.</p>
+      </div>
+    );
+  }
 
   return (
     <div>

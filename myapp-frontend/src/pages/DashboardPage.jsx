@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { MdBusiness, MdPeople, MdDescription, MdReceipt, MdArrowForward, MdRefresh, MdFilterList } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { useCompany } from "../contexts/CompanyContext";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { getCompanies } from "../api/companyApi";
 import { getClientsCount } from "../api/clientApi";
 import { getDeliveryChallansCount } from "../api/challanApi";
@@ -175,6 +176,7 @@ const styles = {
 /* ------------------------------------------------------------------ */
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { has: permCheck } = usePermissions();
   const { companies, selectedCompany, setSelectedCompany } = useCompany();
   const navigate = useNavigate();
 
@@ -191,17 +193,21 @@ export default function DashboardPage() {
     setError(null);
     try {
       const cid = companyId || null;
-      const [companiesRes, clientsCountRes, challansCountRes, invoicesCountRes] = await Promise.all([
+      // allSettled — a single 403 (permission-gated endpoint the caller
+      // doesn't have) shouldn't blank every other counter on the page.
+      const results = await Promise.allSettled([
         getCompanies(),
         getClientsCount(cid),
         getDeliveryChallansCount(cid),
         getInvoicesCount(cid),
       ]);
+      const [companiesRes, clientsCountRes, challansCountRes, invoicesCountRes] = results;
+      const pickNum = (r) => r.status === "fulfilled" && typeof r.value.data === "number" ? r.value.data : 0;
       setCounts({
-        companies: Array.isArray(companiesRes.data) ? companiesRes.data.length : 0,
-        clients: typeof clientsCountRes.data === "number" ? clientsCountRes.data : 0,
-        challans: typeof challansCountRes.data === "number" ? challansCountRes.data : 0,
-        invoices: typeof invoicesCountRes.data === "number" ? invoicesCountRes.data : 0,
+        companies: companiesRes.status === "fulfilled" && Array.isArray(companiesRes.value.data) ? companiesRes.value.data.length : 0,
+        clients: pickNum(clientsCountRes),
+        challans: pickNum(challansCountRes),
+        invoices: pickNum(invoicesCountRes),
       });
     } catch (err) {
       console.error("Dashboard fetch error:", err);
@@ -278,6 +284,7 @@ export default function DashboardPage() {
       btnColor: "#0d47a1",
       path: "/companies/list",
       btnLabel: "Go to Companies",
+      permission: "companies.manage.view",
     },
     {
       title: "Clients",
@@ -287,6 +294,7 @@ export default function DashboardPage() {
       btnColor: "#00897b",
       path: "/Clients/list",
       btnLabel: "Go to Clients",
+      permission: "clients.manage.view",
     },
     {
       title: "Challans",
@@ -296,6 +304,7 @@ export default function DashboardPage() {
       btnColor: "#1565c0",
       path: "/challans",
       btnLabel: "Go to Challans",
+      permission: "challans.list.view",
     },
     {
       title: "Bills",
@@ -305,8 +314,9 @@ export default function DashboardPage() {
       btnColor: "#6a1b9a",
       path: "/invoices",
       btnLabel: "Go to Bills",
+      permission: "invoices.list.view",
     },
-  ];
+  ].filter((card) => permCheck(card.permission));
 
   return (
     <div style={styles.page}>

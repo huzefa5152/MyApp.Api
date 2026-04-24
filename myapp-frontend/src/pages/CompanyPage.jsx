@@ -3,6 +3,7 @@ import { MdBusiness, MdAdd, MdSearch } from "react-icons/md";
 import CompanyList from "../Components/CompanyList";
 import CompanyForm from "../Components/CompanyForm";
 import { useCompany } from "../contexts/CompanyContext";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 const styles = {
   header: {
@@ -89,6 +90,10 @@ const styles = {
 
 export default function CompanyPage() {
   const { companies, refreshCompanies } = useCompany();
+  const { has } = usePermissions();
+  const canCreate = has("companies.manage.create");
+  const canUpdate = has("companies.manage.update");
+  const canDelete = has("companies.manage.delete");
   const [editingCompany, setEditingCompany] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
@@ -117,14 +122,16 @@ export default function CompanyPage() {
             <p style={styles.subtitle}>{companies.length} registered {companies.length === 1 ? "company" : "companies"}</p>
           </div>
         </div>
-        <button
-          style={styles.addBtn}
-          onClick={handleAdd}
-          onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.transform = ""; }}
-        >
-          <MdAdd /> New Company
-        </button>
+        {canCreate && (
+          <button
+            style={styles.addBtn}
+            onClick={handleAdd}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = ""; }}
+          >
+            <MdAdd /> New Company
+          </button>
+        )}
       </div>
 
       {companies.length > 2 && (

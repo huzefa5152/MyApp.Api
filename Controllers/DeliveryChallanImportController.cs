@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers.ExcelImport;
+using MyApp.Api.Middleware;
 using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Services.Interfaces;
 
@@ -16,6 +17,7 @@ namespace MyApp.Api.Controllers
     [ApiController]
     [Route("api/DeliveryChallans")]
     [Authorize]
+    [HasPermission("challans.import.create")]
     public class DeliveryChallanImportController : ControllerBase
     {
         private const int MaxFileBytes = 10 * 1024 * 1024;   // 10 MB per file

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { MdAdd, MdEdit, MdDelete, MdDescription, MdWarning, MdInfoOutline, MdBusiness } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { listPoFormats, getPoFormat, deletePoFormat } from "../api/poFormatApi";
 import POFormatForm from "../Components/POFormatForm";
 import { dropdownStyles } from "../theme";
@@ -24,6 +25,10 @@ const colors = {
 
 export default function POFormatsPage() {
   const { companies, selectedCompany, setSelectedCompany } = useCompany();
+  const { has } = usePermissions();
+  const canCreate = has("poformats.manage.create");
+  const canUpdate = has("poformats.manage.update");
+  const canDelete = has("poformats.manage.delete");
   const [formats, setFormats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -104,9 +109,11 @@ export default function POFormatsPage() {
             Each client's purchase-order layout is saved once. Future PDFs with the same layout parse automatically — no AI, no retry.
           </p>
         </div>
-        <button style={styles.addBtn} onClick={handleAdd}>
-          <MdAdd size={18} /> Add PO Format
-        </button>
+        {canCreate && (
+          <button style={styles.addBtn} onClick={handleAdd}>
+            <MdAdd size={18} /> Add PO Format
+          </button>
+        )}
       </div>
 
       {/* Company selector — scopes every format + client dropdown below */}
@@ -143,9 +150,11 @@ export default function POFormatsPage() {
           <p style={{ margin: "0 0 1rem", color: colors.textSecondary, fontSize: "0.9rem" }}>
             Add a format for each of your clients. You'll need a sample PDF and the column header names.
           </p>
-          <button style={styles.addBtn} onClick={handleAdd}>
-            <MdAdd size={18} /> Add your first PO format
-          </button>
+          {canCreate && (
+            <button style={styles.addBtn} onClick={handleAdd}>
+              <MdAdd size={18} /> Add your first PO format
+            </button>
+          )}
         </div>
       ) : (
         <div style={styles.card}>
@@ -184,8 +193,12 @@ export default function POFormatsPage() {
                     {new Date(f.updatedAt).toLocaleDateString()}
                   </td>
                   <td style={{ ...styles.td, textAlign: "right" }}>
-                    <button style={styles.iconBtn} onClick={() => handleEdit(f)} title="Edit"><MdEdit size={16} /></button>
-                    <button style={{ ...styles.iconBtn, ...styles.iconBtnDanger }} onClick={() => handleDelete(f)} title="Delete"><MdDelete size={16} /></button>
+                    {canUpdate && (
+                      <button style={styles.iconBtn} onClick={() => handleEdit(f)} title="Edit"><MdEdit size={16} /></button>
+                    )}
+                    {canDelete && (
+                      <button style={{ ...styles.iconBtn, ...styles.iconBtnDanger }} onClick={() => handleDelete(f)} title="Delete"><MdDelete size={16} /></button>
+                    )}
                   </td>
                 </tr>
               ))}

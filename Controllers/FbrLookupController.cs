@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MyApp.Api.Middleware;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
 
@@ -6,6 +8,7 @@ namespace MyApp.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class FbrLookupController : ControllerBase
     {
         private readonly IFbrLookupService _service;
@@ -30,6 +33,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPost]
+        [HasPermission("fbr.config.update")]
         public async Task<IActionResult> Create([FromBody] FbrLookup lookup)
         {
             var created = await _service.CreateAsync(lookup);
@@ -37,6 +41,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPut("{id}")]
+        [HasPermission("fbr.config.update")]
         public async Task<IActionResult> Update(int id, [FromBody] FbrLookup lookup)
         {
             var updated = await _service.UpdateAsync(id, lookup);
@@ -45,6 +50,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpDelete("{id}")]
+        [HasPermission("fbr.config.update")]
         public async Task<IActionResult> Delete(int id)
         {
             var deleted = await _service.DeleteAsync(id);

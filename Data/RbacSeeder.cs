@@ -15,10 +15,65 @@ namespace MyApp.Api.Data
     {
         public const string AdministratorRoleName = "Administrator";
 
+        public const string BootstrapMarker = "RBAC_BOOTSTRAP_V1_ADMIN_AUTO_ASSIGN";
+
         public static async Task SeedAsync(AppDbContext db, int seedAdminUserId)
         {
             await UpsertPermissionsAsync(db);
             await EnsureAdministratorRoleAsync(db, seedAdminUserId);
+            await BootstrapExistingAdminUsersAsync(db);
+        }
+
+        /// <summary>
+        /// Runs once per database: assigns the Administrator role to every
+        /// pre-existing user whose legacy <c>User.Role</c> column is "Admin"
+        /// and who has no <c>UserRole</c> rows yet. This preserves behaviour
+        /// for admins who existed before RBAC was introduced — without this
+        /// they'd lose access the moment the new [HasPermission] gates go
+        /// live. Gated by an AuditLog marker so subsequent starts don't re-
+        /// assign roles that an operator has since removed.
+        /// </summary>
+        private static async Task BootstrapExistingAdminUsersAsync(AppDbContext db)
+        {
+            var alreadyRan = await db.AuditLogs
+                .AnyAsync(a => a.ExceptionType == BootstrapMarker);
+            if (alreadyRan) return;
+
+            var adminRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == AdministratorRoleName);
+            if (adminRole == null) return; // EnsureAdministratorRoleAsync should have just created it
+
+            // Candidates: User.Role='Admin' AND no UserRole rows at all
+            var candidateIds = await db.Users
+                .Where(u => u.Role == "Admin" && !db.UserRoles.Any(ur => ur.UserId == u.Id))
+                .Select(u => u.Id)
+                .ToListAsync();
+
+            var count = 0;
+            foreach (var uid in candidateIds)
+            {
+                db.UserRoles.Add(new UserRole
+                {
+                    UserId = uid,
+                    RoleId = adminRole.Id,
+                    AssignedAt = DateTime.UtcNow,
+                    AssignedByUserId = null // system assignment
+                });
+                count++;
+            }
+
+            db.AuditLogs.Add(new AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                Level = "Info",
+                UserName = "system",
+                HttpMethod = "SEED",
+                RequestPath = "/rbac/bootstrap",
+                StatusCode = 200,
+                ExceptionType = BootstrapMarker,
+                Message = $"RBAC bootstrap complete — auto-assigned Administrator role to {count} pre-existing user(s)."
+            });
+
+            await db.SaveChangesAsync();
         }
 
         private static async Task UpsertPermissionsAsync(AppDbContext db)

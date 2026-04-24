@@ -19,6 +19,7 @@ import { exportToPdf } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 
@@ -36,6 +37,11 @@ const colors = {
 export default function ChallanPage() {
   const confirm = useConfirm();
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const { has } = usePermissions();
+  const canCreate = has("challans.manage.create");
+  const canUpdate = has("challans.manage.update");
+  const canDelete = has("challans.manage.delete");
+  const canPrint = has("challans.print.view");
   const [clients, setClients] = useState([]);
   const [challans, setChallans] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -237,12 +243,16 @@ export default function ChallanPage() {
         </div>
         {companies.length > 0 && (
           <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button style={styles.addBtn} onClick={handleAddChallan}>
-              <MdAdd size={18} /> New Challan
-            </button>
-            <button style={{ ...styles.addBtn, backgroundColor: "#00897b" }} onClick={() => selectedCompany && setShowImport(true)}>
-              <MdUploadFile size={18} /> Import PO
-            </button>
+            {canCreate && (
+              <button style={styles.addBtn} onClick={handleAddChallan}>
+                <MdAdd size={18} /> New Challan
+              </button>
+            )}
+            {canCreate && has("poformats.import.create") && (
+              <button style={{ ...styles.addBtn, backgroundColor: "#00897b" }} onClick={() => selectedCompany && setShowImport(true)}>
+                <MdUploadFile size={18} /> Import PO
+              </button>
+            )}
           </div>
         )}
       </div>

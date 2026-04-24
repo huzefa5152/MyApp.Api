@@ -21,6 +21,8 @@ import SyncWarningModal from "../Components/templateEditor/SyncWarningModal";
 import VisualEditor from "../Components/templateEditor/VisualEditor";
 import StarterTemplatePicker from "../Components/templateEditor/StarterTemplatePicker";
 import { useConfirm } from "../Components/ConfirmDialog";
+import { usePermissions } from "../contexts/PermissionsContext";
+import { MdLock } from "react-icons/md";
 
 const TEMPLATE_TYPES = [
   { value: "Challan", label: "Delivery Challan" },
@@ -115,6 +117,8 @@ const colors = {
 
 export default function TemplateEditorPage() {
   const confirm = useConfirm();
+  const { has } = usePermissions();
+  const canManage = has("printtemplates.manage.update");
   const { companies, selectedCompany, setSelectedCompany, loading } = useCompany();
   const [templateType, setTemplateType] = useState("Challan");
   const [htmlContent, setHtmlContent] = useState("");
@@ -341,6 +345,16 @@ export default function TemplateEditorPage() {
 
   const hasChanges = htmlContent !== originalContent || templateJson !== originalJson;
   // fields is now fetched from API via useEffect above
+
+  if (!canManage) {
+    return (
+      <div style={{ textAlign: "center", padding: "4rem 1.5rem", background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 14 }}>
+        <MdLock style={{ fontSize: "2.5rem", color: colors.textSecondary }} />
+        <h3 style={{ margin: "0.75rem 0 0.25rem" }}>Access denied</h3>
+        <p style={{ margin: 0, color: colors.textSecondary, fontSize: "0.9rem" }}>You don&apos;t have permission to edit print templates.</p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

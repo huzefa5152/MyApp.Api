@@ -5,6 +5,7 @@ import ClientForm from "../Components/ClientForm";
 import { getClientsByCompany } from "../api/clientApi";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 const colors = {
   blue: "#0d47a1",
@@ -16,6 +17,8 @@ const colors = {
 
 export default function ClientsPage() {
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const { has } = usePermissions();
+  const canCreate = has("clients.manage.create");
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -73,7 +76,7 @@ export default function ClientsPage() {
             </p>
           </div>
         </div>
-        {companies.length > 0 && (
+        {companies.length > 0 && canCreate && (
           <button
             style={styles.addBtn}
             onClick={handleAdd}

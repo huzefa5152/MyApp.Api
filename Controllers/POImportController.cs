@@ -4,6 +4,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Middleware;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
 
@@ -17,6 +18,7 @@ namespace MyApp.Api.Controllers
     [Authorize]
     [ApiController]
     [Route("api/[controller]")]
+    [HasPermission("poformats.import.create")]
     public class POImportController : ControllerBase
     {
         private readonly IPOParserService _parser;

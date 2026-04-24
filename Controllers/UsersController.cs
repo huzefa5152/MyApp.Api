@@ -4,12 +4,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Middleware;
 
 namespace MyApp.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "Admin")]
+    [Authorize]
     public class UsersController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -21,15 +22,9 @@ namespace MyApp.Api.Controllers
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
         }
 
-        private async Task<bool> IsSeedAdmin()
-        {
-            var username = User.FindFirstValue(ClaimTypes.Name);
-            var currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
-            return currentUser?.Id == _seedAdminUserId;
-        }
-
         // GET /api/users
         [HttpGet]
+        [HasPermission("users.manage.view")]
         public async Task<ActionResult> GetUsers()
         {
             var users = await _context.Users
@@ -50,6 +45,7 @@ namespace MyApp.Api.Controllers
 
         // GET /api/users/{id}
         [HttpGet("{id}")]
+        [HasPermission("users.manage.view")]
         public async Task<ActionResult> GetUser(int id)
         {
             var user = await _context.Users
@@ -71,11 +67,9 @@ namespace MyApp.Api.Controllers
 
         // POST /api/users
         [HttpPost]
+        [HasPermission("users.manage.create")]
         public async Task<ActionResult> CreateUser([FromBody] CreateUserDto dto)
         {
-            if (!await IsSeedAdmin())
-                return Forbid();
-
             if (string.IsNullOrWhiteSpace(dto.Username) || string.IsNullOrWhiteSpace(dto.Password))
                 return BadRequest(new { message = "Username and password are required" });
 
@@ -89,15 +83,15 @@ namespace MyApp.Api.Controllers
             if (exists)
                 return Conflict(new { message = "Username already exists" });
 
-            var allowedRoles = new[] { "Admin" };
-            var role = allowedRoles.Contains(dto.Role) ? dto.Role : "Admin";
-
+            // Legacy "Role" column is now informational only — permissions
+            // come from the RBAC role-assignment system. New users start with
+            // no roles; seed admin assigns via the Users → Roles UI.
             var user = new Models.User
             {
                 Username = dto.Username,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
                 FullName = dto.FullName,
-                Role = role,
+                Role = "User",
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -116,11 +110,9 @@ namespace MyApp.Api.Controllers
 
         // PUT /api/users/{id}
         [HttpPut("{id}")]
+        [HasPermission("users.manage.update")]
         public async Task<ActionResult> UpdateUser(int id, [FromBody] UpdateUserDto dto)
         {
-            if (!await IsSeedAdmin())
-                return Forbid();
-
             if (id == _seedAdminUserId)
                 return BadRequest(new { message = "The primary admin account cannot be modified" });
 
@@ -137,12 +129,8 @@ namespace MyApp.Api.Controllers
             if (!string.IsNullOrWhiteSpace(dto.FullName))
                 user.FullName = dto.FullName;
 
-            if (!string.IsNullOrWhiteSpace(dto.Role))
-            {
-                var allowedRoles = new[] { "Admin" };
-                if (allowedRoles.Contains(dto.Role))
-                    user.Role = dto.Role;
-            }
+            // Legacy "Role" column is informational. Permissions come from
+            // the RBAC role-assignment system — manage via Users → Roles UI.
 
             if (!string.IsNullOrWhiteSpace(dto.Password))
             {
@@ -165,11 +153,9 @@ namespace MyApp.Api.Controllers
 
         // DELETE /api/users/{id}
         [HttpDelete("{id}")]
+        [HasPermission("users.manage.delete")]
         public async Task<ActionResult> DeleteUser(int id)
         {
-            if (!await IsSeedAdmin())
-                return Forbid();
-
             if (id == _seedAdminUserId)
                 return BadRequest(new { message = "The primary admin account cannot be deleted" });
 

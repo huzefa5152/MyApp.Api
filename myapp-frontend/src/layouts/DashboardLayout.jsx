@@ -22,6 +22,7 @@ import {
   MdAdminPanelSettings,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
+import { Can, usePermissions } from "../contexts/PermissionsContext";
 import "./DashboardLayout.css";
 
 /* ------------------------------------------------------------------ */
@@ -48,6 +49,7 @@ function getDisplayName(user) {
 /* ------------------------------------------------------------------ */
 export default function DashboardLayout() {
   const { user, logout } = useAuth();
+  const { hasAny } = usePermissions();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -55,6 +57,17 @@ export default function DashboardLayout() {
   const [configOpen, setConfigOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
+
+  // Configuration menu is shown if the user can reach ANY of its children.
+  const configKeys = [
+    "companies.manage.view",
+    "clients.manage.view",
+    "itemtypes.manage.view",
+    "poformats.manage.view",
+    "printtemplates.manage.update",
+    "fbr.config.update",
+  ];
+  const canSeeConfiguration = hasAny(configKeys);
 
   // Auto-expand Configuration submenu if a child route is active
   const isConfigActive = location.pathname.startsWith("/companies") || location.pathname.startsWith("/Clients") || location.pathname.startsWith("/item-types") || location.pathname.startsWith("/po-formats") || location.pathname.startsWith("/templates") || location.pathname.startsWith("/fbr-settings");
@@ -125,133 +138,152 @@ export default function DashboardLayout() {
           <hr className="dl-nav__divider" />
           <span className="dl-nav__section-label">Management</span>
 
-          {/* Configuration (expandable) */}
-          <button
-            type="button"
-            className={`dl-nav__item${isConfigActive ? " dl-nav__item--active" : ""}`}
-            onClick={toggleConfig}
-            aria-expanded={configOpen}
-            aria-controls="config-submenu"
-          >
-            <MdSettings className="dl-nav__icon" aria-hidden="true" />
-            <span className="dl-nav__label">Configuration</span>
-            <MdKeyboardArrowDown
-              className={`dl-nav__arrow${configOpen ? " dl-nav__arrow--open" : ""}`}
-              aria-hidden="true"
-            />
-          </button>
-
-          {/* Submenu */}
-          <div
-            id="config-submenu"
-            className={`dl-submenu${configOpen ? " dl-submenu--open" : ""}`}
-            role="region"
-            aria-label="Configuration submenu"
-          >
-            <div className="dl-submenu__inner">
-              <NavLink
-                to="/companies/list"
-                className={({ isActive }) =>
-                  "dl-submenu__item" + (isActive ? " active" : "")
-                }
+          {/* Configuration (expandable) — only if caller has access to at
+              least one sub-item. */}
+          {canSeeConfiguration && (
+            <>
+              <button
+                type="button"
+                className={`dl-nav__item${isConfigActive ? " dl-nav__item--active" : ""}`}
+                onClick={toggleConfig}
+                aria-expanded={configOpen}
+                aria-controls="config-submenu"
               >
-                <MdBusiness aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
-                Companies List
-              </NavLink>
-              <NavLink
-                to="/Clients/list"
-                className={({ isActive }) =>
-                  "dl-submenu__item" + (isActive ? " active" : "")
-                }
-              >
-                <MdPeople aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
-                Clients List
-              </NavLink>
-              <NavLink
-                to="/item-types"
-                className={({ isActive }) =>
-                  "dl-submenu__item" + (isActive ? " active" : "")
-                }
-              >
-                <MdCategory aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
-                Item Types
-              </NavLink>
-              <NavLink
-                to="/po-formats"
-                className={({ isActive }) =>
-                  "dl-submenu__item" + (isActive ? " active" : "")
-                }
-              >
-                <MdDescription aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
-                PO Formats
-              </NavLink>
-              <NavLink
-                to="/templates"
-                className={({ isActive }) =>
-                  "dl-submenu__item" + (isActive ? " active" : "")
-                }
-              >
-                <MdCode aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
-                Print Templates
-              </NavLink>
-              <NavLink
-                to="/fbr-settings"
-                className={({ isActive }) =>
-                  "dl-submenu__item" + (isActive ? " active" : "")
-                }
-              >
-                <MdTune aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
-                FBR Settings
-              </NavLink>
-            </div>
-          </div>
+                <MdSettings className="dl-nav__icon" aria-hidden="true" />
+                <span className="dl-nav__label">Configuration</span>
+                <MdKeyboardArrowDown
+                  className={`dl-nav__arrow${configOpen ? " dl-nav__arrow--open" : ""}`}
+                  aria-hidden="true"
+                />
+              </button>
 
-          {/* Challans */}
-          <NavLink
-            to="/challans"
-            className={({ isActive }) =>
-              "dl-nav__item" + (isActive ? " active" : "")
-            }
-          >
-            <MdDescription className="dl-nav__icon" aria-hidden="true" />
-            <span className="dl-nav__label">Challans</span>
-          </NavLink>
+              <div
+                id="config-submenu"
+                className={`dl-submenu${configOpen ? " dl-submenu--open" : ""}`}
+                role="region"
+                aria-label="Configuration submenu"
+              >
+                <div className="dl-submenu__inner">
+                  <Can permission="companies.manage.view">
+                    <NavLink
+                      to="/companies/list"
+                      className={({ isActive }) =>
+                        "dl-submenu__item" + (isActive ? " active" : "")
+                      }
+                    >
+                      <MdBusiness aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
+                      Companies List
+                    </NavLink>
+                  </Can>
+                  <Can permission="clients.manage.view">
+                    <NavLink
+                      to="/Clients/list"
+                      className={({ isActive }) =>
+                        "dl-submenu__item" + (isActive ? " active" : "")
+                      }
+                    >
+                      <MdPeople aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
+                      Clients List
+                    </NavLink>
+                  </Can>
+                  <Can permission="itemtypes.manage.view">
+                    <NavLink
+                      to="/item-types"
+                      className={({ isActive }) =>
+                        "dl-submenu__item" + (isActive ? " active" : "")
+                      }
+                    >
+                      <MdCategory aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
+                      Item Types
+                    </NavLink>
+                  </Can>
+                  <Can permission="poformats.manage.view">
+                    <NavLink
+                      to="/po-formats"
+                      className={({ isActive }) =>
+                        "dl-submenu__item" + (isActive ? " active" : "")
+                      }
+                    >
+                      <MdDescription aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
+                      PO Formats
+                    </NavLink>
+                  </Can>
+                  <Can permission="printtemplates.manage.update">
+                    <NavLink
+                      to="/templates"
+                      className={({ isActive }) =>
+                        "dl-submenu__item" + (isActive ? " active" : "")
+                      }
+                    >
+                      <MdCode aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
+                      Print Templates
+                    </NavLink>
+                  </Can>
+                  <Can permission="fbr.config.update">
+                    <NavLink
+                      to="/fbr-settings"
+                      className={({ isActive }) =>
+                        "dl-submenu__item" + (isActive ? " active" : "")
+                      }
+                    >
+                      <MdTune aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
+                      FBR Settings
+                    </NavLink>
+                  </Can>
+                </div>
+              </div>
+            </>
+          )}
 
-          {/* Import Historical Challans */}
-          <NavLink
-            to="/challans/import"
-            className={({ isActive }) =>
-              "dl-nav__item" + (isActive ? " active" : "")
-            }
-          >
-            <MdFileUpload className="dl-nav__icon" aria-hidden="true" />
-            <span className="dl-nav__label">Import Challans</span>
-          </NavLink>
+          <Can permission="challans.list.view">
+            <NavLink
+              to="/challans"
+              className={({ isActive }) =>
+                "dl-nav__item" + (isActive ? " active" : "")
+              }
+            >
+              <MdDescription className="dl-nav__icon" aria-hidden="true" />
+              <span className="dl-nav__label">Challans</span>
+            </NavLink>
+          </Can>
 
-          {/* Invoices */}
-          <NavLink
-            to="/invoices"
-            className={({ isActive }) =>
-              "dl-nav__item" + (isActive ? " active" : "")
-            }
-          >
-            <MdReceipt className="dl-nav__icon" aria-hidden="true" />
-            <span className="dl-nav__label">Bills</span>
-          </NavLink>
+          <Can permission="challans.import.create">
+            <NavLink
+              to="/challans/import"
+              className={({ isActive }) =>
+                "dl-nav__item" + (isActive ? " active" : "")
+              }
+            >
+              <MdFileUpload className="dl-nav__icon" aria-hidden="true" />
+              <span className="dl-nav__label">Import Challans</span>
+            </NavLink>
+          </Can>
 
-          {/* Users */}
-          <NavLink
-            to="/users"
-            className={({ isActive }) =>
-              "dl-nav__item" + (isActive ? " active" : "")
-            }
-          >
-            <MdGroupAdd className="dl-nav__icon" aria-hidden="true" />
-            <span className="dl-nav__label">Users</span>
-          </NavLink>
+          <Can permission="invoices.list.view">
+            <NavLink
+              to="/invoices"
+              className={({ isActive }) =>
+                "dl-nav__item" + (isActive ? " active" : "")
+              }
+            >
+              <MdReceipt className="dl-nav__icon" aria-hidden="true" />
+              <span className="dl-nav__label">Bills</span>
+            </NavLink>
+          </Can>
 
-          {/* Roles & Permissions — seed-admin only */}
-          {user?.isSeedAdmin && (
+          <Can permission="users.manage.view">
+            <NavLink
+              to="/users"
+              className={({ isActive }) =>
+                "dl-nav__item" + (isActive ? " active" : "")
+              }
+            >
+              <MdGroupAdd className="dl-nav__icon" aria-hidden="true" />
+              <span className="dl-nav__label">Users</span>
+            </NavLink>
+          </Can>
+
+          <Can permission="rbac.roles.view">
             <NavLink
               to="/roles"
               className={({ isActive }) =>
@@ -261,18 +293,19 @@ export default function DashboardLayout() {
               <MdAdminPanelSettings className="dl-nav__icon" aria-hidden="true" />
               <span className="dl-nav__label">Roles &amp; Permissions</span>
             </NavLink>
-          )}
+          </Can>
 
-          {/* Audit Logs */}
-          <NavLink
-            to="/audit-logs"
-            className={({ isActive }) =>
-              "dl-nav__item" + (isActive ? " active" : "")
-            }
-          >
-            <MdBugReport className="dl-nav__icon" aria-hidden="true" />
-            <span className="dl-nav__label">Audit Logs</span>
-          </NavLink>
+          <Can permission="auditlogs.view">
+            <NavLink
+              to="/audit-logs"
+              className={({ isActive }) =>
+                "dl-nav__item" + (isActive ? " active" : "")
+              }
+            >
+              <MdBugReport className="dl-nav__icon" aria-hidden="true" />
+              <span className="dl-nav__label">Audit Logs</span>
+            </NavLink>
+          </Can>
 
         </nav>
 
