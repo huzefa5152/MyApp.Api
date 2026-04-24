@@ -341,7 +341,7 @@ export default function ItemTypesPage() {
 
                 <div style={styles.field}>
                   <label style={styles.label}>
-                    HS Code * <span style={{ ...styles.optTag, backgroundColor: "#ffebee", color: "#c62828" }}>REQUIRED</span>
+                    HS Code <span style={styles.optTag}>Optional</span>
                   </label>
                   <HsCodeAutocomplete
                     companyId={selectedCompany?.id}
