@@ -313,11 +313,6 @@ namespace MyApp.Api.Helpers
                     if (cell.HasFormula) continue;
                     var val = cell.GetString() ?? "";
 
-                    if (val.Contains("{{#if") || val.Contains("{{/if"))
-                    {
-                        Console.Error.WriteLine($"[XlTpl] cell {cell.Address}: IN  = {val}");
-                    }
-
                     // Quick win: if the cell has a self-contained if block,
                     // resolve it in place before the cross-cell scanner sees
                     // the remaining markers.
@@ -325,7 +320,14 @@ namespace MyApp.Api.Helpers
                     if (val.Contains("{{#if") && val.Contains("{{/if}}"))
                     {
                         val = ApplyConditionals(val, data);
-                        Console.Error.WriteLine($"[XlTpl] cell {cell.Address}: AFT = {val}");
+                        // Operators routinely type "{{#if …}}\r\n      PO NO: {{poNumber}}{{/if}}"
+                        // because they want formatting — but the leading
+                        // \r\n pushes the text to a second line in Excel
+                        // and it ends up invisible unless the cell is
+                        // clicked. Collapse leading/trailing whitespace
+                        // on collapsed conditional output so the text sits
+                        // on the first row of the cell.
+                        val = val.Trim();
                         // If the conditional collapsed the whole cell (Lotte
                         // / Afroze case with rich-text spanning all three
                         // runs), write the resolved string back NOW so
