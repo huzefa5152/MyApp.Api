@@ -30,6 +30,12 @@ export default function InvoicePage() {
   const { has } = usePermissions();
   const canCreate = has("invoices.manage.create");
   const canUpdate = has("invoices.manage.update");
+  // Users with only the narrow ItemType-only permission still need the
+  // Edit button to reach the form, even though they can only change the
+  // ItemType column inside it. EditBillForm enforces the field-level
+  // restriction on its own.
+  const canEditItemType = has("invoices.manage.update.itemtype");
+  const canOpenEdit = canUpdate || canEditItemType;
   const canDelete = has("invoices.manage.delete");
   const canPrint = has("invoices.print.view");
   const canFbr = has("invoices.fbr.post");
@@ -708,11 +714,13 @@ export default function InvoicePage() {
                         </button>
                       </>
                     )}
-                    {canUpdate && inv.fbrStatus !== "Submitted" && (
+                    {canOpenEdit && inv.fbrStatus !== "Submitted" && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
-                        title="Edit items and prices on this bill"
+                        title={canUpdate
+                          ? "Edit items and prices on this bill"
+                          : "Re-classify line items by Item Type (your permissions)"}
                       >
                         <MdEdit size={14} /> Edit
                       </button>

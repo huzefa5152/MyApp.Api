@@ -600,17 +600,25 @@ const styles = {
     background: `${colors.blue}10`,
     color: colors.blue,
   },
+  // The global `button` rule in index.css adds chunky padding + a
+  // box-shadow + a dark-theme background. These icon buttons need to
+  // be a tight 32 × 32 square with the role-page tint, so we override
+  // every property the global rule would otherwise smuggle in.
   iconBtn: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     width: 32,
     height: 32,
+    minWidth: 32,
+    padding: 0,
     border: `1px solid ${colors.cardBorder}`,
     borderRadius: 8,
     background: "#fff",
+    boxShadow: "none",
     cursor: "pointer",
     color: colors.blue,
+    flexShrink: 0,
   },
   iconBtnDanger: {
     display: "inline-flex",
@@ -618,11 +626,15 @@ const styles = {
     justifyContent: "center",
     width: 32,
     height: 32,
+    minWidth: 32,
+    padding: 0,
     border: `1px solid ${colors.dangerLight}`,
     borderRadius: 8,
     background: colors.dangerLight,
+    boxShadow: "none",
     cursor: "pointer",
     color: colors.danger,
+    flexShrink: 0,
   },
   overlay: {
     position: "fixed",

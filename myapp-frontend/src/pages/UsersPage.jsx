@@ -49,10 +49,16 @@ export default function UsersPage() {
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editUser, setEditUser] = useState(null);
-  const [form, setForm] = useState({ username: "", fullName: "", password: "", role: "Admin" });
+  const [form, setForm] = useState({ username: "", fullName: "", password: "", role: "" });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+  // Roles loaded once for the create / edit form's role-picker. Separate
+  // from the role-assignment modal's `allRoles` (which lazy-loads on open)
+  // because we need the dropdown populated immediately when the operator
+  // hits "Add User".
+  const [availableRoles, setAvailableRoles] = useState([]);
 
   // Role-assignment modal state
   const [rolesModalUser, setRolesModalUser] = useState(null);
@@ -74,18 +80,29 @@ export default function UsersPage() {
     }
   };
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => {
+    fetchUsers();
+    // Load the role catalog once so the create / edit dialog's dropdown
+    // shows whatever the operator has defined under Roles & Permissions.
+    // Best-effort — non-admin users may not have rbac.roles.view, in which
+    // case the dropdown falls back to free-typing the legacy role name.
+    getRoles()
+      .then(({ data }) => setAvailableRoles(data || []))
+      .catch(() => setAvailableRoles([]));
+  }, []);
+
+  const defaultRoleName = () => availableRoles[0]?.name || "Admin";
 
   const openAdd = () => {
     setEditUser(null);
-    setForm({ username: "", fullName: "", password: "", role: "Admin" });
+    setForm({ username: "", fullName: "", password: "", role: defaultRoleName() });
     setMsg(null);
     setShowModal(true);
   };
 
   const openEdit = (u) => {
     setEditUser(u);
-    setForm({ username: u.username, fullName: u.fullName, password: "", role: u.role });
+    setForm({ username: u.username, fullName: u.fullName, password: "", role: u.role || defaultRoleName() });
     setMsg(null);
     setShowModal(true);
   };
@@ -106,8 +123,27 @@ export default function UsersPage() {
         await updateUser(editUser.id, payload);
         setMsg({ type: "success", text: "User updated successfully" });
       } else {
-        await createUser(form);
-        setMsg({ type: "success", text: "User created successfully" });
+        // Create the user with the legacy `role` text field (kept for
+        // backwards-compat with existing JWT-claim consumers), then assign
+        // the matching RBAC role via the UserRoles join table so the new
+        // user immediately gets their permissions. If the operator can't
+        // assign roles (rbac.userroles.assign), the create still succeeds
+        // — they just won't have permissions until an admin assigns them.
+        const { data: newUser } = await createUser(form);
+        const matchingRole = availableRoles.find(
+          (r) => r.name?.toLowerCase() === form.role?.toLowerCase());
+        if (newUser?.id && matchingRole?.id && canAssignRoles) {
+          try {
+            await assignUserRoles(newUser.id, [matchingRole.id]);
+          } catch {
+            // Non-fatal: the user was created; surface a soft warning.
+            setMsg({
+              type: "warn",
+              text: `User created, but could not auto-assign role "${matchingRole.name}". Use the Roles button to set it manually.`,
+            });
+          }
+        }
+        if (!msg) setMsg({ type: "success", text: "User created successfully" });
       }
       await fetchUsers();
       setTimeout(closeModal, 800);
@@ -371,8 +407,20 @@ export default function UsersPage() {
                 value={form.role}
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
               >
-                <option value="Admin">Admin</option>
+                {availableRoles.length === 0 && (
+                  <option value="Admin">Admin</option>
+                )}
+                {availableRoles.map((r) => (
+                  <option key={r.id} value={r.name}>
+                    {r.name}{r.isSystemRole ? " (system)" : ""}
+                  </option>
+                ))}
               </select>
+              {!editUser && availableRoles.length > 0 && (
+                <p style={{ margin: "0.35rem 0 0", fontSize: "0.72rem", color: "#5f6d7e" }}>
+                  The selected role's permissions will be auto-assigned to this user on create.
+                </p>
+              )}
             </div>
 
             <div style={styles.modalFooter}>
