@@ -47,6 +47,7 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<IDeliveryChallanRepository, DeliveryChallanRepository>();
 builder.Services.AddScoped<IClientRepository, ClientRepository>();
+builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 builder.Services.AddScoped<IItemTypeRepository, ItemTypeRepository>();
 builder.Services.AddScoped<IPrintTemplateRepository, PrintTemplateRepository>();
@@ -62,6 +63,7 @@ builder.Services.AddScoped<IClientService, ClientService>();
 // alongside the per-company ClientService; existing per-company flows
 // keep working unchanged.
 builder.Services.AddScoped<IClientGroupService, ClientGroupService>();
+builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();

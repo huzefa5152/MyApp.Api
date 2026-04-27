@@ -127,6 +127,31 @@ namespace MyApp.Api.Helpers
             // ── Item Rate History (search past rates billed for any item) ───
             new("itemratehistory.view",    "Item Rate History", "View", "View", "View the Item Rate History page (past unit prices billed for an item)"),
 
+            // ── Suppliers (mirror of Clients) ───────────────────────────────
+            new("suppliers.manage.view",   "Suppliers", "Manage", "View",   "View the suppliers list"),
+            new("suppliers.manage.create", "Suppliers", "Manage", "Create", "Create a new supplier"),
+            new("suppliers.manage.update", "Suppliers", "Manage", "Update", "Edit supplier details"),
+            new("suppliers.manage.delete", "Suppliers", "Manage", "Delete", "Delete a supplier"),
+
+            // ── Purchase Bills ──────────────────────────────────────────────
+            new("purchasebills.list.view",     "PurchaseBills", "List",   "View",   "View the purchase-bills list"),
+            new("purchasebills.manage.create", "PurchaseBills", "Manage", "Create", "Create a new purchase bill (records supplier IRN and emits Stock IN)"),
+            new("purchasebills.manage.update", "PurchaseBills", "Manage", "Update", "Edit a purchase bill"),
+            new("purchasebills.manage.delete", "PurchaseBills", "Manage", "Delete", "Delete a purchase bill (reverses any Stock IN it emitted)"),
+            new("purchasebills.print.view",    "PurchaseBills", "Print",  "View",   "Print or download purchase bills"),
+
+            // ── Goods Receipts (mirror of Delivery Challans on the buy-side) ─
+            new("goodsreceipts.list.view",     "GoodsReceipts", "List",   "View",   "View goods-receipt notes"),
+            new("goodsreceipts.manage.create", "GoodsReceipts", "Manage", "Create", "Create a goods-receipt note"),
+            new("goodsreceipts.manage.update", "GoodsReceipts", "Manage", "Update", "Edit a goods-receipt note"),
+            new("goodsreceipts.manage.delete", "GoodsReceipts", "Manage", "Delete", "Delete a goods-receipt note"),
+
+            // ── Inventory / Stock ───────────────────────────────────────────
+            new("stock.dashboard.view",     "Inventory", "Dashboard",       "View",   "View on-hand stock dashboard"),
+            new("stock.movements.view",     "Inventory", "Movements",       "View",   "View the stock-movement audit log"),
+            new("stock.opening.manage",     "Inventory", "Opening Balance", "Manage", "Set or edit opening stock balance per item"),
+            new("stock.adjust.create",      "Inventory", "Adjustment",      "Create", "Record a stock adjustment (count correction, write-off)"),
+
             // ── Audit Logs ──────────────────────────────────────────────────
             new("auditlogs.view",          "AuditLogs", "View", "View", "View application audit/exception logs"),
         };
