@@ -63,6 +63,14 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // ── FBR scenario lock — same UX as the bill-creation form ──────────
+  // Picking a scenario filters the Item Type dropdown to catalog rows
+  // whose stored saleType matches, so the bill can't drift into a
+  // mixed-bucket state that PRAL rejects with 0052. Auto-detected
+  // from the existing paymentTerms ("[SNxxx] ...") on load.
+  const [scenarios, setScenarios] = useState([]);
+  const [scenarioCode, setScenarioCode] = useState("");
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -76,9 +84,21 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         setGstRate(data.gstRate ?? 18);
         // Date arrives as ISO string; the <input type="date"> control wants YYYY-MM-DD.
         setBillDate(data.date ? new Date(data.date).toISOString().slice(0, 10) : "");
-        setPaymentTerms(data.paymentTerms ?? "");
+        const pt = data.paymentTerms ?? "";
+        setPaymentTerms(pt);
         setPaymentMode(data.paymentMode ?? "");
         setDocumentType(data.documentType ?? 4);
+
+        // Auto-detect scenario from paymentTerms tag.
+        const tag = pt.match(/\[\s*(SN\d{3})\s*\]/i);
+        if (tag) setScenarioCode(tag[1].toUpperCase());
+
+        // Lazy-load applicable scenarios for the bill's company.
+        if (data.companyId) {
+          getFbrApplicableScenarios(data.companyId)
+            .then(({ data: sc }) => setScenarios(sc?.scenarios || []))
+            .catch(() => setScenarios([]));
+        }
       } catch {
         setError("Failed to load bill.");
       } finally {
@@ -87,6 +107,23 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
     };
     load();
   }, [invoiceId]);
+
+  // The chosen scenario record drives both the item-type filter and the
+  // bill-level GST rate when it differs from the canonical scenario rate.
+  const chosenScenario = useMemo(
+    () => scenarios.find((s) => s.code === scenarioCode) || null,
+    [scenarios, scenarioCode],
+  );
+
+  // Item types compatible with the chosen scenario. Empty selection ("auto")
+  // shows ALL item types — same fallback as the create form.
+  const filteredItemTypes = useMemo(() => {
+    if (!chosenScenario) return itemTypes;
+    const target = (chosenScenario.saleType || "").trim().toLowerCase();
+    return itemTypes.filter(
+      (it) => (it.saleType || "").trim().toLowerCase() === target,
+    );
+  }, [itemTypes, chosenScenario]);
 
   const updateItem = (index, field, value) => {
     setItems((prev) => {
@@ -159,10 +196,18 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         if (items.some((i) => (parseFloat(i.quantity) || 0) <= 0)) return setError("Quantity must be greater than 0.");
         if (items.some((i) => (parseFloat(i.unitPrice) || 0) < 0)) return setError("Unit price cannot be negative.");
 
+        // Re-write paymentTerms to keep the [SNxxx] tag in sync with the
+        // operator's scenario choice — same convention as the create form
+        // so FbrService's auto-detect routes the right scenarioId on submit.
+        const cleaned = (paymentTerms || "").replace(/^\s*\[\s*SN\d{3}\s*\]\s*/i, "").trim();
+        const ptToSave = scenarioCode
+          ? `[${scenarioCode}] ${cleaned || chosenScenario?.description || ""}`.trim()
+          : (cleaned || null);
+
         await updateInvoice(invoiceId, {
           date: billDate || null,
           gstRate: parseFloat(gstRate),
-          paymentTerms: paymentTerms || null,
+          paymentTerms: ptToSave,
           documentType: documentType || null,
           paymentMode: paymentMode || null,
           items: items.map((i) => ({
@@ -245,6 +290,37 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                       <b>Item Type only</b> — your role lets you re-classify lines by picking
                       a different Item Type. Quantities, prices, dates, and other fields are
                       read-only here. Ask an administrator to grant <code>invoices.manage.update</code> for full edit access.
+                    </div>
+                  </div>
+                )}
+
+                {/* FBR scenario picker — filters Item Type dropdown to
+                    match the chosen scenario's saleType so the bill stays
+                    in a single FBR-bucket. */}
+                {scenarios.length > 0 && (
+                  <div style={styles.row}>
+                    <div style={{ flex: 1, minWidth: 280 }}>
+                      <label style={styles.label}>
+                        FBR Scenario <span style={{ fontWeight: 400, color: colors.textSecondary, fontSize: "0.7rem" }}>filters items below</span>
+                      </label>
+                      <select
+                        style={{ ...styles.input, ...(lockNonItemType ? styles.readOnlyInput : {}) }}
+                        value={scenarioCode}
+                        onChange={(e) => setScenarioCode(e.target.value)}
+                        disabled={lockNonItemType}
+                      >
+                        <option value="">— auto-detect from items —</option>
+                        {scenarios.map((s) => (
+                          <option key={s.code} value={s.code}>
+                            {s.code} · {s.saleType} · {s.defaultRate}%
+                          </option>
+                        ))}
+                      </select>
+                      {chosenScenario && (
+                        <div style={{ fontSize: "0.7rem", color: colors.textSecondary, marginTop: "0.25rem" }}>
+                          Showing only item types with sale type "{chosenScenario.saleType}".
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -351,7 +427,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                 <div style={styles.readOnlyText}>{item.itemTypeName || <span style={styles.muted}>—</span>}</div>
                               ) : (
                                 <SearchableItemTypeSelect
-                                  items={itemTypes}
+                                  items={filteredItemTypes}
                                   value={item.itemTypeId || ""}
                                   onChange={(newId, picked) => updateItemType(idx, newId ? parseInt(newId) : null, picked)}
                                   placeholder="Pick item…"
