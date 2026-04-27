@@ -116,6 +116,33 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Narrow edit path — re-classify each line by picking a different
+        /// ItemType. Service re-derives HS Code / UOM / Sale Type from the
+        /// catalog; every other field on the bill is left alone.
+        ///
+        /// RBAC: requires `invoices.manage.update.itemtype`. Users with the
+        /// broader `invoices.manage.update` permission can use this endpoint
+        /// too (a superset has access to the narrow flow), but operationally
+        /// they'd just hit PUT /{id} for a full edit.
+        /// </summary>
+        [HttpPatch("{id}/itemtypes")]
+        [HasPermission("invoices.manage.update.itemtype")]
+        public async Task<ActionResult<InvoiceDto>> UpdateItemTypes(
+            int id, [FromBody] UpdateInvoiceItemTypesDto dto)
+        {
+            try
+            {
+                var updated = await _service.UpdateItemTypesAsync(id, dto);
+                if (updated == null) return NotFound(new { error = "Bill not found." });
+                return Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
         [HttpDelete("{id}")]
         [HasPermission("invoices.manage.delete")]
         public async Task<IActionResult> Delete(int id)

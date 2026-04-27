@@ -12,6 +12,14 @@ namespace MyApp.Api.Services.Interfaces
         Task<InvoiceDto?> GetByIdAsync(int id);
         Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto);
         Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto);
+        /// <summary>
+        /// Narrow update path: ONLY re-derives FBR fields (HS / UOM / SaleType)
+        /// from a new ItemType per line. Refuses to change quantity, price,
+        /// description, header fields, etc. Used when a user has the
+        /// `invoices.manage.update.itemtype` permission but not full
+        /// `invoices.manage.update`.
+        /// </summary>
+        Task<InvoiceDto?> UpdateItemTypesAsync(int id, UpdateInvoiceItemTypesDto dto);
         Task<bool> DeleteAsync(int id);
         /// <summary>
         /// Flip the IsFbrExcluded flag. Excluded bills are skipped by the

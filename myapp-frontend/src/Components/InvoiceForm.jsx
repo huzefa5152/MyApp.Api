@@ -4,6 +4,7 @@ import { getPendingChallansByCompany } from "../api/challanApi";
 import { createInvoice } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getItemTypes } from "../api/itemTypeApi";
+import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { getItemByName, saveItemFbrDefaults } from "../api/lookupApi";
 import { formStyles } from "../theme";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
@@ -53,17 +54,29 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
   const [itemTypes, setItemTypes] = useState([]);
   const [itemTypeIds, setItemTypeIds] = useState({});
 
+  // ── Scenario lock ─────────────────────────────────────────────
+  // FBR allows only one sale type per invoice. Operator picks the
+  // scenario at bill-creation time → item-type dropdown filters to
+  // catalog rows with a compatible sale type → bill is structurally
+  // submittable (no mixed-bucket 0052 errors). Empty selection ("auto")
+  // means "infer from items" — which is allowed but only works when
+  // every item happens to share the same sale type.
+  const [scenarios, setScenarios] = useState([]);
+  const [scenarioCode, setScenarioCode] = useState("");
+
   useEffect(() => {
     const load = async () => {
       try {
-        const [challanRes, clientRes, typesRes] = await Promise.all([
+        const [challanRes, clientRes, typesRes, scenarioRes] = await Promise.all([
           getPendingChallansByCompany(companyId),
           getClientsByCompany(companyId),
           getItemTypes().catch(() => ({ data: [] })),
+          getFbrApplicableScenarios(companyId).catch(() => ({ data: { scenarios: [] } })),
         ]);
         setAllChallans(challanRes.data);
         setClients(clientRes.data);
         setItemTypes(typesRes.data || []);
+        setScenarios(scenarioRes.data?.scenarios || []);
       } catch {
         setError("Failed to load data.");
       } finally {
@@ -72,6 +85,33 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
     };
     load();
   }, [companyId]);
+
+  // The chosen scenario's full record (sale type + rate + scope) — drives
+  // both the item-type filter and the GST rate auto-fill below.
+  const chosenScenario = useMemo(
+    () => scenarios.find((s) => s.code === scenarioCode) || null,
+    [scenarios, scenarioCode],
+  );
+
+  // Item types compatible with the chosen scenario. When no scenario is
+  // chosen, ALL item types are visible (pre-existing behaviour). When a
+  // scenario is locked in, only items whose stored saleType matches the
+  // scenario's saleType are surfaced — preventing the operator from
+  // building a mixed-sale-type bill that FBR will reject with 0052.
+  const filteredItemTypes = useMemo(() => {
+    if (!chosenScenario) return itemTypes;
+    const target = (chosenScenario.saleType || "").trim().toLowerCase();
+    return itemTypes.filter(
+      (it) => (it.saleType || "").trim().toLowerCase() === target,
+    );
+  }, [itemTypes, chosenScenario]);
+
+  // When operator picks a scenario, snap the GST Rate to that scenario's
+  // canonical rate. Operator can still type over it but the default is
+  // always FBR-correct (e.g. 5% for SN005, 1% for SN020/SN025).
+  useEffect(() => {
+    if (chosenScenario) setGstRate(chosenScenario.defaultRate);
+  }, [chosenScenario]);
 
   // Filter challans for selected client, sorted by DC# descending
   const clientChallans = selectedClientId
@@ -177,12 +217,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
         }
       }
 
+      // Prepend the chosen scenario tag to paymentTerms so FbrService's
+      // auto-detector routes the submission to the right scenarioId. The
+      // tag pattern is "[SNxxx]" — see FbrService.PostInvoiceAsync.
+      const paymentTermsToSave = scenarioCode
+        ? `[${scenarioCode}] ${paymentTerms || chosenScenario?.description || ""}`.trim()
+        : (paymentTerms || null);
+
       await createInvoice({
         date: new Date(invoiceDate).toISOString(),
         companyId,
         clientId: parseInt(selectedClientId),
         gstRate: parseFloat(gstRate),
-        paymentTerms: paymentTerms || null,
+        paymentTerms: paymentTermsToSave,
         documentType: documentType || null,
         paymentMode: paymentMode || null,
         challanIds: selectedIds,
@@ -293,6 +340,29 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
                   <>
                     {/* Bill header fields — Date / GST / Terms / FBR Doc Type / FBR Payment Mode */}
                     <div style={styles.row}>
+                      <div style={{ flex: 2, minWidth: 240 }}>
+                        <label style={styles.label}>
+                          FBR Scenario <span style={styles.optionalTag}>filters items</span>
+                        </label>
+                        <select
+                          style={styles.input}
+                          value={scenarioCode}
+                          onChange={(e) => setScenarioCode(e.target.value)}
+                        >
+                          <option value="">— auto-detect from items —</option>
+                          {scenarios.map((s) => (
+                            <option key={s.code} value={s.code}>
+                              {s.code} · {s.saleType} · {s.defaultRate}%
+                            </option>
+                          ))}
+                        </select>
+                        {chosenScenario && (
+                          <div style={{ fontSize: "0.7rem", color: colors.textSecondary, marginTop: "0.25rem" }}>
+                            Showing only item types with sale type "{chosenScenario.saleType}".
+                            Pick a different scenario to switch the filter.
+                          </div>
+                        )}
+                      </div>
                       <div style={{ flex: 1, minWidth: 140 }}>
                         <label style={styles.label}>Bill Date</label>
                         <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
@@ -460,7 +530,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
                                       {/* Picking an ItemType auto-fills HS Code, UOM, SaleType,
                                           FbrUOMId on this row — identical behaviour to EditBillForm. */}
                                       <SearchableItemTypeSelect
-                                        items={itemTypes}
+                                        items={filteredItemTypes}
                                         value={itemTypeIds[item.id] || ""}
                                         onChange={(newId, picked) => {
                                           setItemTypeIds((p) => ({ ...p, [item.id]: newId ? parseInt(newId) : null }));

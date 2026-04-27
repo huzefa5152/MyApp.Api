@@ -385,3 +385,7 @@ scripts/*.txt
 !scripts/*.py
 !scripts/*.sh
 !scripts/*.csproj
+
+# Local-only runtime log from claude-driven dotnet runs (Bash background)
+.claude_run.log
+.claude_run.log.err

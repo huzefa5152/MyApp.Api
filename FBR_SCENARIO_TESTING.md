@@ -8,11 +8,21 @@ this **every time** any of these change:
 - Any change to `FbrService.cs`, `FbrDtos.cs`, or `InvoiceService.cs`
 - Before requesting production token promotion from PRAL
 
-## 0. The 6 scenarios that PRAL requires for Hakimi (Wholesaler + Wholesale/Retails)
+## 0. The scenarios PRAL requires depend on company profile
 
-Per FBR V1.12 Technical Doc §10 (Applicable Scenarios based on Business Activity),
-the Wholesaler × Wholesale/Retails row requires **SN001, SN002, SN026, SN027, SN028, SN008**.
-Each must produce at least one successful submit in sandbox for production promotion.
+The **Activity × Sector** profile on the company drives which SNs apply.
+Every row of FBR V1.12 Technical Doc §10 is encoded in
+`Services/Tax/TaxScenarios.cs`'s `Matrix` field. Look up the live list for
+any company:
+
+```bash
+curl -s "$BASE_URL/api/fbr/scenarios/applicable/$COMPANY_ID" \
+  -H "Authorization: Bearer $TOKEN" | jq '.scenarios[].code'
+```
+
+For Hakimi Traders (Wholesaler × Wholesale/Retails), this returns
+**SN001, SN002, SN008, SN026, SN027, SN028** — six scenarios, each must
+produce at least one successful submit in sandbox for production promotion.
 
 | SN | What it tests | Key fields |
 |----|---------------|------------|
@@ -144,8 +154,13 @@ This mirrors the regression-gate pattern we already use for the PO parser
 ## 5. Handy commands
 
 ```bash
-# Re-seed the 6 bills (idempotent; skips any SN already present)
+# Re-seed the demo company's bills (idempotent; skips any SN already present)
 python scripts/seed_fbr_scenarios.py
+
+# Seed bills into a NEW company you created via the UI (any business
+# nature × sector combination supported — applicability fetched live
+# from /api/fbr/scenarios/applicable/{id})
+python scripts/seed_fbr_scenarios.py --company-id 8
 
 # Dry-run verify (validate only, no IRN commitment)
 python scripts/verify_fbr_scenarios.py --dry-run
@@ -158,6 +173,14 @@ python scripts/verify_fbr_scenarios.py --submit-only
 
 # Point at a different environment (e.g. staging)
 python scripts/verify_fbr_scenarios.py --base-url https://hakimitraders.runasp.net
+
+# Inspect which scenarios the catalog says apply to a given company
+curl -s "$BASE_URL/api/fbr/scenarios/applicable/$COMPANY_ID" \
+  -H "Authorization: Bearer $TOKEN" | jq '.count, .scenarios[].code'
+
+# Browse the full 28-scenario catalog with metadata
+curl -s "$BASE_URL/api/fbr/scenarios" -H "Authorization: Bearer $TOKEN" \
+  | jq '.[] | {code, saleType, defaultRate, isThirdSchedule}'
 ```
 
 ## 6. Known good payloads (reference)

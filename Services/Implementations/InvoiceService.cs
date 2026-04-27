@@ -428,6 +428,17 @@ namespace MyApp.Api.Services.Implementations
             try
             {
                 // Update invoice-level fields
+                if (dto.Date.HasValue)
+                {
+                    // FBR rejects future dates with [0043]. Cap at end-of-today
+                    // (UTC) so the operator can pick "today" in any time zone
+                    // without tripping the gate.
+                    var newDate = dto.Date.Value;
+                    var maxDate = DateTime.UtcNow.Date.AddDays(1).AddTicks(-1);
+                    if (newDate > maxDate)
+                        throw new InvalidOperationException("Bill date cannot be in the future. [FBR 0043]");
+                    invoice.Date = newDate;
+                }
                 invoice.GSTRate = dto.GSTRate;
                 invoice.PaymentTerms = dto.PaymentTerms;
                 invoice.DocumentType = dto.DocumentType;
@@ -466,6 +477,12 @@ namespace MyApp.Api.Services.Implementations
                     // from the ItemType catalog), so it's applied the same way in both
                     // branches below.
                     existing.FixedNotifiedValueOrRetailPrice = itemDto.FixedNotifiedValueOrRetailPrice;
+                    // SRO references — same: edit-driven, not catalog-inherited.
+                    // Required for non-18 % rates (FBR rules 0077 / 0078).
+                    if (itemDto.SroScheduleNo != null)
+                        existing.SroScheduleNo = itemDto.SroScheduleNo;
+                    if (itemDto.SroItemSerialNo != null)
+                        existing.SroItemSerialNo = itemDto.SroItemSerialNo;
 
                     if (pickedType != null)
                     {
@@ -504,6 +521,93 @@ namespace MyApp.Api.Services.Implementations
                 // Keep the underlying delivery item in sync with the bill's changes
                 // (description, quantity, UOM) so the challan reflects the same edits.
                 await SyncDeliveryItemsFromInvoiceEditAsync(invoice);
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                var reloaded = await _invoiceRepo.GetByIdAsync(id);
+                return reloaded == null ? null : ToDto(reloaded);
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        // ── Narrow edit path: Item Type re-classification only ─────────
+        //
+        // Used by the `invoices.manage.update.itemtype` permission flow.
+        // The operator can change which ItemType each existing line points
+        // at; service re-derives HS Code / UOM / Sale Type / FbrUOMId from
+        // the catalog. EVERY OTHER FIELD on the bill (price, qty, desc,
+        // GST, dates, payment terms, doc type, etc.) is ignored — the
+        // narrow permission deliberately excludes commercial-data edits.
+        public async Task<InvoiceDto?> UpdateItemTypesAsync(int id, UpdateInvoiceItemTypesDto dto)
+        {
+            var invoice = await _invoiceRepo.GetByIdAsync(id);
+            if (invoice == null) return null;
+
+            if (!IsInvoiceEditable(invoice))
+                throw new InvalidOperationException("Cannot edit a bill that has been submitted to FBR.");
+
+            if (dto.Items == null || dto.Items.Count == 0)
+                throw new InvalidOperationException("At least one item is required.");
+
+            // Reject any incoming ItemId that doesn't exist on the bill
+            // (mirror the safety check in UpdateAsync — operator cannot add /
+            // remove lines through this path either).
+            var existingIds = invoice.Items.Select(ii => ii.Id).ToHashSet();
+            var unknownIds = dto.Items.Where(i => i.Id <= 0 || !existingIds.Contains(i.Id))
+                                       .Select(i => i.Id).ToList();
+            if (unknownIds.Count > 0)
+                throw new InvalidOperationException(
+                    $"Bill item id(s) [{string.Join(", ", unknownIds)}] do not belong to this bill.");
+
+            var referencedTypeIds = dto.Items
+                .Where(i => i.ItemTypeId.HasValue)
+                .Select(i => i.ItemTypeId!.Value)
+                .Distinct()
+                .ToList();
+            var typeMap = referencedTypeIds.Count == 0
+                ? new Dictionary<int, ItemType>()
+                : await _context.ItemTypes
+                    .Where(t => referencedTypeIds.Contains(t.Id))
+                    .ToDictionaryAsync(t => t.Id);
+
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                foreach (var row in dto.Items)
+                {
+                    var existing = invoice.Items.First(ii => ii.Id == row.Id);
+
+                    if (row.ItemTypeId.HasValue && typeMap.TryGetValue(row.ItemTypeId.Value, out var t))
+                    {
+                        existing.ItemTypeId = t.Id;
+                        existing.ItemTypeName = t.Name;
+                        existing.UOM = t.UOM ?? "";
+                        existing.FbrUOMId = t.FbrUOMId;
+                        existing.HSCode = t.HSCode;
+                        existing.SaleType = t.SaleType;
+                    }
+                    else if (!row.ItemTypeId.HasValue)
+                    {
+                        existing.ItemTypeId = null;
+                        // Leave the previously-stored UOM/HS/SaleType in
+                        // place — clearing them would violate the "narrow
+                        // edit doesn't change commercial fields" contract.
+                    }
+                }
+
+                // Any edit invalidates a previous validation. Don't touch
+                // FbrStatus when the bill was already submitted (PreValidate
+                // refuses re-edit anyway thanks to IsInvoiceEditable above).
+                if (invoice.FbrStatus != "Submitted")
+                {
+                    invoice.FbrStatus = null;
+                    invoice.FbrErrorMessage = null;
+                }
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -674,8 +778,14 @@ namespace MyApp.Api.Services.Implementations
                 Subtotal = inv.Subtotal,
                 GSTRate = inv.GSTRate,
                 GSTAmount = inv.GSTAmount,
-                GrandTotal = inv.GrandTotal,
-                AmountInWords = inv.AmountInWords,
+                // Round to whole rupees for the printed bill so the displayed
+                // grand total matches AmountInWords. Stored DB value keeps
+                // 2-dp precision; this is purely a print transformation.
+                GrandTotal = NumberToWordsConverter.RoundForDisplay(inv.GrandTotal),
+                // Recompute words at print time so old bills (whose stored
+                // AmountInWords was written under the prior ceil rule) stay in
+                // sync with the rounded total without needing a re-save.
+                AmountInWords = NumberToWordsConverter.Convert(inv.GrandTotal),
                 PaymentTerms = inv.PaymentTerms,
                 Items = inv.Items.Select((ii, idx) => new PrintBillItemDto
                 {
@@ -721,8 +831,11 @@ namespace MyApp.Api.Services.Implementations
                 Subtotal = inv.Subtotal,
                 GSTRate = inv.GSTRate,
                 GSTAmount = inv.GSTAmount,
-                GrandTotal = inv.GrandTotal,
-                AmountInWords = inv.AmountInWords,
+                // Round whole-rupees to keep the printed total in sync with
+                // the in-words line — same transformation as PrintBillDto.
+                GrandTotal = NumberToWordsConverter.RoundForDisplay(inv.GrandTotal),
+                // Recompute words at print time so old bills stay in sync.
+                AmountInWords = NumberToWordsConverter.Convert(inv.GrandTotal),
                 FbrIRN = inv.FbrIRN,
                 FbrStatus = inv.FbrStatus,
                 FbrSubmittedAt = inv.FbrSubmittedAt,

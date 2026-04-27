@@ -4,6 +4,7 @@ using MyApp.Api.DTOs;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Services.Interfaces;
+using MyApp.Api.Services.Tax;
 
 namespace MyApp.Api.Services.Implementations
 {
@@ -11,11 +12,16 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly IItemTypeRepository _repo;
         private readonly AppDbContext _context;
+        private readonly ITaxMappingEngine _taxEngine;
 
-        public ItemTypeService(IItemTypeRepository repo, AppDbContext context)
+        public ItemTypeService(
+            IItemTypeRepository repo,
+            AppDbContext context,
+            ITaxMappingEngine taxEngine)
         {
             _repo = repo;
             _context = context;
+            _taxEngine = taxEngine;
         }
 
         private static ItemTypeDto ToDto(ItemType it) => new()
@@ -50,7 +56,7 @@ namespace MyApp.Api.Services.Implementations
             return it == null ? null : ToDto(it);
         }
 
-        public async Task<ItemTypeDto> CreateAsync(ItemTypeDto dto)
+        public async Task<ItemTypeDto> CreateAsync(ItemTypeDto dto, int? enrichWithCompanyId = null)
         {
             if (await _repo.ExistsByNameAsync(dto.Name))
                 throw new InvalidOperationException($"An item with name '{dto.Name}' already exists.");
@@ -59,6 +65,8 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException(
                     $"An item with HS Code '{dto.HSCode}' already exists in your catalog. " +
                     "Each HS Code can only be mapped to one item.");
+
+            await EnrichFromFbrAsync(dto, enrichWithCompanyId);
 
             var created = await _repo.CreateAsync(new ItemType
             {
@@ -73,7 +81,7 @@ namespace MyApp.Api.Services.Implementations
             return ToDto(created);
         }
 
-        public async Task<ItemTypeDto?> UpdateAsync(int id, ItemTypeDto dto)
+        public async Task<ItemTypeDto?> UpdateAsync(int id, ItemTypeDto dto, int? enrichWithCompanyId = null)
         {
             var it = await _repo.GetByIdAsync(id);
             if (it == null) return null;
@@ -86,6 +94,8 @@ namespace MyApp.Api.Services.Implementations
                     $"Another item in your catalog already uses HS Code '{dto.HSCode}'. " +
                     "Each HS Code can only be mapped to one item.");
 
+            await EnrichFromFbrAsync(dto, enrichWithCompanyId);
+
             it.Name = dto.Name;
             it.HSCode = dto.HSCode;
             it.UOM = dto.UOM;
@@ -95,6 +105,34 @@ namespace MyApp.Api.Services.Implementations
             it.IsFavorite = dto.IsFavorite;
             var updated = await _repo.UpdateAsync(it);
             return ToDto(updated);
+        }
+
+        // When the controller passes enrichWithCompanyId and the operator hasn't
+        // pre-picked a UOM, ask the tax engine for the FBR-published UOM list
+        // for this HS code and store the first match. Catalog stays accurate
+        // without forcing the user to scroll the global UOM list — and a stale
+        // / missing UOM no longer silently drifts the bill into a 0052 error.
+        private async Task EnrichFromFbrAsync(ItemTypeDto dto, int? enrichWithCompanyId)
+        {
+            if (enrichWithCompanyId == null) return;
+            if (string.IsNullOrWhiteSpace(dto.HSCode)) return;
+            // Only fill blanks — never overwrite a UOM the user explicitly chose.
+            if (dto.FbrUOMId.HasValue && !string.IsNullOrWhiteSpace(dto.UOM)) return;
+
+            try
+            {
+                var suggested = await _taxEngine.SuggestDefaultUomAsync(
+                    enrichWithCompanyId.Value, dto.HSCode!);
+                if (suggested == null) return;
+
+                if (!dto.FbrUOMId.HasValue)       dto.FbrUOMId = suggested.UOM_ID;
+                if (string.IsNullOrWhiteSpace(dto.UOM)) dto.UOM = suggested.Description;
+            }
+            catch
+            {
+                // Non-fatal — FBR token may be missing / network down. The
+                // operator can still save and pick UOM manually afterwards.
+            }
         }
 
         /// <summary>

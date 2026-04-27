@@ -152,6 +152,12 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         }
     };
 
+    // Multi-select chips for FBR Business Activity / Sector. Stored as a
+    // comma-separated string in the same column the existing single-value
+    // dropdown wrote to — backwards-compatible, no migration needed.
+    // The TaxScenarios.SplitCsv on the backend reads these tolerantly.
+    const handleCsvChange = (name, csv) => setForm((prev) => ({ ...prev, [name]: csv }));
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
@@ -356,22 +362,26 @@ export default function CompanyForm({ company, onClose, onSaved }) {
 
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
                                 <div style={formGroup}>
-                                    <label style={label}>Business Activity</label>
-                                    <select name="fbrBusinessActivity" value={form.fbrBusinessActivity} onChange={handleChange} style={input}>
-                                        <option value="">Select...</option>
-                                        {activities.map((a) => (
-                                            <option key={a.id} value={a.code}>{a.label}</option>
-                                        ))}
-                                    </select>
+                                    <label style={label}>
+                                        Business Activity <span style={{ fontWeight: 400, color: "#5f6d7e", fontSize: "0.72rem" }}>(multiple — drives applicable FBR scenarios)</span>
+                                    </label>
+                                    <MultiSelectChips
+                                        name="fbrBusinessActivity"
+                                        valueCsv={form.fbrBusinessActivity}
+                                        options={activities}
+                                        onChange={handleCsvChange}
+                                    />
                                 </div>
                                 <div style={formGroup}>
-                                    <label style={label}>Sector</label>
-                                    <select name="fbrSector" value={form.fbrSector} onChange={handleChange} style={input}>
-                                        <option value="">Select...</option>
-                                        {sectors.map((s) => (
-                                            <option key={s.id} value={s.code}>{s.label}</option>
-                                        ))}
-                                    </select>
+                                    <label style={label}>
+                                        Sector <span style={{ fontWeight: 400, color: "#5f6d7e", fontSize: "0.72rem" }}>(multiple)</span>
+                                    </label>
+                                    <MultiSelectChips
+                                        name="fbrSector"
+                                        valueCsv={form.fbrSector}
+                                        options={sectors}
+                                        onChange={handleCsvChange}
+                                    />
                                 </div>
                             </div>
 
@@ -462,3 +472,103 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         </div>
     );
 }
+
+// ── MultiSelectChips ────────────────────────────────────────
+// Lightweight tag-picker for fields that drive multi-applicability (FBR
+// Business Activity, Sector). Stores as a single comma-separated string
+// to avoid touching the Company schema. Selected items render as chips
+// with a remove handle; the bottom <select> lets the operator add more.
+function MultiSelectChips({ name, valueCsv, options, onChange }) {
+    const selected = (valueCsv || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    const remaining = (options || []).filter((o) => !selected.includes(o.code));
+
+    const add = (code) => {
+        if (!code || selected.includes(code)) return;
+        onChange(name, [...selected, code].join(", "));
+    };
+    const remove = (code) => {
+        onChange(name, selected.filter((s) => s !== code).join(", "));
+    };
+
+    const labelFor = (code) =>
+        (options || []).find((o) => o.code === code)?.label || code;
+
+    return (
+        <div>
+            <div style={chipStyles.row}>
+                {selected.length === 0 && (
+                    <span style={chipStyles.empty}>None — add one or more below</span>
+                )}
+                {selected.map((code) => (
+                    <span key={code} style={chipStyles.chip}>
+                        {labelFor(code)}
+                        <button
+                            type="button"
+                            onClick={() => remove(code)}
+                            style={chipStyles.x}
+                            aria-label={`Remove ${labelFor(code)}`}
+                        >
+                            ×
+                        </button>
+                    </span>
+                ))}
+            </div>
+            <select
+                value=""
+                onChange={(e) => { add(e.target.value); e.target.value = ""; }}
+                style={{ ...input, marginTop: "0.4rem" }}
+                disabled={remaining.length === 0}
+            >
+                <option value="">
+                    {remaining.length === 0 ? "All options selected" : "+ Add another…"}
+                </option>
+                {remaining.map((o) => (
+                    <option key={o.id} value={o.code}>{o.label}</option>
+                ))}
+            </select>
+        </div>
+    );
+}
+
+const chipStyles = {
+    row: {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "0.35rem",
+        minHeight: "1.8rem",
+        padding: "0.3rem",
+        border: "1px solid #d0d7e2",
+        borderRadius: 6,
+        backgroundColor: "#f8f9fb",
+    },
+    empty: {
+        fontSize: "0.78rem",
+        color: "#9ca3af",
+        fontStyle: "italic",
+        padding: "0.15rem 0.3rem",
+    },
+    chip: {
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.3rem",
+        padding: "0.2rem 0.55rem",
+        backgroundColor: "#0d47a1",
+        color: "#fff",
+        borderRadius: 14,
+        fontSize: "0.74rem",
+        fontWeight: 600,
+    },
+    x: {
+        background: "transparent",
+        color: "#fff",
+        border: "none",
+        cursor: "pointer",
+        fontSize: "1rem",
+        lineHeight: 1,
+        padding: 0,
+        marginLeft: "0.15rem",
+    },
+};

@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { MdInfo } from "react-icons/md";
-import { getInvoiceById, updateInvoice } from "../api/invoiceApi";
+import { getInvoiceById, updateInvoice, updateInvoiceItemTypes } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
+import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { formStyles } from "../theme";
+import { usePermissions } from "../contexts/PermissionsContext";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 
@@ -34,10 +36,26 @@ const colors = {
  * matching the delivery challan form — picks existing values, creates new ones if needed.
  */
 export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = false }) {
+  const { has } = usePermissions();
+  // Two permission tiers for editing a bill:
+  //  • invoices.manage.update           → full edit (price, qty, all fields)
+  //  • invoices.manage.update.itemtype  → narrow edit, ItemType column only
+  // The narrower path is for FBR-classification helpers who shouldn't touch
+  // commercial values. When the user has only the narrow permission, every
+  // input on this form except the Item Type picker becomes read-only and
+  // Save POSTs to the dedicated PATCH /invoices/{id}/itemtypes endpoint.
+  const canFullEdit       = has("invoices.manage.update");
+  const canEditItemType   = has("invoices.manage.update.itemtype");
+  const itemTypeOnlyMode  = !canFullEdit && canEditItemType;
+
+  // Effective read-only: caller-forced OR no edit permission at all.
+  const effectiveReadOnly = readOnly || (!canFullEdit && !canEditItemType);
+
   const [invoice, setInvoice] = useState(null);
   const [items, setItems] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
   const [gstRate, setGstRate] = useState(18);
+  const [billDate, setBillDate] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
   const [paymentMode, setPaymentMode] = useState("");
   const [documentType, setDocumentType] = useState(4);
@@ -56,6 +74,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         setItems(data.items.map((it) => ({ ...it })));
         setItemTypes(typesRes.data || []);
         setGstRate(data.gstRate ?? 18);
+        // Date arrives as ISO string; the <input type="date"> control wants YYYY-MM-DD.
+        setBillDate(data.date ? new Date(data.date).toISOString().slice(0, 10) : "");
         setPaymentTerms(data.paymentTerms ?? "");
         setPaymentMode(data.paymentMode ?? "");
         setDocumentType(data.documentType ?? 4);
@@ -110,38 +130,57 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
   const grandTotal = subtotal + gstAmount;
 
+  // Field-level gating booleans, derived once for clarity:
+  //   • lockNonItemType — true when the prop locks the form (read-only view)
+  //     OR the operator only has the narrow "ItemType only" permission.
+  //     Locks every input EXCEPT the Item Type picker.
+  //   • lockItemType — locks the Item Type picker too (full read-only view).
+  const lockNonItemType = readOnly || itemTypeOnlyMode;
+  const lockItemType    = readOnly;
+
   const handleSave = async (e) => {
     e.preventDefault();
     setError("");
     if (items.length === 0) return setError("No items to save.");
-    if (items.some((i) => !i.description?.trim())) return setError("All items must have a description.");
-    if (items.some((i) => (parseFloat(i.quantity) || 0) <= 0)) return setError("Quantity must be greater than 0.");
-    if (items.some((i) => (parseFloat(i.unitPrice) || 0) < 0)) return setError("Unit price cannot be negative.");
 
     setSaving(true);
     try {
-      await updateInvoice(invoiceId, {
-        gstRate: parseFloat(gstRate),
-        paymentTerms: paymentTerms || null,
-        documentType: documentType || null,
-        paymentMode: paymentMode || null,
-        items: items.map((i) => ({
-          id: i.id || 0,
-          deliveryItemId: i.deliveryItemId || null,
-          // When ItemTypeId is set, backend re-derives HS/UOM/Sale Type from it.
-          // We still send the current values for safety (backend uses the ItemType
-          // values when ItemTypeId is present).
-          itemTypeId: i.itemTypeId || null,
-          description: i.description,
-          quantity: parseInt(i.quantity),
-          uom: i.uom || "",
-          unitPrice: parseFloat(i.unitPrice),
-          hsCode: i.hsCode || null,
-          fbrUOMId: i.fbrUOMId || null,
-          saleType: i.saleType || null,
-          rateId: i.rateId || null,
-        })),
-      });
+      if (itemTypeOnlyMode) {
+        // Narrow path — only re-classify lines by ItemType. Server enforces
+        // the same restriction (PATCH /invoices/{id}/itemtypes route is
+        // gated by invoices.manage.update.itemtype).
+        await updateInvoiceItemTypes(
+          invoiceId,
+          items.map((i) => ({ id: i.id || 0, itemTypeId: i.itemTypeId || null })),
+        );
+      } else {
+        // Full edit path — same validation as before.
+        if (items.some((i) => !i.description?.trim())) return setError("All items must have a description.");
+        if (items.some((i) => (parseFloat(i.quantity) || 0) <= 0)) return setError("Quantity must be greater than 0.");
+        if (items.some((i) => (parseFloat(i.unitPrice) || 0) < 0)) return setError("Unit price cannot be negative.");
+
+        await updateInvoice(invoiceId, {
+          date: billDate || null,
+          gstRate: parseFloat(gstRate),
+          paymentTerms: paymentTerms || null,
+          documentType: documentType || null,
+          paymentMode: paymentMode || null,
+          items: items.map((i) => ({
+            id: i.id || 0,
+            deliveryItemId: i.deliveryItemId || null,
+            // When ItemTypeId is set, backend re-derives HS/UOM/Sale Type from it.
+            itemTypeId: i.itemTypeId || null,
+            description: i.description,
+            quantity: parseInt(i.quantity),
+            uom: i.uom || "",
+            unitPrice: parseFloat(i.unitPrice),
+            hsCode: i.hsCode || null,
+            fbrUOMId: i.fbrUOMId || null,
+            saleType: i.saleType || null,
+            rateId: i.rateId || null,
+          })),
+        });
+      }
       onSaved();
     } catch (err) {
       setError(err.response?.data?.error || "Failed to save bill.");
@@ -198,39 +237,62 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                   </div>
                 )}
 
+                {/* Narrow-permission banner */}
+                {itemTypeOnlyMode && (
+                  <div style={styles.narrowPermissionBanner}>
+                    <MdInfo size={16} style={{ color: colors.warn, flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      <b>Item Type only</b> — your role lets you re-classify lines by picking
+                      a different Item Type. Quantities, prices, dates, and other fields are
+                      read-only here. Ask an administrator to grant <code>invoices.manage.update</code> for full edit access.
+                    </div>
+                  </div>
+                )}
+
                 {/* Bill-level fields */}
                 <div style={styles.row}>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <label style={styles.label}>Bill Date</label>
+                    <input
+                      type="date"
+                      style={{ ...styles.input, ...(lockNonItemType ? styles.readOnlyInput : {}) }}
+                      value={billDate}
+                      onChange={(e) => setBillDate(e.target.value)}
+                      max={new Date().toISOString().slice(0, 10)}
+                      readOnly={lockNonItemType}
+                    />
+                  </div>
                   <div style={{ flex: 1, minWidth: 120 }}>
                     <label style={styles.label}>GST Rate (%)</label>
                     <input
                       type="number"
-                      style={{ ...styles.input, ...(readOnly ? styles.readOnlyInput : {}) }}
+                      style={{ ...styles.input, ...(lockNonItemType ? styles.readOnlyInput : {}) }}
                       value={gstRate}
                       onChange={(e) => setGstRate(e.target.value)}
                       min={0}
                       max={100}
                       step={0.5}
-                      readOnly={readOnly}
+                      readOnly={lockNonItemType}
                     />
                   </div>
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <label style={styles.label}>Payment Terms</label>
                     <input
                       type="text"
-                      style={{ ...styles.input, ...(readOnly ? styles.readOnlyInput : {}) }}
+                      style={{ ...styles.input, ...(lockNonItemType ? styles.readOnlyInput : {}) }}
                       value={paymentTerms}
                       onChange={(e) => setPaymentTerms(e.target.value)}
                       placeholder="Optional"
-                      readOnly={readOnly}
+                      readOnly={lockNonItemType}
                     />
                   </div>
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <label style={styles.label}>Payment Mode</label>
                     <select
-                      style={{ ...styles.input, ...(readOnly ? styles.readOnlyInput : {}) }}
+                      style={{ ...styles.input, ...(lockNonItemType ? styles.readOnlyInput : {}) }}
                       value={paymentMode}
                       onChange={(e) => setPaymentMode(e.target.value)}
-                      disabled={readOnly}
+                      disabled={lockNonItemType}
                     >
                       <option value="">— none —</option>
                       <option>Cash</option>
@@ -243,10 +305,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <label style={styles.label}>Document Type</label>
                     <select
-                      style={{ ...styles.input, ...(readOnly ? styles.readOnlyInput : {}) }}
+                      style={{ ...styles.input, ...(lockNonItemType ? styles.readOnlyInput : {}) }}
                       value={documentType}
                       onChange={(e) => setDocumentType(parseInt(e.target.value))}
-                      disabled={readOnly}
+                      disabled={lockNonItemType}
                     >
                       <option value={4}>Sale Invoice</option>
                       <option value={9}>Debit Note</option>
@@ -285,7 +347,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                         return (
                           <tr key={item.id || `new-${idx}`}>
                             <td style={styles.td}>
-                              {readOnly ? (
+                              {lockItemType ? (
                                 <div style={styles.readOnlyText}>{item.itemTypeName || <span style={styles.muted}>—</span>}</div>
                               ) : (
                                 <SearchableItemTypeSelect
@@ -298,7 +360,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                               )}
                             </td>
                             <td style={styles.td}>
-                              {readOnly ? (
+                              {lockNonItemType ? (
                                 <div style={styles.readOnlyText}>{item.description || <span style={styles.muted}>—</span>}</div>
                               ) : (
                                 <LookupAutocomplete
@@ -314,11 +376,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                             <td style={styles.td}>
                               <input
                                 type="number"
-                                style={{ ...styles.tableInput, ...(readOnly ? styles.readOnlyInput : {}), textAlign: "right" }}
+                                style={{ ...styles.tableInput, ...(lockNonItemType ? styles.readOnlyInput : {}), textAlign: "right" }}
                                 value={item.quantity ?? 0}
                                 onChange={(e) => updateItem(idx, "quantity", e.target.value)}
                                 min={1}
-                                readOnly={readOnly}
+                                readOnly={lockNonItemType}
                               />
                             </td>
                             <td style={{ ...styles.td, ...styles.readOnlyCell }} title="Comes from Item Type">
@@ -327,12 +389,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                             <td style={styles.td}>
                               <input
                                 type="number"
-                                style={{ ...styles.tableInput, ...(readOnly ? styles.readOnlyInput : {}), textAlign: "right" }}
+                                style={{ ...styles.tableInput, ...(lockNonItemType ? styles.readOnlyInput : {}), textAlign: "right" }}
                                 value={item.unitPrice ?? 0}
                                 onChange={(e) => updateItem(idx, "unitPrice", e.target.value)}
                                 min={0}
                                 step={0.01}
-                                readOnly={readOnly}
+                                readOnly={lockNonItemType}
                               />
                             </td>
                             <td style={{ ...styles.td, fontWeight: 600, color: colors.textPrimary, textAlign: "right" }}>
@@ -379,13 +441,13 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
               {readOnly ? "Close" : "Cancel"}
             </button>
-            {!readOnly && invoice?.isEditable && (
+            {!readOnly && invoice?.isEditable && (canFullEdit || canEditItemType) && (
               <button
                 type="submit"
                 style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}
                 disabled={saving}
               >
-                {saving ? "Saving..." : "Save Changes"}
+                {saving ? "Saving..." : (itemTypeOnlyMode ? "Save Item Types" : "Save Changes")}
               </button>
             )}
           </div>
@@ -414,6 +476,12 @@ const styles = {
   th: { padding: "0.6rem 0.5rem", textAlign: "left", fontSize: "0.75rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
   td: { padding: "0.4rem 0.5rem", fontSize: "0.82rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
   tableInput: { width: "100%", padding: "0.35rem 0.5rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 4, fontSize: "0.8rem", backgroundColor: "#fff" },
+  narrowPermissionBanner: {
+    display: "flex", alignItems: "flex-start", gap: "0.5rem",
+    padding: "0.65rem 0.85rem", backgroundColor: colors.warnBg,
+    color: colors.textPrimary, borderRadius: 6, marginBottom: "1rem",
+    fontSize: "0.82rem", border: `1px solid ${colors.warnBorder}`, lineHeight: 1.4,
+  },
   readOnlyCell: { backgroundColor: "#f5f7fa", color: colors.textPrimary, fontSize: "0.78rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   readOnlyInput: { backgroundColor: "#f5f7fa", cursor: "not-allowed", pointerEvents: "none" },
   readOnlyText: { padding: "0.35rem 0.5rem", fontSize: "0.8rem", color: colors.textPrimary, fontWeight: 600 },

@@ -1,15 +1,24 @@
 """
-Seeds a fresh demo Company with all 6 FBR scenarios as bills.
+Seeds a Company with the FBR scenarios applicable to its
+BusinessActivity × Sector profile (one bill per applicable SN).
 
-Idempotent: if the demo company already exists, it's skipped + the existing
-id is used. Clients and bills are created only if missing.
+Two ways to point it at a company:
+ 1. --company-id <int>    seed the existing company with that id (recommended
+                          when the operator added the company via the UI and
+                          will paste their PRAL token themselves)
+ 2. (no arg)              create / reconcile the built-in demo company
+                          ("Hakimi Traders FBR Sandbox") and seed it
+
+The set of scenarios seeded is whatever GET /api/fbr/scenarios/applicable/{id}
+returns for the company. If the new endpoint isn't available, falls back to
+the original 6-scenario list (Wholesaler × Wholesale/Retails).
+
+Idempotent: re-running skips any bill already tagged with its [SNxxx] in
+paymentTerms. Clients are upserted.
 
 Usage:
     python scripts/seed_fbr_scenarios.py [--base-url http://localhost:5134]
-
-After running, the Bills page for "Hakimi Traders FBR Sandbox" will show
-6 bills, one per scenario, each with FBR-ready fields (HSCode, SaleType,
-UOM, Rate) already populated.
+                                         [--company-id 7]
 """
 import argparse, json, sys
 from datetime import datetime, timedelta
@@ -456,23 +465,113 @@ def create_scenario_bill(api: Api, company_id: int, client_id: int, scenario: di
     return invoice
 
 
+# Default per-scenario bill recipe used when the backend's catalog has a
+# scenario this script doesn't have a hand-tuned recipe for. The recipe is
+# generic but FBR-valid: standard-rate goods to a registered buyer at 18 %.
+# Operators can edit the resulting bill before validating to FBR.
+GENERIC_RECIPE_REGISTERED = {
+    "clientKey": "lotte",
+    "gstRate": 18,
+    "paymentMode": "Credit",
+    "items": [{
+        "desc":       "[Auto-seeded scenario stub] — adjust description before submitting",
+        "qty":        1,
+        "uom":        "Numbers, pieces, units",
+        "unitPrice":  1000,
+        "hsCode":     "8481.8090",
+        "saleType":   "Goods at standard rate (default)",
+    }],
+}
+GENERIC_RECIPE_UNREGISTERED = {
+    "clientKey": "demo_unreg",
+    "gstRate": 18,
+    "paymentMode": "Cash",
+    "items": [{
+        "desc":       "[Auto-seeded scenario stub] — adjust description before submitting",
+        "qty":        1,
+        "uom":        "Numbers, pieces, units",
+        "unitPrice":  1000,
+        "hsCode":     "8481.8090",
+        "saleType":   "Goods at standard rate (default)",
+    }],
+}
+
+
+def get_applicable_scenarios(api: Api, company_id: int):
+    """Asks the backend which SN scenarios apply to this company. Falls back
+    to the hard-coded 6-scenario list if the endpoint isn't deployed yet."""
+    status, body = api.get(f"/api/fbr/scenarios/applicable/{company_id}")
+    if status != 200 or not isinstance(body, dict):
+        print(f"[i] /scenarios/applicable not available (HTTP {status}); using built-in 6-scenario list")
+        return [s["sn"] for s in SCENARIOS], None
+    sns = [s["code"] for s in body.get("scenarios", [])]
+    return sns, body
+
+
+def synthesize_recipe(sn_code: str, scenario_meta: dict | None):
+    """For an SN code we don't have a tuned recipe for, build a generic one
+    from the scenario metadata. Returns the same shape the SCENARIOS list uses."""
+    is_unreg = (scenario_meta or {}).get("buyerRegistrationType") == "Unregistered"
+    base = GENERIC_RECIPE_UNREGISTERED if is_unreg else GENERIC_RECIPE_REGISTERED
+    rate = (scenario_meta or {}).get("defaultRate", 18)
+    sale_type = (scenario_meta or {}).get("saleType", "Goods at standard rate (default)")
+    item = {**base["items"][0], "saleType": sale_type}
+    return {
+        "sn":          sn_code,
+        "label":       (scenario_meta or {}).get("description", f"Generic stub for {sn_code}"),
+        "clientKey":   base["clientKey"],
+        "gstRate":     rate,
+        "paymentMode": base["paymentMode"],
+        "items":       [item],
+    }
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base-url", default="http://localhost:5134")
-    parser.add_argument("--user",     default="admin")
-    parser.add_argument("--password", default="admin123")
+    parser.add_argument("--base-url",   default="http://localhost:5134")
+    parser.add_argument("--user",       default="admin")
+    parser.add_argument("--password",   default="admin123")
+    parser.add_argument("--company-id", type=int, default=None,
+                        help="Seed scenarios into this existing company id "
+                             "(applicability filtered by its activity × sector). "
+                             "If omitted, creates / reuses 'Hakimi Traders FBR Sandbox'.")
     args = parser.parse_args()
 
     print(f"[*] Logging in to {args.base_url} as {args.user}")
     token = login(args.base_url, args.user, args.password)
     api = Api(args.base_url, token)
 
-    print(f"[*] Seeding company, clients, and 6 FBR scenario bills…")
-    company_id = get_or_create_company(api)
+    if args.company_id:
+        company_id = args.company_id
+        status, body = api.get(f"/api/companies/{company_id}")
+        if status != 200:
+            sys.exit(f"[!] Company {company_id} not found (HTTP {status}).")
+        print(f"[=] Seeding company id {company_id} ('{body.get('name')}')")
+    else:
+        print(f"[*] No --company-id given; creating / reconciling demo company")
+        company_id = get_or_create_company(api)
+
     cleanup_stale(api, company_id)
     client_ids = get_or_create_clients(api, company_id)
 
-    for i, sc in enumerate(SCENARIOS):
+    # Pull the applicable scenario list from the backend catalog; this gives
+    # us up-to-date applicability based on the company's activity × sector.
+    applicable_codes, applicable_payload = get_applicable_scenarios(api, company_id)
+    if applicable_payload:
+        print(f"[*] Backend says {applicable_payload.get('count')} scenarios apply to this company "
+              f"(activities={applicable_payload.get('activities')}, sectors={applicable_payload.get('sectors')})")
+    else:
+        print(f"[*] Using fallback list: {applicable_codes}")
+
+    # Index our hand-tuned recipes by SN so we can prefer them over generic stubs.
+    by_sn = {sc["sn"]: sc for sc in SCENARIOS}
+    scenario_meta = {s["code"]: s for s in (applicable_payload.get("scenarios", []) if applicable_payload else [])}
+
+    for i, sn_code in enumerate(applicable_codes):
+        sc = by_sn.get(sn_code)
+        if sc is None:
+            sc = synthesize_recipe(sn_code, scenario_meta.get(sn_code))
+            print(f"[i] No tuned recipe for {sn_code}; using generic stub")
         client_id = client_ids.get(sc["clientKey"])
         if client_id is None:
             print(f"[!] No client for key '{sc['clientKey']}' — skipping {sc['sn']}")
@@ -480,9 +579,9 @@ def main():
         create_scenario_bill(api, company_id, client_id, sc, day_offset=i)
 
     print()
-    print(f"[OK] Done. Open the app, pick company '{DEMO_COMPANY_NAME}',")
-    print(f"     go to Bills, and you should see 6 bills tagged with their SN in the")
-    print(f"     Payment Terms field. Each has HSCode, SaleType, and UOM populated so it")
+    print(f"[OK] Done. Open the app, pick company id {company_id}, go to Bills,")
+    print(f"     and you should see one bill per applicable SN scenario tagged in")
+    print(f"     paymentTerms. Each has HSCode, SaleType, and UOM populated so it")
     print(f"     is FBR-ready for sandbox submission once PRAL approves the token.")
 
 if __name__ == "__main__":

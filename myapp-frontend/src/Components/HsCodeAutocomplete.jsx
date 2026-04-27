@@ -45,14 +45,13 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
     };
   }, []);
 
+  // Fetches HS codes. Empty query → backend returns the first 100 (browse mode)
+  // so the user can scroll the catalog without knowing keywords up front.
+  // With a query, backend filters server-side.
   const fetchResults = useCallback((q) => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       const term = (q || "").trim();
-      if (!term) {
-        setSuggestions([]);
-        return;
-      }
       setLoading(true);
       try {
         const { data } = await getFbrHSCodes(companyId, term);
@@ -66,7 +65,7 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
       } finally {
         setLoading(false);
       }
-    }, 350);
+    }, 200);
   }, [companyId, excludeHsCodes]);
 
   const handleSelect = (code) => {
@@ -106,13 +105,14 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
         type="text"
         style={style}
         value={query}
-        placeholder={placeholder || "Type e.g. valve, pipe, steel…"}
+        placeholder={placeholder || "Click to browse FBR catalog, or type e.g. valve, pipe, steel…"}
         onChange={handleChange}
         onFocus={() => {
-          if (query) {
-            setShowDropdown(true);
-            fetchResults(query);
-          }
+          // Always open the dropdown on focus and fetch — empty query returns
+          // the first 100 catalog rows so the operator can browse without
+          // having to know keywords up front.
+          setShowDropdown(true);
+          fetchResults(query);
         }}
         onKeyDown={handleKeyDown}
         autoComplete="off"

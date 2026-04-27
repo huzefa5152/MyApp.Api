@@ -53,7 +53,15 @@ namespace MyApp.Api.Helpers
             // ── Invoices ────────────────────────────────────────────────────
             new("invoices.list.view",      "Invoices", "List",   "View",   "View the invoices list"),
             new("invoices.manage.create",  "Invoices", "Manage", "Create", "Create a new invoice"),
-            new("invoices.manage.update",  "Invoices", "Manage", "Update", "Edit an invoice"),
+            new("invoices.manage.update",  "Invoices", "Manage", "Update", "Edit an invoice (all fields)"),
+            // Narrow permission: lets a user re-classify an invoice line by
+            // picking a different ItemType, but blocks every other edit
+            // (price, qty, description, GST rate, dates, payment terms,
+            // doc type, etc.). Useful for FBR-classification helpers who
+            // shouldn't touch commercial values. SUPERSEDED by the broader
+            // invoices.manage.update — granting both is safe; granting only
+            // .itemtype restricts the user to the narrow flow.
+            new("invoices.manage.update.itemtype", "Invoices", "Manage", "Update Item Type", "Edit ONLY the Item Type column on a bill (no other fields)"),
             new("invoices.manage.delete",  "Invoices", "Manage", "Delete", "Delete an invoice"),
             new("invoices.fbr.post",       "Invoices", "FBR",    "Post",   "Submit an invoice to FBR digital invoicing"),
             new("invoices.print.view",     "Invoices", "Print",  "View",   "Print or download invoices"),

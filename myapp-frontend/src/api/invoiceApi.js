@@ -15,6 +15,13 @@ export const createInvoice = (payload) =>
 export const updateInvoice = (id, payload) =>
   httpClient.put(`/invoices/${id}`, payload);
 
+// Narrow-permission edit path — only re-classifies each line by ItemType.
+// Server re-derives HS Code / UOM / Sale Type from the catalog and refuses
+// to touch any other field on the bill. Used when the operator has
+// invoices.manage.update.itemtype but NOT the broader invoices.manage.update.
+export const updateInvoiceItemTypes = (id, items) =>
+  httpClient.patch(`/invoices/${id}/itemtypes`, { items });
+
 export const deleteInvoice = (id) =>
   httpClient.delete(`/invoices/${id}`);
 

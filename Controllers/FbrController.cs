@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using MyApp.Api.Data;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
+using MyApp.Api.Services.Tax;
 
 namespace MyApp.Api.Controllers
 {
@@ -11,11 +14,67 @@ namespace MyApp.Api.Controllers
     public class FbrController : ControllerBase
     {
         private readonly IFbrService _fbrService;
+        private readonly AppDbContext _db;
 
-        public FbrController(IFbrService fbrService)
+        public FbrController(IFbrService fbrService, AppDbContext db)
         {
             _fbrService = fbrService;
+            _db = db;
         }
+
+        // ── Scenario catalog ────────────────────────────────────
+        //
+        // Returns the full FBR scenario catalog (SN001..SN028) so the UI can
+        // render a checklist of scenarios the operator wants to test, scoped
+        // by their company's BusinessActivity × Sector profile.
+
+        /// <summary>Returns all 28 FBR scenarios with metadata.</summary>
+        [HttpGet("scenarios")]
+        public IActionResult GetAllScenarios()
+            => Ok(TaxScenarios.All.Select(ToDto));
+
+        /// <summary>
+        /// Returns the subset of scenarios applicable to the given company's
+        /// BusinessActivity × Sector profile. If the company hasn't declared
+        /// either, returns all 28 (operator hasn't decided their profile yet
+        /// — better to show the full menu than nothing).
+        /// </summary>
+        [HttpGet("scenarios/applicable/{companyId}")]
+        public async Task<IActionResult> GetApplicableScenarios(int companyId)
+        {
+            var company = await _db.Companies.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == companyId);
+            if (company == null) return NotFound(new { message = "Company not found." });
+
+            var activities = TaxScenarios.SplitCsv(company.FbrBusinessActivity);
+            var sectors    = TaxScenarios.SplitCsv(company.FbrSector);
+
+            var matched = TaxScenarios.GetApplicable(activities, sectors);
+            return Ok(new
+            {
+                companyId,
+                activities,
+                sectors,
+                count = matched.Count,
+                scenarios = matched.Select(ToDto)
+            });
+        }
+
+        private static object ToDto(TaxScenarios.Scenario s) => new
+        {
+            code = s.Code,
+            description = s.Description,
+            saleType = s.SaleType,
+            defaultRate = s.DefaultRate,
+            buyerRegistrationType = s.BuyerRegistrationType,
+            isThirdSchedule = s.IsThirdSchedule,
+            isEndConsumerRetail = s.IsEndConsumerRetail,
+            requiresSroReference = s.RequiresSroReference,
+            defaultSroScheduleNo = s.DefaultSroScheduleNo,
+            defaultSroItemSerialNo = s.DefaultSroItemSerialNo,
+            // Applicability is now reverse-derived from the §10 matrix
+            // inside TaxScenarios — no longer a per-scenario property.
+        };
 
         // ── Submit & Validate ────────────────────────────────────
 

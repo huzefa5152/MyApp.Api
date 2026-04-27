@@ -110,6 +110,12 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class UpdateInvoiceDto
     {
+        /// <summary>
+        /// Optional new bill date. When null, the existing date is preserved.
+        /// FBR rejects future dates with [0043], so the service caps this at
+        /// today (UTC) before persisting.
+        /// </summary>
+        public DateTime? Date { get; set; }
         public decimal GSTRate { get; set; }
         public string? PaymentTerms { get; set; }
         public int? DocumentType { get; set; }
@@ -137,5 +143,27 @@ namespace MyApp.Api.DTOs
         public int? RateId { get; set; }
         /// <summary>3rd Schedule retail price (MRP × qty) — required for "3rd Schedule Goods" sale type.</summary>
         public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
+        /// <summary>SRO Schedule reference — required when rate ≠ 18 % per FBR rule 0077.</summary>
+        public string? SroScheduleNo { get; set; }
+        /// <summary>Serial number within the referenced SRO/Schedule — FBR rule 0078.</summary>
+        public string? SroItemSerialNo { get; set; }
+    }
+
+    /// <summary>
+    /// Narrow edit DTO for the `invoices.manage.update.itemtype` flow. The
+    /// only thing the operator can change is which ItemType each existing
+    /// line points at — service then re-derives HS Code / UOM / Sale Type
+    /// / FbrUOMId from the catalog. No other field on the bill can be
+    /// changed via this path.
+    /// </summary>
+    public class UpdateInvoiceItemTypesDto
+    {
+        public List<UpdateInvoiceItemTypeRow> Items { get; set; } = new();
+    }
+
+    public class UpdateInvoiceItemTypeRow
+    {
+        public int Id { get; set; }                  // existing InvoiceItem.Id
+        public int? ItemTypeId { get; set; }         // null clears the link
     }
 }

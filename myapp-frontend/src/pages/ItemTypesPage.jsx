@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { MdCategory, MdAdd, MdEdit, MdDelete, MdSearch, MdStar, MdStarBorder, MdInfo, MdBusiness } from "react-icons/md";
-import { getItemTypes, createItemType, updateItemType, deleteItemType } from "../api/itemTypeApi";
+import { getItemTypes, createItemType, updateItemType, deleteItemType, getItemTypeFbrHints } from "../api/itemTypeApi";
 import { getFbrHsUom } from "../api/fbrApi";
 import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
@@ -75,6 +75,11 @@ export default function ItemTypesPage() {
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
   const [loadingUom, setLoadingUom] = useState(false);
+  // FBR-driven suggestions for the currently-typed HS code. Populated by
+  // GET /api/itemtypes/fbr-hints — surfaces UOMs, suggested sale type,
+  // suggested rate %, and the live SaleTypeToRate options. Used as
+  // INFORMATION only (the form fields stay editable); pre-fills blanks.
+  const [hsHints, setHsHints] = useState(null);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -120,22 +125,43 @@ export default function ItemTypesPage() {
     setShowForm(true);
   };
 
-  // When user picks an HS code, look up the FBR-recommended UOM for it.
+  // When user picks an HS code, ask the backend for the full bundle of
+  // FBR-driven suggestions: valid UOMs, suggested sale type, suggested
+  // rate %, and live SaleTypeToRate options for the company's province.
+  // Pre-fills blanks; never overwrites a value the user already typed.
   const handleHsCodeChange = async (code) => {
     setForm((f) => ({ ...f, hsCode: code }));
+    setHsHints(null);
     if (!code || code.length < 6 || !selectedCompany) return;
     setLoadingUom(true);
     try {
-      const { data } = await getFbrHsUom(selectedCompany.id, code, 3);
-      if (Array.isArray(data) && data.length > 0) {
-        setForm((f) => ({
-          ...f,
-          // only fill if the user didn't manually set one
-          uom: f.uom || data[0].description || "",
-          fbrUOMId: f.fbrUOMId || data[0].uoM_ID || null,
-        }));
-      }
-    } catch { /* silently ignore */ } finally {
+      const { data } = await getItemTypeFbrHints(selectedCompany.id, code);
+      setHsHints(data);
+      setForm((f) => ({
+        ...f,
+        // Pre-fill UOM only when blank
+        uom: f.uom || data?.defaultUom?.description || "",
+        fbrUOMId: f.fbrUOMId || data?.defaultUom?.uoM_ID || null,
+        // Pre-fill SaleType only when blank or still on the global default
+        // (so a user editing an existing item never has their explicit pick clobbered)
+        saleType:
+          (f.saleType && f.saleType !== "Goods at standard rate (default)")
+            ? f.saleType
+            : (data?.defaultSaleType || f.saleType || "Goods at standard rate (default)"),
+      }));
+    } catch {
+      /* silently ignore — fall back to old UOM-only path */
+      try {
+        const { data } = await getFbrHsUom(selectedCompany.id, code, 3);
+        if (Array.isArray(data) && data.length > 0) {
+          setForm((f) => ({
+            ...f,
+            uom: f.uom || data[0].description || "",
+            fbrUOMId: f.fbrUOMId || data[0].uoM_ID || null,
+          }));
+        }
+      } catch { /* still nothing */ }
+    } finally {
       setLoadingUom(false);
     }
   };
@@ -160,11 +186,14 @@ export default function ItemTypesPage() {
         fbrDescription: form.fbrDescription?.trim() || null,
         isFavorite: !!form.isFavorite,
       };
+      // Pass companyId so the backend can back-fill any blanks via the FBR
+      // tax engine (HS_UOM lookup) using that company's token.
+      const enrichCompanyId = selectedCompany?.id;
       if (editItem) {
-        await updateItemType(editItem.id, { ...payload, id: editItem.id });
+        await updateItemType(editItem.id, { ...payload, id: editItem.id }, enrichCompanyId);
         notify(`"${payload.name}" updated.`, "success");
       } else {
-        await createItemType(payload);
+        await createItemType(payload, enrichCompanyId);
         notify(`"${payload.name}" added.`, "success");
       }
       setShowForm(false);
@@ -371,8 +400,44 @@ export default function ItemTypesPage() {
                   <p style={styles.hint}>
                     Must be picked from FBR's official catalog (no free-type).
                     HS codes already saved in your catalog are hidden — each code maps to one item.
-                    UOM below auto-fills from the HS_UOM lookup.
+                    UOM, Sale Type and a recommended rate auto-fill from the FBR HS_UOM + SaleTypeToRate lookups.
                   </p>
+
+                  {hsHints && (
+                    <div style={styles.hintBox}>
+                      <div style={{ fontWeight: 700, color: colors.blue, marginBottom: "0.25rem" }}>
+                        FBR suggestions for this HS code
+                      </div>
+                      <div style={styles.hintRow}>
+                        <span style={styles.hintLabel}>Recommended rate:</span>
+                        <strong>{hsHints.defaultRate}%</strong>
+                        <span style={styles.hintLabel} title="Pre-fills the GST Rate when this item is added to a bill">
+                          (applied to bills automatically)
+                        </span>
+                      </div>
+                      <div style={styles.hintRow}>
+                        <span style={styles.hintLabel}>Suggested sale type:</span>
+                        <em>{hsHints.defaultSaleType}</em>
+                      </div>
+                      {hsHints.uoms?.length > 0 && (
+                        <div style={styles.hintRow}>
+                          <span style={styles.hintLabel}>Valid UOM(s):</span>
+                          <span>{hsHints.uoms.map((u) => u.description).join(", ")}</span>
+                        </div>
+                      )}
+                      {hsHints.rateOptions?.length > 0 && (
+                        <div style={styles.hintRow}>
+                          <span style={styles.hintLabel}>All FBR rate options today:</span>
+                          <span>{hsHints.rateOptions.map((r) => `${r.rateValue}%`).join(" · ")}</span>
+                        </div>
+                      )}
+                      {hsHints.notes?.length > 0 && (
+                        <ul style={styles.hintNotes}>
+                          {hsHints.notes.map((n, i) => <li key={i}>{n}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div style={styles.row}>
@@ -449,5 +514,9 @@ const styles = {
   optTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: "#fff3e0", color: "#e65100", fontSize: "0.62rem", fontWeight: 800, letterSpacing: "0.03em" },
   input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
   hint: { margin: "0.25rem 0 0", fontSize: "0.72rem", color: colors.textSecondary, lineHeight: 1.3 },
+  hintBox: { marginTop: "0.55rem", padding: "0.6rem 0.75rem", backgroundColor: "#e3f2fd", border: "1px solid #90caf9", borderRadius: 6, fontSize: "0.78rem", color: colors.textPrimary, lineHeight: 1.5 },
+  hintRow: { display: "flex", flexWrap: "wrap", gap: "0.4rem", alignItems: "baseline" },
+  hintLabel: { color: colors.textSecondary, fontSize: "0.72rem", fontWeight: 600 },
+  hintNotes: { margin: "0.35rem 0 0", paddingLeft: "1.1rem", color: colors.textSecondary, fontSize: "0.72rem" },
   errorAlert: { backgroundColor: colors.danger_light, color: colors.danger, padding: "0.6rem 0.85rem", borderRadius: 6, marginBottom: "0.75rem", fontSize: "0.82rem", border: `1px solid ${colors.danger}40` },
 };

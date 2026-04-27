@@ -10,6 +10,7 @@ using MyApp.Api.DTOs;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Services.Interfaces;
+using MyApp.Api.Services.Tax;
 
 namespace MyApp.Api.Services.Implementations
 {
@@ -20,6 +21,7 @@ namespace MyApp.Api.Services.Implementations
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IAuditLogService _auditLog;
         private readonly AppDbContext _db;
+        private readonly IServiceProvider _services;   // resolves ITaxMappingEngine lazily to avoid circular DI
 
         // ── V1.12 API URLs ──────────────────────────────────────
         // Submit/Validate: sandbox adds "_sb" suffix; routing also based on token
@@ -36,6 +38,14 @@ namespace MyApp.Api.Services.Implementations
 
         // UOM ID → FBR description (from reference API 5.6)
         private static readonly ConcurrentDictionary<int, Dictionary<int, string>> _uomCache = new();
+
+        // Global HS-code catalog cache. The catalog is identical across
+        // companies (FBR's master list), so the first successful fetch from
+        // ANY company seeds it for everyone. Lets companies that haven't
+        // configured a token yet still browse the catalog on the Item Type
+        // form — without this they'd get an empty autocomplete.
+        private static List<FbrHSCodeDto>? _hsCodeCatalog;
+        private static readonly SemaphoreSlim _hsCacheLock = new(1, 1);
 
         // Encoder note:
         // FBR's JSON parser rejects payloads that contain \uXXXX unicode escapes.
@@ -111,18 +121,53 @@ namespace MyApp.Api.Services.Implementations
             return new string(v.Where(char.IsDigit).ToArray());
         }
 
+        // ── SaleType canonicalisation (FBR V1.12 §9) ─────────────────
+        //
+        // FBR's HS_Code × Sale_Type validator rejects payloads where the
+        // sale-type string doesn't EXACTLY match one of the §9 labels.
+        // Older bills + early-version seeds wrote variants:
+        //   • "Goods at standard rate (default)"  (lowercase 's')
+        //   • "goods at standard rate (default)"  (all lowercase)
+        // FBR V1.12 §9 specifies "Goods at Standard Rate (default)"
+        // (capital 'S'). Mapping common variants to canonical form here
+        // means existing bills with stale strings still submit cleanly
+        // without rewriting their stored DB values.
+        private static readonly Dictionary<string, string> SaleTypeCanonicalMap =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Goods at Standard Rate (default)"] = "Goods at Standard Rate (default)",
+                ["Goods at standard rate (default)"] = "Goods at Standard Rate (default)",
+                ["goods at standard rate (default)"] = "Goods at Standard Rate (default)",
+                ["3rd Schedule Goods"]               = "3rd Schedule Goods",
+                ["Goods at Reduced Rate"]            = "Goods at Reduced Rate",
+                ["Goods at zero-rate"]               = "Goods at zero-rate",
+                ["Exempt Goods"]                     = "Exempt Goods",
+                ["Exempt goods"]                     = "Exempt Goods",
+            };
+
+        internal static string NormalizeSaleType(string? saleType)
+        {
+            if (string.IsNullOrWhiteSpace(saleType))
+                return "Goods at Standard Rate (default)";
+            return SaleTypeCanonicalMap.TryGetValue(saleType.Trim(), out var canonical)
+                ? canonical
+                : saleType.Trim();
+        }
+
         public FbrService(
             IInvoiceRepository invoiceRepo,
             ICompanyRepository companyRepo,
             IHttpClientFactory httpClientFactory,
             IAuditLogService auditLogService,
-            AppDbContext db)
+            AppDbContext db,
+            IServiceProvider services)
         {
             _invoiceRepo = invoiceRepo;
             _companyRepo = companyRepo;
             _httpClientFactory = httpClientFactory;
             _auditLog = auditLogService;
             _db = db;
+            _services = services;
         }
 
         // ── Text sanitization for FBR payloads ──────────────────
@@ -424,6 +469,72 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
+            // ─ Mixed sale-type guard ─
+            // FBR requires exactly ONE sale-type bucket per invoice (because
+            // the request has a single scenarioId per bill). Mixing
+            // "3rd Schedule Goods" with "Goods at Standard Rate (default)"
+            // in the same bill returns 0052 / 0204 from PRAL with no useful
+            // line-level detail. Catch it locally and tell the operator
+            // exactly which lines to split out.
+            if (errors.Count == 0 && invoice.Items != null)
+            {
+                var byBucket = invoice.Items
+                    .Where(i => !string.IsNullOrWhiteSpace(i.SaleType))
+                    .GroupBy(i => NormalizeSaleType(i.SaleType))
+                    .ToList();
+                if (byBucket.Count > 1)
+                {
+                    var summary = string.Join("; ",
+                        byBucket.Select(g => $"\"{g.Key}\" on {g.Count()} line(s)"));
+                    errors.Add(
+                        "Mixed sale types in one invoice: FBR allows only one sale type per bill. "
+                        + $"This bill has: {summary}. "
+                        + "Split into separate bills (one per sale type) before submitting.");
+                }
+            }
+
+            // ─ Tax-engine combination check ─
+            // Mirrors what FBR rejects on its side, but locally — single
+            // clear message instead of a 0052/0077/0102 from PRAL.
+            if (errors.Count == 0 && invoice.Items != null)
+            {
+                var engine = _services.GetService(typeof(ITaxMappingEngine)) as ITaxMappingEngine;
+                if (engine != null)
+                {
+                    // Auto-detect scenario from paymentTerms ("[SN00x]" prefix)
+                    // so the engine has the same view that PostInvoiceAsync uses.
+                    string? scen = null;
+                    if (!string.IsNullOrEmpty(invoice.PaymentTerms))
+                    {
+                        var m = System.Text.RegularExpressions.Regex.Match(
+                            invoice.PaymentTerms, @"\[\s*(SN\d{3})\s*\]",
+                            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        if (m.Success) scen = m.Groups[1].Value.ToUpperInvariant();
+                    }
+
+                    var itemList = invoice.Items.ToList();
+                    for (int i = 0; i < itemList.Count; i++)
+                    {
+                        var item = itemList[i];
+                        var input = new TaxResolutionInput(
+                            CompanyId: company.Id,
+                            HsCode: item.HSCode,
+                            ScenarioCode: scen,
+                            Rate: invoice.GSTRate,
+                            BuyerRegistrationType: MapBuyerRegType(buyer.RegistrationType),
+                            InvoiceDate: invoice.Date,
+                            ProvinceCode: company.FbrProvinceCode,
+                            TransactionTypeId: null,
+                            SaleTypeOverride: item.SaleType
+                        );
+                        var combo = await engine.ValidateCombinationAsync(
+                            input, item.LineTotal, item.FixedNotifiedValueOrRetailPrice);
+                        foreach (var err in combo)
+                            errors.Add($"Item {i + 1}: {err}");
+                    }
+                }
+            }
+
             if (errors.Count > 0)
             {
                 return new FbrSubmissionResult
@@ -564,7 +675,14 @@ namespace MyApp.Api.Services.Implementations
                 var (salesTax, furtherTax, retailPrice) =
                     ComputeFbrTaxes(item, invoice.GSTRate, buyerRegType, fbrRequest.ScenarioId);
                 var uomDesc = await ResolveUomDesc(company, item.FbrUOMId, item.UOM);
-                var saleType = item.SaleType ?? "Goods at standard rate (default)";
+                // Normalise the sale-type string to the §9 canonical form.
+                // Older seed rows + manually-entered bills sometimes carry
+                // lowercase "Goods at standard rate (default)" which FBR
+                // (post-2025-05) rejects with 0052 even though both casings
+                // were tolerated historically. Mapping to the spec form
+                // here means the FBR payload is always canonical regardless
+                // of what the row stored.
+                var saleType = NormalizeSaleType(item.SaleType);
 
                 // FBR rule [0077]: "Valid SRO/Schedule No. is mandatory where rate
                 // is not 18%." Prefer the operator-set value on the item; fall
@@ -661,15 +779,43 @@ namespace MyApp.Api.Services.Implementations
                     return Fail(msg);
                 }
 
-                // ── Pattern 1: Header-level error (statusCode "01", invoiceStatuses null) ──
+                // ── Pattern 1: Header-level error (statusCode "01") ──
+                // FBR returns statusCode "01" in two flavours:
+                //   (a) header-only error with invoiceStatuses = null
+                //       (e.g. token / NTN / scenario auth failures)
+                //   (b) header-tagged Invalid + invoiceStatuses populated
+                //       with per-item errors (UOM mismatches, duplicates etc.)
+                // The original code returned with an empty message in case (b)
+                // because validation.Error is empty and ErrorCode is null —
+                // the real diagnostics live in invoiceStatuses. Always check
+                // there first, falling back to the header strings.
                 if (validation.StatusCode == "01")
                 {
-                    var msg = !string.IsNullOrEmpty(validation.ErrorCode)
+                    var headerMsg = !string.IsNullOrEmpty(validation.ErrorCode)
                         ? $"[{validation.ErrorCode}] {validation.Error}"
-                        : validation.Error ?? "FBR header validation failed.";
+                        : validation.Error ?? "";
+
+                    var itemErrors = validation.InvoiceStatuses?
+                        .Where(s => s.StatusCode == "01")
+                        .ToList();
+                    var itemMsg = itemErrors?.Count > 0
+                        ? string.Join("; ", itemErrors.Select(e =>
+                            $"Item {e.ItemSNo}: [{e.ErrorCode}] {e.Error}"))
+                        : "";
+
+                    var msg = !string.IsNullOrWhiteSpace(itemMsg) ? itemMsg
+                            : !string.IsNullOrWhiteSpace(headerMsg) ? headerMsg
+                            : "FBR validation failed with unspecified errors.";
+
                     await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, msg);
                     if (isSubmit) await PersistStatus(invoice, "Failed", null, msg);
-                    return new FbrSubmissionResult { Success = false, FbrStatus = "Failed", ErrorMessage = msg };
+                    return new FbrSubmissionResult
+                    {
+                        Success = false,
+                        FbrStatus = "Failed",
+                        ErrorMessage = msg,
+                        ItemErrors = itemErrors,
+                    };
                 }
 
                 // ── Pattern 2: Item-level errors (statusCode "00", status "Invalid"/"invalid") ──
@@ -856,7 +1002,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<List<FbrHSCodeDto>> GetHSCodesAsync(int companyId, string? search = null)
         {
-            var all = await GetReferenceData<FbrHSCodeDto>(companyId, $"{RefBaseV1}/itemdesccode");
+            var all = await GetHsCodeCatalogAsync(companyId);
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var term = search.ToLower();
@@ -865,7 +1011,69 @@ namespace MyApp.Api.Services.Implementations
                     h.Description.ToLower().Contains(term)
                 ).Take(50).ToList();
             }
+            else
+            {
+                // Empty / no search → return the first 100 so the autocomplete
+                // can show a "browse" view when the operator just clicks into
+                // the field without typing anything yet.
+                all = all.Take(100).ToList();
+            }
             return all;
+        }
+
+        // The HS code catalog is the same regardless of which company asks for
+        // it (FBR's master list). Hold a single in-process copy keyed by no one;
+        // first successful fetch from any company seeds it. Companies without
+        // a token then get the cached copy too — so the Item Type form's
+        // autocomplete keeps working even mid-onboarding when the token isn't
+        // pasted in yet.
+        private async Task<List<FbrHSCodeDto>> GetHsCodeCatalogAsync(int requestingCompanyId)
+        {
+            if (_hsCodeCatalog != null) return _hsCodeCatalog;
+
+            await _hsCacheLock.WaitAsync();
+            try
+            {
+                if (_hsCodeCatalog != null) return _hsCodeCatalog;
+
+                // Try the requesting company first (they may have a token).
+                var fresh = await GetReferenceData<FbrHSCodeDto>(
+                    requestingCompanyId, $"{RefBaseV1}/itemdesccode");
+                if (fresh != null && fresh.Count > 0)
+                {
+                    _hsCodeCatalog = fresh;
+                    return _hsCodeCatalog;
+                }
+
+                // Requesting company has no token. Find any other company that
+                // does and try with its credentials. This is read-only against
+                // FBR's public catalog — no PII / financial data crosses company
+                // boundaries — so cross-company fetch is safe.
+                var donor = await _db.Companies
+                    .AsNoTracking()
+                    .Where(c => c.FbrToken != null && c.FbrToken != ""
+                                && c.Id != requestingCompanyId)
+                    .Select(c => c.Id)
+                    .FirstOrDefaultAsync();
+                if (donor > 0)
+                {
+                    var donorFetch = await GetReferenceData<FbrHSCodeDto>(
+                        donor, $"{RefBaseV1}/itemdesccode");
+                    if (donorFetch != null && donorFetch.Count > 0)
+                    {
+                        _hsCodeCatalog = donorFetch;
+                        return _hsCodeCatalog;
+                    }
+                }
+
+                // Neither path worked — leave cache empty so a later request
+                // can try again once a token is configured.
+                return new List<FbrHSCodeDto>();
+            }
+            finally
+            {
+                _hsCacheLock.Release();
+            }
         }
 
         public async Task<List<FbrUOMDto>> GetUOMsAsync(int companyId)
