@@ -16,13 +16,16 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<List<DeliveryChallan>> GetDeliveryChallansByCompanyAsync(int companyId)
         {
+            // IsDemo challans live in the 900000+ range and are managed only
+            // through the FBR Sandbox tab — they do NOT appear on the regular
+            // Challans page.
             return await _context.DeliveryChallans
                                  .Include(dc => dc.Items)
                                      .ThenInclude(i => i.ItemType)
                                  .Include(dc => dc.Client)
                                  .Include(dc => dc.Company)
                                  .Include(dc => dc.Invoice)
-                                 .Where(dc => dc.CompanyId == companyId)
+                                 .Where(dc => dc.CompanyId == companyId && !dc.IsDemo)
                                  .OrderBy(dc => dc.ChallanNumber)
                                  .ToListAsync();
         }
@@ -37,7 +40,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(dc => dc.Client)
                 .Include(dc => dc.Company)
                 .Include(dc => dc.Invoice)
-                .Where(dc => dc.CompanyId == companyId);
+                .Where(dc => dc.CompanyId == companyId && !dc.IsDemo);
 
             if (!string.IsNullOrWhiteSpace(status))
                 query = query.Where(dc => dc.Status == status);

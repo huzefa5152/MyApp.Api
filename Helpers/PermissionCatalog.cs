@@ -82,6 +82,12 @@ namespace MyApp.Api.Helpers
             new("fbr.config.update",       "FBR", "Config", "Update", "Edit FBR configuration and credentials"),
             new("fbr.lookup.view",         "FBR", "Lookup", "View",   "View FBR lookup tables (provinces, HS codes, etc.)"),
 
+            // ── FBR Sandbox (scenario test bills, isolated 900000+ numbering) ─
+            new("fbr.sandbox.view",        "FBR", "Sandbox", "View",   "View the FBR Sandbox tab and demo scenario bills"),
+            new("fbr.sandbox.seed",        "FBR", "Sandbox", "Seed",   "Auto-create demo scenario bills for a company"),
+            new("fbr.sandbox.run",         "FBR", "Sandbox", "Run",    "Validate / submit demo scenario bills against PRAL"),
+            new("fbr.sandbox.delete",      "FBR", "Sandbox", "Delete", "Delete demo scenario bills and challans"),
+
             // ── Item Types / Descriptions / Units ───────────────────────────
             new("itemtypes.manage.view",   "ItemTypes", "Manage", "View",   "View item types"),
             new("itemtypes.manage.create", "ItemTypes", "Manage", "Create", "Create a new item type"),

@@ -20,6 +20,14 @@
         // challans participate in Bill/Invoice creation just like native ones.
         public bool IsImported { get; set; }
 
+        /// <summary>
+        /// True when this challan was created via the FBR Sandbox tab to
+        /// support a scenario test bill. Same isolation contract as
+        /// <see cref="Invoice.IsDemo"/> — separate number range (900000+),
+        /// no main counter bump, filtered out of the regular Challans page.
+        /// </summary>
+        public bool IsDemo { get; set; }
+
         // Navigation
         public Company Company { get; set; } = null!;
         public Client Client { get; set; } = null!;

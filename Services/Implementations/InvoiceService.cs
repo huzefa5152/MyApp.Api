@@ -312,9 +312,10 @@ namespace MyApp.Api.Services.Implementations
 
             // Use MAX(InvoiceNumber) so a deleted trailing number is reused on the next
             // create (no gaps after deleting the last bill). Falls back to StartingInvoiceNumber
-            // when the company has no invoices yet.
+            // when the company has no invoices yet. IsDemo bills live in their
+            // own 900000+ range and must not influence the regular sequence.
             int maxExistingInvoice = await _context.Invoices
-                .Where(i => i.CompanyId == dto.CompanyId)
+                .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo)
                 .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
 
             int nextInvoiceNumber = maxExistingInvoice > 0

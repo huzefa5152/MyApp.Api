@@ -8,6 +8,7 @@ using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Implementations;
 using MyApp.Api.Services.Interfaces;
+using MyApp.Api.Services.Tax;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,6 +62,14 @@ builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<IFbrService, FbrService>();
 builder.Services.AddScoped<IFbrLookupService, FbrLookupService>();
+// Tax mapping engine: single source of truth for HS_UOM, SaleTypeToRate
+// and scenario rules. Used by ItemType save (auto-pick UOM) and FBR
+// pre-validate (combination check before submitting).
+builder.Services.AddScoped<ITaxMappingEngine, TaxMappingEngine>();
+// FBR Sandbox: backs the per-company FBR test-scenarios tab. Demo bills
+// live in their own 900000+ number range and never collide with real
+// company bill numbering (see Invoice.IsDemo / DeliveryChallan.IsDemo).
+builder.Services.AddScoped<IFbrSandboxService, FbrSandboxService>();
 builder.Services.AddSingleton<IPOParserService, POParserService>();
 builder.Services.AddSingleton<IPOFormatFingerprintService, POFormatFingerprintService>();
 builder.Services.AddScoped<IPOFormatRegistry, POFormatRegistry>();
@@ -122,6 +131,29 @@ using (var scope = app.Services.CreateScope())
     ");
 
     db.Database.Migrate();
+
+    // One-time tagging: any pre-existing bills whose paymentTerms start
+    // with "[SNxxx]" came from the FBR Sandbox seed flow (or the python
+    // script). They predate the IsDemo column, so the migration left
+    // them with IsDemo=false — meaning they still pollute the regular
+    // Bills page. Flip them to IsDemo=true once.
+    // Idempotent: subsequent restarts find zero matching rows because
+    // the WHERE clause filters on IsDemo=0.
+    // Pattern: literal '[' + 'SN0' + any digits + literal ']' + any rest.
+    // The '[[]' escapes '[' so SQL Server treats it literally instead of
+    // as a character-set opener.
+    db.Database.ExecuteSqlRaw(@"
+        UPDATE Invoices
+           SET IsDemo = 1
+         WHERE IsDemo = 0
+           AND PaymentTerms LIKE '[[]SN0%]%';
+        UPDATE dc
+           SET dc.IsDemo = 1
+          FROM DeliveryChallans dc
+         WHERE dc.IsDemo = 0
+           AND EXISTS (SELECT 1 FROM Invoices i
+                        WHERE i.Id = dc.InvoiceId AND i.IsDemo = 1);
+    ");
 
     // Seed the starter catalog of FBR-mapped item types (idempotent — skips
     // any HS code / name already present, so it's safe to run on every boot)

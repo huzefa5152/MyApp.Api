@@ -18,6 +18,7 @@ import {
   MdCode,
   MdBugReport,
   MdTune,
+  MdScience,
   MdFileUpload,
   MdAdminPanelSettings,
 } from "react-icons/md";
@@ -66,11 +67,12 @@ export default function DashboardLayout() {
     "poformats.manage.view",
     "printtemplates.manage.update",
     "fbr.config.update",
+    "fbr.sandbox.view",
   ];
   const canSeeConfiguration = hasAny(configKeys);
 
   // Auto-expand Configuration submenu if a child route is active
-  const isConfigActive = location.pathname.startsWith("/companies") || location.pathname.startsWith("/Clients") || location.pathname.startsWith("/item-types") || location.pathname.startsWith("/po-formats") || location.pathname.startsWith("/templates") || location.pathname.startsWith("/fbr-settings");
+  const isConfigActive = location.pathname.startsWith("/companies") || location.pathname.startsWith("/Clients") || location.pathname.startsWith("/item-types") || location.pathname.startsWith("/po-formats") || location.pathname.startsWith("/templates") || location.pathname.startsWith("/fbr-settings") || location.pathname.startsWith("/fbr-sandbox");
   useEffect(() => {
     if (isConfigActive) setConfigOpen(true);
   }, [isConfigActive]);
@@ -228,6 +230,17 @@ export default function DashboardLayout() {
                     >
                       <MdTune aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
                       FBR Settings
+                    </NavLink>
+                  </Can>
+                  <Can permission="fbr.sandbox.view">
+                    <NavLink
+                      to="/fbr-sandbox"
+                      className={({ isActive }) =>
+                        "dl-submenu__item" + (isActive ? " active" : "")
+                      }
+                    >
+                      <MdScience aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
+                      FBR Sandbox
                     </NavLink>
                   </Can>
                 </div>
@@ -432,6 +445,7 @@ function getBreadcrumb(pathname) {
     "/roles": "Roles & Permissions",
     "/templates": "Print Templates",
     "/fbr-settings": "Configuration / FBR Settings",
+    "/fbr-sandbox": "Configuration / FBR Sandbox",
     "/audit-logs": "Audit Logs",
   };
   return map[pathname] ?? pathname.replace(/\//g, " / ").replace(/^\s\/\s/, "");

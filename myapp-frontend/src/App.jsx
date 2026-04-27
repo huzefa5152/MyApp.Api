@@ -16,6 +16,7 @@ import RolesPage from "./pages/RolesPage";
 import TemplateEditorPage from "./pages/TemplateEditorPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import FbrSettingsPage from "./pages/FbrSettingsPage";
+import FbrSandboxPage from "./pages/FbrSandboxPage";
 import LoginPage from "./pages/public/LoginPage";
 import LandingPage from "./pages/public/LandingPage";
 import ProtectedRoute from "./Components/ProtectedRoute";
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="/roles" element={<RolesPage />} />
           <Route path="/templates" element={<TemplateEditorPage />} />
           <Route path="/fbr-settings" element={<FbrSettingsPage />} />
+          <Route path="/fbr-sandbox" element={<FbrSandboxPage />} />
           <Route path="/audit-logs" element={<AuditLogsPage />} />
         </Route>
       </Route>

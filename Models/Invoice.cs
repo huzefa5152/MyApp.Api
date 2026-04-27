@@ -32,6 +32,18 @@ namespace MyApp.Api.Models
         /// </summary>
         public bool IsFbrExcluded { get; set; }
 
+        /// <summary>
+        /// True when this bill was created via the FBR Sandbox tab (used to
+        /// validate scenarios against PRAL without consuming the company's
+        /// real bill numbering). Demo bills:
+        ///  • Use a separate number range starting at 900000+ so they never
+        ///    collide with real bills.
+        ///  • Do NOT bump the company's CurrentInvoiceNumber.
+        ///  • Are filtered out of the regular Bills page by default.
+        ///  • Are listed only in the FBR Sandbox tab.
+        /// </summary>
+        public bool IsDemo { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation

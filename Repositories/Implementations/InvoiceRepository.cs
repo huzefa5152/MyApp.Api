@@ -16,11 +16,13 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<List<Invoice>> GetByCompanyAsync(int companyId)
         {
+            // Default list excludes IsDemo bills — those are managed via the
+            // FBR Sandbox tab, not the regular Bills page.
             return await _context.Invoices
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans)
-                .Where(i => i.CompanyId == companyId)
+                .Where(i => i.CompanyId == companyId && !i.IsDemo)
                 .OrderByDescending(i => i.InvoiceNumber)
                 .ToListAsync();
         }
@@ -34,7 +36,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans)
-                .Where(i => i.CompanyId == companyId);
+                .Where(i => i.CompanyId == companyId && !i.IsDemo);
 
             if (clientId.HasValue)
                 query = query.Where(i => i.ClientId == clientId.Value);
@@ -96,12 +98,12 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<int> GetTotalCountAsync()
         {
-            return await _context.Invoices.CountAsync();
+            return await _context.Invoices.CountAsync(i => !i.IsDemo);
         }
 
         public async Task<int> GetCountByCompanyAsync(int companyId)
         {
-            return await _context.Invoices.CountAsync(i => i.CompanyId == companyId);
+            return await _context.Invoices.CountAsync(i => i.CompanyId == companyId && !i.IsDemo);
         }
 
         public async Task<bool> HasInvoicesForClientAsync(int clientId)
