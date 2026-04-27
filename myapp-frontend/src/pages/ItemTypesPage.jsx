@@ -106,6 +106,7 @@ export default function ItemTypesPage() {
       fbrDescription: "",
       isFavorite: true,
     });
+    setHsHints(null);
     setFormError("");
     setShowForm(true);
   };
@@ -121,49 +122,68 @@ export default function ItemTypesPage() {
       fbrDescription: it.fbrDescription || "",
       isFavorite: it.isFavorite ?? true,
     });
+    setHsHints(null);
     setFormError("");
     setShowForm(true);
+    // If the existing item already has an HS code, fetch FBR hints
+    // immediately so the operator can compare their saved Sale Type / UOM
+    // against the FBR recommendation without having to re-pick the HS code.
+    // We DON'T pre-fill the form here — those are saved values the operator
+    // explicitly chose. The hints panel surfaces them as info only.
+    if (it.hsCode && selectedCompany) {
+      void fetchHsHints(it.hsCode);
+    }
   };
 
-  // When user picks an HS code, ask the backend for the full bundle of
-  // FBR-driven suggestions: valid UOMs, suggested sale type, suggested
-  // rate %, and live SaleTypeToRate options for the company's province.
-  // Pre-fills blanks; never overwrites a value the user already typed.
-  const handleHsCodeChange = async (code) => {
-    setForm((f) => ({ ...f, hsCode: code }));
-    setHsHints(null);
-    if (!code || code.length < 6 || !selectedCompany) return;
+  // Fetch and stash the FBR hint bundle (valid UOMs, suggested sale type,
+  // suggested rate %, live SaleTypeToRate options) for an HS code. Does
+  // NOT mutate the form — that's the caller's job (handleHsCodeChange
+  // pre-fills blanks, openEdit leaves saved values alone).
+  const fetchHsHints = async (code) => {
+    if (!code || code.length < 6 || !selectedCompany) return null;
     setLoadingUom(true);
     try {
       const { data } = await getItemTypeFbrHints(selectedCompany.id, code);
       setHsHints(data);
-      setForm((f) => ({
-        ...f,
-        // Pre-fill UOM only when blank
-        uom: f.uom || data?.defaultUom?.description || "",
-        fbrUOMId: f.fbrUOMId || data?.defaultUom?.uoM_ID || null,
-        // Pre-fill SaleType only when blank or still on the global default
-        // (so a user editing an existing item never has their explicit pick clobbered)
-        saleType:
-          (f.saleType && f.saleType !== "Goods at standard rate (default)")
-            ? f.saleType
-            : (data?.defaultSaleType || f.saleType || "Goods at standard rate (default)"),
-      }));
+      return data;
     } catch {
-      /* silently ignore — fall back to old UOM-only path */
+      // Fallback: at least try to surface the valid UOMs so the operator
+      // sees something rather than a blank panel.
       try {
         const { data } = await getFbrHsUom(selectedCompany.id, code, 3);
         if (Array.isArray(data) && data.length > 0) {
-          setForm((f) => ({
-            ...f,
-            uom: f.uom || data[0].description || "",
-            fbrUOMId: f.fbrUOMId || data[0].uoM_ID || null,
-          }));
+          const synthetic = {
+            uoms: data,
+            defaultUom: data[0],
+            defaultSaleType: null,
+            saleTypeOptions: [],
+          };
+          setHsHints(synthetic);
+          return synthetic;
         }
       } catch { /* still nothing */ }
+      return null;
     } finally {
       setLoadingUom(false);
     }
+  };
+
+  // When user picks an HS code, fetch hints and pre-fill ONLY blank fields
+  // — never clobber a value the operator already typed/saved.
+  const handleHsCodeChange = async (code) => {
+    setForm((f) => ({ ...f, hsCode: code }));
+    setHsHints(null);
+    const data = await fetchHsHints(code);
+    if (!data) return;
+    setForm((f) => ({
+      ...f,
+      uom: f.uom || data?.defaultUom?.description || "",
+      fbrUOMId: f.fbrUOMId || data?.defaultUom?.uoM_ID || null,
+      saleType:
+        (f.saleType && f.saleType !== "Goods at standard rate (default)")
+          ? f.saleType
+          : (data?.defaultSaleType || f.saleType || "Goods at standard rate (default)"),
+    }));
   };
 
   const handleSubmit = async (e) => {
