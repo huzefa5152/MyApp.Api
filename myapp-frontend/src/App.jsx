@@ -8,7 +8,11 @@ import ChallansPage from "./pages/ChallanPage";
 import ImportChallansPage from "./pages/ImportChallansPage";
 import InvoicePage from "./pages/InvoicePage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
+import PurchaseBillsPage from "./pages/PurchaseBillsPage";
+import GoodsReceiptsPage from "./pages/GoodsReceiptsPage";
+import StockDashboardPage from "./pages/StockDashboardPage";
 import ClientsPage from "./pages/ClientsPage";
+import SuppliersPage from "./pages/SuppliersPage";
 import ItemTypesPage from "./pages/ItemTypesPage";
 import UnitsPage from "./pages/UnitsPage";
 import POFormatsPage from "./pages/POFormatsPage";
@@ -41,6 +45,7 @@ export default function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/companies/*" element={<CompanyPage />} />
           <Route path="/Clients/*" element={<ClientsPage />} />
+          <Route path="/Suppliers/*" element={<SuppliersPage />} />
           <Route path="/item-types" element={<ItemTypesPage />} />
           <Route path="/units" element={<UnitsPage />} />
           <Route path="/po-formats" element={<POFormatsPage />} />
@@ -48,6 +53,9 @@ export default function App() {
           <Route path="/challans/import" element={<ImportChallansPage />} />
           <Route path="/invoices" element={<InvoicePage />} />
           <Route path="/item-rate-history" element={<ItemRateHistoryPage />} />
+          <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
+          <Route path="/goods-receipts" element={<GoodsReceiptsPage />} />
+          <Route path="/stock" element={<StockDashboardPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/roles" element={<RolesPage />} />

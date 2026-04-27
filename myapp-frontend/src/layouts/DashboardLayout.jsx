@@ -23,6 +23,10 @@ import {
   MdFileUpload,
   MdAdminPanelSettings,
   MdHistory,
+  MdLocalShipping,
+  MdShoppingCart,
+  MdInventory,
+  MdInventory2,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { Can, usePermissions } from "../contexts/PermissionsContext";
@@ -65,6 +69,7 @@ export default function DashboardLayout() {
   const configKeys = [
     "companies.manage.view",
     "clients.manage.view",
+    "suppliers.manage.view",
     "itemtypes.manage.view",
     "poformats.manage.view",
     "printtemplates.manage.update",
@@ -74,7 +79,7 @@ export default function DashboardLayout() {
   const canSeeConfiguration = hasAny(configKeys);
 
   // Auto-expand Configuration submenu if a child route is active
-  const isConfigActive = location.pathname.startsWith("/companies") || location.pathname.startsWith("/Clients") || location.pathname.startsWith("/item-types") || location.pathname.startsWith("/po-formats") || location.pathname.startsWith("/templates") || location.pathname.startsWith("/fbr-settings") || location.pathname.startsWith("/fbr-sandbox");
+  const isConfigActive = location.pathname.startsWith("/companies") || location.pathname.startsWith("/Clients") || location.pathname.startsWith("/Suppliers") || location.pathname.startsWith("/item-types") || location.pathname.startsWith("/po-formats") || location.pathname.startsWith("/templates") || location.pathname.startsWith("/fbr-settings") || location.pathname.startsWith("/fbr-sandbox");
   useEffect(() => {
     if (isConfigActive) setConfigOpen(true);
   }, [isConfigActive]);
@@ -190,6 +195,17 @@ export default function DashboardLayout() {
                       Clients List
                     </NavLink>
                   </Can>
+                  <Can permission="suppliers.manage.view">
+                    <NavLink
+                      to="/Suppliers/list"
+                      className={({ isActive }) =>
+                        "dl-submenu__item" + (isActive ? " active" : "")
+                      }
+                    >
+                      <MdLocalShipping aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
+                      Suppliers List
+                    </NavLink>
+                  </Can>
                   <Can permission="itemtypes.manage.view">
                     <NavLink
                       to="/item-types"
@@ -261,29 +277,8 @@ export default function DashboardLayout() {
             </>
           )}
 
-          <Can permission="challans.list.view">
-            <NavLink
-              to="/challans"
-              className={({ isActive }) =>
-                "dl-nav__item" + (isActive ? " active" : "")
-              }
-            >
-              <MdDescription className="dl-nav__icon" aria-hidden="true" />
-              <span className="dl-nav__label">Challans</span>
-            </NavLink>
-          </Can>
-
-          <Can permission="challans.import.create">
-            <NavLink
-              to="/challans/import"
-              className={({ isActive }) =>
-                "dl-nav__item" + (isActive ? " active" : "")
-              }
-            >
-              <MdFileUpload className="dl-nav__icon" aria-hidden="true" />
-              <span className="dl-nav__label">Import Challans</span>
-            </NavLink>
-          </Can>
+          <hr className="dl-nav__divider" />
+          <span className="dl-nav__section-label">Sales</span>
 
           <Can permission="invoices.list.view">
             <NavLink
@@ -308,6 +303,72 @@ export default function DashboardLayout() {
               <span className="dl-nav__label">Item Rate History</span>
             </NavLink>
           </Can>
+
+          <Can permission="challans.list.view">
+            <NavLink
+              to="/challans"
+              className={({ isActive }) =>
+                "dl-nav__item" + (isActive ? " active" : "")
+              }
+            >
+              <MdDescription className="dl-nav__icon" aria-hidden="true" />
+              <span className="dl-nav__label">Delivery Challans</span>
+            </NavLink>
+          </Can>
+
+          <Can permission="challans.import.create">
+            <NavLink
+              to="/challans/import"
+              className={({ isActive }) =>
+                "dl-nav__item" + (isActive ? " active" : "")
+              }
+            >
+              <MdFileUpload className="dl-nav__icon" aria-hidden="true" />
+              <span className="dl-nav__label">Import Challans</span>
+            </NavLink>
+          </Can>
+
+          <hr className="dl-nav__divider" />
+          <span className="dl-nav__section-label">Purchases</span>
+
+          <Can permission="purchasebills.list.view">
+            <NavLink
+              to="/purchase-bills"
+              className={({ isActive }) =>
+                "dl-nav__item" + (isActive ? " active" : "")
+              }
+            >
+              <MdShoppingCart className="dl-nav__icon" aria-hidden="true" />
+              <span className="dl-nav__label">Purchase Bills</span>
+            </NavLink>
+          </Can>
+
+          <Can permission="goodsreceipts.list.view">
+            <NavLink
+              to="/goods-receipts"
+              className={({ isActive }) =>
+                "dl-nav__item" + (isActive ? " active" : "")
+              }
+            >
+              <MdInventory2 className="dl-nav__icon" aria-hidden="true" />
+              <span className="dl-nav__label">Goods Receipts</span>
+            </NavLink>
+          </Can>
+
+          <Can permission="stock.dashboard.view">
+            <NavLink
+              to="/stock"
+              className={({ isActive }) =>
+                "dl-nav__item" + (isActive ? " active" : "")
+              }
+            >
+              <MdInventory className="dl-nav__icon" aria-hidden="true" />
+              <span className="dl-nav__label">Stock Dashboard</span>
+            </NavLink>
+          </Can>
+
+          <hr className="dl-nav__divider" />
+          <span className="dl-nav__section-label">Administration</span>
 
           <Can permission="users.manage.view">
             <NavLink
@@ -461,6 +522,10 @@ function getBreadcrumb(pathname) {
     "/dashboard": "Dashboard",
     "/companies/list": "Configuration / Companies List",
     "/Clients/list": "Configuration / Clients List",
+    "/Suppliers/list": "Configuration / Suppliers List",
+    "/purchase-bills": "Purchases / Purchase Bills",
+    "/goods-receipts": "Purchases / Goods Receipts",
+    "/stock": "Purchases / Stock Dashboard",
     "/item-types": "Configuration / Item Types",
     "/challans": "Challans",
     "/challans/import": "Challans / Import Historical",
