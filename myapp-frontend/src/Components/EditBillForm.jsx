@@ -294,9 +294,14 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                   </div>
                 )}
 
-                {/* FBR scenario picker — filters Item Type dropdown to
-                    match the chosen scenario's saleType so the bill stays
-                    in a single FBR-bucket. */}
+                {/* FBR scenario picker — pure UI filter for the Item Type
+                    dropdown below. Stays editable even in itemTypeOnlyMode
+                    (narrow `invoices.manage.update.itemtype` permission)
+                    because picking a scenario doesn't change commercial
+                    values; it only narrows which ItemType rows the operator
+                    can pick from. The narrow PATCH path doesn't persist
+                    paymentTerms, so the [SNxxx] tag only updates on the
+                    full-edit save path. */}
                 {scenarios.length > 0 && (
                   <div style={styles.row}>
                     <div style={{ flex: 1, minWidth: 280 }}>
@@ -304,10 +309,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                         FBR Scenario <span style={{ fontWeight: 400, color: colors.textSecondary, fontSize: "0.7rem" }}>filters items below</span>
                       </label>
                       <select
-                        style={{ ...styles.input, ...(lockNonItemType ? styles.readOnlyInput : {}) }}
+                        style={{ ...styles.input, ...(lockItemType ? styles.readOnlyInput : {}) }}
                         value={scenarioCode}
                         onChange={(e) => setScenarioCode(e.target.value)}
-                        disabled={lockNonItemType}
+                        disabled={lockItemType}
                       >
                         <option value="">— auto-detect from items —</option>
                         {scenarios.map((s) => (
