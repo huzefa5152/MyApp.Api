@@ -64,6 +64,8 @@ builder.Services.AddScoped<IClientService, ClientService>();
 // keep working unchanged.
 builder.Services.AddScoped<IClientGroupService, ClientGroupService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
+builder.Services.AddScoped<IPurchaseBillService, PurchaseBillService>();
+builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
