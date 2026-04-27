@@ -488,14 +488,17 @@ namespace MyApp.Api.Services.Implementations
             // --- PO number ---
             if (!string.IsNullOrWhiteSpace(poNumLabel))
             {
-                // After the label, optionally skip a leading "[A-Za-z]+-"
-                // document-class prefix (e.g. Lotte's POGI-) so the captured
-                // PO number is the digit-led business identifier the user
-                // enters on bills and challans. The non-capturing prefix
-                // group is optional — PO numbers that don't start with an
-                // alpha-dash prefix (e.g. pure numeric, or "2026/001") are
-                // captured unchanged.
-                var labelPattern = @"(?i)" + Regex.Escape(poNumLabel) + @"\s*[:#]?\s*(?:[A-Za-z]+-)?(\d[A-Za-z0-9\-/.]*)";
+                // After the label, optionally skip a leading document-class
+                // prefix so the captured PO number is the digit-led business
+                // identifier the user enters on bills and challans. We accept
+                // two prefix shapes:
+                //   - "[A-Za-z]+-"        — dash-suffixed (e.g. Lotte's POGI-)
+                //   - "[A-Za-z]{1,3}\s+"  — short alpha + whitespace (e.g.
+                //     Meko's "S 260714"). Capped at 3 letters so we don't
+                //     swallow a meaningful alpha portion of a real PO number.
+                // Both prefix shapes are optional — pure-numeric PO numbers
+                // (or "2026/001") are captured unchanged.
+                var labelPattern = @"(?i)" + Regex.Escape(poNumLabel) + @"\s*[:#]?\s*(?:[A-Za-z]+-|[A-Za-z]{1,3}\s+)?(\d[A-Za-z0-9\-/.]*)";
                 var m = Regex.Match(text, labelPattern);
                 if (m.Success)
                 {
