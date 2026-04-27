@@ -45,8 +45,35 @@
         public string? FbrDefaultPaymentModeRegistered { get; set; }
         public string? FbrDefaultPaymentModeUnregistered { get; set; }
 
+        // ── Purchase / Inventory module ──
+        //
+        // Inventory tracking is opt-in per company. While false, no
+        // StockMovements are emitted by Invoice/PurchaseBill saves and the
+        // stock guard on bill creation is silent. This lets existing
+        // companies (Hakimi, Roshan) keep working unchanged until they're
+        // ready to enter opening balances and turn it on.
+        public bool InventoryTrackingEnabled { get; set; }
+
+        // When InventoryTrackingEnabled = true and StockGuardHardBlock = true,
+        // bill creation is REFUSED if any line would oversell stock. When
+        // false (default), the operator gets a soft warning but can save
+        // anyway — useful while they're still settling their purchase
+        // discipline.
+        public bool StockGuardHardBlock { get; set; }
+
+        // Independent counters for the purchase side so purchase-bill numbers
+        // don't collide with sales-invoice numbers. Same pattern as
+        // CurrentInvoiceNumber / StartingInvoiceNumber.
+        public int StartingPurchaseBillNumber { get; set; }
+        public int CurrentPurchaseBillNumber { get; set; }
+        public int StartingGoodsReceiptNumber { get; set; }
+        public int CurrentGoodsReceiptNumber { get; set; }
+
         public List<DeliveryChallan> DeliveryChallans { get; set; } = new();
         public List<Client> Clients { get; set; } = new();
+        public List<Supplier> Suppliers { get; set; } = new();
         public List<Invoice> Invoices { get; set; } = new();
+        public List<PurchaseBill> PurchaseBills { get; set; } = new();
+        public List<GoodsReceipt> GoodsReceipts { get; set; } = new();
     }
 }

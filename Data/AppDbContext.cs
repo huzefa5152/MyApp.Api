@@ -34,6 +34,15 @@ namespace MyApp.Api.Data
         public DbSet<RolePermission> RolePermissions { get; set; }
         public DbSet<UserRole> UserRoles { get; set; }
 
+        // Purchase + Inventory module
+        public DbSet<Supplier> Suppliers { get; set; }
+        public DbSet<PurchaseBill> PurchaseBills { get; set; }
+        public DbSet<PurchaseItem> PurchaseItems { get; set; }
+        public DbSet<GoodsReceipt> GoodsReceipts { get; set; }
+        public DbSet<GoodsReceiptItem> GoodsReceiptItems { get; set; }
+        public DbSet<StockMovement> StockMovements { get; set; }
+        public DbSet<OpeningStockBalance> OpeningStockBalances { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<AuditLog>()
@@ -537,6 +546,154 @@ namespace MyApp.Api.Data
                 .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<UserRole>()
                 .HasIndex(ur => ur.RoleId);
+
+            // ── Purchase + Inventory module ────────────────────────────────
+
+            // Supplier — mirror of Client
+            modelBuilder.Entity<Supplier>()
+                .HasOne(s => s.Company)
+                .WithMany(co => co.Suppliers)
+                .HasForeignKey(s => s.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<Supplier>()
+                .HasIndex(s => s.CompanyId);
+            modelBuilder.Entity<Supplier>()
+                .Property(s => s.Name).HasMaxLength(300);
+            modelBuilder.Entity<Supplier>()
+                .Property(s => s.NTN).HasMaxLength(20);
+            modelBuilder.Entity<Supplier>()
+                .Property(s => s.STRN).HasMaxLength(20);
+            modelBuilder.Entity<Supplier>()
+                .Property(s => s.RegistrationType).HasMaxLength(20);
+            modelBuilder.Entity<Supplier>()
+                .Property(s => s.CNIC).HasMaxLength(20);
+
+            // PurchaseBill — mirror of Invoice
+            modelBuilder.Entity<PurchaseBill>()
+                .HasOne(pb => pb.Company)
+                .WithMany(c => c.PurchaseBills)
+                .HasForeignKey(pb => pb.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<PurchaseBill>()
+                .HasOne(pb => pb.Supplier)
+                .WithMany(s => s.PurchaseBills)
+                .HasForeignKey(pb => pb.SupplierId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<PurchaseBill>()
+                .HasIndex(pb => pb.CompanyId);
+            modelBuilder.Entity<PurchaseBill>()
+                .HasIndex(pb => new { pb.CompanyId, pb.PurchaseBillNumber });
+            modelBuilder.Entity<PurchaseBill>()
+                .HasIndex(pb => pb.SupplierId);
+            modelBuilder.Entity<PurchaseBill>()
+                .HasIndex(pb => pb.SupplierIRN);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.Subtotal).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.GSTRate).HasPrecision(5, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.GSTAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.GrandTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.SupplierBillNumber).HasMaxLength(100);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.SupplierIRN).HasMaxLength(64);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.ReconciliationStatus).HasMaxLength(20).HasDefaultValue("Pending");
+
+            // PurchaseItem — mirror of InvoiceItem
+            modelBuilder.Entity<PurchaseItem>()
+                .HasOne(pi => pi.PurchaseBill)
+                .WithMany(pb => pb.Items)
+                .HasForeignKey(pi => pi.PurchaseBillId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PurchaseItem>()
+                .HasOne(pi => pi.ItemType)
+                .WithMany()
+                .HasForeignKey(pi => pi.ItemTypeId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<PurchaseItem>()
+                .HasOne(pi => pi.GoodsReceiptItem)
+                .WithMany()
+                .HasForeignKey(pi => pi.GoodsReceiptItemId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<PurchaseItem>()
+                .HasIndex(pi => pi.PurchaseBillId);
+            modelBuilder.Entity<PurchaseItem>()
+                .HasIndex(pi => pi.ItemTypeId);
+            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.UnitPrice).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.LineTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.FixedNotifiedValueOrRetailPrice).HasPrecision(18, 2);
+
+            // GoodsReceipt — mirror of DeliveryChallan
+            modelBuilder.Entity<GoodsReceipt>()
+                .HasOne(gr => gr.Company)
+                .WithMany(c => c.GoodsReceipts)
+                .HasForeignKey(gr => gr.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<GoodsReceipt>()
+                .HasOne(gr => gr.Supplier)
+                .WithMany(s => s.GoodsReceipts)
+                .HasForeignKey(gr => gr.SupplierId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<GoodsReceipt>()
+                .HasOne(gr => gr.PurchaseBill)
+                .WithMany(pb => pb.GoodsReceipts)
+                .HasForeignKey(gr => gr.PurchaseBillId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<GoodsReceipt>()
+                .HasIndex(gr => gr.CompanyId);
+            modelBuilder.Entity<GoodsReceipt>()
+                .HasIndex(gr => new { gr.CompanyId, gr.GoodsReceiptNumber });
+            modelBuilder.Entity<GoodsReceipt>()
+                .HasIndex(gr => gr.SupplierId);
+            modelBuilder.Entity<GoodsReceipt>()
+                .Property(gr => gr.Status).HasMaxLength(20).HasDefaultValue("Pending");
+
+            // GoodsReceiptItem — mirror of DeliveryItem
+            modelBuilder.Entity<GoodsReceiptItem>()
+                .HasOne(gri => gri.GoodsReceipt)
+                .WithMany(gr => gr.Items)
+                .HasForeignKey(gri => gri.GoodsReceiptId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<GoodsReceiptItem>()
+                .HasOne(gri => gri.ItemType)
+                .WithMany()
+                .HasForeignKey(gri => gri.ItemTypeId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<GoodsReceiptItem>()
+                .HasIndex(gri => gri.GoodsReceiptId);
+
+            // StockMovement — append-only event log
+            modelBuilder.Entity<StockMovement>()
+                .HasOne(sm => sm.Company)
+                .WithMany()
+                .HasForeignKey(sm => sm.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<StockMovement>()
+                .HasOne(sm => sm.ItemType)
+                .WithMany()
+                .HasForeignKey(sm => sm.ItemTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Composite index for the hot-path on-hand query:
+            //   WHERE CompanyId = X AND ItemTypeId = Y
+            //   then SUM(Direction == In ? Quantity : -Quantity)
+            modelBuilder.Entity<StockMovement>()
+                .HasIndex(sm => new { sm.CompanyId, sm.ItemTypeId });
+            modelBuilder.Entity<StockMovement>()
+                .HasIndex(sm => new { sm.SourceType, sm.SourceId });
+
+            // OpeningStockBalance — at most one row per (Company, ItemType)
+            modelBuilder.Entity<OpeningStockBalance>()
+                .HasOne(osb => osb.Company)
+                .WithMany()
+                .HasForeignKey(osb => osb.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<OpeningStockBalance>()
+                .HasOne(osb => osb.ItemType)
+                .WithMany()
+                .HasForeignKey(osb => osb.ItemTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<OpeningStockBalance>()
+                .HasIndex(osb => new { osb.CompanyId, osb.ItemTypeId })
+                .IsUnique();
         }
 
     }
