@@ -21,6 +21,7 @@ namespace MyApp.Api.Services.Implementations
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IAuditLogService _auditLog;
         private readonly AppDbContext _db;
+        private readonly IStockService _stock;
         private readonly IServiceProvider _services;   // resolves ITaxMappingEngine lazily to avoid circular DI
 
         // ── V1.12 API URLs ──────────────────────────────────────
@@ -160,6 +161,7 @@ namespace MyApp.Api.Services.Implementations
             IHttpClientFactory httpClientFactory,
             IAuditLogService auditLogService,
             AppDbContext db,
+            IStockService stock,
             IServiceProvider services)
         {
             _invoiceRepo = invoiceRepo;
@@ -167,6 +169,7 @@ namespace MyApp.Api.Services.Implementations
             _httpClientFactory = httpClientFactory;
             _auditLog = auditLogService;
             _db = db;
+            _stock = stock;
             _services = services;
         }
 
@@ -680,6 +683,36 @@ namespace MyApp.Api.Services.Implementations
                 if (preResult != null) return preResult;
             }
 
+            // ── Stock guard ──
+            // Only fires on REAL submissions (isSubmit=true). Validate calls
+            // skip this so the operator can dry-run a bill before bringing
+            // stock data into compliance. The check is also a no-op when
+            // Company.InventoryTrackingEnabled is false — existing tenants
+            // keep working unchanged until they opt in.
+            if (isSubmit)
+            {
+                var requirements = invoice.Items
+                    .Where(it => it.ItemTypeId.HasValue && it.Quantity > 0)
+                    .Select(it => new StockRequirement(
+                        ItemTypeId: it.ItemTypeId!.Value,
+                        ItemName: !string.IsNullOrWhiteSpace(it.ItemTypeName) ? it.ItemTypeName : it.Description,
+                        Quantity: it.Quantity))
+                    .ToList();
+                if (requirements.Count > 0)
+                {
+                    var shortages = await _stock.CheckAvailabilityAsync(invoice.CompanyId, requirements);
+                    if (shortages.Count > 0)
+                    {
+                        var lines = shortages.Select(s =>
+                            $"{s.ItemName}: needs {s.RequiredQuantity}, on hand {s.OnHandQuantity}, short by {s.ShortBy}");
+                        var msg = "Cannot submit to FBR — insufficient stock:\n  • "
+                                  + string.Join("\n  • ", lines)
+                                  + "\nRecord the matching purchase bill(s) or adjust opening balance, then retry.";
+                        return Fail(msg);
+                    }
+                }
+            }
+
             // ── Resolve province names ──
             var sellerProvince = await ResolveProvinceNameAsync(company, company.FbrProvinceCode);
             var buyerProvince = await ResolveProvinceNameAsync(company, buyer.FbrProvinceCode);
@@ -988,7 +1021,32 @@ namespace MyApp.Api.Services.Implementations
                     var irn = fbrResponse?.InvoiceNumber; // top-level IRN (only in POST response)
 
                     if (isSubmit)
+                    {
                         await PersistStatus(invoice, "Submitted", irn, null);
+
+                        // Emit Stock OUT for every line bound to a catalog
+                        // ItemType. We do this AFTER PRAL acknowledged the
+                        // submission — a failed submit produces no movement,
+                        // and the pre-check above guarantees we won't
+                        // oversell here. Lines without an ItemTypeId are
+                        // intentionally skipped (we can't track what we
+                        // can't classify); StockService.RecordMovementAsync
+                        // is also a no-op when tracking is disabled, so
+                        // existing tenants pay zero cost.
+                        foreach (var item in invoice.Items)
+                        {
+                            if (!item.ItemTypeId.HasValue || item.Quantity <= 0) continue;
+                            await _stock.RecordMovementAsync(
+                                companyId: invoice.CompanyId,
+                                itemTypeId: item.ItemTypeId.Value,
+                                direction: StockMovementDirection.Out,
+                                quantity: item.Quantity,
+                                sourceType: StockMovementSourceType.Invoice,
+                                sourceId: invoice.Id,
+                                movementDate: invoice.Date,
+                                notes: $"Bill #{invoice.InvoiceNumber} submitted to FBR (IRN {irn})");
+                        }
+                    }
 
                     var successMsg = isSubmit
                         ? $"Invoice {invoice.InvoiceNumber} submitted to FBR successfully. IRN: {irn}"

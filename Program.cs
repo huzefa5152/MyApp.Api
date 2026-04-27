@@ -67,6 +67,10 @@ builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<IFbrService, FbrService>();
 builder.Services.AddScoped<IFbrLookupService, FbrLookupService>();
+// Inventory accounting: stock movements + on-hand + availability check.
+// All write operations are no-ops when Company.InventoryTrackingEnabled
+// is false, so existing tenants keep working unchanged.
+builder.Services.AddScoped<IStockService, StockService>();
 // Tax mapping engine: single source of truth for HS_UOM, SaleTypeToRate
 // and scenario rules. Used by ItemType save (auto-pick UOM) and FBR
 // pre-validate (combination check before submitting).
