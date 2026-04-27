@@ -223,7 +223,38 @@ namespace MyApp.Api.Services.Implementations
             };
 
             var created = await _repository.CreateDeliveryChallanAsync(deliveryChallan);
+
+            // Upsert ItemDescription rows for any new item names. This makes
+            // PO-imported items immediately visible in the bill form's
+            // SmartItemAutocomplete dropdown — operators no longer have to
+            // edit the challan and re-pick each item from the catalog before
+            // the items show up. Existing ItemDescription rows are left
+            // untouched (we don't want to clobber saved FBR defaults).
+            await EnsureItemDescriptionsAsync(dto.Items.Select(i => i.Description));
+
             return ToDto(created);
+        }
+
+        private async Task EnsureItemDescriptionsAsync(IEnumerable<string?> descriptions)
+        {
+            var names = descriptions
+                .Select(d => d?.Trim() ?? "")
+                .Where(d => !string.IsNullOrWhiteSpace(d))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (names.Count == 0) return;
+
+            var existing = await _context.ItemDescriptions
+                .Where(it => names.Contains(it.Name))
+                .Select(it => it.Name)
+                .ToListAsync();
+            var existingSet = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
+            var toAdd = names.Where(n => !existingSet.Contains(n))
+                             .Select(n => new ItemDescription { Name = n })
+                             .ToList();
+            if (toAdd.Count == 0) return;
+            _context.ItemDescriptions.AddRange(toAdd);
+            await _context.SaveChangesAsync();
         }
 
         public async Task<DeliveryChallanDto?> UpdateItemsAsync(int challanId, List<DeliveryItemDto> items)
@@ -294,6 +325,10 @@ namespace MyApp.Api.Services.Implementations
                     await _repository.DeleteItemAsync(item);
 
                 await _repository.UpdateAsync(dc);
+
+                // Same upsert as on create — newly added item descriptions
+                // surface in the bill autocomplete without a manual round-trip.
+                await EnsureItemDescriptionsAsync(items.Select(i => i.Description));
 
                 await transaction.CommitAsync();
 
