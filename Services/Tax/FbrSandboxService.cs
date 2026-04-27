@@ -157,22 +157,58 @@ namespace MyApp.Api.Services.Tax
             var registeredClient   = demoClients.FirstOrDefault(c => c.Name == DemoRegisteredName);
             var unregisteredClient = demoClients.FirstOrDefault(c => c.Name == DemoUnregisteredName);
 
+            // PRAL's STATL check authoritatively determines the buyer's
+            // RegistrationType from the NTN — a fake or placeholder NTN gets
+            // classified Unregistered regardless of what we send in the
+            // payload, producing 0053 / 0205 errors. So when provisioning
+            // the demo clients, we copy NTN/STRN/Province from a REAL
+            // Registered (or Unregistered) client on the company. The
+            // demo client's NAME stays generic "[DEMO]…" so the operator
+            // never sees a real customer name on a sandbox bill.
+            var realRegistered = await _db.Clients
+                .Where(c => c.CompanyId == companyId
+                            && c.RegistrationType == "Registered"
+                            && !c.Name.StartsWith("[DEMO]"))
+                .OrderBy(c => c.Id)
+                .FirstOrDefaultAsync();
+            var realUnregistered = await _db.Clients
+                .Where(c => c.CompanyId == companyId
+                            && c.RegistrationType == "Unregistered"
+                            && !c.Name.StartsWith("[DEMO]"))
+                .OrderBy(c => c.Id)
+                .FirstOrDefaultAsync();
+
             if (registeredClient == null)
             {
-                // Sample buyer details mirror the FBR V1.12 §4 spec sample
-                // ("FERTILIZER MANUFAC IRS NEW", NTN 1000000000000) — that
-                // buyer is PRAL's documented sandbox test entity, so it
-                // never gets confused with a real customer record.
                 registeredClient = new Client
                 {
                     CompanyId = companyId,
                     Name = DemoRegisteredName,
-                    Address = "Karachi",
-                    NTN = "1000000000000",
+                    Address = realRegistered?.Address ?? "Karachi",
+                    // Real registered NTN — passes PRAL's STATL check.
+                    // Falls back to FBR's V1.12 §4 sample NTN if the
+                    // company has no real registered customers (operator
+                    // will need to update the NTN manually before the
+                    // demo bills can submit successfully to PRAL).
+                    NTN = realRegistered?.NTN ?? "1000000000000",
+                    STRN = realRegistered?.STRN,
                     RegistrationType = "Registered",
-                    FbrProvinceCode = company.FbrProvinceCode ?? 8,    // default Sindh
+                    FbrProvinceCode = realRegistered?.FbrProvinceCode
+                                       ?? company.FbrProvinceCode ?? 8,
                 };
                 _db.Clients.Add(registeredClient);
+                await _db.SaveChangesAsync();
+            }
+            else if (registeredClient.NTN == "1000000000000" && realRegistered != null)
+            {
+                // Self-heal: an earlier seed left a placeholder NTN on the
+                // demo client. Refresh from a real registered client so
+                // future submits clear PRAL's STATL gate.
+                registeredClient.NTN = realRegistered.NTN;
+                registeredClient.STRN = realRegistered.STRN;
+                registeredClient.Address = realRegistered.Address ?? registeredClient.Address;
+                registeredClient.FbrProvinceCode = realRegistered.FbrProvinceCode
+                                                   ?? registeredClient.FbrProvinceCode;
                 await _db.SaveChangesAsync();
             }
 
@@ -182,11 +218,17 @@ namespace MyApp.Api.Services.Tax
                 {
                     CompanyId = companyId,
                     Name = DemoUnregisteredName,
-                    Address = "Karachi",
-                    NTN = "9999999-1",
-                    CNIC = "4220199999991",
+                    Address = realUnregistered?.Address ?? "Karachi",
+                    // Borrow a real Unregistered customer's CNIC when we
+                    // have one — same STATL-mismatch reason as registered
+                    // path. "9999999-1" + CNIC "4220199999991" is the
+                    // historic fallback that has worked on PRAL sandbox
+                    // for end-consumer scenarios (SN002 / SN026-028).
+                    NTN = realUnregistered?.NTN ?? "9999999-1",
+                    CNIC = realUnregistered?.CNIC ?? "4220199999991",
                     RegistrationType = "Unregistered",
-                    FbrProvinceCode = company.FbrProvinceCode ?? 8,
+                    FbrProvinceCode = realUnregistered?.FbrProvinceCode
+                                       ?? company.FbrProvinceCode ?? 8,
                 };
                 _db.Clients.Add(unregisteredClient);
                 await _db.SaveChangesAsync();
