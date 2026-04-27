@@ -328,4 +328,11 @@ function DetailBlock({ label, value, mono }) {
 
 const thStyle = { padding: "10px 14px", textAlign: "left", fontWeight: 600, color: "#5f6d7e", fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.3px", whiteSpace: "nowrap" };
 const tdStyle = { padding: "10px 14px", color: "#1a2332" };
-const pgBtn = { display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, border: "1px solid #d0d7e2", background: "#fff", cursor: "pointer" };
+const pgBtn = {
+  display: "flex", alignItems: "center", justifyContent: "center",
+  width: 32, height: 32, minWidth: 32, flexShrink: 0,
+  borderRadius: 8, border: "1px solid #d0d7e2",
+  background: "#fff", color: "#1a2332",
+  padding: 0, boxShadow: "none",
+  cursor: "pointer",
+};
