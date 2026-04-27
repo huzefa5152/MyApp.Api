@@ -25,5 +25,12 @@
         public string? FbrDefaultUOM { get; set; }
         public string? FbrDefaultPaymentModeRegistered { get; set; }
         public string? FbrDefaultPaymentModeUnregistered { get; set; }
+
+        // Inventory module toggle. Defaults to false on the backend if
+        // omitted from the payload — operators turn it on when they're
+        // ready to track stock movements.
+        public bool InventoryTrackingEnabled { get; set; }
+        public int StartingPurchaseBillNumber { get; set; }
+        public int StartingGoodsReceiptNumber { get; set; }
     }
 }

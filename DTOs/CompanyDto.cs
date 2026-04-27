@@ -27,5 +27,16 @@
         public string? FbrDefaultUOM { get; set; }
         public string? FbrDefaultPaymentModeRegistered { get; set; }
         public string? FbrDefaultPaymentModeUnregistered { get; set; }
+
+        // ── Inventory module toggles ──────────────────────────────
+        // Off by default. While off, no Stock movements are emitted by
+        // PurchaseBill saves or FBR submissions, and the stock guard at
+        // FBR submission is silent. Operators flip this on once they've
+        // entered opening balances and are ready to track inventory.
+        public bool InventoryTrackingEnabled { get; set; }
+        public int StartingPurchaseBillNumber { get; set; }
+        public int CurrentPurchaseBillNumber { get; set; }
+        public int StartingGoodsReceiptNumber { get; set; }
+        public int CurrentGoodsReceiptNumber { get; set; }
     }
 }

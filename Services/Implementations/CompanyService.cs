@@ -50,7 +50,12 @@ namespace MyApp.Api.Services.Implementations
             FbrDefaultSaleType = c.FbrDefaultSaleType,
             FbrDefaultUOM = c.FbrDefaultUOM,
             FbrDefaultPaymentModeRegistered = c.FbrDefaultPaymentModeRegistered,
-            FbrDefaultPaymentModeUnregistered = c.FbrDefaultPaymentModeUnregistered
+            FbrDefaultPaymentModeUnregistered = c.FbrDefaultPaymentModeUnregistered,
+            InventoryTrackingEnabled = c.InventoryTrackingEnabled,
+            StartingPurchaseBillNumber = c.StartingPurchaseBillNumber,
+            CurrentPurchaseBillNumber = c.CurrentPurchaseBillNumber,
+            StartingGoodsReceiptNumber = c.StartingGoodsReceiptNumber,
+            CurrentGoodsReceiptNumber = c.CurrentGoodsReceiptNumber,
         };
 
         public async Task<IEnumerable<CompanyDto>> GetAllAsync()
@@ -113,7 +118,12 @@ namespace MyApp.Api.Services.Implementations
                 FbrDefaultSaleType = dto.FbrDefaultSaleType,
                 FbrDefaultUOM = dto.FbrDefaultUOM,
                 FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered,
-                FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered
+                FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered,
+                InventoryTrackingEnabled = dto.InventoryTrackingEnabled,
+                StartingPurchaseBillNumber = dto.StartingPurchaseBillNumber,
+                CurrentPurchaseBillNumber = 0,
+                StartingGoodsReceiptNumber = dto.StartingGoodsReceiptNumber,
+                CurrentGoodsReceiptNumber = 0,
             };
 
             var created = await _repository.AddAsync(company);
@@ -151,6 +161,23 @@ namespace MyApp.Api.Services.Implementations
             company.FbrDefaultUOM = dto.FbrDefaultUOM;
             company.FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered;
             company.FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered;
+
+            // Inventory module — flag is freely toggleable; starting numbers
+            // only apply if no purchase docs exist yet (same rule as the
+            // sales-side starting numbers).
+            company.InventoryTrackingEnabled = dto.InventoryTrackingEnabled;
+            var hasPurchaseBills = await _context.PurchaseBills.AnyAsync(p => p.CompanyId == id);
+            if (!hasPurchaseBills)
+            {
+                company.StartingPurchaseBillNumber = dto.StartingPurchaseBillNumber;
+                company.CurrentPurchaseBillNumber = 0;
+            }
+            var hasReceipts = await _context.GoodsReceipts.AnyAsync(g => g.CompanyId == id);
+            if (!hasReceipts)
+            {
+                company.StartingGoodsReceiptNumber = dto.StartingGoodsReceiptNumber;
+                company.CurrentGoodsReceiptNumber = 0;
+            }
 
             // Only allow changing starting challan number if no challans exist
             var hasChallans = await _challanRepo.HasChallansForCompanyAsync(id);

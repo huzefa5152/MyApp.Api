@@ -22,5 +22,11 @@
         public string? FbrDefaultUOM { get; set; }
         public string? FbrDefaultPaymentModeRegistered { get; set; }
         public string? FbrDefaultPaymentModeUnregistered { get; set; }
+
+        // Inventory module toggle. Off by default. Flip on once the
+        // operator has entered opening balances.
+        public bool InventoryTrackingEnabled { get; set; }
+        public int StartingPurchaseBillNumber { get; set; }
+        public int StartingGoodsReceiptNumber { get; set; }
     }
 }

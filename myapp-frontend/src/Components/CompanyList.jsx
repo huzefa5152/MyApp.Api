@@ -59,9 +59,19 @@ export default function CompanyList({ companies, onEdit, fetchCompanies }) {
                   <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>NTN:</strong> {c.ntn}
                 </p>
               )}
+              {c.cnic && (
+                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>CNIC:</strong> {c.cnic}
+                </p>
+              )}
               {c.strn && (
                 <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
                   <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>STRN:</strong> {c.strn}
+                </p>
+              )}
+              {c.inventoryTrackingEnabled && (
+                <p style={{ ...cardStyles.text, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.15rem 0.55rem", marginTop: "0.25rem", borderRadius: 12, backgroundColor: "#e0f2f1", color: "#00695c", fontSize: "0.72rem", fontWeight: 700, width: "fit-content" }}>
+                  ✓ Inventory tracking ON
                 </p>
               )}
               <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
