@@ -61,7 +61,8 @@ namespace MyApp.Api.Repositories.Implementations
                     dc.ChallanNumber.ToString().Contains(term) ||
                     (dc.Client != null && dc.Client.Name.ToLower().Contains(term)) ||
                     (dc.PoNumber != null && dc.PoNumber.ToLower().Contains(term)) ||
-                    dc.Items.Any(item => item.Description.ToLower().Contains(term)));
+                    dc.Items.Any(item => item.Description.ToLower().Contains(term) ||
+                                          (item.ItemType != null && item.ItemType.Name.ToLower().Contains(term))));
             }
 
             var totalCount = await query.CountAsync();

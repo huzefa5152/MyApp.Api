@@ -166,4 +166,65 @@ namespace MyApp.Api.DTOs
         public int Id { get; set; }                  // existing InvoiceItem.Id
         public int? ItemTypeId { get; set; }         // null clears the link
     }
+
+    /// <summary>
+    /// One row in the Item Rate History view — a flattened InvoiceItem
+    /// projection that lets the operator answer "what rate did I bill for
+    /// this item last time, and to whom". The grid groups rows by item but
+    /// each row is a single bill-line snapshot.
+    /// </summary>
+    public class ItemRateHistoryRowDto
+    {
+        public int InvoiceItemId { get; set; }
+        public int InvoiceId { get; set; }
+        public int InvoiceNumber { get; set; }
+        public DateTime Date { get; set; }
+        public int ClientId { get; set; }
+        public string ClientName { get; set; } = "";
+        public int? ItemTypeId { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        public string Description { get; set; } = "";
+        public int Quantity { get; set; }
+        public string UOM { get; set; } = "";
+        public decimal UnitPrice { get; set; }
+        public decimal LineTotal { get; set; }
+    }
+
+    /// <summary>
+    /// Aggregate response for the Item Rate History page — paged rows plus
+    /// a summary band (count / avg / min / max rate) computed across the
+    /// FULL filtered set (not just the current page) so the operator sees
+    /// the rate band at a glance.
+    /// </summary>
+    public class ItemRateHistoryResultDto
+    {
+        public List<ItemRateHistoryRowDto> Items { get; set; } = new();
+        public int TotalCount { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public decimal? AvgUnitPrice { get; set; }
+        public decimal? MinUnitPrice { get; set; }
+        public decimal? MaxUnitPrice { get; set; }
+    }
+
+    /// <summary>
+    /// Most-recent unit price for a single delivery-item, used to pre-fill
+    /// the InvoiceForm when the operator clicks "Generate Bill" on a
+    /// challan card. Matching strategy: prefer the item's catalog ItemTypeId,
+    /// fall back to exact case-insensitive Description match.
+    /// </summary>
+    public class LastRateDto
+    {
+        public int DeliveryItemId { get; set; }
+        public decimal? LastUnitPrice { get; set; }
+        public int? LastInvoiceNumber { get; set; }
+        public DateTime? LastInvoiceDate { get; set; }
+        public string? LastClientName { get; set; }
+        /// <summary>
+        /// Source of the match: "ItemType" (matched by catalog id) or
+        /// "Description" (fallback). Surfaced to the UI so the operator
+        /// can judge how trustworthy the suggested rate is.
+        /// </summary>
+        public string? MatchedBy { get; set; }
+    }
 }

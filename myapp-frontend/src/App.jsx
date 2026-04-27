@@ -7,6 +7,7 @@ import CompanyPage from "./pages/CompanyPage";
 import ChallansPage from "./pages/ChallanPage";
 import ImportChallansPage from "./pages/ImportChallansPage";
 import InvoicePage from "./pages/InvoicePage";
+import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
 import ClientsPage from "./pages/ClientsPage";
 import ItemTypesPage from "./pages/ItemTypesPage";
 import POFormatsPage from "./pages/POFormatsPage";
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/challans" element={<ChallansPage />} />
           <Route path="/challans/import" element={<ImportChallansPage />} />
           <Route path="/invoices" element={<InvoicePage />} />
+          <Route path="/item-rate-history" element={<ItemRateHistoryPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/roles" element={<RolesPage />} />

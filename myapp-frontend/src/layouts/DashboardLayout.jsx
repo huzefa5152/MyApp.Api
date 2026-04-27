@@ -21,6 +21,7 @@ import {
   MdScience,
   MdFileUpload,
   MdAdminPanelSettings,
+  MdHistory,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { Can, usePermissions } from "../contexts/PermissionsContext";
@@ -284,6 +285,18 @@ export default function DashboardLayout() {
             </NavLink>
           </Can>
 
+          <Can permission="itemratehistory.view">
+            <NavLink
+              to="/item-rate-history"
+              className={({ isActive }) =>
+                "dl-nav__item" + (isActive ? " active" : "")
+              }
+            >
+              <MdHistory className="dl-nav__icon" aria-hidden="true" />
+              <span className="dl-nav__label">Item Rate History</span>
+            </NavLink>
+          </Can>
+
           <Can permission="users.manage.view">
             <NavLink
               to="/users"
@@ -440,6 +453,7 @@ function getBreadcrumb(pathname) {
     "/challans": "Challans",
     "/challans/import": "Challans / Import Historical",
     "/invoices": "Bills",
+    "/item-rate-history": "Item Rate History",
     "/profile": "My Profile",
     "/users": "User Management",
     "/roles": "Roles & Permissions",

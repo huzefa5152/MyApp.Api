@@ -155,8 +155,15 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         // Default description to the item type name if empty
         if (!current.description?.trim()) current.description = pickedType.name || "";
       } else {
-        // Cleared — blank out the FBR metadata
+        // Cleared — blank out the FBR metadata fields that were inherited
+        // from the catalog row. Otherwise the row keeps stale HS Code /
+        // Sale Type / UOM that no longer reflect any catalog item, and the
+        // operator silently ships wrong data to FBR.
         current.itemTypeName = "";
+        current.uom = "";
+        current.fbrUOMId = null;
+        current.hsCode = "";
+        current.saleType = "";
       }
       next[index] = current;
       return next;

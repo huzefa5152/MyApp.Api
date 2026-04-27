@@ -31,5 +31,29 @@ namespace MyApp.Api.Services.Interfaces
         Task<PrintTaxInvoiceDto?> GetPrintTaxInvoiceAsync(int invoiceId);
         Task<int> GetTotalCountAsync();
         Task<int> GetCountByCompanyAsync(int companyId);
+        /// <summary>
+        /// Flat InvoiceItem search across a company's billing history. Powers
+        /// the Item Rate History page — given an item (by catalog id or free
+        /// text), return every bill line where it appeared, with bill number,
+        /// date, client, qty, unit price, and total. The result also carries
+        /// avg/min/max unit price across the full filtered set so the
+        /// operator can see the rate band before quoting.
+        /// </summary>
+        Task<ItemRateHistoryResultDto> GetItemRateHistoryAsync(
+            int companyId, int page, int pageSize,
+            int? itemTypeId, string? search,
+            int? clientId, DateTime? dateFrom, DateTime? dateTo);
+
+        /// <summary>
+        /// For each item in the given challan, look up the most-recent
+        /// non-demo bill line that billed the same product and return its
+        /// unit price + bill number + date. Powers the "auto-fill rates"
+        /// behaviour on the Generate-Bill shortcut. Match precedence:
+        ///   1. Same ItemTypeId (precise)
+        ///   2. Same Description, case-insensitive (fallback)
+        /// Items without a match are returned with null values so the UI
+        /// can leave them blank for the operator to enter manually.
+        /// </summary>
+        Task<List<LastRateDto>> GetLastRatesForChallanAsync(int companyId, int challanId);
     }
 }

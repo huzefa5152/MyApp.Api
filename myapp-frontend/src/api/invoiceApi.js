@@ -39,3 +39,16 @@ export const getInvoicePrintTaxInvoice = (invoiceId) =>
 
 export const getInvoicesCount = (companyId) =>
   httpClient.get("/invoices/count", { params: companyId ? { companyId } : {} });
+
+// Flat search across a company's bill lines for the Item Rate History page.
+// params: { itemTypeId?, search?, clientId?, dateFrom?, dateTo?, page?, pageSize? }
+export const getItemRateHistory = (companyId, params = {}) =>
+  httpClient.get(`/invoices/company/${companyId}/item-rate-history`, { params });
+
+// Per-item last-billed rate for every line on a challan. Used by the
+// "Generate Bill" shortcut to pre-fill unit prices in the InvoiceForm.
+// Returns an array of { deliveryItemId, lastUnitPrice, lastInvoiceNumber,
+// lastInvoiceDate, lastClientName, matchedBy } — items without history
+// have nulls so the UI can leave them blank.
+export const getLastRatesForChallan = (companyId, challanId) =>
+  httpClient.get(`/invoices/company/${companyId}/last-rates`, { params: { challanId } });

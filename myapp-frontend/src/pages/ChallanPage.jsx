@@ -4,6 +4,7 @@ import ChallanList from "../Components/ChallanList";
 import ChallanForm from "../Components/ChallanForm";
 import ChallanEditForm from "../Components/ChallanEditForm";
 import POImportForm from "../Components/POImportForm";
+import InvoiceForm from "../Components/InvoiceForm";
 import {
   getPagedChallansByCompany,
   createDeliveryChallan,
@@ -48,6 +49,9 @@ export default function ChallanPage() {
   const [showImport, setShowImport] = useState(false);
   const [editChallan, setEditChallan] = useState(null);
   const [loadingChallans, setLoadingChallans] = useState(false);
+  // Generate-Bill shortcut: holds the challanId to prefill into InvoiceForm
+  // when the user clicks the per-card button.
+  const [generateBillChallanId, setGenerateBillChallanId] = useState(null);
 
   // Pagination & filters
   const [page, setPage] = useState(1);
@@ -345,6 +349,7 @@ export default function ChallanPage() {
             onEditItems={handleEditItems}
             onExportPdf={handleExportPdf}
             onExportExcel={hasExcelTpl ? handleExportExcel : null}
+            onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
             exportingId={exportingId}
           />
           {/* Pagination */}
@@ -393,6 +398,20 @@ export default function ChallanPage() {
           challan={editChallan}
           onClose={() => setEditChallan(null)}
           onSaved={handleEditSaved}
+        />
+      )}
+
+      {generateBillChallanId && selectedCompany && (
+        <InvoiceForm
+          companyId={selectedCompany.id}
+          company={selectedCompany}
+          prefillChallanId={generateBillChallanId}
+          onClose={() => setGenerateBillChallanId(null)}
+          onSaved={() => {
+            setGenerateBillChallanId(null);
+            notify("Bill created.", "success");
+            fetchChallans(selectedCompany.id, page);
+          }}
         />
       )}
 

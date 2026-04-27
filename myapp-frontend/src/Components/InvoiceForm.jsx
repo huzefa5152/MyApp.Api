@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { MdSearch } from "react-icons/md";
 import { getPendingChallansByCompany } from "../api/challanApi";
-import { createInvoice } from "../api/invoiceApi";
+import { createInvoice, getLastRatesForChallan } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
@@ -22,7 +22,7 @@ const colors = {
   dangerLight: "#fff0f1",
 };
 
-export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
+export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId }) {
   const [clients, setClients] = useState([]);
   const [allChallans, setAllChallans] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState("");
@@ -64,6 +64,18 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
   const [scenarios, setScenarios] = useState([]);
   const [scenarioCode, setScenarioCode] = useState("");
 
+  // Last-billed rate per delivery item, keyed by deliveryItemId.
+  // Populated whenever a challan gets ticked (whether via the Generate-Bill
+  // shortcut on the Challans page OR by the operator selecting a challan in
+  // the Bills > New Bill flow). Operator can still override any row — the
+  // per-row hint shows the source bill so they can spot stale rates (e.g.
+  // material price has gone up since last bill).
+  const [lastRates, setLastRates] = useState({});
+  const [autoFilledFromHistory, setAutoFilledFromHistory] = useState(false);
+  // Memo of challan ids we've already queried last-rates for, so toggling
+  // the same challan on/off doesn't re-hit the API every time.
+  const [fetchedRateChallanIds, setFetchedRateChallanIds] = useState(() => new Set());
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -77,6 +89,22 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
         setClients(clientRes.data);
         setItemTypes(typesRes.data || []);
         setScenarios(scenarioRes.data?.scenarios || []);
+
+        // Generate-Bill shortcut from the Challans page: when a challanId is
+        // passed in, derive its client and pre-tick the challan. The user
+        // lands directly on the items/prices step. The actual rate fetch +
+        // price prefill is handled by the selectedIds-change effect below,
+        // so the same code path serves both this shortcut and the regular
+        // Bills > New Bill flow when the operator ticks a challan manually.
+        // If the challan is no longer in the pending list (someone else
+        // billed it in between) we fall back to the empty state silently.
+        if (prefillChallanId) {
+          const dc = challanRes.data.find((c) => c.id === prefillChallanId);
+          if (dc) {
+            setSelectedClientId(String(dc.clientId));
+            setSelectedIds([dc.id]);
+          }
+        }
       } catch {
         setError("Failed to load data.");
       } finally {
@@ -84,7 +112,61 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
       }
     };
     load();
-  }, [companyId]);
+  }, [companyId, prefillChallanId]);
+
+  // Whenever a challan gets newly ticked (either via the Generate-Bill
+  // prefill or a manual click in the Bills > New Bill flow), fetch the
+  // last-billed rate for each of its items and merge them into lastRates.
+  // Pre-fill itemPrices ONLY for items the operator has not already typed
+  // a price into — never overwrite manual entries. fetchedRateChallanIds
+  // prevents re-fetching when the user toggles the same challan on/off.
+  useEffect(() => {
+    const newIds = selectedIds.filter((id) => !fetchedRateChallanIds.has(id));
+    if (newIds.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const updates = {};
+      const priceUpdates = {};
+      let filledAny = false;
+      for (const cid of newIds) {
+        try {
+          const r = await getLastRatesForChallan(companyId, cid);
+          (r.data || []).forEach((row) => {
+            updates[row.deliveryItemId] = row;
+            if (row.lastUnitPrice != null) {
+              priceUpdates[row.deliveryItemId] = String(row.lastUnitPrice);
+              filledAny = true;
+            }
+          });
+        } catch {
+          // Non-fatal — operator can still type prices manually.
+        }
+      }
+      if (cancelled) return;
+      setFetchedRateChallanIds((prev) => {
+        const next = new Set(prev);
+        newIds.forEach((id) => next.add(id));
+        return next;
+      });
+      if (Object.keys(updates).length > 0) {
+        setLastRates((prev) => ({ ...prev, ...updates }));
+      }
+      if (Object.keys(priceUpdates).length > 0) {
+        // Only fill prices for items the operator hasn't typed into yet.
+        setItemPrices((prev) => {
+          const next = { ...prev };
+          Object.entries(priceUpdates).forEach(([k, v]) => {
+            if (!next[k]) next[k] = v;
+          });
+          return next;
+        });
+        if (filledAny) setAutoFilledFromHistory(true);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [selectedIds, companyId, fetchedRateChallanIds]);
 
   // The chosen scenario's full record (sale type + rate + scope) — drives
   // both the item-type filter and the GST rate auto-fill below.
@@ -140,6 +222,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
     setCommonPoDate("");
     setDcSearch("");
     setError("");
+    // Also clear any leftover rate-history state so the warning banner and
+    // per-row hints don't persist across an unrelated client.
+    setLastRates({});
+    setAutoFilledFromHistory(false);
+    setFetchedRateChallanIds(new Set());
   };
 
 
@@ -288,7 +375,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
 
   return (
     <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: 850, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ ...formStyles.modal, maxWidth: 1280, width: "96vw", cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>Create Bill</h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
@@ -502,6 +589,21 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
                           </div>
                         </div>
 
+                        {autoFilledFromHistory && (
+                          <div style={{
+                            display: "flex", alignItems: "flex-start", gap: "0.5rem",
+                            padding: "0.55rem 0.85rem", marginBottom: "0.5rem",
+                            backgroundColor: "#fff8e1", border: "1px solid #ffcc80",
+                            borderRadius: 8, fontSize: "0.82rem", color: "#bf360c"
+                          }}>
+                            <span style={{ fontSize: "1rem", lineHeight: 1 }}>⚠</span>
+                            <div>
+                              <b>Rates pre-filled from last bill.</b>
+                              {" "}Verify each unit price below — material prices may have changed since the previous order. Override any row that needs a new rate.
+                            </div>
+                          </div>
+                        )}
+
                         <div style={styles.unifiedTableWrap}>
                           <table style={styles.unifiedTable}>
                             <thead>
@@ -535,10 +637,21 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
                                         onChange={(newId, picked) => {
                                           setItemTypeIds((p) => ({ ...p, [item.id]: newId ? parseInt(newId) : null }));
                                           if (picked) {
+                                            // Picking an ItemType binds these fields to the catalog row.
                                             if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [item.id]: picked.hsCode }));
                                             if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [item.id]: picked.saleType }));
                                             if (picked.uom) setItemUoms((p) => ({ ...p, [item.id]: picked.uom }));
                                             if (picked.fbrUOMId) setItemFbrUomIds((p) => ({ ...p, [item.id]: picked.fbrUOMId }));
+                                          } else {
+                                            // Clearing the ItemType also clears the bound HS Code,
+                                            // Sale Type and UOM — they were inherited from the
+                                            // catalog row, so removing the link should remove the
+                                            // values too. Otherwise stale FBR fields stay on the
+                                            // line and the operator silently ships wrong data.
+                                            setItemHsCodes((p) => ({ ...p, [item.id]: "" }));
+                                            setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
+                                            setItemUoms((p) => ({ ...p, [item.id]: "" }));
+                                            setItemFbrUomIds((p) => ({ ...p, [item.id]: null }));
                                           }
                                         }}
                                         placeholder="— optional —"
@@ -576,6 +689,27 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved }) {
                                         onChange={(e) => handlePriceChange(item.id, e.target.value)}
                                         placeholder="0.00"
                                       />
+                                      {lastRates[item.id]?.lastUnitPrice != null && (
+                                        <div style={{
+                                          fontSize: "0.68rem", marginTop: 2, lineHeight: 1.2,
+                                          whiteSpace: "nowrap",
+                                          color: parseFloat(itemPrices[item.id]) === parseFloat(lastRates[item.id].lastUnitPrice)
+                                            ? "#5f6d7e" : "#2e7d32",
+                                        }}
+                                        title={`Last billed Rs. ${Number(lastRates[item.id].lastUnitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                                          + ` on bill #${lastRates[item.id].lastInvoiceNumber}`
+                                          + (lastRates[item.id].lastInvoiceDate ? ` (${new Date(lastRates[item.id].lastInvoiceDate).toLocaleDateString()})` : "")
+                                          + ` — matched by ${lastRates[item.id].matchedBy}`
+                                        }>
+                                          Last Rs.{Number(lastRates[item.id].lastUnitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                          {lastRates[item.id].lastInvoiceDate && (
+                                            <> · #{lastRates[item.id].lastInvoiceNumber}</>
+                                          )}
+                                          {parseFloat(itemPrices[item.id]) !== parseFloat(lastRates[item.id].lastUnitPrice) && (
+                                            <> · <b>edited</b></>
+                                          )}
+                                        </div>
+                                      )}
                                     </td>
                                     <td style={{ ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
                                       {(item.quantity * price).toLocaleString(undefined, { minimumFractionDigits: 2 })}

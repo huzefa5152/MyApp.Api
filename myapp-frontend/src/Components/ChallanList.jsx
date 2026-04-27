@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning } from "react-icons/md";
+import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote } from "react-icons/md";
 import ChallanModal from "./ChallanModal";
 import { cardStyles, cardHover } from "../theme";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -57,11 +57,12 @@ function WarningTooltip({ warnings }) {
   );
 }
 
-export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, exportingId }) {
+export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, exportingId }) {
   const { has } = usePermissions();
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
   const permPrint = has("challans.print.view");
+  const permCreateBill = has("invoices.manage.create");
   const [selectedChallan, setSelectedChallan] = useState(null);
 
   if (!challans || challans.length === 0) return null;
@@ -79,6 +80,9 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
           // gap-free — earlier challans must be edited instead.
           const canDelete = canCancel && c.isLatest === true;
           const hasWarnings = c.warnings && c.warnings.length > 0;
+          // Generate Bill shortcut — only for billable statuses
+          // (Pending / Imported), matching the backend's CreateAsync guard.
+          const canGenerateBill = permCreateBill && (c.status === "Pending" || c.status === "Imported");
           return (
             <div
               key={c.id}
@@ -162,6 +166,15 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       title={c.status === "Invoiced" ? "Edit items (bill will auto-sync)" : "Edit items"}
                     >
                       <MdEdit size={14} /> Edit
+                    </button>
+                  )}
+                  {canGenerateBill && (
+                    <button
+                      style={{ ...styles.actionBtn, ...styles.generateBillBtn }}
+                      onClick={() => onGenerateBill?.(c)}
+                      title="Open the New Bill form with this challan pre-selected"
+                    >
+                      <MdRequestQuote size={14} /> Generate Bill
                     </button>
                   )}
                   {permUpdate && canCancel && (
@@ -255,4 +268,5 @@ const styles = {
   editBtn: { backgroundColor: "#fff3e0", color: "#e65100" },
   cancelBtn: { backgroundColor: "#fce4ec", color: "#c62828" },
   deleteBtn: { backgroundColor: "#ffebee", color: "#b71c1c" },
+  generateBillBtn: { backgroundColor: "#e0f2f1", color: "#00695c" },
 };

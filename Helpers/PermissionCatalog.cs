@@ -98,6 +98,9 @@ namespace MyApp.Api.Helpers
             new("config.units.manage",            "Configuration", "Units",            "Manage", "Manage the units-of-measure lookup list"),
             new("config.mergefields.manage",      "Configuration", "MergeFields",      "Manage", "Manage mergeable template fields"),
 
+            // ── Item Rate History (search past rates billed for any item) ───
+            new("itemratehistory.view",    "Item Rate History", "View", "View", "View the Item Rate History page (past unit prices billed for an item)"),
+
             // ── Audit Logs ──────────────────────────────────────────────────
             new("auditlogs.view",          "AuditLogs", "View", "View", "View application audit/exception logs"),
         };

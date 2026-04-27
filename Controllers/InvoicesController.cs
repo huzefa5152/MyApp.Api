@@ -63,6 +63,49 @@ namespace MyApp.Api.Controllers
             return Ok(invoice);
         }
 
+        /// <summary>
+        /// Flat search across a company's bill lines — answers "what rate did
+        /// I bill for this item last time, and to whom?". Filter by an
+        /// ItemType id (preferred — exact catalog match) OR by free-text
+        /// search (matches description and ItemType.Name). Optional client/
+        /// date filters narrow further. Result also carries avg/min/max unit
+        /// price across the full filtered set.
+        /// </summary>
+        [HttpGet("company/{companyId}/item-rate-history")]
+        [HasPermission("itemratehistory.view")]
+        public async Task<ActionResult<ItemRateHistoryResultDto>> GetItemRateHistory(
+            int companyId,
+            [FromQuery] int page = 1,
+            [FromQuery] int? pageSize = null,
+            [FromQuery] int? itemTypeId = null,
+            [FromQuery] string? search = null,
+            [FromQuery] int? clientId = null,
+            [FromQuery] DateTime? dateFrom = null,
+            [FromQuery] DateTime? dateTo = null)
+        {
+            var size = pageSize ?? _defaultPageSize;
+            var result = await _service.GetItemRateHistoryAsync(
+                companyId, page, size, itemTypeId, search, clientId, dateFrom, dateTo);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Per-item last billed rate for every line on a challan. Powers the
+        /// "Generate Bill" shortcut's auto-fill behaviour. Gated by the same
+        /// invoices.manage.create permission required to create a bill — if
+        /// you can't make a bill, you don't need rate suggestions.
+        /// </summary>
+        [HttpGet("company/{companyId}/last-rates")]
+        [HasPermission("invoices.manage.create")]
+        public async Task<ActionResult<List<LastRateDto>>> GetLastRatesForChallan(
+            int companyId, [FromQuery] int challanId)
+        {
+            if (challanId <= 0)
+                return BadRequest(new { error = "challanId is required." });
+            var rows = await _service.GetLastRatesForChallanAsync(companyId, challanId);
+            return Ok(rows);
+        }
+
         [HttpPost]
         [HasPermission("invoices.manage.create")]
         public async Task<ActionResult<InvoiceDto>> Create([FromBody] CreateInvoiceDto dto)
