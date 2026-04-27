@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdDelete, MdEdit, MdVisibility, MdBlock, MdRestore } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import EditBillForm from "../Components/EditBillForm";
+import BulkFbrResultsDialog from "../Components/BulkFbrResultsDialog";
 import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
@@ -277,6 +278,11 @@ export default function InvoicePage() {
   };
 
   const [bulkFbrLoading, setBulkFbrLoading] = useState(false);
+  // Per-bill outcome of the most recent Validate All / Submit All run.
+  // Replaces the old summary toast — the operator sees a scrollable grid
+  // with each bill's status and the FBR error so failures can be acted on
+  // directly instead of disappearing after a few seconds.
+  const [bulkResults, setBulkResults] = useState({ open: false, action: "validate", items: [] });
 
   // Get unsubmitted invoices for bulk operations — only those that are FBR-ready
   // (have HS Code + Sale Type + UOM on every item). Others are surfaced as
@@ -340,9 +346,7 @@ export default function InvoicePage() {
   };
 
   const handleBulkValidateAll = async () => {
-    const filterNote = hasFilters
-      ? " matching current filters"
-      : "";
+    const filterNote = hasFilters ? " matching current filters" : "";
     setBulkFbrLoading(true);
     setFbrLoading("bulk-validate-fetching");
     let candidates = [];
@@ -352,31 +356,41 @@ export default function InvoicePage() {
       notify(`No FBR-ready unsubmitted bills${filterNote}.`, "info");
       setBulkFbrLoading(false); setFbrLoading(null); return;
     }
-    let passed = 0, failed = 0, skipped = 0, notAttempted = 0;
-    // Once we see a token/auth/connectivity error we stop making new FBR calls
-    // (they will all fail the same way) but keep COUNTING the remaining bills as
-    // "not attempted" so the operator's report is truthful about scope.
+    // Per-bill rows for the results dialog. Replaces the old summary toast —
+    // failures stay on screen with the FBR message until the operator
+    // dismisses the dialog.
+    const results = [];
+    // Once we see a token/auth/connectivity error we stop making new FBR
+    // calls (they would all fail the same way) but keep RECORDING the
+    // remaining bills as "not attempted" so the operator's report is
+    // truthful about scope.
     let stopFurtherCalls = false;
     let stopReason = "";
     for (const inv of candidates) {
-      if (fbrValidated.has(inv.id)) { passed++; skipped++; continue; }
-      if (stopFurtherCalls) { failed++; notAttempted++; continue; }
+      if (fbrValidated.has(inv.id)) {
+        results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "already", message: "Already validated locally — no new call to FBR." });
+        continue;
+      }
+      if (stopFurtherCalls) {
+        results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "skipped", message: stopReason || "Skipped after token/connectivity error on an earlier bill." });
+        continue;
+      }
       setFbrLoading(inv.id + "-validate");
       try {
         const { data } = await validateInvoiceWithFbr(inv.id);
         if (data.success) {
           setFbrValidated(prev => new Set(prev).add(inv.id));
-          passed++;
+          results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "passed", message: "Passed FBR validation." });
         } else {
-          failed++;
-          const msg = data.errorMessage || "";
+          const msg = data.errorMessage || "FBR rejected the bill (no message returned).";
+          results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "failed", message: msg });
           if (msg.includes("token") || msg.includes("authentication") || msg.includes("Cannot connect")) {
             stopFurtherCalls = true; stopReason = msg;
           }
         }
       } catch (err) {
-        failed++;
-        const msg = err.response?.data?.errorMessage || err.message || "";
+        const msg = err.response?.data?.errorMessage || err.message || "Unknown error";
+        results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "failed", message: msg });
         if (msg.includes("token") || msg.includes("authentication") || msg.includes("Cannot connect") || err.code === "ERR_NETWORK") {
           stopFurtherCalls = true;
           stopReason = msg || "Cannot connect to FBR. Check your connection and FBR token.";
@@ -384,15 +398,8 @@ export default function InvoicePage() {
       }
     }
     setFbrLoading(null);
-    const total = candidates.length;
-    const parts = [];
-    parts.push(`${passed} passed`);
-    parts.push(`${failed} failed`);
-    if (skipped > 0) parts.push(`${skipped} already validated`);
-    if (notAttempted > 0) parts.push(`${notAttempted} not attempted (token/connectivity block)`);
-    const summary = `Validated ${total} bill${total !== 1 ? "s" : ""}${filterNote}: ${parts.join(", ")}.`;
-    notify(stopReason ? `${summary} ${stopReason}` : summary, failed > 0 ? "error" : "success");
     setBulkFbrLoading(false);
+    setBulkResults({ open: true, action: "validate", items: results });
   };
 
   const handleBulkSubmitValidated = async () => {
@@ -409,36 +416,41 @@ export default function InvoicePage() {
     if (!confirm(`Submit ${toSubmit.length} validated bill${toSubmit.length !== 1 ? "s" : ""}${filterNote} to FBR? This cannot be undone.`)) {
       setBulkFbrLoading(false); setFbrLoading(null); return;
     }
-    let submitted = 0, failed = 0;
+    const results = [];
+    let stopFurtherCalls = false;
+    let stopReason = "";
     for (const inv of toSubmit) {
+      if (stopFurtherCalls) {
+        results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "skipped", message: stopReason || "Skipped after token/connectivity error on an earlier bill." });
+        continue;
+      }
       setFbrLoading(inv.id + "-submit");
       try {
         const { data } = await submitInvoiceToFbr(inv.id);
         if (data.success) {
           setFbrValidated(prev => { const s = new Set(prev); s.delete(inv.id); return s; });
-          submitted++;
+          const irn = data.irn || data.IRN || null;
+          results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "submitted", message: irn ? null : "Submitted to FBR.", irn });
         } else {
-          failed++;
-          const msg = data.errorMessage || "";
+          const msg = data.errorMessage || "FBR rejected the bill (no message returned).";
+          results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "failed", message: msg });
           if (msg.includes("token") || msg.includes("authentication") || msg.includes("Cannot connect")) {
-            notify(msg, "error");
-            break;
+            stopFurtherCalls = true; stopReason = msg;
           }
         }
       } catch (err) {
-        failed++;
-        const msg = err.response?.data?.errorMessage || err.message || "";
+        const msg = err.response?.data?.errorMessage || err.message || "Unknown error";
+        results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "failed", message: msg });
         if (msg.includes("token") || msg.includes("authentication") || msg.includes("Cannot connect") || err.code === "ERR_NETWORK") {
-          notify(msg || "Cannot connect to FBR. Check your connection and FBR token.", "error");
-          break;
+          stopFurtherCalls = true;
+          stopReason = msg || "Cannot connect to FBR. Check your connection and FBR token.";
         }
       }
     }
     setFbrLoading(null);
-    notify(`Submitted ${toSubmit.length} bill${toSubmit.length !== 1 ? "s" : ""}${filterNote}: ${submitted} succeeded, ${failed} failed.`,
-           failed > 0 ? "error" : "success");
-    fetchInvoices(selectedCompany.id, page);
     setBulkFbrLoading(false);
+    fetchInvoices(selectedCompany.id, page);
+    setBulkResults({ open: true, action: "submit", items: results });
   };
 
   const hasFilters = search || clientFilter || dateFrom || dateTo;
@@ -818,6 +830,13 @@ export default function InvoicePage() {
           onSaved={() => setViewingId(null)}
         />
       )}
+
+      <BulkFbrResultsDialog
+        open={bulkResults.open}
+        action={bulkResults.action}
+        items={bulkResults.items}
+        onClose={() => setBulkResults((prev) => ({ ...prev, open: false }))}
+      />
     </div>
   );
 }
