@@ -10,6 +10,12 @@
         public int ClientId { get; set; }
         public string PoNumber { get; set; } = "";
         public DateTime? PoDate { get; set; }
+
+        // Optional buyer-side indent reference. Some companies don't use
+        // indents at all — left null when unused so the print template's
+        // {{#if indentNo}} block stays collapsed.
+        public string? IndentNo { get; set; }
+
         public DateTime? DeliveryDate { get; set; }
         public string? Site { get; set; }
         public string Status { get; set; } = "Pending";

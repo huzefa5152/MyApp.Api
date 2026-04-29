@@ -9,6 +9,13 @@
         public string ClientName { get; set; } = "";
         public string PoNumber { get; set; } = "";
         public DateTime? PoDate { get; set; }
+        /// <summary>
+        /// Optional buyer-side indent number — typed by the operator at
+        /// create/edit time. Companies that don't use indents leave this
+        /// blank; the print template's {{#if indentNo}} block hides the
+        /// row when it's empty.
+        /// </summary>
+        public string? IndentNo { get; set; }
         public DateTime? DeliveryDate { get; set; }
         public string? Site { get; set; }
         public string Status { get; set; } = "Pending";

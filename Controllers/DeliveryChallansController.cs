@@ -92,6 +92,14 @@ namespace MyApp.Api.Controllers
                 var created = await _service.CreateDeliveryChallanAsync(companyId, dto);
                 return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
             }
+            catch (InvalidOperationException ex)
+            {
+                // Domain validation failures (decimal qty for integer-only
+                // UOM, FBR pre-condition violations, etc.) — surface as 400
+                // so the operator sees a clear actionable message instead
+                // of a generic server error.
+                return BadRequest(new { error = ex.Message });
+            }
             catch (Exception ex)
             {
                 return StatusCode(500, new { error = ex.Message });

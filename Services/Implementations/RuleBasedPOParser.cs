@@ -362,14 +362,18 @@ namespace MyApp.Api.Services.Implementations
             return g?.Success == true ? g.Value : null;
         }
 
-        private static int ParseQuantity(string? s)
+        private static decimal ParseQuantity(string? s)
         {
-            if (string.IsNullOrWhiteSpace(s)) return 0;
+            if (string.IsNullOrWhiteSpace(s)) return 0m;
             s = s.Replace(",", "").Trim();
-            // Strip anything after a decimal point — quantity is always whole in our domain
-            var dot = s.IndexOf('.');
-            if (dot >= 0) s = s[..dot];
-            return int.TryParse(s, out var n) && n > 0 ? n : 0;
+            // Decimal quantity — fractional UOMs (KG, Liter, Carat) need to
+            // round-trip "12.5" or "0.0004" through the parser intact.
+            // Validation downstream rejects fractional values for UOMs whose
+            // AllowsDecimalQuantity flag is off, so we don't have to know
+            // the unit here.
+            return decimal.TryParse(s, System.Globalization.NumberStyles.Number,
+                                       System.Globalization.CultureInfo.InvariantCulture,
+                                       out var n) && n > 0 ? n : 0m;
         }
 
         // Map common unit strings to the canonical forms we persist elsewhere.

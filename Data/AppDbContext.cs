@@ -157,6 +157,12 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<InvoiceItem>().Property(ii => ii.UnitPrice).HasPrecision(18, 2);
             modelBuilder.Entity<InvoiceItem>().Property(ii => ii.LineTotal).HasPrecision(18, 2);
 
+            // Quantity columns — decimal(18,4) so fractional UOMs (KG, Liter,
+            // Carat) carry up to 4 places. Money is 2 places; quantity gets
+            // 2 extra so e.g. 0.0004 Carat survives the round-trip.
+            modelBuilder.Entity<InvoiceItem>().Property(ii => ii.Quantity).HasPrecision(18, 4);
+            modelBuilder.Entity<DeliveryItem>().Property(di => di.Quantity).HasPrecision(18, 4);
+
             // Optional: make ItemDescription.Name and Unit.Name unique
             modelBuilder.Entity<ItemDescription>()
                 .HasIndex(i => i.Name)

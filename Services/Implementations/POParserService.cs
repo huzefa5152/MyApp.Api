@@ -350,9 +350,14 @@ namespace MyApp.Api.Services.Implementations
                 var desc = descColIdx >= 0 && descColIdx < colTexts.Length ? colTexts[descColIdx].Trim() : "";
                 var unit = unitColIdx >= 0 && unitColIdx < colTexts.Length ? colTexts[unitColIdx].Trim() : "";
                 var qtyStr = qtyColIdx >= 0 && qtyColIdx < colTexts.Length ? colTexts[qtyColIdx].Replace(",", "").Trim() : "";
-                if (qtyStr.Contains('.')) qtyStr = qtyStr.Split('.')[0];
+                // Keep the decimal portion — fractional UOMs (KG, Liter)
+                // need it. Validation downstream rejects non-integer qty
+                // for UOMs whose AllowsDecimalQuantity flag is off.
 
-                if (!string.IsNullOrWhiteSpace(desc) && int.TryParse(qtyStr, out var qty) && qty > 0)
+                if (!string.IsNullOrWhiteSpace(desc) && decimal.TryParse(qtyStr,
+                        System.Globalization.NumberStyles.Number,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var qty) && qty > 0)
                     items.Add(new ParsedPOItemDto { Description = desc, Quantity = qty, Unit = unit });
             }
 
@@ -651,14 +656,17 @@ namespace MyApp.Api.Services.Implementations
             var items = new List<ParsedPOItemDto>();
             for (int i = 0; i < itemNames.Count; i++)
             {
-                int qty = 1;
+                decimal qty = 1m;
                 if (i < quantities.Count)
                 {
                     var qtyStr = quantities[i].Replace(",", "").Trim();
-                    // Handle decimal quantities like "20.000" → take integer part
-                    if (qtyStr.Contains('.'))
-                        qtyStr = qtyStr.Split('.')[0];
-                    if (int.TryParse(qtyStr, out var q) && q > 0)
+                    // Keep the decimal portion intact — fractional UOMs
+                    // (KG, Liter, Carat) need it. Server-side validation
+                    // rejects fractions for integer-only UOMs.
+                    if (decimal.TryParse(qtyStr,
+                            System.Globalization.NumberStyles.Number,
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            out var q) && q > 0)
                         qty = q;
                 }
 
@@ -783,13 +791,16 @@ namespace MyApp.Api.Services.Implementations
                 if (parts.Length <= Math.Max(descCol, qtyCol)) continue;
 
                 var desc = descCol < parts.Length ? parts[descCol] : "";
-                var qtyStr = qtyCol < parts.Length ? parts[qtyCol].Replace(",", "").Split('.')[0] : "0";
+                var qtyStr = qtyCol < parts.Length ? parts[qtyCol].Replace(",", "") : "0";
                 var unit = unitCol >= 0 && unitCol < parts.Length ? parts[unitCol] : "";
 
                 // Skip if desc looks like a serial number only
                 if (Regex.IsMatch(desc, @"^\d{1,3}\.?$")) continue;
 
-                if (int.TryParse(qtyStr, out var qty) && qty > 0 && !string.IsNullOrWhiteSpace(desc))
+                if (decimal.TryParse(qtyStr,
+                        System.Globalization.NumberStyles.Number,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var qty) && qty > 0 && !string.IsNullOrWhiteSpace(desc))
                     items.Add(new ParsedPOItemDto { Description = desc, Quantity = qty, Unit = unit });
             }
 
@@ -838,11 +849,14 @@ namespace MyApp.Api.Services.Implementations
                 if (item != null) return item;
             }
 
-            // Last resort: look for embedded qty pattern in line
-            var qtyMatch = Regex.Match(line, @"(\d+)\s*(pcs|nos|kg|kgs|sets?|meters?|mtrs?|ltrs?|pieces?|numbers?|bags?|rolls?|pairs?|boxes?|cartons?|bottles?|units?|each|pc)\b", RegexOptions.IgnoreCase);
+            // Last resort: look for embedded qty pattern in line. The qty
+            // group now allows decimals so "12.5 KG" or "0.0004 Carat" round-
+            // trip cleanly. Fractional qty for integer-only UOMs is rejected
+            // server-side at save time.
+            var qtyMatch = Regex.Match(line, @"(\d+(?:\.\d+)?)\s*(pcs|nos|kg|kgs|sets?|meters?|mtrs?|ltrs?|pieces?|numbers?|bags?|rolls?|pairs?|boxes?|cartons?|bottles?|units?|each|pc)\b", RegexOptions.IgnoreCase);
             if (qtyMatch.Success)
             {
-                var qty = int.Parse(qtyMatch.Groups[1].Value);
+                var qty = decimal.Parse(qtyMatch.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
                 var unit = qtyMatch.Groups[2].Value;
                 var desc = line.Substring(0, qtyMatch.Index).Trim();
                 desc = Regex.Replace(desc, @"^\d+[\.\)\-\s]+", "").Trim();
@@ -864,10 +878,12 @@ namespace MyApp.Api.Services.Implementations
             int qtyIdx = -1, unitIdx = -1;
             for (int j = startIdx; j < parts.Length; j++)
             {
-                // Skip large numbers that look like codes (8+ digits)
-                if (qtyIdx < 0 && Regex.IsMatch(parts[j], @"^\d+$") && parts[j].Length <= 6)
+                // Skip large numbers that look like codes (8+ digits).
+                // Allow decimal quantities like "12.5" — the regex matches
+                // an optional .digits tail.
+                if (qtyIdx < 0 && Regex.IsMatch(parts[j], @"^\d+(?:\.\d+)?$") && parts[j].Length <= 8)
                 {
-                    var val = int.Parse(parts[j]);
+                    var val = decimal.Parse(parts[j], System.Globalization.CultureInfo.InvariantCulture);
                     if (val > 0 && val <= 999999)
                         qtyIdx = j;
                 }
@@ -879,19 +895,26 @@ namespace MyApp.Api.Services.Implementations
             {
                 var descParts = parts.Skip(startIdx).Take(qtyIdx - startIdx);
                 var desc = string.Join(" ", descParts).Trim();
-                var qty = int.TryParse(parts[qtyIdx], out var q) ? q : 0;
+                var qty = decimal.TryParse(parts[qtyIdx],
+                    System.Globalization.NumberStyles.Number,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var q) ? q : 0m;
                 var unit = unitIdx >= 0 ? parts[unitIdx] : "";
 
                 if (!string.IsNullOrWhiteSpace(desc) && qty > 0)
                     return new ParsedPOItemDto { Description = desc, Quantity = qty, Unit = unit };
             }
 
-            // Fallback: last numeric part = qty
+            // Fallback: last numeric part = qty (decimal-aware so "12.5"
+            // is accepted; integer-only validation happens server-side).
             if (parts.Length >= 2)
             {
                 for (int j = parts.Length - 1; j >= startIdx + 1; j--)
                 {
-                    if (int.TryParse(parts[j], out var qty) && qty > 0 && parts[j].Length <= 6)
+                    if (decimal.TryParse(parts[j],
+                            System.Globalization.NumberStyles.Number,
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            out var qty) && qty > 0 && parts[j].Length <= 8)
                     {
                         var descParts = parts.Skip(startIdx).Take(j - startIdx);
                         var unit = (j + 1 < parts.Length && IsUnitLike(parts[j + 1])) ? parts[j + 1] : "";
@@ -917,10 +940,10 @@ namespace MyApp.Api.Services.Implementations
                 var clean = Regex.Replace(line, @"^[\d]+[\.\)\-\s]+|^[\-\•\*\►\→]\s*", "").Trim();
                 if (string.IsNullOrWhiteSpace(clean)) continue;
 
-                var match = Regex.Match(clean, @"(\d+)\s*(pcs|nos|kg|kgs|sets?|meters?|mtrs?|ltrs?|pieces?|numbers?|bags?|rolls?|pairs?|boxes?|cartons?|bottles?|units?|each|pc)[\.\s,]*(.+)?", RegexOptions.IgnoreCase);
+                var match = Regex.Match(clean, @"(\d+(?:\.\d+)?)\s*(pcs|nos|kg|kgs|sets?|meters?|mtrs?|ltrs?|pieces?|numbers?|bags?|rolls?|pairs?|boxes?|cartons?|bottles?|units?|each|pc)[\.\s,]*(.+)?", RegexOptions.IgnoreCase);
                 if (match.Success)
                 {
-                    var qty = int.Parse(match.Groups[1].Value);
+                    var qty = decimal.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
                     var unit = match.Groups[2].Value;
                     var desc = match.Groups[3].Value.Trim();
                     if (string.IsNullOrWhiteSpace(desc))
@@ -930,8 +953,11 @@ namespace MyApp.Api.Services.Implementations
                     continue;
                 }
 
-                match = Regex.Match(clean, @"(.+?)[\s\-–]+(\d+)\s*(pcs|nos|kg|kgs|sets?|meters?|mtrs?|ltrs?|pieces?|numbers?|bags?|rolls?|pairs?|boxes?|cartons?|bottles?|units?|each|pc)?", RegexOptions.IgnoreCase);
-                if (match.Success && int.TryParse(match.Groups[2].Value, out var q2) && q2 > 0)
+                match = Regex.Match(clean, @"(.+?)[\s\-–]+(\d+(?:\.\d+)?)\s*(pcs|nos|kg|kgs|sets?|meters?|mtrs?|ltrs?|pieces?|numbers?|bags?|rolls?|pairs?|boxes?|cartons?|bottles?|units?|each|pc)?", RegexOptions.IgnoreCase);
+                if (match.Success && decimal.TryParse(match.Groups[2].Value,
+                        System.Globalization.NumberStyles.Number,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var q2) && q2 > 0)
                 {
                     items.Add(new ParsedPOItemDto
                     {
@@ -964,10 +990,10 @@ namespace MyApp.Api.Services.Implementations
                 if (IsEndOfItems(line)) inItemSection = false;
                 if (!inItemSection) continue;
 
-                var match = Regex.Match(line, @"(\d+)\s*(pcs|nos|kg|kgs|sets?|meters?|mtrs?|ltrs?|pieces?|numbers?|bags?|rolls?|pairs?|boxes?|cartons?|bottles?|units?|each|pc)[\s\-–,]*(.+)", RegexOptions.IgnoreCase);
+                var match = Regex.Match(line, @"(\d+(?:\.\d+)?)\s*(pcs|nos|kg|kgs|sets?|meters?|mtrs?|ltrs?|pieces?|numbers?|bags?|rolls?|pairs?|boxes?|cartons?|bottles?|units?|each|pc)[\s\-–,]*(.+)", RegexOptions.IgnoreCase);
                 if (match.Success)
                 {
-                    var qty = int.Parse(match.Groups[1].Value);
+                    var qty = decimal.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
                     var unit = match.Groups[2].Value;
                     var desc = match.Groups[3].Value.Trim();
                     if (!string.IsNullOrWhiteSpace(desc) && qty > 0)

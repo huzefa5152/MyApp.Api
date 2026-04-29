@@ -159,6 +159,100 @@ using (var scope = app.Services.CreateScope())
     // any HS code / name already present, so it's safe to run on every boot)
     await MyApp.Api.Data.ItemTypeSeeder.SeedAsync(db);
 
+    // ── Units backfill ──────────────────────────────────────────────────
+    // The Units table is the canonical store for the AllowsDecimalQuantity
+    // flag. Every UOM string that the operator might ever pick — both from
+    // FBR's master list AND from data already in the system — needs a row
+    // here so the admin grid can configure it.
+    //
+    // Sources for the union, all deduped against the Units table:
+    //   • FBR master UOM list      — hardcoded mirror of /api/fbr/uom (44
+    //                                 entries from gw.fbr.gov.pk/pdi/v1/uom).
+    //                                 Doesn't require a token; works offline.
+    //   • ItemType.UOM             — operator's catalog choice (FBR HS_UOM)
+    //   • InvoiceItem.UOM          — what was billed
+    //   • DeliveryItem.Unit        — what was delivered
+    //
+    // Idempotent: only inserts names not already present (case-insensitive
+    // match, matching SQL Server's CI collation on the unique index). After
+    // the insert pass, re-apply the decimal-default seed so newly-added
+    // rows (e.g. "Liter" coming in for the first time from FBR's list)
+    // get the flag set correctly.
+    db.Database.ExecuteSqlRaw(@"
+        ;WITH FbrMaster (Name) AS (
+            -- Mirror of the FBR /uom reference list (V1.12 §5.5).
+            -- Deduped by description (FBR returns multiple UOM_IDs per name).
+            SELECT N'MT'                       UNION ALL
+            SELECT N'Bill of lading'           UNION ALL
+            SELECT N'SET'                      UNION ALL
+            SELECT N'KWH'                      UNION ALL
+            SELECT N'40KG'                     UNION ALL
+            SELECT N'Liter'                    UNION ALL
+            SELECT N'SqY'                      UNION ALL
+            SELECT N'Bag'                      UNION ALL
+            SELECT N'KG'                       UNION ALL
+            SELECT N'MMBTU'                    UNION ALL
+            SELECT N'Meter'                    UNION ALL
+            SELECT N'Pcs'                      UNION ALL
+            SELECT N'Carat'                    UNION ALL
+            SELECT N'Cubic Metre'              UNION ALL
+            SELECT N'Dozen'                    UNION ALL
+            SELECT N'Gram'                     UNION ALL
+            SELECT N'Gallon'                   UNION ALL
+            SELECT N'Kilogram'                 UNION ALL
+            SELECT N'Pound'                    UNION ALL
+            SELECT N'Timber Logs'              UNION ALL
+            SELECT N'Numbers, pieces, units'   UNION ALL
+            SELECT N'Packs'                    UNION ALL
+            SELECT N'Pair'                     UNION ALL
+            SELECT N'Square Foot'              UNION ALL
+            SELECT N'Square Metre'             UNION ALL
+            SELECT N'Thousand Unit'            UNION ALL
+            SELECT N'Mega Watt'                UNION ALL
+            SELECT N'Foot'                     UNION ALL
+            SELECT N'Barrels'                  UNION ALL
+            SELECT N'NO'                       UNION ALL
+            SELECT N'Others'                   UNION ALL
+            SELECT N'1000 kWh'
+        ),
+        AllUoms AS (
+            SELECT Name FROM FbrMaster
+            UNION
+            SELECT DISTINCT LTRIM(RTRIM(UOM))
+              FROM ItemTypes
+             WHERE UOM IS NOT NULL AND LTRIM(RTRIM(UOM)) <> ''
+            UNION
+            SELECT DISTINCT LTRIM(RTRIM(UOM))
+              FROM InvoiceItems
+             WHERE UOM IS NOT NULL AND LTRIM(RTRIM(UOM)) <> ''
+            UNION
+            SELECT DISTINCT LTRIM(RTRIM(Unit))
+              FROM DeliveryItems
+             WHERE Unit IS NOT NULL AND LTRIM(RTRIM(Unit)) <> ''
+        )
+        INSERT INTO Units (Name, AllowsDecimalQuantity)
+        SELECT a.Name, 0
+          FROM AllUoms a
+         WHERE NOT EXISTS (
+                 SELECT 1 FROM Units u
+                  WHERE LOWER(u.Name) = LOWER(a.Name));
+
+        -- Re-apply the decimal-default seed across the full Units table.
+        -- Idempotent: same UPDATE the migration ran, just runs again so
+        -- newly-added names are picked up too.
+        UPDATE Units SET AllowsDecimalQuantity = 1
+         WHERE LOWER(Name) IN (
+            'kg', 'kilogram', 'gram', 'pound',
+            'liter', 'litre', 'gallon',
+            'mt', 'carat',
+            'square foot', 'sqft', 'square metre', 'sqm', 'sqy',
+            'cubic metre', 'cubicmetre',
+            'meter', 'metre', 'mtr', 'foot',
+            'mmbtu', 'kwh', '1000 kwh', 'mega watt',
+            'barrels'
+         );
+    ");
+
     // Baseline PO formats (Lotte Kolson, Soorty, Meko) — runs ONCE when the
     // POFormats table is empty. Operator-curated formats added via the
     // Configuration → PO Formats UI are preserved across restarts.
@@ -201,6 +295,58 @@ using (var scope = app.Services.CreateScope())
             SELECT rp.RoleId, @submitId FROM RolePermissions rp
             WHERE rp.PermissionId = @oldId
               AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @submitId);
+        END
+    ");
+
+    // ── One-time perm migration: invoices.manage.update.itemtype.qty ──
+    // Strict superset of invoices.manage.update.itemtype — same narrow
+    // flow but allows Quantity edits too. Auto-grant to every role that
+    // already holds the broader invoices.manage.update so existing
+    // full-edit users keep working without manual configuration. The
+    // narrow .itemtype role is intentionally NOT auto-upgraded — that
+    // role exists specifically to BLOCK qty edits. Idempotent: NOT
+    // EXISTS guards make every restart after the first a no-op.
+    db.Database.ExecuteSqlRaw(@"
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'invoices.manage.update.itemtype.qty', 'Invoices', 'Manage', 'Update Item Type + Qty',
+               'Edit Item Type and Quantity columns on a bill (no other fields)'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'invoices.manage.update.itemtype.qty');
+
+        DECLARE @fullEditId INT = (SELECT Id FROM Permissions WHERE [Key] = 'invoices.manage.update');
+        DECLARE @itQtyId    INT = (SELECT Id FROM Permissions WHERE [Key] = 'invoices.manage.update.itemtype.qty');
+        IF @fullEditId IS NOT NULL AND @itQtyId IS NOT NULL
+        BEGIN
+            INSERT INTO RolePermissions (RoleId, PermissionId)
+            SELECT rp.RoleId, @itQtyId FROM RolePermissions rp
+            WHERE rp.PermissionId = @fullEditId
+              AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @itQtyId);
+        END
+    ");
+
+    // ── One-time perm migration: invoices.fbr.exclude carved out of update ──
+    // The Exclude/Include FBR toggle used to be gated by invoices.manage.update
+    // (the broad bill-edit permission). It now has its own dedicated permission
+    // so a role can hold the toggle without holding full edit rights.
+    //
+    // To preserve existing behaviour for roles that already had the broad
+    // edit perm, copy that grant into the new perm on first run. Idempotent —
+    // the NOT EXISTS guard makes subsequent restarts no-ops.
+    db.Database.ExecuteSqlRaw(@"
+        -- Make sure the new perm row exists (RbacSeeder finalises the
+        -- Description below; we just need a row so the FK works).
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'invoices.fbr.exclude', 'Invoices', 'FBR', 'Exclude/Include',
+               'Mark a bill as excluded from FBR bulk Validate/Submit, or re-include it'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'invoices.fbr.exclude');
+
+        DECLARE @updateId  INT = (SELECT Id FROM Permissions WHERE [Key] = 'invoices.manage.update');
+        DECLARE @excludeId INT = (SELECT Id FROM Permissions WHERE [Key] = 'invoices.fbr.exclude');
+        IF @updateId IS NOT NULL AND @excludeId IS NOT NULL
+        BEGIN
+            INSERT INTO RolePermissions (RoleId, PermissionId)
+            SELECT rp.RoleId, @excludeId FROM RolePermissions rp
+            WHERE rp.PermissionId = @updateId
+              AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @excludeId);
         END
     ");
 

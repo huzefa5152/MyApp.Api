@@ -55,7 +55,7 @@ namespace MyApp.Api.DTOs
         public int? ItemTypeId { get; set; }
         public string? ItemTypeName { get; set; }  // raw text from file, for display/match
         public string Description { get; set; } = "";
-        public int Quantity { get; set; }
+        public decimal Quantity { get; set; }
         public string Unit { get; set; } = "";
     }
 

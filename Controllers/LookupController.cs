@@ -130,14 +130,23 @@ namespace MyApp.Api.Controllers
         }
 
 
-        // Search units
+        // Search units. Returns the AllowsDecimalQuantity flag so the
+        // autocomplete-driven quantity inputs can react the moment the
+        // operator picks a UOM (no second round-trip needed).
         [HttpGet("units")]
         public async Task<IActionResult> GetUnits([FromQuery] string query)
         {
+            var q = (query ?? "").Trim();
             var units = await _context.Units
-                .Where(u => u.Name.Contains(query))
+                .Where(u => string.IsNullOrEmpty(q) || u.Name.Contains(q))
                 .OrderBy(u => u.Name)
                 .Take(10)
+                .Select(u => new MyApp.Api.DTOs.UnitDto
+                {
+                    Id = u.Id,
+                    Name = u.Name,
+                    AllowsDecimalQuantity = u.AllowsDecimalQuantity
+                })
                 .ToListAsync();
             return Ok(units);
         }

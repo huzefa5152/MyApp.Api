@@ -7,6 +7,11 @@ namespace MyApp.Api.Services.Interfaces
         // Submit & Validate (V1.12 §4.1, §4.2)
         Task<FbrSubmissionResult> SubmitInvoiceAsync(int invoiceId, string? scenarioId = null);
         Task<FbrSubmissionResult> ValidateInvoiceAsync(int invoiceId, string? scenarioId = null);
+        /// <summary>
+        /// Dry-run: build the FBR payload JSON without sending it. Result's
+        /// Preview field carries the would-be JSON + URL + item count.
+        /// </summary>
+        Task<FbrSubmissionResult> PreviewInvoicePayloadAsync(int invoiceId, string? scenarioId = null);
 
         // Reference APIs v1 (V1.12 §5.1–§5.6)
         Task<List<FbrProvinceDto>> GetProvincesAsync(int companyId);

@@ -98,6 +98,23 @@ namespace MyApp.Api.Controllers
             return Ok(result);
         }
 
+        /// <summary>
+        /// Dry-run preview: build the exact JSON we would POST to FBR's
+        /// validate endpoint, but don't send anything. Returns the JSON in
+        /// the result's Preview field so operators can sanity-check the
+        /// grouped items, descriptions, and totals before clicking the
+        /// real Validate / Submit button. Pre-validate still runs so
+        /// missing fields are caught early.
+        /// </summary>
+        [HttpGet("{invoiceId}/preview-payload")]
+        [HasPermission("invoices.fbr.preview")]
+        public async Task<IActionResult> PreviewPayload(
+            int invoiceId, [FromQuery] string? scenarioId = null)
+        {
+            var result = await _fbrService.PreviewInvoicePayloadAsync(invoiceId, scenarioId);
+            return Ok(result);
+        }
+
         // ── Reference Data v1 ───────────────────────────────────
 
         [HttpGet("provinces/{companyId}")]

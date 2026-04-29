@@ -169,5 +169,26 @@ namespace MyApp.Api.DTOs
         public string? FbrStatus { get; set; }
         public string? ErrorMessage { get; set; }
         public List<FbrInvoiceStatus>? ItemErrors { get; set; }
+        /// <summary>
+        /// Populated only when the caller asked for a dry-run preview (the
+        /// /api/fbr/{id}/preview-payload endpoint). Carries the exact JSON
+        /// the service would have POSTed to FBR's validate or submit
+        /// endpoint, so operators can sanity-check the grouping / values
+        /// before clicking the real button. Null in normal validate/submit
+        /// flows.
+        /// </summary>
+        public FbrPayloadPreview? Preview { get; set; }
+    }
+
+    public class FbrPayloadPreview
+    {
+        /// <summary>The exact request JSON that would be POSTed to FBR.</summary>
+        public string Json { get; set; } = "";
+        /// <summary>Endpoint URL we would have POSTed to (sandbox vs prod).</summary>
+        public string Url { get; set; } = "";
+        /// <summary>Number of items in the FBR payload after grouping.</summary>
+        public int ItemCount { get; set; }
+        /// <summary>How many bill lines collapsed into the payload (n→1 grouping shows here).</summary>
+        public int OriginalLineCount { get; set; }
     }
 }

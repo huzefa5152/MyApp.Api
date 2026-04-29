@@ -31,6 +31,42 @@ namespace MyApp.Api.Services.Implementations
         }
 
         /// <summary>
+        /// Reject fractional quantities (e.g. 2.5 Pcs) for any line whose
+        /// UOM has AllowsDecimalQuantity = false. Same contract as the
+        /// matching helper in DeliveryChallanService — the bill-edit form
+        /// gates this client-side, this is the server-side guard.
+        /// </summary>
+        private async Task ValidateUpdateItemDecimalQuantitiesAsync(List<UpdateInvoiceItemDto> items)
+        {
+            var unitNames = items
+                .Select(i => i.UOM)
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (unitNames.Count == 0) return;
+
+            var unitConfig = await _context.Units
+                .Where(u => unitNames.Contains(u.Name))
+                .Select(u => new { u.Name, u.AllowsDecimalQuantity })
+                .ToListAsync();
+            var allowsDecimal = unitConfig.ToDictionary(
+                u => u.Name, u => u.AllowsDecimalQuantity,
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in items)
+            {
+                if (item.Quantity == Math.Truncate(item.Quantity)) continue;
+                var unit = item.UOM ?? "";
+                if (!allowsDecimal.TryGetValue(unit, out var allows) || !allows)
+                {
+                    throw new InvalidOperationException(
+                        $"Quantity '{item.Quantity}' for unit '{unit}' must be a whole number. " +
+                        $"Enable decimal quantity for this unit on the Units admin page if fractions are allowed.");
+                }
+            }
+        }
+
+        /// <summary>
         /// Invoice (bill) is editable until it has been successfully submitted to FBR.
         /// </summary>
         private static bool IsInvoiceEditable(Invoice inv) => inv.FbrStatus != "Submitted";
@@ -410,6 +446,13 @@ namespace MyApp.Api.Services.Implementations
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("At least one item is required.");
 
+            // Auto-register any new UOM names typed on the bill (e.g. an
+            // operator overrides UOM on a line) so they appear in the
+            // Units admin screen, then reject fractional quantities for
+            // integer-only UOMs.
+            await MyApp.Api.Helpers.UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.UOM));
+            await ValidateUpdateItemDecimalQuantitiesAsync(dto.Items);
+
             // A bill's items cannot be added or removed from here — that must happen on the
             // linked delivery challan (which auto-syncs). Reject any attempt to add or drop items.
             var incomingIds = dto.Items.Select(i => i.Id).ToHashSet();
@@ -539,15 +582,26 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
-        // ── Narrow edit path: Item Type re-classification only ─────────
+        // ── Narrow edit path: Item Type re-classification (+ optional Qty) ─
         //
-        // Used by the `invoices.manage.update.itemtype` permission flow.
-        // The operator can change which ItemType each existing line points
-        // at; service re-derives HS Code / UOM / Sale Type / FbrUOMId from
-        // the catalog. EVERY OTHER FIELD on the bill (price, qty, desc,
-        // GST, dates, payment terms, doc type, etc.) is ignored — the
-        // narrow permission deliberately excludes commercial-data edits.
-        public async Task<InvoiceDto?> UpdateItemTypesAsync(int id, UpdateInvoiceItemTypesDto dto)
+        // Two permission flows feed this method, distinguished by the
+        // allowQuantityEdit flag (set by the controller from the request's
+        // permission gate):
+        //
+        //   • allowQuantityEdit = false  → invoices.manage.update.itemtype
+        //       Operator can only change which ItemType each line points
+        //       at. Quantity values in the payload are ignored. Used by
+        //       the FBR-classification helper role.
+        //
+        //   • allowQuantityEdit = true   → invoices.manage.update.itemtype.qty
+        //       Same as above PLUS the operator can adjust Quantity. Useful
+        //       for users who need to correct qty mistakes that the source
+        //       challan can't fix (returned items, miscount), without giving
+        //       them full price-edit power.
+        //
+        // EVERY OTHER FIELD on the bill (price, desc, GST, dates, payment
+        // terms, doc type, SRO, etc.) is still ignored on both paths.
+        public async Task<InvoiceDto?> UpdateItemTypesAsync(int id, UpdateInvoiceItemTypesDto dto, bool allowQuantityEdit = false)
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return null;
@@ -579,6 +633,48 @@ namespace MyApp.Api.Services.Implementations
                     .Where(t => referencedTypeIds.Contains(t.Id))
                     .ToDictionaryAsync(t => t.Id);
 
+            // If the .qty path is active, validate fractional qty against
+            // the (possibly newly-derived) UOM. We project the would-be UOM
+            // for each row first so the validation lookup uses the final
+            // unit name, not the stale one.
+            if (allowQuantityEdit)
+            {
+                var rowsToValidate = dto.Items
+                    .Where(r => r.Quantity.HasValue)
+                    .Select(r =>
+                    {
+                        var existing = invoice.Items.FirstOrDefault(ii => ii.Id == r.Id);
+                        var unit = (r.ItemTypeId.HasValue && typeMap.TryGetValue(r.ItemTypeId.Value, out var t))
+                            ? (t.UOM ?? "")
+                            : (existing?.UOM ?? "");
+                        return new { Qty = r.Quantity!.Value, Unit = unit };
+                    })
+                    .ToList();
+                if (rowsToValidate.Count > 0)
+                {
+                    var unitNames = rowsToValidate.Select(r => r.Unit)
+                        .Where(u => !string.IsNullOrWhiteSpace(u))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                    var unitConfig = unitNames.Count == 0
+                        ? new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
+                        : (await _context.Units
+                            .Where(u => unitNames.Contains(u.Name))
+                            .Select(u => new { u.Name, u.AllowsDecimalQuantity })
+                            .ToListAsync())
+                          .ToDictionary(u => u.Name, u => u.AllowsDecimalQuantity, StringComparer.OrdinalIgnoreCase);
+
+                    foreach (var row in rowsToValidate)
+                    {
+                        if (row.Qty == Math.Truncate(row.Qty)) continue;
+                        if (!unitConfig.TryGetValue(row.Unit, out var allows) || !allows)
+                            throw new InvalidOperationException(
+                                $"Quantity '{row.Qty}' for unit '{row.Unit}' must be a whole number. " +
+                                $"Enable decimal quantity for this unit on the Units admin page if fractions are allowed.");
+                    }
+                }
+            }
+
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
@@ -602,6 +698,24 @@ namespace MyApp.Api.Services.Implementations
                         // place — clearing them would violate the "narrow
                         // edit doesn't change commercial fields" contract.
                     }
+
+                    // Quantity edit only when the .qty perm path is active.
+                    // Recompute LineTotal so the bill's totals stay
+                    // consistent (UnitPrice is unchanged by this flow).
+                    if (allowQuantityEdit && row.Quantity.HasValue && row.Quantity.Value > 0)
+                    {
+                        existing.Quantity = row.Quantity.Value;
+                        existing.LineTotal = existing.UnitPrice * row.Quantity.Value;
+                    }
+                }
+
+                // If qty changed, recompute bill-level totals from the
+                // refreshed line totals. Otherwise leave them untouched.
+                if (allowQuantityEdit && dto.Items.Any(r => r.Quantity.HasValue))
+                {
+                    invoice.Subtotal = invoice.Items.Sum(ii => ii.LineTotal);
+                    invoice.GSTAmount = Math.Round(invoice.Subtotal * (invoice.GSTRate / 100m), 2, MidpointRounding.AwayFromZero);
+                    invoice.GrandTotal = invoice.Subtotal + invoice.GSTAmount;
                 }
 
                 // Any edit invalidates a previous validation. Don't touch

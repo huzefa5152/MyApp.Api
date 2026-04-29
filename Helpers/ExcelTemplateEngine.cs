@@ -698,6 +698,7 @@ namespace MyApp.Api.Helpers
                 ["clientSite"] = dto.ClientSite,
                 ["poNumber"] = dto.PoNumber,
                 ["poDate"] = dto.PoDate,
+                ["indentNo"] = dto.IndentNo,
                 ["itemCount"] = dto.Items.Count,
             };
 

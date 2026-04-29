@@ -183,7 +183,7 @@ namespace MyApp.Api.Services.Implementations
                 // native GetInt returns null and we used to land on 0. Split
                 // into number + unit, and fall back on the unit column only
                 // when the qty cell didn't carry one.
-                int qty = 0;
+                decimal qty = 0m;
                 string qtyCellUnit = "";
                 if (qtyCol > 0)
                 {
@@ -218,32 +218,35 @@ namespace MyApp.Api.Services.Implementations
         /// when the cell was just a number. Silently returns (0, "") for
         /// truly unparseable cells.
         /// </summary>
-        private static (int qty, string unit) ReadQtyCell(IImportedWorkbook wb, int sheet, int row, int col)
+        private static (decimal qty, string unit) ReadQtyCell(IImportedWorkbook wb, int sheet, int row, int col)
         {
             // Fast path — native numeric cell parses cleanly.
             var asInt = wb.GetInt(sheet, row, col);
-            if (asInt.HasValue) return (asInt.Value, "");
+            if (asInt.HasValue) return ((decimal)asInt.Value, "");
 
-            // Decimal-only cell (e.g. 2.5) — round down; Quantity DTO is int.
+            // Decimal cell (e.g. 2.5) — preserved as decimal. Quantity DTO
+            // is now decimal so fractional UOMs (KG, Liter) round-trip.
+            // Server-side validation rejects fractions for UOMs whose
+            // AllowsDecimalQuantity flag is off.
             var asDec = wb.GetDecimal(sheet, row, col);
-            if (asDec.HasValue) return ((int)Math.Truncate(asDec.Value), "");
+            if (asDec.HasValue) return (asDec.Value, "");
 
             var raw = wb.GetString(sheet, row, col);
-            if (string.IsNullOrWhiteSpace(raw)) return (0, "");
+            if (string.IsNullOrWhiteSpace(raw)) return (0m, "");
 
             var m = QtyUnitRegex.Match(raw);
-            if (!m.Success) return (0, "");
+            if (!m.Success) return (0m, "");
 
             // Strip thousand separators before parsing, tolerate "1 200" too.
             var numberText = m.Groups[1].Value.Replace(",", "").Replace(" ", "");
             if (!decimal.TryParse(numberText, System.Globalization.NumberStyles.Any,
                     System.Globalization.CultureInfo.InvariantCulture, out var number))
             {
-                return (0, "");
+                return (0m, "");
             }
 
             var unit = m.Groups[2].Success ? m.Groups[2].Value.Trim() : "";
-            return ((int)Math.Truncate(number), unit);
+            return (number, unit);
         }
 
         /// <summary>

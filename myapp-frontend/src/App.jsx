@@ -10,6 +10,7 @@ import InvoicePage from "./pages/InvoicePage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
 import ClientsPage from "./pages/ClientsPage";
 import ItemTypesPage from "./pages/ItemTypesPage";
+import UnitsPage from "./pages/UnitsPage";
 import POFormatsPage from "./pages/POFormatsPage";
 import ProfilePage from "./pages/ProfilePage";
 import UsersPage from "./pages/UsersPage";
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/companies/*" element={<CompanyPage />} />
           <Route path="/Clients/*" element={<ClientsPage />} />
           <Route path="/item-types" element={<ItemTypesPage />} />
+          <Route path="/units" element={<UnitsPage />} />
           <Route path="/po-formats" element={<POFormatsPage />} />
           <Route path="/challans" element={<ChallansPage />} />
           <Route path="/challans/import" element={<ImportChallansPage />} />

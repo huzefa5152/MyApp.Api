@@ -22,6 +22,13 @@ export const updateInvoice = (id, payload) =>
 export const updateInvoiceItemTypes = (id, items) =>
   httpClient.patch(`/invoices/${id}/itemtypes`, { items });
 
+// Slightly broader narrow edit path — Item Type AND Quantity per line.
+// Server still refuses to change price / desc / GST / dates / payment terms
+// / SRO etc. Decimal validation applies (fractional qty rejected for
+// integer-only UOMs). Gated by invoices.manage.update.itemtype.qty.
+export const updateInvoiceItemTypesAndQty = (id, items) =>
+  httpClient.patch(`/invoices/${id}/itemtypes-and-qty`, { items });
+
 export const deleteInvoice = (id) =>
   httpClient.delete(`/invoices/${id}`);
 

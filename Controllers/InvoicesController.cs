@@ -176,7 +176,36 @@ namespace MyApp.Api.Controllers
         {
             try
             {
-                var updated = await _service.UpdateItemTypesAsync(id, dto);
+                // allowQuantityEdit=false — qty fields in payload are ignored
+                var updated = await _service.UpdateItemTypesAsync(id, dto, allowQuantityEdit: false);
+                if (updated == null) return NotFound(new { error = "Bill not found." });
+                return Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Slightly broader narrow edit — Item Type AND Quantity per line.
+        /// Everything else on the bill (price / desc / GST / dates / payment
+        /// terms / doc type / SRO) stays read-only. Decimal validation
+        /// applies: fractional qty rejected for integer-only UOMs.
+        ///
+        /// RBAC: requires `invoices.manage.update.itemtype.qty`. Strict
+        /// superset of `invoices.manage.update.itemtype` — the startup
+        /// migration in Program.cs auto-grants it to anyone holding the
+        /// broader `invoices.manage.update`.
+        /// </summary>
+        [HttpPatch("{id}/itemtypes-and-qty")]
+        [HasPermission("invoices.manage.update.itemtype.qty")]
+        public async Task<ActionResult<InvoiceDto>> UpdateItemTypesAndQty(
+            int id, [FromBody] UpdateInvoiceItemTypesDto dto)
+        {
+            try
+            {
+                var updated = await _service.UpdateItemTypesAsync(id, dto, allowQuantityEdit: true);
                 if (updated == null) return NotFound(new { error = "Bill not found." });
                 return Ok(updated);
             }
@@ -206,9 +235,14 @@ namespace MyApp.Api.Controllers
         /// Flip the FBR-exclusion flag on a bill. Excluded bills are skipped
         /// by Validate All / Submit All; per-bill validate/submit still work.
         /// Returns the updated DTO so the UI can re-render without a refetch.
+        ///
+        /// Gated by the dedicated invoices.fbr.exclude permission rather
+        /// than the broader invoices.manage.update so a role can be granted
+        /// the toggle without also gaining edit rights on prices / items /
+        /// dates of the bill itself.
         /// </summary>
         [HttpPut("{id}/fbr-excluded")]
-        [HasPermission("invoices.manage.update")]
+        [HasPermission("invoices.fbr.exclude")]
         public async Task<ActionResult<InvoiceDto>> SetFbrExcluded(int id, [FromBody] SetFbrExcludedRequest body)
         {
             var updated = await _service.SetFbrExcludedAsync(id, body.Excluded);

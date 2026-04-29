@@ -19,6 +19,7 @@ import {
   MdBugReport,
   MdTune,
   MdScience,
+  MdStraighten,
   MdFileUpload,
   MdAdminPanelSettings,
   MdHistory,
@@ -198,6 +199,17 @@ export default function DashboardLayout() {
                     >
                       <MdCategory aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
                       Item Types
+                    </NavLink>
+                  </Can>
+                  <Can permission="config.units.manage">
+                    <NavLink
+                      to="/units"
+                      className={({ isActive }) =>
+                        "dl-submenu__item" + (isActive ? " active" : "")
+                      }
+                    >
+                      <MdStraighten aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
+                      Units
                     </NavLink>
                   </Can>
                   <Can permission="poformats.manage.view">

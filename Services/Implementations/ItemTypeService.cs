@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Services.Interfaces;
@@ -67,6 +68,7 @@ namespace MyApp.Api.Services.Implementations
                     "Each HS Code can only be mapped to one item.");
 
             await EnrichFromFbrAsync(dto, enrichWithCompanyId);
+            await EnsureUnitRowAsync(dto.UOM);
 
             var created = await _repo.CreateAsync(new ItemType
             {
@@ -80,6 +82,16 @@ namespace MyApp.Api.Services.Implementations
             });
             return ToDto(created);
         }
+
+        /// <summary>
+        /// Ensure a Unit row exists for this UOM string so the Units admin
+        /// page can configure its AllowsDecimalQuantity flag. Delegates to
+        /// the shared UnitRegistry helper — same contract every save path
+        /// across the app uses (challan create/edit, bill update, excel
+        /// import, item-type save). Idempotent, race-protected.
+        /// </summary>
+        private Task EnsureUnitRowAsync(string? uom)
+            => UnitRegistry.EnsureNamesAsync(_context, new[] { uom });
 
         public async Task<ItemTypeDto?> UpdateAsync(int id, ItemTypeDto dto, int? enrichWithCompanyId = null)
         {
@@ -95,6 +107,7 @@ namespace MyApp.Api.Services.Implementations
                     "Each HS Code can only be mapped to one item.");
 
             await EnrichFromFbrAsync(dto, enrichWithCompanyId);
+            await EnsureUnitRowAsync(dto.UOM);
 
             // Capture the OLD values so we can detect what actually changed,
             // and compute a "fields changed" set that drives the propagation

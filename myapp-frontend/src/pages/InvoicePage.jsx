@@ -3,6 +3,7 @@ import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevr
 import InvoiceForm from "../Components/InvoiceForm";
 import EditBillForm from "../Components/EditBillForm";
 import BulkFbrResultsDialog from "../Components/BulkFbrResultsDialog";
+import FbrPreviewDialog from "../Components/FbrPreviewDialog";
 import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
@@ -36,7 +37,10 @@ export default function InvoicePage() {
   // ItemType column inside it. EditBillForm enforces the field-level
   // restriction on its own.
   const canEditItemType = has("invoices.manage.update.itemtype");
-  const canOpenEdit = canUpdate || canEditItemType;
+  // Slightly broader narrow permission — Item Type AND Quantity. Same
+  // Edit button entry point, EditBillForm enforces field-level lock.
+  const canEditItemTypeAndQty = has("invoices.manage.update.itemtype.qty");
+  const canOpenEdit = canUpdate || canEditItemTypeAndQty || canEditItemType;
   const canDelete = has("invoices.manage.delete");
   const canPrint = has("invoices.print.view");
   // Two granular FBR perms — operator can be allowed to dry-run without
@@ -44,6 +48,17 @@ export default function InvoicePage() {
   const canFbrValidate = has("invoices.fbr.validate");
   const canFbrSubmit = has("invoices.fbr.submit");
   const canFbrAny = canFbrValidate || canFbrSubmit;
+  // Dedicated permission for the per-bill Exclude / Include FBR toggle —
+  // separated from invoices.manage.update so a role can be granted ONLY
+  // the toggle without also gaining edit rights on the bill itself.
+  const canFbrExclude = has("invoices.fbr.exclude");
+  // Dedicated permission for the FBR preview dialog — operator can sanity-
+  // check the grouped items / totals before clicking Validate or Submit
+  // without being trusted to actually call FBR. Administrator gets it
+  // automatically via RbacSeeder.
+  const canFbrPreview = has("invoices.fbr.preview");
+  // The bill currently shown in the FBR preview dialog (null when closed).
+  const [fbrPreviewId, setFbrPreviewId] = useState(null);
   const [clients, setClients] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -696,6 +711,20 @@ export default function InvoicePage() {
                         {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Tax XLS
                       </button>
                     )}
+                    {/* View what FBR will see — grouped items, totals, raw
+                        JSON. Pure read-only, no calls to FBR. Available for
+                        any bill (even submitted ones — useful to inspect
+                        what was sent historically). Gated by its own perm
+                        so it can be granted without Validate/Submit rights. */}
+                    {canFbrPreview && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
+                        onClick={() => setFbrPreviewId(inv.id)}
+                        title="Preview the FBR payload — grouped items, total qty, total value, total tax. Read-only, doesn't send anything."
+                      >
+                        <MdVisibility size={14} /> View FBR
+                      </button>
+                    )}
                     {canFbrAny && selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && (
                       <>
                         {canFbrValidate && (
@@ -751,7 +780,7 @@ export default function InvoicePage() {
                         <MdEdit size={14} /> Edit
                       </button>
                     )}
-                    {canUpdate && inv.fbrStatus !== "Submitted" && (
+                    {canFbrExclude && inv.fbrStatus !== "Submitted" && (
                       <button
                         style={{
                           ...styles.printBtn,
@@ -851,6 +880,15 @@ export default function InvoicePage() {
         items={bulkResults.items}
         onClose={() => setBulkResults((prev) => ({ ...prev, open: false }))}
       />
+
+      {/* FBR submission preview — read-only inspector. Operator can see
+          grouped items, totals, raw JSON before clicking Validate / Submit. */}
+      {fbrPreviewId !== null && (
+        <FbrPreviewDialog
+          invoiceId={fbrPreviewId}
+          onClose={() => setFbrPreviewId(null)}
+        />
+      )}
     </div>
   );
 }

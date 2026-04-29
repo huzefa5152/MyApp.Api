@@ -62,6 +62,14 @@ namespace MyApp.Api.Helpers
             // invoices.manage.update — granting both is safe; granting only
             // .itemtype restricts the user to the narrow flow.
             new("invoices.manage.update.itemtype", "Invoices", "Manage", "Update Item Type", "Edit ONLY the Item Type column on a bill (no other fields)"),
+            // Strict superset of update.itemtype: same narrow flow, but the
+            // operator can also adjust the Quantity column (everything else
+            // still locked — price / desc / GST / dates / payment terms /
+            // doc type / SRO etc. remain read-only). Use this for users
+            // who classify bills AND need to correct qty mistakes that the
+            // challan can't correct (e.g. a returned item) without giving
+            // them full price-edit power.
+            new("invoices.manage.update.itemtype.qty", "Invoices", "Manage", "Update Item Type + Qty", "Edit Item Type and Quantity columns on a bill (no other fields)"),
             new("invoices.manage.delete",  "Invoices", "Manage", "Delete", "Delete an invoice"),
             // Two granular FBR permissions — separating dry-run from real
             // submission so an operator can be allowed to validate without
@@ -72,6 +80,16 @@ namespace MyApp.Api.Helpers
             // senior reviewer submits).
             new("invoices.fbr.validate",   "Invoices", "FBR",    "Validate", "Dry-run validate an invoice with FBR (no commit, no IRN issued)"),
             new("invoices.fbr.submit",     "Invoices", "FBR",    "Submit",   "Submit an invoice to FBR digital invoicing (commits, returns IRN)"),
+            // View the JSON we would POST to FBR — grouped items, totals,
+            // tax breakdown — without sending anything. Useful for review
+            // / sign-off before clicking the real Validate / Submit button.
+            new("invoices.fbr.preview",    "Invoices", "FBR",    "Preview",  "View the FBR submission preview (grouped items, totals, raw JSON) without sending to FBR"),
+            // Independent permission for the per-bill "Exclude from FBR /
+            // Include in FBR" toggle. Excluded bills are skipped by Validate
+            // All / Submit All. Carved out of invoices.manage.update so an
+            // operator can be trusted to flip the toggle without being
+            // trusted to edit prices, dates, or items on the bill itself.
+            new("invoices.fbr.exclude",    "Invoices", "FBR",    "Exclude/Include", "Mark a bill as excluded from FBR bulk Validate/Submit, or re-include it"),
             new("invoices.print.view",     "Invoices", "Print",  "View",   "Print or download invoices"),
 
             // ── PO Formats (Purchase-Order parser registry) ─────────────────

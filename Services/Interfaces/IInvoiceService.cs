@@ -13,13 +13,18 @@ namespace MyApp.Api.Services.Interfaces
         Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto);
         Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto);
         /// <summary>
-        /// Narrow update path: ONLY re-derives FBR fields (HS / UOM / SaleType)
-        /// from a new ItemType per line. Refuses to change quantity, price,
-        /// description, header fields, etc. Used when a user has the
-        /// `invoices.manage.update.itemtype` permission but not full
-        /// `invoices.manage.update`.
+        /// Narrow update path: re-derives FBR fields (HS / UOM / SaleType)
+        /// from a new ItemType per line. Refuses to change price, description,
+        /// header fields, etc.
+        ///
+        /// Permission flows (controller picks the flag based on which
+        /// endpoint the request hit):
+        ///   • allowQuantityEdit=false → invoices.manage.update.itemtype
+        ///       (Item Type only — qty in payload is ignored)
+        ///   • allowQuantityEdit=true  → invoices.manage.update.itemtype.qty
+        ///       (Item Type + Quantity, with decimal validation)
         /// </summary>
-        Task<InvoiceDto?> UpdateItemTypesAsync(int id, UpdateInvoiceItemTypesDto dto);
+        Task<InvoiceDto?> UpdateItemTypesAsync(int id, UpdateInvoiceItemTypesDto dto, bool allowQuantityEdit = false);
         Task<bool> DeleteAsync(int id);
         /// <summary>
         /// Flip the IsFbrExcluded flag. Excluded bills are skipped by the

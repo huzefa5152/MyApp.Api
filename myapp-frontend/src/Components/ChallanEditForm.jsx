@@ -2,11 +2,13 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { MdAdd, MdDelete, MdInfo } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import QuantityInput from "./QuantityInput";
 import { updateChallan } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
-import { formStyles } from "../theme";
+import { getAllUnits } from "../api/unitsApi";
+import { formStyles, modalSizes } from "../theme";
 
 const colors = {
   textPrimary: "#1a2332",
@@ -48,6 +50,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   );
   const [poNumber, setPoNumber] = useState(challan.poNumber || "");
   const [poDate, setPoDate] = useState(challan.poDate ? challan.poDate.substring(0, 10) : "");
+  const [indentNo, setIndentNo] = useState(challan.indentNo || "");
 
   // ── Line items ──
   const [items, setItems] = useState(
@@ -63,6 +66,8 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // ── Lookups ──
   const [clients, setClients] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
+  // Units list — gates each row's quantity input on the picked UOM.
+  const [units, setUnits] = useState([]);
 
   // ── UI state ──
   const [error, setError] = useState("");
@@ -75,6 +80,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
       getClientsByCompany(challan.companyId).then(({ data }) => setClients(data)).catch(() => {});
     }
     getItemTypes().then(({ data }) => setItemTypes(data)).catch(() => {});
+    getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
   }, [challan.companyId]);
 
   useEffect(() => {
@@ -174,12 +180,15 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         // Backend re-evaluates status based on FBR readiness.
         poNumber: poNumber.trim(),
         poDate: poNumber.trim() && poDate ? new Date(poDate).toISOString() : null,
+        indentNo: indentNo.trim() || null,
         deliveryDate: new Date(deliveryDate).toISOString(),
         items: validItems.map((i) => ({
           id: i.id || 0,
           itemTypeId: i.itemTypeId ? parseInt(i.itemTypeId) : null,
           description: i.description.trim(),
-          quantity: parseInt(i.quantity) || 1,
+          // parseFloat preserves decimals (12.5, 0.0004) — server-side
+          // validation rejects fractions for integer-only UOMs.
+          quantity: parseFloat(i.quantity) || 1,
           unit: (i.unit || "").trim(),
           itemTypeName: "",
         })),
@@ -192,9 +201,11 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     }
   };
 
+  // Backdrop click is a no-op — protects in-progress edits from a stray
+  // click. Dismiss via the X in the header or the Cancel button.
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: 1100, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div style={formStyles.backdrop}>
+      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>Edit Challan #{challan.challanNumber}</h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
@@ -259,9 +270,12 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               </div>
             </div>
 
-            {/* ── PO row: Number (clearable) + Date ── */}
+            {/* ── PO row: Number (clearable) + Date + Indent No ──
+                All three on one line so the operator sees the full PO/indent
+                context at a glance. Indent No is optional and independent
+                of PO — companies that don't use indents leave it blank. */}
             <div style={styles.rowGroup}>
-              <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ flex: 1, minWidth: 180 }}>
                 <label style={styles.label}>
                   PO Number
                   <span style={styles.labelHint}> (clear to move to "No PO")</span>
@@ -274,7 +288,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                   onChange={(e) => setPoNumber(e.target.value)}
                 />
               </div>
-              <div style={{ flex: 1, minWidth: 150 }}>
+              <div style={{ flex: 1, minWidth: 140 }}>
                 <label style={styles.label}>PO Date</label>
                 <input
                   type="date"
@@ -283,6 +297,19 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                   onChange={(e) => setPoDate(e.target.value)}
                   disabled={!poNumber.trim()}
                   title={!poNumber.trim() ? "Set a PO Number first" : undefined}
+                />
+              </div>
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <label style={styles.label}>
+                  Indent No
+                  <span style={styles.labelHint}> (optional)</span>
+                </label>
+                <input
+                  type="text"
+                  style={styles.input}
+                  placeholder="Leave blank if not used"
+                  value={indentNo}
+                  onChange={(e) => setIndentNo(e.target.value)}
                 />
               </div>
             </div>
@@ -347,13 +374,15 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                       onChange={(val) => handleItemChange(idx, "description", val)}
                     />
                   </div>
-                  <div style={{ width: 80, flexShrink: 0 }}>
-                    <input
-                      type="number"
-                      min={1}
-                      style={{ ...styles.input, textAlign: "center", padding: "0.55rem 0.35rem" }}
+                  {/* Wider column so 4-place decimals (0.0004, 1234.5678)
+                      stay fully visible alongside the spinner controls. */}
+                  <div style={{ width: 130, flexShrink: 0 }}>
+                    <QuantityInput
                       value={item.quantity}
-                      onChange={(e) => handleItemChange(idx, "quantity", parseInt(e.target.value) || 1)}
+                      onChange={(val) => handleItemChange(idx, "quantity", val === "" ? 1 : val)}
+                      unit={item.unit}
+                      units={units}
+                      style={{ ...styles.input, textAlign: "right", padding: "0.55rem 0.5rem" }}
                     />
                   </div>
                   <div style={{ width: 180, flexShrink: 0 }}>

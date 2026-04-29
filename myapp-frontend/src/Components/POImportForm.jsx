@@ -4,9 +4,11 @@ import { parsePdf, parseText, ensureLookups } from "../api/poImportApi";
 import { getClientsByCompany, getClientById } from "../api/clientApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { createDeliveryChallan } from "../api/challanApi";
-import { formStyles } from "../theme";
+import { getAllUnits } from "../api/unitsApi";
+import { formStyles, modalSizes } from "../theme";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import QuantityInput from "./QuantityInput";
 
 const colors = {
   blue: "#0d47a1",
@@ -35,6 +37,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
   // Parsed data (editable in step 2)
   const [poNumber, setPoNumber] = useState("");
   const [poDate, setPoDate] = useState("");
+  const [indentNo, setIndentNo] = useState("");
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split("T")[0]);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [site, setSite] = useState("");
@@ -54,6 +57,9 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
   // Lookups
   const [clients, setClients] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
+  // Units list — drives whether each row's quantity input accepts decimals
+  // (KG, Liter, Carat) or only whole numbers (Pcs, SET, Pair).
+  const [units, setUnits] = useState([]);
   const [saving, setSaving] = useState(false);
 
   const fileInputRef = useRef(null);
@@ -61,12 +67,14 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const [clientRes, typeRes] = await Promise.all([
+        const [clientRes, typeRes, unitsRes] = await Promise.all([
           getClientsByCompany(companyId),
           getItemTypes(),
+          getAllUnits().catch(() => ({ data: [] })),
         ]);
         setClients(clientRes.data);
         setItemTypes(typeRes.data);
+        setUnits(unitsRes.data || []);
       } catch { /* ignore */ }
     };
     load();
@@ -130,6 +138,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
         const miss = err.response.data || {};
         setPoNumber("");
         setPoDate("");
+        setIndentNo("");
         setItems([]);
         setMatchedFormatId(null);
         setMatchedFormatName("");
@@ -189,6 +198,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
         site: site || null,
         poNumber: poNumber.trim(),
         poDate: poDate ? new Date(poDate).toISOString() : null,
+        indentNo: indentNo.trim() || null,
         deliveryDate: new Date(deliveryDate).toISOString(),
         items: items.map((i) => ({
           description: i.description.trim(),
@@ -207,9 +217,11 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
     }
   };
 
+  // Backdrop click is a no-op — PO imports involve picking + reviewing
+  // many lines, a stray click shouldn't drop the work. Use X / Cancel.
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: 900, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div style={formStyles.backdrop}>
+      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>
             {step === 1 ? "Import Purchase Order" : "Review & Create Challan"}
@@ -304,24 +316,11 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                 </div>
               )}
 
-              {/* PO Fields + Client + Delivery Date */}
+              {/* Header row: Client / Site / Delivery Date — same 2/1.5/1
+                  layout as Add and Edit Challan so the import preview feels
+                  identical to the regular create flow. */}
               <div style={styles.row}>
-                <div style={{ flex: 1 }}>
-                  <label style={styles.label}>PO Number</label>
-                  <input style={styles.input} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="e.g. PO-2026-001" />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={styles.label}>PO Date</label>
-                  <input type="date" style={styles.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={styles.label}>Delivery Date *</label>
-                  <input type="date" style={styles.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
-                </div>
-              </div>
-
-              <div style={styles.row}>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 2, minWidth: 220 }}>
                   <label style={styles.label}>Client *</label>
                   <select style={styles.select} value={selectedClientId} onChange={(e) => { setSelectedClientId(e.target.value); setSite(""); }}>
                     <option value="">— Select Client —</option>
@@ -330,7 +329,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                     ))}
                   </select>
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1.5, minWidth: 180 }}>
                   <label style={styles.label}>Site / Department</label>
                   {clientSites.length > 0 ? (
                     <select style={styles.select} value={site} onChange={(e) => setSite(e.target.value)}>
@@ -343,12 +342,35 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                     <input
                       type="text"
                       style={styles.input}
-                      placeholder={selectedClientId ? "Optional — type a site or department" : "Pick a client first"}
+                      placeholder={selectedClientId ? "Optional" : "Pick a client first"}
                       value={site}
                       onChange={(e) => setSite(e.target.value)}
                       disabled={!selectedClientId}
                     />
                   )}
+                </div>
+                <div style={{ flex: 1, minWidth: 150 }}>
+                  <label style={styles.label}>Delivery Date *</label>
+                  <input type="date" style={styles.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+                </div>
+              </div>
+
+              {/* PO row: Number + Date + Indent No — same 1/1/1 (180/140/180)
+                  layout as Add and Edit Challan. */}
+              <div style={styles.row}>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <label style={styles.label}>PO Number</label>
+                  <input style={styles.input} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="e.g. PO-2026-001" />
+                </div>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <label style={styles.label}>PO Date</label>
+                  <input type="date" style={styles.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
+                </div>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <label style={styles.label}>
+                    Indent No <span style={{ color: "#5f6d7e", fontWeight: 400 }}>(optional)</span>
+                  </label>
+                  <input style={styles.input} value={indentNo} onChange={(e) => setIndentNo(e.target.value)} placeholder="Leave blank if not used" />
                 </div>
               </div>
 
@@ -409,13 +431,15 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                             inputStyle={{ ...styles.input, padding: "0.35rem 0.5rem", fontSize: "0.85rem" }}
                           />
                         </div>
-                        <div style={{ flex: 0.6 }}>
-                          <input
-                            type="number"
-                            min={1}
-                            style={{ ...styles.input, padding: "0.35rem 0.4rem", fontSize: "0.85rem", textAlign: "center" }}
+                        {/* Wider so 4-place decimals (0.0004, 1234.5678)
+                            stay fully visible alongside the spinner. */}
+                        <div style={{ flex: 1.1 }}>
+                          <QuantityInput
                             value={item.quantity}
-                            onChange={(e) => handleItemChange(idx, "quantity", e.target.value)}
+                            onChange={(val) => handleItemChange(idx, "quantity", val)}
+                            unit={item.unit}
+                            units={units}
+                            style={{ ...styles.input, padding: "0.35rem 0.5rem", fontSize: "0.85rem", textAlign: "right" }}
                           />
                         </div>
                         <div style={{ flex: 1 }}>

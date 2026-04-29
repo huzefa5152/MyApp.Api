@@ -6,7 +6,7 @@ import { getClientsByCompany } from "../api/clientApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { getItemByName, saveItemFbrDefaults } from "../api/lookupApi";
-import { formStyles } from "../theme";
+import { formStyles, modalSizes } from "../theme";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 
@@ -411,9 +411,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     allChallans.some((ch) => ch.clientId === cl.id)
   );
 
+  // Backdrop click is a no-op — bills can hold a lot of typed data and
+  // a stray click shouldn't wipe it. Dismiss via X or Cancel.
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: 1280, width: "96vw", cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div style={formStyles.backdrop}>
+      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>Create Bill</h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
@@ -688,8 +690,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               <tr style={styles.unifiedThead}>
                                 <th style={{ ...styles.unifiedTh, width: "4%" }}>DC#</th>
                                 <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type (FBR)</th>
-                                <th style={{ ...styles.unifiedTh, width: "20%" }}>Description</th>
-                                <th style={{ ...styles.unifiedTh, width: "5%" }}>Qty</th>
+                                <th style={{ ...styles.unifiedTh, width: "16%" }}>Description</th>
+                                <th style={{ ...styles.unifiedTh, width: "9%" }}>Qty</th>
                                 <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
                                 <th style={{ ...styles.unifiedTh, width: "8%" }}>Unit Price *</th>
                                 <th style={{ ...styles.unifiedTh, width: "9%" }}>Line Total</th>
@@ -746,8 +748,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                         placeholder="Search or type item…"
                                       />
                                     </td>
-                                    <td style={{ ...styles.unifiedTd, textAlign: "center", fontSize: "0.82rem" }}>
-                                      {item.quantity}
+                                    <td style={{ ...styles.unifiedTd, textAlign: "right", fontSize: "0.82rem", paddingRight: "0.5rem" }}>
+                                      {/* Strip trailing zeros so 1.0000 → "1",
+                                          12.5000 → "12.5", 0.0004 → "0.0004". */}
+                                      {parseFloat(Number(item.quantity || 0).toFixed(4)).toString()}
                                     </td>
                                     <td style={styles.unifiedTd}>
                                       <input

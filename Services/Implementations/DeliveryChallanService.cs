@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Services.Interfaces;
@@ -16,6 +17,49 @@ namespace MyApp.Api.Services.Implementations
         {
             _repository = repository;
             _context = context;
+        }
+
+        /// <summary>
+        /// Defence-in-depth check: reject fractional quantities (e.g. 2.5
+        /// Pcs) for any line whose UOM has AllowsDecimalQuantity = false.
+        /// The frontend gates this via step="1" on the input, but a hand-
+        /// rolled API call could still POST a fraction — this is the
+        /// last-line guard. Throws InvalidOperationException so the
+        /// controller layer surfaces a 400 with a clear message.
+        /// </summary>
+        private async Task ValidateDecimalQuantitiesAsync<T>(IEnumerable<T> items,
+            Func<T, string?> getUnit, Func<T, decimal> getQty)
+        {
+            var unitNames = items
+                .Select(getUnit)
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList()!;
+            if (unitNames.Count == 0) return;
+
+            // Build a lookup: lowercase unit name → AllowsDecimalQuantity
+            var unitConfig = await _context.Units
+                .Where(u => unitNames.Contains(u.Name))
+                .Select(u => new { u.Name, u.AllowsDecimalQuantity })
+                .ToListAsync();
+            var allowsDecimal = unitConfig.ToDictionary(
+                u => u.Name, u => u.AllowsDecimalQuantity,
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in items)
+            {
+                var unit = getUnit(item) ?? "";
+                var qty = getQty(item);
+                // If the unit isn't in the table, skip — operator-typed
+                // ad-hoc unit, no config to enforce. If qty is whole, skip.
+                if (qty == Math.Truncate(qty)) continue;
+                if (!allowsDecimal.TryGetValue(unit, out var allows) || !allows)
+                {
+                    throw new InvalidOperationException(
+                        $"Quantity '{qty}' for unit '{unit}' must be a whole number. " +
+                        $"Enable decimal quantity for this unit on the Units admin page if fractions are allowed.");
+                }
+            }
         }
 
         /// <summary>Check if company+client have all required FBR fields filled.</summary>
@@ -53,6 +97,7 @@ namespace MyApp.Api.Services.Implementations
                 ClientName = dc.Client?.Name ?? "",
                 PoNumber = dc.PoNumber,
                 PoDate = dc.PoDate,
+                IndentNo = dc.IndentNo,
                 DeliveryDate = dc.DeliveryDate,
                 Site = dc.Site,
                 Status = dc.Status,
@@ -189,6 +234,17 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<DeliveryChallanDto> CreateDeliveryChallanAsync(int companyId, DeliveryChallanDto dto)
         {
+            // Make sure any new unit name typed by the operator gets a
+            // Units row so it shows up on the Units admin screen (default
+            // integer-only; admin flips the decimal flag if needed).
+            // Runs BEFORE the decimal validation so the validation lookup
+            // sees the row we just inserted.
+            await UnitRegistry.EnsureNamesAsync(_context, dto.Items?.Select(i => i.Unit) ?? Enumerable.Empty<string>());
+
+            // Reject fractional qty for integer-only UOMs before any other
+            // work — keeps the early failure path cheap and clear.
+            await ValidateDecimalQuantitiesAsync(dto.Items, i => i.Unit, i => i.Quantity);
+
             var hasPo = !string.IsNullOrWhiteSpace(dto.PoNumber);
 
             // Determine status based on FBR readiness
@@ -211,6 +267,7 @@ namespace MyApp.Api.Services.Implementations
                 Site = dto.Site,
                 PoNumber = dto.PoNumber?.Trim() ?? "",
                 PoDate = hasPo ? dto.PoDate : null,
+                IndentNo = string.IsNullOrWhiteSpace(dto.IndentNo) ? null : dto.IndentNo.Trim(),
                 DeliveryDate = dto.DeliveryDate,
                 Status = status,
                 Items = dto.Items.Select(i => new DeliveryItem
@@ -278,7 +335,7 @@ namespace MyApp.Api.Services.Implementations
                 var toRemove = dc.Items.Where(i => !updatedIds.Contains(i.Id)).ToList();
                 var removedDeliveryItemIds = toRemove.Select(i => i.Id).ToList();
 
-                var quantityChanges = new Dictionary<int, int>(); // deliveryItemId → newQuantity
+                var quantityChanges = new Dictionary<int, decimal>(); // deliveryItemId → newQuantity
                 var newItems = new List<DeliveryItem>();
 
                 foreach (var itemDto in items)
@@ -359,7 +416,7 @@ namespace MyApp.Api.Services.Implementations
         private async Task SyncInvoiceItemsForChallanEditAsync(
             DeliveryChallan dc,
             List<int> removedDeliveryItemIds,
-            Dictionary<int, int> quantityChanges,
+            Dictionary<int, decimal> quantityChanges,
             List<DeliveryItem> newlyAddedDeliveryItems)
         {
             var invoice = await _context.Invoices
@@ -512,7 +569,7 @@ namespace MyApp.Api.Services.Implementations
                     await SyncInvoiceItemsForChallanEditAsync(
                         dc,
                         new List<int> { itemId },
-                        new Dictionary<int, int>(),
+                        new Dictionary<int, decimal>(),
                         new List<DeliveryItem>());
                 }
 
@@ -560,6 +617,14 @@ namespace MyApp.Api.Services.Implementations
             if (dc.Status == "Invoiced" && dc.Invoice?.FbrStatus == "Submitted")
                 throw new InvalidOperationException("Cannot edit a challan whose bill has been submitted to FBR.");
 
+            // Auto-register any new unit names so they appear on the Units
+            // admin screen, then reject fractional qty for integer-only UOMs.
+            if (dto.Items != null && dto.Items.Any())
+            {
+                await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.Unit));
+                await ValidateDecimalQuantitiesAsync(dto.Items, i => i.Unit, i => i.Quantity);
+            }
+
             // Validate the incoming client — must exist and belong to the same company
             if (dto.ClientId > 0 && dto.ClientId != dc.ClientId)
             {
@@ -582,6 +647,12 @@ namespace MyApp.Api.Services.Implementations
             var hasPo = !string.IsNullOrWhiteSpace(poNumber);
             dc.PoNumber = poNumber;
             dc.PoDate = hasPo ? dto.PoDate : null;
+
+            // Indent No is independent of PO — operators may set/clear it
+            // even when there's no PO (e.g. internal indents that pre-date
+            // a customer PO). Empty string clears it back to null so the
+            // print template's {{#if indentNo}} block hides correctly.
+            dc.IndentNo = string.IsNullOrWhiteSpace(dto.IndentNo) ? null : dto.IndentNo.Trim();
 
             // Items: full replace (same semantics as UpdateItemsAsync but inline
             // so we don't do two DB round-trips)
@@ -664,6 +735,7 @@ namespace MyApp.Api.Services.Implementations
                 ClientSite = dc.Site,
                 PoNumber = dc.PoNumber,
                 PoDate = dc.PoDate,
+                IndentNo = dc.IndentNo,
                 Items = dc.Items.Select(i => new PrintChallanItemDto
                 {
                     Quantity = i.Quantity,
@@ -748,6 +820,11 @@ namespace MyApp.Api.Services.Implementations
             var hasPo = !string.IsNullOrWhiteSpace(dto.PoNumber);
             string status = !fbrReady ? "Setup Required" : (hasPo ? "Imported" : "No PO");
 
+            // Auto-register any new unit names that came in via the Excel
+            // import so the operator can immediately configure them on the
+            // Units admin screen.
+            await UnitRegistry.EnsureNamesAsync(_context, dto.Items?.Select(i => i.Unit) ?? Enumerable.Empty<string>());
+
             var challan = new DeliveryChallan
             {
                 CompanyId = companyId,
@@ -756,6 +833,9 @@ namespace MyApp.Api.Services.Implementations
                 Site = string.IsNullOrWhiteSpace(dto.Site) ? null : dto.Site.Trim(),
                 PoNumber = (dto.PoNumber ?? "").Trim(),
                 PoDate = hasPo ? dto.PoDate : null,
+                // IndentNo intentionally left null for bulk Excel imports —
+                // legacy import sheets don't have an indent column. Operators
+                // can fill it in afterwards via the Edit dialog if needed.
                 DeliveryDate = dto.DeliveryDate,
                 Status = status,
                 IsImported = true,

@@ -562,12 +562,24 @@ namespace MyApp.Api.Services.Implementations
         // ═══════════════════════════════════════════════════════════
 
         public async Task<FbrSubmissionResult> SubmitInvoiceAsync(int invoiceId, string? scenarioId = null)
-            => await PostInvoiceAsync(invoiceId, isSubmit: true, scenarioId);
+            => await PostInvoiceAsync(invoiceId, isSubmit: true, scenarioId, dryRun: false);
 
         public async Task<FbrSubmissionResult> ValidateInvoiceAsync(int invoiceId, string? scenarioId = null)
-            => await PostInvoiceAsync(invoiceId, isSubmit: false, scenarioId);
+            => await PostInvoiceAsync(invoiceId, isSubmit: false, scenarioId, dryRun: false);
 
-        private async Task<FbrSubmissionResult> PostInvoiceAsync(int invoiceId, bool isSubmit, string? scenarioId)
+        /// <summary>
+        /// Build the exact JSON we would POST to FBR's validate endpoint —
+        /// without actually sending. Lets operators sanity-check the
+        /// grouped items / values before clicking the real button.
+        /// Returns the same structure as a normal validate, but populates
+        /// `Preview` with the JSON and skips both the HTTP call and any
+        /// FBR-status mutations on the bill. Pre-validate still runs so
+        /// missing fields are caught before the build even starts.
+        /// </summary>
+        public async Task<FbrSubmissionResult> PreviewInvoicePayloadAsync(int invoiceId, string? scenarioId = null)
+            => await PostInvoiceAsync(invoiceId, isSubmit: false, scenarioId, dryRun: true);
+
+        private async Task<FbrSubmissionResult> PostInvoiceAsync(int invoiceId, bool isSubmit, string? scenarioId, bool dryRun)
         {
             // ── Load entities ──
             var invoice = await _invoiceRepo.GetByIdAsync(invoiceId);
@@ -603,8 +615,15 @@ namespace MyApp.Api.Services.Implementations
             bool isSandbox = company.FbrEnvironment != "production";
 
             // ── Pre-validate ──
-            var preResult = await PreValidate(invoice, company, buyer);
-            if (preResult != null) return preResult;
+            // Skipped for dry-run preview so the operator can inspect the
+            // would-be JSON even when fields are incomplete (preview is
+            // for shape-checking; missing-field errors are caught later
+            // when they actually click Validate / Submit).
+            if (!dryRun)
+            {
+                var preResult = await PreValidate(invoice, company, buyer);
+                if (preResult != null) return preResult;
+            }
 
             // ── Resolve province names ──
             var sellerProvince = await ResolveProvinceNameAsync(company, company.FbrProvinceCode);
@@ -664,13 +683,64 @@ namespace MyApp.Api.Services.Implementations
                 Items = new List<FbrInvoiceItemRequest>()
             };
 
-            // Resolve UOM descriptions + compute FBR-compliant tax numbers per item.
-            // ComputeFbrTaxes encodes the three rules that differ from plain "line × rate":
+            // ── Item-Type grouping (mirrors the Tax Invoice print) ───────────
+            //
+            // The Tax Invoice we hand to clients groups bill lines by ItemType
+            // (sum of quantities + sum of line totals, one row per type),
+            // because that's how the buyer sees their purchase: 5 batteries,
+            // 2 rolls of adhesive tape — not 5 separate battery line items.
+            //
+            // Mirror that grouping in the FBR payload so the digital invoice
+            // matches what FBR would expect to see on the printed tax
+            // invoice. Same rule as PrintTaxInvoiceDto: only group when EVERY
+            // line has an ItemTypeName; if any line is unclassified, fall
+            // back to per-line emission (same fallback the print uses).
+            //
+            // The grouping is safe because each line's HSCode / UOM / SaleType
+            // / SROs are derived from the catalog ItemType, so all lines in
+            // a group share those fields. Sum-of-LineTotals × rate gives the
+            // same FBR-tax answer as summing per-line tax (linear in value).
+            // 3rd Schedule items also work correctly: summed retail price
+            // × rate is the same as sum of per-line retail × rate.
+            var fbrItems = invoice.Items.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName))
+                ? invoice.Items
+                    .GroupBy(ii => ii.ItemTypeName)
+                    .Select(g =>
+                    {
+                        var first = g.First();
+                        return new InvoiceItem
+                        {
+                            // Keep ItemType-derived fields (all lines in a
+                            // group share these because they came from the
+                            // same catalog row).
+                            ItemTypeId = first.ItemTypeId,
+                            ItemTypeName = g.Key,
+                            UOM = first.UOM,
+                            FbrUOMId = first.FbrUOMId,
+                            HSCode = first.HSCode,
+                            SaleType = first.SaleType,
+                            SroScheduleNo = first.SroScheduleNo,
+                            SroItemSerialNo = first.SroItemSerialNo,
+                            // ProductDescription = the ItemTypeName so the
+                            // FBR row matches the Tax Invoice print row.
+                            Description = g.Key,
+                            // Sum the value-bearing columns.
+                            Quantity = g.Sum(ii => ii.Quantity),
+                            LineTotal = g.Sum(ii => ii.LineTotal),
+                            FixedNotifiedValueOrRetailPrice = g.Sum(ii => ii.FixedNotifiedValueOrRetailPrice ?? 0m),
+                        };
+                    })
+                    .ToList()
+                : invoice.Items.ToList();
+
+            // Resolve UOM descriptions + compute FBR-compliant tax numbers per
+            // (grouped) item. ComputeFbrTaxes encodes the three rules that
+            // differ from plain "line × rate":
             //   1) 3rd Schedule Goods: tax is BACKED OUT of tax-inclusive MRP
             //      salesTax = retailPrice × rate / (1 + rate)
             //   2) Unregistered-buyer standard-rate: add 4% further tax
             //   3) End-consumer retail (SN026/027/028): NO further tax even if unregistered
-            foreach (var item in invoice.Items)
+            foreach (var item in fbrItems)
             {
                 var (salesTax, furtherTax, retailPrice) =
                     ComputeFbrTaxes(item, invoice.GSTRate, buyerRegType, fbrRequest.ScenarioId);
@@ -730,6 +800,24 @@ namespace MyApp.Api.Services.Implementations
             var action = isSubmit ? "Submit" : "Validate";
             var url = isSubmit ? GetSubmitUrl(company) : GetValidateUrl(company);
             var json = JsonSerializer.Serialize(fbrRequest, JsonOptions);
+
+            // Dry-run preview — return the built JSON without POSTing
+            // anything and without writing to the FBR audit log. Lets
+            // operators inspect the grouping/values pre-flight.
+            if (dryRun)
+            {
+                return new FbrSubmissionResult
+                {
+                    Success = true,
+                    Preview = new FbrPayloadPreview
+                    {
+                        Json = json,
+                        Url = url,
+                        ItemCount = fbrRequest.Items.Count,
+                        OriginalLineCount = invoice.Items.Count,
+                    }
+                };
+            }
 
             try
             {

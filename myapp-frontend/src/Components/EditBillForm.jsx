@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { MdInfo } from "react-icons/md";
-import { getInvoiceById, updateInvoice, updateInvoiceItemTypes } from "../api/invoiceApi";
+import { getInvoiceById, updateInvoice, updateInvoiceItemTypes, updateInvoiceItemTypesAndQty } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
+import { getAllUnits } from "../api/unitsApi";
+import QuantityInput from "./QuantityInput";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
-import { formStyles } from "../theme";
+import { formStyles, modalSizes } from "../theme";
 import { usePermissions } from "../contexts/PermissionsContext";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
@@ -37,23 +39,32 @@ const colors = {
  */
 export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = false }) {
   const { has } = usePermissions();
-  // Two permission tiers for editing a bill:
-  //  • invoices.manage.update           → full edit (price, qty, all fields)
-  //  • invoices.manage.update.itemtype  → narrow edit, ItemType column only
-  // The narrower path is for FBR-classification helpers who shouldn't touch
-  // commercial values. When the user has only the narrow permission, every
-  // input on this form except the Item Type picker becomes read-only and
-  // Save POSTs to the dedicated PATCH /invoices/{id}/itemtypes endpoint.
-  const canFullEdit       = has("invoices.manage.update");
-  const canEditItemType   = has("invoices.manage.update.itemtype");
-  const itemTypeOnlyMode  = !canFullEdit && canEditItemType;
+  // Three permission tiers for editing a bill, ordered narrowest → broadest:
+  //   • invoices.manage.update.itemtype       → ONLY Item Type column
+  //   • invoices.manage.update.itemtype.qty   → Item Type + Quantity columns
+  //   • invoices.manage.update                → full edit (price, all fields)
+  //
+  // The narrow paths are for operators who classify or correct quantities
+  // but shouldn't touch commercial values. When the user has only a narrow
+  // permission, every input on this form outside its scope becomes
+  // read-only and Save POSTs to the matching narrow PATCH endpoint.
+  const canFullEdit          = has("invoices.manage.update");
+  const canEditItemTypeAndQty = has("invoices.manage.update.itemtype.qty");
+  const canEditItemType       = has("invoices.manage.update.itemtype");
+  // Mode flags — exactly one of these is true at a time (in priority order).
+  // canFullEdit takes precedence: a full-editor doesn't need the narrow modes.
+  const itemTypeOnlyMode     = !canFullEdit && !canEditItemTypeAndQty && canEditItemType;
+  const itemTypeAndQtyMode   = !canFullEdit && canEditItemTypeAndQty;
 
   // Effective read-only: caller-forced OR no edit permission at all.
-  const effectiveReadOnly = readOnly || (!canFullEdit && !canEditItemType);
+  const effectiveReadOnly = readOnly || (!canFullEdit && !canEditItemTypeAndQty && !canEditItemType);
 
   const [invoice, setInvoice] = useState(null);
   const [items, setItems] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
+  // Units list — gates each row's quantity input on the picked UOM
+  // (decimal allowed for KG/Liter/etc., integer-only for Pcs/SET/etc.).
+  const [units, setUnits] = useState([]);
   const [gstRate, setGstRate] = useState(18);
   const [billDate, setBillDate] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
@@ -76,13 +87,15 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   useEffect(() => {
     const load = async () => {
       try {
-        const [{ data }, typesRes] = await Promise.all([
+        const [{ data }, typesRes, unitsRes] = await Promise.all([
           getInvoiceById(invoiceId),
           getItemTypes().catch(() => ({ data: [] })),
+          getAllUnits().catch(() => ({ data: [] })),
         ]);
         setInvoice(data);
         setItems(data.items.map((it) => ({ ...it })));
         setItemTypes(typesRes.data || []);
+        setUnits(unitsRes.data || []);
         setGstRate(data.gstRate ?? 18);
         // Date arrives as ISO string; the <input type="date"> control wants YYYY-MM-DD.
         setBillDate(data.date ? new Date(data.date).toISOString().slice(0, 10) : "");
@@ -186,11 +199,16 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const grandTotal = subtotal + gstAmount;
 
   // Field-level gating booleans, derived once for clarity:
-  //   • lockNonItemType — true when the prop locks the form (read-only view)
-  //     OR the operator only has the narrow "ItemType only" permission.
-  //     Locks every input EXCEPT the Item Type picker.
-  //   • lockItemType — locks the Item Type picker too (full read-only view).
-  const lockNonItemType = readOnly || itemTypeOnlyMode;
+  //   • lockNonItemType — locks every input that isn't the Item Type
+  //     picker (bill-level fields like GST rate, dates, payment terms;
+  //     line-item fields like description, UOM, unit price, line total,
+  //     HS code, sale type). True in BOTH narrow modes (itemtype-only
+  //     and itemtype+qty) and in caller-forced read-only.
+  //   • lockQty — locks ONLY the Qty cell on each line. Same as
+  //     lockNonItemType EXCEPT in ItemType+Qty mode, where Qty unlocks.
+  //   • lockItemType — locks the Item Type picker too (full read-only).
+  const lockNonItemType = readOnly || itemTypeOnlyMode || itemTypeAndQtyMode;
+  const lockQty         = readOnly || itemTypeOnlyMode; // Qty stays editable in itemTypeAndQty mode
   const lockItemType    = readOnly;
 
   const handleSave = async (e) => {
@@ -207,6 +225,22 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         await updateInvoiceItemTypes(
           invoiceId,
           items.map((i) => ({ id: i.id || 0, itemTypeId: i.itemTypeId || null })),
+        );
+      } else if (itemTypeAndQtyMode) {
+        // Slightly broader narrow path — Item Type + Qty. Same back-end
+        // model (UpdateInvoiceItemTypesDto), but the .qty endpoint sets
+        // allowQuantityEdit=true so the service honours each row's qty.
+        // Decimal validation rejects fractional qty for integer-only UOMs.
+        if (items.some((i) => (parseFloat(i.quantity) || 0) <= 0)) {
+          return setError("Quantity must be greater than 0.");
+        }
+        await updateInvoiceItemTypesAndQty(
+          invoiceId,
+          items.map((i) => ({
+            id: i.id || 0,
+            itemTypeId: i.itemTypeId || null,
+            quantity: parseFloat(i.quantity) || 0,
+          })),
         );
       } else {
         // Full edit path — same validation as before.
@@ -234,7 +268,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
             // When ItemTypeId is set, backend re-derives HS/UOM/Sale Type from it.
             itemTypeId: i.itemTypeId || null,
             description: i.description,
-            quantity: parseInt(i.quantity),
+            // parseFloat preserves decimals (12.5 KG, 0.0004 Carat).
+            // Server-side validation rejects fractions for integer-only UOMs.
+            quantity: parseFloat(i.quantity) || 0,
             uom: i.uom || "",
             unitPrice: parseFloat(i.unitPrice),
             hsCode: i.hsCode || null,
@@ -252,9 +288,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
     }
   };
 
+  // Backdrop click is a no-op — protects in-progress edits. Dismiss
+  // via the X in the header or the Cancel button.
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: 1300, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div style={formStyles.backdrop}>
+      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>
             {readOnly ? "View Bill" : "Edit Bill"} {invoice?.fbrInvoiceNumber || `#${invoice?.invoiceNumber || ""}`}
@@ -308,6 +346,16 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                       <b>Item Type only</b> — your role lets you re-classify lines by picking
                       a different Item Type. Quantities, prices, dates, and other fields are
                       read-only here. Ask an administrator to grant <code>invoices.manage.update</code> for full edit access.
+                    </div>
+                  </div>
+                )}
+                {itemTypeAndQtyMode && (
+                  <div style={styles.narrowPermissionBanner}>
+                    <MdInfo size={16} style={{ color: colors.warn, flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      <b>Item Type + Quantity only</b> — your role lets you re-classify lines and
+                      adjust quantity. Prices, dates, payment terms, and other fields are read-only.
+                      Ask an administrator to grant <code>invoices.manage.update</code> for full edit access.
                     </div>
                   </div>
                 )}
@@ -468,7 +516,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                       <tr style={styles.thead}>
                         <th style={{ ...styles.th, width: 180, minWidth: 180 }}>Item Type (FBR)</th>
                         <th style={{ ...styles.th, minWidth: 140 }}>Description</th>
-                        <th style={{ ...styles.th, width: 70, minWidth: 70 }}>Qty</th>
+                        <th style={{ ...styles.th, width: 120, minWidth: 120 }}>Qty</th>
                         <th style={{ ...styles.th, width: 110, minWidth: 110 }}>UOM</th>
                         <th style={{ ...styles.th, width: 100, minWidth: 100 }}>Unit Price</th>
                         <th style={{ ...styles.th, width: 100, minWidth: 100 }}>Line Total</th>
@@ -509,13 +557,17 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                               )}
                             </td>
                             <td style={styles.td}>
-                              <input
-                                type="number"
-                                style={{ ...styles.tableInput, ...(lockNonItemType ? styles.readOnlyInput : {}), textAlign: "right" }}
+                              {/* Uses lockQty (not lockNonItemType) so the
+                                  ItemType+Qty narrow mode keeps this cell
+                                  editable while everything else stays locked. */}
+                              <QuantityInput
                                 value={item.quantity ?? 0}
-                                onChange={(e) => updateItem(idx, "quantity", e.target.value)}
-                                min={1}
-                                readOnly={lockNonItemType}
+                                onChange={(val) => updateItem(idx, "quantity", val)}
+                                unit={item.uom}
+                                units={units}
+                                disabled={lockQty}
+                                readOnly={lockQty}
+                                style={{ ...styles.tableInput, ...(lockQty ? styles.readOnlyInput : {}), textAlign: "right" }}
                               />
                             </td>
                             <td style={{ ...styles.td, ...styles.readOnlyCell }} title="Comes from Item Type">
@@ -576,13 +628,19 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
               {readOnly ? "Close" : "Cancel"}
             </button>
-            {!readOnly && invoice?.isEditable && (canFullEdit || canEditItemType) && (
+            {!readOnly && invoice?.isEditable && (canFullEdit || canEditItemTypeAndQty || canEditItemType) && (
               <button
                 type="submit"
                 style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}
                 disabled={saving}
               >
-                {saving ? "Saving..." : (itemTypeOnlyMode ? "Save Item Types" : "Save Changes")}
+                {saving
+                  ? "Saving..."
+                  : itemTypeOnlyMode
+                    ? "Save Item Types"
+                    : itemTypeAndQtyMode
+                      ? "Save Item Types & Qty"
+                      : "Save Changes"}
               </button>
             )}
           </div>

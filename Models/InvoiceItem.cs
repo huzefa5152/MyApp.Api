@@ -17,7 +17,14 @@ namespace MyApp.Api.Models
 
         public string ItemTypeName { get; set; } = "";
         public string Description { get; set; } = "";
-        public int Quantity { get; set; }
+        /// <summary>
+        /// Stored as decimal(18,4) so fractional UOMs (KG, Liter, Carat, etc.)
+        /// can carry up to 4 decimal places of precision. Whether the input
+        /// form actually permits decimals depends on the picked UOM's
+        /// AllowsDecimalQuantity flag — server-side validation rejects
+        /// non-integer quantities on integer-only UOMs as defence in depth.
+        /// </summary>
+        public decimal Quantity { get; set; }
         public string UOM { get; set; } = "";
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }

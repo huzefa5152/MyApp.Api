@@ -26,7 +26,8 @@ namespace MyApp.Api.DTOs
     public class ParsedPOItemDto
     {
         public string Description { get; set; } = "";
-        public int Quantity { get; set; }
+        // Decimal so PO parsers can carry "12.5 KG" through unchanged.
+        public decimal Quantity { get; set; }
         public string Unit { get; set; } = "";
     }
 

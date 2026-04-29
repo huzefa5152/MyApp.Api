@@ -57,7 +57,8 @@ namespace MyApp.Api.DTOs
         public int? ItemTypeId { get; set; }
         public string ItemTypeName { get; set; } = "";
         public string Description { get; set; } = "";
-        public int Quantity { get; set; }
+        // Decimal — see DeliveryItemDto.Quantity for the formatting contract.
+        public decimal Quantity { get; set; }
         public string UOM { get; set; } = "";
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
@@ -134,7 +135,8 @@ namespace MyApp.Api.DTOs
         /// </summary>
         public int? ItemTypeId { get; set; }
         public string Description { get; set; } = "";
-        public int Quantity { get; set; }
+        // Decimal — see InvoiceItemDto.Quantity for the formatting contract.
+        public decimal Quantity { get; set; }
         public string UOM { get; set; } = "";
         public decimal UnitPrice { get; set; }
         public string? HSCode { get; set; }
@@ -150,11 +152,19 @@ namespace MyApp.Api.DTOs
     }
 
     /// <summary>
-    /// Narrow edit DTO for the `invoices.manage.update.itemtype` flow. The
-    /// only thing the operator can change is which ItemType each existing
-    /// line points at — service then re-derives HS Code / UOM / Sale Type
-    /// / FbrUOMId from the catalog. No other field on the bill can be
-    /// changed via this path.
+    /// Narrow edit DTO for the `invoices.manage.update.itemtype` and
+    /// `invoices.manage.update.itemtype.qty` flows.
+    ///
+    /// Default flow (.itemtype): the operator can change which ItemType
+    /// each existing line points at; the service re-derives HS Code /
+    /// UOM / Sale Type / FbrUOMId from the catalog. Quantity is ignored
+    /// even if sent.
+    ///
+    /// Superset flow (.itemtype.qty): same as above, plus the Quantity
+    /// field is honoured. Server-side validation still rejects fractional
+    /// qty for integer-only UOMs.
+    ///
+    /// No other field on the bill can be changed via either path.
     /// </summary>
     public class UpdateInvoiceItemTypesDto
     {
@@ -165,6 +175,13 @@ namespace MyApp.Api.DTOs
     {
         public int Id { get; set; }                  // existing InvoiceItem.Id
         public int? ItemTypeId { get; set; }         // null clears the link
+        /// <summary>
+        /// Optional quantity update. Honoured ONLY when the controller
+        /// is the .qty endpoint (gated by invoices.manage.update.itemtype.qty);
+        /// silently ignored on the plain .itemtype endpoint to keep that
+        /// flow strictly to type re-classification.
+        /// </summary>
+        public decimal? Quantity { get; set; }
     }
 
     /// <summary>
@@ -184,7 +201,8 @@ namespace MyApp.Api.DTOs
         public int? ItemTypeId { get; set; }
         public string ItemTypeName { get; set; } = "";
         public string Description { get; set; } = "";
-        public int Quantity { get; set; }
+        // Decimal — Item Rate History row mirrors InvoiceItem precision.
+        public decimal Quantity { get; set; }
         public string UOM { get; set; } = "";
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }

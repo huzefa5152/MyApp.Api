@@ -14,12 +14,13 @@ namespace MyApp.Api.DTOs
         public string? ClientSite { get; set; }
         public string PoNumber { get; set; } = "";
         public DateTime? PoDate { get; set; }
+        public string? IndentNo { get; set; }
         public List<PrintChallanItemDto> Items { get; set; } = new();
     }
 
     public class PrintChallanItemDto
     {
-        public int Quantity { get; set; }
+        public decimal Quantity { get; set; }
         public string Description { get; set; } = "";
         public string Unit { get; set; } = "";
     }
@@ -58,7 +59,7 @@ namespace MyApp.Api.DTOs
         public int SNo { get; set; }
         public string ItemTypeName { get; set; } = "";
         public string Description { get; set; } = "";
-        public int Quantity { get; set; }
+        public decimal Quantity { get; set; }
         public string UOM { get; set; } = "";
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
@@ -103,7 +104,7 @@ namespace MyApp.Api.DTOs
     public class PrintTaxItemDto
     {
         public string ItemTypeName { get; set; } = "";
-        public int Quantity { get; set; }
+        public decimal Quantity { get; set; }
         public string UOM { get; set; } = "";
         public string Description { get; set; } = "";
         public decimal ValueExclTax { get; set; }
