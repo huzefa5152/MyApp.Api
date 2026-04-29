@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { MdTune, MdAdd, MdEdit, MdDelete, MdSearch, MdLock } from "react-icons/md";
 import { getFbrLookups, createFbrLookup, updateFbrLookup, deleteFbrLookup } from "../api/fbrLookupApi";
-import { formStyles } from "../theme";
+import { formStyles, modalSizes } from "../theme";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -202,8 +202,10 @@ export default function FbrSettingsPage() {
       )}
 
       {showForm && (
-        <div style={formStyles.backdrop} onClick={() => setShowForm(false)}>
-          <div style={{ ...formStyles.modal, maxWidth: 420, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+        // Backdrop click is a no-op so a stray click can't drop the FBR
+        // lookup form before the operator finishes typing.
+        <div style={formStyles.backdrop}>
+          <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px`, cursor: "default" }}>
             <div style={formStyles.header}>
               <h5 style={formStyles.title}>{editItem ? "Edit Lookup Value" : "New Lookup Value"}</h5>
               <button style={formStyles.closeButton} onClick={() => setShowForm(false)}>&times;</button>

@@ -1,5 +1,8 @@
 import { createContext, useContext, useState, useCallback, useRef } from "react";
 import { MdWarning, MdDelete, MdInfo } from "react-icons/md";
+// Reuse the shared backdrop / modal baseline so confirm dialogs feel
+// identical to every other popup (blurred backdrop, centered, non-movable).
+import { formStyles, modalSizes } from "../theme";
 
 const ConfirmContext = createContext(null);
 
@@ -37,19 +40,20 @@ export default function ConfirmProvider({ children }) {
       {children}
       {state && (
         <div
-          style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
-            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1060,
-            animation: "fadeIn 0.2s ease",
-          }}
-          onClick={() => handleClose(false)}
+          // Sit slightly above the standard modal layer so a confirm-on-top-
+          // of-a-modal stack still wins (e.g. "Discard unsaved changes?"
+          // shown above an open Edit dialog). 1101 is just one above
+          // formStyles.backdrop's 1100.
+          //
+          // Backdrop click is intentionally a no-op — destructive
+          // confirmations should require explicit Cancel / Confirm.
+          style={{ ...formStyles.backdrop, zIndex: 1101, animation: "fadeIn 0.2s ease" }}
         >
           <div
-            style={{
-              background: "#fff", borderRadius: 16, maxWidth: 420, width: "90%",
-              boxShadow: "0 12px 40px rgba(0,0,0,0.2)", overflow: "hidden",
-              animation: "fadeIn 0.25s ease",
-            }}
+            // Smallest size tier — confirm dialogs are short by design.
+            // Reuses formStyles.modal so width/border-radius/box-shadow/
+            // non-movable behaviour all match the rest of the app.
+            style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px`, animation: "fadeIn 0.25s ease" }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Icon header */}

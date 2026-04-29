@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { MdClose, MdDescription, MdReceipt, MdLocalShipping } from "react-icons/md";
 import { STARTER_TEMPLATES } from "../../utils/starterTemplates";
+// Pulled from shared formStyles so this picker matches every other popup —
+// blurred backdrop, fixed centered modal, non-movable, standard z-index.
+import { formStyles, modalSizes } from "../../theme";
 
 const TYPE_ICONS = {
   Challan: MdLocalShipping,
@@ -21,8 +24,10 @@ export default function StarterTemplatePicker({ templateType, onSelect, onClose 
     (t) => !templateType || t.type === templateType
   );
 
+  // Backdrop click is a no-op so a stray click can't drop the picker
+  // before the operator commits to a starter template.
   return (
-    <div style={s.overlay} onClick={onClose}>
+    <div style={s.overlay}>
       <div style={s.modal} onClick={(e) => e.stopPropagation()}>
         <div style={s.header}>
           <h3 style={s.title}>Start from Template</h3>
@@ -59,15 +64,12 @@ export default function StarterTemplatePicker({ templateType, onSelect, onClose 
 }
 
 const s = {
-  overlay: {
-    position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    zIndex: 10000, backdropFilter: "blur(2px)",
-  },
+  overlay: formStyles.backdrop,
   modal: {
-    background: "#fff", borderRadius: 14, width: "90%", maxWidth: 680,
-    maxHeight: "85vh", overflow: "auto", padding: "1.5rem",
-    boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+    ...formStyles.modal,
+    maxWidth: `${modalSizes.lg}px`,
+    overflow: "auto",
+    padding: "1.5rem",
   },
   header: {
     display: "flex", justifyContent: "space-between", alignItems: "center",

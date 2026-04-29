@@ -1,5 +1,5 @@
 import { MdPerson, MdReceipt, MdCalendarToday } from "react-icons/md";
-import { formStyles } from "../theme";
+import { formStyles, modalSizes } from "../theme";
 
 const colors = {
   blue: "#0d47a1",
@@ -12,10 +12,12 @@ const colors = {
 export default function ChallanModal({ challan, onClose }) {
   if (!challan) return null;
 
+  // Backdrop click is a no-op for consistency with the rest of the app —
+  // every popup dismisses via the X / Close button only.
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
+    <div style={formStyles.backdrop}>
       <div
-        style={{ ...formStyles.modal, maxWidth: 680, cursor: "default" }}
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

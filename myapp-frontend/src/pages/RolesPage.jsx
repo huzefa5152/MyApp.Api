@@ -25,6 +25,9 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { Can, usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
+// Shared modal baseline — gradient header, blurred backdrop, size tiers,
+// non-movable. See comment in theme.js modalSizes for tier guidance.
+import { formStyles, modalSizes } from "../theme";
 
 const colors = {
   blue: "#0d47a1",
@@ -81,11 +84,16 @@ export default function RolesPage() {
   useEffect(() => { fetchAll(); }, []);
 
   // ── Modal helpers ────────────────────────────────────────────────────────
+  // Start with EVERY module collapsed so the operator sees a tidy stack of
+  // module headers at first glance, and can drill in only where they need
+  // to. Far less overwhelming than seeing 57 permissions sprawled out.
+  const allModulesCollapsed = () => new Set(tree.map((m) => m.module));
+
   const openCreate = () => {
     setEditRole(null);
     setForm({ name: "", description: "", permissionKeys: new Set() });
     setMsg(null);
-    setCollapsedModules(new Set());
+    setCollapsedModules(allModulesCollapsed());
     setModalOpen(true);
   };
 
@@ -97,7 +105,7 @@ export default function RolesPage() {
       permissionKeys: new Set(role.permissionKeys),
     });
     setMsg(null);
-    setCollapsedModules(new Set());
+    setCollapsedModules(allModulesCollapsed());
     setModalOpen(true);
   };
 
@@ -320,14 +328,22 @@ export default function RolesPage() {
 
       {/* ── Create/Edit Modal ── */}
       {modalOpen && (
-        <div style={styles.overlay} onClick={closeModal}>
+        // Backdrop click is a no-op — explicit Cancel / X only, protects
+        // mid-edit permission selections from a stray click.
+        <div style={styles.overlay}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
-              <h3 style={{ margin: 0, fontSize: "1.1rem", color: colors.textPrimary }}>
+              <h3 style={formStyles.title}>
                 {editRole ? `Edit role — ${editRole.name}` : "Create new role"}
               </h3>
-              <button style={styles.modalClose} onClick={closeModal}>
-                <MdClose style={{ fontSize: "1.25rem" }} />
+              <button
+                type="button"
+                style={styles.modalClose}
+                onClick={closeModal}
+                aria-label="Close"
+                title="Close"
+              >
+                <MdClose size={20} color="#fff" />
               </button>
             </div>
 
@@ -360,9 +376,31 @@ export default function RolesPage() {
 
               <div style={styles.permHeader}>
                 <label style={{ ...styles.label, marginTop: 0 }}>Permissions</label>
-                <span style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>
-                  {form.permissionKeys.size} / {totalCatalogKeys} selected
-                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                  {/* Collapse All / Expand All — quality-of-life when the
+                      catalog has 15+ modules. Sets/clears every module
+                      name in the collapsedModules Set in one shot. */}
+                  <button
+                    type="button"
+                    style={styles.smallLinkBtn}
+                    onClick={() => setCollapsedModules(new Set(tree.map((m) => m.module)))}
+                    title="Collapse every module group"
+                  >
+                    Collapse all
+                  </button>
+                  <span style={{ color: colors.cardBorder }}>|</span>
+                  <button
+                    type="button"
+                    style={styles.smallLinkBtn}
+                    onClick={() => setCollapsedModules(new Set())}
+                    title="Expand every module group"
+                  >
+                    Expand all
+                  </button>
+                  <span style={{ color: colors.textSecondary, fontSize: "0.82rem", marginLeft: "0.5rem" }}>
+                    {form.permissionKeys.size} / {totalCatalogKeys} selected
+                  </span>
+                </div>
               </div>
 
               <div style={styles.permTree}>
@@ -467,7 +505,9 @@ export default function RolesPage() {
 
       {/* ── Delete confirm ── */}
       {deleteConfirm && (
-        <div style={styles.overlay} onClick={() => setDeleteConfirm(null)}>
+        // Backdrop click is a no-op — destructive action requires explicit
+        // Cancel or Delete click.
+        <div style={styles.overlay}>
           <div style={styles.deleteModal} onClick={(e) => e.stopPropagation()}>
             <MdDelete style={{ fontSize: "2.5rem", color: colors.danger }} />
             <h3 style={{ margin: "0.75rem 0 0.5rem", color: colors.textPrimary }}>Delete role?</h3>
@@ -636,48 +676,16 @@ const styles = {
     color: colors.danger,
     flexShrink: 0,
   },
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.45)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 2000,
-    padding: "1rem",
-  },
-  modal: {
-    background: "#fff",
-    borderRadius: 14,
-    width: "100%",
-    maxWidth: 760,
-    maxHeight: "calc(100vh - 2rem)",
-    display: "flex",
-    flexDirection: "column",
-    boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
-  },
-  modalHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "1rem 1.5rem",
-    borderBottom: `1px solid ${colors.cardBorder}`,
-  },
-  modalClose: {
-    background: "none",
-    border: "none",
-    color: colors.textSecondary,
-    cursor: "pointer",
-    padding: "0.25rem",
-  },
-  modalBody: { padding: "1rem 1.5rem", overflowY: "auto" },
-  modalFooter: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: "0.75rem",
-    padding: "1rem 1.5rem",
-    borderTop: `1px solid ${colors.cardBorder}`,
-  },
+  // Modal chrome delegated to formStyles so the Roles & Permissions popup
+  // matches every other dialog in the app (blurred backdrop, gradient
+  // header, fixed centered position, non-movable). Tier "lg" because the
+  // permission tree needs more room than a typical short form.
+  overlay: formStyles.backdrop,
+  modal: { ...formStyles.modal, maxWidth: `${modalSizes.lg}px` },
+  modalHeader: formStyles.header,
+  modalClose: formStyles.closeButton,
+  modalBody: formStyles.body,
+  modalFooter: formStyles.footer,
   label: {
     display: "block",
     fontSize: "0.85rem",
@@ -696,6 +704,25 @@ const styles = {
     color: colors.textPrimary,
     outline: "none",
     boxSizing: "border-box",
+  },
+  // Compact text-link-style button for collapse/expand-all controls. Has to
+  // override the global button rule from index.css (padding 0.8em 1.6em,
+  // box-shadow, etc.).
+  smallLinkBtn: {
+    background: "transparent",
+    backgroundColor: "transparent",
+    border: "none",
+    color: colors.blue,
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    padding: "0.15rem 0.35rem",
+    margin: 0,
+    cursor: "pointer",
+    boxShadow: "none",
+    textDecoration: "underline",
+    textUnderlineOffset: 2,
+    lineHeight: 1.2,
+    borderRadius: 4,
   },
   permHeader: {
     display: "flex",
@@ -832,14 +859,14 @@ const styles = {
     fontWeight: 500,
     marginBottom: "0.5rem",
   },
+  // Delete-confirm uses the smallest tier with centered icon + text;
+  // padding is applied directly because the body/footer stack isn't used.
   deleteModal: {
-    background: "#fff",
-    borderRadius: 14,
+    ...formStyles.modal,
+    maxWidth: `${modalSizes.sm}px`,
     padding: "2rem",
     textAlign: "center",
-    maxWidth: 400,
-    width: "100%",
-    boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+    overflow: "visible",
   },
   forbidden: {
     textAlign: "center",

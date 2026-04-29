@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { MdBugReport, MdWarning, MdInfo, MdSearch, MdChevronLeft, MdChevronRight, MdClose, MdLock } from "react-icons/md";
 import { getAuditLogs, getAuditSummary } from "../api/auditLogApi";
 import { usePermissions } from "../contexts/PermissionsContext";
+// Shared backdrop / modal so this audit-log detail dialog matches every
+// other popup (blurred backdrop, centered, non-movable).
+import { formStyles, modalSizes } from "../theme";
 
 const colors = {
   blue: "#0d47a1",
@@ -261,11 +264,12 @@ export default function AuditLogsPage() {
       {/* Detail Modal */}
       {selectedLog && (
         <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1050 }}
-          onClick={() => setSelectedLog(null)}
+          // Backdrop click is a no-op for consistency with the rest of the
+          // app — dismiss via the X button in the modal header.
+          style={formStyles.backdrop}
         >
           <div
-            style={{ background: "#fff", borderRadius: 12, maxWidth: 700, width: "95%", maxHeight: "85vh", overflow: "auto", padding: "24px" }}
+            style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, overflow: "auto", padding: "24px" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>

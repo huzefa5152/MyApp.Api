@@ -18,6 +18,10 @@ import { getRoles, getUserRoles, assignUserRoles } from "../api/rbacApi";
 import { useAuth } from "../contexts/AuthContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
+// Shared modal baseline — gradient header, blurred backdrop, size tiers,
+// non-movable. Every popup in the app pulls from these so widths and
+// behaviour stay consistent.
+import { formStyles, modalSizes } from "../theme";
 
 const colors = {
   blue: "#0d47a1",
@@ -356,10 +360,12 @@ export default function UsersPage() {
 
       {/* ---- Create/Edit Modal ---- */}
       {showModal && (
-        <div style={styles.overlay} onClick={closeModal}>
+        // Backdrop click is a no-op — explicit Cancel / X only, so a stray
+        // click can't drop the half-typed user form.
+        <div style={styles.overlay}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
-              <h3 style={{ margin: 0, fontSize: "1.15rem", color: colors.textPrimary }}>
+              <h3 style={formStyles.title}>
                 {editUser ? "Edit User" : "Add New User"}
               </h3>
               <button style={styles.modalClose} onClick={closeModal}>
@@ -464,10 +470,11 @@ export default function UsersPage() {
 
       {/* ---- Role Assignment Modal ---- */}
       {rolesModalUser && (
-        <div style={styles.overlay} onClick={closeRolesModal}>
+        // Backdrop click is a no-op — explicit Cancel / X only.
+        <div style={styles.overlay}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
-              <h3 style={{ margin: 0, fontSize: "1.1rem", color: colors.textPrimary }}>
+              <h3 style={formStyles.title}>
                 Manage roles — {rolesModalUser.fullName}
               </h3>
               <button style={styles.modalClose} onClick={closeRolesModal}>
@@ -575,7 +582,9 @@ export default function UsersPage() {
 
       {/* ---- Delete Confirmation Modal ---- */}
       {deleteConfirm && (
-        <div style={styles.overlay} onClick={() => setDeleteConfirm(null)}>
+        // Backdrop click is a no-op — destructive action requires explicit
+        // Cancel or Delete click.
+        <div style={styles.overlay}>
           <div style={styles.deleteModal} onClick={(e) => e.stopPropagation()}>
             <MdDelete style={{ fontSize: "2.5rem", color: colors.danger }} />
             <h3 style={{ margin: "0.75rem 0 0.5rem", color: colors.textPrimary }}>
@@ -755,47 +764,16 @@ const styles = {
     fontSize: "0.82rem",
     fontWeight: 600,
   },
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.45)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 2000,
-    padding: "1rem",
-  },
-  modal: {
-    background: "#fff",
-    borderRadius: 14,
-    width: "100%",
-    maxWidth: 460,
-    boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
-  },
-  modalHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "1.25rem 1.5rem",
-    borderBottom: `1px solid ${colors.cardBorder}`,
-  },
-  modalClose: {
-    background: "none",
-    border: "none",
-    color: colors.textSecondary,
-    cursor: "pointer",
-    padding: "0.25rem",
-  },
-  modalBody: {
-    padding: "1.25rem 1.5rem",
-  },
-  modalFooter: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: "0.75rem",
-    padding: "1rem 1.5rem",
-    borderTop: `1px solid ${colors.cardBorder}`,
-  },
+  // Modal chrome — all delegated to the shared formStyles baseline so
+  // every popup (Create/Edit user, Roles, Delete confirm) has identical
+  // backdrop blur, width tier, gradient header, and non-movable behaviour
+  // as the rest of the app.
+  overlay: formStyles.backdrop,
+  modal: { ...formStyles.modal, maxWidth: `${modalSizes.md}px` },
+  modalHeader: formStyles.header,
+  modalClose: formStyles.closeButton,
+  modalBody: formStyles.body,
+  modalFooter: formStyles.footer,
   label: {
     display: "flex",
     alignItems: "center",
@@ -860,13 +838,14 @@ const styles = {
     fontSize: "0.85rem",
     fontWeight: 500,
   },
+  // Delete-confirm uses the small modal tier, but skips the gradient header
+  // (small alert dialog with centered icon + buttons inline). Padding is
+  // applied directly because the body/footer stack isn't used here.
   deleteModal: {
-    background: "#fff",
-    borderRadius: 14,
+    ...formStyles.modal,
+    maxWidth: `${modalSizes.sm}px`,
     padding: "2rem",
     textAlign: "center",
-    maxWidth: 380,
-    width: "100%",
-    boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+    overflow: "visible",
   },
 };

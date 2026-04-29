@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { MdCategory, MdAdd, MdEdit, MdDelete, MdSearch, MdStar, MdStarBorder, MdInfo, MdBusiness } from "react-icons/md";
 import { getItemTypes, createItemType, updateItemType, deleteItemType, getItemTypeFbrHints } from "../api/itemTypeApi";
 import { getFbrHsUom } from "../api/fbrApi";
-import { formStyles } from "../theme";
+import { formStyles, modalSizes } from "../theme";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { useCompany } from "../contexts/CompanyContext";
@@ -390,8 +390,9 @@ export default function ItemTypesPage() {
       )}
 
       {showForm && (
-        <div style={formStyles.backdrop} onClick={() => setShowForm(false)}>
-          <div style={{ ...formStyles.modal, maxWidth: 620, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+        // Backdrop click is a no-op — explicit Cancel only.
+        <div style={formStyles.backdrop}>
+          <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
             <div style={formStyles.header}>
               <h5 style={formStyles.title}>{editItem ? "Edit Item" : "New Item"}</h5>
               <button style={formStyles.closeButton} onClick={() => setShowForm(false)}>&times;</button>

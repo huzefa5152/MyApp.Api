@@ -105,12 +105,34 @@ export const dropdownStyles = {
   },
 };
 
+// ────────────────────────────────────────────────────────────────────
+// Modal size tiers — every popup in the app picks one of these so widths
+// stay consistent. Add to `formStyles.modal.maxWidth` via spread:
+//   <div style={{ ...formStyles.modal, maxWidth: modalSizes.lg }}>
+// Pick by content:
+//   sm  — confirm dialogs, tiny single-field prompts
+//   md  — short forms (login, simple create/edit, role assignment)
+//   lg  — multi-row forms with a small table (challan view, item type edit)
+//   xl  — multi-row forms with a full item-line table (challan create/edit, PO import)
+//   xxl — wide tabular workflows (invoice form, bulk FBR results)
+// ────────────────────────────────────────────────────────────────────
+export const modalSizes = {
+  sm: 420,   // confirm dialogs, single-question prompts, delete-confirm
+  md: 560,   // short forms (login, simple create/edit, role assignment)
+  lg: 820,   // detail viewers + medium forms (ChallanModal, POFormat, BulkFbrResults, SyncWarning)
+  xl: 1100,  // multi-row forms with full item-line table (ChallanForm/Edit, POImport)
+  xxl: 1280, // wide tabular workflows (InvoiceForm, EditBillForm)
+};
+
 export const formStyles = {
   backdrop: {
     position: "fixed",
     inset: 0,
     backgroundColor: "rgba(10,22,40,0.55)",
-    backdropFilter: "blur(4px)",
+    // Stronger blur (was 4px) so the backdrop reads as "the rest of the app
+    // is suspended" — matches user request for consistent blurred overlay.
+    backdropFilter: "blur(6px)",
+    WebkitBackdropFilter: "blur(6px)", // Safari prefix
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -126,7 +148,9 @@ export const formStyles = {
     backgroundColor: colors.cardBg,
     borderRadius: "16px",
     width: "100%",
-    maxWidth: "500px",
+    // Default size = "md". Override per-modal via inline spread:
+    //   { ...formStyles.modal, maxWidth: modalSizes.xl }
+    maxWidth: `${modalSizes.md}px`,
     maxHeight: "96vh", // cap at 96% of viewport so header + footer always stay visible
     boxShadow: "0 20px 60px rgba(13,71,161,0.2)",
     overflow: "hidden",
@@ -135,6 +159,9 @@ export const formStyles = {
     // Flex column so header / body / footer stack and body can scroll independently
     display: "flex",
     flexDirection: "column",
+    // Modals are intentionally NOT movable — centered and pinned. No drag
+    // handles anywhere; resize is disabled to keep the layout predictable.
+    resize: "none",
   },
   header: {
     background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
@@ -151,18 +178,33 @@ export const formStyles = {
     color: "#ffffff",
   },
   closeButton: {
+    // Aggressive overrides because index.css applies a global
+    //   button { padding: 0.8em 1.6em; box-shadow: ...; background: ...; }
+    // rule that would otherwise stretch this to a huge pill and hide the X.
     background: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.2)",
     border: "none",
     color: "#fff",
     fontSize: "1.2rem",
+    fontWeight: 500,
     cursor: "pointer",
     width: "32px",
+    minWidth: "32px",
+    maxWidth: "32px",
     height: "32px",
+    minHeight: "32px",
+    maxHeight: "32px",
+    padding: 0,                 // kills the global 0.8em 1.6em padding
+    margin: 0,
     borderRadius: "8px",
-    display: "flex",
+    display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    boxShadow: "none",          // kills the global drop-shadow
     transition: "background 0.2s",
+    flexShrink: 0,
+    flexGrow: 0,
+    lineHeight: 1,
   },
   body: {
     padding: "1.5rem",

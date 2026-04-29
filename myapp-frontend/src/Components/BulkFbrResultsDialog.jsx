@@ -1,5 +1,8 @@
 import { useMemo } from "react";
 import { MdCheckCircle, MdError, MdInfo, MdBlock, MdClose } from "react-icons/md";
+// Reuse the shared backdrop/modal so this dialog feels identical to every
+// other popup (blurred backdrop, gradient header, non-movable, size tier).
+import { formStyles, modalSizes } from "../theme";
 
 const colors = {
   blue: "#0d47a1",
@@ -56,8 +59,10 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
   const title = action === "submit" ? "Submit to FBR — Results" : "Validate All — Results";
   const total = items?.length || 0;
 
+  // Backdrop click is a no-op — operators may want to scroll the
+  // results table; clicking outside accidentally shouldn't dismiss it.
   return (
-    <div style={styles.backdrop} onClick={onClose}>
+    <div style={styles.backdrop}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.header}>
           <h3 style={styles.title}>{title}</h3>
@@ -186,17 +191,13 @@ function StatusBadge({ status }) {
 }
 
 const styles = {
-  backdrop: {
-    position: "fixed", inset: 0, backgroundColor: "rgba(15,20,30,0.55)",
-    backdropFilter: "blur(4px)", display: "flex", alignItems: "center",
-    justifyContent: "center", zIndex: 1100, padding: "2vh 1rem",
-  },
-  modal: {
-    backgroundColor: "#fff", borderRadius: 16, width: "100%",
-    maxWidth: 820, maxHeight: "92vh", boxShadow: "0 20px 60px rgba(13,71,161,0.2)",
-    display: "flex", flexDirection: "column", overflow: "hidden",
-    color: colors.textPrimary,
-  },
+  // Backdrop + modal pulled from the shared formStyles baseline so this
+  // dialog matches every other popup (same blur, same z-index, same
+  // non-movable behaviour). Tier `lg` (820) is the right size for the
+  // results table — a touch larger than a short form, smaller than the
+  // full bill/invoice editor.
+  backdrop: formStyles.backdrop,
+  modal: { ...formStyles.modal, maxWidth: `${modalSizes.lg}px` },
   header: {
     background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
     padding: "0.95rem 1.4rem",

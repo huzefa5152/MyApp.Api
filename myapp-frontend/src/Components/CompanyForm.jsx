@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { createCompany, updateCompany, uploadCompanyLogo, getCompanyById } from "../api/companyApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
-import { formStyles } from "../theme";
+import { formStyles, modalSizes } from "../theme";
 
 const {
     backdrop,
@@ -211,7 +211,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
 
     return (
         <div style={backdrop}>
-            <div style={{ ...modal, maxWidth: "520px" }}>
+            <div style={{ ...modal, maxWidth: `${modalSizes.md}px` }}>
                 <div style={header}>
                     <h5 style={title}>{company ? "Edit Company" : "New Company"}</h5>
                     <button style={closeButton} onClick={onClose}>&times;</button>

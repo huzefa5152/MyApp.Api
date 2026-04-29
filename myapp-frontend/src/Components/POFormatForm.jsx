@@ -7,7 +7,7 @@ import {
   createPoFormatSimple,
   updatePoFormatSimple,
 } from "../api/poFormatApi";
-import { formStyles } from "../theme";
+import { formStyles, modalSizes } from "../theme";
 
 const colors = {
   blue: "#0d47a1",
@@ -197,9 +197,11 @@ export default function POFormatForm({ companyId, format, onClose, onSaved }) {
     }
   };
 
+  // Backdrop click is a no-op so a stray click can't drop the format
+  // wizard mid-fingerprint. Dismiss via the X or the Cancel button.
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: 780, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div style={formStyles.backdrop}>
+      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? "Edit PO Format" : "Add PO Format"}</h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>

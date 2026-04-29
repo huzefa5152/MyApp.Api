@@ -1,6 +1,12 @@
+// Small confirm-style dialog. Pulls backdrop / modal from the shared
+// formStyles so it matches every other popup (blurred backdrop, centered,
+// non-movable). Sits at the standard modal z-index.
+import { formStyles, modalSizes } from "../../theme";
+
 export default function SyncWarningModal({ onConfirm, onCancel }) {
+  // Backdrop click is a no-op — explicit Cancel / Continue only.
   return (
-    <div style={styles.overlay} onClick={onCancel}>
+    <div style={styles.overlay}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <h3 style={styles.title}>Switch to Visual Editor?</h3>
         <p style={styles.text}>
@@ -26,22 +32,12 @@ export default function SyncWarningModal({ onConfirm, onCancel }) {
 }
 
 const styles = {
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.5)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 10000,
-  },
+  overlay: formStyles.backdrop,
   modal: {
-    background: "#fff",
-    borderRadius: 12,
+    ...formStyles.modal,
+    maxWidth: `${modalSizes.sm}px`,
     padding: "1.5rem",
-    maxWidth: 440,
-    width: "90%",
-    boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+    overflow: "visible",
   },
   title: {
     margin: "0 0 0.75rem",
