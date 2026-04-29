@@ -121,7 +121,29 @@ export default function UsersPage() {
         const payload = { username: form.username, fullName: form.fullName, role: form.role };
         if (form.password) payload.password = form.password;
         await updateUser(editUser.id, payload);
-        setMsg({ type: "success", text: "User updated successfully" });
+
+        // Sync RBAC role assignment to match the dropdown's pick — without
+        // this, the Edit form silently keeps the user's old permissions
+        // (the legacy `role` text was updated but the UserRoles join table
+        // wasn't). Mirrors what the Create branch already does.
+        // Note: this OVERWRITES any extra RBAC roles the user had (rare;
+        // operators with multi-role users should use the Roles modal,
+        // which is the explicit multi-select path).
+        const matchingRole = availableRoles.find(
+          (r) => r.name?.toLowerCase() === form.role?.toLowerCase());
+        if (matchingRole?.id && canAssignRoles) {
+          try {
+            await assignUserRoles(editUser.id, [matchingRole.id]);
+            setMsg({ type: "success", text: `User updated and role "${matchingRole.name}" applied.` });
+          } catch {
+            setMsg({
+              type: "warn",
+              text: `User updated, but could not apply role "${matchingRole.name}". Use the Roles button to set it manually.`,
+            });
+          }
+        } else {
+          setMsg({ type: "success", text: "User updated successfully" });
+        }
       } else {
         // Create the user with the legacy `role` text field (kept for
         // backwards-compat with existing JWT-claim consumers), then assign

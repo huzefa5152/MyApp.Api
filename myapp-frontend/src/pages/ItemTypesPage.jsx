@@ -210,8 +210,22 @@ export default function ItemTypesPage() {
       // tax engine (HS_UOM lookup) using that company's token.
       const enrichCompanyId = selectedCompany?.id;
       if (editItem) {
-        await updateItemType(editItem.id, { ...payload, id: editItem.id }, enrichCompanyId);
-        notify(`"${payload.name}" updated.`, "success");
+        const { data: saved } = await updateItemType(editItem.id, { ...payload, id: editItem.id }, enrichCompanyId);
+        // Surface propagation summary so the operator sees that bill /
+        // challan lines automatically picked up the new HSCode / UOM /
+        // SaleType and they don't need to re-edit each bill.
+        const p = saved?.propagation;
+        const billsLine = p?.invoiceItemsUpdated > 0
+          ? `${p.invoiceItemsUpdated} unposted bill line${p.invoiceItemsUpdated !== 1 ? "s" : ""} synced.`
+          : "";
+        const dcsLine = p?.deliveryItemsUpdated > 0
+          ? `${p.deliveryItemsUpdated} unposted challan line${p.deliveryItemsUpdated !== 1 ? "s" : ""} synced.`
+          : "";
+        const skippedLine = p?.submittedInvoiceLinesSkipped > 0
+          ? `${p.submittedInvoiceLinesSkipped} FBR-submitted line${p.submittedInvoiceLinesSkipped !== 1 ? "s" : ""} left unchanged (locked).`
+          : "";
+        const propLines = [billsLine, dcsLine, skippedLine].filter(Boolean).join(" ");
+        notify(`"${payload.name}" updated.${propLines ? "\n" + propLines : ""}`, "success");
       } else {
         await createItemType(payload, enrichCompanyId);
         notify(`"${payload.name}" added.`, "success");

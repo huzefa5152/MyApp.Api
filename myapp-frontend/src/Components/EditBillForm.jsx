@@ -60,6 +60,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const [paymentMode, setPaymentMode] = useState("");
   const [documentType, setDocumentType] = useState(4);
   const [loading, setLoading] = useState(true);
+  // Bulk-apply mode for the "Apply same Item Type to all rows" UX.
+  const [bulkApplyMode, setBulkApplyMode] = useState("all");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -137,37 +139,46 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
     });
   };
 
-  // When the user picks a different Item Type for a line, copy the catalog's
-  // FBR fields onto the row — UOM, HS Code, Sale Type, FBR UOM ID. These fields
-  // are read-only in the grid; the only way to change them is to pick a
-  // different Item Type (or edit the Item Type row in the catalog).
+  // Apply a catalog row to one bill line. Sets ItemType + the inherited
+  // FBR fields (UOM, HS Code, Sale Type, FbrUOMId). Clearing the
+  // ItemType wipes the inherited fields so stale data doesn't ship to FBR.
+  const _applyItemTypeToRow = (current, newId, pickedType) => {
+    const next = { ...current };
+    next.itemTypeId = newId || null;
+    if (pickedType) {
+      next.itemTypeName = pickedType.name || "";
+      next.uom = pickedType.uom || "";
+      next.fbrUOMId = pickedType.fbrUOMId || null;
+      next.hsCode = pickedType.hsCode || "";
+      next.saleType = pickedType.saleType || "";
+      if (!next.description?.trim()) next.description = pickedType.name || "";
+    } else {
+      next.itemTypeName = "";
+      next.uom = "";
+      next.fbrUOMId = null;
+      next.hsCode = "";
+      next.saleType = "";
+    }
+    return next;
+  };
+
   const updateItemType = (index, newId, pickedType) => {
     setItems((prev) => {
       const next = [...prev];
-      const current = { ...next[index] };
-      current.itemTypeId = newId || null;
-      if (pickedType) {
-        current.itemTypeName = pickedType.name || "";
-        current.uom = pickedType.uom || "";
-        current.fbrUOMId = pickedType.fbrUOMId || null;
-        current.hsCode = pickedType.hsCode || "";
-        current.saleType = pickedType.saleType || "";
-        // Default description to the item type name if empty
-        if (!current.description?.trim()) current.description = pickedType.name || "";
-      } else {
-        // Cleared — blank out the FBR metadata fields that were inherited
-        // from the catalog row. Otherwise the row keeps stale HS Code /
-        // Sale Type / UOM that no longer reflect any catalog item, and the
-        // operator silently ships wrong data to FBR.
-        current.itemTypeName = "";
-        current.uom = "";
-        current.fbrUOMId = null;
-        current.hsCode = "";
-        current.saleType = "";
-      }
-      next[index] = current;
+      next[index] = _applyItemTypeToRow(next[index], newId, pickedType);
       return next;
     });
+  };
+
+  // Bulk apply — sets the same ItemType on every row in one shot.
+  // Good when the operator has 20+ items that should all be classified
+  // the same way (typical for single-category sale bills).
+  const applyItemTypeToAll = (newId, pickedType, mode = "all") => {
+    setItems((prev) => prev.map((row) => {
+      // mode === "empty" → only fill rows that don't have an Item Type yet
+      if (mode === "empty" && row.itemTypeId) return row;
+      return _applyItemTypeToRow(row, newId, pickedType);
+    }));
   };
 
   const subtotal = items.reduce((s, i) => s + (parseFloat(i.lineTotal) || 0), 0);
@@ -415,6 +426,42 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                   </p>
                 )}
 
+                {/* Bulk Item Type apply — saves operator the pain of picking
+                    the same catalog row 20+ times. Two modes:
+                      - "All rows": overwrites Item Type on every row
+                      - "Empty rows only": fills only rows that don't have one
+                    Available to narrow-perm users too — it's still just an
+                    Item Type pick. */}
+                {!lockItemType && items.length > 1 && (
+                  <div style={styles.bulkApplyBar}>
+                    <span style={styles.bulkApplyLabel}>
+                      Apply same Item Type to:
+                    </span>
+                    <select
+                      value={bulkApplyMode}
+                      onChange={(e) => setBulkApplyMode(e.target.value)}
+                      style={{ ...styles.tableInput, maxWidth: 180 }}
+                    >
+                      <option value="all">All {items.length} rows</option>
+                      <option value="empty">Only empty rows</option>
+                    </select>
+                    <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
+                      <SearchableItemTypeSelect
+                        items={filteredItemTypes}
+                        value=""
+                        onChange={(newId, picked) => {
+                          if (!newId) return;
+                          applyItemTypeToAll(parseInt(newId), picked, bulkApplyMode);
+                        }}
+                        placeholder={bulkApplyMode === "all"
+                          ? "— pick to apply to all —"
+                          : "— pick to fill empty rows —"}
+                        style={styles.tableInput}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div style={styles.tableWrap}>
                   <table style={styles.table}>
                     <thead>
@@ -575,6 +622,13 @@ const styles = {
   readOnlyText: { padding: "0.35rem 0.5rem", fontSize: "0.8rem", color: colors.textPrimary, fontWeight: 600 },
   muted: { color: "#9ca3af", fontStyle: "italic" },
   gridHint: { margin: "0.5rem 0 0.6rem", fontSize: "0.75rem", color: colors.textSecondary, lineHeight: 1.4 },
+  bulkApplyBar: {
+    display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap",
+    padding: "0.55rem 0.85rem", marginBottom: "0.65rem",
+    borderRadius: 8, border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: "#f8faff",
+  },
+  bulkApplyLabel: { fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 500 },
   totalsBox: { marginTop: "1rem", padding: "0.75rem 1rem", backgroundColor: "#f5f7fa", borderRadius: 8, maxWidth: 360, marginLeft: "auto" },
   totalsRow: { display: "flex", justifyContent: "space-between", fontSize: "0.88rem", color: colors.textPrimary, padding: "0.2rem 0" },
 };

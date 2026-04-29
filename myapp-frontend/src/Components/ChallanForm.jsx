@@ -197,6 +197,38 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
             <div style={{ marginTop: "0.25rem" }}>
               <label style={{ ...styles.label, marginBottom: "0.5rem" }}>Items</label>
+
+              {/* Bulk Item Type apply — saves picking the same catalog row N times. */}
+              {items.length > 1 && (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap",
+                  padding: "0.5rem 0.65rem", marginBottom: "0.5rem",
+                  borderRadius: 8, border: "1px solid #e8edf3", backgroundColor: "#f8faff",
+                }}>
+                  <span style={{ fontSize: "0.8rem", color: "#1a2332" }}>
+                    Apply same Item Type to all {items.length} rows:
+                  </span>
+                  <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
+                    <SearchableItemTypeSelect
+                      items={itemTypes}
+                      value=""
+                      onChange={(newId, picked) => {
+                        if (!newId) return;
+                        const newIdNum = parseInt(newId);
+                        const newItems = items.map((row) => {
+                          const next = { ...row, itemTypeId: newIdNum };
+                          if (picked?.uom) next.unit = picked.uom;
+                          return next;
+                        });
+                        setItems(newItems);
+                      }}
+                      placeholder="— pick to apply to all —"
+                      style={{ padding: "0.45rem 0.55rem", fontSize: "0.82rem" }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div ref={itemsContainerRef} style={styles.itemsContainer}>
                 {items.map((item, idx) => (
                   <div key={idx} style={styles.itemRow}>

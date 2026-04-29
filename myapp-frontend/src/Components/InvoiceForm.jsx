@@ -64,6 +64,44 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [scenarios, setScenarios] = useState([]);
   const [scenarioCode, setScenarioCode] = useState("");
 
+  // Bulk-apply mode — drives the "Apply same Item Type to: [All / Only empty]"
+  // selector above the items grid. Saves 20+ catalog picks when every line on
+  // the bill is the same FBR category.
+  const [bulkApplyMode, setBulkApplyMode] = useState("all");
+
+  // Apply one catalog ItemType to many lines in one shot. mode = "all"
+  // overwrites every row; "empty" only fills rows without an Item Type.
+  // Re-uses the per-row state setters so the same auto-fill logic
+  // (description default, HSCode/UOM/SaleType inheritance) runs uniformly.
+  const applyItemTypeToAll = (newId, picked, mode = "all") => {
+    if (!newId || !picked) return;
+    setItemTypeIds((prev) => {
+      const next = { ...prev };
+      const newHs = {}, newSt = {}, newUom = {}, newFbrUom = {}, newDesc = {};
+      for (const item of allItems) {
+        const id = item.id;
+        if (mode === "empty" && next[id]) continue;
+        next[id] = parseInt(newId);
+        if (picked.hsCode) newHs[id] = picked.hsCode;
+        if (picked.saleType) newSt[id] = picked.saleType;
+        if (picked.uom) newUom[id] = picked.uom;
+        if (picked.fbrUOMId) newFbrUom[id] = picked.fbrUOMId;
+        // Don't overwrite a description the operator already typed.
+        if (picked.name && !itemDescriptions[id]?.trim() && !item.description?.trim())
+          newDesc[id] = picked.name;
+      }
+      // Apply the keyed updates outside this updater so each set runs.
+      setTimeout(() => {
+        if (Object.keys(newHs).length) setItemHsCodes(p => ({ ...p, ...newHs }));
+        if (Object.keys(newSt).length) setItemSaleTypes(p => ({ ...p, ...newSt }));
+        if (Object.keys(newUom).length) setItemUoms(p => ({ ...p, ...newUom }));
+        if (Object.keys(newFbrUom).length) setItemFbrUomIds(p => ({ ...p, ...newFbrUom }));
+        if (Object.keys(newDesc).length) setItemDescriptions(p => ({ ...p, ...newDesc }));
+      }, 0);
+      return next;
+    });
+  };
+
   // Last-billed rate per delivery item, keyed by deliveryItemId.
   // Populated whenever a challan gets ticked (whether via the Generate-Bill
   // shortcut on the Challans page OR by the operator selecting a challan in
@@ -600,6 +638,46 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             <div>
                               <b>Rates pre-filled from last bill.</b>
                               {" "}Verify each unit price below — material prices may have changed since the previous order. Override any row that needs a new rate.
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Bulk Item Type apply — single dropdown sets the
+                            same catalog row across all lines. Saves 20+
+                            picks when every item on the bill is the same
+                            FBR category. */}
+                        {allItems.length > 1 && (
+                          <div style={{
+                            display: "flex", alignItems: "center", gap: "0.65rem",
+                            flexWrap: "wrap", padding: "0.55rem 0.85rem",
+                            marginBottom: "0.5rem", borderRadius: 8,
+                            border: `1px solid ${colors.cardBorder}`,
+                            backgroundColor: "#f8faff",
+                          }}>
+                            <span style={{ fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 500 }}>
+                              Apply same Item Type to:
+                            </span>
+                            <select
+                              value={bulkApplyMode}
+                              onChange={(e) => setBulkApplyMode(e.target.value)}
+                              style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", maxWidth: 180 }}
+                            >
+                              <option value="all">All {allItems.length} rows</option>
+                              <option value="empty">Only empty rows</option>
+                            </select>
+                            <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
+                              <SearchableItemTypeSelect
+                                items={filteredItemTypes}
+                                value=""
+                                onChange={(newId, picked) => {
+                                  if (!newId || !picked) return;
+                                  applyItemTypeToAll(parseInt(newId), picked, bulkApplyMode);
+                                }}
+                                placeholder={bulkApplyMode === "all"
+                                  ? "— pick to apply to all —"
+                                  : "— pick to fill empty rows —"}
+                                style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                              />
                             </div>
                           </div>
                         )}

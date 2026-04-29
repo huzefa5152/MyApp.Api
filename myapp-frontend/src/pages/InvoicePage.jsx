@@ -39,7 +39,11 @@ export default function InvoicePage() {
   const canOpenEdit = canUpdate || canEditItemType;
   const canDelete = has("invoices.manage.delete");
   const canPrint = has("invoices.print.view");
-  const canFbr = has("invoices.fbr.post");
+  // Two granular FBR perms — operator can be allowed to dry-run without
+  // being trusted to commit. canFbrAny is just for showing the bulk bar.
+  const canFbrValidate = has("invoices.fbr.validate");
+  const canFbrSubmit = has("invoices.fbr.submit");
+  const canFbrAny = canFbrValidate || canFbrSubmit;
   const [clients, setClients] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -489,8 +493,10 @@ export default function InvoicePage() {
             </select>
           </div>
 
-          {/* FBR Bulk Actions — hidden unless caller can post to FBR */}
-          {canFbr && selectedCompany?.hasFbrToken && (unsubmittedInvoices.length > 0 || incompleteCount > 0) && (
+          {/* FBR Bulk Actions — bar shows if caller has either FBR perm.
+              Validate All is gated on canFbrValidate; Submit All on
+              canFbrSubmit. Asymmetric grants render a partial bar. */}
+          {canFbrAny && selectedCompany?.hasFbrToken && (unsubmittedInvoices.length > 0 || incompleteCount > 0) && (
             <div style={styles.fbrBulkBar}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                 <MdCloudUpload size={18} color="#0d47a1" />
@@ -505,26 +511,30 @@ export default function InvoicePage() {
                 )}
               </div>
               <div style={{ display: "flex", gap: "0.5rem" }}>
-                <button
-                  style={{ ...styles.fbrBulkBtn, ...styles.fbrBulkValidateBtn }}
-                  disabled={bulkFbrLoading}
-                  onClick={handleBulkValidateAll}
-                >
-                  {bulkFbrLoading ? <span className="btn-spinner" /> : <MdCheckCircle size={15} />}
-                  Validate All
-                </button>
-                <button
-                  style={{
-                    ...styles.fbrBulkBtn, ...styles.fbrBulkSubmitBtn,
-                    opacity: validatedCount === 0 ? 0.4 : 1,
-                    cursor: validatedCount === 0 ? "not-allowed" : "pointer",
-                  }}
-                  disabled={bulkFbrLoading || validatedCount === 0}
-                  onClick={handleBulkSubmitValidated}
-                >
-                  {bulkFbrLoading ? <span className="btn-spinner" /> : <MdCloudUpload size={15} />}
-                  Submit {validatedCount > 0 ? `${validatedCount} ` : ""}to FBR
-                </button>
+                {canFbrValidate && (
+                  <button
+                    style={{ ...styles.fbrBulkBtn, ...styles.fbrBulkValidateBtn }}
+                    disabled={bulkFbrLoading}
+                    onClick={handleBulkValidateAll}
+                  >
+                    {bulkFbrLoading ? <span className="btn-spinner" /> : <MdCheckCircle size={15} />}
+                    Validate All
+                  </button>
+                )}
+                {canFbrSubmit && (
+                  <button
+                    style={{
+                      ...styles.fbrBulkBtn, ...styles.fbrBulkSubmitBtn,
+                      opacity: validatedCount === 0 ? 0.4 : 1,
+                      cursor: validatedCount === 0 ? "not-allowed" : "pointer",
+                    }}
+                    disabled={bulkFbrLoading || validatedCount === 0}
+                    onClick={handleBulkSubmitValidated}
+                  >
+                    {bulkFbrLoading ? <span className="btn-spinner" /> : <MdCloudUpload size={15} />}
+                    Submit {validatedCount > 0 ? `${validatedCount} ` : ""}to FBR
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -686,44 +696,48 @@ export default function InvoicePage() {
                         {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Tax XLS
                       </button>
                     )}
-                    {canFbr && selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && (
+                    {canFbrAny && selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && (
                       <>
-                        <button
-                          style={{
-                            ...styles.fbrValidateBtn,
-                            opacity: fbrLoading || !inv.fbrReady ? 0.4 : 1,
-                            cursor: !inv.fbrReady ? "not-allowed" : "pointer",
-                            ...(fbrValidated.has(inv.id) ? { backgroundColor: "#e8f5e9", color: "#2e7d32" } : {}),
-                          }}
-                          disabled={!!fbrLoading || !inv.fbrReady}
-                          onClick={() => handleFbrValidate(inv)}
-                          title={
-                            !inv.fbrReady
-                              ? `Complete FBR setup first:\n• ${inv.fbrMissing?.join("\n• ") || "Missing FBR fields"}`
-                              : "Dry-run: checks all bill data with FBR without recording it. Must pass before you can submit."
-                          }
-                        >
-                          {fbrLoading === inv.id + "-validate" ? <span className="btn-spinner" /> : <MdCheckCircle size={14} />}
-                          {fbrValidated.has(inv.id) ? "Validated" : "Validate"}
-                        </button>
-                        <button
-                          style={{
-                            ...styles.fbrSubmitBtn,
-                            opacity: fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady ? 0.4 : 1,
-                            cursor: !fbrValidated.has(inv.id) || !inv.fbrReady ? "not-allowed" : "pointer",
-                          }}
-                          disabled={!!fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady}
-                          onClick={() => handleFbrSubmit(inv)}
-                          title={
-                            !inv.fbrReady
-                              ? "Complete FBR setup first."
-                              : fbrValidated.has(inv.id)
-                              ? "Permanently submit this bill to FBR. Cannot be undone."
-                              : "Validate first before submitting to FBR."
-                          }
-                        >
-                          {fbrLoading === inv.id + "-submit" ? <span className="btn-spinner" /> : <MdCloudUpload size={14} />} Submit FBR
-                        </button>
+                        {canFbrValidate && (
+                          <button
+                            style={{
+                              ...styles.fbrValidateBtn,
+                              opacity: fbrLoading || !inv.fbrReady ? 0.4 : 1,
+                              cursor: !inv.fbrReady ? "not-allowed" : "pointer",
+                              ...(fbrValidated.has(inv.id) ? { backgroundColor: "#e8f5e9", color: "#2e7d32" } : {}),
+                            }}
+                            disabled={!!fbrLoading || !inv.fbrReady}
+                            onClick={() => handleFbrValidate(inv)}
+                            title={
+                              !inv.fbrReady
+                                ? `Complete FBR setup first:\n• ${inv.fbrMissing?.join("\n• ") || "Missing FBR fields"}`
+                                : "Dry-run: checks all bill data with FBR without recording it. Must pass before you can submit."
+                            }
+                          >
+                            {fbrLoading === inv.id + "-validate" ? <span className="btn-spinner" /> : <MdCheckCircle size={14} />}
+                            {fbrValidated.has(inv.id) ? "Validated" : "Validate"}
+                          </button>
+                        )}
+                        {canFbrSubmit && (
+                          <button
+                            style={{
+                              ...styles.fbrSubmitBtn,
+                              opacity: fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady ? 0.4 : 1,
+                              cursor: !fbrValidated.has(inv.id) || !inv.fbrReady ? "not-allowed" : "pointer",
+                            }}
+                            disabled={!!fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady}
+                            onClick={() => handleFbrSubmit(inv)}
+                            title={
+                              !inv.fbrReady
+                                ? "Complete FBR setup first."
+                                : fbrValidated.has(inv.id)
+                                ? "Permanently submit this bill to FBR. Cannot be undone."
+                                : "Validate first before submitting to FBR."
+                            }
+                          >
+                            {fbrLoading === inv.id + "-submit" ? <span className="btn-spinner" /> : <MdCloudUpload size={14} />} Submit FBR
+                          </button>
+                        )}
                       </>
                     )}
                     {canOpenEdit && inv.fbrStatus !== "Submitted" && (
