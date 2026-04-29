@@ -525,7 +525,9 @@ namespace MyApp.Api.Services.Implementations
                             InvoiceDate: invoice.Date,
                             ProvinceCode: company.FbrProvinceCode,
                             TransactionTypeId: null,
-                            SaleTypeOverride: item.SaleType
+                            SaleTypeOverride: item.SaleType,
+                            Uom: item.UOM,
+                            FbrUomId: item.FbrUOMId
                         );
                         var combo = await engine.ValidateCombinationAsync(
                             input, item.LineTotal, item.FixedNotifiedValueOrRetailPrice);

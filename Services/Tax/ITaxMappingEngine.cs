@@ -86,7 +86,9 @@ namespace MyApp.Api.Services.Tax
         DateTime InvoiceDate,
         int? ProvinceCode,               // seller province
         int? TransactionTypeId,          // FBR transaction-type id (default 18 = Goods)
-        string? SaleTypeOverride         // user-supplied; null → engine picks
+        string? SaleTypeOverride,        // user-supplied; null → engine picks
+        string? Uom = null,              // line UoM string — used by HS_UOM pre-flight check
+        int? FbrUomId = null             // line UoM id — used by HS_UOM pre-flight check
     );
 
     public record TaxResolution(

@@ -146,14 +146,42 @@ namespace MyApp.Api.Services.Tax
                 errors.Add("HS Code is required for FBR submission. [pre-flight 0019]");
             else
             {
-                // (b) HS_UOM check — only if FBR has a mapping for this HS code.
-                //     When FBR has no mapping (newer codes), we don't block;
-                //     submission will surface the error if it actually matters.
+                // (b) HS_UOM check — block locally what FBR would reject as 0099
+                //     (UoM not allowed against the provided HS Code). FBR keeps a
+                //     master mapping at HS_UOM(hs_code, annexure_id=3); this checks
+                //     that the line's UoM is in that list before we round-trip.
+                //     Skipped when FBR has no mapping for the code (newer HS codes
+                //     return an empty list — let the live submission be the source
+                //     of truth there) and when the line itself doesn't carry a UoM
+                //     yet (handled by other validation).
                 var validUoms = await GetValidUomsForHsCodeAsync(input.CompanyId, input.HsCode);
-                if (validUoms.Count > 0 && !string.IsNullOrWhiteSpace(input.SaleTypeOverride))
+                if (validUoms.Count > 0
+                    && (input.FbrUomId.HasValue || !string.IsNullOrWhiteSpace(input.Uom)))
                 {
-                    // sale-type-driven UOM check is informational; the actual UOM
-                    // check happens at submission via FbrUOMId on the line.
+                    // Match on FbrUomId first (numeric, unambiguous) and fall
+                    // back to a case-insensitive description match. FBR's
+                    // descriptions vary in casing across endpoints ("KG" vs
+                    // "Kg") so we normalise both sides.
+                    bool ok = false;
+                    if (input.FbrUomId.HasValue)
+                        ok = validUoms.Any(u => u.UOM_ID == input.FbrUomId.Value);
+                    if (!ok && !string.IsNullOrWhiteSpace(input.Uom))
+                        ok = validUoms.Any(u => string.Equals(
+                            (u.Description ?? "").Trim(),
+                            input.Uom!.Trim(),
+                            StringComparison.OrdinalIgnoreCase));
+
+                    if (!ok)
+                    {
+                        var allowed = string.Join(", ", validUoms.Select(u => u.Description));
+                        var actual = !string.IsNullOrWhiteSpace(input.Uom)
+                            ? $"'{input.Uom}'"
+                            : $"FbrUOMId={input.FbrUomId}";
+                        errors.Add(
+                            $"UoM {actual} is not allowed for HS Code {input.HsCode}. " +
+                            $"FBR accepts: {allowed}. " +
+                            "Update the Item Type's UoM to one of these and re-save the bill. [pre-flight 0099]");
+                    }
                 }
             }
 
