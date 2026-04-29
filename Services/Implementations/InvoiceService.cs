@@ -693,10 +693,22 @@ namespace MyApp.Api.Services.Implementations
                     }
                     else if (!row.ItemTypeId.HasValue)
                     {
+                        // When the operator clears the Item Type, also blank
+                        // the FBR-classification fields the catalog had been
+                        // driving (HSCode, UOM, FbrUOMId, SaleType,
+                        // ItemTypeName). Otherwise the row keeps stale data
+                        // that came from the now-removed catalog row, and
+                        // the bill silently stays "FBR-ready" with values
+                        // the operator no longer endorses — they'd ship the
+                        // wrong HSCode / SaleType to FBR on the next submit.
+                        // Mirrors what EditBillForm.updateItemType already
+                        // does on the frontend.
                         existing.ItemTypeId = null;
-                        // Leave the previously-stored UOM/HS/SaleType in
-                        // place — clearing them would violate the "narrow
-                        // edit doesn't change commercial fields" contract.
+                        existing.ItemTypeName = "";
+                        existing.UOM = "";
+                        existing.FbrUOMId = null;
+                        existing.HSCode = null;
+                        existing.SaleType = null;
                     }
 
                     // Quantity edit only when the .qty perm path is active.

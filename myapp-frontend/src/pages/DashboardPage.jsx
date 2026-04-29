@@ -193,18 +193,23 @@ export default function DashboardPage() {
     setError(null);
     try {
       const cid = companyId || null;
-      // allSettled — a single 403 (permission-gated endpoint the caller
-      // doesn't have) shouldn't blank every other counter on the page.
+      // Gate each fetch on its corresponding permission so a user without
+      // (e.g.) challans.list.view doesn't fire a request that's guaranteed
+      // to come back 403 — keeps the browser console clean and avoids
+      // alarming "API failed" warnings on roles like Billing Operator.
+      // Promises that resolve to null tell the rest of the function "this
+      // counter isn't visible to this user".
+      const skip = Promise.resolve(null);
       const results = await Promise.allSettled([
-        getCompanies(),
-        getClientsCount(cid),
-        getDeliveryChallansCount(cid),
-        getInvoicesCount(cid),
+        permCheck("companies.manage.view") ? getCompanies()                       : skip,
+        permCheck("clients.manage.view")   ? getClientsCount(cid)                 : skip,
+        permCheck("challans.list.view")    ? getDeliveryChallansCount(cid)        : skip,
+        permCheck("invoices.list.view")    ? getInvoicesCount(cid)                : skip,
       ]);
       const [companiesRes, clientsCountRes, challansCountRes, invoicesCountRes] = results;
-      const pickNum = (r) => r.status === "fulfilled" && typeof r.value.data === "number" ? r.value.data : 0;
+      const pickNum = (r) => r.status === "fulfilled" && r.value && typeof r.value.data === "number" ? r.value.data : 0;
       setCounts({
-        companies: companiesRes.status === "fulfilled" && Array.isArray(companiesRes.value.data) ? companiesRes.value.data.length : 0,
+        companies: companiesRes.status === "fulfilled" && companiesRes.value && Array.isArray(companiesRes.value.data) ? companiesRes.value.data.length : 0,
         clients: pickNum(clientsCountRes),
         challans: pickNum(challansCountRes),
         invoices: pickNum(invoicesCountRes),
