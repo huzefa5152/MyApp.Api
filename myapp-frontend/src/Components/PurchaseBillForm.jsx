@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
-import { MdAdd, MdDelete } from "react-icons/md";
+import { MdAdd, MdDelete, MdReceipt } from "react-icons/md";
 import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById } from "../api/purchaseBillApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getItemTypes } from "../api/itemTypeApi";
+import { getPurchaseTemplate } from "../api/invoiceApi";
 import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
@@ -17,8 +18,9 @@ const colors = {
   inputBorder: "#d0d7e2",
 };
 
-export default function PurchaseBillForm({ companyId, billId, onClose, onSaved }) {
+export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null }) {
   const isEdit = !!billId;
+  const isAgainstSale = !!prefillFromInvoiceId;
   const [suppliers, setSuppliers] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
   const [supplierId, setSupplierId] = useState("");
@@ -31,10 +33,27 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved }
   const [items, setItems] = useState([newRow()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  // Source-bill metadata when in "Purchase Against Sale" mode
+  const [sourceBill, setSourceBill] = useState(null);
 
   function newRow() {
-    return { id: 0, itemTypeId: null, description: "", quantity: 1, unitPrice: 0, uom: "", hsCode: "", saleType: "" };
+    return {
+      id: 0, itemTypeId: null, description: "", quantity: 1, unitPrice: 0,
+      uom: "", hsCode: "", saleType: "",
+      sourceInvoiceItemIds: [],
+      // metadata used only when in against-sale mode (not sent to API)
+      _saleSoldQty: 0, _saleProcuredQty: 0, _saleRemaining: 0, _saleLineCount: 0,
+    };
   }
+
+  // For the against-sale flow, the ItemType picker MUST filter to items
+  // that have an HSCode — procurement is an FBR-compliance moment, not
+  // a re-classification with a placeholder. For the standalone flow,
+  // any catalog item is fine.
+  const eligibleItemTypes = useMemo(() => {
+    if (!isAgainstSale) return itemTypes;
+    return itemTypes.filter(it => it.hsCode && it.hsCode.trim().length > 0);
+  }, [itemTypes, isAgainstSale]);
 
   useEffect(() => {
     (async () => {
@@ -67,12 +86,57 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved }
           id: i.id, itemTypeId: i.itemTypeId, description: i.description,
           quantity: i.quantity, unitPrice: i.unitPrice, uom: i.uom,
           hsCode: i.hsCode || "", saleType: i.saleType || "",
+          sourceInvoiceItemIds: i.sourceInvoiceItemIds || [],
         })));
       } catch {
         setError("Failed to load purchase bill.");
       }
     })();
   }, [billId, isEdit]);
+
+  // "Purchase Against Sale Bill" mode — load the grouped template and
+  // populate items. Each row represents a group of sale lines with the
+  // same ItemType (HSCode-empty). Operator picks an FBR-compliant
+  // ItemType to procure under; on save, every linked sale line gets
+  // back-filled with HSCode/UOM/SaleType.
+  useEffect(() => {
+    if (!prefillFromInvoiceId) return;
+    (async () => {
+      try {
+        const { data } = await getPurchaseTemplate(prefillFromInvoiceId);
+        setSourceBill({
+          invoiceId: data.invoiceId,
+          invoiceNumber: data.invoiceNumber,
+          date: data.date,
+          clientName: data.clientName,
+        });
+        if (!data.items || data.items.length === 0) {
+          setError("This sale bill has no lines awaiting procurement.");
+          setItems([]);
+          return;
+        }
+        setItems(data.items.map(g => ({
+          id: 0,
+          itemTypeId: null,            // operator MUST pick an HSCode'd item
+          description: g.description,  // shows e.g. "Paracetamol (+ 27 more)"
+          quantity: g.remainingQty,
+          unitPrice: g.avgSaleUnitPrice || 0,
+          uom: g.saleUom || "",
+          hsCode: "",
+          saleType: "",
+          sourceInvoiceItemIds: g.invoiceItemIds || [],
+          _saleSoldQty: g.soldQty,
+          _saleProcuredQty: g.purchasedQty,
+          _saleRemaining: g.remainingQty,
+          _saleLineCount: g.lineCount,
+          _originalItemTypeId: g.itemTypeId,
+          _originalItemTypeName: g.itemTypeName,
+        })));
+      } catch {
+        setError("Failed to load purchase template for the chosen sale bill.");
+      }
+    })();
+  }, [prefillFromInvoiceId]);
 
   const subtotal = useMemo(
     () => items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0), 0),
@@ -117,6 +181,14 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved }
     if (items.some(i => !i.description?.trim())) return setError("Every line needs a description.");
     if (items.some(i => !(parseInt(i.quantity) > 0))) return setError("Quantity must be greater than zero on every line.");
     if (items.some(i => parseFloat(i.unitPrice) < 0)) return setError("Unit price cannot be negative.");
+    if (isAgainstSale) {
+      // In the "Purchase Against Sale" flow every row MUST have an
+      // ItemType picked — that's the whole point (binding the sale's
+      // unclassified items to a real catalog item with HSCode).
+      const unbound = items.filter(i => !i.itemTypeId);
+      if (unbound.length > 0)
+        return setError("Pick an FBR-compliant Item Type (with HS Code) for every row.");
+    }
     setSaving(true);
     try {
       const payload = {
@@ -137,6 +209,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved }
           uom: i.uom || null,
           hsCode: i.hsCode || null,
           saleType: i.saleType || null,
+          sourceInvoiceItemIds: i.sourceInvoiceItemIds || [],
         })),
       };
       const res = isEdit
@@ -162,6 +235,27 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved }
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
             {error && <div style={formStyles.error}>{error}</div>}
+
+            {sourceBill && (
+              <div style={{
+                display: "flex", alignItems: "flex-start", gap: "0.65rem",
+                padding: "0.7rem 0.95rem", marginBottom: "0.85rem",
+                backgroundColor: "#fff8e1", border: "1px solid #ffcc80",
+                borderRadius: 8,
+              }}>
+                <MdReceipt size={20} color="#bf360c" style={{ flexShrink: 0, marginTop: 1 }} />
+                <div style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.4 }}>
+                  <strong>Procuring against Sale Bill #{sourceBill.invoiceNumber}</strong>
+                  {" "}for <strong>{sourceBill.clientName}</strong>
+                  {" "}({new Date(sourceBill.date).toLocaleDateString()})
+                  <div style={{ fontSize: "0.76rem", color: "#5f6d7e", marginTop: 2 }}>
+                    Each row groups same-ItemType sale lines. Pick an HS-coded catalog item per row —
+                    on save, every linked sale line back-fills with that HSCode / UOM / Sale Type and
+                    becomes FBR-ready.
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
@@ -233,16 +327,26 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved }
                   <tbody>
                     {items.map((it, idx) => {
                       const lineTotal = (parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0);
+                      const linkedToSale = (it.sourceInvoiceItemIds?.length || 0) > 0;
                       return (
                         <tr key={idx}>
                           <td style={td}>
                             <SearchableItemTypeSelect
-                              items={itemTypes}
+                              items={eligibleItemTypes}
                               value={it.itemTypeId || ""}
                               onChange={(newId, picked) => pickItemType(idx, newId, picked)}
-                              placeholder="— optional —"
-                              style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                              placeholder={isAgainstSale ? "— pick item with HS Code —" : "— optional —"}
+                              style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem",
+                                       ...(isAgainstSale && !it.itemTypeId ? { borderColor: "#dc3545" } : {}) }}
                             />
+                            {linkedToSale && (
+                              <div style={{ fontSize: "0.7rem", color: "#5f6d7e", marginTop: 2 }}>
+                                {it._saleLineCount > 1
+                                  ? `${it._saleLineCount} sale lines, was: ${it._originalItemTypeName || "—"}`
+                                  : `1 sale line, was: ${it._originalItemTypeName || "—"}`}
+                                {it._saleProcuredQty > 0 && ` · already procured ${it._saleProcuredQty} of ${it._saleSoldQty}`}
+                              </div>
+                            )}
                           </td>
                           <td style={td}>
                             <input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />

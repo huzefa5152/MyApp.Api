@@ -59,3 +59,14 @@ export const getItemRateHistory = (companyId, params = {}) =>
 // have nulls so the UI can leave them blank.
 export const getLastRatesForChallan = (companyId, challanId) =>
   httpClient.get(`/invoices/company/${companyId}/last-rates`, { params: { challanId } });
+
+// Sale bills awaiting procurement — picker for the "Purchase Against
+// Sale Bill" flow. Returns bills that have HSCode-empty lines with
+// remaining qty AND every line has an ItemType set.
+export const getAwaitingPurchase = (companyId) =>
+  httpClient.get(`/invoices/company/${companyId}/awaiting-purchase`);
+
+// Per-line procurement template for one sale bill. Lines grouped by
+// ItemType so 28 "Medicines" entries collapse to one procurement row.
+export const getPurchaseTemplate = (invoiceId) =>
+  httpClient.get(`/invoices/${invoiceId}/purchase-template`);

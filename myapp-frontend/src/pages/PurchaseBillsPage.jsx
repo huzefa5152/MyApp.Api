@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight } from "react-icons/md";
+import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight, MdReceipt, MdClose } from "react-icons/md";
 import { getPurchaseBillsByCompanyPaged, deletePurchaseBill } from "../api/purchaseBillApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
+import { getAwaitingPurchase } from "../api/invoiceApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -39,6 +40,12 @@ export default function PurchaseBillsPage() {
   const [dateTo, setDateTo] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  // "Purchase Against Sale Bill" picker
+  const [showSalePicker, setShowSalePicker] = useState(false);
+  const [awaitingBills, setAwaitingBills] = useState([]);
+  const [loadingAwaiting, setLoadingAwaiting] = useState(false);
+  const [prefillFromInvoiceId, setPrefillFromInvoiceId] = useState(null);
+  const [pickerSearch, setPickerSearch] = useState("");
 
   const fetchBills = useCallback(async (pg) => {
     if (!selectedCompany) return;
@@ -108,9 +115,30 @@ export default function PurchaseBillsPage() {
           </div>
         </div>
         {companies.length > 0 && canCreate && (
-          <button style={styles.addBtn} onClick={() => { setEditingId(null); setShowForm(true); }}>
-            <MdAdd size={18} /> New Purchase Bill
-          </button>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button
+              style={styles.altBtn}
+              onClick={async () => {
+                setShowSalePicker(true);
+                setLoadingAwaiting(true);
+                setPickerSearch("");
+                try {
+                  const { data } = await getAwaitingPurchase(selectedCompany.id);
+                  setAwaitingBills(data || []);
+                } catch {
+                  setAwaitingBills([]);
+                  notify("Failed to load sale bills awaiting procurement.", "error");
+                } finally {
+                  setLoadingAwaiting(false);
+                }
+              }}
+            >
+              <MdReceipt size={16} /> Purchase Against Sale Bill
+            </button>
+            <button style={styles.addBtn} onClick={() => { setEditingId(null); setPrefillFromInvoiceId(null); setShowForm(true); }}>
+              <MdAdd size={18} /> New Purchase Bill
+            </button>
+          </div>
         )}
       </div>
 
@@ -219,13 +247,131 @@ export default function PurchaseBillsPage() {
         <PurchaseBillForm
           companyId={selectedCompany.id}
           billId={editingId}
-          onClose={() => { setShowForm(false); setEditingId(null); }}
-          onSaved={() => { setShowForm(false); setEditingId(null); fetchBills(page); }}
+          prefillFromInvoiceId={prefillFromInvoiceId}
+          onClose={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); }}
+          onSaved={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); fetchBills(page); }}
         />
+      )}
+
+      {showSalePicker && (
+        <div style={pickerStyles.backdrop} onClick={() => setShowSalePicker(false)}>
+          <div style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={pickerStyles.header}>
+              <h3 style={pickerStyles.title}>Pick a sale bill awaiting procurement</h3>
+              <button style={pickerStyles.closeBtn} onClick={() => setShowSalePicker(false)}>
+                <MdClose size={20} />
+              </button>
+            </div>
+            <div style={{ padding: "0.75rem 1.25rem", borderBottom: `1px solid ${colors.cardBorder}` }}>
+              <div style={{ position: "relative" }}>
+                <MdSearch style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+                <input
+                  type="text" placeholder="Search bill # / client..." autoFocus
+                  value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)}
+                  style={{ width: "100%", padding: "0.55rem 0.75rem 0.55rem 2.3rem",
+                          border: `1px solid ${colors.inputBorder}`, borderRadius: 10,
+                          fontSize: "0.88rem", backgroundColor: "#f8f9fb", outline: "none" }}
+                />
+              </div>
+              <div style={{ fontSize: "0.74rem", color: colors.textSecondary, marginTop: "0.5rem" }}>
+                Only bills where every line has an Item Type AND at least one line is missing HS Code appear here.
+              </div>
+            </div>
+            <div style={pickerStyles.tableWrap}>
+              {loadingAwaiting ? (
+                <div style={{ padding: "3rem 0", textAlign: "center", color: colors.textSecondary }}>Loading...</div>
+              ) : awaitingBills.length === 0 ? (
+                <div style={{ padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary, fontSize: "0.9rem" }}>
+                  No sale bills awaiting procurement. Either every bill is FBR-ready, or some lines are missing Item Type — fix those on the Bills page first.
+                </div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
+                  <thead>
+                    <tr>
+                      <th style={pickerStyles.th}>Bill #</th>
+                      <th style={pickerStyles.th}>Date</th>
+                      <th style={pickerStyles.th}>Client</th>
+                      <th style={{ ...pickerStyles.th, textAlign: "right" }}>Lines awaiting</th>
+                      <th style={{ ...pickerStyles.th, textAlign: "right" }}>Qty remaining</th>
+                      <th style={{ ...pickerStyles.th, width: 80 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {awaitingBills
+                      .filter(b => {
+                        if (!pickerSearch.trim()) return true;
+                        const q = pickerSearch.toLowerCase();
+                        return String(b.invoiceNumber).includes(q)
+                            || (b.clientName || "").toLowerCase().includes(q);
+                      })
+                      .map(b => (
+                        <tr key={b.invoiceId}>
+                          <td style={pickerStyles.td}><strong>#{b.invoiceNumber}</strong></td>
+                          <td style={pickerStyles.td}>{new Date(b.date).toLocaleDateString()}</td>
+                          <td style={pickerStyles.td}>{b.clientName}</td>
+                          <td style={{ ...pickerStyles.td, textAlign: "right" }}>{b.linesAwaiting}</td>
+                          <td style={{ ...pickerStyles.td, textAlign: "right", fontWeight: 600 }}>{b.totalQtyRemaining}</td>
+                          <td style={pickerStyles.td}>
+                            <button style={pickerStyles.pickBtn} onClick={() => {
+                              setShowSalePicker(false);
+                              setEditingId(null);
+                              setPrefillFromInvoiceId(b.invoiceId);
+                              setShowForm(true);
+                            }}>
+                              Pick
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
 }
+
+const pickerStyles = {
+  backdrop: {
+    position: "fixed", inset: 0, backgroundColor: "rgba(15,20,30,0.55)",
+    backdropFilter: "blur(4px)", display: "flex", alignItems: "center",
+    justifyContent: "center", zIndex: 1100, padding: "2vh 1rem",
+  },
+  modal: {
+    backgroundColor: "#fff", borderRadius: 16, width: "100%",
+    maxWidth: 820, maxHeight: "92vh", boxShadow: "0 20px 60px rgba(13,71,161,0.2)",
+    display: "flex", flexDirection: "column", overflow: "hidden",
+  },
+  header: {
+    background: `linear-gradient(135deg, #6a1b9a, #00897b)`,
+    padding: "0.95rem 1.4rem",
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+  },
+  title: { margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#fff" },
+  closeBtn: {
+    background: "rgba(255,255,255,0.2)", border: "none", color: "#fff",
+    cursor: "pointer", width: 32, height: 32, minWidth: 32, padding: 0,
+    borderRadius: 8, boxShadow: "none",
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+  },
+  tableWrap: { overflowY: "auto", flex: "1 1 auto", minHeight: 0 },
+  th: {
+    textAlign: "left", padding: "0.6rem 0.95rem",
+    backgroundColor: "#f5f8fc", borderBottom: "1px solid #e8edf3",
+    fontSize: "0.76rem", fontWeight: 700, color: "#5f6d7e",
+    textTransform: "uppercase", letterSpacing: "0.04em",
+    position: "sticky", top: 0, zIndex: 1,
+  },
+  td: { padding: "0.55rem 0.95rem", borderBottom: "1px solid #e8edf3", color: "#1a2332" },
+  pickBtn: {
+    padding: "0.35rem 0.85rem", borderRadius: 6, border: "none",
+    backgroundColor: "#0d47a1", color: "#fff",
+    fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", boxShadow: "none",
+  },
+};
 
 const styles = {
   pageHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" },
@@ -233,6 +379,7 @@ const styles = {
   pageTitle: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
   pageSubtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
   addBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
+  altBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 1rem", borderRadius: 10, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#6a1b9a", fontSize: "0.86rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
   loading: { display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem 0" },
   spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
   empty: { display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary },
