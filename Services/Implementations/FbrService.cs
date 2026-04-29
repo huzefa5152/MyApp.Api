@@ -1015,11 +1015,20 @@ namespace MyApp.Api.Services.Implementations
                         foreach (var item in invoice.Items)
                         {
                             if (!item.ItemTypeId.HasValue || item.Quantity <= 0) continue;
+                            // InvoiceItem.Quantity is decimal(18,4) since the
+                            // decimal-qty feature, but StockMovement.Quantity is
+                            // still int (purchase-module schema). Truncate at
+                            // the boundary — fractional sales are a sales-side
+                            // concern; stock tracking only follows whole units
+                            // until the purchase module also goes decimal.
+                            // TODO: promote StockMovement / PurchaseItem /
+                            // GoodsReceiptItem / OpeningStockBalance quantities
+                            // to decimal(18,4) and drop this cast.
                             await _stock.RecordMovementAsync(
                                 companyId: invoice.CompanyId,
                                 itemTypeId: item.ItemTypeId.Value,
                                 direction: StockMovementDirection.Out,
-                                quantity: item.Quantity,
+                                quantity: (int)Math.Truncate(item.Quantity),
                                 sourceType: StockMovementSourceType.Invoice,
                                 sourceId: invoice.Id,
                                 movementDate: invoice.Date,

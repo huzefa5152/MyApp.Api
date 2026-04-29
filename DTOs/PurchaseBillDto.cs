@@ -147,7 +147,10 @@ namespace MyApp.Api.DTOs
         public int ClientId { get; set; }
         public string ClientName { get; set; } = "";
         public int LinesAwaiting { get; set; }
-        public int TotalQtyRemaining { get; set; }
+        // Decimal because the sum source (InvoiceItem.Quantity) is now
+        // decimal(18,4). PurchasedQty is still int on the purchase side,
+        // so the math (decimal - int) lands as decimal here.
+        public decimal TotalQtyRemaining { get; set; }
     }
 
     /// <summary>
@@ -188,9 +191,11 @@ namespace MyApp.Api.DTOs
         /// <summary>Combined description preview (first description or "first +N more").</summary>
         public string Description { get; set; } = "";
 
-        public int SoldQty { get; set; }
-        public int PurchasedQty { get; set; }
-        public int RemainingQty { get; set; }
+        // Decimal because the sale-side Quantity is now decimal(18,4).
+        // PurchasedQty stays consistent so subtraction lands as decimal.
+        public decimal SoldQty { get; set; }
+        public decimal PurchasedQty { get; set; }
+        public decimal RemainingQty { get; set; }
 
         /// <summary>UOM the operator typed at sale time (most common across the group, if any).</summary>
         public string? SaleUom { get; set; }
