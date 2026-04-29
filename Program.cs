@@ -350,6 +350,76 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
+    // ── One-time data fix: align seeded ItemType UoMs to FBR HS_UOM ──
+    // The v2 seeder labelled six HS codes with UoMs that FBR's published
+    // HS_UOM master rejects (error 0099 at validateinvoicedata). Notably
+    // "Adhesive Tape" / 3919.1090 → was "Numbers, pieces, units", FBR
+    // requires "KG". This block:
+    //   1) updates the affected ItemType rows to the correct UoM /
+    //      FbrUOMId, but ONLY when the row still carries the old wrong
+    //      values — so an operator who already corrected one by hand is
+    //      left alone.
+    //   2) cascades the correction to InvoiceItem (non-Submitted bills
+    //      only) and DeliveryItem (non-Cancelled, not-yet-submitted)
+    //      rows that point to those ItemTypes via FK — same boundary
+    //      ItemTypeService.PropagateToLinesAsync uses.
+    //
+    // Gated by an audit-log marker so it runs at most once per database.
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'FBR_HS_UOM_BACKFILL_V1')
+        BEGIN
+            -- Pairs: (HSCode, OldUOM, NewUOM, NewFbrUOMId). We only rewrite
+            -- a row when both the OLD UOM and the HSCode still match the
+            -- bad seeder value — operator hand-fixes are preserved.
+            DECLARE @fixes TABLE (HSCode NVARCHAR(50), OldUOM NVARCHAR(100), NewUOM NVARCHAR(100), NewFbrUOMId INT);
+            INSERT INTO @fixes VALUES
+                ('7307.9900', N'Numbers, pieces, units', N'KG',                       13),
+                ('7318.1590', N'Numbers, pieces, units', N'KG',                       13),
+                ('4009.3130', N'Meter',                  N'Numbers, pieces, units',   69),
+                ('7304.9000', N'Meter',                  N'KG',                       13),
+                ('3919.1090', N'Numbers, pieces, units', N'KG',                       13),
+                ('3506.9110', N'Numbers, pieces, units', N'KG',                       13);
+
+            -- 1) ItemTypes — only rows still on the wrong UoM.
+            UPDATE it
+               SET it.UOM = f.NewUOM,
+                   it.FbrUOMId = f.NewFbrUOMId
+              FROM ItemTypes it
+              JOIN @fixes    f ON f.HSCode = it.HSCode
+             WHERE it.UOM = f.OldUOM;
+
+            -- 2) Cascade to InvoiceItem rows on non-Submitted bills.
+            UPDATE ii
+               SET ii.UOM = f.NewUOM,
+                   ii.FbrUOMId = f.NewFbrUOMId
+              FROM InvoiceItems ii
+              JOIN Invoices  i ON i.Id = ii.InvoiceId
+              JOIN ItemTypes it ON it.Id = ii.ItemTypeId
+              JOIN @fixes    f  ON f.HSCode = it.HSCode
+             WHERE ISNULL(i.FbrStatus, '') <> 'Submitted'
+               AND ii.UOM = f.OldUOM;
+
+            -- 3) Cascade to DeliveryItem rows on live challans (not
+            --    cancelled, not on a submitted bill).
+            UPDATE di
+               SET di.Unit = f.NewUOM
+              FROM DeliveryItems di
+              JOIN DeliveryChallans dc ON dc.Id = di.DeliveryChallanId
+              LEFT JOIN Invoices    i  ON i.Id = dc.InvoiceId
+              JOIN ItemTypes        it ON it.Id = di.ItemTypeId
+              JOIN @fixes           f  ON f.HSCode = it.HSCode
+             WHERE ISNULL(dc.Status, '') <> 'Cancelled'
+               AND (i.Id IS NULL OR ISNULL(i.FbrStatus, '') <> 'Submitted')
+               AND di.Unit = f.OldUOM;
+
+            -- Marker — its presence prevents re-runs.
+            INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp])
+            VALUES ('Info', 'FBR_HS_UOM_BACKFILL_V1',
+                    'Aligned 6 seeded ItemType HS_UOM mismatches to FBR HS_UOM master and cascaded to live bill/challan lines.',
+                    'STARTUP', '/seed/itemtypes/hsuom-backfill', 200, SYSUTCDATETIME());
+        END
+    ");
+
     // RBAC: sync PermissionCatalog into the Permissions table and ensure the
     // built-in "Administrator" system role exists and is wired to the seed
     // admin user. Idempotent — runs every start.

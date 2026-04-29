@@ -64,12 +64,18 @@ namespace MyApp.Api.Data
         private static readonly Seed[] Defaults = new[]
         {
             // ── Hardware / Pneumatic (core business — Section XV / XVI items, all 18% standard) ──
+            // UoM choices below are anchored to FBR's HS_UOM master
+            // (gw.fbr.gov.pk/pdi_data/v2/HS_UOM?annexure_id=3). FBR rejects
+            // any UoM that isn't in the published list with error 0099, so
+            // we mirror their picks exactly even when the convention feels
+            // odd — e.g. "Bolts" billed by KG, "Rubber Hoses" billed by
+            // pieces. FbrUOMId comes from the same master row.
             new Seed("Valves (all types)",        "8481.8090", "Numbers, pieces, units", 69, "Goods at Standard Rate (default)", "Ball, gate, check, globe, needle, solenoid valves"),
-            new Seed("Pipe Fittings (Steel)",     "7307.9900", "Numbers, pieces, units", 69, "Goods at Standard Rate (default)", "Elbows, tees, reducers, unions, nipples"),
+            new Seed("Pipe Fittings (Steel)",     "7307.9900", "KG",                     13, "Goods at Standard Rate (default)", "Elbows, tees, reducers, unions, nipples"),
             new Seed("Pneumatic Cylinders",       "8412.2900", "Numbers, pieces, units", 69, "Goods at Standard Rate (default)", "Pneumatic / hydraulic cylinders and actuators"),
-            new Seed("Bolts, Nuts & Screws",      "7318.1590", "Numbers, pieces, units", 69, "Goods at Standard Rate (default)", "All threaded hardware — bolts, nuts, screws, washers"),
-            new Seed("Rubber Hoses & Fittings",   "4009.3130", "Meter",                  48, "Goods at Standard Rate (default)", "Pneumatic hoses, push-in fittings"),
-            new Seed("Steel Pipes & Tubes",       "7304.9000", "Meter",                  48, "Goods at Standard Rate (default)", "Iron/steel seamless tubes and pipes"),
+            new Seed("Bolts, Nuts & Screws",      "7318.1590", "KG",                     13, "Goods at Standard Rate (default)", "All threaded hardware — bolts, nuts, screws, washers"),
+            new Seed("Rubber Hoses & Fittings",   "4009.3130", "Numbers, pieces, units", 69, "Goods at Standard Rate (default)", "Pneumatic hoses, push-in fittings"),
+            new Seed("Steel Pipes & Tubes",       "7304.9000", "KG",                     13, "Goods at Standard Rate (default)", "Iron/steel seamless tubes and pipes"),
             new Seed("Bearings",                  "8482.1090", "Numbers, pieces, units", 69, "Goods at Standard Rate (default)", "Ball bearings, roller bearings"),
             new Seed("Gaskets & Seals",           "8484.1010", "Numbers, pieces, units", 69, "Goods at Standard Rate (default)", "Gaskets and similar joints of metal sheeting"),
 
@@ -77,8 +83,8 @@ namespace MyApp.Api.Data
             new Seed("Pencils",                   "9609.2020", "Numbers, pieces, units", 69, "Goods at Standard Rate (default)", "Pencils, mechanical pencils"),
             new Seed("Pens & Markers",            "9608.9100", "Numbers, pieces, units", 69, "Goods at Standard Rate (default)", "Ball pens, felt-tipped markers, highlighters"),
             new Seed("Paper & Files",             "4820.1010", "Numbers, pieces, units", 69, "Goods at Standard Rate (default)", "Notebooks, registers, files, envelopes"),
-            new Seed("Adhesive Tape",             "3919.1090", "Numbers, pieces, units", 69, "Goods at Standard Rate (default)", "Self-adhesive tape, masking tape, scotch tape"),
-            new Seed("Industrial Adhesives",      "3506.9110", "Numbers, pieces, units", 69, "Goods at Standard Rate (default)", "Industrial epoxy / cyanoacrylate / construction adhesives"),
+            new Seed("Adhesive Tape",             "3919.1090", "KG",                     13, "Goods at Standard Rate (default)", "Self-adhesive tape, masking tape, scotch tape"),
+            new Seed("Industrial Adhesives",      "3506.9110", "KG",                     13, "Goods at Standard Rate (default)", "Industrial epoxy / cyanoacrylate / construction adhesives"),
 
             // ── Industrial electrical (cables — Section XVI, 18%) ──
             new Seed("Cables & Wires",            "8544.4210", "Meter",                  48, "Goods at Standard Rate (default)", "Insulated wire, industrial cables"),
