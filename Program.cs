@@ -165,6 +165,45 @@ using (var scope = app.Services.CreateScope())
     var fp = scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.IPOFormatFingerprintService>();
     await MyApp.Api.Data.POFormatSeeder.SeedAsync(db, fp);
 
+    // ── One-time perm migration: split invoices.fbr.post → validate + submit ──
+    // The legacy single perm has been removed from the catalog and replaced
+    // with two narrower ones. RbacSeeder below will purge the old permission
+    // row (and cascade-delete its RolePermission rows) — so before that
+    // happens, copy each role's old grant into BOTH new perms. After this
+    // ran once, subsequent restarts are no-ops because the legacy perm no
+    // longer exists.
+    db.Database.ExecuteSqlRaw(@"
+        DECLARE @oldId INT = (SELECT TOP 1 Id FROM Permissions WHERE [Key] = 'invoices.fbr.post');
+        IF @oldId IS NOT NULL
+        BEGIN
+            -- Make sure the new perms exist (RbacSeeder will populate descriptions
+            -- properly in a moment; we just need rows so the FK works).
+            INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+            SELECT 'invoices.fbr.validate', 'Invoices', 'FBR', 'Validate',
+                   'Dry-run validate an invoice with FBR (no commit, no IRN issued)'
+            WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'invoices.fbr.validate');
+
+            INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+            SELECT 'invoices.fbr.submit', 'Invoices', 'FBR', 'Submit',
+                   'Submit an invoice to FBR digital invoicing (commits, returns IRN)'
+            WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'invoices.fbr.submit');
+
+            DECLARE @validateId INT = (SELECT Id FROM Permissions WHERE [Key] = 'invoices.fbr.validate');
+            DECLARE @submitId   INT = (SELECT Id FROM Permissions WHERE [Key] = 'invoices.fbr.submit');
+
+            -- Translate every existing grant of the old perm into both new ones.
+            INSERT INTO RolePermissions (RoleId, PermissionId)
+            SELECT rp.RoleId, @validateId FROM RolePermissions rp
+            WHERE rp.PermissionId = @oldId
+              AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @validateId);
+
+            INSERT INTO RolePermissions (RoleId, PermissionId)
+            SELECT rp.RoleId, @submitId FROM RolePermissions rp
+            WHERE rp.PermissionId = @oldId
+              AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @submitId);
+        END
+    ");
+
     // RBAC: sync PermissionCatalog into the Permissions table and ensure the
     // built-in "Administrator" system role exists and is wired to the seed
     // admin user. Idempotent — runs every start.

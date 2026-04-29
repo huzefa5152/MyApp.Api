@@ -63,7 +63,15 @@ namespace MyApp.Api.Helpers
             // .itemtype restricts the user to the narrow flow.
             new("invoices.manage.update.itemtype", "Invoices", "Manage", "Update Item Type", "Edit ONLY the Item Type column on a bill (no other fields)"),
             new("invoices.manage.delete",  "Invoices", "Manage", "Delete", "Delete an invoice"),
-            new("invoices.fbr.post",       "Invoices", "FBR",    "Post",   "Submit an invoice to FBR digital invoicing"),
+            // Two granular FBR permissions — separating dry-run from real
+            // submission so an operator can be allowed to validate without
+            // being trusted to commit. A user with .submit but not
+            // .validate would never get to use the validate button, so
+            // most roles will get both. Granting .validate alone is the
+            // useful asymmetric case (junior operator preparing bills,
+            // senior reviewer submits).
+            new("invoices.fbr.validate",   "Invoices", "FBR",    "Validate", "Dry-run validate an invoice with FBR (no commit, no IRN issued)"),
+            new("invoices.fbr.submit",     "Invoices", "FBR",    "Submit",   "Submit an invoice to FBR digital invoicing (commits, returns IRN)"),
             new("invoices.print.view",     "Invoices", "Print",  "View",   "Print or download invoices"),
 
             // ── PO Formats (Purchase-Order parser registry) ─────────────────

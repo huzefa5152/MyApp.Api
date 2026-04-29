@@ -79,7 +79,7 @@ namespace MyApp.Api.Controllers
         // ── Submit & Validate ────────────────────────────────────
 
         [HttpPost("{invoiceId}/submit")]
-        [HasPermission("invoices.fbr.post")]
+        [HasPermission("invoices.fbr.submit")]
         public async Task<IActionResult> SubmitInvoice(
             int invoiceId, [FromQuery] string? scenarioId = null)
         {
@@ -90,7 +90,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPost("{invoiceId}/validate")]
-        [HasPermission("invoices.fbr.post")]
+        [HasPermission("invoices.fbr.validate")]
         public async Task<IActionResult> ValidateInvoice(
             int invoiceId, [FromQuery] string? scenarioId = null)
         {

@@ -96,6 +96,18 @@ namespace MyApp.Api.Services.Implementations
 
             await EnrichFromFbrAsync(dto, enrichWithCompanyId);
 
+            // Capture the OLD values so we can detect what actually changed,
+            // and compute a "fields changed" set that drives the propagation
+            // below. Without this we'd unnecessarily rewrite every line on
+            // every catalog touch.
+            var changedFields = new ItemTypeFieldChangeSet
+            {
+                HsCodeChanged   = !StringEq(it.HSCode,   dto.HSCode),
+                UomChanged      = !StringEq(it.UOM,      dto.UOM),
+                FbrUomIdChanged = it.FbrUOMId            != dto.FbrUOMId,
+                SaleTypeChanged = !StringEq(it.SaleType, dto.SaleType),
+            };
+
             it.Name = dto.Name;
             it.HSCode = dto.HSCode;
             it.UOM = dto.UOM;
@@ -104,7 +116,81 @@ namespace MyApp.Api.Services.Implementations
             it.FbrDescription = dto.FbrDescription;
             it.IsFavorite = dto.IsFavorite;
             var updated = await _repo.UpdateAsync(it);
-            return ToDto(updated);
+
+            var summary = await PropagateToLinesAsync(updated, changedFields);
+
+            var resultDto = ToDto(updated);
+            resultDto.Propagation = summary;
+            return resultDto;
+        }
+
+        private static bool StringEq(string? a, string? b)
+            => string.Equals(a ?? "", b ?? "", StringComparison.Ordinal);
+
+        private struct ItemTypeFieldChangeSet
+        {
+            public bool HsCodeChanged;
+            public bool UomChanged;
+            public bool FbrUomIdChanged;
+            public bool SaleTypeChanged;
+            public bool Any => HsCodeChanged || UomChanged || FbrUomIdChanged || SaleTypeChanged;
+        }
+
+        /// <summary>
+        /// When an ItemType's HSCode / UOM / FbrUOMId / SaleType changes,
+        /// every InvoiceItem and DeliveryItem that references it should
+        /// reflect the new values — without forcing the operator to re-edit
+        /// every bill and re-pick the catalog row.
+        ///
+        /// Boundaries:
+        ///  • Invoice lines on FBR-Submitted bills are LEFT ALONE — that
+        ///    data is locked at submission time. We surface a count of
+        ///    skipped lines in the response so the operator sees them.
+        ///  • Cancelled challans are skipped (their data is dead).
+        ///  • PurchaseItems aren't synced — purchase-side values reflect
+        ///    what the SUPPLIER's invoice said, not our catalog opinion.
+        ///
+        /// All updates happen as single SQL UPDATE statements via
+        /// ExecuteUpdateAsync, so a catalog change touching 5,000 lines
+        /// completes in one round-trip.
+        /// </summary>
+        private async Task<ItemTypePropagationSummaryDto> PropagateToLinesAsync(
+            ItemType updated, ItemTypeFieldChangeSet changed)
+        {
+            if (!changed.Any) return new ItemTypePropagationSummaryDto();
+
+            int submittedSkipped = await _context.InvoiceItems
+                .Where(ii => ii.ItemTypeId == updated.Id && ii.Invoice.FbrStatus == "Submitted")
+                .CountAsync();
+
+            int invoicesUpdated = await _context.InvoiceItems
+                .Where(ii => ii.ItemTypeId == updated.Id && ii.Invoice.FbrStatus != "Submitted")
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(ii => ii.HSCode,
+                        ii => changed.HsCodeChanged ? updated.HSCode : ii.HSCode)
+                    .SetProperty(ii => ii.UOM,
+                        ii => changed.UomChanged ? (updated.UOM ?? ii.UOM) : ii.UOM)
+                    .SetProperty(ii => ii.FbrUOMId,
+                        ii => changed.FbrUomIdChanged ? updated.FbrUOMId : ii.FbrUOMId)
+                    .SetProperty(ii => ii.SaleType,
+                        ii => changed.SaleTypeChanged ? updated.SaleType : ii.SaleType)
+                    .SetProperty(ii => ii.ItemTypeName, ii => updated.Name));
+
+            int challansUpdated = await _context.DeliveryItems
+                .Where(di => di.ItemTypeId == updated.Id
+                          && di.DeliveryChallan.Status != "Cancelled"
+                          && (di.DeliveryChallan.Invoice == null
+                              || di.DeliveryChallan.Invoice.FbrStatus != "Submitted"))
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(di => di.Unit,
+                        di => changed.UomChanged ? (updated.UOM ?? di.Unit) : di.Unit));
+
+            return new ItemTypePropagationSummaryDto
+            {
+                InvoiceItemsUpdated = invoicesUpdated,
+                DeliveryItemsUpdated = challansUpdated,
+                SubmittedInvoiceLinesSkipped = submittedSkipped,
+            };
         }
 
         // When the controller passes enrichWithCompanyId and the operator hasn't

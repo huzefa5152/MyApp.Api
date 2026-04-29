@@ -127,8 +127,11 @@ namespace MyApp.Api.Services.Implementations
 
             // Gate the Delete button client-side — only the highest-numbered
             // bill for this company is deletable. Earlier bills must be edited.
+            // EXCLUDE demo bills (FBR Sandbox) from the max — they live in
+            // their own 900000+ range and would otherwise prevent any real
+            // bill from being marked IsLatest.
             var maxNumber = await _context.Invoices
-                .Where(i => i.CompanyId == companyId)
+                .Where(i => i.CompanyId == companyId && !i.IsDemo)
                 .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
 
             var dtos = items.Select(ToDto).ToList();
@@ -678,9 +681,16 @@ namespace MyApp.Api.Services.Implementations
 
             // Only the LAST bill (highest invoice number) can be deleted so
             // numbering stays gap-free. Earlier bills must be edited in place.
-            var maxNumber = await _context.Invoices
-                .Where(i => i.CompanyId == invoice.CompanyId)
-                .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+            // Demo bills (FBR Sandbox) live in their own 900000+ range and
+            // are excluded so the latest-real-bill rule isn't blocked by
+            // demo numbers. Demo deletes are gated by FbrSandboxService.
+            var maxNumber = invoice.IsDemo
+                ? await _context.Invoices
+                    .Where(i => i.CompanyId == invoice.CompanyId && i.IsDemo)
+                    .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0
+                : await _context.Invoices
+                    .Where(i => i.CompanyId == invoice.CompanyId && !i.IsDemo)
+                    .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
             if (invoice.InvoiceNumber != maxNumber)
                 throw new InvalidOperationException(
                     $"Only the latest bill can be deleted (currently #{maxNumber}). " +

@@ -102,8 +102,15 @@ namespace MyApp.Api.Repositories.Implementations
                 // Use MAX(ChallanNumber) so a deleted trailing number is reused on the next
                 // create (no gaps after deleting the last challan). If nothing exists yet
                 // for this company, fall back to the configured StartingChallanNumber.
+                //
+                // EXCLUDE demo challans (FBR Sandbox) from the MAX — they live in
+                // their own 900000+ range so a seeded sandbox would otherwise push
+                // the next REAL challan number into the demo range and pollute the
+                // operator's actual numbering sequence.
+                bool isDemo = deliveryChallan.IsDemo;
                 var maxExisting = await _context.DeliveryChallans
-                                                .Where(c => c.CompanyId == deliveryChallan.CompanyId)
+                                                .Where(c => c.CompanyId == deliveryChallan.CompanyId
+                                                         && c.IsDemo == isDemo)
                                                 .MaxAsync(c => (int?)c.ChallanNumber) ?? 0;
 
                 int nextNumber = maxExisting > 0
@@ -111,7 +118,12 @@ namespace MyApp.Api.Repositories.Implementations
                                  : company.StartingChallanNumber;
 
                 deliveryChallan.ChallanNumber = nextNumber;
-                company.CurrentChallanNumber = nextNumber;
+                // Don't touch the company's CurrentChallanNumber when seeding
+                // demo data — that field reflects the LIVE business sequence.
+                if (!isDemo)
+                {
+                    company.CurrentChallanNumber = nextNumber;
+                }
 
                 _context.DeliveryChallans.Add(deliveryChallan);
                 await _context.SaveChangesAsync();

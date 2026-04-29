@@ -16,5 +16,20 @@ namespace MyApp.Api.DTOs
 
         public bool IsFavorite { get; set; }
         public int UsageCount { get; set; }
+
+        /// <summary>
+        /// Set on UPDATE responses only — tells the UI how many bill /
+        /// challan lines got auto-synced because this catalog row changed.
+        /// Lets us notify the operator: "47 unposted lines updated; 3
+        /// FBR-submitted lines left alone."
+        /// </summary>
+        public ItemTypePropagationSummaryDto? Propagation { get; set; }
+    }
+
+    public class ItemTypePropagationSummaryDto
+    {
+        public int InvoiceItemsUpdated { get; set; }
+        public int DeliveryItemsUpdated { get; set; }
+        public int SubmittedInvoiceLinesSkipped { get; set; }
     }
 }
