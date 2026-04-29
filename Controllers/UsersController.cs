@@ -83,15 +83,18 @@ namespace MyApp.Api.Controllers
             if (exists)
                 return Conflict(new { message = "Username already exists" });
 
-            // Legacy "Role" column is now informational only — permissions
-            // come from the RBAC role-assignment system. New users start with
-            // no roles; seed admin assigns via the Users → Roles UI.
+            // Permissions are driven by the RBAC role-assignment system, but
+            // the legacy "Role" text column is still surfaced as the pill on
+            // the user card and used by some JWT-claim consumers. Honor what
+            // the operator picked in the dropdown instead of hard-coding it
+            // — otherwise the card always reads "User" regardless of the
+            // role the operator chose at create time.
             var user = new Models.User
             {
                 Username = dto.Username,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
                 FullName = dto.FullName,
-                Role = "User",
+                Role = string.IsNullOrWhiteSpace(dto.Role) ? "User" : dto.Role.Trim(),
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -129,8 +132,14 @@ namespace MyApp.Api.Controllers
             if (!string.IsNullOrWhiteSpace(dto.FullName))
                 user.FullName = dto.FullName;
 
-            // Legacy "Role" column is informational. Permissions come from
-            // the RBAC role-assignment system — manage via Users → Roles UI.
+            // Persist the Role text so the user card's pill reflects the
+            // operator's pick. Permissions still come from the RBAC role-
+            // assignment system (UserRoles join table) — the frontend's
+            // Edit modal calls assignUserRoles() right after this PUT to
+            // keep the two in sync. Without this assignment the pill would
+            // forever show whatever role the user was created with.
+            if (!string.IsNullOrWhiteSpace(dto.Role))
+                user.Role = dto.Role.Trim();
 
             if (!string.IsNullOrWhiteSpace(dto.Password))
             {
