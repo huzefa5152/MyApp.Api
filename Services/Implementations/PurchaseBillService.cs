@@ -60,7 +60,17 @@ namespace MyApp.Api.Services.Implementations
                 SaleType = i.SaleType,
                 RateId = i.RateId,
                 FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
+                SourceInvoiceItemIds = i.SourceLines?.Select(s => s.InvoiceItemId).ToList() ?? new(),
             }).ToList() ?? new(),
+            // Distinct sale-bill numbers this purchase covered — computed
+            // by walking the SourceLines → InvoiceItem → Invoice chain.
+            LinkedSaleBillNumbers = pb.Items?
+                .SelectMany(i => i.SourceLines ?? new List<PurchaseItemSourceLine>())
+                .Where(sl => sl.InvoiceItem?.Invoice != null)
+                .Select(sl => sl.InvoiceItem!.Invoice!.InvoiceNumber)
+                .Distinct()
+                .OrderBy(n => n)
+                .ToList() ?? new(),
         };
 
         public async Task<PagedResult<PurchaseBillDto>> GetPagedByCompanyAsync(
@@ -72,6 +82,10 @@ namespace MyApp.Api.Services.Implementations
                 .Include(pb => pb.Supplier)
                 .Include(pb => pb.Items)
                     .ThenInclude(pi => pi.ItemType)
+                .Include(pb => pb.Items)
+                    .ThenInclude(pi => pi.SourceLines)
+                        .ThenInclude(sl => sl.InvoiceItem!)
+                            .ThenInclude(ii => ii.Invoice)
                 .Where(pb => pb.CompanyId == companyId);
             if (supplierId.HasValue)
                 q = q.Where(pb => pb.SupplierId == supplierId.Value);
@@ -112,6 +126,10 @@ namespace MyApp.Api.Services.Implementations
                 .Include(p => p.Supplier)
                 .Include(p => p.Items)
                     .ThenInclude(pi => pi.ItemType)
+                .Include(p => p.Items)
+                    .ThenInclude(pi => pi.SourceLines)
+                        .ThenInclude(sl => sl.InvoiceItem!)
+                            .ThenInclude(ii => ii.Invoice)
                 .FirstOrDefaultAsync(p => p.Id == id);
             return pb == null ? null : ToDto(pb);
         }
@@ -139,12 +157,70 @@ namespace MyApp.Api.Services.Implementations
             var nextNumber = Math.Max(maxNumber + 1, company.StartingPurchaseBillNumber);
             company.CurrentPurchaseBillNumber = nextNumber;
 
-            var items = new List<PurchaseItem>();
-            foreach (var i in dto.Items)
+            // Validate "Purchase Against Sale Bill" lines BEFORE we touch
+            // anything. Any line with SourceInvoiceItemIds:
+            //   • must carry an ItemTypeId (we group sale lines by it)
+            //   • that catalog row MUST have a non-empty HSCode (the
+            //     procurement flow exists precisely to set HSCode on
+            //     unclassified sale lines)
+            //   • every linked InvoiceItem must belong to an Invoice in
+            //     this same Company (no cross-tenant linking)
+            var lineErrors = new List<string>();
+            var allSourceItemIds = dto.Items
+                .SelectMany(x => x.SourceInvoiceItemIds ?? new())
+                .Distinct()
+                .ToList();
+            Dictionary<int, InvoiceItem>? sourceLines = null;
+            if (allSourceItemIds.Count > 0)
             {
+                sourceLines = await _context.InvoiceItems
+                    .Include(ii => ii.Invoice)
+                    .Where(ii => allSourceItemIds.Contains(ii.Id))
+                    .ToDictionaryAsync(ii => ii.Id);
+                foreach (var (id, ii) in sourceLines)
+                {
+                    if (ii.Invoice.CompanyId != dto.CompanyId)
+                        lineErrors.Add($"Sale line #{id} belongs to a different company.");
+                }
+            }
+            for (int idx = 0; idx < dto.Items.Count; idx++)
+            {
+                var line = dto.Items[idx];
+                if (line.SourceInvoiceItemIds == null || line.SourceInvoiceItemIds.Count == 0)
+                    continue;
+                if (!line.ItemTypeId.HasValue)
+                    lineErrors.Add($"Line {idx + 1}: Item Type is required when procuring against a sale bill.");
+            }
+            if (lineErrors.Count > 0)
+                throw new InvalidOperationException(string.Join("\n", lineErrors));
+
+            var items = new List<PurchaseItem>();
+            // Pre-load all chosen ItemTypes in one query so the HSCode
+            // gate on against-sale lines runs without N round-trips.
+            var chosenItemTypeIds = dto.Items
+                .Where(i => i.ItemTypeId.HasValue)
+                .Select(i => i.ItemTypeId!.Value)
+                .Distinct()
+                .ToList();
+            var itemTypeMap = await _context.ItemTypes
+                .Where(it => chosenItemTypeIds.Contains(it.Id))
+                .ToDictionaryAsync(it => it.Id);
+
+            for (int idx = 0; idx < dto.Items.Count; idx++)
+            {
+                var i = dto.Items[idx];
                 ItemType? itemType = i.ItemTypeId.HasValue
-                    ? await _context.ItemTypes.FindAsync(i.ItemTypeId.Value)
+                    ? itemTypeMap.GetValueOrDefault(i.ItemTypeId.Value)
                     : null;
+
+                // HSCode gate for procurement-against-sale lines
+                bool isAgainstSale = (i.SourceInvoiceItemIds?.Count ?? 0) > 0;
+                if (isAgainstSale && string.IsNullOrWhiteSpace(itemType?.HSCode))
+                {
+                    throw new InvalidOperationException(
+                        $"Line {idx + 1}: pick an Item Type WITH HS Code — procurement against a sale bill must be FBR-compliant.");
+                }
+
                 items.Add(new PurchaseItem
                 {
                     ItemTypeId = i.ItemTypeId,
@@ -188,6 +264,47 @@ namespace MyApp.Api.Services.Implementations
             };
 
             _context.PurchaseBills.Add(bill);
+            await _context.SaveChangesAsync();
+
+            // ── Source-line links + back-fill onto sale lines ─────────────
+            // For each purchase row that points at a group of InvoiceItems,
+            // write join rows AND apply the picked ItemType's HSCode/UOM/
+            // SaleType/FbrUOMId onto every linked sale line in one shot.
+            // This is the whole reason the flow exists: classify the sale
+            // by classifying the procurement.
+            for (int idx = 0; idx < dto.Items.Count; idx++)
+            {
+                var dtoLine = dto.Items[idx];
+                var savedItem = items[idx];
+                var sourceIds = dtoLine.SourceInvoiceItemIds;
+                if (sourceIds == null || sourceIds.Count == 0) continue;
+                if (sourceLines == null) continue;
+                if (!savedItem.ItemTypeId.HasValue) continue;
+                var catalog = itemTypeMap.GetValueOrDefault(savedItem.ItemTypeId.Value);
+                if (catalog == null) continue;
+
+                foreach (var srcId in sourceIds)
+                {
+                    if (!sourceLines.TryGetValue(srcId, out var src)) continue;
+
+                    // Join row
+                    _context.PurchaseItemSourceLines.Add(new PurchaseItemSourceLine
+                    {
+                        PurchaseItemId = savedItem.Id,
+                        InvoiceItemId = src.Id,
+                    });
+
+                    // Back-fill — only fields the procurement is meant to
+                    // populate. Don't touch quantity / unitPrice / description
+                    // (those reflect the sale, not the procurement).
+                    src.ItemTypeId = catalog.Id;
+                    src.ItemTypeName = catalog.Name;
+                    if (!string.IsNullOrWhiteSpace(catalog.HSCode)) src.HSCode = catalog.HSCode;
+                    if (!string.IsNullOrWhiteSpace(catalog.UOM)) src.UOM = catalog.UOM;
+                    if (catalog.FbrUOMId.HasValue) src.FbrUOMId = catalog.FbrUOMId;
+                    if (!string.IsNullOrWhiteSpace(catalog.SaleType)) src.SaleType = catalog.SaleType;
+                }
+            }
             await _context.SaveChangesAsync();
 
             // Emit Stock IN for every line that's bound to a catalog item.

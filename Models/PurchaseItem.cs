@@ -40,5 +40,13 @@ namespace MyApp.Api.Models
         public PurchaseBill PurchaseBill { get; set; } = null!;
         public GoodsReceiptItem? GoodsReceiptItem { get; set; }
         public ItemType? ItemType { get; set; }
+
+        /// <summary>
+        /// Sale lines this purchase line covered (the "Purchase Against
+        /// Sale Bill" flow). One PurchaseItem can cover MANY InvoiceItems
+        /// because the operator groups sale lines by ItemType (e.g. 28
+        /// "Medicines" lines collapsed into one Paracetamol procurement).
+        /// </summary>
+        public ICollection<PurchaseItemSourceLine> SourceLines { get; set; } = new List<PurchaseItemSourceLine>();
     }
 }

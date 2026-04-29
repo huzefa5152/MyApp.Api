@@ -683,35 +683,14 @@ namespace MyApp.Api.Services.Implementations
                 if (preResult != null) return preResult;
             }
 
-            // ── Stock guard ──
-            // Only fires on REAL submissions (isSubmit=true). Validate calls
-            // skip this so the operator can dry-run a bill before bringing
-            // stock data into compliance. The check is also a no-op when
-            // Company.InventoryTrackingEnabled is false — existing tenants
-            // keep working unchanged until they opt in.
-            if (isSubmit)
-            {
-                var requirements = invoice.Items
-                    .Where(it => it.ItemTypeId.HasValue && it.Quantity > 0)
-                    .Select(it => new StockRequirement(
-                        ItemTypeId: it.ItemTypeId!.Value,
-                        ItemName: !string.IsNullOrWhiteSpace(it.ItemTypeName) ? it.ItemTypeName : it.Description,
-                        Quantity: it.Quantity))
-                    .ToList();
-                if (requirements.Count > 0)
-                {
-                    var shortages = await _stock.CheckAvailabilityAsync(invoice.CompanyId, requirements);
-                    if (shortages.Count > 0)
-                    {
-                        var lines = shortages.Select(s =>
-                            $"{s.ItemName}: needs {s.RequiredQuantity}, on hand {s.OnHandQuantity}, short by {s.ShortBy}");
-                        var msg = "Cannot submit to FBR — insufficient stock:\n  • "
-                                  + string.Join("\n  • ", lines)
-                                  + "\nRecord the matching purchase bill(s) or adjust opening balance, then retry.";
-                        return Fail(msg);
-                    }
-                }
-            }
+            // Stock availability is NOT a gate on FBR submission. Sales /
+            // tax compliance comes first — most operators care about
+            // filing on time, not inventory accuracy. If a sale exceeds
+            // on-hand, Stock OUT still emits after the successful submit
+            // (so on-hand goes negative), and the dashboard surfaces that
+            // in red. Operator catches up by recording the matching
+            // PurchaseBill or an opening-balance adjustment later.
+
 
             // ── Resolve province names ──
             var sellerProvince = await ResolveProvinceNameAsync(company, company.FbrProvinceCode);

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyApp.Api.Data;
 
@@ -11,9 +12,11 @@ using MyApp.Api.Data;
 namespace MyApp.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260428130406_AddPurchaseItemSourceLines")]
+    partial class AddPurchaseItemSourceLines
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -89,9 +92,6 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("CNIC")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("ClientGroupId")
-                        .HasColumnType("int");
-
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
@@ -125,52 +125,9 @@ namespace MyApp.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ClientGroupId");
-
                     b.HasIndex("CompanyId");
 
                     b.ToTable("Clients");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.ClientGroup", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("GroupKey")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("NormalizedName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("NormalizedNtn")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GroupKey")
-                        .IsUnique();
-
-                    b.HasIndex("NormalizedName");
-
-                    b.HasIndex("NormalizedNtn");
-
-                    b.ToTable("ClientGroups");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Company", b =>
@@ -291,9 +248,6 @@ namespace MyApp.Api.Migrations
                     b.Property<DateTime?>("DeliveryDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("IndentNo")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<int?>("InvoiceId")
                         .HasColumnType("int");
 
@@ -348,9 +302,8 @@ namespace MyApp.Api.Migrations
                     b.Property<int?>("ItemTypeId")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
 
                     b.Property<string>("Unit")
                         .IsRequired()
@@ -984,9 +937,8 @@ namespace MyApp.Api.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
 
                     b.Property<int?>("RateId")
                         .HasColumnType("int");
@@ -2078,9 +2030,6 @@ namespace MyApp.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("ClientGroupId")
-                        .HasColumnType("int");
-
                     b.Property<int?>("ClientId")
                         .HasColumnType("int");
 
@@ -2122,8 +2071,6 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ClientGroupId");
 
                     b.HasIndex("ClientId");
 
@@ -2629,9 +2576,6 @@ namespace MyApp.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<bool>("AllowsDecimalQuantity")
-                        .HasColumnType("bit");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
@@ -2716,18 +2660,11 @@ namespace MyApp.Api.Migrations
 
             modelBuilder.Entity("MyApp.Api.Models.Client", b =>
                 {
-                    b.HasOne("MyApp.Api.Models.ClientGroup", "ClientGroup")
-                        .WithMany("Clients")
-                        .HasForeignKey("ClientGroupId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("MyApp.Api.Models.Company", "Company")
                         .WithMany("Clients")
                         .HasForeignKey("CompanyId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.Navigation("ClientGroup");
 
                     b.Navigation("Company");
                 });
@@ -2884,11 +2821,6 @@ namespace MyApp.Api.Migrations
 
             modelBuilder.Entity("MyApp.Api.Models.POFormat", b =>
                 {
-                    b.HasOne("MyApp.Api.Models.ClientGroup", "ClientGroup")
-                        .WithMany("POFormats")
-                        .HasForeignKey("ClientGroupId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("MyApp.Api.Models.Client", "Client")
                         .WithMany()
                         .HasForeignKey("ClientId")
@@ -2900,8 +2832,6 @@ namespace MyApp.Api.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Client");
-
-                    b.Navigation("ClientGroup");
 
                     b.Navigation("Company");
                 });
@@ -3073,13 +3003,6 @@ namespace MyApp.Api.Migrations
             modelBuilder.Entity("MyApp.Api.Models.Client", b =>
                 {
                     b.Navigation("DeliveryChallans");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.ClientGroup", b =>
-                {
-                    b.Navigation("Clients");
-
-                    b.Navigation("POFormats");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Company", b =>

@@ -38,6 +38,7 @@ namespace MyApp.Api.Data
         public DbSet<Supplier> Suppliers { get; set; }
         public DbSet<PurchaseBill> PurchaseBills { get; set; }
         public DbSet<PurchaseItem> PurchaseItems { get; set; }
+        public DbSet<PurchaseItemSourceLine> PurchaseItemSourceLines { get; set; }
         public DbSet<GoodsReceipt> GoodsReceipts { get; set; }
         public DbSet<GoodsReceiptItem> GoodsReceiptItems { get; set; }
         public DbSet<StockMovement> StockMovements { get; set; }
@@ -617,6 +618,25 @@ namespace MyApp.Api.Data
                 .HasIndex(pi => pi.PurchaseBillId);
             modelBuilder.Entity<PurchaseItem>()
                 .HasIndex(pi => pi.ItemTypeId);
+
+            // PurchaseItemSourceLine — join table for N:M between
+            // PurchaseItems and InvoiceItems. Composite PK; both sides
+            // cascade so cleanup is automatic when either parent is
+            // removed.
+            modelBuilder.Entity<PurchaseItemSourceLine>()
+                .HasKey(x => new { x.PurchaseItemId, x.InvoiceItemId });
+            modelBuilder.Entity<PurchaseItemSourceLine>()
+                .HasOne(x => x.PurchaseItem)
+                .WithMany(pi => pi.SourceLines)
+                .HasForeignKey(x => x.PurchaseItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PurchaseItemSourceLine>()
+                .HasOne(x => x.InvoiceItem)
+                .WithMany()
+                .HasForeignKey(x => x.InvoiceItemId)
+                .OnDelete(DeleteBehavior.NoAction); // avoid SQL Server "multiple cascade paths"
+            modelBuilder.Entity<PurchaseItemSourceLine>()
+                .HasIndex(x => x.InvoiceItemId);
             modelBuilder.Entity<PurchaseItem>().Property(pi => pi.UnitPrice).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseItem>().Property(pi => pi.LineTotal).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseItem>().Property(pi => pi.FixedNotifiedValueOrRetailPrice).HasPrecision(18, 2);

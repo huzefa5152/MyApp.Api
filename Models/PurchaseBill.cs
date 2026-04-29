@@ -62,5 +62,12 @@ namespace MyApp.Api.Models
         public Supplier Supplier { get; set; } = null!;
         public ICollection<PurchaseItem> Items { get; set; } = new List<PurchaseItem>();
         public ICollection<GoodsReceipt> GoodsReceipts { get; set; } = new List<GoodsReceipt>();
+
+        // The "links to sale bills" relationship is N:M between PurchaseBills
+        // and Invoices, expressed at the LINE level via
+        // PurchaseItem.SourceInvoiceItemId. Compute "this purchase covers
+        // sale bills X, Y, Z" by grouping Items.Select(i =>
+        // i.SourceInvoiceItem?.InvoiceId).Distinct() — no bill-level FK
+        // needed, and one purchase bill can fulfill any number of sale bills.
     }
 }

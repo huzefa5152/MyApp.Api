@@ -1043,6 +1043,154 @@ namespace MyApp.Api.Services.Implementations
             return await _invoiceRepo.GetCountByCompanyAsync(companyId);
         }
 
+        public async Task<List<AwaitingPurchaseInvoiceDto>> GetAwaitingPurchaseAsync(int companyId)
+        {
+            // A bill qualifies for the "Purchase Against Sale Bill" picker if:
+            //   • not yet submitted to FBR (still mutable)
+            //   • EVERY line on it has an ItemTypeId set (so grouping works)
+            //   • at least one line has empty HSCode (= needs procurement)
+            //   • that line still has remaining qty (sold − already procured)
+            //
+            // Bills with mixed-classification lines (some with ItemTypeId,
+            // some without) are excluded — operator must classify all
+            // lines first so the procurement form can show clean groups.
+
+            // Sum of "already procured" qty per InvoiceItem, computed from
+            // the join table.
+            var procuredPerItem = _context.PurchaseItemSourceLines
+                .Join(_context.PurchaseItems,
+                      psl => psl.PurchaseItemId,
+                      pi => pi.Id,
+                      (psl, pi) => new { psl.InvoiceItemId, pi.Quantity });
+
+            // We need raw item rows to compute the per-bill qualification
+            // server-side. EF will translate the LINQ to a single query.
+            var rawLines = await (
+                from i in _context.Invoices
+                join ii in _context.InvoiceItems on i.Id equals ii.InvoiceId
+                where i.CompanyId == companyId
+                   && i.FbrStatus != "Submitted"
+                   && !i.IsDemo
+                select new
+                {
+                    i.Id,
+                    i.InvoiceNumber,
+                    i.Date,
+                    i.ClientId,
+                    ClientName = i.Client.Name,
+                    InvoiceItemId = ii.Id,
+                    ii.HSCode,
+                    ii.ItemTypeId,
+                    SoldQty = ii.Quantity,
+                    PurchasedQty = procuredPerItem
+                        .Where(p => p.InvoiceItemId == ii.Id)
+                        .Sum(p => (int?)p.Quantity) ?? 0,
+                }).ToListAsync();
+
+            var grouped = rawLines.GroupBy(x => new {
+                x.Id, x.InvoiceNumber, x.Date, x.ClientId, x.ClientName
+            });
+
+            var result = new List<AwaitingPurchaseInvoiceDto>();
+            foreach (var bill in grouped)
+            {
+                var lines = bill.ToList();
+                // Every line must have ItemTypeId — bills with stragglers
+                // are filtered out per the user's rule ("if no item type
+                // is selected on bill, that bill doesn't show").
+                if (lines.Any(l => l.ItemTypeId == null)) continue;
+
+                var awaiting = lines
+                    .Where(l => string.IsNullOrWhiteSpace(l.HSCode)
+                             && (l.SoldQty - l.PurchasedQty) > 0)
+                    .ToList();
+                if (awaiting.Count == 0) continue;
+
+                result.Add(new AwaitingPurchaseInvoiceDto
+                {
+                    InvoiceId = bill.Key.Id,
+                    InvoiceNumber = bill.Key.InvoiceNumber,
+                    Date = bill.Key.Date,
+                    ClientId = bill.Key.ClientId,
+                    ClientName = bill.Key.ClientName,
+                    LinesAwaiting = awaiting.Count,
+                    TotalQtyRemaining = awaiting.Sum(l => l.SoldQty - l.PurchasedQty),
+                });
+            }
+            return result.OrderByDescending(x => x.Date)
+                         .ThenByDescending(x => x.InvoiceNumber)
+                         .ToList();
+        }
+
+        public async Task<PurchaseTemplateDto?> GetPurchaseTemplateAsync(int invoiceId)
+        {
+            var invoice = await _context.Invoices
+                .Include(i => i.Client)
+                .Include(i => i.Items)
+                    .ThenInclude(ii => ii.ItemType)
+                .FirstOrDefaultAsync(i => i.Id == invoiceId);
+            if (invoice == null) return null;
+
+            var lineIds = invoice.Items.Select(x => x.Id).ToList();
+
+            // Pre-compute already-procured qty per InvoiceItem in one query.
+            var procuredMap = await _context.PurchaseItemSourceLines
+                .Where(psl => lineIds.Contains(psl.InvoiceItemId))
+                .Join(_context.PurchaseItems,
+                      psl => psl.PurchaseItemId,
+                      pi => pi.Id,
+                      (psl, pi) => new { psl.InvoiceItemId, pi.Quantity })
+                .GroupBy(x => x.InvoiceItemId)
+                .Select(g => new { InvoiceItemId = g.Key, Total = g.Sum(x => x.Quantity) })
+                .ToDictionaryAsync(x => x.InvoiceItemId, x => x.Total);
+
+            // Group HSCode-empty lines by ItemTypeId. Lines without
+            // ItemTypeId would have disqualified the bill at picker
+            // level, so we shouldn't see any here — but defensively skip.
+            var groups = invoice.Items
+                .Where(ii => string.IsNullOrWhiteSpace(ii.HSCode) && ii.ItemTypeId.HasValue)
+                .GroupBy(ii => ii.ItemTypeId!.Value)
+                .Select(g => {
+                    var sample = g.First();
+                    var soldQty = g.Sum(x => x.Quantity);
+                    var procuredQty = g.Sum(x => procuredMap.GetValueOrDefault(x.Id));
+                    var remaining = soldQty - procuredQty;
+                    var firstDesc = g.First().Description;
+                    var moreCount = g.Count() - 1;
+                    return new PurchaseTemplateLineDto
+                    {
+                        ItemTypeId = g.Key,
+                        ItemTypeName = sample.ItemType?.Name ?? sample.ItemTypeName,
+                        InvoiceItemIds = g.Select(x => x.Id).ToList(),
+                        LineCount = g.Count(),
+                        Description = moreCount > 0
+                            ? $"{firstDesc} (+ {moreCount} more)"
+                            : firstDesc,
+                        SoldQty = soldQty,
+                        PurchasedQty = procuredQty,
+                        RemainingQty = remaining,
+                        SaleUom = g.GroupBy(x => x.UOM)
+                            .OrderByDescending(g2 => g2.Count())
+                            .Select(g2 => g2.Key)
+                            .FirstOrDefault(),
+                        AvgSaleUnitPrice = g.Average(x => x.UnitPrice),
+                    };
+                })
+                .Where(line => line.RemainingQty > 0)
+                .OrderBy(line => line.ItemTypeName)
+                .ToList();
+
+            return new PurchaseTemplateDto
+            {
+                InvoiceId = invoice.Id,
+                InvoiceNumber = invoice.InvoiceNumber,
+                Date = invoice.Date,
+                ClientId = invoice.ClientId,
+                ClientName = invoice.Client?.Name ?? "",
+                Items = groups,
+            };
+        }
+
         public async Task<ItemRateHistoryResultDto> GetItemRateHistoryAsync(
             int companyId, int page, int pageSize,
             int? itemTypeId, string? search,

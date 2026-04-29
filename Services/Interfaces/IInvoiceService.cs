@@ -60,5 +60,18 @@ namespace MyApp.Api.Services.Interfaces
         /// can leave them blank for the operator to enter manually.
         /// </summary>
         Task<List<LastRateDto>> GetLastRatesForChallanAsync(int companyId, int challanId);
+
+        /// <summary>
+        /// Sale bills with at least one HSCode-empty line that still has
+        /// remaining qty to procure. Drives the "pick a sale bill" step of
+        /// the Purchase Against Sale Bill flow.
+        /// </summary>
+        Task<List<AwaitingPurchaseInvoiceDto>> GetAwaitingPurchaseAsync(int companyId);
+
+        /// <summary>
+        /// Per-line procurement template for one sale bill — the lines
+        /// missing HSCode plus their sold/procured/remaining qty.
+        /// </summary>
+        Task<PurchaseTemplateDto?> GetPurchaseTemplateAsync(int invoiceId);
     }
 }

@@ -106,6 +106,32 @@ namespace MyApp.Api.Controllers
             return Ok(rows);
         }
 
+        /// <summary>
+        /// Sale bills that need procurement — picker for the "Purchase
+        /// Against Sale Bill" flow. Returns only bills that have at least
+        /// one HSCode-empty line with remaining qty AND every line on the
+        /// bill has an ItemTypeId set (so the procurement form can group
+        /// cleanly).
+        /// </summary>
+        [HttpGet("company/{companyId}/awaiting-purchase")]
+        [HasPermission("purchasebills.manage.create")]
+        public async Task<ActionResult<List<AwaitingPurchaseInvoiceDto>>> GetAwaitingPurchase(int companyId)
+            => Ok(await _service.GetAwaitingPurchaseAsync(companyId));
+
+        /// <summary>
+        /// Per-line procurement template for one sale bill — HSCode-empty
+        /// lines grouped by ItemType, with sold/procured/remaining qty.
+        /// Drives the PurchaseBillForm in "Purchase Against Sale" mode.
+        /// </summary>
+        [HttpGet("{invoiceId}/purchase-template")]
+        [HasPermission("purchasebills.manage.create")]
+        public async Task<ActionResult<PurchaseTemplateDto>> GetPurchaseTemplate(int invoiceId)
+        {
+            var dto = await _service.GetPurchaseTemplateAsync(invoiceId);
+            if (dto == null) return NotFound();
+            return Ok(dto);
+        }
+
         [HttpPost]
         [HasPermission("invoices.manage.create")]
         public async Task<ActionResult<InvoiceDto>> Create([FromBody] CreateInvoiceDto dto)
