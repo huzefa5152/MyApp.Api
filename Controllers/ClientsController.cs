@@ -81,6 +81,35 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Delete a Common Client across every tenant — removes each
+        /// per-company Client row (cascading to its invoices /
+        /// challans, same as the per-tenant delete UX) plus the
+        /// ClientGroup row itself. Permission gated on
+        /// clients.manage.delete; the cascade is identical to what
+        /// the per-tenant DELETE /api/clients/{id} already does, so
+        /// "common delete" is N parallel per-tenant deletes wrapped
+        /// in one operator action.
+        /// </summary>
+        [HttpDelete("common/{groupId:int}")]
+        [HasPermission("clients.manage.delete")]
+        public async Task<ActionResult<CommonClientUpdateResultDto>> DeleteCommon(int groupId)
+        {
+            try
+            {
+                var result = await _groupService.DeleteAsync(groupId);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpGet]
         public async Task<ActionResult<IEnumerable<ClientDto>>> GetClients()
             => Ok(await _service.GetAllAsync());

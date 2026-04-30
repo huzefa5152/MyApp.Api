@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
@@ -15,10 +16,17 @@ namespace MyApp.Api.Services.Implementations
     public class ClientGroupService : IClientGroupService
     {
         private readonly AppDbContext _db;
+        // Resolve IClientService lazily — both services depend on each
+        // other (ClientService → ClientGroupService for EnsureGroup;
+        // ClientGroupService → ClientService for the per-member cascade
+        // delete) so direct DI would create a cycle. IServiceProvider
+        // breaks the cycle without wiring an extra interface boundary.
+        private readonly IServiceProvider _services;
 
-        public ClientGroupService(AppDbContext db)
+        public ClientGroupService(AppDbContext db, IServiceProvider services)
         {
             _db = db;
+            _services = services;
         }
 
         // Same regexes used by the startup backfill (kept in C# so the
@@ -359,6 +367,57 @@ namespace MyApp.Api.Services.Implementations
                     .Distinct()
                     .OrderBy(n => n)
                     .ToList(),
+            };
+        }
+
+        public async Task<CommonClientUpdateResultDto> DeleteAsync(int groupId)
+        {
+            var group = await _db.ClientGroups.FirstOrDefaultAsync(g => g.Id == groupId)
+                ?? throw new KeyNotFoundException("Common client group not found.");
+
+            // Snapshot member ids + company names BEFORE we start
+            // deleting — once ClientService.DeleteAsync removes the row
+            // its Company nav becomes useless.
+            var members = await _db.Clients
+                .Include(c => c.Company)
+                .Where(c => c.ClientGroupId == groupId)
+                .ToListAsync();
+
+            var companyNames = members
+                .Select(m => m.Company?.Name ?? $"Company #{m.CompanyId}")
+                .Distinct()
+                .OrderBy(n => n)
+                .ToList();
+
+            // Delegate per-member delete to the existing ClientService
+            // path — that already runs the full cascade (invoices,
+            // invoice items, delivery items, challans) inside its own
+            // transaction. Doing it once per member is N round-trips
+            // but each is small and the safety of "exact same cascade
+            // every tenant uses today" beats reinventing the cleanup.
+            var clientService = _services.GetRequiredService<IClientService>();
+            foreach (var member in members)
+            {
+                await clientService.DeleteAsync(member.Id);
+            }
+
+            // SetNull cascade on Client.ClientGroupId means the group
+            // row is now orphaned — drop it explicitly so the dropdown
+            // and the Common Clients panel refresh cleanly. Use a
+            // fresh entity load (the prior reference may be stale
+            // after the per-member deletes).
+            var groupRow = await _db.ClientGroups.FirstOrDefaultAsync(g => g.Id == groupId);
+            if (groupRow != null)
+            {
+                _db.ClientGroups.Remove(groupRow);
+                await _db.SaveChangesAsync();
+            }
+
+            return new CommonClientUpdateResultDto
+            {
+                GroupId = groupId,
+                ClientsUpdated = members.Count,
+                AffectedCompanyNames = companyNames,
             };
         }
     }

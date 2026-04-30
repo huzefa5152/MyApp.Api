@@ -49,6 +49,20 @@ namespace MyApp.Api.Services.Interfaces
         Task<CommonClientUpdateResultDto> UpdateAsync(int groupId, CommonClientUpdateDto dto);
 
         /// <summary>
+        /// Delete the Common Client across every tenant: removes each
+        /// per-company <see cref="Client"/> row (with the same cascade
+        /// the existing single-tenant ClientService.DeleteAsync uses —
+        /// invoices, invoice items, delivery items, challans), then
+        /// removes the <see cref="ClientGroup"/> row itself.
+        ///
+        /// Returns a list of company-name "deleted from" labels so the
+        /// caller can show a clear toast. Throws on the first member
+        /// that fails to delete (transactional — partial deletes are
+        /// rolled back).
+        /// </summary>
+        Task<CommonClientUpdateResultDto> DeleteAsync(int groupId);
+
+        /// <summary>
         /// Pure helper exposed so other paths (the startup backfill, the
         /// PO matcher, future merge tooling) compute group keys the same
         /// way as the runtime EnsureGroup path.

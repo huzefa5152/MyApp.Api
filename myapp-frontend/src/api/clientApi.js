@@ -30,3 +30,10 @@ export const getCommonClientById = (groupId) =>
   http.get(`/clients/common/${groupId}`);
 export const updateCommonClient = (groupId, payload) =>
   http.put(`/clients/common/${groupId}`, payload);
+
+// Delete a Common Client across every tenant — removes the per-
+// company Client row in each company plus their cascading data
+// (invoices, items, delivery challans). Same destructive shape as
+// the per-tenant DELETE, just N tenants in one operator action.
+export const deleteCommonClient = (groupId) =>
+  http.delete(`/clients/common/${groupId}`);

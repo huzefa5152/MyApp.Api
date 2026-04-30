@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { MdClose, MdInfo, MdBusiness, MdCheckCircle } from "react-icons/md";
-import { getCommonClientById, updateCommonClient } from "../api/clientApi";
+import { MdClose, MdInfo, MdBusiness, MdCheckCircle, MdDelete } from "react-icons/md";
+import { getCommonClientById, updateCommonClient, deleteCommonClient } from "../api/clientApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { formStyles, modalSizes } from "../theme";
 
 /**
@@ -16,8 +17,12 @@ import { formStyles, modalSizes } from "../theme";
  * propagation will land on the rows they expect before saving.
  */
 export default function CommonClientForm({ groupId, onClose, onSaved }) {
+  const { has } = usePermissions();
+  const canDelete = has("clients.manage.delete");
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [detail, setDetail] = useState(null);
   // Province dropdown options — same FBR Lookup category the per-
@@ -88,6 +93,41 @@ export default function CommonClientForm({ groupId, onClose, onSaved }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
+  };
+
+  const handleDelete = async () => {
+    if (!detail || deleting) return;
+    const memberCount = detail.members?.length || 0;
+    const companyList = detail.members?.map((m) => m.companyName).join(", ") || "this company";
+    const hasInvoices = detail.members?.some((m) => m.hasInvoices);
+
+    // Strong confirmation — this cascades across every tenant. Same
+    // shape as the per-company delete (which also cascades hard) but
+    // multiplied by N tenants in one click, so the prompt has to
+    // make the blast radius obvious.
+    const confirmation = window.confirm(
+      `Delete "${detail.displayName}" from ${memberCount} compan${memberCount === 1 ? "y" : "ies"} ` +
+        `(${companyList})?\n\n` +
+        (hasInvoices
+          ? "⚠️ At least one company has invoices for this client — those invoices and their delivery challans will ALSO be deleted.\n\n"
+          : "") +
+        "This cannot be undone."
+    );
+    if (!confirmation) return;
+
+    setDeleting(true);
+    setError("");
+    try {
+      const { data } = await deleteCommonClient(groupId);
+      // onSaved doubles as the refresh hook — pass null so the
+      // parent treats this as "form closed, refresh both lists".
+      onSaved?.(data);
+      onClose?.();
+    } catch (e) {
+      setError(e?.response?.data?.message || "Failed to delete.");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -297,22 +337,41 @@ export default function CommonClientForm({ groupId, onClose, onSaved }) {
             )}
           </div>
 
-          <div style={formStyles.footer}>
-            <button
-              type="button"
-              style={{ ...formStyles.button, ...formStyles.cancel }}
-              onClick={onClose}
-              disabled={saving}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              style={{ ...formStyles.button, ...formStyles.submit }}
-              disabled={saving || loading}
-            >
-              {saving ? "Saving…" : "Save & propagate"}
-            </button>
+          <div style={{ ...formStyles.footer, justifyContent: "space-between" }}>
+            {/* Delete on the left, Cancel/Save on the right — same
+                pattern as native edit dialogs that have a destructive
+                action. Hidden entirely without the permission so the
+                button never tantalises operators who can't use it. */}
+            {canDelete && detail ? (
+              <button
+                type="button"
+                style={{ ...formStyles.button, ...s.deleteBtn }}
+                onClick={handleDelete}
+                disabled={deleting || saving || loading}
+                title="Delete this client from every company that has it"
+              >
+                <MdDelete size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} />
+                {deleting ? "Deleting…" : "Delete from all companies"}
+              </button>
+            ) : <span />}
+
+            <div style={{ display: "flex", gap: "0.6rem" }}>
+              <button
+                type="button"
+                style={{ ...formStyles.button, ...formStyles.cancel }}
+                onClick={onClose}
+                disabled={saving || deleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                style={{ ...formStyles.button, ...formStyles.submit }}
+                disabled={saving || deleting || loading}
+              >
+                {saving ? "Saving…" : "Save & propagate"}
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -372,5 +431,12 @@ const s = {
     marginTop: "0.25rem",
     display: "block",
     lineHeight: 1.4,
+  },
+  deleteBtn: {
+    background: "#fff0f1",
+    backgroundColor: "#fff0f1",
+    color: "#dc3545",
+    border: "1px solid rgba(220,53,69,0.2)",
+    boxShadow: "none",
   },
 };
