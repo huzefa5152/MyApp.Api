@@ -616,6 +616,59 @@ namespace MyApp.Api.Services.Implementations
 
             bool isSandbox = company.FbrEnvironment != "production";
 
+            // ── Refresh FBR-classification fields from the live ItemType ──
+            // Operators expect the bill to track the catalog at submit time:
+            // if they fix an Item Type's UoM / HS Code / Sale Type after a
+            // bill was created, the next Validate or Submit must use the
+            // corrected catalog values — not the stale snapshot taken when
+            // the bill was first saved. (FBR error 0099 happens precisely
+            // because the snapshot drifted from the catalog.)
+            //
+            // Boundaries:
+            //   • Only runs for non-Submitted bills. Submitted bills carry
+            //     their own audit-locked snapshot — re-validating one is
+            //     a no-op for FBR but we don't rewrite history.
+            //   • Only refreshes lines that carry an ItemTypeId. Lines
+            //     created without picking from the catalog (free-text) keep
+            //     their operator-typed values; the pre-flight HS_UOM check
+            //     still blocks any mismatch there.
+            //   • Touches only the four FBR-classification fields
+            //     (HSCode / UOM / FbrUOMId / SaleType) plus the display
+            //     ItemTypeName. Quantity / unit price / SRO references
+            //     stay as the operator entered them.
+            //   • Skipped for dry-run preview — preview is read-only.
+            if (!dryRun
+                && !string.Equals(invoice.FbrStatus, "Submitted", StringComparison.OrdinalIgnoreCase))
+            {
+                var typeIds = invoice.Items
+                    .Where(ii => ii.ItemTypeId.HasValue)
+                    .Select(ii => ii.ItemTypeId!.Value)
+                    .Distinct()
+                    .ToList();
+                if (typeIds.Count > 0)
+                {
+                    var liveTypes = await _db.ItemTypes
+                        .Where(t => typeIds.Contains(t.Id))
+                        .ToDictionaryAsync(t => t.Id);
+
+                    bool anyChanged = false;
+                    foreach (var line in invoice.Items)
+                    {
+                        if (!line.ItemTypeId.HasValue) continue;
+                        if (!liveTypes.TryGetValue(line.ItemTypeId.Value, out var t)) continue;
+
+                        if (line.HSCode       != t.HSCode)        { line.HSCode = t.HSCode;        anyChanged = true; }
+                        if ((line.UOM ?? "")  != (t.UOM ?? ""))   { line.UOM = t.UOM ?? "";        anyChanged = true; }
+                        if (line.FbrUOMId     != t.FbrUOMId)      { line.FbrUOMId = t.FbrUOMId;    anyChanged = true; }
+                        if (line.SaleType     != t.SaleType)      { line.SaleType = t.SaleType;    anyChanged = true; }
+                        if (line.ItemTypeName != t.Name)          { line.ItemTypeName = t.Name;    anyChanged = true; }
+                    }
+
+                    if (anyChanged)
+                        await _db.SaveChangesAsync();
+                }
+            }
+
             // ── Pre-validate ──
             // Skipped for dry-run preview so the operator can inspect the
             // would-be JSON even when fields are incomplete (preview is
