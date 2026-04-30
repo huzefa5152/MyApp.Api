@@ -110,4 +110,49 @@ namespace MyApp.Api.DTOs
         public int ClientsUpdated { get; set; }
         public List<string> AffectedCompanyNames { get; set; } = new();
     }
+
+    /// <summary>
+    /// Multi-company create payload. The "New Client" form sends one of
+    /// these instead of a single ClientDto so that one form submission
+    /// can populate the same client under multiple companies in a single
+    /// transaction. Every created row inherits the same <see cref="ClientDto"/>
+    /// fields and is auto-linked to the same <see cref="ClientGroup"/>
+    /// via the runtime EnsureGroup path — so the new client appears in the
+    /// Common Clients panel immediately if the operator picked 2+ companies.
+    /// </summary>
+    public class CreateClientBatchDto
+    {
+        public string Name { get; set; } = "";
+        public string? Address { get; set; }
+        public string? Phone { get; set; }
+        public string? Email { get; set; }
+        public string? NTN { get; set; }
+        public string? STRN { get; set; }
+        public string? Site { get; set; }
+        public string? RegistrationType { get; set; }
+        public string? CNIC { get; set; }
+        public int? FbrProvinceCode { get; set; }
+
+        /// <summary>
+        /// One or more CompanyIds — one Client row is created per id.
+        /// Empty list is rejected by the controller. Duplicate-name
+        /// collisions (a client with this name already exists in one
+        /// of the target companies) are surfaced via
+        /// <see cref="CreateClientBatchResultDto.SkippedReasons"/>.
+        /// </summary>
+        public List<int> CompanyIds { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Result of a multi-company create. Reports which Client rows were
+    /// created, which companies were skipped (and why), and the shared
+    /// <see cref="ClientGroup"/> id so the UI can deep-link straight
+    /// into the Common Client edit form.
+    /// </summary>
+    public class CreateClientBatchResultDto
+    {
+        public List<ClientDto> Created { get; set; } = new();
+        public List<string> SkippedReasons { get; set; } = new();
+        public int? ClientGroupId { get; set; }
+    }
 }

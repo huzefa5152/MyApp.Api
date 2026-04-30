@@ -4,6 +4,12 @@ export const getClients = () => http.get("/clients");
 export const getClientsByCompany = (companyId) => http.get(`/clients/company/${companyId}`);
 export const getClientById = (id) => http.get(`/clients/${id}`);
 export const createClient = (payload) => http.post("/clients", payload);
+
+// Multi-company create — one form, N Client rows (one per company).
+// Selecting 2+ companies auto-collapses them into a Common Client.
+// Payload shape: { ...clientFields, companyIds: [1, 2] }
+// Response shape: { created: [Client...], skippedReasons: ["..."], clientGroupId }
+export const createClientBatch = (payload) => http.post("/clients/batch", payload);
 export const updateClient = (id, payload) => http.put(`/clients/${id}`, payload);
 export const deleteClient = (id) => http.delete(`/clients/${id}`);
 export const getClientsCount = (companyId) =>

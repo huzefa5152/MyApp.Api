@@ -109,6 +109,94 @@ namespace MyApp.Api.Services.Implementations
             return ToDto(created);
         }
 
+        public async Task<CreateClientBatchResultDto> CreateForCompaniesAsync(CreateClientBatchDto dto)
+        {
+            var result = new CreateClientBatchResultDto();
+            if (dto.CompanyIds == null || dto.CompanyIds.Count == 0)
+                throw new InvalidOperationException("At least one company must be selected.");
+
+            // Resolve company names up front so the skip messages don't
+            // require a per-row round-trip and so the operator sees friendly
+            // labels (not just numeric ids) in the response toast.
+            var distinctIds = dto.CompanyIds.Distinct().ToList();
+            var companyNames = await _context.Companies
+                .Where(c => distinctIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => c.Name);
+
+            // Use a single transaction so a partial failure (e.g. transient
+            // DB error mid-batch) doesn't leave us with half the records and
+            // a half-formed Common Client group. Either every selected
+            // company gets the row (or is recorded as skipped) or nothing
+            // changes.
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                foreach (var companyId in distinctIds)
+                {
+                    if (!companyNames.TryGetValue(companyId, out var companyName))
+                    {
+                        result.SkippedReasons.Add($"Company id={companyId} not found.");
+                        continue;
+                    }
+
+                    // Same name-collision rule the per-company CreateAsync
+                    // enforces — record as a skip instead of throwing so the
+                    // remaining companies still get the row.
+                    if (await _repo.ExistsWithNameAsync(dto.Name, companyId))
+                    {
+                        result.SkippedReasons.Add(
+                            $"{companyName}: a client named '{dto.Name}' already exists; skipped.");
+                        continue;
+                    }
+
+                    var client = new Client
+                    {
+                        Name = dto.Name,
+                        Address = dto.Address,
+                        Phone = dto.Phone,
+                        Email = dto.Email,
+                        NTN = dto.NTN,
+                        STRN = dto.STRN,
+                        Site = dto.Site,
+                        RegistrationType = dto.RegistrationType,
+                        CNIC = dto.CNIC,
+                        FbrProvinceCode = dto.FbrProvinceCode,
+                        CompanyId = companyId,
+                        CreatedAt = DateTime.UtcNow,
+                    };
+                    var created = await _repo.CreateAsync(client);
+
+                    // Find-or-create the shared ClientGroup. After the first
+                    // iteration this LANDS on the same group every time
+                    // because EnsureGroup keys off NTN (or normalised name)
+                    // — so picking 2+ companies auto-collapses them into
+                    // one Common Client without any extra wiring here.
+                    try
+                    {
+                        var grp = await _clientGroupService.EnsureGroupForClientAsync(created);
+                        await _context.SaveChangesAsync();
+                        result.ClientGroupId = grp.Id;
+                    }
+                    catch
+                    {
+                        // Grouping failure must not block the create —
+                        // the per-company row is the source of truth.
+                    }
+
+                    result.Created.Add(ToDto(created));
+                }
+
+                await tx.CommitAsync();
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+
+            return result;
+        }
+
         public async Task<ClientDto> UpdateAsync(ClientDto dto)
         {
             if (dto.Id == null) throw new ArgumentException("Client ID is required for update.");

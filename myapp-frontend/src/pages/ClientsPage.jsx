@@ -205,11 +205,15 @@ export default function ClientsPage() {
         />
       )}
 
-      {/* Client Form Modal */}
+      {/* Client Form Modal — `companies` enables the multi-company
+          picker on Add. On Edit, the picker is hidden (a Client row
+          can only belong to one company; cross-tenant edits are done
+          via the Common Client form). */}
       {showModal && selectedCompany && (
         <ClientForm
           client={selectedClient}
           companyId={selectedCompany.id}
+          companies={companies}
           onClose={() => setShowModal(false)}
           onSaved={() => {
             fetchClients(selectedCompany.id);

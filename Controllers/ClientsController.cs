@@ -116,6 +116,33 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Multi-company create — one form submission, N Client rows
+        /// (one per selected CompanyId). Selecting 2+ companies auto-
+        /// links the rows into the same ClientGroup so the new client
+        /// shows up in the Common Clients panel immediately. Per-company
+        /// name collisions are surfaced as skip reasons rather than
+        /// failing the whole batch.
+        /// </summary>
+        [HttpPost("batch")]
+        [HasPermission("clients.manage.create")]
+        public async Task<ActionResult<CreateClientBatchResultDto>> CreateBatch([FromBody] CreateClientBatchDto dto)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (dto.CompanyIds == null || dto.CompanyIds.Count == 0)
+                return BadRequest(new { message = "Select at least one company." });
+
+            try
+            {
+                var result = await _service.CreateForCompaniesAsync(dto);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpPut("{id}")]
         [HasPermission("clients.manage.update")]
         public async Task<ActionResult<ClientDto>> UpdateClient(int id, [FromBody] ClientDto dto)

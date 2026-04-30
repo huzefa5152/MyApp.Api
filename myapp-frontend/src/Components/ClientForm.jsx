@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { createClient, updateClient } from "../api/clientApi";
+import { createClient, createClientBatch, updateClient } from "../api/clientApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { notify } from "../utils/notify";
 import { formStyles } from "../theme";
@@ -10,7 +10,35 @@ const {
   footer, button, cancel, submit,
 } = formStyles;
 
-export default function ClientForm({ client, companyId, onClose, onSaved }) {
+/**
+ * Per-company client form. Two modes:
+ *
+ *  • EDIT (`client` prop set) — exactly the existing behaviour. The
+ *    company can't change here; if the operator wants the same
+ *    edits to land on every company's record they should open the
+ *    Common Client form instead.
+ *
+ *  • CREATE (`client` null) — the new "multi-company" flow. The
+ *    operator can pick one OR more companies; the form posts to
+ *    /api/clients/batch and the backend creates one Client row per
+ *    company, all auto-linked to the same ClientGroup. When
+ *    `companies` prop is empty (or only one is provided) the picker
+ *    is hidden and the form falls back to the legacy single-company
+ *    POST /api/clients call — keeping screens that don't yet pass
+ *    the company list working.
+ *
+ * Props:
+ *  • client     — existing client to edit, or null for create.
+ *  • companyId  — currently-selected company in the parent dropdown.
+ *                 Used as the legacy single-company create target AND
+ *                 as the default-checked entry in the multi-company
+ *                 picker.
+ *  • companies  — full list of companies the operator may create the
+ *                 client under (typically from useCompany().companies).
+ *                 Optional — when omitted, multi-company picker is
+ *                 hidden.
+ */
+export default function ClientForm({ client, companyId, companies = [], onClose, onSaved }) {
   const [formData, setFormData] = useState(
     client
       ? { ...client, ntn: client.ntn || "", strn: client.strn || "", site: client.site || "", registrationType: client.registrationType || "", cnic: client.cnic || "", fbrProvinceCode: client.fbrProvinceCode ?? "" }
@@ -19,6 +47,33 @@ export default function ClientForm({ client, companyId, onClose, onSaved }) {
   const [errors, setErrors] = useState({});
   const [provinces, setProvinces] = useState([]);
   const [regTypes, setRegTypes] = useState([]);
+
+  // Multi-company picker state (CREATE mode only). Default-selected
+  // is the currently-active company so the existing single-company
+  // workflow stays one click — operator just opens the form, fills,
+  // saves. Adding a second company is one extra checkbox click.
+  const isCreate = !client;
+  const showCompanyPicker = isCreate && Array.isArray(companies) && companies.length > 1;
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState(() =>
+    companyId ? [Number(companyId)] : []
+  );
+
+  // Keep the default in sync if the parent dropdown changes the
+  // active company while the modal is closed (rare, but safe).
+  useEffect(() => {
+    if (isCreate && companyId) {
+      setSelectedCompanyIds((prev) =>
+        prev.length === 0 ? [Number(companyId)] : prev
+      );
+    }
+  }, [companyId, isCreate]);
+
+  const toggleCompany = (id) => {
+    const n = Number(id);
+    setSelectedCompanyIds((prev) =>
+      prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]
+    );
+  };
 
   useEffect(() => {
     if (client) setFormData({ ...client, ntn: client.ntn || "", strn: client.strn || "", site: client.site || "", registrationType: client.registrationType || "", cnic: client.cnic || "", fbrProvinceCode: client.fbrProvinceCode ?? "" });
@@ -48,6 +103,9 @@ export default function ClientForm({ client, companyId, onClose, onSaved }) {
     if ((formData.registrationType === "Unregistered" || formData.registrationType === "CNIC") && !formData.cnic.trim()) {
       newErrors.cnic = "CNIC is required for this registration type";
     }
+    if (isCreate && showCompanyPicker && selectedCompanyIds.length === 0) {
+      newErrors.companies = "Pick at least one company.";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -61,11 +119,43 @@ export default function ClientForm({ client, companyId, onClose, onSaved }) {
     e.preventDefault();
     if (!validate()) return;
     try {
-      const payload = { ...formData, companyId, fbrProvinceCode: formData.fbrProvinceCode === "" ? null : Number(formData.fbrProvinceCode), registrationType: formData.registrationType || null, cnic: formData.cnic || null };
-      let result;
-      if (formData.id) result = await updateClient(formData.id, payload);
-      else result = await createClient(payload);
-      onSaved(result.data);
+      const base = {
+        ...formData,
+        fbrProvinceCode: formData.fbrProvinceCode === "" ? null : Number(formData.fbrProvinceCode),
+        registrationType: formData.registrationType || null,
+        cnic: formData.cnic || null,
+      };
+
+      // EDIT — single record, unchanged path.
+      if (formData.id) {
+        const { data } = await updateClient(formData.id, { ...base, companyId });
+        onSaved(data);
+        onClose();
+        return;
+      }
+
+      // CREATE — branch on whether we have a multi-company picker.
+      // When the picker is hidden (legacy callers / single-company
+      // setups) fall back to the original POST /api/clients.
+      if (showCompanyPicker) {
+        const { data } = await createClientBatch({ ...base, companyIds: selectedCompanyIds });
+        const created = data.created || [];
+        const skipped = data.skippedReasons || [];
+        if (skipped.length > 0) {
+          notify(skipped.join(" "), "warning");
+        }
+        if (created.length > 0) {
+          notify(
+            `Created ${created.length} client record${created.length !== 1 ? "s" : ""}` +
+              (data.clientGroupId ? " (linked as a Common Client)" : ""),
+            "success"
+          );
+        }
+        onSaved(created[0] || null);
+      } else {
+        const { data } = await createClient({ ...base, companyId });
+        onSaved(data);
+      }
       onClose();
     } catch (err) {
       const msg = err.response?.data?.message || "Failed to save client. Please try again.";
@@ -88,6 +178,45 @@ export default function ClientForm({ client, companyId, onClose, onSaved }) {
         </div>
         <form onSubmit={handleSubmit} noValidate>
           <div style={body}>
+            {/* Multi-company picker — CREATE mode only, when the parent
+                has supplied the companies list and the operator has
+                more than one to pick from. Default-checked is the
+                currently-active company so single-company creates
+                stay one click. Picking 2+ auto-collapses the new
+                rows into a Common Client group via EnsureGroup. */}
+            {showCompanyPicker && (
+              <div style={pickerStyles.box}>
+                <div style={pickerStyles.headerRow}>
+                  <span style={pickerStyles.title}>Create under which companies?</span>
+                  <span style={pickerStyles.hint}>
+                    Pick one to add this client to a single tenant, or 2+ to share it as a Common Client.
+                  </span>
+                </div>
+                <div style={pickerStyles.chips}>
+                  {companies.map((c) => {
+                    const id = Number(c.id);
+                    const checked = selectedCompanyIds.includes(id);
+                    const lbl = c.brandName || c.name;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => toggleCompany(id)}
+                        style={{
+                          ...pickerStyles.chip,
+                          ...(checked ? pickerStyles.chipOn : pickerStyles.chipOff),
+                        }}
+                        title={checked ? `Tap to remove ${lbl}` : `Tap to include ${lbl}`}
+                      >
+                        {checked ? "✓ " : ""}{lbl}
+                      </button>
+                    );
+                  })}
+                </div>
+                {errorMsg("companies")}
+              </div>
+            )}
+
             <div style={formGroup}>
               <label style={label}>Name *</label>
               <input type="text" name="name" value={formData.name} onChange={handleChange} style={{ ...input, ...fieldError("name") }} />
@@ -173,3 +302,58 @@ export default function ClientForm({ client, companyId, onClose, onSaved }) {
     </div>
   );
 }
+
+// Multi-company picker styles. Kept inline (not in theme.js) because
+// they're specific to this one form — chip-style toggles with a
+// slightly different visual weight than the rest of the inputs.
+const pickerStyles = {
+  box: {
+    background: "#f0f7ff",
+    border: "1px solid #b7d4f0",
+    borderRadius: 10,
+    padding: "0.7rem 0.85rem",
+    marginBottom: "0.9rem",
+  },
+  headerRow: {
+    display: "flex",
+    alignItems: "baseline",
+    gap: "0.5rem",
+    flexWrap: "wrap",
+    marginBottom: "0.5rem",
+  },
+  title: {
+    fontWeight: 700,
+    fontSize: "0.88rem",
+    color: "#0d47a1",
+  },
+  hint: {
+    fontSize: "0.74rem",
+    color: "#5f6d7e",
+  },
+  chips: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.4rem",
+  },
+  chip: {
+    fontFamily: "inherit",
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    padding: "0.35rem 0.85rem",
+    borderRadius: 999,
+    cursor: "pointer",
+    transition: "background 0.15s, color 0.15s, border-color 0.15s",
+    boxShadow: "none",
+    margin: 0,
+  },
+  chipOn: {
+    background: "#0d47a1",
+    color: "#fff",
+    border: "1px solid #0d47a1",
+  },
+  chipOff: {
+    background: "#fff",
+    color: "#0d47a1",
+    border: "1px solid #b7d4f0",
+  },
+};
