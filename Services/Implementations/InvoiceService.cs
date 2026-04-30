@@ -143,7 +143,25 @@ namespace MyApp.Api.Services.Implementations
                 RateId = ii.RateId,
                 FixedNotifiedValueOrRetailPrice = ii.FixedNotifiedValueOrRetailPrice
             }).ToList(),
-            ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList()
+            ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
+            // Aggregate Site / IndentNo / PoNumber from linked challans
+            // — joined with "; " when distinct values exist (covers
+            // multi-challan bills rolling up two different POs / sites).
+            // Empty / whitespace-only entries are dropped before the
+            // join so a single-challan bill with a blank PO doesn't
+            // surface "" in the card.
+            PoNumber = string.Join("; ", inv.DeliveryChallans
+                .Select(dc => dc.PoNumber)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct()),
+            IndentNo = string.Join("; ", inv.DeliveryChallans
+                .Select(dc => dc.IndentNo)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct()),
+            Site = string.Join("; ", inv.DeliveryChallans
+                .Select(dc => dc.Site)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct()),
             };
         }
 

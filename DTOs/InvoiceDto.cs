@@ -47,6 +47,17 @@ namespace MyApp.Api.DTOs
         public List<string> FbrMissing { get; set; } = new();
         public List<InvoiceItemDto> Items { get; set; } = new();
         public List<int> ChallanNumbers { get; set; } = new();
+
+        // Aggregated from the linked DeliveryChallans — bills don't
+        // store these directly because a single bill can roll up
+        // multiple challans, but the bill list / view UI wants to
+        // show "PO 553, Indent A-12, Site Unit-2" at a glance.
+        // Strings are joined with "; " when multiple distinct values
+        // exist across the linked challans (rare in practice — most
+        // bills cover one challan).
+        public string? PoNumber { get; set; }
+        public string? IndentNo { get; set; }
+        public string? Site { get; set; }
     }
 
     public class InvoiceItemDto

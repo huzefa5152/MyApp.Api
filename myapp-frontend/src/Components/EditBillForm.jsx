@@ -332,6 +332,13 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     <div>
                       <b>Client:</b> {invoice.clientName} · <b>Date:</b> {invoice.date ? new Date(invoice.date).toLocaleDateString() : "—"}
                       {invoice.challanNumbers?.length > 0 && <> · <b>DC#{invoice.challanNumbers.join(", #")}</b></>}
+                      {/* PO Number / Indent / Site rolled up from linked
+                          challans — same fields the bill list card now
+                          shows, so the read-only view matches the card
+                          and Edit form one-for-one. */}
+                      {invoice.poNumber && <> · <b>PO:</b> {invoice.poNumber}</>}
+                      {invoice.indentNo && <> · <b>Indent:</b> {invoice.indentNo}</>}
+                      {invoice.site && <> · <b>Site:</b> {invoice.site}</>}
                       {invoice.fbrStatus && <> · <b>FBR:</b> {invoice.fbrStatus}</>}
                       {invoice.fbrIRN && <> · <b>IRN:</b> {invoice.fbrIRN}</>}
                     </div>

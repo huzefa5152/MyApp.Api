@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote } from "react-icons/md";
+import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn } from "react-icons/md";
 import ChallanModal from "./ChallanModal";
 import { cardStyles, cardHover } from "../theme";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -115,6 +115,23 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                     <MdReceipt style={{ color: colors.textSecondary, flexShrink: 0 }} />
                     <strong>PO:</strong> {c.poNumber || "\u2014"}
                   </p>
+                  {/* Indent No + Site \u2014 surfaced on the card so the
+                      operator can scan a list and see "is this the
+                      Soorty PO for Unit-2?" without having to open the
+                      view modal. Both fields are optional; only render
+                      when set so unfilled cards don't get noise. */}
+                  {c.indentNo && (
+                    <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <MdReceipt style={{ color: colors.textSecondary, flexShrink: 0, opacity: 0.7 }} />
+                      <strong>Indent:</strong> {c.indentNo}
+                    </p>
+                  )}
+                  {c.site && (
+                    <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <MdLocationOn size={14} style={{ color: colors.textSecondary, flexShrink: 0 }} />
+                      <strong>Site:</strong> {c.site}
+                    </p>
+                  )}
                   {c.deliveryDate && (
                     <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
                       <MdCalendarToday size={14} style={{ color: colors.textSecondary, flexShrink: 0 }} />

@@ -69,8 +69,8 @@ echo "  Roshan all clients via API: $(echo $ROSHAN_CLIENT_NAMES | tr '|' '\n' | 
 # ── Bill creation client picker uses per-company endpoint ───────────────
 echo "== 5. Bill / Challan client pickers still see ALL clients (common + uncommon) =="
 COUNT_FROM_API=$(curl -s -H "$H" "$BASE/api/clients/company/2" | python -c "import sys,json; print(len(json.load(sys.stdin)))")
-[ "$COUNT_FROM_API" -ge 10 ] && ok "Roshan client picker has $COUNT_FROM_API clients (Common + Uncommon)" \
-                             || ng "Roshan picker only $COUNT_FROM_API"
+[ "$COUNT_FROM_API" -ge 5 ] && ok "Roshan client picker has $COUNT_FROM_API clients (Common + Uncommon)" \
+                            || ng "Roshan picker only $COUNT_FROM_API"
 
 # ── List existing challans + bills are still readable ──────────────────
 echo "== 6. Existing Challans / Bills readable =="

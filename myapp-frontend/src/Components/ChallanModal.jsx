@@ -1,5 +1,7 @@
-import { MdPerson, MdReceipt, MdCalendarToday } from "react-icons/md";
+import { MdPerson, MdReceipt, MdCalendarToday, MdLocationOn, MdAssignmentTurnedIn, MdEventNote } from "react-icons/md";
 import { formStyles, modalSizes } from "../theme";
+
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "—");
 
 const colors = {
   blue: "#0d47a1",
@@ -31,13 +33,33 @@ export default function ChallanModal({ challan, onClose }) {
 
         {/* Body */}
         <div style={formStyles.body}>
-          {/* Info row */}
+          {/* Info grid — every field the operator can set on the
+              edit form is mirrored here so View matches Edit one-for-
+              one. Optional fields (Indent, Site, PO Date) only render
+              their tile when populated to keep the grid tidy on
+              minimal-data challans. Status is always shown. */}
           <div style={styles.infoGrid}>
             <div style={styles.infoItem}>
               <MdPerson size={16} color={colors.teal} />
               <div>
                 <span style={styles.infoLabel}>Client</span>
-                <span style={styles.infoValue}>{challan.clientName}</span>
+                <span style={styles.infoValue}>{challan.clientName || "—"}</span>
+              </div>
+            </div>
+            {challan.site && (
+              <div style={styles.infoItem}>
+                <MdLocationOn size={16} color={colors.teal} />
+                <div>
+                  <span style={styles.infoLabel}>Site</span>
+                  <span style={styles.infoValue}>{challan.site}</span>
+                </div>
+              </div>
+            )}
+            <div style={styles.infoItem}>
+              <MdCalendarToday size={16} color={colors.textSecondary} />
+              <div>
+                <span style={styles.infoLabel}>Delivery Date</span>
+                <span style={styles.infoValue}>{fmtDate(challan.deliveryDate)}</span>
               </div>
             </div>
             <div style={styles.infoItem}>
@@ -47,12 +69,30 @@ export default function ChallanModal({ challan, onClose }) {
                 <span style={styles.infoValue}>{challan.poNumber || "—"}</span>
               </div>
             </div>
+            {challan.poDate && (
+              <div style={styles.infoItem}>
+                <MdEventNote size={16} color={colors.blue} />
+                <div>
+                  <span style={styles.infoLabel}>PO Date</span>
+                  <span style={styles.infoValue}>{fmtDate(challan.poDate)}</span>
+                </div>
+              </div>
+            )}
+            {challan.indentNo && (
+              <div style={styles.infoItem}>
+                <MdAssignmentTurnedIn size={16} color={colors.blue} />
+                <div>
+                  <span style={styles.infoLabel}>Indent No</span>
+                  <span style={styles.infoValue}>{challan.indentNo}</span>
+                </div>
+              </div>
+            )}
             <div style={styles.infoItem}>
-              <MdCalendarToday size={16} color={colors.textSecondary} />
+              <MdAssignmentTurnedIn size={16} color={colors.textSecondary} />
               <div>
-                <span style={styles.infoLabel}>Delivery Date</span>
+                <span style={styles.infoLabel}>Status</span>
                 <span style={styles.infoValue}>
-                  {new Date(challan.deliveryDate).toLocaleDateString()}
+                  {challan.status === "Invoiced" ? "Billed" : (challan.status || "—")}
                 </span>
               </div>
             </div>

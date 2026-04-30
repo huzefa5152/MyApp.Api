@@ -612,6 +612,13 @@ export default function InvoicePage() {
                       Bill #{inv.invoiceNumber}
                     </h5>
                     <p style={cardStyles.text}><strong>Client:</strong> {inv.clientName}</p>
+                    {/* PO Number / Indent No / Site come from the linked
+                        DeliveryChallans (aggregated server-side). All
+                        three are optional — render only when present so
+                        sparse bills don't get noisy. */}
+                    {inv.poNumber && <p style={cardStyles.text}><strong>PO:</strong> {inv.poNumber}</p>}
+                    {inv.indentNo && <p style={cardStyles.text}><strong>Indent:</strong> {inv.indentNo}</p>}
+                    {inv.site && <p style={cardStyles.text}><strong>Site:</strong> {inv.site}</p>}
                     <p style={cardStyles.text}><strong>Date:</strong> {new Date(inv.date).toLocaleDateString()}</p>
                     <p style={cardStyles.text}><strong>Grand Total:</strong> Rs. {inv.grandTotal?.toLocaleString()}</p>
                     <p style={{ ...cardStyles.text, fontSize: "0.78rem", color: colors.textSecondary }}>
