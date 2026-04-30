@@ -226,7 +226,10 @@ const styles = {
   companyRow: { display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" },
   subtitle: { margin: "0.25rem 0 0", color: colors.textSecondary, fontSize: "0.9rem", maxWidth: 720 },
   addBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.6rem 1rem", borderRadius: 8, border: "none", backgroundColor: colors.primary, color: "white", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer" },
-  card: { backgroundColor: "white", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, overflow: "hidden" },
+  // Card wraps the PO formats table; overflowX makes the 5-column
+  // grid (Name / Client / Status / Last updated / Actions) scroll
+  // horizontally on mobile instead of getting cut off.
+  card: { backgroundColor: "white", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, overflowX: "auto", WebkitOverflowScrolling: "touch" },
   table: { width: "100%", borderCollapse: "collapse" },
   th: { textAlign: "left", padding: "0.75rem 1rem", borderBottom: `1px solid ${colors.cardBorder}`, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary, fontWeight: 600, backgroundColor: colors.inputBg },
   td: { padding: "0.85rem 1rem", borderBottom: `1px solid ${colors.cardBorder}`, fontSize: "0.9rem", color: colors.textPrimary, verticalAlign: "top" },

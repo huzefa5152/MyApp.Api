@@ -99,7 +99,7 @@ export default function ClientForm({ client, companyId, onClose, onSaved }) {
               <input type="text" name="address" value={formData.address} onChange={handleChange} style={input} />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <div className="form-grid-2col">
               <div style={formGroup}>
                 <label style={label}>Email</label>
                 <input type="email" name="email" value={formData.email} onChange={handleChange} style={input} />
@@ -110,7 +110,7 @@ export default function ClientForm({ client, companyId, onClose, onSaved }) {
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <div className="form-grid-2col">
               <div style={formGroup}>
                 <label style={label}>NTN *</label>
                 <input type="text" name="ntn" value={formData.ntn} onChange={handleChange} style={{ ...input, ...fieldError("ntn") }} />
@@ -131,7 +131,7 @@ export default function ClientForm({ client, companyId, onClose, onSaved }) {
 
             <div style={{ marginTop: "0.5rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #0d47a130", backgroundColor: "#e3f2fd" }}>
               <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#0d47a1" }}>FBR Details</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <div className="form-grid-2col">
                 <div style={formGroup}>
                   <label style={label}>Registration Type *</label>
                   <select name="registrationType" value={formData.registrationType} onChange={handleChange} style={{ ...input, ...fieldError("registrationType") }}>

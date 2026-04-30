@@ -31,7 +31,12 @@ export const buttonHover = {
 export const cardStyles = {
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
+    // Auto-fit collapses 3 columns → 2 → 1 as the viewport narrows.
+    // 280px min keeps each card legible (company / invoice cards have
+    // a title + 3-line meta block + buttons, so anything narrower
+    // cramps the layout). Was hardcoded `repeat(3, 1fr)` which forced
+    // a 3-up grid on phones.
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
     gap: "1.25rem",
   },
   card: {
@@ -98,7 +103,12 @@ export const dropdownStyles = {
     backgroundColor: colors.inputBg,
     color: colors.textPrimary,
     outline: "none",
-    minWidth: "250px",
+    // Was a fixed 250px which forced horizontal overflow on phones
+    // (DashboardLayout content area can be ~340px wide on 360px-class
+    // devices). `min(250px, 100%)` keeps the desktop look while
+    // allowing the dropdown to shrink below 250px on narrow screens.
+    minWidth: "min(250px, 100%)",
+    maxWidth: "100%",
     cursor: "pointer",
     transition: "border-color 0.25s ease",
     fontSize: "0.9rem",
@@ -165,7 +175,9 @@ export const formStyles = {
   },
   header: {
     background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-    padding: "1.1rem 1.5rem",
+    // clamp keeps the header tidy on phones (~0.9rem horizontal) while
+    // restoring the comfortable 1.5rem on tablet/desktop.
+    padding: "1.1rem clamp(0.9rem, 2vw, 1.5rem)",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -207,7 +219,10 @@ export const formStyles = {
     lineHeight: 1,
   },
   body: {
-    padding: "1.5rem",
+    // Padding shrinks on phones via a clamp() — 1rem at narrow widths,
+    // 1.5rem on tablet+. Keeps long forms from feeling claustrophobic
+    // on a 360px viewport without cramping the desktop look.
+    padding: "clamp(1rem, 2vw, 1.5rem)",
     // Body takes remaining space and scrolls internally when content exceeds it —
     // this is the key fix for tall modals on high-resolution screens.
     overflowY: "auto",
@@ -253,7 +268,10 @@ export const formStyles = {
   footer: {
     display: "flex",
     justifyContent: "flex-end",
-    padding: "1rem 1.5rem",
+    // flexWrap lets long button rows (e.g. Save / Cancel / Delete) wrap
+    // to a second line on narrow phones instead of overflowing.
+    flexWrap: "wrap",
+    padding: "1rem clamp(0.9rem, 2vw, 1.5rem)",
     gap: "0.6rem",
     backgroundColor: "#f5f7fa",
     borderTop: `1px solid ${colors.cardBorder}`,

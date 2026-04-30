@@ -306,7 +306,12 @@ const styles = {
     background: "#fff",
     border: `1px solid ${colors.cardBorder}`,
     borderRadius: 12,
-    overflow: "hidden",
+    // Was overflow:hidden which clipped content on mobile. overflowX
+    // lets the wrapper scroll horizontally when the units table
+    // (Name / Allows Decimal / Used By) is wider than the viewport.
+    overflowX: "auto",
+    overflowY: "hidden",
+    WebkitOverflowScrolling: "touch",
   },
   table: {
     width: "100%",

@@ -131,10 +131,13 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
             </div>
           ) : (
             <>
-              {/* Summary banner: how the bill grouped, where it would go */}
+              {/* Summary banner: how the bill grouped, where it would go.
+                  `minWidth: 0` on the text column is the standard fix for
+                  flex-child overflow — without it, long unbreakable tokens
+                  (the FBR URL) push the parent past the modal width. */}
               <div style={s.summaryBanner}>
                 <MdInfo size={18} color="#0d47a1" style={{ flexShrink: 0, marginTop: 2 }} />
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, marginBottom: 4 }}>
                     {origLineCount} bill {origLineCount === 1 ? "line" : "lines"} → {itemCount} FBR{" "}
                     {itemCount === 1 ? "item" : "items"}
@@ -144,14 +147,16 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: "0.82rem", color: "#5f6d7e" }}>
+                  <div style={{ fontSize: "0.82rem", color: "#5f6d7e", wordBreak: "break-word" }}>
                     Will POST to <code style={s.codeInline}>{url}</code>
                   </div>
                 </div>
               </div>
 
-              {/* Header / parties block */}
-              <div style={s.partiesGrid}>
+              {/* Header / parties block — `responsive-grid-3col`
+                  collapses 3 → 2 → 1 columns on narrow viewports
+                  (defined in index.css). */}
+              <div className="responsive-grid-3col" style={s.partiesGrid}>
                 <div>
                   <div style={s.partyLabel}>Seller</div>
                   <div style={s.partyName}>{payload?.sellerBusinessName}</div>
@@ -172,12 +177,14 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                 </div>
               </div>
 
-              {/* Items table */}
+              {/* Items table — `responsive-table-wrap` enables
+                  horizontal scroll on phones (9 columns is too wide
+                  to ever fit a 360px viewport). */}
               <div style={{ marginTop: "0.75rem" }}>
                 <div style={s.itemsHeader}>
                   Items in FBR payload ({itemCount})
                 </div>
-                <div style={s.tableWrap}>
+                <div className="responsive-table-wrap" style={s.tableWrap}>
                   <table style={s.table}>
                     <thead>
                       <tr>
@@ -295,8 +302,11 @@ const s = {
     color: "#0d47a1", padding: "0.75rem 1rem", borderRadius: 8,
   },
   partiesGrid: {
-    display: "grid", gridTemplateColumns: "repeat(3, 1fr)",
-    gap: "0.75rem", marginTop: "0.75rem",
+    // `display: grid` + columns come from the `responsive-grid-3col`
+    // class on the wrapping div (auto-fit, minmax(220px, 1fr) — see
+    // index.css). The inline style only adds the top margin so we
+    // don't have to bake spacing into a utility class.
+    marginTop: "0.75rem",
   },
   partyLabel: {
     fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em",
@@ -309,8 +319,14 @@ const s = {
     marginBottom: "0.4rem", display: "flex", alignItems: "center",
     justifyContent: "space-between",
   },
-  tableWrap: { border: "1px solid #e8edf3", borderRadius: 10, overflow: "hidden" },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" },
+  // Border / radius / horizontal-scroll all come from the
+  // `responsive-table-wrap` class on the wrapping div (index.css).
+  // Kept as an empty object so spread-into-style users still work.
+  tableWrap: {},
+  // minWidth ensures columns don't collapse to unreadable widths on
+  // mobile — instead the parent `responsive-table-wrap` scrolls
+  // horizontally, which is the standard wide-table-on-mobile pattern.
+  table: { width: "100%", minWidth: "720px", borderCollapse: "collapse", fontSize: "0.85rem" },
   th: {
     padding: "0.5rem 0.6rem", background: "#f8fafc", borderBottom: "1px solid #e8edf3",
     fontSize: "0.75rem", fontWeight: 700, color: "#5f6d7e",
@@ -351,5 +367,14 @@ const s = {
   codeInline: {
     background: "rgba(13,71,161,0.08)", padding: "0.05rem 0.35rem",
     borderRadius: 4, fontSize: "0.78rem", fontFamily: "monospace",
+    // FBR URL is a single unbreakable token — without `wordBreak`
+    // it overflows the parent on phones and ends up clipped by the
+    // modal edge. `break-all` is fine for URLs (operators copy via
+    // the raw-JSON button anyway).
+    wordBreak: "break-all",
+    overflowWrap: "anywhere",
+    // Keep it inline-block so the break-all actually applies to a
+    // continuous URL the way users expect.
+    display: "inline",
   },
 };

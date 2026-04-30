@@ -138,6 +138,11 @@ const styles = {
   tableWrapper: {
     maxHeight: 280,
     overflowY: "auto",
+    // Horizontal scroll on phones — the 5-column items table (#,
+    // Item Type, Description, Qty, Unit) doesn't fit in a 360px-wide
+    // viewport without unreadable column compression.
+    overflowX: "auto",
+    WebkitOverflowScrolling: "touch",
     borderRadius: 10,
     border: `1px solid ${colors.cardBorder}`,
   },

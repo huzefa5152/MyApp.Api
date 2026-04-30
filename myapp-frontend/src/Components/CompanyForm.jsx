@@ -235,7 +235,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                             <input type="text" name="fullAddress" value={form.fullAddress} onChange={handleChange} style={input} />
                         </div>
 
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                        <div className="form-grid-2col">
                             <div style={formGroup}>
                                 <label style={label}>Phone</label>
                                 <input type="text" name="phone" value={form.phone} onChange={handleChange} style={input} />
@@ -246,7 +246,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                             </div>
                         </div>
 
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                        <div className="form-grid-2col">
                             <div style={formGroup}>
                                 <label style={label}>CNIC *</label>
                                 <input
@@ -335,7 +335,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 <input type="text" name="invoiceNumberPrefix" value={form.invoiceNumberPrefix} onChange={handleChange} style={input} placeholder="e.g. INV-" />
                             </div>
 
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                            <div className="form-grid-2col">
                                 <div style={formGroup}>
                                     <label style={label}>Province</label>
                                     <select name="fbrProvinceCode" value={form.fbrProvinceCode} onChange={handleChange} style={input}>
@@ -360,7 +360,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 </div>
                             </div>
 
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                            <div className="form-grid-2col">
                                 <div style={formGroup}>
                                     <label style={label}>
                                         Business Activity <span style={{ fontWeight: 400, color: "#5f6d7e", fontSize: "0.72rem" }}>(multiple — drives applicable FBR scenarios)</span>

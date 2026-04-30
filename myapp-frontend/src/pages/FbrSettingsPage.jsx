@@ -229,7 +229,7 @@ export default function FbrSettingsPage() {
                   </select>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                <div className="form-grid-2col" style={{ marginBottom: "0.75rem" }}>
                   <div>
                     <label style={styles.formLabel}>Code *</label>
                     <input type="text" value={formData.code} onChange={(e) => setFormData({ ...formData, code: e.target.value })} style={styles.formInput} placeholder="e.g. 7 or Registered" />

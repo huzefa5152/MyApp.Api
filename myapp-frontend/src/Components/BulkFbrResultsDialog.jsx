@@ -219,7 +219,10 @@ const styles = {
   summaryItem: { display: "flex", alignItems: "center", gap: "0.4rem" },
   summaryLabel: { fontSize: "0.78rem", color: colors.textSecondary, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" },
   summaryValue: { fontSize: "1rem", fontWeight: 800, color: colors.textPrimary },
-  tableWrap: { overflowY: "auto", flex: "1 1 auto", minHeight: 0, maxHeight: "calc(92vh - 200px)" },
+  // overflowX:auto added so the 3-col results table can scroll
+  // horizontally on phones (Bill # / Status / Details columns get
+  // squashed at sub-360px viewports otherwise).
+  tableWrap: { overflowX: "auto", overflowY: "auto", flex: "1 1 auto", minHeight: 0, maxHeight: "calc(92vh - 200px)", WebkitOverflowScrolling: "touch" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" },
   th: {
     textAlign: "left", padding: "0.6rem 0.95rem",

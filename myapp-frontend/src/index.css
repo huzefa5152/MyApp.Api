@@ -95,6 +95,67 @@ button:focus-visible {
 }
 
 
+/* ────────────────────────────────────────────────────────────────────
+   Responsive utility classes for inline-styled forms / dialogs.
+   Components opt-in by passing className="…" alongside their inline
+   style — these rules then override the inline grid on small screens.
+
+   Why classes (not just inline media queries via theme.js):
+   inline `style={…}` can't carry @media; CSS is the only way to
+   collapse a 2-column form to 1 column on phones without rewriting
+   every form to use react-responsive / window.innerWidth tracking.
+
+   Breakpoints match DashboardLayout.css (767.98 / 991.98) so sidebar
+   and content responsiveness stay in lock-step.
+   ──────────────────────────────────────────────────────────────────── */
+
+/* 2-column form rows (Client / Company / FBR Settings forms etc.).
+   Used as `<div className="form-grid-2col">…</div>` — kills the
+   inline `gridTemplateColumns: "1fr 1fr"` on phones, restoring it on
+   tablet+ where the side-by-side fields fit comfortably. */
+.form-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+@media (max-width: 599.98px) {
+  .form-grid-2col {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 3-column header rows (FbrPreviewDialog parties block, summary
+   tiles). Auto-fit collapses to 2 then 1 column as width drops. */
+.responsive-grid-3col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+/* Wide tables inside modals (FBR preview, bulk results, item-line
+   tables). On mobile the table itself stays at its natural width and
+   the WRAPPER scrolls horizontally — much better than a squashed
+   un-readable layout. -webkit-overflow-scrolling enables momentum
+   scroll on iOS. */
+.responsive-table-wrap {
+  border: 1px solid #e8edf3;
+  border-radius: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Modal body should breathe a bit less on small screens — the global
+   1.5rem padding eats real estate. Apply via className="modal-body
+   modal-body-responsive" or just rely on the cascading override below
+   when the parent modal uses formStyles.body. */
+@media (max-width: 599.98px) {
+  /* Slightly tighter modal padding on phones — keeps content from
+     being pushed off-screen by chunky chrome. */
+  .modal-body-tight {
+    padding: 1rem !important;
+  }
+}
+
 @media (prefers-color-scheme: light) {
   body {
     color: var(--color-text-light);
