@@ -5,6 +5,7 @@ import {
   fingerprintPdf,
   createPoFormatSimple,
   updatePoFormatSimple,
+  listPoFormats,
 } from "../api/poFormatApi";
 import { formStyles, modalSizes } from "../theme";
 
@@ -76,18 +77,38 @@ export default function POFormatForm({ format, onClose, onSaved }) {
   const [error, setError] = useState("");
   const fileInputRef = useRef(null);
 
-  // Load every Client Group once. The picker lists each as one
-  // "Common Client" entry regardless of how many companies have the
-  // client — single-company groups are still pickable so uncommon
-  // clients can have a format too. CompanyCount is shown in brackets
-  // as a hint.
+  // Set of group IDs that ALREADY have a PO format. The dropdown
+  // hides these so the operator can't try to create a duplicate
+  // binding (the backend would 409 anyway, but pre-filtering makes
+  // the picker show only "free" clients). When editing, we exclude
+  // THIS format's id from the taken set so its currently-bound
+  // group stays visible / selectable.
+  const [takenGroupIds, setTakenGroupIds] = useState(() => new Set());
+
+  // Load every Client Group + every existing PO format once. The
+  // picker lists each group as one "Common Client" entry regardless
+  // of how many companies have the client — single-company groups
+  // are still pickable so uncommon clients can have a format too.
+  // Already-bound groups are filtered out below.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await getAllClientGroups();
+        const [{ data: groupData }, { data: formatData }] = await Promise.all([
+          getAllClientGroups(),
+          listPoFormats({}),
+        ]);
         if (cancelled) return;
-        setGroups(Array.isArray(data) ? data : []);
+
+        setGroups(Array.isArray(groupData) ? groupData : []);
+
+        const taken = new Set();
+        for (const f of (formatData || [])) {
+          if (!f.clientGroupId) continue;
+          if (format?.id && f.id === format.id) continue; // editing this one — keep its group selectable
+          taken.add(f.clientGroupId);
+        }
+        setTakenGroupIds(taken);
 
         // On EDIT, pre-select the group via the saved ClientId →
         // group.thisCompanyClientId / group members lookup. The
@@ -103,16 +124,24 @@ export default function POFormatForm({ format, onClose, onSaved }) {
             // Fallback: find the group whose representative member
             // matches the saved ClientId. (Not always perfect but
             // gives the operator a sensible default to confirm.)
-            const match = data.find((g) => g.thisCompanyClientId === format.clientId);
+            const match = groupData.find((g) => g.thisCompanyClientId === format.clientId);
             if (match) setSelectedGroupId(match.groupId);
           }
         }
       } catch {
-        if (!cancelled) setGroups([]);
+        if (!cancelled) {
+          setGroups([]);
+          setTakenGroupIds(new Set());
+        }
       }
     })();
     return () => { cancelled = true; };
-  }, [format?.clientId, format?.clientGroupId]);
+  }, [format?.id, format?.clientId, format?.clientGroupId]);
+
+  // Visible options: free groups + (when editing) the currently-bound one.
+  const availableGroups = groups.filter(
+    (g) => !takenGroupIds.has(g.groupId) || g.groupId === selectedGroupId
+  );
 
   // Preload the 5 fields when editing — parse them out of RuleSetJson
   useEffect(() => {
@@ -249,7 +278,9 @@ export default function POFormatForm({ format, onClose, onSaved }) {
           {/* Client + name. The "Client" picker lists every distinct
               legal entity (one per ClientGroup) — picking one binds
               the format to that entity globally, so it applies in
-              EVERY tenant that has them as a per-company client. */}
+              EVERY tenant that has them as a per-company client.
+              Clients that ALREADY have a PO format saved are hidden
+              (one format per legal entity is the rule). */}
           <div style={styles.row}>
             <div style={{ flex: 1 }}>
               <label style={styles.label}>Client *</label>
@@ -259,7 +290,7 @@ export default function POFormatForm({ format, onClose, onSaved }) {
                 onChange={(e) => setSelectedGroupId(e.target.value === "" ? null : Number(e.target.value))}
               >
                 <option value="">— Select client —</option>
-                {groups.map((g) => (
+                {availableGroups.map((g) => (
                   <option key={g.groupId} value={g.groupId}>
                     {g.displayName}
                     {g.companyCount > 1 ? ` · ${g.companyCount} companies` : ""}
@@ -267,6 +298,20 @@ export default function POFormatForm({ format, onClose, onSaved }) {
                   </option>
                 ))}
               </select>
+              {/* Visible-count hint when some clients are hidden because
+                  they already have a format. Helps the operator
+                  understand "where's <X>?" when scanning the list. */}
+              {!isEdit && groups.length > availableGroups.length && (
+                <div style={{ ...styles.hint, marginTop: "0.3rem" }}>
+                  {groups.length - availableGroups.length} client
+                  {groups.length - availableGroups.length !== 1 ? "s are" : " is"} hidden — they already have a PO format saved.
+                </div>
+              )}
+              {!isEdit && availableGroups.length === 0 && groups.length > 0 && (
+                <div style={{ ...styles.hint, color: colors.warning, marginTop: "0.3rem" }}>
+                  Every existing client already has a PO format. Edit the existing one instead, or create a new client first.
+                </div>
+              )}
               {selectedGroup && selectedGroup.companyCount > 1 && (
                 <div style={{ ...styles.hint, color: colors.primary, marginTop: "0.3rem" }}>
                   This format will apply across {selectedGroup.companyNames?.join(", ") || `${selectedGroup.companyCount} companies`}.
