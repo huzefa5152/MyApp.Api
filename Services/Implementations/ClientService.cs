@@ -12,12 +12,14 @@ namespace MyApp.Api.Services.Implementations
         private readonly IClientRepository _repo;
         private readonly IInvoiceRepository _invoiceRepo;
         private readonly IDeliveryChallanService _challanService;
+        private readonly IClientGroupService _clientGroupService;
         private readonly AppDbContext _context;
-        public ClientService(IClientRepository repo, IInvoiceRepository invoiceRepo, IDeliveryChallanService challanService, AppDbContext context)
+        public ClientService(IClientRepository repo, IInvoiceRepository invoiceRepo, IDeliveryChallanService challanService, IClientGroupService clientGroupService, AppDbContext context)
         {
             _repo = repo;
             _invoiceRepo = invoiceRepo;
             _challanService = challanService;
+            _clientGroupService = clientGroupService;
             _context = context;
         }
 
@@ -35,6 +37,7 @@ namespace MyApp.Api.Services.Implementations
             CNIC = c.CNIC,
             FbrProvinceCode = c.FbrProvinceCode,
             CompanyId = c.CompanyId,
+            ClientGroupId = c.ClientGroupId,
             HasInvoices = hasInvoices,
             CreatedAt = c.CreatedAt
         };
@@ -85,6 +88,24 @@ namespace MyApp.Api.Services.Implementations
             };
 
             var created = await _repo.CreateAsync(client);
+
+            // Attach to a Common Client group — find-or-create by NTN
+            // (or normalised name fallback). Idempotent and runs after the
+            // initial save so the FK has a real client Id to point back to.
+            // Failure here MUST NOT break the create — the per-company
+            // record is the source of truth and works fine without a
+            // group.
+            try
+            {
+                await _clientGroupService.EnsureGroupForClientAsync(created);
+                await _context.SaveChangesAsync();
+            }
+            catch
+            {
+                // Swallow: grouping is a convenience layer. Operator
+                // can edit-save the client to retry the grouping.
+            }
+
             return ToDto(created);
         }
 
@@ -111,6 +132,17 @@ namespace MyApp.Api.Services.Implementations
 
             var hasInvoices = await _invoiceRepo.HasInvoicesForClientAsync(client.Id);
             await _repo.UpdateAsync(client);
+
+            // Re-evaluate Common Client grouping. NTN / Name might have
+            // just changed, which moves the client from one group to
+            // another (or creates a new group). Same defensive try/catch
+            // pattern as Create — grouping must never break a save.
+            try
+            {
+                await _clientGroupService.EnsureGroupForClientAsync(client);
+                await _context.SaveChangesAsync();
+            }
+            catch { /* see CreateAsync */ }
 
             // Re-evaluate "Setup Required" challans for this client
             await _challanService.ReEvaluateSetupRequiredAsync(client.CompanyId, client.Id);

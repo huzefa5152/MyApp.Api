@@ -12,7 +12,64 @@ namespace MyApp.Api.Controllers
     public class ClientsController : ControllerBase
     {
         private readonly IClientService _service;
-        public ClientsController(IClientService service) => _service = service;
+        private readonly IClientGroupService _groupService;
+        public ClientsController(IClientService service, IClientGroupService groupService)
+        {
+            _service = service;
+            _groupService = groupService;
+        }
+
+        // ── Common Clients (shared across companies via grouping) ──
+        // Sits under /api/clients/common* so it lives next to the
+        // existing client endpoints. Uses the same clients.* permission
+        // family because operationally these ARE clients — just viewed
+        // through the grouping lens.
+
+        /// <summary>
+        /// Multi-company clients visible to companyId. Single-company
+        /// clients are excluded — they remain in the per-company list.
+        /// </summary>
+        [HttpGet("common")]
+        public async Task<ActionResult<List<CommonClientDto>>> GetCommon([FromQuery] int companyId)
+            => Ok(await _groupService.GetCommonClientsAsync(companyId));
+
+        /// <summary>
+        /// Detail view for the Common Client edit form — master fields +
+        /// per-company member list (sites stay per-company).
+        /// </summary>
+        [HttpGet("common/{groupId:int}")]
+        public async Task<ActionResult<CommonClientDetailDto>> GetCommonById(int groupId)
+        {
+            var detail = await _groupService.GetByIdAsync(groupId);
+            if (detail == null) return NotFound();
+            return Ok(detail);
+        }
+
+        /// <summary>
+        /// Update master fields and propagate to every sibling Client in
+        /// the group. Site fields are intentionally NOT updated here —
+        /// each tenant manages its own sites via the per-company form.
+        /// </summary>
+        [HttpPut("common/{groupId:int}")]
+        [HasPermission("clients.manage.update")]
+        public async Task<ActionResult<CommonClientUpdateResultDto>> UpdateCommon(
+            int groupId, [FromBody] CommonClientUpdateDto dto)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            try
+            {
+                var result = await _groupService.UpdateAsync(groupId, dto);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<ClientDto>>> GetClients()

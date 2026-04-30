@@ -14,6 +14,13 @@ namespace MyApp.Api.DTOs
         public string? CNIC { get; set; }
         public int? FbrProvinceCode { get; set; }
         public int CompanyId { get; set; }
+
+        // Common Client grouping id (read-only on this DTO). Lets the
+        // per-company list surface "this client is also in N other
+        // companies" affordances and links to the Common Client edit
+        // view. Nullable until the backfill / EnsureGroup runs.
+        public int? ClientGroupId { get; set; }
+
         public bool HasInvoices { get; set; }
         public DateTime? CreatedAt { get; set; } // Nullable; set by server
     }

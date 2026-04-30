@@ -12,6 +12,7 @@ namespace MyApp.Api.Data
         public DbSet<DeliveryItem> DeliveryItems { get; set; }
 
         public DbSet<Client> Clients { get; set; } // ✅ add this
+        public DbSet<ClientGroup> ClientGroups { get; set; }
 
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<InvoiceItem> InvoiceItems { get; set; }
@@ -75,6 +76,47 @@ namespace MyApp.Api.Data
                 .WithMany(co => co.Clients)
                 .HasForeignKey(c => c.CompanyId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // ── Client → ClientGroup (Common Clients grouping) ──
+            // Nullable FK so existing rows stay valid until the one-time
+            // backfill assigns them. SetNull on group delete so removing
+            // the group row doesn't orphan / cascade-delete clients —
+            // they keep working as ungrouped per-company records.
+            modelBuilder.Entity<Client>()
+                .HasOne(c => c.ClientGroup)
+                .WithMany(g => g.Clients)
+                .HasForeignKey(c => c.ClientGroupId)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<Client>()
+                .HasIndex(c => c.ClientGroupId);
+
+            // ── ClientGroup unique key + lookup indexes ──
+            // GroupKey is the canonical "NTN:..." or "NAME:..." string —
+            // unique because the service is the single writer and finds-
+            // or-creates by this value.
+            modelBuilder.Entity<ClientGroup>()
+                .HasIndex(g => g.GroupKey)
+                .IsUnique();
+            // NormalizedNtn — used for "find group for this NTN" on every
+            // Client save and PO match. Not unique (a name-only group has
+            // null NTN; multiple null-NTN groups can coexist).
+            modelBuilder.Entity<ClientGroup>()
+                .HasIndex(g => g.NormalizedNtn);
+            // NormalizedName — fallback lookup when NTN is missing.
+            modelBuilder.Entity<ClientGroup>()
+                .HasIndex(g => g.NormalizedName);
+
+            // ── POFormat → ClientGroup ──
+            // Group-bound formats — applies to every member of the group
+            // regardless of which tenant the PDF arrived from. Nullable
+            // because legacy formats use POFormat.ClientId only.
+            modelBuilder.Entity<POFormat>()
+                .HasOne(f => f.ClientGroup)
+                .WithMany(g => g.POFormats)
+                .HasForeignKey(f => f.ClientGroupId)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<POFormat>()
+                .HasIndex(f => f.ClientGroupId);
 
             // DeliveryChallan status default
             modelBuilder.Entity<DeliveryChallan>()

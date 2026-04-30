@@ -1,0 +1,49 @@
+using MyApp.Api.DTOs;
+using MyApp.Api.Models;
+
+namespace MyApp.Api.Services.Interfaces
+{
+    /// <summary>
+    /// Owns the "Common Client" grouping layer. The single source of truth
+    /// for ComputeGroupKey() — every other path that needs to know "what
+    /// group does this client belong to" comes through here so the
+    /// normalisation rules stay consistent.
+    /// </summary>
+    public interface IClientGroupService
+    {
+        /// <summary>
+        /// Find-or-create the <see cref="ClientGroup"/> for the given client
+        /// and stamp <see cref="Client.ClientGroupId"/>. Idempotent — calling
+        /// it on every Client save keeps the grouping in lock-step with the
+        /// client's current Name / NTN. Caller is responsible for SaveChanges.
+        /// </summary>
+        Task<ClientGroup> EnsureGroupForClientAsync(Client client);
+
+        /// <summary>
+        /// "Common Clients" list for the panel above the company-scoped
+        /// client list. Returns groups where <paramref name="companyId"/>
+        /// has a member AND at least one OTHER company also has a member.
+        /// Single-company groups are intentionally hidden — they're shown
+        /// only in the existing per-company list.
+        /// </summary>
+        Task<List<CommonClientDto>> GetCommonClientsAsync(int companyId);
+
+        /// <summary>
+        /// Detail view: master fields + per-company members (sites etc.).
+        /// </summary>
+        Task<CommonClientDetailDto?> GetByIdAsync(int groupId);
+
+        /// <summary>
+        /// Propagate master-field changes to every <see cref="Client"/> in
+        /// the group. Returns the cascade summary for the toast.
+        /// </summary>
+        Task<CommonClientUpdateResultDto> UpdateAsync(int groupId, CommonClientUpdateDto dto);
+
+        /// <summary>
+        /// Pure helper exposed so other paths (the startup backfill, the
+        /// PO matcher, future merge tooling) compute group keys the same
+        /// way as the runtime EnsureGroup path.
+        /// </summary>
+        (string GroupKey, string? NormalizedNtn, string NormalizedName) ComputeGroupKey(string? name, string? ntn);
+    }
+}

@@ -22,6 +22,16 @@ namespace MyApp.Api.Models
         public int? ClientId { get; set; }
         public Client? Client { get; set; }
 
+        // Common Client (group) scope — preferred over ClientId for new
+        // formats. When a PO is configured against a group, the SAME
+        // template applies to that legal entity in EVERY tenant that has
+        // them as a client. Nullable + alongside ClientId for backward
+        // compat: legacy formats keep working via ClientId; new formats
+        // save ClientGroupId; on import the matcher prefers group-based
+        // resolution and falls back to ClientId.
+        public int? ClientGroupId { get; set; }
+        public ClientGroup? ClientGroup { get; set; }
+
         // SHA-256 (hex) of the normalised, sorted keyword signature.
         // Exact match on this is the primary routing mechanism.
         public string SignatureHash { get; set; } = "";

@@ -17,6 +17,17 @@
         public int? FbrProvinceCode { get; set; }
 
         public int CompanyId { get; set; }
+
+        // Common Client grouping. Nullable for backward compatibility:
+        // existing rows are NULL until the one-time backfill assigns them
+        // a group. New / updated clients are assigned a group via
+        // ClientGroupService.EnsureGroupForClientAsync — same NTN (or same
+        // normalised name when NTN is missing) ⇒ same group. Single-company
+        // clients still get a group so the link is automatic the moment a
+        // 2nd company adds the same client.
+        public int? ClientGroupId { get; set; }
+        public ClientGroup? ClientGroup { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation

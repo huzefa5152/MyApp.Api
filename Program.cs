@@ -57,6 +57,11 @@ builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<ICompanyService, CompanyService>();
 builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
 builder.Services.AddScoped<IClientService, ClientService>();
+// "Common Clients" grouping — the same legal entity (matched by NTN, then
+// fallback to normalised name) shared across multiple companies. Sits
+// alongside the per-company ClientService; existing per-company flows
+// keep working unchanged.
+builder.Services.AddScoped<IClientGroupService, ClientGroupService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
@@ -347,6 +352,141 @@ using (var scope = app.Services.CreateScope())
             SELECT rp.RoleId, @excludeId FROM RolePermissions rp
             WHERE rp.PermissionId = @updateId
               AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @excludeId);
+        END
+    ");
+
+    // ── One-time backfill: Common Clients grouping ──
+    // Walks every existing Client and assigns it to a ClientGroup based on
+    // the same canonical key the runtime EnsureGroupForClientAsync uses
+    // (NTN-digits ≥ 7 ⇒ "NTN:..."; otherwise "NAME:lower-trimmed-name").
+    // Re-runs are no-ops via the audit-log marker. Existing per-company
+    // client rows, controllers and UI are untouched — ClientGroupId is
+    // a nullable additive column.
+    //
+    // Also backfills POFormats.ClientGroupId from POFormats.ClientId so
+    // existing format → client links carry over to group → format links
+    // automatically. New formats can opt into ClientGroupId at save time.
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'COMMON_CLIENTS_BACKFILL_V1')
+        BEGIN
+            -- Step 1: build a per-Client view of the canonical key. T-SQL
+            -- mirrors ClientGroupService.ComputeGroupKey():
+            --   • DigitsOnlyNtn = NTN with every non-digit stripped
+            --   • If LEN(DigitsOnlyNtn) >= 7  → ""NTN:"" + digits
+            --   • Else                        → ""NAME:"" + lower(trim(name))
+            -- Names are lowered via LOWER() and edge-trimmed via LTRIM/RTRIM.
+            -- Whitespace collapsing (multiple internal spaces → one) is
+            -- omitted in T-SQL because SQL Server has no native regex; the
+            -- runtime EnsureGroup path will harmonise on next save if a
+            -- collision is ever observed.
+            ;WITH Digits(Id, DigitsNtn) AS (
+                SELECT c.Id,
+                       REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                         ISNULL(c.NTN, ''),
+                         ' ',  ''), '-', ''), '/', ''), '.', ''), '(', ''), ')', ''),
+                         ',', ''), ':', ''), '\', ''), '''', ''), '""', ''), '+', ''), CHAR(9), '')
+                  FROM Clients c
+            ),
+            Keyed AS (
+                SELECT c.Id, c.CompanyId, c.Name, c.NTN, c.CreatedAt,
+                       d.DigitsNtn,
+                       LOWER(LTRIM(RTRIM(c.Name))) AS NormName,
+                       CASE
+                         WHEN LEN(d.DigitsNtn) >= 7 THEN N'NTN:'  + d.DigitsNtn
+                         ELSE                            N'NAME:' + LOWER(LTRIM(RTRIM(c.Name)))
+                       END AS GroupKey
+                  FROM Clients c
+                  JOIN Digits  d ON d.Id = c.Id
+            )
+            -- Step 2: insert one ClientGroup row per distinct key. Single-
+            -- company keys are also created — the moment a 2nd company
+            -- adds the same client, EnsureGroup links them automatically.
+            -- Both DisplayName and NormalizedName resolve via TOP-1
+            -- earliest-saved member so the row is deterministic; without
+            -- that pick we'd hit the IX_ClientGroups_GroupKey unique
+            -- index whenever two clients share an NTN but spell the
+            -- name slightly differently.
+            INSERT INTO ClientGroups (GroupKey, DisplayName, NormalizedNtn, NormalizedName, CreatedAt, UpdatedAt)
+            SELECT k.GroupKey,
+                   (SELECT TOP 1 k2.Name
+                      FROM Keyed k2
+                     WHERE k2.GroupKey = k.GroupKey
+                     ORDER BY k2.CreatedAt, k2.Id),
+                   CASE WHEN LEFT(k.GroupKey, 4) = N'NTN:' THEN SUBSTRING(k.GroupKey, 5, LEN(k.GroupKey)) ELSE NULL END,
+                   (SELECT TOP 1 k2.NormName
+                      FROM Keyed k2
+                     WHERE k2.GroupKey = k.GroupKey
+                     ORDER BY k2.CreatedAt, k2.Id),
+                   SYSUTCDATETIME(), SYSUTCDATETIME()
+              FROM (SELECT DISTINCT GroupKey FROM Keyed) k
+             WHERE NOT EXISTS (SELECT 1 FROM ClientGroups g WHERE g.GroupKey = k.GroupKey);
+
+            -- Step 3: stamp Clients.ClientGroupId. Only rows still NULL —
+            -- in case the runtime EnsureGroup path raced ahead during
+            -- this same boot.
+            ;WITH Digits2(Id, DigitsNtn) AS (
+                SELECT c.Id,
+                       REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                         ISNULL(c.NTN, ''),
+                         ' ',  ''), '-', ''), '/', ''), '.', ''), '(', ''), ')', ''),
+                         ',', ''), ':', ''), '\', ''), '''', ''), '""', ''), '+', ''), CHAR(9), '')
+                  FROM Clients c
+            ),
+            Keyed2 AS (
+                SELECT c.Id,
+                       CASE
+                         WHEN LEN(d.DigitsNtn) >= 7 THEN N'NTN:'  + d.DigitsNtn
+                         ELSE                            N'NAME:' + LOWER(LTRIM(RTRIM(c.Name)))
+                       END AS GroupKey
+                  FROM Clients c
+                  JOIN Digits2 d ON d.Id = c.Id
+                 WHERE c.ClientGroupId IS NULL
+            )
+            UPDATE c
+               SET c.ClientGroupId = g.Id
+              FROM Clients c
+              JOIN Keyed2  k ON k.Id = c.Id
+              JOIN ClientGroups g ON g.GroupKey = k.GroupKey
+             WHERE c.ClientGroupId IS NULL;
+
+            -- Step 4: backfill POFormats.ClientGroupId from POFormats.ClientId.
+            -- A format previously bound to one Client now also points to
+            -- that client's group — so the group-aware match path picks it
+            -- up automatically. Legacy ClientId is left intact.
+            UPDATE pof
+               SET pof.ClientGroupId = c.ClientGroupId
+              FROM POFormats pof
+              JOIN Clients   c ON c.Id = pof.ClientId
+             WHERE pof.ClientGroupId IS NULL
+               AND c.ClientGroupId IS NOT NULL;
+
+            -- Step 5: write a one-time summary into AuditLogs. Doubles as
+            -- the marker that prevents re-runs. Body lists every multi-
+            -- company group so the operator can audit at first boot.
+            DECLARE @groupCount INT, @clientLinked INT, @poLinked INT;
+            SELECT @groupCount   = COUNT(*) FROM ClientGroups;
+            SELECT @clientLinked = COUNT(*) FROM Clients   WHERE ClientGroupId IS NOT NULL;
+            SELECT @poLinked     = COUNT(*) FROM POFormats WHERE ClientGroupId IS NOT NULL;
+
+            DECLARE @multiNames NVARCHAR(MAX) = (
+                SELECT STRING_AGG(g.DisplayName, N'; ')
+                  FROM ClientGroups g
+                 WHERE (SELECT COUNT(DISTINCT c.CompanyId)
+                          FROM Clients c
+                         WHERE c.ClientGroupId = g.Id) >= 2
+            );
+
+            INSERT INTO AuditLogs (Level, ExceptionType, Message, StackTrace, HttpMethod, RequestPath, StatusCode, [Timestamp])
+            VALUES (
+                'Info',
+                'COMMON_CLIENTS_BACKFILL_V1',
+                CONCAT(
+                    'Common Clients backfill: created/linked ', @groupCount,
+                    ' groups, attached ', @clientLinked, ' clients, ',
+                    @poLinked, ' PO formats inherited group linkage.'),
+                CASE WHEN @multiNames IS NULL THEN N'No multi-company clients detected yet.'
+                     ELSE N'Multi-company groups: ' + @multiNames END,
+                'STARTUP', '/seed/clientgroups/backfill', 200, SYSUTCDATETIME());
         END
     ");
 
