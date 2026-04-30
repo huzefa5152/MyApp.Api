@@ -107,15 +107,27 @@ namespace MyApp.Api.Controllers
             }
 
             // If the matched format has a ClientId, resolve the name so the
-            // import review screen can pre-select it (name is shown in the
-            // dropdown).
+            // import review screen can pre-select it. The format itself is
+            // tenant-global but the linked Client belongs to ONE company —
+            // so when a different company imports the same PO layout, we
+            // MUST NOT leak that other company's client. Filter by the
+            // importing companyId; if there's no match, fall back to a
+            // null pre-select and let the operator pick manually (or
+            // create the client first).
+            int? matchedClientId = null;
             string? matchedClientName = null;
             if (match.Format.ClientId.HasValue)
             {
-                matchedClientName = await _context.Clients
-                    .Where(c => c.Id == match.Format.ClientId.Value)
-                    .Select(c => c.Name)
+                var clientRow = await _context.Clients
+                    .Where(c => c.Id == match.Format.ClientId.Value
+                             && (companyId == null || c.CompanyId == companyId.Value))
+                    .Select(c => new { c.Id, c.Name })
                     .FirstOrDefaultAsync();
+                if (clientRow != null)
+                {
+                    matchedClientId = clientRow.Id;
+                    matchedClientName = clientRow.Name;
+                }
             }
 
             var ruleResult = _ruleParser.Parse(rawText, match.Format);
@@ -129,7 +141,7 @@ namespace MyApp.Api.Controllers
                     RawText = rawText,
                     MatchedFormatId = match.Format.Id,
                     MatchedFormatName = match.Format.Name,
-                    MatchedClientId = match.Format.ClientId,
+                    MatchedClientId = matchedClientId,
                     MatchedClientName = matchedClientName,
                 });
             }
@@ -137,7 +149,7 @@ namespace MyApp.Api.Controllers
             ruleResult.MatchedFormatId = match.Format.Id;
             ruleResult.MatchedFormatName = match.Format.Name;
             ruleResult.MatchedFormatVersion = match.Format.CurrentVersion;
-            ruleResult.MatchedClientId = match.Format.ClientId;
+            ruleResult.MatchedClientId = matchedClientId;
             ruleResult.MatchedClientName = matchedClientName;
             // Strip internal diagnostic warnings from the response — the UI
             // only cares about the extracted fields now.

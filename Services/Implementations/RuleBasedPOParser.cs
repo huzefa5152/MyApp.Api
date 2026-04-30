@@ -435,7 +435,15 @@ namespace MyApp.Api.Services.Implementations
         // etc. which appear on every page's footer — that caused multi-page
         // POs to stop parsing at the bottom of page 1.)
         private static readonly Regex SimpleStopRegex = new(
-            @"^\s*(In\s+words|Amount\s+in\s+Words|Sub-?\s*Total|Sales\s+Tax\s*@|Excise\s+Duty|Grand\s+Total|Payable\s+Amount|Discount\s+Amount|Total\s+Amount|Freight\s*/?\s*Cartage|Remarks\s*:|For\s+Meko|HEAD\s+OFFICE|Email:|Rupees\s+Only)\b",
+            // Footer markers — once any of these appear we know the items
+            // table has ended. Three Meko-specific markers were missing
+            // (`Total <amount>` on its own line, `Sales Tax Amount`, and
+            // `ET Amount`), which let footer text leak into the last
+            // item's description on Meko-format POs (e.g. "CUTTING DISK
+            // 4\" RODIUS Total 7,200 Sales Tax Amount 1,296 ET Amount 0").
+            // The new alternatives are tight enough to skip Lotte/Soorty
+            // data rows, which always start with a numeric S.No instead.
+            @"^\s*(In\s+words|Amount\s+in\s+Words|Sub-?\s*Total|Sales\s+Tax\s*@|Sales\s+Tax\s+Amount|ET\s+Amount|Excise\s+Duty|Grand\s+Total|Payable\s+Amount|Discount\s+Amount|Total\s+Amount|Total\s+[\d,]+(?:\.\d+)?\s*$|Freight\s*/?\s*Cartage|Remarks\s*:|For\s+Meko|HEAD\s+OFFICE|Email:|Rupees\s+Only)\b",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         // Per-page chrome: header/footer lines that REPEAT on every page of
@@ -585,9 +593,16 @@ namespace MyApp.Api.Services.Implementations
                 // Skip secondary header fragments that wrap onto a second line
                 // (common in our PDFs: "Unit Price" / "Delivery Date"). A line
                 // whose tokens are mostly alphabetic and contain no numerics
-                // right after the real header row is almost always a header
+                // IMMEDIATELY after the real header row is almost always a header
                 // continuation — not a data row.
-                if (i <= headerIdx + 2 && !line.Any(char.IsDigit) && line.Trim().Split(' ').All(t => t.All(char.IsLetter) || t.Length <= 2))
+                //
+                // Tightened from `i <= headerIdx + 2` to `i == headerIdx + 1`
+                // because the wider window also swallowed legitimate item
+                // wrap-lines that happen to be a single alpha word (e.g.
+                // Meko PO has "G.I NUT BOLT 16X160MM W/DOUBLE" on the data
+                // row and "WASHER" on the wrap row — the wrap row sits at
+                // headerIdx+2 and was being silently dropped).
+                if (i == headerIdx + 1 && !line.Any(char.IsDigit) && line.Trim().Split(' ').All(t => t.All(char.IsLetter) || t.Length <= 2))
                     continue;
 
                 // Per-page chrome (repeating page header/footer across multi-
@@ -636,34 +651,49 @@ namespace MyApp.Api.Services.Implementations
                 var candidates = pairRegex.Matches(line);
                 Match? picked = null;
 
+                // True when the line begins with a real S.No / Item Id
+                // leader. Continuation lines from wrapped descriptions
+                // never have one, so we use this to gate ALL THREE pick
+                // passes (first/second/third) — otherwise units that ARE
+                // technically real UOMs but commonly appear inside
+                // descriptions ("Mm" in cable cross-sections, "Cm" in
+                // sheet sizes, "M" in pipe diameters) get picked from
+                // continuation text and produce phantom items.
+                bool lineHasRowLeader = HasLeadingRowMarker(line);
+
                 // First pass: a pair whose unit is a RECOGNISED UOM
                 // (NOS, Piece, KG, PC, etc.). Iterates in REVERSE — the
                 // real qty/unit column lives near the RIGHT end of the
                 // line, while pairs earlier in the line are almost always
                 // inside descriptions (e.g. "Oil Paint (3.64 Ltr)").
                 // Also rejects pairs immediately preceded by "(" — those
-                // are in-description specs, not columns.
+                // are in-description specs, not columns. Now also gated on
+                // `lineHasRowLeader` so continuation lines (which never
+                // start with the S.No / Item Id leader) cannot be picked.
                 var orderedDesc = candidates.Cast<Match>().Reverse().ToList();
-                foreach (Match m in orderedDesc)
+                if (lineHasRowLeader)
                 {
-                    var qtyRaw = m.Groups["qty"].Value;
-                    var unit = m.Groups["unit"].Value;
-                    if (IsNonUnitToken(unit)) continue;
-                    // Reject absurdly large qty tokens. Use the NUMERIC value
-                    // rather than character length so "10.00" (5 chars) still
-                    // passes while "004539" (item ID, len 6, value 4539) is
-                    // rejected by being > 9999.
-                    if (IsImplausibleQty(qtyRaw)) continue;
-                    if (!unitBeforeQty && m.Index == 0) continue;
-                    if (IsInsideParens(line, m.Index)) continue;
-                    if (!IsRecognisedUnit(unit)) continue;
-                    picked = m;
-                    break;
+                    foreach (Match m in orderedDesc)
+                    {
+                        var qtyRaw = m.Groups["qty"].Value;
+                        var unit = m.Groups["unit"].Value;
+                        if (IsNonUnitToken(unit)) continue;
+                        // Reject absurdly large qty tokens. Use the NUMERIC value
+                        // rather than character length so "10.00" (5 chars) still
+                        // passes while "004539" (item ID, len 6, value 4539) is
+                        // rejected by being > 9999.
+                        if (IsImplausibleQty(qtyRaw)) continue;
+                        if (!unitBeforeQty && m.Index == 0) continue;
+                        if (IsInsideParens(line, m.Index)) continue;
+                        if (!IsRecognisedUnit(unit)) continue;
+                        picked = m;
+                        break;
+                    }
                 }
                 // Second pass (qty-first mode only): any decimal qty pair,
                 // even with an unknown unit. Decimals almost always indicate
                 // a real qty column.
-                if (picked == null && !unitBeforeQty)
+                if (picked == null && !unitBeforeQty && lineHasRowLeader)
                 {
                     foreach (Match m in candidates)
                     {
@@ -676,7 +706,7 @@ namespace MyApp.Api.Services.Implementations
                     }
                 }
                 // Last resort: integer pair with a short alpha unit.
-                if (picked == null)
+                if (picked == null && lineHasRowLeader)
                 {
                     foreach (Match m in candidates)
                     {
@@ -771,6 +801,31 @@ namespace MyApp.Api.Services.Implementations
             var pattern = $@"(^|\W){Regex.Escape(needle)}(\W|$)";
             return Regex.IsMatch(haystack, pattern, RegexOptions.IgnoreCase);
         }
+
+        // True when the line begins with the kind of leader a real data
+        // row carries — at least one numeric token (the S.No) followed
+        // by whitespace, optionally followed by a second numeric token
+        // (the Item Id) and more text. Used to gate the LENIENT passes
+        // in ExtractSimpleItems so that wrap-line continuations (which
+        // start with description text, not numbers) don't get misread
+        // as standalone items.
+        //
+        // Patterns this matches:
+        //   "1  003651  Cable Flexible ..."   (Lotte: S.No + Item Id)
+        //   "10020041 CUTTING DISK 4\" RODIUS" (Meko: Item Id only)
+        //   "1 0 (076-006530-01) ..."          (Soorty: S.No + parens)
+        //
+        // Patterns this rejects (continuation lines):
+        //   ", 300/500 Volt Rating."           (Lotte wrap)
+        //   "Core 2.5 Mm² , 300/500..."        (Lotte wrap)
+        //   "Mm² , 300/500 Volt Rating."       (Lotte wrap)
+        //   "( G-ELECTRICAL ITEMS 6.0VA"       (Soorty wrap)
+        private static readonly Regex RowLeaderRegex = new(
+            @"^\s*\d+(\s+\d+)?\s+\S",
+            RegexOptions.Compiled);
+
+        private static bool HasLeadingRowMarker(string line)
+            => RowLeaderRegex.IsMatch(line ?? "");
 
         // Tokens that look alphabetic but are clearly not a UOM. Prevents
         // "Rs. 7,500.00" from being parsed as qty=7,500.00 unit="Rs" etc.
