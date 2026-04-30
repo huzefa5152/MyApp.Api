@@ -8,3 +8,13 @@ export const updateClient = (id, payload) => http.put(`/clients/${id}`, payload)
 export const deleteClient = (id) => http.delete(`/clients/${id}`);
 export const getClientsCount = (companyId) =>
   http.get("/clients/count", { params: companyId ? { companyId } : {} });
+
+// Common Clients (group view) — multi-company duplicates collapsed into
+// a single editable record. Single-company clients DO NOT appear here;
+// they keep working through the per-company endpoints above.
+export const getCommonClients = (companyId) =>
+  http.get("/clients/common", { params: { companyId } });
+export const getCommonClientById = (groupId) =>
+  http.get(`/clients/common/${groupId}`);
+export const updateCommonClient = (groupId, payload) =>
+  http.put(`/clients/common/${groupId}`, payload);

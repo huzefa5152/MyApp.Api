@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { MdPeople, MdAdd, MdSearch, MdBusiness } from "react-icons/md";
 import ClientList from "../Components/ClientList";
 import ClientForm from "../Components/ClientForm";
+import CommonClientsPanel from "../Components/CommonClientsPanel";
+import CommonClientForm from "../Components/CommonClientForm";
 import { getClientsByCompany } from "../api/clientApi";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
@@ -24,6 +26,13 @@ export default function ClientsPage() {
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
   const [loadingClients, setLoadingClients] = useState(false);
+
+  // Common Client edit state — separate from per-company edit because
+  // the modal, payload shape and propagation behaviour are all different.
+  // commonRefreshKey lets the panel reload its list after a save (display
+  // names / membership might have shifted).
+  const [editingGroupId, setEditingGroupId] = useState(null);
+  const [commonRefreshKey, setCommonRefreshKey] = useState(0);
 
   const fetchClients = async (companyId) => {
     if (!companyId) return;
@@ -87,6 +96,17 @@ export default function ClientsPage() {
           </button>
         )}
       </div>
+
+      {/* Common Clients panel — shows ONLY when this company shares
+          a client (by NTN, fallback to name) with at least one other
+          company. Empty / single-tenant setups render nothing here. */}
+      {selectedCompany && (
+        <CommonClientsPanel
+          companyId={selectedCompany.id}
+          refreshKey={commonRefreshKey}
+          onEdit={(c) => setEditingGroupId(c.groupId)}
+        />
+      )}
 
       {/* Company Selector */}
       {loadingCompanies ? (
@@ -157,7 +177,28 @@ export default function ClientsPage() {
           client={selectedClient}
           companyId={selectedCompany.id}
           onClose={() => setShowModal(false)}
-          onSaved={() => fetchClients(selectedCompany.id)}
+          onSaved={() => {
+            fetchClients(selectedCompany.id);
+            // A per-company save can change Name / NTN, which moves
+            // the client to a different group — bump the panel refresh
+            // key so the Common Clients list re-pulls.
+            setCommonRefreshKey((k) => k + 1);
+          }}
+        />
+      )}
+
+      {/* Common Client edit modal — propagates to every member */}
+      {editingGroupId != null && (
+        <CommonClientForm
+          groupId={editingGroupId}
+          onClose={() => setEditingGroupId(null)}
+          onSaved={() => {
+            setEditingGroupId(null);
+            // Refresh BOTH the per-company list (this company's row may
+            // have changed name/NTN) AND the common panel.
+            if (selectedCompany) fetchClients(selectedCompany.id);
+            setCommonRefreshKey((k) => k + 1);
+          }}
         />
       )}
     </div>
