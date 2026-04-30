@@ -17,7 +17,95 @@ namespace MyApp.Api.Controllers
     public class SuppliersController : ControllerBase
     {
         private readonly ISupplierService _service;
-        public SuppliersController(ISupplierService service) => _service = service;
+        private readonly ISupplierGroupService _groupService;
+        public SuppliersController(ISupplierService service, ISupplierGroupService groupService)
+        {
+            _service = service;
+            _groupService = groupService;
+        }
+
+        // ── Common Suppliers (cross-company grouping) ──
+        // Mirror of /api/clients/common* — same HTTP shape, same
+        // permissions family. These are purely additive endpoints; the
+        // existing per-company routes above keep their behaviour.
+
+        [HttpGet("common")]
+        [HasPermission("suppliers.manage.view")]
+        public async Task<ActionResult<List<CommonSupplierDto>>> GetCommon([FromQuery] int companyId)
+            => Ok(await _groupService.GetCommonSuppliersAsync(companyId));
+
+        [HttpGet("groups")]
+        [HasPermission("suppliers.manage.view")]
+        public async Task<ActionResult<List<CommonSupplierDto>>> GetAllGroups()
+            => Ok(await _groupService.GetAllGroupsAsync());
+
+        [HttpGet("common/{groupId:int}")]
+        [HasPermission("suppliers.manage.view")]
+        public async Task<ActionResult<CommonSupplierDetailDto>> GetCommonById(int groupId)
+        {
+            var detail = await _groupService.GetByIdAsync(groupId);
+            if (detail == null) return NotFound();
+            return Ok(detail);
+        }
+
+        [HttpPut("common/{groupId:int}")]
+        [HasPermission("suppliers.manage.update")]
+        public async Task<ActionResult<CommonSupplierUpdateResultDto>> UpdateCommon(
+            int groupId, [FromBody] CommonSupplierUpdateDto dto)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            try
+            {
+                var result = await _groupService.UpdateAsync(groupId, dto);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpDelete("common/{groupId:int}")]
+        [HasPermission("suppliers.manage.delete")]
+        public async Task<ActionResult<CommonSupplierUpdateResultDto>> DeleteCommon(int groupId)
+        {
+            try
+            {
+                var result = await _groupService.DeleteAsync(groupId);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("batch")]
+        [HasPermission("suppliers.manage.create")]
+        public async Task<ActionResult<CreateSupplierBatchResultDto>> CreateBatch([FromBody] CreateSupplierBatchDto dto)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (dto.CompanyIds == null || dto.CompanyIds.Count == 0)
+                return BadRequest(new { message = "Select at least one company." });
+
+            try
+            {
+                var result = await _service.CreateForCompaniesAsync(dto);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
 
         [HttpGet]
         [HasPermission("suppliers.manage.view")]

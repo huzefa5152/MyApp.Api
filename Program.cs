@@ -64,6 +64,12 @@ builder.Services.AddScoped<IClientService, ClientService>();
 // keep working unchanged.
 builder.Services.AddScoped<IClientGroupService, ClientGroupService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
+// "Common Suppliers" grouping — same shape as IClientGroupService for
+// the purchase side. Lets the same legal entity (matched by NTN, then
+// fallback to normalised name) act as a single supplier across multiple
+// tenants. Existing per-company SupplierService flows keep working
+// unchanged; this is purely additive.
+builder.Services.AddScoped<ISupplierGroupService, SupplierGroupService>();
 builder.Services.AddScoped<IPurchaseBillService, PurchaseBillService>();
 builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
@@ -565,6 +571,101 @@ using (var scope = app.Services.CreateScope())
             VALUES ('Info', 'FBR_HS_UOM_BACKFILL_V1',
                     'Aligned 6 seeded ItemType HS_UOM mismatches to FBR HS_UOM master and cascaded to live bill/challan lines.',
                     'STARTUP', '/seed/itemtypes/hsuom-backfill', 200, SYSUTCDATETIME());
+        END
+    ");
+
+    // ── One-time backfill: Common Suppliers grouping ──
+    // Mirrors the Common Clients backfill above. Walks every existing
+    // Supplier and assigns it to a SupplierGroup based on the same
+    // canonical key the runtime EnsureGroupForSupplierAsync uses
+    // (NTN-digits ≥ 7 ⇒ "NTN:..."; otherwise "NAME:lower-trimmed").
+    // Idempotent via the audit-log marker. Existing per-company supplier
+    // rows, controllers and UI are untouched — SupplierGroupId is a
+    // nullable additive column.
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'COMMON_SUPPLIERS_BACKFILL_V1')
+        BEGIN
+            ;WITH Digits(Id, DigitsNtn) AS (
+                SELECT s.Id,
+                       REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                         ISNULL(s.NTN, ''),
+                         ' ',  ''), '-', ''), '/', ''), '.', ''), '(', ''), ')', ''),
+                         ',', ''), ':', ''), '\', ''), '''', ''), '""', ''), '+', ''), CHAR(9), '')
+                  FROM Suppliers s
+            ),
+            Keyed AS (
+                SELECT s.Id, s.CompanyId, s.Name, s.NTN, s.CreatedAt,
+                       d.DigitsNtn,
+                       LOWER(LTRIM(RTRIM(s.Name))) AS NormName,
+                       CASE
+                         WHEN LEN(d.DigitsNtn) >= 7 THEN N'NTN:'  + d.DigitsNtn
+                         ELSE                            N'NAME:' + LOWER(LTRIM(RTRIM(s.Name)))
+                       END AS GroupKey
+                  FROM Suppliers s
+                  JOIN Digits  d ON d.Id = s.Id
+            )
+            INSERT INTO SupplierGroups (GroupKey, DisplayName, NormalizedNtn, NormalizedName, CreatedAt, UpdatedAt)
+            SELECT k.GroupKey,
+                   (SELECT TOP 1 k2.Name
+                      FROM Keyed k2
+                     WHERE k2.GroupKey = k.GroupKey
+                     ORDER BY k2.CreatedAt, k2.Id),
+                   CASE WHEN LEFT(k.GroupKey, 4) = N'NTN:' THEN SUBSTRING(k.GroupKey, 5, LEN(k.GroupKey)) ELSE NULL END,
+                   (SELECT TOP 1 k2.NormName
+                      FROM Keyed k2
+                     WHERE k2.GroupKey = k.GroupKey
+                     ORDER BY k2.CreatedAt, k2.Id),
+                   SYSUTCDATETIME(), SYSUTCDATETIME()
+              FROM (SELECT DISTINCT GroupKey FROM Keyed) k
+             WHERE NOT EXISTS (SELECT 1 FROM SupplierGroups g WHERE g.GroupKey = k.GroupKey);
+
+            ;WITH Digits2(Id, DigitsNtn) AS (
+                SELECT s.Id,
+                       REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                         ISNULL(s.NTN, ''),
+                         ' ',  ''), '-', ''), '/', ''), '.', ''), '(', ''), ')', ''),
+                         ',', ''), ':', ''), '\', ''), '''', ''), '""', ''), '+', ''), CHAR(9), '')
+                  FROM Suppliers s
+            ),
+            Keyed2 AS (
+                SELECT s.Id,
+                       CASE
+                         WHEN LEN(d.DigitsNtn) >= 7 THEN N'NTN:'  + d.DigitsNtn
+                         ELSE                            N'NAME:' + LOWER(LTRIM(RTRIM(s.Name)))
+                       END AS GroupKey
+                  FROM Suppliers s
+                  JOIN Digits2 d ON d.Id = s.Id
+                 WHERE s.SupplierGroupId IS NULL
+            )
+            UPDATE s
+               SET s.SupplierGroupId = g.Id
+              FROM Suppliers s
+              JOIN Keyed2  k ON k.Id = s.Id
+              JOIN SupplierGroups g ON g.GroupKey = k.GroupKey
+             WHERE s.SupplierGroupId IS NULL;
+
+            DECLARE @groupCount2 INT, @supplierLinked INT;
+            SELECT @groupCount2  = COUNT(*) FROM SupplierGroups;
+            SELECT @supplierLinked = COUNT(*) FROM Suppliers WHERE SupplierGroupId IS NOT NULL;
+
+            DECLARE @multiSupplierNames NVARCHAR(MAX) = (
+                SELECT STRING_AGG(g.DisplayName, N'; ')
+                  FROM SupplierGroups g
+                 WHERE (SELECT COUNT(DISTINCT s.CompanyId)
+                          FROM Suppliers s
+                         WHERE s.SupplierGroupId = g.Id) >= 2
+            );
+
+            INSERT INTO AuditLogs (Level, ExceptionType, Message, StackTrace, HttpMethod, RequestPath, StatusCode, [Timestamp])
+            VALUES (
+                'Info',
+                'COMMON_SUPPLIERS_BACKFILL_V1',
+                CONCAT(
+                    'Common Suppliers backfill: created/linked ', @groupCount2,
+                    ' groups, attached ', @supplierLinked, ' suppliers.'),
+                CASE WHEN @multiSupplierNames IS NULL THEN N'No multi-company suppliers detected yet.'
+                     ELSE N'Multi-company groups: ' + @multiSupplierNames END,
+                'STARTUP', '/seed/suppliergroups/backfill', 200, SYSUTCDATETIME());
         END
     ");
 

@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { MdLocalShipping, MdAdd, MdSearch, MdBusiness } from "react-icons/md";
 import SupplierList from "../Components/SupplierList";
 import SupplierForm from "../Components/SupplierForm";
-import { getSuppliersByCompany } from "../api/supplierApi";
+import CommonSuppliersPanel from "../Components/CommonSuppliersPanel";
+import CommonSupplierForm from "../Components/CommonSupplierForm";
+import { getSuppliersByCompany, getCommonSuppliers } from "../api/supplierApi";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -25,6 +27,36 @@ export default function SuppliersPage() {
   const [search, setSearch] = useState("");
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
 
+  // Common Supplier edit state — separate from per-company edit
+  // because the modal, payload shape and propagation behaviour are
+  // all different. commonRefreshKey lets the panel reload after a save.
+  const [editingGroupId, setEditingGroupId] = useState(null);
+  const [commonRefreshKey, setCommonRefreshKey] = useState(0);
+
+  // Multi-company group ids that show in the Common Suppliers panel —
+  // used to filter them out of the per-company list below the dropdown
+  // (each supplier appears in exactly one place on the page).
+  const [commonGroupIds, setCommonGroupIds] = useState(() => new Set());
+
+  useEffect(() => {
+    if (!selectedCompany) {
+      setCommonGroupIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await getCommonSuppliers(selectedCompany.id);
+        if (!cancelled) {
+          setCommonGroupIds(new Set((data || []).map((g) => g.groupId)));
+        }
+      } catch {
+        if (!cancelled) setCommonGroupIds(new Set());
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedCompany, commonRefreshKey]);
+
   const fetchSuppliers = async (companyId) => {
     if (!companyId) return;
     setLoadingSuppliers(true);
@@ -46,7 +78,14 @@ export default function SuppliersPage() {
   const handleEdit = (s) => { setSelectedSupplier(s); setShowModal(true); };
   const handleAdd = () => { setSelectedSupplier(null); setShowModal(true); };
 
-  const filtered = suppliers.filter((s) =>
+  // Hide suppliers that already appear in the Common Suppliers panel
+  // above — each supplier visible in exactly one place on the page.
+  const uncommonSuppliers = useMemo(() => {
+    if (commonGroupIds.size === 0) return suppliers;
+    return suppliers.filter((s) => !s.supplierGroupId || !commonGroupIds.has(s.supplierGroupId));
+  }, [suppliers, commonGroupIds]);
+
+  const filtered = uncommonSuppliers.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
     (s.ntn || "").toLowerCase().includes(search.toLowerCase()) ||
     (s.email || "").toLowerCase().includes(search.toLowerCase()) ||
@@ -64,7 +103,7 @@ export default function SuppliersPage() {
             <h2 style={styles.pageTitle}>Suppliers</h2>
             <p style={styles.pageSubtitle}>
               {selectedCompany
-                ? `${suppliers.length} supplier${suppliers.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
+                ? `${uncommonSuppliers.length} company-specific supplier${uncommonSuppliers.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
                 : "Select a company to view suppliers"}
             </p>
           </div>
@@ -80,6 +119,16 @@ export default function SuppliersPage() {
           </button>
         )}
       </div>
+
+      {/* Common Suppliers panel — auto-hides for tenants with no
+          multi-company duplicates. Stable across the company dropdown. */}
+      {selectedCompany && (
+        <CommonSuppliersPanel
+          companyId={selectedCompany.id}
+          refreshKey={commonRefreshKey}
+          onEdit={(s) => setEditingGroupId(s.groupId)}
+        />
+      )}
 
       {loadingCompanies ? (
         <div style={styles.loadingContainer}>
@@ -145,8 +194,28 @@ export default function SuppliersPage() {
         <SupplierForm
           supplier={selectedSupplier}
           companyId={selectedCompany.id}
+          companies={companies}
           onClose={() => setShowModal(false)}
-          onSaved={() => fetchSuppliers(selectedCompany.id)}
+          onSaved={() => {
+            fetchSuppliers(selectedCompany.id);
+            // A per-company save can change Name / NTN, which moves
+            // the supplier to a different group — bump the panel
+            // refresh key so the Common Suppliers list re-pulls.
+            setCommonRefreshKey((k) => k + 1);
+          }}
+        />
+      )}
+
+      {/* Common Supplier edit modal — propagates to every member */}
+      {editingGroupId != null && (
+        <CommonSupplierForm
+          groupId={editingGroupId}
+          onClose={() => setEditingGroupId(null)}
+          onSaved={() => {
+            setEditingGroupId(null);
+            if (selectedCompany) fetchSuppliers(selectedCompany.id);
+            setCommonRefreshKey((k) => k + 1);
+          }}
         />
       )}
     </div>

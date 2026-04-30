@@ -27,6 +27,16 @@ namespace MyApp.Api.Models
         public int? FbrProvinceCode { get; set; }
 
         public int CompanyId { get; set; }
+
+        // Common Supplier grouping — mirrors Client.ClientGroupId.
+        // Nullable for backward compatibility: existing rows are NULL
+        // until the one-time backfill assigns them a group. Same
+        // identity rules (NTN-first, name-fallback). Single-company
+        // suppliers still get a group so the 2nd company adds them
+        // and they auto-link.
+        public int? SupplierGroupId { get; set; }
+        public SupplierGroup? SupplierGroup { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation

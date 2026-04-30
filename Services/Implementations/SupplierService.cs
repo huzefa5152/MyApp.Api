@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
@@ -8,10 +10,14 @@ namespace MyApp.Api.Services.Implementations
     public class SupplierService : ISupplierService
     {
         private readonly ISupplierRepository _repo;
+        private readonly ISupplierGroupService _groupService;
+        private readonly AppDbContext _context;
 
-        public SupplierService(ISupplierRepository repo)
+        public SupplierService(ISupplierRepository repo, ISupplierGroupService groupService, AppDbContext context)
         {
             _repo = repo;
+            _groupService = groupService;
+            _context = context;
         }
 
         private static SupplierDto ToDto(Supplier s, bool hasPurchaseBills = false) => new()
@@ -28,6 +34,7 @@ namespace MyApp.Api.Services.Implementations
             CNIC = s.CNIC,
             FbrProvinceCode = s.FbrProvinceCode,
             CompanyId = s.CompanyId,
+            SupplierGroupId = s.SupplierGroupId,
             HasPurchaseBills = hasPurchaseBills,
             CreatedAt = s.CreatedAt,
         };
@@ -78,7 +85,87 @@ namespace MyApp.Api.Services.Implementations
             };
 
             var created = await _repo.CreateAsync(supplier);
+
+            // Attach to a Common Supplier group — find-or-create by NTN
+            // (or normalised name fallback). Same defensive try/catch as
+            // ClientService: grouping is a convenience layer, must never
+            // break the per-company create.
+            try
+            {
+                await _groupService.EnsureGroupForSupplierAsync(created);
+                await _context.SaveChangesAsync();
+            }
+            catch { /* see ClientService.CreateAsync */ }
+
             return ToDto(created);
+        }
+
+        public async Task<CreateSupplierBatchResultDto> CreateForCompaniesAsync(CreateSupplierBatchDto dto)
+        {
+            var result = new CreateSupplierBatchResultDto();
+            if (dto.CompanyIds == null || dto.CompanyIds.Count == 0)
+                throw new InvalidOperationException("At least one company must be selected.");
+
+            var distinctIds = dto.CompanyIds.Distinct().ToList();
+            var companyNames = await _context.Companies
+                .Where(c => distinctIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => c.Name);
+
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                foreach (var companyId in distinctIds)
+                {
+                    if (!companyNames.TryGetValue(companyId, out var companyName))
+                    {
+                        result.SkippedReasons.Add($"Company id={companyId} not found.");
+                        continue;
+                    }
+
+                    if (await _repo.ExistsWithNameAsync(dto.Name, companyId))
+                    {
+                        result.SkippedReasons.Add(
+                            $"{companyName}: a supplier named '{dto.Name}' already exists; skipped.");
+                        continue;
+                    }
+
+                    var supplier = new Supplier
+                    {
+                        Name = dto.Name,
+                        Address = dto.Address,
+                        Phone = dto.Phone,
+                        Email = dto.Email,
+                        NTN = dto.NTN,
+                        STRN = dto.STRN,
+                        Site = dto.Site,
+                        RegistrationType = dto.RegistrationType,
+                        CNIC = dto.CNIC,
+                        FbrProvinceCode = dto.FbrProvinceCode,
+                        CompanyId = companyId,
+                        CreatedAt = DateTime.UtcNow,
+                    };
+                    var created = await _repo.CreateAsync(supplier);
+
+                    try
+                    {
+                        var grp = await _groupService.EnsureGroupForSupplierAsync(created);
+                        await _context.SaveChangesAsync();
+                        result.SupplierGroupId = grp.Id;
+                    }
+                    catch { /* grouping failure must not block create */ }
+
+                    result.Created.Add(ToDto(created));
+                }
+
+                await tx.CommitAsync();
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+
+            return result;
         }
 
         public async Task<SupplierDto> UpdateAsync(SupplierDto dto)
@@ -104,6 +191,18 @@ namespace MyApp.Api.Services.Implementations
 
             var hasBills = await _repo.HasPurchaseBillsAsync(supplier.Id);
             await _repo.UpdateAsync(supplier);
+
+            // Re-evaluate Common Supplier grouping. NTN / Name might
+            // have just changed, which moves the supplier from one
+            // group to another (or creates a new group). Same
+            // defensive try/catch as Create.
+            try
+            {
+                await _groupService.EnsureGroupForSupplierAsync(supplier);
+                await _context.SaveChangesAsync();
+            }
+            catch { /* see CreateAsync */ }
+
             return ToDto(supplier, hasBills);
         }
 

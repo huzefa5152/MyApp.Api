@@ -36,6 +36,7 @@ namespace MyApp.Api.Data
 
         // Purchase + Inventory module
         public DbSet<Supplier> Suppliers { get; set; }
+        public DbSet<SupplierGroup> SupplierGroups { get; set; }
         public DbSet<PurchaseBill> PurchaseBills { get; set; }
         public DbSet<PurchaseItem> PurchaseItems { get; set; }
         public DbSet<PurchaseItemSourceLine> PurchaseItemSourceLines { get; set; }
@@ -568,6 +569,29 @@ namespace MyApp.Api.Data
                 .Property(s => s.RegistrationType).HasMaxLength(20);
             modelBuilder.Entity<Supplier>()
                 .Property(s => s.CNIC).HasMaxLength(20);
+
+            // ── Supplier → SupplierGroup (Common Suppliers grouping) ──
+            // Mirrors Client → ClientGroup. Nullable FK so existing rows
+            // stay valid until the one-time backfill assigns them. SetNull
+            // on group delete so removing the group row doesn't orphan /
+            // cascade-delete suppliers — they keep working as ungrouped
+            // per-company records.
+            modelBuilder.Entity<Supplier>()
+                .HasOne(s => s.SupplierGroup)
+                .WithMany(g => g.Suppliers)
+                .HasForeignKey(s => s.SupplierGroupId)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<Supplier>()
+                .HasIndex(s => s.SupplierGroupId);
+
+            // ── SupplierGroup unique key + lookup indexes ──
+            modelBuilder.Entity<SupplierGroup>()
+                .HasIndex(g => g.GroupKey)
+                .IsUnique();
+            modelBuilder.Entity<SupplierGroup>()
+                .HasIndex(g => g.NormalizedNtn);
+            modelBuilder.Entity<SupplierGroup>()
+                .HasIndex(g => g.NormalizedName);
 
             // PurchaseBill — mirror of Invoice
             modelBuilder.Entity<PurchaseBill>()

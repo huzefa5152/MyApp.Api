@@ -15,6 +15,11 @@ namespace MyApp.Api.DTOs
         public int? FbrProvinceCode { get; set; }
         public int CompanyId { get; set; }
 
+        // Common Supplier grouping id (read-only). Lets the per-company
+        // list surface "this supplier is also in N other companies"
+        // affordances and links to the Common Supplier edit view.
+        public int? SupplierGroupId { get; set; }
+
         /// <summary>
         /// True when this supplier has at least one PurchaseBill against
         /// them. UI uses it to disable the Delete button — same UX as the

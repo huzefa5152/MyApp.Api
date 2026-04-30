@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { createSupplier, updateSupplier } from "../api/supplierApi";
+import { createSupplier, createSupplierBatch, updateSupplier } from "../api/supplierApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { notify } from "../utils/notify";
 import { formStyles } from "../theme";
@@ -10,7 +10,16 @@ const {
   footer, button, cancel, submit,
 } = formStyles;
 
-export default function SupplierForm({ supplier, companyId, onClose, onSaved }) {
+/**
+ * Mirror of the per-company ClientForm with the same multi-company
+ * picker semantics:
+ *   • EDIT → single Supplier row, picker hidden.
+ *   • CREATE → operator picks 1+ companies; selecting 2+ auto-collapses
+ *     the new rows into a Common Supplier group via EnsureGroup.
+ * When `companies` is empty / single, the picker is hidden and the
+ * legacy single-company POST /api/suppliers path is used.
+ */
+export default function SupplierForm({ supplier, companyId, companies = [], onClose, onSaved }) {
   const empty = {
     id: null, name: "", address: "", email: "", phone: "",
     ntn: "", strn: "", site: "", registrationType: "", cnic: "",
@@ -31,6 +40,26 @@ export default function SupplierForm({ supplier, companyId, onClose, onSaved }) 
   const [errors, setErrors] = useState({});
   const [provinces, setProvinces] = useState([]);
   const [regTypes, setRegTypes] = useState([]);
+
+  // Multi-company picker state — same shape as ClientForm.
+  const isCreate = !supplier;
+  const showCompanyPicker = isCreate && Array.isArray(companies) && companies.length > 1;
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState(() =>
+    companyId ? [Number(companyId)] : []
+  );
+  useEffect(() => {
+    if (isCreate && companyId) {
+      setSelectedCompanyIds((prev) =>
+        prev.length === 0 ? [Number(companyId)] : prev
+      );
+    }
+  }, [companyId, isCreate]);
+  const toggleCompany = (id) => {
+    const n = Number(id);
+    setSelectedCompanyIds((prev) =>
+      prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]
+    );
+  };
 
   useEffect(() => {
     if (supplier) setFormData({
@@ -67,6 +96,9 @@ export default function SupplierForm({ supplier, companyId, onClose, onSaved }) 
     if ((formData.registrationType === "Unregistered" || formData.registrationType === "CNIC") && !formData.cnic.trim()) {
       next.cnic = "CNIC is required for this registration type";
     }
+    if (isCreate && showCompanyPicker && selectedCompanyIds.length === 0) {
+      next.companies = "Pick at least one company.";
+    }
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -80,17 +112,39 @@ export default function SupplierForm({ supplier, companyId, onClose, onSaved }) 
     e.preventDefault();
     if (!validate()) return;
     try {
-      const payload = {
+      const base = {
         ...formData,
-        companyId,
         fbrProvinceCode: formData.fbrProvinceCode === "" ? null : Number(formData.fbrProvinceCode),
         registrationType: formData.registrationType || null,
         cnic: formData.cnic || null,
       };
-      const result = formData.id
-        ? await updateSupplier(formData.id, payload)
-        : await createSupplier(payload);
-      onSaved(result.data);
+
+      // EDIT — unchanged path.
+      if (formData.id) {
+        const { data } = await updateSupplier(formData.id, { ...base, companyId });
+        onSaved(data);
+        onClose();
+        return;
+      }
+
+      // CREATE — multi-company batch when >1 companies are pickable.
+      if (showCompanyPicker) {
+        const { data } = await createSupplierBatch({ ...base, companyIds: selectedCompanyIds });
+        const created = data.created || [];
+        const skipped = data.skippedReasons || [];
+        if (skipped.length > 0) notify(skipped.join(" "), "warning");
+        if (created.length > 0) {
+          notify(
+            `Created ${created.length} supplier record${created.length !== 1 ? "s" : ""}` +
+              (data.supplierGroupId ? " (linked as a Common Supplier)" : ""),
+            "success"
+          );
+        }
+        onSaved(created[0] || null);
+      } else {
+        const { data } = await createSupplier({ ...base, companyId });
+        onSaved(data);
+      }
       onClose();
     } catch (err) {
       notify(err.response?.data?.message || "Failed to save supplier.", "error");
@@ -112,6 +166,43 @@ export default function SupplierForm({ supplier, companyId, onClose, onSaved }) 
         </div>
         <form onSubmit={handleSubmit} noValidate>
           <div style={body}>
+            {/* Multi-company picker — CREATE mode + parent supplied
+                companies. Default-checked is the currently-active
+                company so single-company creates stay one click;
+                tapping extra chips spawns a Common Supplier group. */}
+            {showCompanyPicker && (
+              <div style={pickerStyles.box}>
+                <div style={pickerStyles.headerRow}>
+                  <span style={pickerStyles.title}>Create under which companies?</span>
+                  <span style={pickerStyles.hint}>
+                    Pick one to add this supplier to a single tenant, or 2+ to share it as a Common Supplier.
+                  </span>
+                </div>
+                <div style={pickerStyles.chips}>
+                  {companies.map((c) => {
+                    const id = Number(c.id);
+                    const checked = selectedCompanyIds.includes(id);
+                    const lbl = c.brandName || c.name;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => toggleCompany(id)}
+                        style={{
+                          ...pickerStyles.chip,
+                          ...(checked ? pickerStyles.chipOn : pickerStyles.chipOff),
+                        }}
+                        title={checked ? `Tap to remove ${lbl}` : `Tap to include ${lbl}`}
+                      >
+                        {checked ? "✓ " : ""}{lbl}
+                      </button>
+                    );
+                  })}
+                </div>
+                {errorMsg("companies")}
+              </div>
+            )}
+
             <div style={formGroup}>
               <label style={label}>Name *</label>
               <input type="text" name="name" value={formData.name} onChange={handleChange} style={{ ...input, ...fieldError("name") }} />
@@ -186,3 +277,30 @@ export default function SupplierForm({ supplier, companyId, onClose, onSaved }) 
     </div>
   );
 }
+
+const pickerStyles = {
+  box: {
+    background: "#f0f7ff",
+    border: "1px solid #b7d4f0",
+    borderRadius: 10,
+    padding: "0.7rem 0.85rem",
+    marginBottom: "0.9rem",
+  },
+  headerRow: { display: "flex", alignItems: "baseline", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.5rem" },
+  title: { fontWeight: 700, fontSize: "0.88rem", color: "#0d47a1" },
+  hint: { fontSize: "0.74rem", color: "#5f6d7e" },
+  chips: { display: "flex", flexWrap: "wrap", gap: "0.4rem" },
+  chip: {
+    fontFamily: "inherit",
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    padding: "0.35rem 0.85rem",
+    borderRadius: 999,
+    cursor: "pointer",
+    transition: "background 0.15s, color 0.15s, border-color 0.15s",
+    boxShadow: "none",
+    margin: 0,
+  },
+  chipOn: { background: "#0d47a1", color: "#fff", border: "1px solid #0d47a1" },
+  chipOff: { background: "#fff", color: "#0d47a1", border: "1px solid #b7d4f0" },
+};
