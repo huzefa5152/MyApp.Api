@@ -32,10 +32,10 @@ namespace MyApp.Api.DTOs
 
     /// <summary>
     /// Detail view for a single common client — used by the edit form.
-    /// Master fields (Name / NTN / STRN / CNIC / RegistrationType /
-    /// FbrProvinceCode / Address) come from the group's representative
-    /// row; Sites stay per-company so each tenant keeps its own
-    /// physical-department list.
+    /// All master fields propagate to every member (including Site,
+    /// because operators repeatedly hit the "I added sites under one
+    /// company but the other tenant's record was empty" papercut and
+    /// expected sites to follow the legal entity, not the tenant).
     /// </summary>
     public class CommonClientDetailDto
     {
@@ -51,8 +51,20 @@ namespace MyApp.Api.DTOs
         public int? FbrProvinceCode { get; set; }
 
         /// <summary>
-        /// Per-company member breakdown — operator sees which tenants
-        /// have this client and what site list each one carries.
+        /// Master site list — semicolon-separated. Pre-filled from
+        /// whichever member's Site is the longest at load time so the
+        /// operator never starts with a blank list when at least one
+        /// tenant has sites configured. On save propagates to every
+        /// member, overwriting per-tenant variations (the Members
+        /// section below shows the per-tenant "before" state so they
+        /// can sanity-check what's about to change).
+        /// </summary>
+        public string? Site { get; set; }
+
+        /// <summary>
+        /// Per-company member breakdown — read-only "before" view of
+        /// each tenant's site list, so the operator can confirm what
+        /// the cascade is about to overwrite.
         /// </summary>
         public List<CommonClientMemberDto> Members { get; set; } = new();
     }
@@ -67,9 +79,12 @@ namespace MyApp.Api.DTOs
     }
 
     /// <summary>
-    /// Update payload from the Common Client edit form. Master fields
-    /// only — Site updates still go through the per-company Client
-    /// edit because each tenant manages its own site list.
+    /// Update payload from the Common Client edit form. Every field
+    /// here propagates to every member Client across all companies.
+    /// Site is included on purpose — operators kept hitting the
+    /// "I configured sites under one tenant and they didn't show up
+    /// for the other" papercut, and sites are master data of the
+    /// BUYER (their physical departments), not of the seller tenant.
     /// </summary>
     public class CommonClientUpdateDto
     {
@@ -80,6 +95,7 @@ namespace MyApp.Api.DTOs
         public string? NTN { get; set; }
         public string? STRN { get; set; }
         public string? CNIC { get; set; }
+        public string? Site { get; set; }
         public string? RegistrationType { get; set; }
         public int? FbrProvinceCode { get; set; }
     }

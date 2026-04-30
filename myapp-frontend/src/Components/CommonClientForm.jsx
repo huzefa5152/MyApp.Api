@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { MdClose, MdInfo, MdBusiness, MdCheckCircle } from "react-icons/md";
 import { getCommonClientById, updateCommonClient } from "../api/clientApi";
+import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { formStyles, modalSizes } from "../theme";
 
 /**
@@ -19,6 +20,9 @@ export default function CommonClientForm({ groupId, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [detail, setDetail] = useState(null);
+  // Province dropdown options — same FBR Lookup category the per-
+  // company ClientForm uses, so the picker shape matches end-to-end.
+  const [provinces, setProvinces] = useState([]);
   const [form, setForm] = useState({
     name: "",
     address: "",
@@ -27,9 +31,25 @@ export default function CommonClientForm({ groupId, onClose, onSaved }) {
     ntn: "",
     strn: "",
     cnic: "",
+    site: "",
     registrationType: "",
     fbrProvinceCode: null,
   });
+
+  // Load FBR Province lookups once (independent of groupId — same list
+  // for every common client).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await getFbrLookupsByCategory("Province");
+        if (!cancelled) setProvinces(Array.isArray(data) ? data : []);
+      } catch {
+        if (!cancelled) setProvinces([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!groupId) return;
@@ -49,6 +69,10 @@ export default function CommonClientForm({ groupId, onClose, onSaved }) {
           ntn: data.ntn || "",
           strn: data.strn || "",
           cnic: data.cnic || "",
+          // Site pre-fills from whichever member has the longest list
+          // (server-side pick), so opening the form on a tenant that
+          // has no sites still shows the master list ready to save.
+          site: data.site || "",
           registrationType: data.registrationType || "",
           fbrProvinceCode: data.fbrProvinceCode ?? null,
         });
@@ -83,6 +107,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved }) {
         ntn: form.ntn?.trim() || null,
         strn: form.strn?.trim() || null,
         cnic: form.cnic?.trim() || null,
+        site: form.site?.trim() || null,
         registrationType: form.registrationType?.trim() || null,
         fbrProvinceCode: form.fbrProvinceCode ?? null,
       };
@@ -137,9 +162,9 @@ export default function CommonClientForm({ groupId, onClose, onSaved }) {
                         {(detail.members?.length || 0) !== 1 ? "s" : ""} across {memberCompanyList || "this company"}
                       </div>
                       <div style={{ fontSize: "0.8rem", color: "#5f6d7e" }}>
-                        Master fields below (name, NTN, STRN, CNIC, registration type, address) are
-                        applied to every sibling. Each company's <strong>Sites</strong> are unchanged —
-                        edit those from the per-company client form.
+                        Every field below — including <strong>Sites</strong> — applies to every sibling
+                        company's record on save. Sites pre-fill from the longest existing list so the
+                        common case (you set them under one tenant, forgot the others) is a no-op rewrite.
                       </div>
                     </div>
                   </div>
@@ -187,6 +212,26 @@ export default function CommonClientForm({ groupId, onClose, onSaved }) {
                   </div>
                 </div>
 
+                <div style={formStyles.formGroup}>
+                  <label style={formStyles.label}>FBR Province</label>
+                  <select
+                    name="fbrProvinceCode"
+                    value={form.fbrProvinceCode ?? ""}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        fbrProvinceCode: e.target.value === "" ? null : Number(e.target.value),
+                      }))
+                    }
+                    style={formStyles.input}
+                  >
+                    <option value="">— Select province —</option>
+                    {provinces.map((p) => (
+                      <option key={p.id} value={p.code}>{p.label}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="form-grid-2col">
                   <div style={formStyles.formGroup}>
                     <label style={formStyles.label}>Phone</label>
@@ -201,6 +246,22 @@ export default function CommonClientForm({ groupId, onClose, onSaved }) {
                 <div style={formStyles.formGroup}>
                   <label style={formStyles.label}>Address</label>
                   <input name="address" value={form.address} onChange={handleChange} style={formStyles.input} />
+                </div>
+
+                <div style={formStyles.formGroup}>
+                  <label style={formStyles.label}>Sites</label>
+                  <input
+                    name="site"
+                    value={form.site}
+                    onChange={handleChange}
+                    style={formStyles.input}
+                    placeholder="e.g. Site-A ; Site-B ; Site-C"
+                  />
+                  <span style={s.fieldHelp}>
+                    Semicolon-separated. Saving here overwrites the site list on every member
+                    company — pre-filled from the longest existing list across this client's
+                    tenants, so editing once propagates the same sites everywhere.
+                  </span>
                 </div>
 
                 {/* Member breakdown — read-only, lets the operator
@@ -303,4 +364,11 @@ const s = {
   memberCompany: { display: "inline-flex", alignItems: "center", gap: "0.25rem", fontWeight: 600, color: "#1a2332" },
   memberSite: { color: "#5f6d7e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   memberFlag: { color: "#5f6d7e", fontSize: "0.78rem" },
+  fieldHelp: {
+    fontSize: "0.75rem",
+    color: "#5f6d7e",
+    marginTop: "0.25rem",
+    display: "block",
+    lineHeight: 1.4,
+  },
 };

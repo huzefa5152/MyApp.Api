@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { MdPeople, MdAdd, MdSearch, MdBusiness } from "react-icons/md";
 import ClientList from "../Components/ClientList";
 import ClientForm from "../Components/ClientForm";
 import CommonClientsPanel from "../Components/CommonClientsPanel";
 import CommonClientForm from "../Components/CommonClientForm";
-import { getClientsByCompany } from "../api/clientApi";
+import { getClientsByCompany, getCommonClients } from "../api/clientApi";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -34,6 +34,32 @@ export default function ClientsPage() {
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [commonRefreshKey, setCommonRefreshKey] = useState(0);
 
+  // The set of multi-company group IDs visible right now — used to
+  // hide those clients from the per-company list below the dropdown.
+  // Same data the CommonClientsPanel renders (kept in sync via
+  // commonRefreshKey), only the IDs are needed here so it's a thin
+  // shadow query rather than a duplicate fetch.
+  const [commonGroupIds, setCommonGroupIds] = useState(() => new Set());
+
+  useEffect(() => {
+    if (!selectedCompany) {
+      setCommonGroupIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await getCommonClients(selectedCompany.id);
+        if (!cancelled) {
+          setCommonGroupIds(new Set((data || []).map((g) => g.groupId)));
+        }
+      } catch {
+        if (!cancelled) setCommonGroupIds(new Set());
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedCompany, commonRefreshKey]);
+
   const fetchClients = async (companyId) => {
     if (!companyId) return;
     setLoadingClients(true);
@@ -62,7 +88,15 @@ export default function ClientsPage() {
     setShowModal(true);
   };
 
-  const filtered = clients.filter((c) =>
+  // Hide clients that already appear in the Common Clients panel
+  // above — operator wants exactly ONE place to edit each client,
+  // not the same name listed twice on the same page.
+  const uncommonClients = useMemo(() => {
+    if (commonGroupIds.size === 0) return clients;
+    return clients.filter((c) => !c.clientGroupId || !commonGroupIds.has(c.clientGroupId));
+  }, [clients, commonGroupIds]);
+
+  const filtered = uncommonClients.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
     (c.email || "").toLowerCase().includes(search.toLowerCase()) ||
     (c.phone || "").includes(search)
@@ -80,7 +114,7 @@ export default function ClientsPage() {
             <h2 style={styles.pageTitle}>Clients</h2>
             <p style={styles.pageSubtitle}>
               {selectedCompany
-                ? `${clients.length} client${clients.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
+                ? `${uncommonClients.length} company-specific client${uncommonClients.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
                 : "Select a company to view clients"}
             </p>
           </div>

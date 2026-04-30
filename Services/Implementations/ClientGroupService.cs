@@ -90,19 +90,22 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<List<CommonClientDto>> GetCommonClientsAsync(int companyId)
         {
-            // Server-side aggregation — only multi-company groups, only
-            // those visible to the importing company. The HAVING clause
-            // produces zero rows for single-company duplicates so the
-            // Common Clients UI panel stays uncluttered.
+            // "Common Client" = a legal entity that more than one tenant
+            // has as a client. The panel sits ABOVE the per-company
+            // dropdown precisely because it's cross-tenant by definition,
+            // so the list MUST stay stable when the operator switches
+            // companies — only the per-card "your company has this one"
+            // hint changes.
             //
-            // We compute the projection in two queries (groups + companies)
-            // because EF can't translate a per-row "names of companies"
-            // aggregation cleanly across SQL Server collations.
+            // Filter rule: HAVING COUNT(DISTINCT CompanyId) >= 2.
+            // companyId is used only to compute ThisCompanyClientId
+            // (a deep-link to the operator's own row in the group);
+            // it does NOT exclude groups where the current company
+            // has no member.
             var groupSummaries = await _db.Clients
                 .Where(c => c.ClientGroupId != null)
                 .GroupBy(c => c.ClientGroupId!.Value)
-                .Where(g => g.Select(c => c.CompanyId).Distinct().Count() >= 2
-                         && g.Any(c => c.CompanyId == companyId))
+                .Where(g => g.Select(c => c.CompanyId).Distinct().Count() >= 2)
                 .Select(g => new
                 {
                     GroupId = g.Key,
@@ -179,6 +182,19 @@ namespace MyApp.Api.Services.Implementations
             // data always produces the same output.
             var representative = members.OrderBy(m => m.Id).First();
 
+            // Site is the exception: it's the field operators most
+            // often forget to copy across tenants, so we pre-fill the
+            // form from whichever member has the longest semicolon
+            // list. That maximises information shown in the form
+            // (operator can prune if they really want to clear sites
+            // on save) and makes the cascade non-destructive in the
+            // common case where exactly ONE tenant has sites entered.
+            var bestSite = members
+                .Select(m => m.Site)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .OrderByDescending(s => s!.Length)
+                .FirstOrDefault();
+
             // Has-invoices flag is per-Client; for the Common Client edit
             // form we only need to know if ANY member has invoices, since
             // that's what gates "this client can't be deleted".
@@ -201,6 +217,7 @@ namespace MyApp.Api.Services.Implementations
                 Email = representative.Email,
                 RegistrationType = representative.RegistrationType,
                 FbrProvinceCode = representative.FbrProvinceCode,
+                Site = bestSite,
                 Members = members
                     .OrderBy(m => m.CompanyName)
                     .Select(m => new CommonClientMemberDto
@@ -229,8 +246,12 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("Common client group has no members.");
 
             // Propagate master fields to every sibling Client. Site is
-            // intentionally excluded — sites are physical departments at
-            // each buyer plant and remain per-company.
+            // included on purpose — sites are buyer-side master data
+            // (physical departments at the buyer's plant), not seller
+            // tenant data, and operators frequently forgot to copy the
+            // list across companies. Pre-fill in GetByIdAsync uses the
+            // longest existing site list so this overwrite is non-
+            // destructive in the common case.
             foreach (var member in members)
             {
                 member.Name = dto.Name;
@@ -240,6 +261,7 @@ namespace MyApp.Api.Services.Implementations
                 member.NTN = dto.NTN;
                 member.STRN = dto.STRN;
                 member.CNIC = dto.CNIC;
+                member.Site = dto.Site;
                 member.RegistrationType = dto.RegistrationType;
                 member.FbrProvinceCode = dto.FbrProvinceCode;
             }
