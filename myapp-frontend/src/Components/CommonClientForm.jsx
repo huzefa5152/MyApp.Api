@@ -212,27 +212,29 @@ export default function CommonClientForm({ groupId, onClose, onSaved }) {
                   </div>
                 </div>
 
-                <div style={formStyles.formGroup}>
-                  <label style={formStyles.label}>FBR Province</label>
-                  <select
-                    name="fbrProvinceCode"
-                    value={form.fbrProvinceCode ?? ""}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        fbrProvinceCode: e.target.value === "" ? null : Number(e.target.value),
-                      }))
-                    }
-                    style={formStyles.input}
-                  >
-                    <option value="">— Select province —</option>
-                    {provinces.map((p) => (
-                      <option key={p.id} value={p.code}>{p.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-grid-2col">
+                {/* FBR Province + Phone + Email on one row on desktop;
+                    `form-grid-3col` collapses to 1 column on phones via
+                    the responsive utility class in index.css. */}
+                <div className="form-grid-3col">
+                  <div style={formStyles.formGroup}>
+                    <label style={formStyles.label}>FBR Province</label>
+                    <select
+                      name="fbrProvinceCode"
+                      value={form.fbrProvinceCode ?? ""}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          fbrProvinceCode: e.target.value === "" ? null : Number(e.target.value),
+                        }))
+                      }
+                      style={formStyles.input}
+                    >
+                      <option value="">— Select province —</option>
+                      {provinces.map((p) => (
+                        <option key={p.id} value={p.code}>{p.label}</option>
+                      ))}
+                    </select>
+                  </div>
                   <div style={formStyles.formGroup}>
                     <label style={formStyles.label}>Phone</label>
                     <input name="phone" value={form.phone} onChange={handleChange} style={formStyles.input} />

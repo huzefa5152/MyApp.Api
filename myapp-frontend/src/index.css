@@ -124,6 +124,25 @@ button:focus-visible {
   }
 }
 
+/* 3-column form rows (e.g. Province + Phone + Email). Collapses to
+   2 columns on tablet, 1 column on phones — keeps form density
+   comfortable across breakpoints. */
+.form-grid-3col {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+@media (max-width: 899.98px) {
+  .form-grid-3col {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 599.98px) {
+  .form-grid-3col {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* 3-column header rows (FbrPreviewDialog parties block, summary
    tiles). Auto-fit collapses to 2 then 1 column as width drops. */
 .responsive-grid-3col {

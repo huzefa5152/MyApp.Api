@@ -335,6 +335,7 @@ export default function ItemTypesPage() {
             : "No matching items."}
         </p>
       ) : (
+        <div className="responsive-table-wrap" style={styles.listWrap}>
         <div style={styles.list}>
           <div style={styles.listHeader}>
             <span style={{ width: 32 }}></span>
@@ -386,6 +387,7 @@ export default function ItemTypesPage() {
               </div>
             </div>
           ))}
+        </div>
         </div>
       )}
 
@@ -535,7 +537,16 @@ const styles = {
   searchWrap: { position: "relative", marginBottom: "1rem", maxWidth: 420 },
   searchIcon: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" },
   searchInput: { width: "100%", padding: "0.55rem 0.75rem 0.55rem 2.3rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 10, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none" },
-  list: { display: "flex", flexDirection: "column", gap: "0.35rem" },
+  // Outer wrapper with `responsive-table-wrap` class — on phones the
+  // 7-column row layout below would otherwise squash and become
+  // unreadable; horizontal scroll keeps every column at the right
+  // width while letting the operator swipe across.
+  listWrap: { padding: 0, border: "none", borderRadius: 0 },
+  // minWidth on the inner list pushes the rows out to the column
+  // widths their flex ratios imply, triggering horizontal scroll on
+  // viewports narrower than that. 720px gives every column a
+  // legible minimum without horizontal scrolling on tablet+.
+  list: { display: "flex", flexDirection: "column", gap: "0.35rem", minWidth: 720 },
   listHeader: { display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.4rem 0.75rem", fontSize: "0.72rem", fontWeight: 800, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em" },
   item: { display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.6rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fff" },
   starBtn: { width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: "pointer", borderRadius: 6, padding: 0 },
