@@ -54,6 +54,7 @@ namespace MyApp.Api.Controllers
                 .AsNoTracking()
                 .Include(f => f.Company)
                 .Include(f => f.Client)
+                .Include(f => f.ClientGroup)
                 .AsQueryable();
 
             if (companyId.HasValue)
@@ -73,6 +74,7 @@ namespace MyApp.Api.Controllers
                 .AsNoTracking()
                 .Include(x => x.Company)
                 .Include(x => x.Client)
+                .Include(x => x.ClientGroup)
                 .FirstOrDefaultAsync(x => x.Id == id);
             if (f == null) return NotFound();
             return Ok(ToDto(f));
@@ -271,6 +273,7 @@ namespace MyApp.Api.Controllers
                 .AsNoTracking()
                 .Include(f => f.Company)
                 .Include(f => f.Client)
+                .Include(f => f.ClientGroup)
                 .FirstAsync(f => f.Id == id);
             return Ok(ToDto(reloaded));
         }
@@ -310,6 +313,8 @@ namespace MyApp.Api.Controllers
             CompanyName = f.Company?.Name,
             ClientId = f.ClientId,
             ClientName = f.Client?.Name,
+            ClientGroupId = f.ClientGroupId,
+            ClientGroupName = f.ClientGroup?.DisplayName,
             SignatureHash = f.SignatureHash,
             KeywordSignature = f.KeywordSignature,
             RuleSetJson = f.RuleSetJson,
@@ -328,6 +333,8 @@ namespace MyApp.Api.Controllers
             CompanyName = f.Company?.Name,
             ClientId = f.ClientId,
             ClientName = f.Client?.Name,
+            ClientGroupId = f.ClientGroupId,
+            ClientGroupName = f.ClientGroup?.DisplayName,
             CurrentVersion = f.CurrentVersion,
             IsActive = f.IsActive,
             UpdatedAt = f.UpdatedAt,

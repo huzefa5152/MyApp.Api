@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { MdAdd, MdEdit, MdDelete, MdDescription, MdWarning, MdInfoOutline, MdBusiness } from "react-icons/md";
-import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { listPoFormats, getPoFormat, deletePoFormat } from "../api/poFormatApi";
 import POFormatForm from "../Components/POFormatForm";
-import { dropdownStyles } from "../theme";
 
 const colors = {
   blue: "#0d47a1",
@@ -24,7 +22,6 @@ const colors = {
 };
 
 export default function POFormatsPage() {
-  const { companies, selectedCompany, setSelectedCompany } = useCompany();
   const { has } = usePermissions();
   const canCreate = has("poformats.manage.create");
   const canUpdate = has("poformats.manage.update");
@@ -35,19 +32,23 @@ export default function POFormatsPage() {
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState("");
 
+  // PO Formats are now keyed off the Common Client GROUP, not the
+  // selling tenant. One format per legal entity, applies in every
+  // company that has that client. So the company dropdown that used
+  // to scope this page is gone — we list ALL formats regardless of
+  // CompanyId / ClientId, and the form picks a Common Client.
   const load = useCallback(async () => {
-    if (!selectedCompany) return;
     setLoading(true);
     setError("");
     try {
-      const res = await listPoFormats({ companyId: selectedCompany.id });
+      const res = await listPoFormats({});
       setFormats(res.data);
     } catch (err) {
       setError(err.response?.data?.error || "Failed to load PO formats.");
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -87,26 +88,14 @@ export default function POFormatsPage() {
     load();
   };
 
-  if (!selectedCompany) {
-    return (
-      <div style={styles.page}>
-        <div style={styles.emptyCard}>
-          <MdInfoOutline size={28} color={colors.textSecondary} />
-          <p style={{ margin: "0.5rem 0 0", color: colors.textSecondary }}>
-            Select a company first to manage its PO formats.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div style={styles.page}>
       <div style={styles.header}>
         <div style={{ flex: 1 }}>
           <h1 style={styles.title}>PO Formats</h1>
           <p style={styles.subtitle}>
-            Each client's purchase-order layout is saved once. Future PDFs with the same layout parse automatically — no AI, no retry.
+            One PO format per client (across ALL companies). Configure once for a client and the same layout parses
+            automatically whenever ANY tenant receives a PO from them.
           </p>
         </div>
         {canCreate && (
@@ -114,25 +103,6 @@ export default function POFormatsPage() {
             <MdAdd size={18} /> Add PO Format
           </button>
         )}
-      </div>
-
-      {/* Company selector — scopes every format + client dropdown below */}
-      <div style={styles.companyRow}>
-        <MdBusiness size={20} color={colors.primary} />
-        <select
-          style={dropdownStyles.base}
-          value={selectedCompany?.id || ""}
-          onChange={(e) =>
-            setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))
-          }
-        >
-          {companies.map((c) => (
-            <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
-          ))}
-        </select>
-        <span style={{ fontSize: "0.82rem", color: colors.textSecondary }}>
-          Formats below are scoped to this company.
-        </span>
       </div>
 
       {error && (
@@ -176,7 +146,13 @@ export default function POFormatsPage() {
                     <div style={{ fontSize: "0.75rem", color: colors.textSecondary }}>v{f.currentVersion}</div>
                   </td>
                   <td style={styles.td}>
-                    {f.clientName ? (
+                    {/* Prefer the ClientGroup display name — that's the
+                        canonical "client" the format applies to (across
+                        every tenant). Fallback to per-tenant ClientName
+                        for legacy formats not yet group-bound. */}
+                    {f.clientGroupName ? (
+                      <span style={styles.chip}>{f.clientGroupName}</span>
+                    ) : f.clientName ? (
                       <span style={styles.chip}>{f.clientName}</span>
                     ) : (
                       <span style={{ ...styles.chip, ...styles.chipMuted }}>Unassigned</span>
@@ -209,7 +185,6 @@ export default function POFormatsPage() {
 
       {showForm && (
         <POFormatForm
-          companyId={selectedCompany.id}
           format={editing}
           onClose={() => { setShowForm(false); setEditing(null); }}
           onSaved={handleSaved}

@@ -34,6 +34,16 @@ namespace MyApp.Api.Controllers
             => Ok(await _groupService.GetCommonClientsAsync(companyId));
 
         /// <summary>
+        /// Every client group (multi-company AND single-company). Used
+        /// by config screens that pick "one row per legal entity" — PO
+        /// Formats being the obvious one. Each card carries CompanyCount
+        /// so the UI can still hint "this client lives in N companies".
+        /// </summary>
+        [HttpGet("groups")]
+        public async Task<ActionResult<List<CommonClientDto>>> GetAllGroups()
+            => Ok(await _groupService.GetAllGroupsAsync());
+
+        /// <summary>
         /// Detail view for the Common Client edit form — master fields +
         /// per-company member list (sites stay per-company).
         /// </summary>

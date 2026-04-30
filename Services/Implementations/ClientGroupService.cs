@@ -150,6 +150,62 @@ namespace MyApp.Api.Services.Implementations
                 .ToList();
         }
 
+        public async Task<List<CommonClientDto>> GetAllGroupsAsync()
+        {
+            // Every group, single-member or multi-company. Used by config
+            // screens (PO Formats etc.) that key off "the legal entity"
+            // rather than "the legal entity that this tenant happens to
+            // share with another tenant". The per-card metadata is the
+            // same shape as the Common Clients panel so the UI can reuse
+            // the rendering bits.
+            var groupSummaries = await _db.Clients
+                .Where(c => c.ClientGroupId != null)
+                .GroupBy(c => c.ClientGroupId!.Value)
+                .Select(g => new
+                {
+                    GroupId = g.Key,
+                    CompanyCount = g.Select(c => c.CompanyId).Distinct().Count(),
+                    AnyClientId = g.Select(c => (int?)c.Id).FirstOrDefault(),
+                })
+                .ToListAsync();
+
+            if (groupSummaries.Count == 0) return new List<CommonClientDto>();
+
+            var groupIds = groupSummaries.Select(s => s.GroupId).ToList();
+
+            var groups = await _db.ClientGroups
+                .Where(g => groupIds.Contains(g.Id))
+                .ToDictionaryAsync(g => g.Id);
+
+            var memberCompanies = await _db.Clients
+                .Where(c => c.ClientGroupId != null && groupIds.Contains(c.ClientGroupId!.Value))
+                .Select(c => new { c.ClientGroupId, c.Company.Name })
+                .ToListAsync();
+            var companyNamesByGroup = memberCompanies
+                .GroupBy(x => x.ClientGroupId!.Value)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(x => x.Name).Distinct().OrderBy(n => n).ToList());
+
+            return groupSummaries
+                .Select(s => new CommonClientDto
+                {
+                    GroupId = s.GroupId,
+                    DisplayName = groups[s.GroupId].DisplayName,
+                    NTN = groups[s.GroupId].NormalizedNtn,
+                    CompanyCount = s.CompanyCount,
+                    CompanyNames = companyNamesByGroup.GetValueOrDefault(s.GroupId, new List<string>()),
+                    // ThisCompanyClientId is repurposed here as "any
+                    // member's clientId" — a representative we can hand
+                    // to legacy save paths (POFormat) that still take
+                    // a ClientId. The receiver auto-derives the group
+                    // from this client's ClientGroupId.
+                    ThisCompanyClientId = s.AnyClientId,
+                })
+                .OrderBy(c => c.DisplayName)
+                .ToList();
+        }
+
         public async Task<CommonClientDetailDto?> GetByIdAsync(int groupId)
         {
             var group = await _db.ClientGroups.FirstOrDefaultAsync(g => g.Id == groupId);

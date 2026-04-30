@@ -29,6 +29,15 @@ namespace MyApp.Api.Services.Interfaces
         Task<List<CommonClientDto>> GetCommonClientsAsync(int companyId);
 
         /// <summary>
+        /// Every <see cref="ClientGroup"/> (single-company AND multi-company) —
+        /// used by config screens like PO Formats that pick one Client per
+        /// legal entity rather than per company. CompanyCount is reported so
+        /// the operator can still see at a glance which entries are
+        /// cross-tenant.
+        /// </summary>
+        Task<List<CommonClientDto>> GetAllGroupsAsync();
+
+        /// <summary>
         /// Detail view: master fields + per-company members (sites etc.).
         /// </summary>
         Task<CommonClientDetailDto?> GetByIdAsync(int groupId);

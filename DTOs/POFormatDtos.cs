@@ -8,6 +8,10 @@ namespace MyApp.Api.DTOs
         public string? CompanyName { get; set; }
         public int? ClientId { get; set; }
         public string? ClientName { get; set; }
+        // Surfaced to the form so it can pre-select the right Common
+        // Client on edit without falling back to a clientId-based hop.
+        public int? ClientGroupId { get; set; }
+        public string? ClientGroupName { get; set; }
         public string SignatureHash { get; set; } = "";
         public string KeywordSignature { get; set; } = "";
         public string RuleSetJson { get; set; } = "{}";
@@ -26,6 +30,11 @@ namespace MyApp.Api.DTOs
         public string? CompanyName { get; set; }
         public int? ClientId { get; set; }
         public string? ClientName { get; set; }
+        public int? ClientGroupId { get; set; }
+        // ClientGroup display name — when the format is bound to a
+        // Common Client this is what the operator should see in the
+        // table column ("LOTTE Kolson", not Hakimi's per-tenant row).
+        public string? ClientGroupName { get; set; }
         public int CurrentVersion { get; set; }
         public bool IsActive { get; set; }
         public DateTime UpdatedAt { get; set; }

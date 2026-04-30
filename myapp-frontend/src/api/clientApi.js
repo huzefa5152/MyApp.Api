@@ -20,6 +20,12 @@ export const getClientsCount = (companyId) =>
 // they keep working through the per-company endpoints above.
 export const getCommonClients = (companyId) =>
   http.get("/clients/common", { params: { companyId } });
+
+// Every Client Group — single-company AND multi-company. Used by
+// config screens (PO Formats etc.) that pick "one row per legal
+// entity" rather than per tenant. Each item carries CompanyCount
+// so the picker can hint which entries are cross-tenant.
+export const getAllClientGroups = () => http.get("/clients/groups");
 export const getCommonClientById = (groupId) =>
   http.get(`/clients/common/${groupId}`);
 export const updateCommonClient = (groupId, payload) =>
