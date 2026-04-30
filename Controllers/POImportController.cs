@@ -106,17 +106,39 @@ namespace MyApp.Api.Controllers
                 });
             }
 
-            // If the matched format has a ClientId, resolve the name so the
-            // import review screen can pre-select it. The format itself is
-            // tenant-global but the linked Client belongs to ONE company —
-            // so when a different company imports the same PO layout, we
-            // MUST NOT leak that other company's client. Filter by the
-            // importing companyId; if there's no match, fall back to a
-            // null pre-select and let the operator pick manually (or
-            // create the client first).
+            // Resolve the per-tenant Client row that this format should
+            // pre-select on the import review screen. Two-step lookup:
+            //
+            //  1. PREFERRED — POFormat.ClientGroupId. The Common Clients
+            //     grouping means a Lotte-format saved by Hakimi automatically
+            //     applies in Roshan and FBR-Test-Co too, because all three
+            //     tenants' Lotte rows share the same ClientGroupId. We pick
+            //     whichever client in the IMPORTING company belongs to that
+            //     group.
+            //  2. FALLBACK — POFormat.ClientId. Legacy formats (or formats
+            //     where the linked client doesn't have a group yet) keep
+            //     working via the original direct-FK match.
+            //
+            // Either way, we ALWAYS filter by the importing companyId so
+            // we never leak another tenant's client into this tenant's UI.
             int? matchedClientId = null;
             string? matchedClientName = null;
-            if (match.Format.ClientId.HasValue)
+            if (match.Format.ClientGroupId.HasValue && companyId.HasValue)
+            {
+                var clientRow = await _context.Clients
+                    .Where(c => c.ClientGroupId == match.Format.ClientGroupId.Value
+                             && c.CompanyId == companyId.Value)
+                    .Select(c => new { c.Id, c.Name })
+                    .FirstOrDefaultAsync();
+                if (clientRow != null)
+                {
+                    matchedClientId = clientRow.Id;
+                    matchedClientName = clientRow.Name;
+                }
+            }
+            // Fallback A — POFormat.ClientId points to the importing
+            // tenant's client directly.
+            if (matchedClientId == null && match.Format.ClientId.HasValue)
             {
                 var clientRow = await _context.Clients
                     .Where(c => c.Id == match.Format.ClientId.Value
@@ -127,6 +149,35 @@ namespace MyApp.Api.Controllers
                 {
                     matchedClientId = clientRow.Id;
                     matchedClientName = clientRow.Name;
+                }
+            }
+
+            // Fallback B — POFormat is bound to ClientId in another
+            // tenant, but that other-tenant client is part of a Common
+            // Client group that ALSO has a member in the importing
+            // tenant. Hop through Clients to find the right group.
+            // Handles data drift where the format's stored ClientGroupId
+            // is stale (e.g. the linked client was re-grouped after the
+            // format was saved). companyId is required so we only ever
+            // resolve to a client owned by the importing tenant.
+            if (matchedClientId == null && match.Format.ClientId.HasValue && companyId.HasValue)
+            {
+                var ownerGroupId = await _context.Clients
+                    .Where(c => c.Id == match.Format.ClientId.Value)
+                    .Select(c => c.ClientGroupId)
+                    .FirstOrDefaultAsync();
+                if (ownerGroupId.HasValue)
+                {
+                    var clientRow = await _context.Clients
+                        .Where(c => c.ClientGroupId == ownerGroupId.Value
+                                 && c.CompanyId == companyId.Value)
+                        .Select(c => new { c.Id, c.Name })
+                        .FirstOrDefaultAsync();
+                    if (clientRow != null)
+                    {
+                        matchedClientId = clientRow.Id;
+                        matchedClientName = clientRow.Name;
+                    }
                 }
             }
 

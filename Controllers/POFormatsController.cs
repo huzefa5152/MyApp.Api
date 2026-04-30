@@ -142,14 +142,30 @@ namespace MyApp.Api.Controllers
                 || string.IsNullOrWhiteSpace(dto.UnitHeader))
                 return BadRequest(new { error = "descriptionHeader, quantityHeader and unitHeader are all required." });
 
-            // Dedup — one format per (company, client) pair. Operator should
-            // edit the existing one instead of creating a duplicate.
+            // Dedup — one format per Common Client GROUP, not per
+            // (company, client) pair. Common Clients machinery ensures
+            // every Client has a ClientGroupId (single-company clients
+            // get a 1-member group). So configuring a format for any
+            // tenant's Lotte automatically covers every other tenant's
+            // Lotte too — that's the whole point of Phase 3.
+            int? newClientGroupId = null;
             if (dto.ClientId.HasValue)
             {
-                var existing = await _db.POFormats
-                    .FirstOrDefaultAsync(f => f.CompanyId == dto.CompanyId && f.ClientId == dto.ClientId);
+                newClientGroupId = await _db.Clients
+                    .Where(c => c.Id == dto.ClientId.Value)
+                    .Select(c => c.ClientGroupId)
+                    .FirstOrDefaultAsync();
+
+                // Dedup check — prefer ClientGroupId equality so we
+                // catch cross-tenant duplicates (Hakimi has a Lotte
+                // format, operator on Roshan tries to add another one).
+                // Falls back to ClientId equality only when the legacy
+                // client somehow doesn't have a group yet.
+                var existing = newClientGroupId.HasValue
+                    ? await _db.POFormats.FirstOrDefaultAsync(f => f.ClientGroupId == newClientGroupId.Value)
+                    : await _db.POFormats.FirstOrDefaultAsync(f => f.CompanyId == dto.CompanyId && f.ClientId == dto.ClientId);
                 if (existing != null)
-                    return Conflict(new { error = $"A PO format already exists for this client ('{existing.Name}'). Edit it instead of creating a duplicate.", existingId = existing.Id });
+                    return Conflict(new { error = $"A PO format already exists for this client ('{existing.Name}'). Edit it instead of creating a duplicate — every tenant that has this client will use the same format.", existingId = existing.Id });
             }
 
             var ruleSet = BuildSimpleRuleSet(dto);
@@ -160,6 +176,7 @@ namespace MyApp.Api.Controllers
                 Name = dto.Name,
                 CompanyId = dto.CompanyId,
                 ClientId = dto.ClientId,
+                ClientGroupId = newClientGroupId,
                 RawText = dto.RawText,
                 RuleSetJson = ruleSetJson,
                 Notes = dto.Notes,
@@ -184,19 +201,38 @@ namespace MyApp.Api.Controllers
                 || string.IsNullOrWhiteSpace(dto.UnitHeader))
                 return BadRequest(new { error = "descriptionHeader, quantityHeader and unitHeader are all required." });
 
-            // Dedup on edit — if the operator re-assigns to a different
-            // client that already has a format, surface a clear conflict.
+            // Dedup on edit — same group-aware check as Create. If the
+            // operator re-assigns this format to a client that already
+            // has a format saved at the GROUP level (could be in a
+            // different tenant), surface a clear conflict.
+            int? newClientGroupId = null;
             if (dto.ClientId.HasValue && dto.ClientId != format.ClientId)
             {
-                var dupe = await _db.POFormats
-                    .FirstOrDefaultAsync(f => f.Id != id && f.CompanyId == format.CompanyId && f.ClientId == dto.ClientId);
+                newClientGroupId = await _db.Clients
+                    .Where(c => c.Id == dto.ClientId.Value)
+                    .Select(c => c.ClientGroupId)
+                    .FirstOrDefaultAsync();
+
+                var dupe = newClientGroupId.HasValue
+                    ? await _db.POFormats.FirstOrDefaultAsync(f => f.Id != id && f.ClientGroupId == newClientGroupId.Value)
+                    : await _db.POFormats.FirstOrDefaultAsync(f => f.Id != id && f.CompanyId == format.CompanyId && f.ClientId == dto.ClientId);
                 if (dupe != null)
                     return Conflict(new { error = $"Another PO format already exists for that client ('{dupe.Name}').", existingId = dupe.Id });
+            }
+            else if (dto.ClientId.HasValue)
+            {
+                // ClientId unchanged — refresh the group anyway so a
+                // newly-grouped client still gets its FK propagated.
+                newClientGroupId = await _db.Clients
+                    .Where(c => c.Id == dto.ClientId.Value)
+                    .Select(c => c.ClientGroupId)
+                    .FirstOrDefaultAsync();
             }
 
             format.Name = dto.Name?.Trim() ?? format.Name;
             format.IsActive = dto.IsActive;
             format.ClientId = dto.ClientId;
+            format.ClientGroupId = newClientGroupId;
             format.Notes = dto.Notes;
 
             // Optional: replace sample text + recompute fingerprint

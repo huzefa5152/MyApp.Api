@@ -101,6 +101,13 @@ namespace MyApp.Api.Services.Implementations
             {
                 Name = dto.Name?.Trim() ?? "",
                 CompanyId = dto.CompanyId,
+                ClientId = dto.ClientId,
+                // ClientGroupId is the source of truth for "which client
+                // does this format apply to" in the multi-tenant Common
+                // Clients model — the matcher resolves the per-tenant
+                // client row off this. ClientId is kept alongside it
+                // for backward compatibility with legacy callers.
+                ClientGroupId = dto.ClientGroupId,
                 SignatureHash = fp.Hash,
                 KeywordSignature = fp.Signature,
                 RuleSetJson = ruleSet,

@@ -36,6 +36,12 @@ namespace MyApp.Api.DTOs
         public string Name { get; set; } = "";
         public int? CompanyId { get; set; }
         public int? ClientId { get; set; }
+        // ClientGroupId — the Common Clients grouping FK. Auto-populated
+        // by the controller from the linked Client's group so the saved
+        // format applies in every tenant that has that client (uncommon
+        // single-company clients still have a 1-member group, so the
+        // semantics are identical to the legacy ClientId-only flow).
+        public int? ClientGroupId { get; set; }
         public string RawText { get; set; } = "";     // the sample PDF's raw text — we derive the fingerprint server-side
         public string? RuleSetJson { get; set; }      // optional (defaults to empty {}) — power users can paste a full anchored-v1 ruleset
         public string? Notes { get; set; }
