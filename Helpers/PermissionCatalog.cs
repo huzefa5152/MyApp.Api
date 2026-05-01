@@ -161,6 +161,19 @@ namespace MyApp.Api.Helpers
 
             // ── Audit Logs ──────────────────────────────────────────────────
             new("auditlogs.view",          "AuditLogs", "View", "View", "View application audit/exception logs"),
+
+            // ── Tenant Access (User → Company assignments) ──────────────────
+            // Decides who can SEE the per-company data. The `IsTenantIsolated`
+            // flag on Company is the switch: while false, every authenticated
+            // user with the right RBAC permission still reaches the company
+            // (legacy/open mode); while true, only users with a matching
+            // UserCompanies row pass the ICompanyAccessGuard. These two
+            // permissions gate the UI that maintains those rows; flipping
+            // IsTenantIsolated itself reuses companies.manage.update.
+            new("tenantaccess.manage.view",   "Tenant Access", "Manage", "View",
+                "View user → company tenant-access assignments"),
+            new("tenantaccess.manage.assign", "Tenant Access", "Manage", "Assign",
+                "Grant or revoke a user's access to specific companies"),
         };
     }
 }

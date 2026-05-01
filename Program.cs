@@ -755,6 +755,25 @@ using (var scope = app.Services.CreateScope())
     // admin user. Idempotent — runs every start.
     var seedAdminUserId = builder.Configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
     await MyApp.Api.Data.RbacSeeder.SeedAsync(db, seedAdminUserId);
+
+    // ── One-time perm grant: tenantaccess.manage.* → Administrator role ──
+    // The new keys are inserted by RbacSeeder (it walks PermissionCatalog),
+    // but RolePermissions is empty for them by default. Grant them to the
+    // built-in Administrator role on first run so the seed admin doesn't
+    // have to click into the role editor before the new screen works.
+    // Idempotent via the NOT EXISTS guard.
+    db.Database.ExecuteSqlRaw(@"
+        DECLARE @adminRoleId INT = (SELECT TOP 1 Id FROM Roles WHERE [Name] = 'Administrator');
+        IF @adminRoleId IS NOT NULL
+        BEGIN
+            DECLARE @viewId   INT = (SELECT Id FROM Permissions WHERE [Key] = 'tenantaccess.manage.view');
+            DECLARE @assignId INT = (SELECT Id FROM Permissions WHERE [Key] = 'tenantaccess.manage.assign');
+            IF @viewId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM RolePermissions WHERE RoleId = @adminRoleId AND PermissionId = @viewId)
+                INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (@adminRoleId, @viewId);
+            IF @assignId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM RolePermissions WHERE RoleId = @adminRoleId AND PermissionId = @assignId)
+                INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (@adminRoleId, @assignId);
+        END
+    ");
 }
 
 // Configure the HTTP request pipeline

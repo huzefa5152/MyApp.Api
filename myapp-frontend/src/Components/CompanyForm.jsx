@@ -53,6 +53,12 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         inventoryTrackingEnabled: false,
         startingPurchaseBillNumber: 0,
         startingGoodsReceiptNumber: 0,
+        // Tenant isolation — off by default to preserve "any user with the
+        // right RBAC permission can reach this company" behaviour. When
+        // flipped true, only users with a UserCompanies row pass the
+        // CompanyAccessGuard. Manage assignments via Configuration → Tenant
+        // Access.
+        isTenantIsolated: false,
     });
     const [logoFile, setLogoFile] = useState(null);
     const [error, setError] = useState("");
@@ -114,6 +120,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 inventoryTrackingEnabled: !!freshCompany.inventoryTrackingEnabled,
                 startingPurchaseBillNumber: freshCompany.startingPurchaseBillNumber || 0,
                 startingGoodsReceiptNumber: freshCompany.startingGoodsReceiptNumber || 0,
+                isTenantIsolated: !!freshCompany.isTenantIsolated,
             });
         }
     }, [freshCompany]);
@@ -524,6 +531,26 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                     </span>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Tenant Isolation ─────────────────────────────── */}
+                        <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #b26a0030", backgroundColor: "#fff4e0" }}>
+                            <p style={{ margin: "0 0 0.6rem", fontWeight: 700, fontSize: "0.85rem", color: "#b26a00" }}>Tenant Isolation</p>
+                            <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.5rem", borderRadius: 8, backgroundColor: "#fff", border: "1px solid #ffd699", cursor: "pointer" }}>
+                                <input
+                                    type="checkbox"
+                                    name="isTenantIsolated"
+                                    checked={!!form.isTenantIsolated}
+                                    onChange={handleChange}
+                                    style={{ marginTop: "0.15rem", flexShrink: 0 }}
+                                />
+                                <span style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.35 }}>
+                                    <strong style={{ display: "block" }}>Restrict to assigned users only</strong>
+                                    <span style={{ fontSize: "0.74rem", color: "#5f6d7e" }}>
+                                        OFF (default) — any authenticated user with the right RBAC permission can reach this company. ON — only users with an explicit grant in <em>Configuration → Tenant Access</em> see this company in dropdowns and can read/write its data. The seed admin always bypasses.
+                                    </span>
+                                </span>
+                            </label>
                         </div>
                     </div>
 

@@ -56,6 +56,7 @@ namespace MyApp.Api.Services.Implementations
             CurrentPurchaseBillNumber = c.CurrentPurchaseBillNumber,
             StartingGoodsReceiptNumber = c.StartingGoodsReceiptNumber,
             CurrentGoodsReceiptNumber = c.CurrentGoodsReceiptNumber,
+            IsTenantIsolated = c.IsTenantIsolated,
         };
 
         public async Task<IEnumerable<CompanyDto>> GetAllAsync()
@@ -124,6 +125,7 @@ namespace MyApp.Api.Services.Implementations
                 CurrentPurchaseBillNumber = 0,
                 StartingGoodsReceiptNumber = dto.StartingGoodsReceiptNumber,
                 CurrentGoodsReceiptNumber = 0,
+                IsTenantIsolated = dto.IsTenantIsolated,
             };
 
             var created = await _repository.AddAsync(company);
@@ -161,6 +163,11 @@ namespace MyApp.Api.Services.Implementations
             company.FbrDefaultUOM = dto.FbrDefaultUOM;
             company.FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered;
             company.FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered;
+
+            // Tenant isolation flag — freely toggleable. Flipping it true
+            // immediately requires a UserCompanies row for non-admins; the
+            // CompanyAccessGuard cache TTL is 60s so propagation is bounded.
+            company.IsTenantIsolated = dto.IsTenantIsolated;
 
             // Inventory module — flag is freely toggleable; starting numbers
             // only apply if no purchase docs exist yet (same rule as the

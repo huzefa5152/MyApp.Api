@@ -28,5 +28,8 @@
         public bool InventoryTrackingEnabled { get; set; }
         public int StartingPurchaseBillNumber { get; set; }
         public int StartingGoodsReceiptNumber { get; set; }
+
+        // Tenant isolation flag. See CompanyDto for semantics.
+        public bool IsTenantIsolated { get; set; }
     }
 }

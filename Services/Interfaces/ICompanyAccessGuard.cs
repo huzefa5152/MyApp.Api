@@ -29,5 +29,19 @@ namespace MyApp.Api.Services.Interfaces
         /// list-everything endpoints to filter rather than 403.
         /// </summary>
         Task<HashSet<int>> GetAccessibleCompanyIdsAsync(int userId);
+
+        /// <summary>
+        /// Drop the cached accessible-company set for one user. Call
+        /// after writing UserCompanies rows so the next request reflects
+        /// the change without waiting for the 60s TTL.
+        /// </summary>
+        void InvalidateUser(int userId);
+
+        /// <summary>
+        /// Drop every cached accessible-company set. Call when a company
+        /// flips IsTenantIsolated, since that changes who passes the
+        /// "open mode" branch for everyone at once.
+        /// </summary>
+        void InvalidateAll();
     }
 }

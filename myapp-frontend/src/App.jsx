@@ -19,6 +19,7 @@ import POFormatsPage from "./pages/POFormatsPage";
 import ProfilePage from "./pages/ProfilePage";
 import UsersPage from "./pages/UsersPage";
 import RolesPage from "./pages/RolesPage";
+import TenantAccessPage from "./pages/TenantAccessPage";
 import TemplateEditorPage from "./pages/TemplateEditorPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import FbrSettingsPage from "./pages/FbrSettingsPage";
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/roles" element={<RolesPage />} />
+          <Route path="/tenant-access" element={<TenantAccessPage />} />
           <Route path="/templates" element={<TemplateEditorPage />} />
           <Route path="/fbr-settings" element={<FbrSettingsPage />} />
           <Route path="/fbr-sandbox" element={<FbrSandboxPage />} />

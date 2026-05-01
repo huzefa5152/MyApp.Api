@@ -38,5 +38,12 @@
         public int CurrentPurchaseBillNumber { get; set; }
         public int StartingGoodsReceiptNumber { get; set; }
         public int CurrentGoodsReceiptNumber { get; set; }
+
+        // ── Tenant isolation switch ─────────────────────────────────
+        // false (default) → any authenticated user with the right RBAC
+        // permission can reach this company (legacy/open).
+        // true → only users with a UserCompanies row pass the access
+        // guard. The seed admin always bypasses.
+        public bool IsTenantIsolated { get; set; }
     }
 }

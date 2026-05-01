@@ -32,5 +32,9 @@
         public bool InventoryTrackingEnabled { get; set; }
         public int StartingPurchaseBillNumber { get; set; }
         public int StartingGoodsReceiptNumber { get; set; }
+
+        // Tenant isolation flag. See CompanyDto for semantics. Defaults to
+        // false on a newly created company so existing flows keep working.
+        public bool IsTenantIsolated { get; set; }
     }
 }

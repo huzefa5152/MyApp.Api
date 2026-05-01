@@ -16,6 +16,9 @@ namespace MyApp.Api.Services.Implementations
     {
         private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(60);
         private const string CachePrefix = "company-access:user:";
+        // Generation counter — bumping invalidates every per-user cache
+        // entry at once. Same trick PermissionService uses.
+        private const string GenerationKey = "company-access:generation";
 
         private readonly AppDbContext _context;
         private readonly IMemoryCache _cache;
@@ -27,6 +30,13 @@ namespace MyApp.Api.Services.Implementations
             _cache = cache;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
         }
+
+        private long CurrentGeneration() =>
+            _cache.GetOrCreate(GenerationKey, e =>
+            {
+                e.Priority = CacheItemPriority.NeverRemove;
+                return 0L;
+            });
 
         public async Task<bool> HasAccessAsync(int userId, int companyId)
         {
@@ -62,7 +72,7 @@ namespace MyApp.Api.Services.Implementations
                 return await _context.Companies.Select(c => c.Id).ToHashSetAsync();
             }
 
-            var cacheKey = $"{CachePrefix}{userId}";
+            var cacheKey = $"{CachePrefix}{userId}:g{CurrentGeneration()}";
             if (_cache.TryGetValue<HashSet<int>>(cacheKey, out var cached) && cached is not null)
                 return cached;
 
@@ -85,6 +95,22 @@ namespace MyApp.Api.Services.Implementations
                 SlidingExpiration = CacheTtl
             });
             return set;
+        }
+
+        public void InvalidateUser(int userId)
+        {
+            // Drop only the current-generation key. Older-generation keys
+            // (from a previous InvalidateAll bump) expire naturally.
+            _cache.Remove($"{CachePrefix}{userId}:g{CurrentGeneration()}");
+        }
+
+        public void InvalidateAll()
+        {
+            var gen = CurrentGeneration();
+            _cache.Set(GenerationKey, gen + 1, new MemoryCacheEntryOptions
+            {
+                Priority = CacheItemPriority.NeverRemove
+            });
         }
     }
 }
