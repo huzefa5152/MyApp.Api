@@ -509,8 +509,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
                       </div>
                       <div style={{ flex: 1, minWidth: 100 }}>
-                        <label style={styles.label}>
-                          GST Rate (%){chosenScenario && <span style={styles.lockedTag}>scenario-locked</span>}
+                        <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
+                          GST Rate (%){chosenScenario && <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}>🔒 locked</span>}
                         </label>
                         <input
                           type="number"
@@ -949,7 +949,7 @@ const styles = {
   unifiedTd: { padding: "0.3rem 0.4rem", fontSize: "0.8rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
 
   // Scenario-locked GST + Sale Type affordances (same look as StandaloneInvoiceForm).
-  lockedTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: "#e0f2f1", color: "#00695c", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase" },
+  lockedTag: { marginLeft: "0.3rem", padding: "0.05rem 0.3rem", borderRadius: 4, backgroundColor: "#e0f2f1", color: "#00695c", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", whiteSpace: "nowrap", display: "inline-block" },
   lockedSaleType: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.85rem", marginBottom: "0.6rem", borderRadius: 8, backgroundColor: "#e0f2f1", border: "1px solid #80cbc4", color: "#00695c", fontSize: "0.82rem" },
   lockedSaleTypeIcon: { fontSize: "0.85rem" },
   lockedSaleTypeHint: { color: "#00695c", opacity: 0.8, fontSize: "0.75rem" },

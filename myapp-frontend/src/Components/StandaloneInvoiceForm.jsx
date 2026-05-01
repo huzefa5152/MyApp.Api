@@ -526,8 +526,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
                       </div>
                       <div style={{ flex: 1, minWidth: 100 }}>
-                        <label style={styles.label}>
-                          GST Rate (%) <span style={styles.lockedTag}><MdLock size={10} /> scenario-locked</span>
+                        <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
+                          GST Rate (%) <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}><MdLock size={10} /> locked</span>
                         </label>
                         <input
                           type="number"
