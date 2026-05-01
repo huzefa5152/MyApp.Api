@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { MdAdd, MdDelete, MdCheck, MdInfo, MdLock, MdPersonAdd, MdInventory2 } from "react-icons/md";
 import { createStandaloneInvoice } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
-import { getFbrApplicableScenarios } from "../api/fbrApi";
-import { getItemTypes, createItemType } from "../api/itemTypeApi";
+import { getFbrApplicableScenarios, getFbrHSCodes } from "../api/fbrApi";
+import { getItemTypes, createItemType, getItemTypeFbrHints } from "../api/itemTypeApi";
 import { formStyles, modalSizes } from "../theme";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
@@ -735,6 +735,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       {showAddItemType && (
         <QuickItemTypeForm
           companyId={companyId}
+          scenarioCode={chosenScenario?.code}
+          scenarioSaleType={chosenScenario?.saleType}
           onClose={() => { setShowAddItemType(false); setPendingItemTypeRow(null); }}
           onSaved={onItemTypeSaved}
         />
@@ -744,17 +746,88 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 }
 
 // ────────────────────────────────────────────────────────────────────
-// Inline mini-form for "+ New Item Type" — name + HS code + UOM +
-// SaleType. Mirrors the essential fields from ItemTypesPage. Operator
-// can fine-tune later via the full Item Types page.
+// Inline mini-form for "+ New Item Type". Scenario-aware:
+//
+//   • Sale Type is LOCKED to the parent bill's scenario.saleType when
+//     opened from a scenario context — saving a mismatched sale type
+//     would just block the bill at FBR validation. Outside a scenario,
+//     it falls back to a freeform select.
+//
+//   • HS Code is a live typeahead against `/api/fbr/hscodes/{companyId}`.
+//     When the operator picks a code, /api/itemtypes/fbr-hints fills in
+//     UOM (and the FBR uoM_ID) automatically. Sale Type stays locked
+//     when in scenario context; if the FBR hint suggests a different
+//     SaleType, we surface that as a heads-up.
 // ────────────────────────────────────────────────────────────────────
-function QuickItemTypeForm({ companyId, onClose, onSaved }) {
+function QuickItemTypeForm({ companyId, onClose, onSaved, scenarioCode, scenarioSaleType }) {
+  const lockedSaleType = !!scenarioSaleType;
+
   const [name, setName] = useState("");
   const [hsCode, setHsCode] = useState("");
   const [uom, setUom] = useState("");
-  const [saleType, setSaleType] = useState("Goods at standard rate (default)");
+  const [fbrUOMId, setFbrUOMId] = useState(null);
+  const [saleType, setSaleType] = useState(scenarioSaleType || "Goods at standard rate (default)");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // HS code typeahead state
+  const [hsQuery, setHsQuery] = useState("");
+  const [hsSuggestions, setHsSuggestions] = useState([]);
+  const [hsLoading, setHsLoading] = useState(false);
+  const [hsOpen, setHsOpen] = useState(false);
+  const [fbrHint, setFbrHint] = useState(null);     // last fetched fbr-hints bundle
+  const [hintLoading, setHintLoading] = useState(false);
+
+  // Debounced HS code search. 250ms idle is generous enough that the
+  // network isn't hammered while the operator is still typing, but
+  // tight enough that the dropdown feels live.
+  useEffect(() => {
+    const q = hsQuery.trim();
+    if (q.length < 2) { setHsSuggestions([]); return; }
+    const t = setTimeout(async () => {
+      setHsLoading(true);
+      try {
+        const { data } = await getFbrHSCodes(companyId, q);
+        // Cap the suggestion list — FBR happily returns hundreds of
+        // hits for a 2-letter prefix, but the dropdown becomes
+        // unusable past ~30 entries.
+        setHsSuggestions(Array.isArray(data) ? data.slice(0, 30) : []);
+      } catch {
+        setHsSuggestions([]);
+      } finally {
+        setHsLoading(false);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [hsQuery, companyId]);
+
+  const pickHsCode = async (code) => {
+    setHsCode(code);
+    setHsQuery(code);
+    setHsOpen(false);
+    setFbrHint(null);
+    setHintLoading(true);
+    try {
+      const { data } = await getItemTypeFbrHints(companyId, code);
+      setFbrHint(data);
+      if (data?.defaultUom) {
+        setUom(data.defaultUom.description || "");
+        setFbrUOMId(data.defaultUom.uoM_ID || null);
+      }
+      // Sale Type only auto-fills when NOT locked by scenario context.
+      if (!lockedSaleType && data?.defaultSaleType) {
+        setSaleType(data.defaultSaleType);
+      }
+    } catch { /* hints unavailable; UOM stays editable */ }
+    finally { setHintLoading(false); }
+  };
+
+  // Heads-up: when locked to the scenario's sale type, surface a soft
+  // warning if FBR's hint says this HS code is normally a different
+  // sale type. Doesn't block save — the operator may still be right.
+  const saleTypeMismatch = lockedSaleType
+    && fbrHint?.defaultSaleType
+    && fbrHint.defaultSaleType !== scenarioSaleType;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -766,6 +839,7 @@ function QuickItemTypeForm({ companyId, onClose, onSaved }) {
         name: name.trim(),
         hsCode: hsCode.trim() || null,
         uom: uom.trim() || null,
+        fbrUOMId: fbrUOMId || null,
         saleType: saleType || null,
       }, companyId);
       onSaved(data);
@@ -786,6 +860,9 @@ function QuickItemTypeForm({ companyId, onClose, onSaved }) {
           <h5 style={formStyles.title}>
             <MdInventory2 style={{ verticalAlign: "-3px", marginRight: 4 }} size={16} />
             New Item Type
+            {scenarioCode && (
+              <span style={styles.scenarioPillSmall}>{scenarioCode}</span>
+            )}
           </h5>
           <button type="button" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
@@ -793,46 +870,112 @@ function QuickItemTypeForm({ companyId, onClose, onSaved }) {
           <div style={formStyles.body}>
             {error && <div style={styles.errorAlert}>{error}</div>}
             <p style={{ margin: "0 0 0.6rem", fontSize: "0.78rem", color: colors.textSecondary }}>
-              Adds a new entry to your product catalog. You can fine-tune HS code, UOM and SaleType
-              later from <b>Configuration → Item Types</b>.
+              Adds a new entry to your product catalog.
+              {scenarioCode
+                ? ` Sale Type is locked to ${scenarioCode}'s rule; UOM auto-fills from FBR's HS-UOM mapping.`
+                : " Pick an HS code to auto-fill UOM."}
+              {" "}You can fine-tune later from <b>Configuration → Item Types</b>.
             </p>
+
             <div style={formStyles.formGroup}>
               <label style={styles.label}>Name *</label>
               <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
             </div>
+
+            {/* HS code typeahead — focus opens the suggestion list,
+                debounced search hits /api/fbr/hscodes. Click a suggestion
+                to populate hsCode + auto-fill UOM via /api/itemtypes/fbr-hints. */}
+            <div style={{ ...formStyles.formGroup, position: "relative" }}>
+              <label style={styles.label}>
+                HS Code
+                {hintLoading && <span style={styles.lockedTag}>looking up UOM…</span>}
+              </label>
+              <input
+                style={{ ...styles.input, fontFamily: "monospace" }}
+                value={hsQuery}
+                onChange={(e) => { setHsQuery(e.target.value); setHsOpen(true); setHsCode(e.target.value); }}
+                onFocus={() => setHsOpen(true)}
+                onBlur={() => setTimeout(() => setHsOpen(false), 180)} // small delay so click on suggestion lands
+                placeholder="Type to search FBR catalog (e.g. 'mobile' or '8517')"
+                autoComplete="off"
+              />
+              {hsOpen && (hsLoading || hsSuggestions.length > 0) && (
+                <div style={styles.hsDropdown}>
+                  {hsLoading && (
+                    <div style={styles.hsLoading}>Searching FBR catalog…</div>
+                  )}
+                  {!hsLoading && hsSuggestions.length === 0 && (
+                    <div style={styles.hsLoading}>No matches.</div>
+                  )}
+                  {!hsLoading && hsSuggestions.map((row) => (
+                    <button
+                      type="button"
+                      key={row.hS_CODE}
+                      style={styles.hsOption}
+                      onMouseDown={(e) => e.preventDefault()} // keep input focused
+                      onClick={() => pickHsCode(row.hS_CODE)}
+                    >
+                      <span style={styles.hsOptionCode}>{row.hS_CODE}</span>
+                      <span style={styles.hsOptionDesc}>{row.description}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {fbrHint?.notes?.length > 0 && (
+                <span style={{ fontSize: "0.72rem", color: colors.textSecondary, marginTop: "0.2rem", display: "block" }}>
+                  {fbrHint.notes[0]}
+                </span>
+              )}
+            </div>
+
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
-                <label style={styles.label}>HS Code</label>
-                <input
-                  style={{ ...styles.input, fontFamily: "monospace" }}
-                  value={hsCode}
-                  onChange={(e) => setHsCode(e.target.value)}
-                  placeholder="e.g. 8517.1300"
-                />
-              </div>
-              <div style={formStyles.formGroup}>
-                <label style={styles.label}>UOM</label>
+                <label style={styles.label}>
+                  UOM
+                  {fbrUOMId && <span style={styles.lockedTag}>FBR-mapped</span>}
+                </label>
                 <input
                   style={styles.input}
                   value={uom}
-                  onChange={(e) => setUom(e.target.value)}
-                  placeholder="e.g. Numbers, pieces, units"
+                  onChange={(e) => { setUom(e.target.value); setFbrUOMId(null); }}
+                  placeholder="auto-fills from HS code"
                 />
               </div>
+              <div style={formStyles.formGroup}>
+                <label style={styles.label}>
+                  Sale Type
+                  {lockedSaleType && <span style={styles.lockedTag}><MdLock size={10} /> {scenarioCode}</span>}
+                </label>
+                {lockedSaleType ? (
+                  <input
+                    style={{ ...styles.input, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+                    value={saleType}
+                    readOnly
+                    title={`Locked to ${scenarioCode}'s sale type. Cancel to use a different scenario.`}
+                  />
+                ) : (
+                  <select style={styles.input} value={saleType} onChange={(e) => setSaleType(e.target.value)}>
+                    <option>Goods at standard rate (default)</option>
+                    <option>Goods at Reduced Rate</option>
+                    <option>Goods at zero-rate</option>
+                    <option>Exempt goods</option>
+                    <option>3rd Schedule Goods</option>
+                    <option>Services</option>
+                    <option>Services (FED in ST Mode)</option>
+                    <option>Goods (FED in ST Mode)</option>
+                  </select>
+                )}
+              </div>
             </div>
-            <div style={formStyles.formGroup}>
-              <label style={styles.label}>Sale Type</label>
-              <select style={styles.input} value={saleType} onChange={(e) => setSaleType(e.target.value)}>
-                <option>Goods at standard rate (default)</option>
-                <option>Goods at Reduced Rate</option>
-                <option>Goods at zero-rate</option>
-                <option>Exempt goods</option>
-                <option>3rd Schedule Goods</option>
-                <option>Services</option>
-                <option>Services (FED in ST Mode)</option>
-                <option>Goods (FED in ST Mode)</option>
-              </select>
-            </div>
+
+            {saleTypeMismatch && (
+              <div style={styles.warnAlert}>
+                <MdInfo size={14} /> Heads-up: FBR usually treats this HS code as
+                <b style={{ margin: "0 0.25rem" }}>{fbrHint.defaultSaleType}</b>,
+                but you're saving it as <b>{saleType}</b> to match {scenarioCode}.
+                That's fine — the bill will validate as long as your scenario allows this HS code.
+              </div>
+            )}
           </div>
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
@@ -914,4 +1057,12 @@ const styles = {
   permHintBlock: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.75rem", borderRadius: 6, backgroundColor: "#fff8e1", border: `1px solid ${colors.warn}30`, color: colors.warn, fontSize: "0.78rem", lineHeight: 1.35, flexWrap: "wrap" },
   permHintInline: { display: "inline-flex", alignItems: "center", gap: "0.25rem", color: colors.warn, fontSize: "0.72rem", flexWrap: "wrap" },
   permCode: { fontFamily: "monospace", padding: "0 0.25rem", borderRadius: 3, backgroundColor: "#f5f5f5", fontWeight: 700, fontSize: "0.74rem" },
+
+  // ── HS code typeahead inside QuickItemTypeForm ────────────────────
+  scenarioPillSmall: { marginLeft: "0.5rem", padding: "0.1rem 0.4rem", borderRadius: 4, backgroundColor: "#e3f2fd", color: "#0d47a1", fontSize: "0.7rem", fontWeight: 800, fontFamily: "monospace" },
+  hsDropdown: { position: "absolute", top: "100%", left: 0, right: 0, marginTop: "0.2rem", maxHeight: 260, overflowY: "auto", backgroundColor: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.08)", zIndex: 1200 },
+  hsLoading: { padding: "0.6rem 0.85rem", fontSize: "0.82rem", color: colors.textSecondary },
+  hsOption: { display: "flex", flexDirection: "column", alignItems: "flex-start", width: "100%", padding: "0.5rem 0.75rem", border: "none", borderBottom: `1px solid ${colors.cardBorder}`, backgroundColor: "#fff", textAlign: "left", cursor: "pointer", fontFamily: "inherit" },
+  hsOptionCode: { fontWeight: 700, color: colors.blue, fontFamily: "monospace", fontSize: "0.85rem" },
+  hsOptionDesc: { fontSize: "0.74rem", color: colors.textSecondary, marginTop: 2, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" },
 };
