@@ -190,19 +190,23 @@ tokens = {
 
 # What each user must see in /api/companies
 isolated_ids = {alpha["id"], beta["id"]}
+# Semantics: explicit UserCompanies grants OVERRIDE open companies. So a
+# non-admin user with any rows in UserCompanies sees ONLY those rows, not
+# also the IsTenantIsolated=false fleet. (Operators rejected the earlier
+# union semantics — "if I assigned them to A only, they shouldn't see
+# open B by accident.")
 expected_visible = {
-    "alice": {alpha["id"], gamma["id"]},
-    "bob":   {beta["id"],  gamma["id"]},
-    "carol": {alpha["id"], beta["id"], gamma["id"]},
+    "alice": {alpha["id"]},                          # alice -> Alpha only
+    "bob":   {beta["id"]},                           # bob   -> Beta only
+    "carol": {alpha["id"], beta["id"]},              # carol -> Alpha + Beta
 }
-# Admin always sees everything
+# Admin always sees everything (seed-admin bypass)
 status, all_companies = request("GET", "/api/companies", token=admin)
 all_company_ids = {c["id"] for c in all_companies}
 expected_visible["admin"] = all_company_ids
-# All non-admin users also see open companies (existing dev DB has open ones)
+# Every other open company in the DB now becomes a forbidden ID for
+# non-admins — they have explicit grants so opens stop falling through.
 open_ids = {c["id"] for c in all_companies if not c["isTenantIsolated"]}
-for u in ("alice", "bob", "carol"):
-    expected_visible[u] |= open_ids
 
 # Suite 1: GET /api/companies returns the right set
 print("\n  Suite 1 — GET /api/companies filtering")
@@ -217,9 +221,14 @@ for username, tok in tokens.items():
 # Suite 2: tenant-scoped endpoints — 403 on isolated companies the user can't reach
 print("\n  Suite 2 — 403 on forbidden isolated companies")
 forbidden_for = {
-    "alice": {beta["id"]},
-    "bob":   {alpha["id"]},
-    "carol": set(),       # carol has access to both isolated
+    # Each non-admin sees ONLY their assigned companies; every other
+    # company (whether isolated or not) must 403. Specifically, alice
+    # is blocked on Beta + every open company; bob on Alpha + every
+    # open company; carol only on the open companies (she has both
+    # isolated ones).
+    "alice": ({beta["id"]} | open_ids) - {alpha["id"]},
+    "bob":   ({alpha["id"]} | open_ids) - {beta["id"]},
+    "carol": open_ids,
     "admin": set(),       # seed admin bypasses
 }
 endpoints_to_test = [
@@ -264,9 +273,9 @@ for username, forbidden in forbidden_for.items():
 # Suite 3: tenant-scoped endpoints — 200 on allowed companies
 print("\n  Suite 3 — 200 on allowed companies (lightweight)")
 allowed_for = {
-    "alice": {alpha["id"], gamma["id"]},
-    "bob":   {beta["id"],  gamma["id"]},
-    "carol": {alpha["id"], beta["id"], gamma["id"]},
+    "alice": {alpha["id"]},
+    "bob":   {beta["id"]},
+    "carol": {alpha["id"], beta["id"]},
 }
 for username, allowed in allowed_for.items():
     tok = tokens[username]

@@ -82,8 +82,25 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved }) {
     return () => { cancelled = true; };
   }, [groupId]);
 
+  // Same registration-type → identity-fields mapping as ClientForm.
+  const regType = form.registrationType;
+  const showNtn  = regType === "Registered" || regType === "FTN";
+  const showStrn = regType === "Registered";
+  const showCnic = regType === "Unregistered" || regType === "CNIC";
+  const ntnLabel = regType === "FTN" ? "FTN" : "NTN";
+
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === "registrationType") {
+      setForm((f) => ({
+        ...f,
+        registrationType: value,
+        ntn:  (value === "Registered" || value === "FTN") ? f.ntn  : "",
+        strn: (value === "Registered")                    ? f.strn : "",
+        cnic: (value === "Unregistered" || value === "CNIC") ? f.cnic : "",
+      }));
+      return;
+    }
     setForm((f) => ({ ...f, [name]: value }));
   };
 
@@ -124,6 +141,19 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved }) {
       setError("Name is required.");
       return;
     }
+    if (showNtn && !form.ntn?.trim()) {
+      setError(`${ntnLabel} is required for ${regType} entities.`);
+      return;
+    }
+    if (showStrn && !form.strn?.trim()) {
+      setError("STRN is required for Registered entities.");
+      return;
+    }
+    if (showCnic) {
+      const digits = (form.cnic || "").replace(/\D/g, "");
+      if (!digits) { setError("CNIC is required for this registration type."); return; }
+      if (digits.length !== 13) { setError("CNIC must be 13 digits."); return; }
+    }
     setSaving(true);
     setError("");
     try {
@@ -132,9 +162,9 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved }) {
         address: form.address?.trim() || null,
         phone: form.phone?.trim() || null,
         email: form.email?.trim() || null,
-        ntn: form.ntn?.trim() || null,
-        strn: form.strn?.trim() || null,
-        cnic: form.cnic?.trim() || null,
+        ntn: showNtn ? (form.ntn?.trim() || null) : null,
+        strn: showStrn ? (form.strn?.trim() || null) : null,
+        cnic: showCnic ? (form.cnic?.trim() || null) : null,
         site: form.site?.trim() || null,
         registrationType: form.registrationType?.trim() || null,
         fbrProvinceCode: form.fbrProvinceCode ?? null,
@@ -206,22 +236,10 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved }) {
                   />
                 </div>
 
+                {/* Registration type drives the identity fields below.
+                    Switching type clears the now-irrelevant fields so a
+                    stale NTN doesn't propagate to every member company. */}
                 <div className="form-grid-2col">
-                  <div style={formStyles.formGroup}>
-                    <label style={formStyles.label}>NTN</label>
-                    <input name="ntn" value={form.ntn} onChange={handleChange} style={formStyles.input} />
-                  </div>
-                  <div style={formStyles.formGroup}>
-                    <label style={formStyles.label}>STRN</label>
-                    <input name="strn" value={form.strn} onChange={handleChange} style={formStyles.input} />
-                  </div>
-                </div>
-
-                <div className="form-grid-2col">
-                  <div style={formStyles.formGroup}>
-                    <label style={formStyles.label}>CNIC</label>
-                    <input name="cnic" value={form.cnic} onChange={handleChange} style={formStyles.input} />
-                  </div>
                   <div style={formStyles.formGroup}>
                     <label style={formStyles.label}>Registration Type</label>
                     <select
@@ -233,9 +251,57 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved }) {
                       <option value="">—</option>
                       <option value="Registered">Registered</option>
                       <option value="Unregistered">Unregistered</option>
+                      <option value="FTN">FTN</option>
+                      <option value="CNIC">CNIC</option>
                     </select>
                   </div>
                 </div>
+
+                {(showNtn || showStrn) && (
+                  <div className="form-grid-2col">
+                    {showNtn && (
+                      <div style={formStyles.formGroup}>
+                        <label style={formStyles.label}>{ntnLabel} *</label>
+                        <input
+                          name="ntn"
+                          value={form.ntn}
+                          onChange={handleChange}
+                          style={formStyles.input}
+                          placeholder={regType === "FTN" ? "Federal Tax Number" : "7-digit NTN"}
+                        />
+                      </div>
+                    )}
+                    {showStrn && (
+                      <div style={formStyles.formGroup}>
+                        <label style={formStyles.label}>STRN *</label>
+                        <input
+                          name="strn"
+                          value={form.strn}
+                          onChange={handleChange}
+                          style={formStyles.input}
+                          placeholder="13-digit Sales Tax Registration Number"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {showCnic && (
+                  <div style={formStyles.formGroup}>
+                    <label style={formStyles.label}>CNIC (13 digits) *</label>
+                    <input
+                      name="cnic"
+                      value={form.cnic}
+                      onChange={handleChange}
+                      style={formStyles.input}
+                      placeholder="3520112345678"
+                      maxLength={13}
+                    />
+                    <span style={s.fieldHelp}>
+                      Unregistered vendors don't have NTN/STRN — CNIC is the FBR identity for individuals.
+                    </span>
+                  </div>
+                )}
 
                 <div className="form-grid-3col">
                   <div style={formStyles.formGroup}>

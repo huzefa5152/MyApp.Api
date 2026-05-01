@@ -41,17 +41,10 @@ namespace MyApp.Api.Services.Implementations
         public async Task<bool> HasAccessAsync(int userId, int companyId)
         {
             if (userId == _seedAdminUserId) return true;
-
-            // Open companies (legacy behaviour): not isolated → any
-            // authenticated user passes. The IsTenantIsolated flag is the
-            // single switch that turns enforcement on per-company.
-            var isIsolated = await _context.Companies
-                .Where(c => c.Id == companyId)
-                .Select(c => (bool?)c.IsTenantIsolated)
-                .FirstOrDefaultAsync();
-            if (isIsolated == null) return false; // company doesn't exist
-            if (isIsolated == false) return true;
-
+            // Single-source-of-truth: defer to the cached accessible-set
+            // computation so the "explicit grants override open companies"
+            // semantics are applied consistently. See
+            // GetAccessibleCompanyIdsAsync for the rules.
             var accessible = await GetAccessibleCompanyIdsAsync(userId);
             return accessible.Contains(companyId);
         }
@@ -76,20 +69,39 @@ namespace MyApp.Api.Services.Implementations
             if (_cache.TryGetValue<HashSet<int>>(cacheKey, out var cached) && cached is not null)
                 return cached;
 
-            // Two sets unioned:
-            //   1. all companies whose IsTenantIsolated=false  (legacy-open)
-            //   2. companies whose UserCompany row grants this user
-            var open = await _context.Companies
-                .Where(c => !c.IsTenantIsolated)
-                .Select(c => c.Id)
-                .ToListAsync();
-
+            // Rule: explicit grants OVERRIDE open companies.
+            //
+            //   • User has at least one UserCompanies row
+            //       → they see ONLY those companies, regardless of
+            //         IsTenantIsolated. Matches operator intent: "I
+            //         assigned them to Company A; they shouldn't also
+            //         see open Company B by accident."
+            //
+            //   • User has zero UserCompanies rows
+            //       → legacy behaviour: every IsTenantIsolated=false
+            //         company is reachable. Lets existing operators who
+            //         haven't touched the new UI keep working.
+            //
+            //   • Seed admin → bypassed earlier; never lands here.
             var explicitGrants = await _context.UserCompanies
                 .Where(uc => uc.UserId == userId)
                 .Select(uc => uc.CompanyId)
                 .ToListAsync();
 
-            var set = new HashSet<int>(open.Concat(explicitGrants));
+            HashSet<int> set;
+            if (explicitGrants.Count > 0)
+            {
+                set = new HashSet<int>(explicitGrants);
+            }
+            else
+            {
+                var open = await _context.Companies
+                    .Where(c => !c.IsTenantIsolated)
+                    .Select(c => c.Id)
+                    .ToListAsync();
+                set = new HashSet<int>(open);
+            }
+
             _cache.Set(cacheKey, set, new MemoryCacheEntryOptions
             {
                 SlidingExpiration = CacheTtl

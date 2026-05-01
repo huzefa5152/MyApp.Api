@@ -69,18 +69,44 @@ export default function DashboardLayout() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
 
-  // Configuration menu is shown if the user can reach ANY of its children.
+  // Each section's keys — used both to gate the section *header* and to
+  // open the Configuration submenu. A user with zero matching perms gets
+  // neither the divider nor the label, so the sidebar doesn't show empty
+  // section stubs (which look broken when MANAGEMENT / SALES / PURCHASES
+  // / ADMINISTRATION render with nothing under them).
   const configKeys = [
     "companies.manage.view",
     "clients.manage.view",
     "suppliers.manage.view",
     "itemtypes.manage.view",
+    "config.units.manage",
     "poformats.manage.view",
     "printtemplates.manage.update",
     "fbr.config.update",
     "fbr.sandbox.view",
   ];
+  const salesKeys = [
+    "invoices.list.view",
+    "itemratehistory.view",
+    "challans.list.view",
+    "challans.import.create",
+  ];
+  const purchasesKeys = [
+    "purchasebills.list.view",
+    "goodsreceipts.list.view",
+    "stock.dashboard.view",
+  ];
+  const adminKeys = [
+    "users.manage.view",
+    "rbac.roles.view",
+    "tenantaccess.manage.view",
+    "auditlogs.view",
+  ];
   const canSeeConfiguration = hasAny(configKeys);
+  const canSeeManagement   = canSeeConfiguration; // currently config is the only management child
+  const canSeeSales        = hasAny(salesKeys);
+  const canSeePurchases    = hasAny(purchasesKeys);
+  const canSeeAdmin        = hasAny(adminKeys);
 
   // Auto-expand Configuration submenu if a child route is active
   const isConfigActive = location.pathname.startsWith("/companies") || location.pathname.startsWith("/Clients") || location.pathname.startsWith("/Suppliers") || location.pathname.startsWith("/item-types") || location.pathname.startsWith("/po-formats") || location.pathname.startsWith("/templates") || location.pathname.startsWith("/fbr-settings") || location.pathname.startsWith("/fbr-sandbox");
@@ -148,8 +174,12 @@ export default function DashboardLayout() {
             <span className="dl-nav__label">Dashboard</span>
           </NavLink>
 
-          <hr className="dl-nav__divider" />
-          <span className="dl-nav__section-label">Management</span>
+          {canSeeManagement && (
+            <>
+              <hr className="dl-nav__divider" />
+              <span className="dl-nav__section-label">Management</span>
+            </>
+          )}
 
           {/* Configuration (expandable) — only if caller has access to at
               least one sub-item. */}
@@ -281,8 +311,12 @@ export default function DashboardLayout() {
             </>
           )}
 
-          <hr className="dl-nav__divider" />
-          <span className="dl-nav__section-label">Sales</span>
+          {canSeeSales && (
+            <>
+              <hr className="dl-nav__divider" />
+              <span className="dl-nav__section-label">Sales</span>
+            </>
+          )}
 
           <Can permission="invoices.list.view">
             <NavLink
@@ -332,8 +366,12 @@ export default function DashboardLayout() {
             </NavLink>
           </Can>
 
-          <hr className="dl-nav__divider" />
-          <span className="dl-nav__section-label">Purchases</span>
+          {canSeePurchases && (
+            <>
+              <hr className="dl-nav__divider" />
+              <span className="dl-nav__section-label">Purchases</span>
+            </>
+          )}
 
           <Can permission="purchasebills.list.view">
             <NavLink
@@ -371,8 +409,12 @@ export default function DashboardLayout() {
             </NavLink>
           </Can>
 
-          <hr className="dl-nav__divider" />
-          <span className="dl-nav__section-label">Administration</span>
+          {canSeeAdmin && (
+            <>
+              <hr className="dl-nav__divider" />
+              <span className="dl-nav__section-label">Administration</span>
+            </>
+          )}
 
           <Can permission="users.manage.view">
             <NavLink

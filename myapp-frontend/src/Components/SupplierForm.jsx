@@ -87,14 +87,24 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
     load();
   }, []);
 
+  // Same registration-type → fields mapping as ClientForm.
+  // Suppliers in Pakistan follow the same FBR taxonomy: Registered have
+  // NTN+STRN; FTN entities have NTN only; Unregistered/CNIC vendors have
+  // CNIC only.
+  const regType = formData.registrationType;
+  const showNtn  = regType === "Registered" || regType === "FTN";
+  const showStrn = regType === "Registered";
+  const showCnic = regType === "Unregistered" || regType === "CNIC";
+  const ntnLabel = regType === "FTN" ? "FTN *" : "NTN *";
+
   const validate = () => {
     const next = {};
     if (!formData.name.trim()) next.name = "Name is required";
-    // NTN/STRN are encouraged but not strictly required for suppliers —
-    // some small vendors only have CNIC. We surface a soft prompt rather
-    // than block save. Registration type still drives the CNIC ask below.
-    if ((formData.registrationType === "Unregistered" || formData.registrationType === "CNIC") && !formData.cnic.trim()) {
-      next.cnic = "CNIC is required for this registration type";
+    if (showNtn && !formData.ntn.trim()) next.ntn = regType === "FTN" ? "FTN is required" : "NTN is required";
+    if (showStrn && !formData.strn.trim()) next.strn = "STRN is required";
+    if (showCnic && !formData.cnic.trim()) next.cnic = "CNIC is required for this registration type";
+    if (showCnic && formData.cnic.trim() && formData.cnic.replace(/\D/g, "").length !== 13) {
+      next.cnic = "CNIC must be 13 digits";
     }
     if (isCreate && showCompanyPicker && selectedCompanyIds.length === 0) {
       next.companies = "Pick at least one company.";
@@ -104,8 +114,23 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
   };
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-    setErrors({ ...errors, [e.target.name]: "" });
+    const { name, value } = e.target;
+    if (name === "registrationType") {
+      // Clear identity fields that no longer apply on type switch — see
+      // ClientForm.handleChange for the rationale.
+      const nextForm = { ...formData, registrationType: value };
+      const willShowNtn  = value === "Registered" || value === "FTN";
+      const willShowStrn = value === "Registered";
+      const willShowCnic = value === "Unregistered" || value === "CNIC";
+      if (!willShowNtn)  nextForm.ntn  = "";
+      if (!willShowStrn) nextForm.strn = "";
+      if (!willShowCnic) nextForm.cnic = "";
+      setFormData(nextForm);
+      setErrors({ ...errors, registrationType: "", ntn: "", strn: "", cnic: "" });
+      return;
+    }
+    setFormData({ ...formData, [name]: value });
+    setErrors({ ...errors, [name]: "" });
   };
 
   const handleSubmit = async (e) => {
@@ -225,17 +250,9 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-              <div style={formGroup}>
-                <label style={label}>NTN</label>
-                <input type="text" name="ntn" value={formData.ntn} onChange={handleChange} style={input} />
-              </div>
-              <div style={formGroup}>
-                <label style={label}>STRN</label>
-                <input type="text" name="strn" value={formData.strn} onChange={handleChange} style={input} />
-              </div>
-            </div>
-
+            {/* FBR identity — pick Registration Type first; identity
+                fields render below conditionally. Same model as
+                ClientForm.  */}
             <div style={{ marginTop: "0.5rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #00695c30", backgroundColor: "#e0f2f1" }}>
               <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#00695c" }}>FBR Details</p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
@@ -258,11 +275,54 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
                   </select>
                 </div>
               </div>
-              {(formData.registrationType === "Unregistered" || formData.registrationType === "CNIC") && (
-                <div style={formGroup}>
+
+              {!regType && (
+                <p style={{ margin: "0.5rem 0 0", fontSize: "0.78rem", color: "#5f6d7e" }}>
+                  Pick a registration type to see the right identity fields.
+                </p>
+              )}
+
+              {(showNtn || showStrn) && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginTop: "0.5rem" }}>
+                  {showNtn && (
+                    <div style={formGroup}>
+                      <label style={label}>{ntnLabel}</label>
+                      <input
+                        type="text"
+                        name="ntn"
+                        value={formData.ntn}
+                        onChange={handleChange}
+                        style={{ ...input, ...fieldError("ntn") }}
+                        placeholder={regType === "FTN" ? "Federal Tax Number" : "7-digit NTN"}
+                      />
+                      {errorMsg("ntn")}
+                    </div>
+                  )}
+                  {showStrn && (
+                    <div style={formGroup}>
+                      <label style={label}>STRN *</label>
+                      <input
+                        type="text"
+                        name="strn"
+                        value={formData.strn}
+                        onChange={handleChange}
+                        style={{ ...input, ...fieldError("strn") }}
+                        placeholder="13-digit Sales Tax Registration Number"
+                      />
+                      {errorMsg("strn")}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {showCnic && (
+                <div style={{ ...formGroup, marginTop: "0.5rem" }}>
                   <label style={label}>CNIC (13 digits) *</label>
                   <input type="text" name="cnic" value={formData.cnic} onChange={handleChange} style={{ ...input, ...fieldError("cnic") }} placeholder="3520112345678" maxLength={13} />
                   {errorMsg("cnic")}
+                  <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
+                    Unregistered vendors don't have NTN/STRN — CNIC is the FBR identity for individuals.
+                  </span>
                 </div>
               )}
             </div>
