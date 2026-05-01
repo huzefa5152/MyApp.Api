@@ -1,18 +1,25 @@
 import { useState, useEffect, useMemo } from "react";
-import { MdAdd, MdDelete, MdCheck, MdInfo } from "react-icons/md";
+import { MdAdd, MdDelete, MdCheck, MdInfo, MdLock, MdPersonAdd, MdInventory2 } from "react-icons/md";
 import { createStandaloneInvoice } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
-import { saveItemFbrDefaults } from "../api/lookupApi";
+import { getItemTypes, createItemType } from "../api/itemTypeApi";
 import { formStyles, modalSizes } from "../theme";
-import SmartItemAutocomplete from "./SmartItemAutocomplete";
+import { usePermissions } from "../contexts/PermissionsContext";
+import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import ClientForm from "./ClientForm";
 
-// NOTE: this form deliberately does NOT include the FBR Item Type
-// catalog picker. SmartItemAutocomplete already searches both saved
-// item descriptions AND the FBR catalog, and auto-fills HS code +
-// UOM + Sale Type on pick — having a second column for the same
-// thing was redundant. Sale Type is locked to the chosen scenario,
-// so an item's catalog saleType is overridden anyway.
+// Bill-without-challan flow ("Standalone Bill"). Per FBR DI-API V1.12:
+//   • §9 (Scenarios) — locks Sale Type per SN.
+//   • §10 (Applicable Scenarios) — only the SNs valid for the company's
+//     Activity × Sector profile are listed.
+//
+// Operator interaction model: pick scenario → pick buyer (filtered by
+// scenario) → add lines (item type + qty + unit price). Everything
+// else (HSCode, UOM, SaleType, GST rate, payment mode, MRP-vs-unit-
+// price split, SRO refs) is locked / auto-derived by the scenario or
+// the picked Item Type. Operator can ALSO inline-create a Buyer or an
+// Item Type from this same form when permitted.
 
 const colors = {
   blue: "#0d47a1",
@@ -28,63 +35,69 @@ const colors = {
   warnLight: "#fff8e1",
 };
 
-// ────────────────────────────────────────────────────────────────────
-// Scenario shape contract
-// ────────────────────────────────────────────────────────────────────
-//
-// Per FBR DI-API v1.12 §9 (Scenarios for Sandbox Testing) + §10
-// (Applicable Scenarios based on Business Activity), each scenario has:
-//   • a locked Sale Type that every line on the bill must use
-//   • a buyer constraint (Registered, Unregistered, or End-Consumer Walk-in)
-//   • a default GST rate (auto-fill on pick)
-//   • optional extra fields the line must carry to validate:
-//       - MRP    (fixedNotifiedValueOrRetailPrice) — for SN008 / SN027
-//       - SRO    (sroScheduleNo + sroItemSerialNo) — for SN028
-//       - 4 % further tax tip — for SN002 (advisory; the FBR service
-//         emits the further-tax line itself at submit time)
-//
-// `scenarioMeta` annotates whatever the backend returns so the form's
-// conditional rendering doesn't have to care about scenario codes
-// directly.
+// Per §9 + §10. Each entry annotates the backend's Scenario record so
+// the form's conditional rendering doesn't have to read SN codes.
+//   buyerKind — drives the buyer-pool filter:
+//     "b2b-registered"   → only Registered clients
+//     "b2b-unregistered" → only Unregistered clients
+//     "walk-in"          → only Unregistered (counter sale)
+//     "either"           → no filter (FBR accepts both)
+//   needsMRP — line carries fixedNotifiedValueOrRetailPrice (3rd-Sched).
+//   needsSRO — line carries SRO Schedule + Item Serial #.
 const SCENARIO_META = {
-  SN001: { kind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Wholesale B2B to a registered buyer (NTN required, validated by FBR)." },
-  SN002: { kind: "b2b-unregistered", needsMRP: false, needsSRO: false, hint: "B2B to an unregistered buyer. 4% further tax common at submit time." },
-  SN008: { kind: "either",           needsMRP: true,  needsSRO: false, hint: "3rd Schedule goods — tax backed out of MRP. Enter the printed retail price × qty." },
-  SN026: { kind: "walk-in",          needsMRP: false, needsSRO: false, hint: "Retail counter sale to an end consumer at standard rate." },
-  SN027: { kind: "walk-in",          needsMRP: true,  needsSRO: false, hint: "Retail counter sale of 3rd Schedule goods. MRP × qty required." },
-  SN028: { kind: "walk-in",          needsMRP: false, needsSRO: true,  hint: "Retail counter sale at reduced rate. SRO Schedule + Item No required." },
+  SN001: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Wholesale B2B to a registered buyer (NTN required, validated by FBR)." },
+  SN002: { buyerKind: "b2b-unregistered", needsMRP: false, needsSRO: false, hint: "B2B to an unregistered buyer. 4% further tax common at submit time." },
+  SN003: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of Steel (Melted and Re-Rolled)." },
+  SN004: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale by Ship Breakers." },
+  SN005: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Reduced rate sale — SRO reference required." },
+  SN006: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Exempt goods (rate 0%) — SRO reference required." },
+  SN007: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Zero rated sale — SRO reference required." },
+  SN008: { buyerKind: "either",           needsMRP: true,  needsSRO: false, hint: "3rd Schedule goods — tax backed out of MRP. Enter the printed retail price × qty." },
+  SN009: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Cotton ginners → spinners (Textile Sector)." },
+  SN010: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Telecom services rendered or provided." },
+  SN011: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Toll Manufacturing sale by Steel sector (registered buyer only)." },
+  SN012: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of Petroleum products." },
+  SN013: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Electricity supply to retailers (registered buyer)." },
+  SN014: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Sale of gas to CNG stations (registered buyer)." },
+  SN015: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Sale of mobile phones — Ninth Schedule SRO reference required." },
+  SN016: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Processing / Conversion of Goods (registered buyer)." },
+  SN017: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of goods where FED is charged in ST mode." },
+  SN018: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Services rendered where FED is charged in ST mode." },
+  SN019: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Services rendered or provided (16% standard)." },
+  SN020: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of Electric Vehicles (1%)." },
+  SN021: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of Cement / Concrete Block." },
+  SN022: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of Potassium Chlorate." },
+  SN023: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of CNG." },
+  SN024: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Goods listed in SRO 297(I)/2023 — SRO reference required." },
+  SN025: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Drugs at fixed ST rate (Eighth Schedule Table 1, S.No 81)." },
+  SN026: { buyerKind: "walk-in",          needsMRP: false, needsSRO: false, hint: "Retail counter sale to an end consumer at standard rate." },
+  SN027: { buyerKind: "walk-in",          needsMRP: true,  needsSRO: false, hint: "Retail counter sale of 3rd Schedule goods. MRP × qty required." },
+  SN028: { buyerKind: "walk-in",          needsMRP: false, needsSRO: true,  hint: "Retail counter sale at reduced rate. SRO Schedule + Item No required." },
 };
-
-// Default sale-type list (for the rare "no scenario" case). When a
-// scenario IS picked, its saleType is locked and this list isn't shown.
-const SALE_TYPES = [
-  "Goods at standard rate (default)",
-  "Goods at Reduced Rate",
-  "Goods at zero-rate",
-  "Exempt goods",
-  "3rd Schedule Goods",
-  "Services",
-  "Services (FED in ST Mode)",
-  "Goods (FED in ST Mode)",
-];
 
 const blankRow = () => ({
   localId: Math.random().toString(36).slice(2, 10),
-  description: "",
-  quantity: "",
-  uom: "",
-  unitPrice: "",
+  itemTypeId: "",
+  itemTypeName: "",       // mirrored from the picked ItemType for the read-only Description column
   hsCode: "",
-  saleType: "",
+  uom: "",
   fbrUOMId: null,
-  // Extra fields surfaced only for scenarios that need them
+  saleType: "",           // overridden by scenario at save time, kept for display only
+  quantity: "",
+  unitPrice: "",
+  // Scenario-specific extras
   fixedNotifiedValueOrRetailPrice: "",
   sroScheduleNo: "",
   sroItemSerialNo: "",
 });
 
 export default function StandaloneInvoiceForm({ companyId, company, onClose, onSaved }) {
+  const { has } = usePermissions();
+  const canCreateClient   = has("clients.manage.create");
+  const canCreateItemType = has("itemtypes.manage.create");
+
   const [clients, setClients] = useState([]);
+  const [itemTypes, setItemTypes] = useState([]);
   const [scenarios, setScenarios] = useState([]);
 
   const [selectedClientId, setSelectedClientId] = useState("");
@@ -100,14 +113,32 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Inline-create modals
+  const [showAddClient, setShowAddClient] = useState(false);
+  const [showAddItemType, setShowAddItemType] = useState(false);
+  // Which row's item-type select triggered the Add modal — used so the
+  // newly-created type auto-selects on that row when the modal closes.
+  const [pendingItemTypeRow, setPendingItemTypeRow] = useState(null);
+
+  const refreshClients = async () => {
+    const { data } = await getClientsByCompany(companyId);
+    setClients(data || []);
+    return data || [];
+  };
+  const refreshItemTypes = async () => {
+    const { data } = await getItemTypes();
+    setItemTypes(data || []);
+    return data || [];
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
-        const [clientRes, scenarioRes] = await Promise.all([
-          getClientsByCompany(companyId),
+        const [, , scenarioRes] = await Promise.all([
+          refreshClients(),
+          refreshItemTypes(),
           getFbrApplicableScenarios(companyId).catch(() => ({ data: { scenarios: [] } })),
         ]);
-        setClients(clientRes.data || []);
         setScenarios(scenarioRes.data?.scenarios || []);
       } catch {
         setError("Failed to load data.");
@@ -116,16 +147,16 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       }
     };
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
-  // Decorate the backend's scenario list with the local meta we need to
-  // drive conditional rendering. Falls back to a generic "either" record
-  // if the backend ever sends a code we don't know about, so the form
-  // never crashes — it just renders the scenario without conditional UI.
+  // Decorate scenarios with local meta. Falls back to a generic record
+  // if the backend ever sends a code we don't know — form never crashes.
   const enrichedScenarios = useMemo(
     () => scenarios.map((s) => ({
       ...s,
-      meta: SCENARIO_META[s.code] || { kind: "either", needsMRP: false, needsSRO: false, hint: s.description || "" },
+      meta: SCENARIO_META[s.code]
+        || { buyerKind: "either", needsMRP: false, needsSRO: false, hint: s.description || "" },
     })),
     [scenarios],
   );
@@ -135,70 +166,70 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     [enrichedScenarios, scenarioCode],
   );
 
-  // GST rate auto-syncs to scenario's canonical rate when picked.
+  // GST rate auto-syncs to scenario's canonical rate when one is picked.
+  // The input itself is locked when a scenario is active — operators
+  // override only by switching scenario.
   useEffect(() => {
     if (chosenScenario && chosenScenario.defaultRate != null) {
       setGstRate(chosenScenario.defaultRate);
     }
   }, [chosenScenario]);
 
-  // Buyer pool depends on scenario kind:
-  //   • b2b-registered   → Registered clients only
-  //   • b2b-unregistered → all clients
-  //   • either           → all clients
-  //   • walk-in          → only Unregistered clients (operator picks the
-  //                        company's standing walk-in row, or whichever
-  //                        Unregistered client they want to bill)
+  // Buyer pool filter.
   const filteredClients = useMemo(() => {
     if (!chosenScenario) return clients;
-    const k = chosenScenario.meta.kind;
+    const k = chosenScenario.meta.buyerKind;
     if (k === "b2b-registered")
       return clients.filter((c) => (c.registrationType || "").toLowerCase() === "registered");
-    if (k === "walk-in")
-      return clients.filter((c) => (c.registrationType || "").toLowerCase() === "unregistered");
+    if (k === "b2b-unregistered" || k === "walk-in")
+      return clients.filter((c) => (c.registrationType || "").toLowerCase() !== "registered");
     return clients;
   }, [clients, chosenScenario]);
 
-  // Auto-pick a sensible default buyer when the scenario changes:
-  //   • walk-in → snap to the first Unregistered client (operator can
-  //               override). Avoids the "Select a client first" blocker
-  //               for the most common counter-sale path.
-  //   • b2b-registered with current selection invalid → clear it.
+  // Auto-pick a sensible default buyer on scenario change.
   useEffect(() => {
     if (!chosenScenario) return;
-    const k = chosenScenario.meta.kind;
+    const k = chosenScenario.meta.buyerKind;
     if (k === "walk-in") {
       if (filteredClients.length > 0) setSelectedClientId(String(filteredClients[0].id));
       else setSelectedClientId("");
-    } else if (k === "b2b-registered") {
-      // If the current selection isn't in the registered list, clear.
+    } else if (k === "b2b-registered" || k === "b2b-unregistered") {
       if (selectedClientId && !filteredClients.some((c) => String(c.id) === String(selectedClientId)))
         setSelectedClientId("");
     }
-    // For "either" / "b2b-unregistered" we leave whatever the operator picked.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chosenScenario]);
 
   // Per-row helpers
-  const updateRow = (localId, patch) => {
+  const updateRow = (localId, patch) =>
     setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, ...patch } : r)));
-  };
   const addRow = () => setRows((prev) => [...prev, blankRow()]);
-  const removeRow = (localId) => {
+  const removeRow = (localId) =>
     setRows((prev) => (prev.length === 1 ? prev : prev.filter((r) => r.localId !== localId)));
+
+  const handleItemTypePick = (localId, picked) => {
+    if (!picked) {
+      updateRow(localId, {
+        itemTypeId: "", itemTypeName: "", hsCode: "", uom: "", fbrUOMId: null, saleType: "",
+      });
+      return;
+    }
+    updateRow(localId, {
+      itemTypeId: picked.id,
+      itemTypeName: picked.name || "",
+      hsCode: picked.hsCode || "",
+      uom: picked.uom || "",
+      fbrUOMId: picked.fbrUOMId || null,
+      saleType: picked.saleType || "",
+    });
   };
 
-  // Effective sale type for a row — locked to scenario when one is picked,
-  // otherwise the operator's manual pick. Centralised so the saved payload
-  // and the on-screen "Locked: …" label stay in sync.
-  const effectiveSaleType = (r) =>
-    chosenScenario ? chosenScenario.saleType : (r.saleType || "");
+  // Effective sale type for a row — locked to scenario when one's picked.
+  const effectiveSaleType = (r) => (chosenScenario ? chosenScenario.saleType : r.saleType || "");
 
-  // Totals — for non-3rd-Schedule rows, line total is qty × unitPrice.
-  // For 3rd Schedule rows (MRP-driven), the MRP × qty becomes the gross
-  // value and tax is BACKED OUT inside FbrService at submit time. The
-  // bill-screen subtotal stays consistent (qty × unitPrice) since the
-  // bill stores price separately from MRP.
+  // Totals — see comment in CreateStandaloneAsync about MRP scenarios:
+  // backend backs tax out of MRP at FBR submit, but the bill subtotal
+  // here stays qty × unitPrice (price stored separately from MRP).
   const subtotal = rows.reduce((sum, r) => {
     const q = parseFloat(r.quantity) || 0;
     const p = parseFloat(r.unitPrice) || 0;
@@ -207,10 +238,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
   const grandTotal = subtotal + gstAmount;
 
-  // Form validation: row-level checks plus scenario-driven extras.
   const rowErrors = (r) => {
     const errs = [];
-    if (!r.description.trim()) errs.push("description");
+    if (!r.itemTypeId) errs.push("itemType");
     const q = parseFloat(r.quantity);
     if (!(q > 0)) errs.push("qty>0");
     const p = parseFloat(r.unitPrice);
@@ -227,16 +257,6 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   };
   const allRowsValid = rows.length > 0 && rows.every((r) => rowErrors(r).length === 0);
 
-  const handleItemPick = (localId, picked) => {
-    updateRow(localId, {
-      description: picked.name || "",
-      hsCode: picked.hsCode || "",
-      uom: picked.uom || "",
-      fbrUOMId: picked.fbrUOMId || null,
-      saleType: picked.saleType || "",
-    });
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -244,6 +264,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (!selectedClientId) return setError("Select a buyer first.");
     if (!company || company.startingInvoiceNumber === 0)
       return setError("Starting bill number not set for this company. Configure it on the Companies page first.");
+    if (!chosenScenario) return setError("Pick an FBR scenario first.");
     if (!allRowsValid) {
       const missing = rows.flatMap(rowErrors);
       return setError(`Fill all required fields. Missing: ${[...new Set(missing)].join(", ")}.`);
@@ -256,60 +277,59 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         companyId,
         clientId: parseInt(selectedClientId),
         gstRate: parseFloat(gstRate),
-        // Backend auto-prepends "[SNxxx]" when scenarioId is set, so the
-        // operator's typed payment terms come through clean.
         paymentTerms: paymentTerms || null,
         scenarioId: scenarioCode || null,
         documentType: documentType || null,
         paymentMode: paymentMode || null,
         items: rows.map((r) => ({
-          description: r.description.trim(),
+          itemTypeId: r.itemTypeId ? parseInt(r.itemTypeId) : null,
+          // Description is the item type's name — the operator never edits
+          // it directly. CreateStandaloneAsync stores it on InvoiceItem.Description.
+          description: r.itemTypeName || "",
           quantity: parseFloat(r.quantity),
           uom: r.uom?.trim() || null,
           unitPrice: parseFloat(r.unitPrice),
           hsCode: r.hsCode?.trim() || null,
-          // Sale type comes from the scenario when one's picked — the
-          // operator can't override it on a locked-scenario bill.
           saleType: effectiveSaleType(r) || null,
           fbrUOMId: r.fbrUOMId || null,
           fixedNotifiedValueOrRetailPrice:
-            chosenScenario?.meta.needsMRP && r.fixedNotifiedValueOrRetailPrice
+            chosenScenario.meta.needsMRP && r.fixedNotifiedValueOrRetailPrice
               ? parseFloat(r.fixedNotifiedValueOrRetailPrice)
               : null,
-          sroScheduleNo: chosenScenario?.meta.needsSRO ? r.sroScheduleNo?.trim() || null : null,
-          sroItemSerialNo: chosenScenario?.meta.needsSRO ? r.sroItemSerialNo?.trim() || null : null,
+          sroScheduleNo: chosenScenario.meta.needsSRO ? r.sroScheduleNo?.trim() || null : null,
+          sroItemSerialNo: chosenScenario.meta.needsSRO ? r.sroItemSerialNo?.trim() || null : null,
         })),
       });
-
-      // Best-effort save of FBR defaults per item description.
-      const rememberPromises = rows
-        .filter((r) => r.hsCode || r.uom || r.fbrUOMId || effectiveSaleType(r))
-        .map((r) => {
-          const name = r.description.trim();
-          if (!name) return Promise.resolve();
-          return saveItemFbrDefaults({
-            name,
-            hsCode: r.hsCode?.trim() || null,
-            saleType: effectiveSaleType(r) || null,
-            uom: r.uom?.trim() || null,
-            fbrUOMId: r.fbrUOMId || null,
-          }).catch(() => {});
-        });
-      await Promise.all(rememberPromises);
-
       onSaved();
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to create bill.");
+      setError(err.response?.data?.message || err.response?.data?.error || "Failed to create bill.");
     } finally {
       setSaving(false);
     }
   };
 
-  // Layout knobs — table column widths shift based on which scenario-
-  // specific columns are visible. Computed inside the render closure.
+  // Inline-create handlers — refresh the underlying list and auto-select
+  // the new entity. Errors bubble up to the API form (ClientForm) or are
+  // surfaced inline (item-type mini form).
+  const onClientSaved = async (created) => {
+    setShowAddClient(false);
+    const list = await refreshClients();
+    if (created?.id) setSelectedClientId(String(created.id));
+    else if (list.length > 0) setSelectedClientId(String(list[0].id));
+  };
+
+  const onItemTypeSaved = async (created) => {
+    setShowAddItemType(false);
+    const list = await refreshItemTypes();
+    if (created?.id && pendingItemTypeRow) {
+      handleItemTypePick(pendingItemTypeRow, list.find((t) => t.id === created.id) || created);
+    }
+    setPendingItemTypeRow(null);
+  };
+
   const showMRP = !!chosenScenario?.meta.needsMRP;
   const showSRO = !!chosenScenario?.meta.needsSRO;
-  const buyerKind = chosenScenario?.meta.kind || null;
+  const buyerKind = chosenScenario?.meta.buyerKind || null;
 
   return (
     <div style={formStyles.backdrop}>
@@ -326,13 +346,13 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
               <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading…</div>
             ) : (
               <>
-                {/* ──────────────── Step 1 — Pick FBR scenario ──────────────── */}
+                {/* ── Step 1: Pick FBR scenario ─────────────── */}
                 <div style={{ marginBottom: "1rem" }}>
                   <label style={styles.stepLabel}>
                     <span style={styles.stepNum}>1</span> Pick FBR Scenario
                   </label>
                   <p style={styles.stepHint}>
-                    Each scenario locks the Sale Type and tells FBR how to validate this bill.
+                    Each scenario locks the Sale Type, GST rate, buyer type, and any extra fields FBR needs to validate this bill.
                     Only the scenarios applicable to your company's profile
                     ({company?.fbrBusinessActivity || "—"} · {company?.fbrSector || "—"}) are listed.
                   </p>
@@ -363,9 +383,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                             <div style={styles.scenarioSaleType}>{s.saleType}</div>
                             <div style={styles.scenarioRate}>{s.defaultRate}% GST</div>
                             <div style={styles.scenarioBadges}>
-                              {s.meta.kind === "b2b-registered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>Registered buyer</span>}
-                              {s.meta.kind === "b2b-unregistered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}>Unregistered OK</span>}
-                              {s.meta.kind === "walk-in" && <span style={{ ...styles.scenarioBadge, ...styles.badgePurple }}>Walk-in retail</span>}
+                              {s.meta.buyerKind === "b2b-registered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>Registered buyer</span>}
+                              {s.meta.buyerKind === "b2b-unregistered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}>Unregistered buyer</span>}
+                              {s.meta.buyerKind === "walk-in" && <span style={{ ...styles.scenarioBadge, ...styles.badgePurple }}>Walk-in retail</span>}
                               {s.meta.needsMRP && <span style={{ ...styles.scenarioBadge, ...styles.badgeYellow }}>MRP required</span>}
                               {s.meta.needsSRO && <span style={{ ...styles.scenarioBadge, ...styles.badgePink }}>SRO required</span>}
                             </div>
@@ -381,32 +401,52 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                   )}
                 </div>
 
-                {/* ──────────────── Step 2 — Buyer ──────────────── */}
+                {/* ── Step 2: Buyer ─────────────── */}
                 {chosenScenario && (
                   <div style={{ marginBottom: "1rem" }}>
                     <label style={styles.stepLabel}>
                       <span style={styles.stepNum}>2</span>
                       {buyerKind === "walk-in" ? "Walk-in Buyer" : "Buyer"}
                     </label>
-                    {filteredClients.length === 0 ? (
-                      <div style={styles.warnAlert}>
-                        <MdInfo size={16} /> No matching {buyerKind === "b2b-registered" ? "Registered" : buyerKind === "walk-in" ? "Unregistered (Walk-in)" : ""} clients.
-                        Add one on the Clients page first.
-                      </div>
-                    ) : (
-                      <select
-                        style={styles.select}
-                        value={selectedClientId}
-                        onChange={(e) => setSelectedClientId(e.target.value)}
-                      >
-                        <option value="">— Choose a buyer —</option>
-                        {filteredClients.map((cl) => (
-                          <option key={cl.id} value={cl.id}>
-                            {cl.name} ({cl.registrationType || "—"}{cl.ntn ? ` · NTN ${cl.ntn}` : cl.cnic ? ` · CNIC ${cl.cnic}` : ""})
-                          </option>
-                        ))}
-                      </select>
-                    )}
+                    <div style={styles.inlineRow}>
+                      {filteredClients.length === 0 ? (
+                        <div style={{ ...styles.warnAlert, flex: 1 }}>
+                          <MdInfo size={16} />
+                          No matching{" "}
+                          {buyerKind === "b2b-registered" ? "Registered"
+                            : buyerKind === "b2b-unregistered" ? "Unregistered"
+                            : buyerKind === "walk-in" ? "Unregistered (Walk-in)" : ""}{" "}
+                          clients yet.
+                        </div>
+                      ) : (
+                        <select
+                          style={{ ...styles.select, flex: 1 }}
+                          value={selectedClientId}
+                          onChange={(e) => setSelectedClientId(e.target.value)}
+                        >
+                          <option value="">— Choose a buyer —</option>
+                          {filteredClients.map((cl) => (
+                            <option key={cl.id} value={cl.id}>
+                              {cl.name} ({cl.registrationType || "—"}{cl.ntn ? ` · NTN ${cl.ntn}` : cl.cnic ? ` · CNIC ${cl.cnic}` : ""})
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {/* Inline-create. Hidden when caller can't create
+                          clients — replaced by an inline hint instead. */}
+                      {canCreateClient ? (
+                        <button
+                          type="button"
+                          style={styles.inlineAddBtn}
+                          onClick={() => setShowAddClient(true)}
+                          title="Create a new buyer without leaving this form"
+                        >
+                          <MdPersonAdd size={14} /> New Buyer
+                        </button>
+                      ) : (
+                        <PermissionLackedHint perm="clients.manage.create" what="add a new buyer" />
+                      )}
+                    </div>
                     {company && company.startingInvoiceNumber > 0 && (
                       <span style={{ fontSize: "0.78rem", color: colors.textSecondary, marginTop: "0.3rem", display: "block" }}>
                         Next bill #: {company.currentInvoiceNumber > 0 ? company.currentInvoiceNumber + 1 : company.startingInvoiceNumber}
@@ -415,7 +455,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                   </div>
                 )}
 
-                {/* ──────────────── Step 3 — Header + items ──────────────── */}
+                {/* ── Step 3: Bill header + items ─────────────── */}
                 {chosenScenario && selectedClientId && (
                   <>
                     <label style={styles.stepLabel}>
@@ -429,37 +469,31 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       </div>
                       <div style={{ flex: 1, minWidth: 100 }}>
                         <label style={styles.label}>
-                          GST Rate (%) <span style={styles.lockedTag} title="Auto-set from scenario">scenario default</span>
+                          GST Rate (%) <span style={styles.lockedTag}><MdLock size={10} /> scenario-locked</span>
                         </label>
-                        <input type="number" style={styles.input} value={gstRate} onChange={(e) => setGstRate(e.target.value)} min={0} max={100} step={0.5} />
+                        <input
+                          type="number"
+                          style={{ ...styles.input, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+                          value={gstRate}
+                          readOnly
+                          title={`Locked by ${chosenScenario.code}. Switch scenario to change.`}
+                        />
                       </div>
                       <div style={{ flex: 1, minWidth: 140 }}>
                         <label style={styles.label}>Payment Terms</label>
                         <input type="text" style={styles.input} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Optional" />
                       </div>
                       <div style={{ flex: 1, minWidth: 140 }}>
-                        <label style={styles.label}>
-                          Document Type <span style={styles.optionalTag}>FBR</span>
-                        </label>
-                        <select
-                          style={styles.input}
-                          value={documentType}
-                          onChange={(e) => setDocumentType(parseInt(e.target.value))}
-                        >
+                        <label style={styles.label}>Document Type <span style={styles.optionalTag}>FBR</span></label>
+                        <select style={styles.input} value={documentType} onChange={(e) => setDocumentType(parseInt(e.target.value))}>
                           <option value={4}>Sale Invoice</option>
                           <option value={9}>Debit Note</option>
                           <option value={10}>Credit Note</option>
                         </select>
                       </div>
                       <div style={{ flex: 1, minWidth: 140 }}>
-                        <label style={styles.label}>
-                          Payment Mode <span style={styles.optionalTag}>FBR</span>
-                        </label>
-                        <select
-                          style={styles.input}
-                          value={paymentMode}
-                          onChange={(e) => setPaymentMode(e.target.value)}
-                        >
+                        <label style={styles.label}>Payment Mode <span style={styles.optionalTag}>FBR</span></label>
+                        <select style={styles.input} value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)}>
                           <option value="">— optional —</option>
                           <option>Cash</option>
                           <option>Credit</option>
@@ -470,19 +504,16 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       </div>
                     </div>
 
-                    {/* Locked Sale Type banner */}
                     <div style={styles.lockedSaleType}>
-                      <MdCheck size={14} color={colors.teal} />
+                      <MdLock size={14} color={colors.teal} />
                       <span><b>Sale Type locked:</b> {chosenScenario.saleType}</span>
-                      <span style={styles.lockedSaleTypeHint}>(every line below uses this — required by {chosenScenario.code})</span>
+                      <span style={styles.lockedSaleTypeHint}>(every line uses this — required by {chosenScenario.code})</span>
                     </div>
 
                     {/* Items table */}
                     <div>
                       <div style={styles.itemsHeaderBar}>
-                        <label style={{ ...styles.label, margin: 0 }}>
-                          Items ({rows.length})
-                        </label>
+                        <label style={{ ...styles.label, margin: 0 }}>Items ({rows.length})</label>
                         <button type="button" style={styles.addRowBtn} onClick={addRow}>
                           <MdAdd size={14} /> Add Row
                         </button>
@@ -492,15 +523,16 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         <table style={styles.unifiedTable}>
                           <thead>
                             <tr style={styles.unifiedThead}>
-                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "26%" : "32%" }}>Description *</th>
+                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "22%" : "26%" }}>Item Type *</th>
+                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "16%" : "20%" }}>Description</th>
                               <th style={{ ...styles.unifiedTh, width: "7%" }}>Qty *</th>
                               <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
                               <th style={{ ...styles.unifiedTh, width: "9%" }}>Unit Price *</th>
                               <th style={{ ...styles.unifiedTh, width: "10%" }}>Line Total</th>
-                              <th style={{ ...styles.unifiedTh, width: "12%" }}>HS Code</th>
+                              <th style={{ ...styles.unifiedTh, width: "10%" }}>HS Code</th>
                               {showMRP && <th style={{ ...styles.unifiedTh, width: "11%", backgroundColor: "#fff8e1" }}>MRP × Qty *</th>}
-                              {showSRO && <th style={{ ...styles.unifiedTh, width: "11%", backgroundColor: "#fce4ec" }}>SRO Schedule *</th>}
-                              {showSRO && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: "#fce4ec" }}>SRO Item No *</th>}
+                              {showSRO && <th style={{ ...styles.unifiedTh, width: "10%", backgroundColor: "#fce4ec" }}>SRO Schedule *</th>}
+                              {showSRO && <th style={{ ...styles.unifiedTh, width: "8%", backgroundColor: "#fce4ec" }}>SRO Item No *</th>}
                               <th style={{ ...styles.unifiedTh, width: "4%" }}></th>
                             </tr>
                           </thead>
@@ -511,14 +543,30 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               return (
                                 <tr key={r.localId} style={styles.unifiedRow}>
                                   <td style={styles.unifiedTd}>
-                                    <SmartItemAutocomplete
-                                      companyId={companyId}
-                                      value={r.description}
-                                      onChange={(v) => updateRow(r.localId, { description: v })}
-                                      onPick={(picked) => handleItemPick(r.localId, picked)}
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                      placeholder="Search items / FBR catalog — auto-fills HS Code & UOM"
-                                    />
+                                    <div style={{ display: "flex", gap: "0.25rem", alignItems: "center" }}>
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <SearchableItemTypeSelect
+                                          items={itemTypes}
+                                          value={r.itemTypeId}
+                                          onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
+                                          placeholder="Pick from your catalog…"
+                                          style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                        />
+                                      </div>
+                                      {canCreateItemType ? (
+                                        <button
+                                          type="button"
+                                          style={styles.tinyAddBtn}
+                                          title="Add a new item type to your catalog"
+                                          onClick={() => { setPendingItemTypeRow(r.localId); setShowAddItemType(true); }}
+                                        >
+                                          <MdAdd size={14} />
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                  </td>
+                                  <td style={{ ...styles.unifiedTd, color: r.itemTypeName ? colors.textPrimary : colors.textSecondary, fontStyle: r.itemTypeName ? "normal" : "italic" }}>
+                                    {r.itemTypeName || "(pick an item type)"}
                                   </td>
                                   <td style={styles.unifiedTd}>
                                     <input
@@ -532,10 +580,16 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   <td style={styles.unifiedTd}>
                                     <input
                                       type="text"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                      readOnly={!!r.itemTypeId}
+                                      style={{
+                                        ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem",
+                                        backgroundColor: r.itemTypeId ? "#eef5ff" : colors.inputBg,
+                                        cursor: r.itemTypeId ? "not-allowed" : "text",
+                                      }}
                                       value={r.uom}
                                       onChange={(e) => updateRow(r.localId, { uom: e.target.value })}
-                                      placeholder="Pcs"
+                                      placeholder="auto from item type"
+                                      title={r.itemTypeId ? "Inherited from the picked item type" : ""}
                                     />
                                   </td>
                                   <td style={styles.unifiedTd}>
@@ -553,10 +607,16 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   <td style={styles.unifiedTd}>
                                     <input
                                       type="text"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem", fontFamily: "monospace" }}
+                                      readOnly={!!r.itemTypeId}
+                                      style={{
+                                        ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem", fontFamily: "monospace",
+                                        backgroundColor: r.itemTypeId ? "#eef5ff" : colors.inputBg,
+                                        cursor: r.itemTypeId ? "not-allowed" : "text",
+                                      }}
                                       value={r.hsCode}
                                       onChange={(e) => updateRow(r.localId, { hsCode: e.target.value })}
-                                      placeholder="auto"
+                                      placeholder="auto from item type"
+                                      title={r.itemTypeId ? "Inherited from the picked item type" : ""}
                                     />
                                   </td>
                                   {showMRP && (
@@ -611,7 +671,13 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         </table>
                       </div>
                       <p style={styles.fbrToggleHint}>
-                        <b>*</b> required
+                        <b>*</b> required ·
+                        <b> Description, UOM, HS Code, Sale Type</b> all auto-fill from the picked Item Type
+                        {!canCreateItemType && (
+                          <span style={{ marginLeft: 8 }}>
+                            · <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
+                          </span>
+                        )}
                         {showMRP && " · MRP × Qty drives 3rd Schedule tax (backed out of MRP)"}
                         {showSRO && " · SRO Schedule + Item No referenced for reduced-rate items"}
                       </p>
@@ -650,12 +716,157 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           </div>
         </form>
       </div>
+
+      {/* Inline Add Buyer modal — reuses the regular ClientForm. Pin the
+          single-company picker to the active company; multi-company
+          picker auto-collapses since we pass companies=[]. */}
+      {showAddClient && (
+        <ClientForm
+          client={null}
+          companyId={companyId}
+          companies={[]}
+          onClose={() => setShowAddClient(false)}
+          onSaved={(created) => onClientSaved(created)}
+        />
+      )}
+
+      {/* Inline Add Item Type modal — small dedicated form (the full
+          ItemTypesPage form is too heavy for an inline add). */}
+      {showAddItemType && (
+        <QuickItemTypeForm
+          companyId={companyId}
+          onClose={() => { setShowAddItemType(false); setPendingItemTypeRow(null); }}
+          onSaved={onItemTypeSaved}
+        />
+      )}
     </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Inline mini-form for "+ New Item Type" — name + HS code + UOM +
+// SaleType. Mirrors the essential fields from ItemTypesPage. Operator
+// can fine-tune later via the full Item Types page.
+// ────────────────────────────────────────────────────────────────────
+function QuickItemTypeForm({ companyId, onClose, onSaved }) {
+  const [name, setName] = useState("");
+  const [hsCode, setHsCode] = useState("");
+  const [uom, setUom] = useState("");
+  const [saleType, setSaleType] = useState("Goods at standard rate (default)");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (!name.trim()) { setError("Name is required."); return; }
+    setSaving(true);
+    try {
+      const { data } = await createItemType({
+        name: name.trim(),
+        hsCode: hsCode.trim() || null,
+        uom: uom.trim() || null,
+        saleType: saleType || null,
+      }, companyId);
+      onSaved(data);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to create item type.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ ...formStyles.backdrop, zIndex: 1100 }}>
+      <div
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={formStyles.header}>
+          <h5 style={formStyles.title}>
+            <MdInventory2 style={{ verticalAlign: "-3px", marginRight: 4 }} size={16} />
+            New Item Type
+          </h5>
+          <button type="button" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+        </div>
+        <form onSubmit={submit}>
+          <div style={formStyles.body}>
+            {error && <div style={styles.errorAlert}>{error}</div>}
+            <p style={{ margin: "0 0 0.6rem", fontSize: "0.78rem", color: colors.textSecondary }}>
+              Adds a new entry to your product catalog. You can fine-tune HS code, UOM and SaleType
+              later from <b>Configuration → Item Types</b>.
+            </p>
+            <div style={formStyles.formGroup}>
+              <label style={styles.label}>Name *</label>
+              <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <div style={formStyles.formGroup}>
+                <label style={styles.label}>HS Code</label>
+                <input
+                  style={{ ...styles.input, fontFamily: "monospace" }}
+                  value={hsCode}
+                  onChange={(e) => setHsCode(e.target.value)}
+                  placeholder="e.g. 8517.1300"
+                />
+              </div>
+              <div style={formStyles.formGroup}>
+                <label style={styles.label}>UOM</label>
+                <input
+                  style={styles.input}
+                  value={uom}
+                  onChange={(e) => setUom(e.target.value)}
+                  placeholder="e.g. Numbers, pieces, units"
+                />
+              </div>
+            </div>
+            <div style={formStyles.formGroup}>
+              <label style={styles.label}>Sale Type</label>
+              <select style={styles.input} value={saleType} onChange={(e) => setSaleType(e.target.value)}>
+                <option>Goods at standard rate (default)</option>
+                <option>Goods at Reduced Rate</option>
+                <option>Goods at zero-rate</option>
+                <option>Exempt goods</option>
+                <option>3rd Schedule Goods</option>
+                <option>Services</option>
+                <option>Services (FED in ST Mode)</option>
+                <option>Goods (FED in ST Mode)</option>
+              </select>
+            </div>
+          </div>
+          <div style={formStyles.footer}>
+            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }} disabled={saving}>
+              {saving ? "Creating…" : "Create"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// "Permission required" hint — shown inline when a user is forbidden
+// from inline-creating a buyer or item type. Surfaces the permission
+// key by name so an admin can find it on Roles & Permissions.
+// ────────────────────────────────────────────────────────────────────
+function PermissionLackedHint({ perm, what, inline = false }) {
+  return (
+    <span
+      style={inline ? styles.permHintInline : styles.permHintBlock}
+      title={`Ask your admin to enable the '${perm}' permission on your role.`}
+    >
+      <MdLock size={inline ? 12 : 14} /> Can't {what}? You need the{" "}
+      <code style={styles.permCode}>{perm}</code> permission. Ask an admin to enable it via
+      <b> Administration → Roles &amp; Permissions</b>.
+    </span>
   );
 }
 
 const styles = {
   row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
+  inlineRow: { display: "flex", gap: "0.5rem", alignItems: "stretch", flexWrap: "wrap" },
   label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
   input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
   select: { width: "100%", padding: "0.6rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", cursor: "pointer" },
@@ -665,23 +876,23 @@ const styles = {
   totalRow: { display: "flex", gap: "2rem", justifyContent: "flex-end", fontSize: "0.9rem", minWidth: 280 },
   fbrToggleHint: { margin: "0.3rem 0 0", fontSize: "0.75rem", color: colors.textSecondary },
   optionalTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: "#fff3e0", color: "#e65100", fontSize: "0.62rem", fontWeight: 800, letterSpacing: "0.03em", textTransform: "uppercase" },
-  lockedTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: "#e0f2f1", color: "#00695c", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase" },
+  lockedTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: "#e0f2f1", color: "#00695c", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: 2 },
   itemsHeaderBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" },
   addRowBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.35rem 0.75rem", borderRadius: 6, border: "none", backgroundColor: colors.blue, color: "#fff", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
+  inlineAddBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.45rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
+  tinyAddBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.25rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, cursor: "pointer", flexShrink: 0 },
   removeRowBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.3rem", borderRadius: 6, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fff", color: colors.danger, cursor: "pointer" },
   unifiedTableWrap: { width: "100%", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 8 },
-  unifiedTable: { width: "100%", borderCollapse: "collapse", minWidth: 1100 },
+  unifiedTable: { width: "100%", borderCollapse: "collapse", minWidth: 1200 },
   unifiedThead: { backgroundColor: "#eff3f8" },
   unifiedTh: { padding: "0.5rem 0.45rem", textAlign: "left", fontSize: "0.7rem", fontWeight: 800, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
   unifiedRow: { backgroundColor: "#fff" },
   unifiedTd: { padding: "0.3rem 0.4rem", fontSize: "0.8rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
 
-  // ── Step labels (numbered) ────────────────────────────────────────
   stepLabel: { display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary, marginBottom: "0.4rem" },
   stepNum: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", backgroundColor: colors.blue, color: "#fff", fontSize: "0.78rem", fontWeight: 800 },
   stepHint: { margin: "0 0 0.6rem 30px", fontSize: "0.78rem", color: colors.textSecondary, lineHeight: 1.4 },
 
-  // ── Scenario picker cards ─────────────────────────────────────────
   scenarioGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "0.6rem", marginTop: "0.25rem" },
   scenarioCard: { textAlign: "left", padding: "0.7rem 0.85rem", borderRadius: 10, border: "2px solid", cursor: "pointer", display: "flex", flexDirection: "column", gap: "0.3rem", transition: "all 0.15s", backgroundColor: "#fff", fontFamily: "inherit" },
   scenarioCardHeader: { display: "flex", justifyContent: "space-between", alignItems: "center" },
@@ -697,7 +908,10 @@ const styles = {
   badgePink:   { backgroundColor: "#fce4ec", color: "#ad1457" },
   scenarioHint: { display: "flex", alignItems: "flex-start", gap: "0.4rem", marginTop: "0.6rem", padding: "0.5rem 0.75rem", borderRadius: 8, backgroundColor: "#e3f2fd", border: "1px solid #90caf9", color: "#0d47a1", fontSize: "0.82rem", lineHeight: 1.4 },
 
-  // Locked-sale-type banner
   lockedSaleType: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.85rem", marginBottom: "0.6rem", borderRadius: 8, backgroundColor: "#e0f2f1", border: "1px solid #80cbc4", color: "#00695c", fontSize: "0.82rem" },
   lockedSaleTypeHint: { color: "#00695c", opacity: 0.8, fontSize: "0.75rem" },
+
+  permHintBlock: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.75rem", borderRadius: 6, backgroundColor: "#fff8e1", border: `1px solid ${colors.warn}30`, color: colors.warn, fontSize: "0.78rem", lineHeight: 1.35, flexWrap: "wrap" },
+  permHintInline: { display: "inline-flex", alignItems: "center", gap: "0.25rem", color: colors.warn, fontSize: "0.72rem", flexWrap: "wrap" },
+  permCode: { fontFamily: "monospace", padding: "0 0.25rem", borderRadius: 3, backgroundColor: "#f5f5f5", fontWeight: 700, fontSize: "0.74rem" },
 };
