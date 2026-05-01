@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
@@ -18,11 +20,18 @@ namespace MyApp.Api.Controllers
     {
         private readonly ISupplierService _service;
         private readonly ISupplierGroupService _groupService;
-        public SuppliersController(ISupplierService service, ISupplierGroupService groupService)
+        private readonly ICompanyAccessGuard _access;
+        public SuppliersController(ISupplierService service, ISupplierGroupService groupService, ICompanyAccessGuard access)
         {
             _service = service;
             _groupService = groupService;
+            _access = access;
         }
+
+        private int CurrentUserId =>
+            int.TryParse(
+                User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
+                out var id) ? id : 0;
 
         // ── Common Suppliers (cross-company grouping) ──
         // Mirror of /api/clients/common* — same HTTP shape, same
@@ -31,6 +40,7 @@ namespace MyApp.Api.Controllers
 
         [HttpGet("common")]
         [HasPermission("suppliers.manage.view")]
+        [AuthorizeCompany]
         public async Task<ActionResult<List<CommonSupplierDto>>> GetCommon([FromQuery] int companyId)
             => Ok(await _groupService.GetCommonSuppliersAsync(companyId));
 
@@ -110,7 +120,14 @@ namespace MyApp.Api.Controllers
         [HttpGet]
         [HasPermission("suppliers.manage.view")]
         public async Task<ActionResult<IEnumerable<SupplierDto>>> GetSuppliers()
-            => Ok(await _service.GetAllAsync());
+        {
+            // Tenant filter: only suppliers of companies the caller can
+            // access. Replaces the previous "return everything" behaviour
+            // that mixed tenants on a single response.
+            var allowed = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            var rows = await _service.GetAllAsync();
+            return Ok(rows.Where(r => allowed.Contains(r.CompanyId)));
+        }
 
         [HttpGet("count")]
         [HasPermission("suppliers.manage.view")]
@@ -118,15 +135,18 @@ namespace MyApp.Api.Controllers
         {
             if (companyId.HasValue)
             {
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
                 var rows = await _service.GetByCompanyAsync(companyId.Value);
                 return Ok(rows.Count());
             }
+            var allowed = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
             var all = await _service.GetAllAsync();
-            return Ok(all.Count());
+            return Ok(all.Count(r => allowed.Contains(r.CompanyId)));
         }
 
         [HttpGet("company/{companyId}")]
         [HasPermission("suppliers.manage.view")]
+        [AuthorizeCompany]
         public async Task<ActionResult<IEnumerable<SupplierDto>>> GetByCompany(int companyId)
             => Ok(await _service.GetByCompanyAsync(companyId));
 
@@ -136,6 +156,7 @@ namespace MyApp.Api.Controllers
         {
             var s = await _service.GetByIdAsync(id);
             if (s == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, s.CompanyId);
             return Ok(s);
         }
 
@@ -144,6 +165,7 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<SupplierDto>> Create([FromBody] SupplierDto dto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
+            await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
             try
             {
                 var result = await _service.CreateAsync(dto);
@@ -161,6 +183,11 @@ namespace MyApp.Api.Controllers
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
             dto.Id = id;
+            // Authorize against the existing row's company, not the body —
+            // body could be forged to point at a tenant the user owns.
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             try
             {
                 var result = await _service.UpdateAsync(dto);
@@ -180,6 +207,9 @@ namespace MyApp.Api.Controllers
         [HasPermission("suppliers.manage.delete")]
         public async Task<IActionResult> Delete(int id)
         {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             try
             {
                 await _service.DeleteAsync(id);

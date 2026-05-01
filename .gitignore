@@ -3,6 +3,14 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+# Environment-specific settings — hold real DB connection strings,
+# JWT signing keys, third-party API keys. The .example files are
+# tracked as templates; the real ones live on each machine only.
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Local.json
+appsettings.*.local.json
+
 # User-specific files
 *.rsuser
 *.suo

@@ -1,5 +1,8 @@
 ﻿using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using MyApp.Api.Data;
@@ -22,7 +25,20 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// JWT Authentication
+// JWT Authentication — key MUST come from a non-committed source:
+//   • env var Jwt__Key  (recommended for prod)
+//   • appsettings.{Development,Production,Local}.json  (gitignored)
+// We refuse to start with an empty / default key so a misconfigured
+// deploy fails loudly rather than running on a forgeable signing key.
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey) || jwtKey.Length < 32)
+{
+    throw new InvalidOperationException(
+        "Jwt:Key is missing or too short (minimum 32 chars). Set it via " +
+        "the Jwt__Key environment variable or appsettings.{Environment}.json. " +
+        "Never commit a real signing key to git.");
+}
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -38,9 +54,29 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = builder.Configuration["Jwt:Issuer"],
         ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
     };
+});
+
+// Rate limiter — applied selectively below to /api/auth/login. Other
+// endpoints stay unrestricted to avoid breaking bulk operations the
+// operator runs (Validate All, Submit All, etc.).
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("login", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            // 10 attempts per IP per minute — generous enough for a typo
+            // recovery, tight enough to stop credential stuffing.
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+        });
+    });
 });
 
 // Register Repositories
@@ -107,13 +143,36 @@ builder.Services.AddHttpClient("FBR");
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
 
-// before builder.Build()
+// Tenant-scope guard — answers "may this user touch this company?"
+// in addition to RBAC's "may this user perform this action?". Reads
+// the UserCompany table when Company.IsTenantIsolated=true; passes
+// through otherwise (preserves Hakimi/Roshan behaviour).
+builder.Services.AddScoped<ICompanyAccessGuard, CompanyAccessGuard>();
+
+// CORS — origins read from configuration (Cors:AllowedOrigins, comma-
+// separated). Empty / missing collapses to "no cross-origin allowed",
+// which is correct when the SPA is served from the same host as the
+// API (the standard MonsterASP / Render setup here). Never falls back
+// to AllowAnyOrigin; that combined with a stolen JWT was the gap.
+var corsOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? "")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", p =>
-        p.AllowAnyOrigin()    // or .WithOrigins("https://localhost:5173")
-         .AllowAnyHeader()
-         .AllowAnyMethod());
+    {
+        if (corsOrigins.Length > 0)
+        {
+            p.WithOrigins(corsOrigins)
+             .AllowAnyHeader()
+             .AllowAnyMethod();
+        }
+        else
+        {
+            // No origins configured → effectively "same-origin only".
+            // No-op policy; the SPA from wwwroot still works because
+            // it never crosses an origin.
+        }
+    });
 });
 
 // Use PORT env variable for Docker/Render deployment; IIS/MonsterASP manages its own port
@@ -702,6 +761,25 @@ using (var scope = app.Services.CreateScope())
 app.UseSwagger();
 app.UseSwaggerUI();
 
+// Honour X-Forwarded-Proto / X-Forwarded-For from the reverse proxy
+// (Render, MonsterASP, etc.). Without this, app.Request.IsHttps is
+// always false behind a TLS-terminating proxy, which trips up HSTS
+// and any same-site cookie defaults. KnownNetworks/Proxies is left
+// at the framework default — populate via config if you need to
+// restrict which proxies can rewrite these headers.
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+});
+
+// HSTS in non-dev — tells browsers to never speak plaintext to this
+// host once they've seen one HTTPS response. Dev keeps using
+// HttpsRedirection only.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
 // after app = builder.Build()
 app.UseCors("AllowFrontend");
 
@@ -716,6 +794,8 @@ if (app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

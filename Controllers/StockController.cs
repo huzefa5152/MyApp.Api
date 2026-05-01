@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -20,12 +22,19 @@ namespace MyApp.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IStockService _stock;
+        private readonly ICompanyAccessGuard _access;
 
-        public StockController(AppDbContext context, IStockService stock)
+        public StockController(AppDbContext context, IStockService stock, ICompanyAccessGuard access)
         {
             _context = context;
             _stock = stock;
+            _access = access;
         }
+
+        private int CurrentUserId =>
+            int.TryParse(
+                User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
+                out var id) ? id : 0;
 
         /// <summary>
         /// On-hand grid for the dashboard. Returns one row per ItemType the
@@ -34,6 +43,7 @@ namespace MyApp.Api.Controllers
         /// </summary>
         [HttpGet("company/{companyId}/onhand")]
         [HasPermission("stock.dashboard.view")]
+        [AuthorizeCompany]
         public async Task<ActionResult<List<StockOnHandRowDto>>> GetOnHand(int companyId)
         {
             // Items that have ever moved or have an opening balance.
@@ -99,6 +109,7 @@ namespace MyApp.Api.Controllers
         /// <summary>Audit feed of every movement, newest first.</summary>
         [HttpGet("company/{companyId}/movements")]
         [HasPermission("stock.movements.view")]
+        [AuthorizeCompany]
         public async Task<ActionResult<PagedResult<StockMovementRowDto>>> GetMovements(
             int companyId,
             [FromQuery] int page = 1,
@@ -151,6 +162,7 @@ namespace MyApp.Api.Controllers
         /// <summary>List opening balances for a company.</summary>
         [HttpGet("company/{companyId}/opening")]
         [HasPermission("stock.opening.manage")]
+        [AuthorizeCompany]
         public async Task<ActionResult<List<OpeningStockBalanceDto>>> GetOpeningBalances(int companyId)
         {
             var rows = await _context.OpeningStockBalances
@@ -183,6 +195,7 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<OpeningStockBalanceDto>> UpsertOpeningBalance(
             [FromBody] UpsertOpeningBalanceDto dto)
         {
+            await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
             var existing = await _context.OpeningStockBalances
                 .FirstOrDefaultAsync(o => o.CompanyId == dto.CompanyId && o.ItemTypeId == dto.ItemTypeId);
             if (existing == null)
@@ -225,6 +238,7 @@ namespace MyApp.Api.Controllers
         {
             var row = await _context.OpeningStockBalances.FindAsync(id);
             if (row == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, row.CompanyId);
             _context.OpeningStockBalances.Remove(row);
             await _context.SaveChangesAsync();
             return NoContent();
@@ -242,6 +256,25 @@ namespace MyApp.Api.Controllers
         public async Task<IActionResult> AdjustStock([FromBody] CreateStockAdjustmentDto dto)
         {
             if (dto.Delta == 0) return BadRequest(new { error = "Delta cannot be zero." });
+            await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
+
+            // Negative deltas can't drive stock below zero. The previous
+            // version of this endpoint allowed any signed delta — useful
+            // when seeding ledgers but a footgun once tracking is on.
+            // Tracking-disabled companies still bypass the check (their
+            // dashboard can be in a half-set state until they turn it on).
+            if (dto.Delta < 0 && await _stock.IsTrackingEnabledAsync(dto.CompanyId))
+            {
+                var onHand = await _stock.GetOnHandAsync(dto.CompanyId, dto.ItemTypeId);
+                if (onHand + dto.Delta < 0)
+                {
+                    return BadRequest(new
+                    {
+                        error = $"Adjustment would drive on-hand to {onHand + dto.Delta} (current {onHand}). " +
+                                "Increase the on-hand first or reduce the negative delta."
+                    });
+                }
+            }
 
             // Bypass the IsTrackingEnabled gate by writing directly: an
             // explicit adjustment is the operator's deliberate act, and we

@@ -102,53 +102,93 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<GoodsReceiptDto> CreateAsync(CreateGoodsReceiptDto dto)
         {
-            var company = await _context.Companies.FindAsync(dto.CompanyId);
-            if (company == null) throw new KeyNotFoundException("Company not found.");
-            var supplier = await _context.Suppliers
-                .FirstOrDefaultAsync(s => s.Id == dto.SupplierId && s.CompanyId == dto.CompanyId);
-            if (supplier == null) throw new KeyNotFoundException("Supplier not found.");
-            if (dto.Items == null || dto.Items.Count == 0)
-                throw new InvalidOperationException("At least one item is required.");
-
-            // Number allocation, mirror PurchaseBill numbering.
-            var maxNumber = await _context.GoodsReceipts
-                .Where(g => g.CompanyId == dto.CompanyId)
-                .Select(g => (int?)g.GoodsReceiptNumber)
-                .MaxAsync() ?? 0;
-            var nextNumber = Math.Max(maxNumber + 1, company.StartingGoodsReceiptNumber);
-            company.CurrentGoodsReceiptNumber = nextNumber;
-
-            var receipt = new GoodsReceipt
+            // Wrap number allocation + receipt insert in one transaction so
+            // a concurrent create can't race the MAX(...)+1 lookup.
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
             {
-                GoodsReceiptNumber = nextNumber,
-                ReceiptDate = dto.ReceiptDate.Date,
-                CompanyId = dto.CompanyId,
-                SupplierId = dto.SupplierId,
-                PurchaseBillId = dto.PurchaseBillId,
-                SupplierChallanNumber = dto.SupplierChallanNumber?.Trim(),
-                Site = dto.Site,
-                Status = "Pending",
-                CreatedAt = DateTime.UtcNow,
-                Items = dto.Items.Select(i => new GoodsReceiptItem
+                var company = await _context.Companies.FindAsync(dto.CompanyId);
+                if (company == null) throw new KeyNotFoundException("Company not found.");
+                var supplier = await _context.Suppliers
+                    .FirstOrDefaultAsync(s => s.Id == dto.SupplierId && s.CompanyId == dto.CompanyId);
+                if (supplier == null) throw new KeyNotFoundException("Supplier not found.");
+                if (dto.PurchaseBillId.HasValue)
                 {
-                    ItemTypeId = i.ItemTypeId,
-                    Description = i.Description?.Trim() ?? "",
-                    Quantity = i.Quantity,
-                    Unit = i.Unit ?? "",
-                }).ToList(),
-            };
+                    // Cross-tenant linkage guard: a goods receipt can only
+                    // reference a purchase bill of the same company.
+                    var billCompanyId = await _context.PurchaseBills
+                        .Where(pb => pb.Id == dto.PurchaseBillId.Value)
+                        .Select(pb => (int?)pb.CompanyId)
+                        .FirstOrDefaultAsync();
+                    if (billCompanyId == null)
+                        throw new KeyNotFoundException("Purchase bill not found.");
+                    if (billCompanyId != dto.CompanyId)
+                        throw new InvalidOperationException("Purchase bill belongs to a different company.");
+                }
+                if (dto.Items == null || dto.Items.Count == 0)
+                    throw new InvalidOperationException("At least one item is required.");
 
-            _context.GoodsReceipts.Add(receipt);
-            await _context.SaveChangesAsync();
-            return (await GetByIdAsync(receipt.Id))!;
+                // Number allocation, mirror PurchaseBill numbering.
+                var maxNumber = await _context.GoodsReceipts
+                    .Where(g => g.CompanyId == dto.CompanyId)
+                    .Select(g => (int?)g.GoodsReceiptNumber)
+                    .MaxAsync() ?? 0;
+                var nextNumber = Math.Max(maxNumber + 1, company.StartingGoodsReceiptNumber);
+                company.CurrentGoodsReceiptNumber = nextNumber;
+
+                var receipt = new GoodsReceipt
+                {
+                    GoodsReceiptNumber = nextNumber,
+                    ReceiptDate = dto.ReceiptDate.Date,
+                    CompanyId = dto.CompanyId,
+                    SupplierId = dto.SupplierId,
+                    PurchaseBillId = dto.PurchaseBillId,
+                    SupplierChallanNumber = dto.SupplierChallanNumber?.Trim(),
+                    Site = dto.Site,
+                    Status = "Pending",
+                    CreatedAt = DateTime.UtcNow,
+                    Items = dto.Items.Select(i => new GoodsReceiptItem
+                    {
+                        ItemTypeId = i.ItemTypeId,
+                        Description = i.Description?.Trim() ?? "",
+                        Quantity = i.Quantity,
+                        Unit = i.Unit ?? "",
+                    }).ToList(),
+                };
+
+                _context.GoodsReceipts.Add(receipt);
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+                return (await GetByIdAsync(receipt.Id))!;
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<GoodsReceiptDto?> UpdateAsync(int id, UpdateGoodsReceiptDto dto)
         {
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
             var gr = await _context.GoodsReceipts
                 .Include(g => g.Items)
                 .FirstOrDefaultAsync(g => g.Id == id);
             if (gr == null) return null;
+            if (dto.PurchaseBillId.HasValue)
+            {
+                // Same cross-tenant linkage guard as Create.
+                var billCompanyId = await _context.PurchaseBills
+                    .Where(pb => pb.Id == dto.PurchaseBillId.Value)
+                    .Select(pb => (int?)pb.CompanyId)
+                    .FirstOrDefaultAsync();
+                if (billCompanyId == null)
+                    throw new KeyNotFoundException("Purchase bill not found.");
+                if (billCompanyId != gr.CompanyId)
+                    throw new InvalidOperationException("Purchase bill belongs to a different company.");
+            }
 
             gr.ReceiptDate = dto.ReceiptDate.Date;
             gr.SupplierId = dto.SupplierId;
@@ -171,16 +211,33 @@ namespace MyApp.Api.Services.Implementations
                 });
             }
             await _context.SaveChangesAsync();
+            await tx.CommitAsync();
             return await GetByIdAsync(gr.Id);
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<bool> DeleteAsync(int id)
         {
-            var gr = await _context.GoodsReceipts.FindAsync(id);
-            if (gr == null) return false;
-            _context.GoodsReceipts.Remove(gr);
-            await _context.SaveChangesAsync();
-            return true;
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var gr = await _context.GoodsReceipts.FindAsync(id);
+                if (gr == null) return false;
+                _context.GoodsReceipts.Remove(gr);
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+                return true;
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
         }
     }
 }

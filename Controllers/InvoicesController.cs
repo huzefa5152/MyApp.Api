@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
@@ -12,25 +14,43 @@ namespace MyApp.Api.Controllers
     public class InvoicesController : ControllerBase
     {
         private readonly IInvoiceService _service;
+        private readonly ICompanyAccessGuard _access;
         private readonly int _defaultPageSize;
 
-        public InvoicesController(IInvoiceService service, IConfiguration configuration)
+        public InvoicesController(IInvoiceService service, ICompanyAccessGuard access, IConfiguration configuration)
         {
             _service = service;
+            _access = access;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
+
+        private int CurrentUserId =>
+            int.TryParse(
+                User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
+                out var id) ? id : 0;
 
         [HttpGet("count")]
         [HasPermission("invoices.list.view")]
         public async Task<ActionResult<int>> GetTotalCount([FromQuery] int? companyId)
         {
             if (companyId.HasValue)
+            {
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
                 return Ok(await _service.GetCountByCompanyAsync(companyId.Value));
-            return Ok(await _service.GetTotalCountAsync());
+            }
+            // Total across companies — only seed admin / users who can
+            // access every company should see this; others get the sum
+            // restricted to their accessible set.
+            var allowed = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            var byCompany = 0;
+            foreach (var cid in allowed)
+                byCompany += await _service.GetCountByCompanyAsync(cid);
+            return Ok(byCompany);
         }
 
         [HttpGet("company/{companyId}")]
         [HasPermission("invoices.list.view")]
+        [AuthorizeCompany]
         public async Task<ActionResult<List<InvoiceDto>>> GetByCompany(int companyId)
         {
             var invoices = await _service.GetByCompanyAsync(companyId);
@@ -39,6 +59,7 @@ namespace MyApp.Api.Controllers
 
         [HttpGet("company/{companyId}/paged")]
         [HasPermission("invoices.list.view")]
+        [AuthorizeCompany]
         public async Task<ActionResult<PagedResult<InvoiceDto>>> GetPagedByCompany(
             int companyId,
             [FromQuery] int page = 1,
@@ -60,6 +81,7 @@ namespace MyApp.Api.Controllers
         {
             var invoice = await _service.GetByIdAsync(id);
             if (invoice == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, invoice.CompanyId);
             return Ok(invoice);
         }
 
@@ -73,6 +95,7 @@ namespace MyApp.Api.Controllers
         /// </summary>
         [HttpGet("company/{companyId}/item-rate-history")]
         [HasPermission("itemratehistory.view")]
+        [AuthorizeCompany]
         public async Task<ActionResult<ItemRateHistoryResultDto>> GetItemRateHistory(
             int companyId,
             [FromQuery] int page = 1,
@@ -97,6 +120,7 @@ namespace MyApp.Api.Controllers
         /// </summary>
         [HttpGet("company/{companyId}/last-rates")]
         [HasPermission("invoices.manage.create")]
+        [AuthorizeCompany]
         public async Task<ActionResult<List<LastRateDto>>> GetLastRatesForChallan(
             int companyId, [FromQuery] int challanId)
         {
@@ -115,6 +139,7 @@ namespace MyApp.Api.Controllers
         /// </summary>
         [HttpGet("company/{companyId}/awaiting-purchase")]
         [HasPermission("purchasebills.manage.create")]
+        [AuthorizeCompany]
         public async Task<ActionResult<List<AwaitingPurchaseInvoiceDto>>> GetAwaitingPurchase(int companyId)
             => Ok(await _service.GetAwaitingPurchaseAsync(companyId));
 
@@ -127,6 +152,9 @@ namespace MyApp.Api.Controllers
         [HasPermission("purchasebills.manage.create")]
         public async Task<ActionResult<PurchaseTemplateDto>> GetPurchaseTemplate(int invoiceId)
         {
+            var inv = await _service.GetByIdAsync(invoiceId);
+            if (inv == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, inv.CompanyId);
             var dto = await _service.GetPurchaseTemplateAsync(invoiceId);
             if (dto == null) return NotFound();
             return Ok(dto);
@@ -136,6 +164,7 @@ namespace MyApp.Api.Controllers
         [HasPermission("invoices.manage.create")]
         public async Task<ActionResult<InvoiceDto>> Create([FromBody] CreateInvoiceDto dto)
         {
+            await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
             try
             {
                 if (dto.ChallanIds == null || !dto.ChallanIds.Any())
@@ -176,6 +205,7 @@ namespace MyApp.Api.Controllers
         [HasPermission("invoices.manage.create.standalone")]
         public async Task<ActionResult<InvoiceDto>> CreateStandalone([FromBody] CreateStandaloneInvoiceDto dto)
         {
+            await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
             try
             {
                 if (dto.Items == null || !dto.Items.Any())
@@ -204,6 +234,9 @@ namespace MyApp.Api.Controllers
         [HasPermission("invoices.manage.update")]
         public async Task<ActionResult<InvoiceDto>> Update(int id, [FromBody] UpdateInvoiceDto dto)
         {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             try
             {
                 if (dto.Items == null || !dto.Items.Any())
@@ -240,6 +273,9 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<InvoiceDto>> UpdateItemTypes(
             int id, [FromBody] UpdateInvoiceItemTypesDto dto)
         {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             try
             {
                 // allowQuantityEdit=false — qty fields in payload are ignored
@@ -269,6 +305,9 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<InvoiceDto>> UpdateItemTypesAndQty(
             int id, [FromBody] UpdateInvoiceItemTypesDto dto)
         {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             try
             {
                 var updated = await _service.UpdateItemTypesAsync(id, dto, allowQuantityEdit: true);
@@ -285,6 +324,9 @@ namespace MyApp.Api.Controllers
         [HasPermission("invoices.manage.delete")]
         public async Task<IActionResult> Delete(int id)
         {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             try
             {
                 var deleted = await _service.DeleteAsync(id);
@@ -311,6 +353,9 @@ namespace MyApp.Api.Controllers
         [HasPermission("invoices.fbr.exclude")]
         public async Task<ActionResult<InvoiceDto>> SetFbrExcluded(int id, [FromBody] SetFbrExcludedRequest body)
         {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             var updated = await _service.SetFbrExcludedAsync(id, body.Excluded);
             if (updated == null) return NotFound(new { error = "Bill not found." });
             return Ok(updated);
@@ -325,6 +370,9 @@ namespace MyApp.Api.Controllers
         [HasPermission("invoices.print.view")]
         public async Task<ActionResult<PrintBillDto>> GetPrintBill(int id)
         {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             var dto = await _service.GetPrintBillAsync(id);
             if (dto == null) return NotFound();
             return Ok(dto);
@@ -334,6 +382,9 @@ namespace MyApp.Api.Controllers
         [HasPermission("invoices.print.view")]
         public async Task<ActionResult<PrintTaxInvoiceDto>> GetPrintTaxInvoice(int id)
         {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             var dto = await _service.GetPrintTaxInvoiceAsync(id);
             if (dto == null) return NotFound();
             return Ok(dto);

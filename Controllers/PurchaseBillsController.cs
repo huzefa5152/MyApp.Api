@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
@@ -17,21 +19,30 @@ namespace MyApp.Api.Controllers
     public class PurchaseBillsController : ControllerBase
     {
         private readonly IPurchaseBillService _service;
+        private readonly ICompanyAccessGuard _access;
         private readonly int _defaultPageSize;
 
-        public PurchaseBillsController(IPurchaseBillService service, IConfiguration configuration)
+        public PurchaseBillsController(IPurchaseBillService service, ICompanyAccessGuard access, IConfiguration configuration)
         {
             _service = service;
+            _access = access;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
 
+        private int CurrentUserId =>
+            int.TryParse(
+                User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
+                out var id) ? id : 0;
+
         [HttpGet("count")]
         [HasPermission("purchasebills.list.view")]
+        [AuthorizeCompany]
         public async Task<ActionResult<int>> GetCount([FromQuery] int companyId)
             => Ok(await _service.GetCountByCompanyAsync(companyId));
 
         [HttpGet("company/{companyId}/paged")]
         [HasPermission("purchasebills.list.view")]
+        [AuthorizeCompany]
         public async Task<ActionResult<PagedResult<PurchaseBillDto>>> GetPagedByCompany(
             int companyId,
             [FromQuery] int page = 1,
@@ -52,6 +63,7 @@ namespace MyApp.Api.Controllers
         {
             var pb = await _service.GetByIdAsync(id);
             if (pb == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, pb.CompanyId);
             return Ok(pb);
         }
 
@@ -59,6 +71,7 @@ namespace MyApp.Api.Controllers
         [HasPermission("purchasebills.manage.create")]
         public async Task<ActionResult<PurchaseBillDto>> Create([FromBody] CreatePurchaseBillDto dto)
         {
+            await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
             try
             {
                 var created = await _service.CreateAsync(dto);
@@ -78,6 +91,11 @@ namespace MyApp.Api.Controllers
         [HasPermission("purchasebills.manage.update")]
         public async Task<ActionResult<PurchaseBillDto>> Update(int id, [FromBody] UpdatePurchaseBillDto dto)
         {
+            // Authorize on the existing row's company — body fields can't
+            // smuggle the bill into another tenant.
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             try
             {
                 var updated = await _service.UpdateAsync(id, dto);
@@ -94,6 +112,9 @@ namespace MyApp.Api.Controllers
         [HasPermission("purchasebills.manage.delete")]
         public async Task<IActionResult> Delete(int id)
         {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             var ok = await _service.DeleteAsync(id);
             if (!ok) return NotFound();
             return Ok(new { message = "Purchase bill deleted; stock movements reversed." });

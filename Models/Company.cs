@@ -69,6 +69,15 @@
         public int StartingGoodsReceiptNumber { get; set; }
         public int CurrentGoodsReceiptNumber { get; set; }
 
+        // ── Tenant isolation ──
+        // When false (default), any authenticated user with the right
+        // RBAC permission can access this company's data — preserves
+        // the legacy "every user sees every company" behaviour Hakimi
+        // and Roshan rely on. Flip to true on a SaaS tenant and only
+        // users with an explicit UserCompany row can reach it. See
+        // ICompanyAccessGuard.
+        public bool IsTenantIsolated { get; set; }
+
         public List<DeliveryChallan> DeliveryChallans { get; set; } = new();
         public List<Client> Clients { get; set; } = new();
         public List<Supplier> Suppliers { get; set; } = new();

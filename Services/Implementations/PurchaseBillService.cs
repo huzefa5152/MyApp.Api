@@ -136,6 +136,14 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<PurchaseBillDto> CreateAsync(CreatePurchaseBillDto dto)
         {
+            // Single transaction across number allocation, source-line
+            // joins, sale-side back-fill and stock movements. The previous
+            // version had three SaveChangesAsync calls — if the second
+            // failed after the first committed, you got an orphaned bill
+            // with no joins / no stock movements.
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
             var company = await _context.Companies.FindAsync(dto.CompanyId);
             if (company == null) throw new KeyNotFoundException("Company not found.");
             var supplier = await _context.Suppliers
@@ -323,11 +331,21 @@ namespace MyApp.Api.Services.Implementations
                     notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplier.Name}");
             }
 
+            await tx.CommitAsync();
             return (await GetByIdAsync(bill.Id))!;
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<PurchaseBillDto?> UpdateAsync(int id, UpdatePurchaseBillDto dto)
         {
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
             var bill = await _context.PurchaseBills
                 .Include(p => p.Items)
                 .FirstOrDefaultAsync(p => p.Id == id);
@@ -412,11 +430,21 @@ namespace MyApp.Api.Services.Implementations
                     notes: $"Purchase Bill #{bill.PurchaseBillNumber} (edited)");
             }
 
+            await tx.CommitAsync();
             return await GetByIdAsync(bill.Id);
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<bool> DeleteAsync(int id)
         {
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
             var bill = await _context.PurchaseBills
                 .Include(p => p.Items)
                 .FirstOrDefaultAsync(p => p.Id == id);
@@ -441,7 +469,14 @@ namespace MyApp.Api.Services.Implementations
 
             _context.PurchaseBills.Remove(bill);
             await _context.SaveChangesAsync();
+            await tx.CommitAsync();
             return true;
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<int> GetCountByCompanyAsync(int companyId) =>

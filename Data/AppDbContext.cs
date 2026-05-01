@@ -33,6 +33,7 @@ namespace MyApp.Api.Data
         public DbSet<Role> Roles { get; set; }
         public DbSet<RolePermission> RolePermissions { get; set; }
         public DbSet<UserRole> UserRoles { get; set; }
+        public DbSet<UserCompany> UserCompanies { get; set; }
 
         // Purchase + Inventory module
         public DbSet<Supplier> Suppliers { get; set; }
@@ -548,6 +549,25 @@ namespace MyApp.Api.Data
                 .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<UserRole>()
                 .HasIndex(ur => ur.RoleId);
+
+            // ── Tenant isolation: UserCompany ──
+            // Composite PK on (UserId, CompanyId). Both sides cascade so
+            // deleting a user or a company cleans up its grants. The
+            // CompanyAccessGuard reads this table when Company.IsTenantIsolated=true.
+            modelBuilder.Entity<UserCompany>()
+                .HasKey(uc => new { uc.UserId, uc.CompanyId });
+            modelBuilder.Entity<UserCompany>()
+                .HasOne(uc => uc.User)
+                .WithMany()
+                .HasForeignKey(uc => uc.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UserCompany>()
+                .HasOne(uc => uc.Company)
+                .WithMany()
+                .HasForeignKey(uc => uc.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UserCompany>()
+                .HasIndex(uc => uc.CompanyId);
 
             // ── Purchase + Inventory module ────────────────────────────────
 

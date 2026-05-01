@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
 
@@ -10,6 +11,31 @@ namespace MyApp.Api.Middleware
         private readonly RequestDelegate _next;
 
         public GlobalExceptionMiddleware(RequestDelegate next) => _next = next;
+
+        // Field names whose value should be replaced with "***" before
+        // a request body is persisted to AuditLogs. The audit table is
+        // not encrypted and is itself viewable via auditlogs.view, so
+        // anything that looks like a credential / token must be scrubbed.
+        // Match is case-insensitive and applies to JSON bodies — form
+        // bodies are unusual on this API (JWT-bearer + JSON).
+        private static readonly string[] SensitiveFieldNames = new[]
+        {
+            "password", "currentpassword", "newpassword", "oldpassword",
+            "passwordhash", "confirmpassword",
+            "fbrtoken", "token", "apikey", "api_key", "secret",
+            "jwt", "authorization", "bearer",
+            "connectionstring",
+        };
+
+        private static readonly Regex SensitiveJsonRegex = new(
+            @"(""(?:" + string.Join("|", SensitiveFieldNames) + @")""\s*:\s*)(""(?:[^""\\]|\\.)*""|null)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static string? RedactSensitive(string? body)
+        {
+            if (string.IsNullOrEmpty(body)) return body;
+            return SensitiveJsonRegex.Replace(body, "$1\"***\"");
+        }
 
         public async Task InvokeAsync(HttpContext context)
         {
@@ -42,6 +68,7 @@ namespace MyApp.Api.Middleware
                     requestBody = await reader.ReadToEndAsync();
                     if (string.IsNullOrWhiteSpace(requestBody)) requestBody = null;
                     else if (requestBody.Length > 4000) requestBody = requestBody[..4000] + "...(truncated)";
+                    requestBody = RedactSensitive(requestBody);
                 }
             }
             catch { /* ignore */ }
@@ -71,7 +98,11 @@ namespace MyApp.Api.Middleware
 
         private static async Task HandleExceptionAsync(HttpContext context, Exception ex)
         {
-            // Determine status code from exception type
+            // Determine status code from exception type. UnauthorizedAccessException
+            // is reserved for tenant-scope failures from ICompanyAccessGuard —
+            // mapped to 403 so the frontend can distinguish it from a
+            // permission failure (which the HasPermissionAttribute already
+            // returns directly).
             var statusCode = ex switch
             {
                 KeyNotFoundException => (int)HttpStatusCode.NotFound,
@@ -91,6 +122,7 @@ namespace MyApp.Api.Middleware
                     requestBody = await reader.ReadToEndAsync();
                     if (requestBody.Length > 4000)
                         requestBody = requestBody[..4000] + "...(truncated)";
+                    requestBody = RedactSensitive(requestBody);
                 }
             }
             catch { /* ignore body read failures */ }
