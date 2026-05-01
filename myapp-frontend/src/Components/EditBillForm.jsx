@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { MdInfo } from "react-icons/md";
 import { getInvoiceById, updateInvoice, updateInvoiceItemTypes, updateInvoiceItemTypesAndQty } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
+import { getClientsByCompany } from "../api/clientApi";
 import { getAllUnits } from "../api/unitsApi";
 import QuantityInput from "./QuantityInput";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
@@ -62,6 +63,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const [invoice, setInvoice] = useState(null);
   const [items, setItems] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
+  // Buyer reassignment — only meaningful for standalone bills (no
+  // linked challan). Loaded lazily after the bill itself comes back so
+  // we know which company's client list to pull. clientId starts as the
+  // bill's existing buyer.
+  const [clients, setClients] = useState([]);
+  const [clientId, setClientId] = useState("");
   // Units list — gates each row's quantity input on the picked UOM
   // (decimal allowed for KG/Liter/etc., integer-only for Pcs/SET/etc.).
   const [units, setUnits] = useState([]);
@@ -96,6 +103,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         setItems(data.items.map((it) => ({ ...it })));
         setItemTypes(typesRes.data || []);
         setUnits(unitsRes.data || []);
+        setClientId(data.clientId ? String(data.clientId) : "");
         setGstRate(data.gstRate ?? 18);
         // Date arrives as ISO string; the <input type="date"> control wants YYYY-MM-DD.
         setBillDate(data.date ? new Date(data.date).toISOString().slice(0, 10) : "");
@@ -113,6 +121,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           getFbrApplicableScenarios(data.companyId)
             .then(({ data: sc }) => setScenarios(sc?.scenarios || []))
             .catch(() => setScenarios([]));
+          // Load the company's clients so the operator can reassign the
+          // buyer on a standalone bill (challan-linked bills get the
+          // same dropdown but disabled — see lockClient below).
+          getClientsByCompany(data.companyId)
+            .then((res) => setClients(res.data || []))
+            .catch(() => setClients([]));
         }
       } catch {
         setError("Failed to load bill.");
@@ -210,6 +224,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const lockNonItemType = readOnly || itemTypeOnlyMode || itemTypeAndQtyMode;
   const lockQty         = readOnly || itemTypeOnlyMode; // Qty stays editable in itemTypeAndQty mode
   const lockItemType    = readOnly;
+  // Buyer reassignment: only meaningful for standalone bills (no
+  // linked challan) AND only in full-edit mode. Challan-linked bills
+  // would diverge from their challan if the buyer changed, so the
+  // backend rejects the change and we lock it client-side.
+  const isChallanLinked = !!(invoice?.challanNumbers && invoice.challanNumbers.length > 0);
+  const lockClient      = lockNonItemType || isChallanLinked;
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -262,6 +282,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           paymentTerms: ptToSave,
           documentType: documentType || null,
           paymentMode: paymentMode || null,
+          // Only send clientId when it would actually change — backend
+          // refuses to reassign on challan-linked bills, so omitting the
+          // field on those (when locked) avoids a needless 400.
+          clientId: !lockClient && clientId ? parseInt(clientId) : null,
           items: items.map((i) => ({
             id: i.id || 0,
             deliveryItemId: i.deliveryItemId || null,
@@ -405,6 +429,35 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
 
                 {/* Bill-level fields */}
                 <div style={styles.row}>
+                  <div style={{ flex: 1, minWidth: 240 }}>
+                    <label style={styles.label}>
+                      Buyer
+                      {isChallanLinked && (
+                        <span style={{ fontWeight: 400, color: colors.textSecondary, fontSize: "0.7rem", marginLeft: "0.4rem" }}>
+                          locked — set by linked challan
+                        </span>
+                      )}
+                    </label>
+                    <select
+                      style={{ ...styles.input, ...(lockClient ? styles.readOnlyInput : {}) }}
+                      value={clientId}
+                      onChange={(e) => setClientId(e.target.value)}
+                      disabled={lockClient}
+                    >
+                      {/* Show the existing buyer as a fallback option even
+                          when not in the loaded clients list (e.g. archived
+                          client) so the dropdown never silently changes the
+                          buyer just because of an empty options list. */}
+                      {invoice?.clientId && !clients.some((c) => c.id === invoice.clientId) && (
+                        <option value={invoice.clientId}>{invoice.clientName}</option>
+                      )}
+                      {clients.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.registrationType || "—"}{c.ntn ? ` · NTN ${c.ntn}` : c.cnic ? ` · CNIC ${c.cnic}` : ""})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <label style={styles.label}>Bill Date</label>
                     <input

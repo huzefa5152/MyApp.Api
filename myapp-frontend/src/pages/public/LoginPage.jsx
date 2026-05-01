@@ -57,25 +57,25 @@ export default function LoginPage() {
         </div>
 
         <div>
-          <h1 className="ht-brand-title">HAKIMI TRADERS</h1>
+          <h1 className="ht-brand-title">FBR DIGITAL INVOICING ERP</h1>
           <div className="ht-brand-divider" />
           <p className="ht-brand-tagline">
-            Specialist of Pneumatics Fitting, Equipments &amp; General Order Suppliers
+            Sales Tax Compliance &amp; Digital Invoicing Platform
           </p>
         </div>
 
         <div className="ht-brand-features">
           <div className="ht-brand-feature-item">
             <span className="feature-dot" />
-            Pneumatics Fittings &amp; Equipment
+            FBR Digital Invoicing (Validate &amp; Submit)
           </div>
           <div className="ht-brand-feature-item">
             <span className="feature-dot" />
-            General Order Supplies
+            Delivery Challans &amp; Sales Bills
           </div>
           <div className="ht-brand-feature-item">
             <span className="feature-dot" />
-            Delivery Challan Management
+            Purchase, Inventory &amp; Item Catalog
           </div>
         </div>
       </aside>

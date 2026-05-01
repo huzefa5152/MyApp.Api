@@ -451,6 +451,270 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
+        // ── Standalone bill creation (no linked delivery challan) ─────────
+        //
+        // For FBR-only flows where the operator never issued a challan
+        // (service invoices, retail walk-ins, ad-hoc billing). Re-uses the
+        // regular bill numbering sequence so these bills appear on the same
+        // Bills page and feed Item Rate History identically. The major
+        // differences from CreateAsync above:
+        //
+        //   • No ChallanIds — operator types items directly. InvoiceItems
+        //     are persisted with DeliveryItemId = null (the column is
+        //     already nullable on the model).
+        //   • No DeliveryChallans navigation gets populated, so no challan
+        //     transitions, no PO-date updates, no DeliveryItem usage-count
+        //     bump.
+        //   • UnitRegistry.EnsureNamesAsync registers any new UOM strings
+        //     the operator typed (matches what UpdateAsync already does
+        //     for the edit path), then fractional-qty validation runs
+        //     against the picked UOMs.
+        public async Task<InvoiceDto> CreateStandaloneAsync(CreateStandaloneInvoiceDto dto)
+        {
+            var company = await _companyRepo.GetByIdAsync(dto.CompanyId);
+            if (company == null) throw new KeyNotFoundException("Company not found.");
+
+            var client = await _context.Clients.FindAsync(dto.ClientId);
+            if (client == null) throw new KeyNotFoundException("Client not found.");
+            if (client.CompanyId != dto.CompanyId)
+                throw new InvalidOperationException("Client does not belong to this company.");
+
+            if (dto.Items == null || dto.Items.Count == 0)
+                throw new InvalidOperationException("At least one item is required.");
+            if (dto.Items.Any(i => i.Quantity <= 0))
+                throw new InvalidOperationException("Quantity must be greater than zero.");
+            if (dto.Items.Any(i => i.UnitPrice <= 0))
+                throw new InvalidOperationException("All items must have a positive unit price.");
+            if (dto.GSTRate < 0 || dto.GSTRate > 100)
+                throw new InvalidOperationException("GST rate must be between 0 and 100.");
+
+            // Cap bill date at end-of-today UTC — same FBR [0043] guard as UpdateAsync.
+            var maxDate = DateTime.UtcNow.Date.AddDays(1).AddTicks(-1);
+            if (dto.Date > maxDate)
+                throw new InvalidOperationException("Bill date cannot be in the future. [FBR 0043]");
+
+            // Register any newly-typed UOM names + reject fractional qty
+            // for integer-only UOMs. Mirrors the contract on the regular
+            // create path (which inherits UOM from the challan's DeliveryItem
+            // and is already validated upstream).
+            await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.UOM));
+            await ValidateStandaloneItemDecimalQuantitiesAsync(dto.Items);
+
+            // Preload referenced ItemTypes in a single round-trip
+            var referencedTypeIds = dto.Items
+                .Where(i => i.ItemTypeId.HasValue)
+                .Select(i => i.ItemTypeId!.Value)
+                .Distinct()
+                .ToList();
+            var typeMap = referencedTypeIds.Count == 0
+                ? new Dictionary<int, ItemType>()
+                : await _context.ItemTypes
+                    .Where(t => referencedTypeIds.Contains(t.Id))
+                    .ToDictionaryAsync(t => t.Id);
+
+            // Per-company FBR defaults — same precedence chain as CreateAsync
+            // minus step 3 (DeliveryItem.Unit), since there's no challan.
+            var companyDefaultUOM = !string.IsNullOrWhiteSpace(company.FbrDefaultUOM)
+                ? company.FbrDefaultUOM
+                : "Numbers, pieces, units";
+            var companyDefaultSaleType = !string.IsNullOrWhiteSpace(company.FbrDefaultSaleType)
+                ? company.FbrDefaultSaleType
+                : "Goods at Standard Rate (default)";
+
+            var invoiceItems = new List<InvoiceItem>();
+            foreach (var itemDto in dto.Items)
+            {
+                ItemType? itemType = null;
+                if (itemDto.ItemTypeId.HasValue)
+                    typeMap.TryGetValue(itemDto.ItemTypeId.Value, out itemType);
+
+                // Same precedence as CreateAsync: explicit DTO field → ItemType
+                // catalog → company default → seed value.
+                var effectiveUOM = !string.IsNullOrWhiteSpace(itemDto.UOM)
+                    ? itemDto.UOM!
+                    : !string.IsNullOrWhiteSpace(itemType?.UOM)
+                        ? itemType!.UOM!
+                        : companyDefaultUOM;
+                var effectiveHSCode = !string.IsNullOrWhiteSpace(itemDto.HSCode)
+                    ? itemDto.HSCode
+                    : itemType?.HSCode;
+                var effectiveFbrUOMId = itemDto.FbrUOMId ?? itemType?.FbrUOMId;
+                var effectiveSaleType = !string.IsNullOrWhiteSpace(itemDto.SaleType)
+                    ? itemDto.SaleType
+                    : !string.IsNullOrWhiteSpace(itemType?.SaleType)
+                        ? itemType!.SaleType
+                        : companyDefaultSaleType;
+
+                var lineTotal = itemDto.Quantity * itemDto.UnitPrice;
+
+                invoiceItems.Add(new InvoiceItem
+                {
+                    DeliveryItemId = null,            // standalone — no source line
+                    ItemTypeId = itemType?.Id,
+                    ItemTypeName = itemType?.Name ?? "",
+                    Description = itemDto.Description ?? "",
+                    Quantity = itemDto.Quantity,
+                    UOM = effectiveUOM,
+                    UnitPrice = itemDto.UnitPrice,
+                    LineTotal = lineTotal,
+                    HSCode = effectiveHSCode,
+                    FbrUOMId = effectiveFbrUOMId,
+                    SaleType = effectiveSaleType,
+                    RateId = itemDto.RateId,
+                    FixedNotifiedValueOrRetailPrice = itemDto.FixedNotifiedValueOrRetailPrice,
+                    // SRO refs flow through directly — they're scenario-driven
+                    // (only SN028-style reduced-rate bills set them) and are
+                    // never derived from the catalog.
+                    SroScheduleNo = string.IsNullOrWhiteSpace(itemDto.SroScheduleNo) ? null : itemDto.SroScheduleNo,
+                    SroItemSerialNo = string.IsNullOrWhiteSpace(itemDto.SroItemSerialNo) ? null : itemDto.SroItemSerialNo,
+                });
+
+                if (itemType != null)
+                {
+                    itemType.UsageCount += 1;
+                    itemType.LastUsedAt = DateTime.UtcNow;
+                    _context.ItemTypes.Update(itemType);
+                }
+            }
+
+            // Bill-header defaults — identical to CreateAsync.
+            const int SeededDefaultDocType = 4;
+            var effectiveDocType = dto.DocumentType ?? SeededDefaultDocType;
+
+            string? effectivePaymentMode = dto.PaymentMode;
+            if (string.IsNullOrWhiteSpace(effectivePaymentMode))
+            {
+                var isRegistered = client.RegistrationType == "Registered";
+                effectivePaymentMode = isRegistered
+                    ? (!string.IsNullOrWhiteSpace(company.FbrDefaultPaymentModeRegistered)
+                        ? company.FbrDefaultPaymentModeRegistered
+                        : "Credit")
+                    : (!string.IsNullOrWhiteSpace(company.FbrDefaultPaymentModeUnregistered)
+                        ? company.FbrDefaultPaymentModeUnregistered
+                        : "Cash");
+            }
+
+            var subtotal = invoiceItems.Sum(i => i.LineTotal);
+            var gstAmount = Math.Round(subtotal * dto.GSTRate / 100, 2);
+            var grandTotal = subtotal + gstAmount;
+
+            if (company.StartingInvoiceNumber == 0)
+                throw new InvalidOperationException("Starting invoice number has not been set for this company. Please set it first.");
+
+            // Share the regular numbering sequence — standalone bills are
+            // real bills, not demos. MAX(InvoiceNumber) excluding IsDemo
+            // matches CreateAsync.
+            int maxExistingInvoice = await _context.Invoices
+                .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo)
+                .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+
+            int nextInvoiceNumber = maxExistingInvoice > 0
+                ? maxExistingInvoice + 1
+                : company.StartingInvoiceNumber;
+            company.CurrentInvoiceNumber = nextInvoiceNumber;
+
+            // Auto-tag PaymentTerms with the scenario code so FbrService can
+            // route Validate / Submit calls to the correct scenarioId without
+            // the operator having to type "[SNxxx]" themselves. Pattern matches
+            // what InvoiceForm already does on the regular create path.
+            //   • If dto.ScenarioId is set AND the existing PaymentTerms
+            //     doesn't already start with "[SNxxx]", prepend it.
+            //   • If neither is set, PaymentTerms passes through untouched.
+            string? finalPaymentTerms = dto.PaymentTerms;
+            if (!string.IsNullOrWhiteSpace(dto.ScenarioId))
+            {
+                var existing = (finalPaymentTerms ?? "").TrimStart();
+                var hasTag = existing.StartsWith("[") && existing.Contains("]");
+                if (!hasTag)
+                    finalPaymentTerms = $"[{dto.ScenarioId.Trim()}] {finalPaymentTerms ?? ""}".Trim();
+            }
+
+            var invoice = new Invoice
+            {
+                InvoiceNumber = nextInvoiceNumber,
+                Date = dto.Date,
+                CompanyId = dto.CompanyId,
+                ClientId = dto.ClientId,
+                Subtotal = subtotal,
+                GSTRate = dto.GSTRate,
+                GSTAmount = gstAmount,
+                GrandTotal = grandTotal,
+                AmountInWords = NumberToWordsConverter.Convert(grandTotal),
+                PaymentTerms = finalPaymentTerms,
+                DocumentType = effectiveDocType,
+                PaymentMode = effectivePaymentMode,
+                FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
+                    ? nextInvoiceNumber.ToString()
+                    : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
+                Items = invoiceItems
+            };
+
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var created = await _invoiceRepo.CreateAsync(invoice);
+                await _companyRepo.UpdateAsync(company);
+
+                // Auto-save typed item descriptions for future autocomplete —
+                // mirrors CreateAsync.
+                var newDescs = dto.Items
+                    .Where(i => !string.IsNullOrWhiteSpace(i.Description))
+                    .Select(i => i.Description!)
+                    .Distinct()
+                    .ToList();
+                if (newDescs.Count > 0)
+                {
+                    var existing = await _context.ItemDescriptions
+                        .Where(d => newDescs.Contains(d.Name))
+                        .Select(d => d.Name)
+                        .ToListAsync();
+                    foreach (var desc in newDescs.Where(d => !existing.Contains(d)))
+                        _context.ItemDescriptions.Add(new ItemDescription { Name = desc });
+                    await _context.SaveChangesAsync();
+                }
+
+                await transaction.CommitAsync();
+
+                var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
+                return ToDto(loaded!);
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Same fractional-qty contract as ValidateUpdateItemDecimalQuantitiesAsync
+        /// but for the standalone-create DTO shape.
+        /// </summary>
+        private async Task ValidateStandaloneItemDecimalQuantitiesAsync(List<CreateStandaloneInvoiceItemDto> items)
+        {
+            var unitNames = items
+                .Select(i => i.UOM)
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (unitNames.Count == 0) return;
+
+            var unitConfig = (await _context.Units
+                .Where(u => unitNames.Contains(u.Name))
+                .Select(u => new { u.Name, u.AllowsDecimalQuantity })
+                .ToListAsync())
+                .ToDictionary(u => u.Name, u => u.AllowsDecimalQuantity, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var it in items)
+            {
+                if (string.IsNullOrWhiteSpace(it.UOM)) continue;
+                if (it.Quantity == Math.Truncate(it.Quantity)) continue;
+                if (!unitConfig.TryGetValue(it.UOM!, out var allows) || !allows)
+                    throw new InvalidOperationException(
+                        $"Quantity '{it.Quantity}' for unit '{it.UOM}' must be a whole number. " +
+                        $"Enable decimal quantity for this unit on the Units admin page if fractions are allowed.");
+            }
+        }
+
         public async Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto)
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
@@ -508,6 +772,25 @@ namespace MyApp.Api.Services.Implementations
                 invoice.PaymentTerms = dto.PaymentTerms;
                 invoice.DocumentType = dto.DocumentType;
                 invoice.PaymentMode = dto.PaymentMode;
+
+                // Allow buyer reassignment ONLY on standalone bills (no
+                // linked delivery challan). For challan-linked bills the
+                // buyer is owned by the challan; changing it here would
+                // put the bill out of sync with its source challan, so
+                // we surface a clear error instead of silently accepting.
+                if (dto.ClientId.HasValue && dto.ClientId.Value != invoice.ClientId)
+                {
+                    if (invoice.DeliveryChallans != null && invoice.DeliveryChallans.Any())
+                        throw new InvalidOperationException(
+                            "Cannot change the buyer on a challan-linked bill. " +
+                            "Edit the buyer on the linked delivery challan, or recreate the bill.");
+                    var newClient = await _context.Clients.FindAsync(dto.ClientId.Value);
+                    if (newClient == null)
+                        throw new InvalidOperationException($"Client {dto.ClientId.Value} not found.");
+                    if (newClient.CompanyId != invoice.CompanyId)
+                        throw new InvalidOperationException("Client does not belong to this company.");
+                    invoice.ClientId = newClient.Id;
+                }
 
                 // Preload any referenced ItemTypes in one round-trip
                 var referencedTypeIds = dto.Items

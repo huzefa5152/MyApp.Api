@@ -53,6 +53,13 @@ namespace MyApp.Api.Helpers
             // ── Invoices ────────────────────────────────────────────────────
             new("invoices.list.view",      "Invoices", "List",   "View",   "View the invoices list"),
             new("invoices.manage.create",  "Invoices", "Manage", "Create", "Create a new invoice"),
+            // Standalone create — operator can issue a bill WITHOUT a linked
+            // delivery challan. Useful for FBR-only flows where a challan
+            // wasn't issued (e.g. service invoices, retail sales, ad-hoc
+            // billing). Carved out as a separate permission so a role can
+            // be granted ONLY this without also gaining the regular
+            // create-from-challan flow, or vice-versa.
+            new("invoices.manage.create.standalone", "Invoices", "Manage", "Create (No Challan)", "Create a bill directly without linking a delivery challan (FBR-only flow)"),
             new("invoices.manage.update",  "Invoices", "Manage", "Update", "Edit an invoice (all fields)"),
             // Narrow permission: lets a user re-classify an invoice line by
             // picking a different ItemType, but blocks every other edit

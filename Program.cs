@@ -152,27 +152,49 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 
     // One-time tagging: any pre-existing bills whose paymentTerms start
-    // with "[SNxxx]" came from the FBR Sandbox seed flow (or the python
-    // script). They predate the IsDemo column, so the migration left
-    // them with IsDemo=false — meaning they still pollute the regular
+    // with "[SNxxx]" came from the legacy FBR Sandbox seed flow (or the
+    // python script). They predate the IsDemo column, so the migration
+    // left them with IsDemo=false — meaning they polluted the regular
     // Bills page. Flip them to IsDemo=true once.
-    // Idempotent: subsequent restarts find zero matching rows because
-    // the WHERE clause filters on IsDemo=0.
-    // Pattern: literal '[' + 'SN0' + any digits + literal ']' + any rest.
-    // The '[[]' escapes '[' so SQL Server treats it literally instead of
-    // as a character-set opener.
-    db.Database.ExecuteSqlRaw(@"
-        UPDATE Invoices
-           SET IsDemo = 1
-         WHERE IsDemo = 0
-           AND PaymentTerms LIKE '[[]SN0%]%';
-        UPDATE dc
-           SET dc.IsDemo = 1
-          FROM DeliveryChallans dc
-         WHERE dc.IsDemo = 0
-           AND EXISTS (SELECT 1 FROM Invoices i
-                        WHERE i.Id = dc.InvoiceId AND i.IsDemo = 1);
-    ");
+    //
+    // CRITICAL: this MUST be guarded by an audit-log marker, not by
+    // `WHERE IsDemo = 0`. The new StandaloneInvoiceForm flow legitimately
+    // tags every bill with "[SNxxx]" so FbrService can route the right
+    // scenarioId on Validate / Submit — those are REAL bills, not demos.
+    // Without this guard, every non-demo bill with a scenario tag gets
+    // hidden from the Bills page on the next backend restart.
+    //
+    // Marker pattern matches what RbacSeeder / ItemTypeSeeder /
+    // CommonClientsBackfill etc. already use elsewhere in this file.
+    var sandboxTagBackfillRan = await db.AuditLogs
+        .AnyAsync(a => a.ExceptionType == "SANDBOX_SNTAG_BACKFILL_V1");
+    if (!sandboxTagBackfillRan)
+    {
+        db.Database.ExecuteSqlRaw(@"
+            UPDATE Invoices
+               SET IsDemo = 1
+             WHERE IsDemo = 0
+               AND PaymentTerms LIKE '[[]SN0%]%';
+            UPDATE dc
+               SET dc.IsDemo = 1
+              FROM DeliveryChallans dc
+             WHERE dc.IsDemo = 0
+               AND EXISTS (SELECT 1 FROM Invoices i
+                            WHERE i.Id = dc.InvoiceId AND i.IsDemo = 1);
+        ");
+        db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
+        {
+            Timestamp = DateTime.UtcNow,
+            Level = "Info",
+            UserName = "system",
+            HttpMethod = "SEED",
+            RequestPath = "/migrations/sandbox-sntag-backfill",
+            StatusCode = 200,
+            ExceptionType = "SANDBOX_SNTAG_BACKFILL_V1",
+            Message = "One-time backfill: flagged legacy [SNxxx]-tagged bills as IsDemo=true."
+        });
+        await db.SaveChangesAsync();
+    }
 
     // Seed the starter catalog of FBR-mapped item types (idempotent — skips
     // any HS code / name already present, so it's safe to run on every boot)

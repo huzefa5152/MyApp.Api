@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdDelete, MdEdit, MdVisibility, MdBlock, MdRestore } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
+import StandaloneInvoiceForm from "../Components/StandaloneInvoiceForm";
 import EditBillForm from "../Components/EditBillForm";
 import BulkFbrResultsDialog from "../Components/BulkFbrResultsDialog";
 import FbrPreviewDialog from "../Components/FbrPreviewDialog";
@@ -31,6 +32,10 @@ export default function InvoicePage() {
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
   const canCreate = has("invoices.manage.create");
+  // Separate permission for the "Create Bill (No Challan)" flow — gates
+  // the standalone create button. A role can be granted only this without
+  // also gaining the regular create-from-challan flow, or vice-versa.
+  const canCreateStandalone = has("invoices.manage.create.standalone");
   const canUpdate = has("invoices.manage.update");
   // Users with only the narrow ItemType-only permission still need the
   // Edit button to reach the form, even though they can only change the
@@ -62,6 +67,9 @@ export default function InvoicePage() {
   const [clients, setClients] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  // Separate visibility flag for the "Create Bill (No Challan)" modal so
+  // it doesn't share state with the regular New Bill flow.
+  const [showStandaloneForm, setShowStandaloneForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [viewingId, setViewingId] = useState(null);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
@@ -486,10 +494,23 @@ export default function InvoicePage() {
             </p>
           </div>
         </div>
-        {companies.length > 0 && canCreate && (
-          <button style={styles.addBtn} onClick={() => setShowForm(true)}>
-            <MdAdd size={18} /> New Bill
-          </button>
+        {companies.length > 0 && (canCreate || canCreateStandalone) && (
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            {canCreate && (
+              <button style={styles.addBtn} onClick={() => setShowForm(true)}>
+                <MdAdd size={18} /> New Bill
+              </button>
+            )}
+            {canCreateStandalone && (
+              <button
+                style={styles.addBtnSecondary}
+                onClick={() => setShowStandaloneForm(true)}
+                title="Create a bill directly without linking a delivery challan (FBR-only flow)"
+              >
+                <MdAdd size={18} /> New Bill (No Challan)
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -854,6 +875,15 @@ export default function InvoicePage() {
         />
       )}
 
+      {showStandaloneForm && selectedCompany && (
+        <StandaloneInvoiceForm
+          companyId={selectedCompany.id}
+          company={selectedCompany}
+          onClose={() => setShowStandaloneForm(false)}
+          onSaved={() => { setShowStandaloneForm(false); handleCreated(); }}
+        />
+      )}
+
       {editingId && (
         <EditBillForm
           invoiceId={editingId}
@@ -906,6 +936,10 @@ const styles = {
   pageTitle: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
   pageSubtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
   addBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
+  // Visually distinct from the primary "New Bill" — outlined treatment
+  // makes the standalone path the secondary action without losing
+  // discoverability for roles that also have the primary permission.
+  addBtnSecondary: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: `1px solid ${colors.blue}`, background: "#fff", color: colors.blue, fontSize: "0.9rem", fontWeight: 600, cursor: "pointer" },
   loadingContainer: { display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", padding: "3rem 0" },
   spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
   emptyState: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3rem 1rem", textAlign: "center" },

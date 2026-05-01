@@ -11,6 +11,15 @@ namespace MyApp.Api.Services.Interfaces
             DateTime? dateFrom = null, DateTime? dateTo = null);
         Task<InvoiceDto?> GetByIdAsync(int id);
         Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto);
+        /// <summary>
+        /// Create a bill WITHOUT a linked delivery challan — for FBR-only
+        /// flows (service invoices, retail sales, ad-hoc billing) where a
+        /// challan wasn't issued. Bill numbering shares the regular
+        /// sequence; the bill flows through the same Bills page, FBR
+        /// Validate / Submit, and Item Rate History as challan-linked
+        /// bills.
+        /// </summary>
+        Task<InvoiceDto> CreateStandaloneAsync(CreateStandaloneInvoiceDto dto);
         Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto);
         /// <summary>
         /// Narrow update path: re-derives FBR fields (HS / UOM / SaleType)

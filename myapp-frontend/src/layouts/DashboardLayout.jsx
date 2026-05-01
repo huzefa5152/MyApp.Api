@@ -61,7 +61,10 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [configOpen, setConfigOpen] = useState(false);
+  // Default-expand the Configuration submenu — FBR Settings / FBR Sandbox /
+  // Companies / Clients / Suppliers / Item Types etc. live inside it, and
+  // hiding them behind a click hurts discoverability for new operators.
+  const [configOpen, setConfigOpen] = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
 
@@ -124,9 +127,9 @@ export default function DashboardLayout() {
       <aside className={`dl-sidebar${sidebarOpen ? " dl-sidebar--open" : ""}`} aria-label="Main navigation">
         {/* Brand */}
         <div className="dl-brand">
-          <span className="dl-brand__icon" aria-hidden="true">🏪</span>
-          <h1 className="dl-brand__name">Hakimi Traders</h1>
-          <p className="dl-brand__tagline">Business Management Portal</p>
+          <span className="dl-brand__icon" aria-hidden="true">📄</span>
+          <h1 className="dl-brand__name">FBR Digital Invoicing ERP</h1>
+          <p className="dl-brand__tagline">Sales Tax Compliance Portal</p>
         </div>
 
         {/* Nav */}
@@ -426,7 +429,7 @@ export default function DashboardLayout() {
             <span className="dl-nav__label">My Profile</span>
           </NavLink>
           <p className="dl-sidebar-footer__copy">
-            &copy; {new Date().getFullYear()} Hakimi Traders
+            &copy; {new Date().getFullYear()} FBR Digital Invoicing ERP
           </p>
           <button
             type="button"

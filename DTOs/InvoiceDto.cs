@@ -116,6 +116,62 @@ namespace MyApp.Api.DTOs
     }
 
     /// <summary>
+    /// DTO for the "Create Bill Without Challan" flow. Mirrors
+    /// <see cref="CreateInvoiceDto"/> but drops the ChallanIds requirement
+    /// and lets the operator type each line directly. Used for FBR-only
+    /// flows where no delivery challan was issued (service invoices,
+    /// retail sales, ad-hoc billing).
+    ///
+    /// Bill numbering shares the regular sequence (not IsDemo) so it
+    /// flows through the same Bills page, FBR Validate / Submit, and
+    /// Item Rate History as challan-linked bills.
+    /// </summary>
+    public class CreateStandaloneInvoiceDto
+    {
+        public DateTime Date { get; set; }
+        public int CompanyId { get; set; }
+        public int ClientId { get; set; }
+        public decimal GSTRate { get; set; }
+        public string? PaymentTerms { get; set; }
+        /// <summary>FBR document type: 4 = Sale Invoice (default), 9 = Debit Note, 10 = Credit Note.</summary>
+        public int? DocumentType { get; set; }
+        /// <summary>Optional payment mode (Cash / Credit / Bank Transfer / Cheque / Online).</summary>
+        public string? PaymentMode { get; set; }
+        /// <summary>
+        /// FBR scenario code (SN001 / SN002 / SN008 / SN026 / SN027 / SN028 / etc).
+        /// When set, the server prepends "[SNxxx] " to PaymentTerms so that
+        /// FbrService routes the bill to the correct scenarioId at submit time.
+        /// Optional — bills without a scenario tag rely on auto-detection from
+        /// items.
+        /// </summary>
+        public string? ScenarioId { get; set; }
+        public List<CreateStandaloneInvoiceItemDto> Items { get; set; } = new();
+    }
+
+    public class CreateStandaloneInvoiceItemDto
+    {
+        /// <summary>Free-text item description (typed by operator or picked from autocomplete).</summary>
+        public string Description { get; set; } = "";
+        /// <summary>Quantity. Server-side decimal-quantity validation applies based on the picked UOM.</summary>
+        public decimal Quantity { get; set; }
+        /// <summary>Unit of measure (e.g. "Pcs", "KG"). Either typed or inherited from the picked ItemType.</summary>
+        public string? UOM { get; set; }
+        public decimal UnitPrice { get; set; }
+        /// <summary>Optional ItemType (FBR catalog) link — when set, server re-derives HS / UOM / SaleType / FbrUOMId from the catalog.</summary>
+        public int? ItemTypeId { get; set; }
+        public string? HSCode { get; set; }
+        public int? FbrUOMId { get; set; }
+        public string? SaleType { get; set; }
+        public int? RateId { get; set; }
+        /// <summary>3rd Schedule retail price (MRP × qty) — required for SN008 / SN027.</summary>
+        public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
+        /// <summary>SRO Schedule reference — required for non-18 % rates (SN028, FBR rule 0077).</summary>
+        public string? SroScheduleNo { get; set; }
+        /// <summary>Serial number within the referenced SRO/Schedule — required when SroScheduleNo is set (FBR rule 0078).</summary>
+        public string? SroItemSerialNo { get; set; }
+    }
+
+    /// <summary>
     /// DTO for editing an existing invoice (bill) before FBR submission.
     /// Users can update prices, descriptions, GST rate, FBR fields, and even
     /// quantity if an item's source challan item was also updated.
@@ -132,6 +188,14 @@ namespace MyApp.Api.DTOs
         public string? PaymentTerms { get; set; }
         public int? DocumentType { get; set; }
         public string? PaymentMode { get; set; }
+        /// <summary>
+        /// Optional new buyer. Only honoured on STANDALONE bills (those with
+        /// no linked DeliveryChallan) — challan-linked bills inherit the buyer
+        /// from the challan and changing it would put the bill out of sync
+        /// with the source challan, so the service rejects the change.
+        /// When null, the existing client is preserved.
+        /// </summary>
+        public int? ClientId { get; set; }
         public List<UpdateInvoiceItemDto> Items { get; set; } = new();
     }
 

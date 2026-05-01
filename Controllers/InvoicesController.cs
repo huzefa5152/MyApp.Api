@@ -160,6 +160,46 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Create a bill WITHOUT a linked delivery challan — for FBR-only
+        /// flows (service invoices, retail walk-ins, ad-hoc billing) where
+        /// no challan was issued. Bill numbering shares the regular
+        /// sequence; the bill flows through the same Bills page, FBR
+        /// Validate / Submit, and Item Rate History as challan-linked
+        /// bills.
+        ///
+        /// RBAC: gated by the dedicated <c>invoices.manage.create.standalone</c>
+        /// permission so a role can be granted ONLY this without also
+        /// gaining the regular create-from-challan flow, or vice-versa.
+        /// </summary>
+        [HttpPost("standalone")]
+        [HasPermission("invoices.manage.create.standalone")]
+        public async Task<ActionResult<InvoiceDto>> CreateStandalone([FromBody] CreateStandaloneInvoiceDto dto)
+        {
+            try
+            {
+                if (dto.Items == null || !dto.Items.Any())
+                    return BadRequest(new { error = "At least one item is required." });
+                if (dto.Items.Any(i => i.UnitPrice <= 0))
+                    return BadRequest(new { error = "All items must have a positive unit price." });
+                if (dto.Items.Any(i => i.Quantity <= 0))
+                    return BadRequest(new { error = "Quantity must be greater than zero." });
+                if (dto.GSTRate < 0 || dto.GSTRate > 100)
+                    return BadRequest(new { error = "GST rate must be between 0 and 100." });
+
+                var created = await _service.CreateStandaloneAsync(dto);
+                return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
         [HttpPut("{id}")]
         [HasPermission("invoices.manage.update")]
         public async Task<ActionResult<InvoiceDto>> Update(int id, [FromBody] UpdateInvoiceDto dto)

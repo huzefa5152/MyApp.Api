@@ -12,6 +12,14 @@ export const getInvoiceById = (id) =>
 export const createInvoice = (payload) =>
   httpClient.post("/invoices", payload);
 
+// Create a bill WITHOUT a linked delivery challan — for FBR-only flows
+// (service invoices, retail walk-ins, ad-hoc billing) where no challan
+// was issued. Bill numbering shares the regular sequence so the bill
+// shows up on the same Bills page as challan-linked bills.
+// Gated server-side by `invoices.manage.create.standalone`.
+export const createStandaloneInvoice = (payload) =>
+  httpClient.post("/invoices/standalone", payload);
+
 export const updateInvoice = (id, payload) =>
   httpClient.put(`/invoices/${id}`, payload);
 
