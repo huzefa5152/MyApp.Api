@@ -1,14 +1,18 @@
 import { useState, useEffect, useMemo } from "react";
-import { MdSearch } from "react-icons/md";
+import { MdSearch, MdCheck, MdInfo, MdLock, MdAdd, MdPersonAdd } from "react-icons/md";
 import { getPendingChallansByCompany } from "../api/challanApi";
 import { createInvoice, getLastRatesForChallan } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
-import { getItemByName, saveItemFbrDefaults } from "../api/lookupApi";
+import { saveItemFbrDefaults } from "../api/lookupApi";
 import { formStyles, modalSizes } from "../theme";
+import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import ClientForm from "./ClientForm";
+import QuickItemTypeForm from "./QuickItemTypeForm";
+import PermissionLackedHint from "./PermissionLackedHint";
 
 const colors = {
   blue: "#0d47a1",
@@ -20,10 +24,58 @@ const colors = {
   inputBorder: "#d0d7e2",
   danger: "#dc3545",
   dangerLight: "#fff0f1",
+  warn: "#e65100",
+  warnLight: "#fff8e1",
+};
+
+// Per-scenario buyer-kind metadata. Mirrors StandaloneInvoiceForm so the
+// two flows behave identically on buyer filtering. See V1.12 §9 + §10.
+//   buyerKind drives the client dropdown filter:
+//     "b2b-registered"   → only Registered clients
+//     "b2b-unregistered" → only Unregistered clients
+//     "walk-in"          → only Unregistered clients (counter sale)
+//     "either"           → no buyer-type filter
+const SCENARIO_META = {
+  SN001: { buyerKind: "b2b-registered" },
+  SN002: { buyerKind: "b2b-unregistered" },
+  SN003: { buyerKind: "either" },
+  SN004: { buyerKind: "either" },
+  SN005: { buyerKind: "either" },
+  SN006: { buyerKind: "either" },
+  SN007: { buyerKind: "either" },
+  SN008: { buyerKind: "either" },
+  SN009: { buyerKind: "either" },
+  SN010: { buyerKind: "either" },
+  SN011: { buyerKind: "b2b-registered" },
+  SN012: { buyerKind: "either" },
+  SN013: { buyerKind: "b2b-registered" },
+  SN014: { buyerKind: "b2b-registered" },
+  SN015: { buyerKind: "either" },
+  SN016: { buyerKind: "b2b-registered" },
+  SN017: { buyerKind: "either" },
+  SN018: { buyerKind: "either" },
+  SN019: { buyerKind: "either" },
+  SN020: { buyerKind: "either" },
+  SN021: { buyerKind: "either" },
+  SN022: { buyerKind: "either" },
+  SN023: { buyerKind: "either" },
+  SN024: { buyerKind: "either" },
+  SN025: { buyerKind: "either" },
+  SN026: { buyerKind: "walk-in" },
+  SN027: { buyerKind: "walk-in" },
+  SN028: { buyerKind: "walk-in" },
 };
 
 export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId }) {
+  const { has } = usePermissions();
+  const canCreateClient   = has("clients.manage.create");
+  const canCreateItemType = has("itemtypes.manage.create");
+
   const [clients, setClients] = useState([]);
+  // Inline create modals — same affordances StandaloneInvoiceForm has
+  const [showAddClient, setShowAddClient] = useState(false);
+  const [showAddItemType, setShowAddItemType] = useState(false);
+  const [pendingItemTypeRowId, setPendingItemTypeRowId] = useState(null);
   const [allChallans, setAllChallans] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
@@ -206,11 +258,20 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     return () => { cancelled = true; };
   }, [selectedIds, companyId, fetchedRateChallanIds]);
 
-  // The chosen scenario's full record (sale type + rate + scope) — drives
-  // both the item-type filter and the GST rate auto-fill below.
+  // Decorate scenarios with local meta — same shape as StandaloneInvoiceForm.
+  const enrichedScenarios = useMemo(
+    () => scenarios.map((s) => ({
+      ...s,
+      meta: SCENARIO_META[s.code] || { buyerKind: "either" },
+    })),
+    [scenarios],
+  );
+
+  // The chosen scenario's full record (sale type + rate + buyerKind) — drives
+  // GST rate, item-type filter, AND the client dropdown filter.
   const chosenScenario = useMemo(
-    () => scenarios.find((s) => s.code === scenarioCode) || null,
-    [scenarios, scenarioCode],
+    () => enrichedScenarios.find((s) => s.code === scenarioCode) || null,
+    [enrichedScenarios, scenarioCode],
   );
 
   // Item types compatible with the chosen scenario. When no scenario is
@@ -425,6 +486,56 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     allChallans.some((ch) => ch.clientId === cl.id)
   );
 
+  // Apply the scenario's buyer-kind filter on top of the with-challan
+  // filter — same logic StandaloneInvoiceForm uses.
+  //   b2b-registered   → only Registered clients
+  //   b2b-unregistered → only Unregistered clients
+  //   walk-in          → only Unregistered clients (counter sale, rare with challans)
+  //   either           → no filter
+  const clientsForScenario = useMemo(() => {
+    if (!chosenScenario) return clientsWithChallans;
+    const k = chosenScenario.meta.buyerKind;
+    if (k === "b2b-registered")
+      return clientsWithChallans.filter((c) => (c.registrationType || "").toLowerCase() === "registered");
+    if (k === "b2b-unregistered" || k === "walk-in")
+      return clientsWithChallans.filter((c) => (c.registrationType || "").toLowerCase() !== "registered");
+    return clientsWithChallans;
+  }, [clientsWithChallans, chosenScenario]);
+
+  // Re-fetchers for inline creates so the new buyer / item type lands
+  // in the dropdowns immediately. Keep the original useEffect for first
+  // load — these helpers just refresh on demand.
+  const refreshClients = async () => {
+    const { data } = await getClientsByCompany(companyId);
+    setClients(data || []);
+    return data || [];
+  };
+  const refreshItemTypes = async () => {
+    const { data } = await getItemTypes();
+    setItemTypes(data || []);
+    return data || [];
+  };
+
+  const onClientCreated = async (created) => {
+    setShowAddClient(false);
+    await refreshClients();
+    if (created?.id) setSelectedClientId(String(created.id));
+  };
+
+  const onItemTypeCreated = async (created) => {
+    setShowAddItemType(false);
+    const list = await refreshItemTypes();
+    if (created?.id && pendingItemTypeRowId) {
+      const picked = list.find((t) => t.id === created.id) || created;
+      setItemTypeIds((p) => ({ ...p, [pendingItemTypeRowId]: picked.id }));
+      if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [pendingItemTypeRowId]: picked.hsCode }));
+      if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [pendingItemTypeRowId]: picked.saleType }));
+      if (picked.uom) setItemUoms((p) => ({ ...p, [pendingItemTypeRowId]: picked.uom }));
+      if (picked.fbrUOMId) setItemFbrUomIds((p) => ({ ...p, [pendingItemTypeRowId]: picked.fbrUOMId }));
+    }
+    setPendingItemTypeRowId(null);
+  };
+
   // Backdrop click is a no-op — bills can hold a lot of typed data and
   // a stray click shouldn't wipe it. Dismiss via X or Cancel.
   return (
@@ -442,68 +553,130 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
               <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading...</div>
             ) : (
               <>
-                {/* Step 1: Client Selection */}
-                <div style={{ marginBottom: "1.25rem" }}>
-                  <label style={styles.label}>Select Client</label>
-                  {clientsWithChallans.length === 0 ? (
-                    <p style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>No clients have pending challans.</p>
+                {/* Step 1 — Pick FBR scenario. Same card grid as
+                    StandaloneInvoiceForm so both flows feel identical. */}
+                <div style={{ marginBottom: "1rem" }}>
+                  <label style={styles.stepLabel}>
+                    <span style={styles.stepNum}>1</span> Pick FBR Scenario
+                  </label>
+                  <p style={styles.stepHint}>
+                    Each scenario locks the Sale Type, GST rate, and buyer type.
+                    Only the scenarios applicable to your company's profile
+                    ({company?.fbrBusinessActivity || "—"} · {company?.fbrSector || "—"}) are listed.
+                  </p>
+                  {enrichedScenarios.length === 0 ? (
+                    <div style={styles.warnAlert}>
+                      <MdInfo size={16} /> No FBR scenarios available. Configure Business Activity
+                      and Sector on the Company before creating a bill.
+                    </div>
                   ) : (
-                    <select
-                      style={styles.select}
-                      value={selectedClientId}
-                      onChange={handleClientChange}
-                    >
-                      <option value="">— Choose a client —</option>
-                      {clientsWithChallans.map((cl) => {
-                        const count = allChallans.filter((ch) => ch.clientId === cl.id).length;
+                    <div style={styles.scenarioGrid}>
+                      {enrichedScenarios.map((s) => {
+                        const active = scenarioCode === s.code;
                         return (
-                          <option key={cl.id} value={cl.id}>
-                            {cl.name} ({count} pending DC{count !== 1 ? "s" : ""})
-                          </option>
+                          <button
+                            type="button"
+                            key={s.code}
+                            onClick={() => setScenarioCode(s.code)}
+                            style={{
+                              ...styles.scenarioCard,
+                              borderColor: active ? colors.blue : colors.cardBorder,
+                              backgroundColor: active ? "#e3f2fd" : "#fff",
+                            }}
+                          >
+                            <div style={styles.scenarioCardHeader}>
+                              <span style={styles.scenarioCode}>{s.code}</span>
+                              {active && <MdCheck size={16} color={colors.blue} />}
+                            </div>
+                            <div style={styles.scenarioSaleType}>{s.saleType}</div>
+                            <div style={styles.scenarioRate}>{s.defaultRate}% GST</div>
+                            <div style={styles.scenarioBadges}>
+                              {s.meta.buyerKind === "b2b-registered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>Registered buyer</span>}
+                              {s.meta.buyerKind === "b2b-unregistered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}>Unregistered buyer</span>}
+                              {s.meta.buyerKind === "walk-in" && <span style={{ ...styles.scenarioBadge, ...styles.badgePurple }}>Walk-in retail</span>}
+                            </div>
+                          </button>
                         );
                       })}
-                    </select>
-                  )}
-                  {company && company.startingInvoiceNumber === 0 && (
-                    <div style={{ ...styles.errorAlert, marginTop: "0.5rem", marginBottom: 0 }}>
-                      Starting bill number not set for this company. Please configure it in the Companies page.
                     </div>
-                  )}
-                  {company && company.startingInvoiceNumber > 0 && (
-                    <span style={{ fontSize: "0.78rem", color: colors.textSecondary, marginTop: "0.3rem", display: "block" }}>
-                      Next bill #: {company.currentInvoiceNumber > 0 ? company.currentInvoiceNumber + 1 : company.startingInvoiceNumber}
-                    </span>
                   )}
                 </div>
 
-                {/* Step 2: Show rest only after client is selected AND has starting invoice number */}
-                {selectedClientId && company?.startingInvoiceNumber > 0 && (
-                  <>
-                    {/* Bill header fields — Date / GST / Terms / FBR Doc Type / FBR Payment Mode */}
-                    <div style={styles.row}>
-                      <div style={{ flex: 2, minWidth: 240 }}>
-                        <label style={styles.label}>
-                          FBR Scenario <span style={styles.optionalTag}>filters items</span>
-                        </label>
+                {/* Step 2 — Pick a client. Filtered by scenario.buyerKind +
+                    "has at least one pending challan". Inline + button next
+                    to the dropdown spawns a ClientForm modal so the operator
+                    can create a buyer mid-flow. Permission gate matches
+                    StandaloneInvoiceForm. */}
+                {chosenScenario && (
+                  <div style={{ marginBottom: "1.25rem" }}>
+                    <label style={styles.stepLabel}>
+                      <span style={styles.stepNum}>2</span>
+                      {chosenScenario.meta.buyerKind === "walk-in" ? "Walk-in Buyer" : "Buyer"}
+                    </label>
+                    <div style={styles.inlineRow}>
+                      {clientsForScenario.length === 0 ? (
+                        <div style={{ ...styles.warnAlert, flex: 1 }}>
+                          <MdInfo size={16} />
+                          No matching{" "}
+                          {chosenScenario.meta.buyerKind === "b2b-registered" ? "Registered"
+                            : chosenScenario.meta.buyerKind === "b2b-unregistered" ? "Unregistered"
+                            : chosenScenario.meta.buyerKind === "walk-in" ? "Unregistered (Walk-in)" : ""}{" "}
+                          clients with pending challans.
+                          {canCreateClient ? " Add a buyer below." : " Switch scenarios or ask an admin to add one."}
+                        </div>
+                      ) : (
                         <select
-                          style={styles.input}
-                          value={scenarioCode}
-                          onChange={(e) => setScenarioCode(e.target.value)}
+                          style={{ ...styles.select, flex: 1 }}
+                          value={selectedClientId}
+                          onChange={handleClientChange}
                         >
-                          <option value="">— auto-detect from items —</option>
-                          {scenarios.map((s) => (
-                            <option key={s.code} value={s.code}>
-                              {s.code} · {s.saleType} · {s.defaultRate}%
-                            </option>
-                          ))}
+                          <option value="">— Choose a buyer —</option>
+                          {clientsForScenario.map((cl) => {
+                            const count = allChallans.filter((ch) => ch.clientId === cl.id).length;
+                            return (
+                              <option key={cl.id} value={cl.id}>
+                                {cl.name} ({count} pending DC{count !== 1 ? "s" : ""})
+                              </option>
+                            );
+                          })}
                         </select>
-                        {chosenScenario && (
-                          <div style={{ fontSize: "0.7rem", color: colors.textSecondary, marginTop: "0.25rem" }}>
-                            Showing only item types with sale type "{chosenScenario.saleType}".
-                            Pick a different scenario to switch the filter.
-                          </div>
-                        )}
+                      )}
+                      {canCreateClient ? (
+                        <button
+                          type="button"
+                          style={styles.inlineAddBtn}
+                          onClick={() => setShowAddClient(true)}
+                          title="Create a new buyer without leaving this form"
+                        >
+                          <MdPersonAdd size={14} /> New Buyer
+                        </button>
+                      ) : (
+                        <PermissionLackedHint perm="clients.manage.create" what="add a new buyer" />
+                      )}
+                    </div>
+                    {company && company.startingInvoiceNumber === 0 && (
+                      <div style={{ ...styles.errorAlert, marginTop: "0.5rem", marginBottom: 0 }}>
+                        Starting bill number not set for this company. Please configure it in the Companies page.
                       </div>
+                    )}
+                    {company && company.startingInvoiceNumber > 0 && (
+                      <span style={{ fontSize: "0.78rem", color: colors.textSecondary, marginTop: "0.3rem", display: "block" }}>
+                        Next bill #: {company.currentInvoiceNumber > 0 ? company.currentInvoiceNumber + 1 : company.startingInvoiceNumber}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Step 3 — Bill details + DC selection + items.
+                    Mirrors StandaloneInvoiceForm's Step 3 numbering for
+                    visual consistency. Scenario is now Step 1, so it's no
+                    longer in this header row. */}
+                {chosenScenario && selectedClientId && company?.startingInvoiceNumber > 0 && (
+                  <>
+                    <label style={styles.stepLabel}>
+                      <span style={styles.stepNum}>3</span> Bill Details
+                    </label>
+                    <div style={styles.row}>
                       <div style={{ flex: 1, minWidth: 140 }}>
                         <label style={styles.label}>Bill Date</label>
                         <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
@@ -752,34 +925,48 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                       {item.challanNumber}
                                     </td>
                                     <td style={styles.unifiedTd}>
-                                      {/* Picking an ItemType auto-fills HS Code, UOM, SaleType,
-                                          FbrUOMId on this row — identical behaviour to EditBillForm. */}
-                                      <SearchableItemTypeSelect
-                                        items={filteredItemTypes}
-                                        value={itemTypeIds[item.id] || ""}
-                                        onChange={(newId, picked) => {
-                                          setItemTypeIds((p) => ({ ...p, [item.id]: newId ? parseInt(newId) : null }));
-                                          if (picked) {
-                                            // Picking an ItemType binds these fields to the catalog row.
-                                            if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [item.id]: picked.hsCode }));
-                                            if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [item.id]: picked.saleType }));
-                                            if (picked.uom) setItemUoms((p) => ({ ...p, [item.id]: picked.uom }));
-                                            if (picked.fbrUOMId) setItemFbrUomIds((p) => ({ ...p, [item.id]: picked.fbrUOMId }));
-                                          } else {
-                                            // Clearing the ItemType also clears the bound HS Code,
-                                            // Sale Type and UOM — they were inherited from the
-                                            // catalog row, so removing the link should remove the
-                                            // values too. Otherwise stale FBR fields stay on the
-                                            // line and the operator silently ships wrong data.
-                                            setItemHsCodes((p) => ({ ...p, [item.id]: "" }));
-                                            setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
-                                            setItemUoms((p) => ({ ...p, [item.id]: "" }));
-                                            setItemFbrUomIds((p) => ({ ...p, [item.id]: null }));
-                                          }
-                                        }}
-                                        placeholder="— optional —"
-                                        style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                                      />
+                                      <div style={{ display: "flex", gap: "0.25rem", alignItems: "center" }}>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                          {/* Picking an ItemType auto-fills HS Code, UOM, SaleType,
+                                              FbrUOMId on this row — identical behaviour to EditBillForm. */}
+                                          <SearchableItemTypeSelect
+                                            items={filteredItemTypes}
+                                            value={itemTypeIds[item.id] || ""}
+                                            onChange={(newId, picked) => {
+                                              setItemTypeIds((p) => ({ ...p, [item.id]: newId ? parseInt(newId) : null }));
+                                              if (picked) {
+                                                // Picking an ItemType binds these fields to the catalog row.
+                                                if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [item.id]: picked.hsCode }));
+                                                if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [item.id]: picked.saleType }));
+                                                if (picked.uom) setItemUoms((p) => ({ ...p, [item.id]: picked.uom }));
+                                                if (picked.fbrUOMId) setItemFbrUomIds((p) => ({ ...p, [item.id]: picked.fbrUOMId }));
+                                              } else {
+                                                // Clearing the ItemType also clears the bound HS Code,
+                                                // Sale Type and UOM — they were inherited from the
+                                                // catalog row, so removing the link should remove the
+                                                // values too. Otherwise stale FBR fields stay on the
+                                                // line and the operator silently ships wrong data.
+                                                setItemHsCodes((p) => ({ ...p, [item.id]: "" }));
+                                                setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
+                                                setItemUoms((p) => ({ ...p, [item.id]: "" }));
+                                                setItemFbrUomIds((p) => ({ ...p, [item.id]: null }));
+                                              }
+                                            }}
+                                            placeholder="— optional —"
+                                            style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                                          />
+                                        </div>
+                                        {canCreateItemType && (
+                                          <button
+                                            type="button"
+                                            style={styles.tinyAddBtn}
+                                            title="Add a new item type to your catalog"
+                                            onClick={() => { setPendingItemTypeRowId(item.id); setShowAddItemType(true); }}
+                                          >
+                                            <MdAdd size={14} />
+                                          </button>
+                                        )}
+                                      </div>
                                     </td>
                                     <td style={styles.unifiedTd}>
                                       <SmartItemAutocomplete
@@ -883,6 +1070,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         <p style={styles.fbrToggleHint}>
                           <b>*</b> Unit Price is required. HS Code &amp; Sale Type are optional —
                           needed only when submitting to FBR. They auto-fill when you pick an item.
+                          {!canCreateItemType && (
+                            <span style={{ marginLeft: 8 }}>
+                              · <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
+                            </span>
+                          )}
                         </p>
 
                         {/* Totals */}
@@ -917,6 +1109,32 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           </div>
         </form>
       </div>
+
+      {/* Inline Add Buyer modal — reuses the regular ClientForm. The
+          single-company picker pins to the active company; multi-company
+          picker auto-collapses since we pass companies=[]. */}
+      {showAddClient && (
+        <ClientForm
+          client={null}
+          companyId={companyId}
+          companies={[]}
+          onClose={() => setShowAddClient(false)}
+          onSaved={(created) => onClientCreated(created)}
+        />
+      )}
+
+      {/* Inline Add Item Type modal — same QuickItemTypeForm the
+          standalone bill uses. Inherits the parent bill's scenario so
+          Sale Type is locked and the HS-code typeahead filters by it. */}
+      {showAddItemType && (
+        <QuickItemTypeForm
+          companyId={companyId}
+          scenarioCode={chosenScenario?.code}
+          scenarioSaleType={chosenScenario?.saleType}
+          onClose={() => { setShowAddItemType(false); setPendingItemTypeRowId(null); }}
+          onSaved={(created) => onItemTypeCreated(created)}
+        />
+      )}
     </div>
   );
 }
@@ -953,4 +1171,26 @@ const styles = {
   lockedSaleType: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.85rem", marginBottom: "0.6rem", borderRadius: 8, backgroundColor: "#e0f2f1", border: "1px solid #80cbc4", color: "#00695c", fontSize: "0.82rem" },
   lockedSaleTypeIcon: { fontSize: "0.85rem" },
   lockedSaleTypeHint: { color: "#00695c", opacity: 0.8, fontSize: "0.75rem" },
+
+  // ── Step labels + scenario picker grid (same as StandaloneInvoiceForm) ──
+  stepLabel: { display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary, marginBottom: "0.4rem" },
+  stepNum: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", backgroundColor: colors.blue, color: "#fff", fontSize: "0.78rem", fontWeight: 800 },
+  stepHint: { margin: "0 0 0.6rem 30px", fontSize: "0.78rem", color: colors.textSecondary, lineHeight: 1.4 },
+  warnAlert: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.65rem 0.85rem", borderRadius: 8, backgroundColor: colors.warnLight, border: `1px solid ${colors.warn}30`, color: colors.warn, fontSize: "0.85rem" },
+  scenarioGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "0.6rem", marginTop: "0.25rem" },
+  scenarioCard: { textAlign: "left", padding: "0.7rem 0.85rem", borderRadius: 10, border: "2px solid", cursor: "pointer", display: "flex", flexDirection: "column", gap: "0.3rem", transition: "all 0.15s", backgroundColor: "#fff", fontFamily: "inherit" },
+  scenarioCardHeader: { display: "flex", justifyContent: "space-between", alignItems: "center" },
+  scenarioCode: { fontWeight: 800, fontSize: "0.95rem", color: colors.blue, fontFamily: "monospace" },
+  scenarioSaleType: { fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 600, lineHeight: 1.25 },
+  scenarioRate: { fontSize: "0.74rem", color: colors.textSecondary },
+  scenarioBadges: { display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.15rem" },
+  scenarioBadge: { fontSize: "0.65rem", padding: "0.1rem 0.4rem", borderRadius: 4, fontWeight: 700, letterSpacing: "0.02em" },
+  badgeBlue: { backgroundColor: "#e3f2fd", color: "#0d47a1" },
+  badgeOrange: { backgroundColor: "#fff3e0", color: "#e65100" },
+  badgePurple: { backgroundColor: "#f3e5f5", color: "#6a1b9a" },
+
+  // ── Inline create buttons (next to Buyer dropdown + per-row Item Type) ──
+  inlineRow: { display: "flex", gap: "0.5rem", alignItems: "stretch", flexWrap: "wrap" },
+  inlineAddBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.45rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
+  tinyAddBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.25rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, cursor: "pointer", flexShrink: 0 },
 };
