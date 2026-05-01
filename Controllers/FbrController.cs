@@ -158,8 +158,8 @@ namespace MyApp.Api.Controllers
 
         [HttpGet("hscodes/{companyId}")]
         [AuthorizeCompany]
-        public async Task<IActionResult> GetHSCodes(int companyId, [FromQuery] string? search)
-            => Ok(await _fbrService.GetHSCodesAsync(companyId, search));
+        public async Task<IActionResult> GetHSCodes(int companyId, [FromQuery] string? search, [FromQuery] string? saleType)
+            => Ok(await _fbrService.GetHSCodesAsync(companyId, search, saleType));
 
         [HttpGet("uom/{companyId}")]
         [AuthorizeCompany]

@@ -1189,9 +1189,30 @@ namespace MyApp.Api.Services.Implementations
         public async Task<List<FbrDocTypeDto>> GetDocTypesAsync(int companyId)
             => await GetReferenceData<FbrDocTypeDto>(companyId, $"{RefBaseV1}/doctypecode");
 
-        public async Task<List<FbrHSCodeDto>> GetHSCodesAsync(int companyId, string? search = null)
+        public async Task<List<FbrHSCodeDto>> GetHSCodesAsync(int companyId, string? search = null, string? saleType = null)
         {
             var all = await GetHsCodeCatalogAsync(companyId);
+
+            // Apply sale-type filter BEFORE the text search so the cap
+            // (50 / 100) operates on the already-narrowed list.
+            // HsPrefixHeuristics.Match(code) returns the scenario the HS
+            // code "naturally" maps to; codes that don't match any rule
+            // fall through to SN001's sale type ("Goods at Standard Rate
+            // (default)"), which is the right answer for ~80% of FBR's
+            // 14k+ catalog.
+            if (!string.IsNullOrWhiteSpace(saleType))
+            {
+                var defaultSaleType = TaxScenarios.Find(TaxScenarios.DefaultCode)?.SaleType
+                                      ?? "Goods at Standard Rate (default)";
+                var wantedSaleType = saleType.Trim();
+                all = all.Where(h =>
+                {
+                    var heuristic = HsPrefixHeuristics.Match(h.HS_CODE);
+                    var effective = heuristic?.SaleType ?? defaultSaleType;
+                    return string.Equals(effective, wantedSaleType, StringComparison.OrdinalIgnoreCase);
+                }).ToList();
+            }
+
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var term = search.ToLower();

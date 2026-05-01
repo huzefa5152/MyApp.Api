@@ -86,7 +86,11 @@ const blankRow = () => ({
   quantity: "",
   unitPrice: "",
   // Scenario-specific extras
-  fixedNotifiedValueOrRetailPrice: "",
+  // MRP scenarios (SN008 / SN027) — operator types the per-unit MRP
+  // (the printed retail price). The MRP × Qty total column is computed
+  // and read-only. On submit we ship `fixedNotifiedValueOrRetailPrice`
+  // = mrp × quantity, which is what FBR expects on the line.
+  mrp: "",
   sroScheduleNo: "",
   sroItemSerialNo: "",
 });
@@ -246,7 +250,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     const p = parseFloat(r.unitPrice);
     if (!(p > 0)) errs.push("unitPrice>0");
     if (chosenScenario?.meta.needsMRP) {
-      const mrp = parseFloat(r.fixedNotifiedValueOrRetailPrice);
+      const mrp = parseFloat(r.mrp);
       if (!(mrp > 0)) errs.push("MRP>0");
     }
     if (chosenScenario?.meta.needsSRO) {
@@ -292,9 +296,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           hsCode: r.hsCode?.trim() || null,
           saleType: effectiveSaleType(r) || null,
           fbrUOMId: r.fbrUOMId || null,
+          // MRP × Qty (FBR field name `fixedNotifiedValueOrRetailPrice`)
+          // is computed from the per-unit MRP the operator typed × the
+          // quantity already on the row. Storing as the precomputed total
+          // matches what FBR expects; the per-unit MRP itself is a UI
+          // affordance only and isn't persisted separately.
           fixedNotifiedValueOrRetailPrice:
-            chosenScenario.meta.needsMRP && r.fixedNotifiedValueOrRetailPrice
-              ? parseFloat(r.fixedNotifiedValueOrRetailPrice)
+            chosenScenario.meta.needsMRP && r.mrp && r.quantity
+              ? Math.round(parseFloat(r.mrp) * parseFloat(r.quantity) * 100) / 100
               : null,
           sroScheduleNo: chosenScenario.meta.needsSRO ? r.sroScheduleNo?.trim() || null : null,
           sroItemSerialNo: chosenScenario.meta.needsSRO ? r.sroItemSerialNo?.trim() || null : null,
@@ -530,7 +539,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               <th style={{ ...styles.unifiedTh, width: "9%" }}>Unit Price *</th>
                               <th style={{ ...styles.unifiedTh, width: "10%" }}>Line Total</th>
                               <th style={{ ...styles.unifiedTh, width: "10%" }}>HS Code</th>
-                              {showMRP && <th style={{ ...styles.unifiedTh, width: "11%", backgroundColor: "#fff8e1" }}>MRP × Qty *</th>}
+                              {showMRP && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: "#fff8e1" }}>MRP / unit *</th>}
+                              {showMRP && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: "#fff8e1" }}>MRP × Qty</th>}
                               {showSRO && <th style={{ ...styles.unifiedTh, width: "10%", backgroundColor: "#fce4ec" }}>SRO Schedule *</th>}
                               {showSRO && <th style={{ ...styles.unifiedTh, width: "8%", backgroundColor: "#fce4ec" }}>SRO Item No *</th>}
                               <th style={{ ...styles.unifiedTh, width: "4%" }}></th>
@@ -624,11 +634,22 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       <input
                                         type="number" min={0} step={0.01}
                                         style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                        value={r.fixedNotifiedValueOrRetailPrice}
-                                        onChange={(e) => updateRow(r.localId, { fixedNotifiedValueOrRetailPrice: e.target.value })}
-                                        placeholder="MRP × qty"
-                                        title="Printed retail price × quantity. FBR backs the sales tax out of this number."
+                                        value={r.mrp}
+                                        onChange={(e) => updateRow(r.localId, { mrp: e.target.value })}
+                                        placeholder="MRP / unit"
+                                        title="Printed retail price PER UNIT. The MRP × Qty total is computed automatically."
                                       />
+                                    </td>
+                                  )}
+                                  {showMRP && (
+                                    <td style={{ ...styles.unifiedTd, backgroundColor: "#fffdf5", textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
+                                      {(() => {
+                                        const m = parseFloat(r.mrp) || 0;
+                                        const total = m * q;
+                                        return total > 0
+                                          ? total.toLocaleString(undefined, { minimumFractionDigits: 2 })
+                                          : "—";
+                                      })()}
                                     </td>
                                   )}
                                   {showSRO && (
@@ -678,7 +699,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                             · <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
                           </span>
                         )}
-                        {showMRP && " · MRP × Qty drives 3rd Schedule tax (backed out of MRP)"}
+                        {showMRP && " · enter the per-unit MRP — the MRP × Qty total drives 3rd Schedule tax (backed out of MRP)"}
                         {showSRO && " · SRO Schedule + Item No referenced for reduced-rate items"}
                       </p>
 
@@ -780,14 +801,17 @@ function QuickItemTypeForm({ companyId, onClose, onSaved, scenarioCode, scenario
 
   // Debounced HS code search. 250ms idle is generous enough that the
   // network isn't hammered while the operator is still typing, but
-  // tight enough that the dropdown feels live.
+  // tight enough that the dropdown feels live. When the modal opens
+  // from a scenario context the saleType filter is passed through so
+  // the dropdown only suggests HS codes that are valid under the
+  // parent bill's locked sale type.
   useEffect(() => {
     const q = hsQuery.trim();
     if (q.length < 2) { setHsSuggestions([]); return; }
     const t = setTimeout(async () => {
       setHsLoading(true);
       try {
-        const { data } = await getFbrHSCodes(companyId, q);
+        const { data } = await getFbrHSCodes(companyId, q, scenarioSaleType || null);
         // Cap the suggestion list — FBR happily returns hundreds of
         // hits for a 2-letter prefix, but the dropdown becomes
         // unusable past ~30 entries.
@@ -799,7 +823,7 @@ function QuickItemTypeForm({ companyId, onClose, onSaved, scenarioCode, scenario
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [hsQuery, companyId]);
+  }, [hsQuery, companyId, scenarioSaleType]);
 
   const pickHsCode = async (code) => {
     setHsCode(code);
