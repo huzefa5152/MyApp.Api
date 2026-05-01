@@ -156,6 +156,20 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     });
   };
 
+  // Bulk-clear: drop the Item Type binding (and the inherited HS Code /
+  // UOM / Sale Type / FbrUOMId) on every challan-derived item row in
+  // one click. Description state is also cleared so the SmartItemAutocomplete
+  // falls back to the challan's original description — operator gets a
+  // clean slate without losing the challan context.
+  const clearAllItemTypes = () => {
+    setItemTypeIds({});
+    setItemHsCodes({});
+    setItemSaleTypes({});
+    setItemUoms({});
+    setItemFbrUomIds({});
+    setItemDescriptions({});
+  };
+
   // Last-billed rate per delivery item, keyed by deliveryItemId.
   // Populated whenever a challan gets ticked (whether via the Generate-Bill
   // shortcut on the Challans page OR by the operator selecting a challan in
@@ -535,15 +549,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
   const onItemTypeCreated = async (created) => {
     setShowAddItemType(false);
-    const list = await refreshItemTypes();
-    if (created?.id && pendingItemTypeRowId) {
-      const picked = list.find((t) => t.id === created.id) || created;
-      setItemTypeIds((p) => ({ ...p, [pendingItemTypeRowId]: picked.id }));
-      if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [pendingItemTypeRowId]: picked.hsCode }));
-      if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [pendingItemTypeRowId]: picked.saleType }));
-      if (picked.uom) setItemUoms((p) => ({ ...p, [pendingItemTypeRowId]: picked.uom }));
-      if (picked.fbrUOMId) setItemFbrUomIds((p) => ({ ...p, [pendingItemTypeRowId]: picked.fbrUOMId }));
-    }
+    await refreshItemTypes();
+    // The "+ New Item Type" button now lives once in the items header bar
+    // (not per-row), so we don't auto-stamp the new type onto a specific
+    // row. The operator picks it via the per-row dropdown OR the bulk-
+    // apply toolbar — explicit and undoable. created is unused here but
+    // kept on the signature for parity with onClientCreated.
     setPendingItemTypeRowId(null);
   };
 
@@ -850,9 +861,29 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           <label style={{ ...styles.label, margin: 0 }}>
                             Items ({allItems.length})
                           </label>
-                          <div style={styles.hintRow}>
-                            <span style={styles.hintPill}>Tip</span>
-                            Pick from <b>SAVED</b> (remembered defaults) or <b>FBR catalog</b> to auto-fill HS Code & UOM.
+                          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                            {/* '+ New Item Type' lives once here, above the
+                                grid (was per-row before). The new catalog
+                                row appears in every dropdown and in the
+                                bulk-apply toolbar — operator picks it
+                                explicitly. Hidden behind a permission hint
+                                when the user lacks itemtypes.manage.create. */}
+                            {canCreateItemType ? (
+                              <button
+                                type="button"
+                                style={styles.inlineAddBtn}
+                                onClick={() => setShowAddItemType(true)}
+                                title="Add a new item type to your catalog"
+                              >
+                                <MdAdd size={14} /> New Item Type
+                              </button>
+                            ) : (
+                              <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
+                            )}
+                            <div style={styles.hintRow}>
+                              <span style={styles.hintPill}>Tip</span>
+                              Pick from <b>SAVED</b> (remembered defaults) or <b>FBR catalog</b> to auto-fill HS Code & UOM.
+                            </div>
                           </div>
                         </div>
 
@@ -908,6 +939,20 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                               />
                             </div>
+                            {/* Clear all — drops the Item Type binding (+ HS
+                                / UOM / SaleType / Description) on every
+                                row. Disabled until at least one row carries
+                                an Item Type so the button never offers a
+                                no-op. */}
+                            <button
+                              type="button"
+                              style={styles.bulkClearBtn}
+                              onClick={clearAllItemTypes}
+                              disabled={!Object.values(itemTypeIds).some(Boolean)}
+                              title="Drop the Item Type binding from every row"
+                            >
+                              Clear all
+                            </button>
                           </div>
                         )}
 
@@ -936,53 +981,41 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                       {item.challanNumber}
                                     </td>
                                     <td style={styles.unifiedTd}>
-                                      <div style={{ display: "flex", gap: "0.25rem", alignItems: "center" }}>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                          {/* Picking an ItemType auto-fills HS Code, UOM, SaleType,
-                                              FbrUOMId on this row — identical behaviour to EditBillForm. */}
-                                          <SearchableItemTypeSelect
-                                            items={filteredItemTypes}
-                                            value={itemTypeIds[item.id] || ""}
-                                            onChange={(newId, picked) => {
-                                              setItemTypeIds((p) => ({ ...p, [item.id]: newId ? parseInt(newId) : null }));
-                                              if (picked) {
-                                                // Picking an ItemType binds these fields to the catalog row.
-                                                // Description switches to the item type's name and the
-                                                // input goes read-only — same UX as the no-challan form.
-                                                if (picked.name) setItemDescriptions((p) => ({ ...p, [item.id]: picked.name }));
-                                                if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [item.id]: picked.hsCode }));
-                                                if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [item.id]: picked.saleType }));
-                                                if (picked.uom) setItemUoms((p) => ({ ...p, [item.id]: picked.uom }));
-                                                if (picked.fbrUOMId) setItemFbrUomIds((p) => ({ ...p, [item.id]: picked.fbrUOMId }));
-                                              } else {
-                                                // Clearing the ItemType also clears the bound HS Code,
-                                                // Sale Type and UOM — they were inherited from the
-                                                // catalog row, so removing the link should remove the
-                                                // values too. Otherwise stale FBR fields stay on the
-                                                // line and the operator silently ships wrong data.
-                                                // Description is left as-is so the operator can keep
-                                                // editing or clear via SmartItemAutocomplete.
-                                                setItemHsCodes((p) => ({ ...p, [item.id]: "" }));
-                                                setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
-                                                setItemUoms((p) => ({ ...p, [item.id]: "" }));
-                                                setItemFbrUomIds((p) => ({ ...p, [item.id]: null }));
-                                              }
-                                            }}
-                                            placeholder="— optional —"
-                                            style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                                          />
-                                        </div>
-                                        {canCreateItemType && (
-                                          <button
-                                            type="button"
-                                            style={styles.tinyAddBtn}
-                                            title="Add a new item type to your catalog"
-                                            onClick={() => { setPendingItemTypeRowId(item.id); setShowAddItemType(true); }}
-                                          >
-                                            <MdAdd size={14} />
-                                          </button>
-                                        )}
-                                      </div>
+                                      {/* Picking an ItemType auto-fills HS Code, UOM, SaleType,
+                                          FbrUOMId on this row — identical behaviour to EditBillForm.
+                                          The '+ New Item Type' affordance lives once above the grid
+                                          (was per-row before — moved to declutter the table). */}
+                                      <SearchableItemTypeSelect
+                                        items={filteredItemTypes}
+                                        value={itemTypeIds[item.id] || ""}
+                                        onChange={(newId, picked) => {
+                                          setItemTypeIds((p) => ({ ...p, [item.id]: newId ? parseInt(newId) : null }));
+                                          if (picked) {
+                                            // Picking an ItemType binds these fields to the catalog row.
+                                            // Description switches to the item type's name and the
+                                            // input goes read-only — same UX as the no-challan form.
+                                            if (picked.name) setItemDescriptions((p) => ({ ...p, [item.id]: picked.name }));
+                                            if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [item.id]: picked.hsCode }));
+                                            if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [item.id]: picked.saleType }));
+                                            if (picked.uom) setItemUoms((p) => ({ ...p, [item.id]: picked.uom }));
+                                            if (picked.fbrUOMId) setItemFbrUomIds((p) => ({ ...p, [item.id]: picked.fbrUOMId }));
+                                          } else {
+                                            // Clearing the ItemType also clears the bound HS Code,
+                                            // Sale Type and UOM — they were inherited from the
+                                            // catalog row, so removing the link should remove the
+                                            // values too. Otherwise stale FBR fields stay on the
+                                            // line and the operator silently ships wrong data.
+                                            // Description is left as-is so the operator can keep
+                                            // editing or clear via SmartItemAutocomplete.
+                                            setItemHsCodes((p) => ({ ...p, [item.id]: "" }));
+                                            setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
+                                            setItemUoms((p) => ({ ...p, [item.id]: "" }));
+                                            setItemFbrUomIds((p) => ({ ...p, [item.id]: null }));
+                                          }
+                                        }}
+                                        placeholder="— optional —"
+                                        style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                                      />
                                     </td>
                                     <td style={styles.unifiedTd}>
                                       {/* Description is locked to the picked Item Type's name when
@@ -1255,4 +1288,5 @@ const styles = {
   inlineRow: { display: "flex", gap: "0.5rem", alignItems: "stretch", flexWrap: "wrap" },
   inlineAddBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.45rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
   tinyAddBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.25rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, cursor: "pointer", flexShrink: 0 },
+  bulkClearBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
 };

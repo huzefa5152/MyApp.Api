@@ -266,6 +266,24 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     }));
   };
 
+  // Bulk-clear: drop the Item Type binding (and the inherited HS Code /
+  // UOM / Sale Type / FbrUOMId) on every row. Used when the operator
+  // wants to start over after a wrong bulk-apply pick. Description goes
+  // back to "(pick an item type)" since the standalone form has no
+  // challan-derived fallback. Quantity / Unit Price / MRP / SRO refs
+  // are preserved — those are line-level inputs, not catalog-derived.
+  const clearAllItemTypes = () => {
+    setRows((prev) => prev.map((r) => ({
+      ...r,
+      itemTypeId: "",
+      itemTypeName: "",
+      hsCode: "",
+      uom: "",
+      fbrUOMId: null,
+      saleType: "",
+    })));
+  };
+
   // Item types compatible with the chosen scenario. When no scenario is
   // chosen, every catalog row is visible. When a scenario is locked in,
   // only items whose stored saleType matches the scenario's saleType
@@ -380,10 +398,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
   const onItemTypeSaved = async (created) => {
     setShowAddItemType(false);
-    const list = await refreshItemTypes();
-    if (created?.id && pendingItemTypeRow) {
-      handleItemTypePick(pendingItemTypeRow, list.find((t) => t.id === created.id) || created);
-    }
+    await refreshItemTypes();
+    // The "+ New Item Type" button now lives once in the items header bar
+    // (not per-row), so we don't auto-stamp the new type onto a specific
+    // row. The operator picks it via the per-row dropdown OR the bulk-
+    // apply toolbar — explicit and undoable.
     setPendingItemTypeRow(null);
   };
 
@@ -574,15 +593,39 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     <div>
                       <div style={styles.itemsHeaderBar}>
                         <label style={{ ...styles.label, margin: 0 }}>Items ({rows.length})</label>
-                        <button type="button" style={styles.addRowBtn} onClick={addRow}>
-                          <MdAdd size={14} /> Add Row
-                        </button>
+                        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                          {/* '+ New Item Type' lives once here, above the
+                              grid (was per-row before). The operator
+                              creates the catalog row, then picks it via
+                              the per-row dropdown or the bulk-apply
+                              toolbar below. Hidden behind a permission
+                              hint when the user lacks itemtypes.manage.create. */}
+                          {canCreateItemType ? (
+                            <button
+                              type="button"
+                              style={styles.inlineAddBtn}
+                              onClick={() => setShowAddItemType(true)}
+                              title="Add a new item type to your catalog"
+                            >
+                              <MdAdd size={14} /> New Item Type
+                            </button>
+                          ) : (
+                            <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
+                          )}
+                          <button type="button" style={styles.addRowBtn} onClick={addRow}>
+                            <MdAdd size={14} /> Add Row
+                          </button>
+                        </div>
                       </div>
 
                       {/* Bulk-apply toolbar — single dropdown stamps the
                           same catalog row across every line (or only the
-                          empty ones). Only shown once there are 2+ rows
-                          since it has no value at row count = 1. */}
+                          empty ones). 'Clear all' wipes the Item Type
+                          binding from every row in one click; useful when
+                          the operator picked the wrong category in bulk
+                          and wants to start over. Only shown once there
+                          are 2+ rows since both actions have no value at
+                          row count = 1. */}
                       {rows.length > 1 && (
                         <div style={styles.bulkApplyBar}>
                           <span style={{ fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 500 }}>
@@ -607,6 +650,15 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                             />
                           </div>
+                          <button
+                            type="button"
+                            style={styles.bulkClearBtn}
+                            onClick={clearAllItemTypes}
+                            disabled={!rows.some((r) => r.itemTypeId)}
+                            title="Drop the Item Type binding from every row"
+                          >
+                            <MdDelete size={14} /> Clear all
+                          </button>
                         </div>
                       )}
 
@@ -635,27 +687,13 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               return (
                                 <tr key={r.localId} style={styles.unifiedRow}>
                                   <td style={styles.unifiedTd}>
-                                    <div style={{ display: "flex", gap: "0.25rem", alignItems: "center" }}>
-                                      <div style={{ flex: 1, minWidth: 0 }}>
-                                        <SearchableItemTypeSelect
-                                          items={filteredItemTypes}
-                                          value={r.itemTypeId}
-                                          onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
-                                          placeholder="Pick from your catalog…"
-                                          style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                        />
-                                      </div>
-                                      {canCreateItemType ? (
-                                        <button
-                                          type="button"
-                                          style={styles.tinyAddBtn}
-                                          title="Add a new item type to your catalog"
-                                          onClick={() => { setPendingItemTypeRow(r.localId); setShowAddItemType(true); }}
-                                        >
-                                          <MdAdd size={14} />
-                                        </button>
-                                      ) : null}
-                                    </div>
+                                    <SearchableItemTypeSelect
+                                      items={filteredItemTypes}
+                                      value={r.itemTypeId}
+                                      onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
+                                      placeholder="Pick from your catalog…"
+                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                    />
                                   </td>
                                   <td style={{ ...styles.unifiedTd, color: r.itemTypeName ? colors.textPrimary : colors.textSecondary, fontStyle: r.itemTypeName ? "normal" : "italic" }}>
                                     {r.itemTypeName || "(pick an item type)"}
@@ -776,11 +814,6 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       <p style={styles.fbrToggleHint}>
                         <b>*</b> required ·
                         <b> Description, UOM, HS Code, Sale Type</b> all auto-fill from the picked Item Type
-                        {!canCreateItemType && (
-                          <span style={{ marginLeft: 8 }}>
-                            · <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
-                          </span>
-                        )}
                         {showMRP && " · enter the per-unit MRP — the MRP × Qty total drives 3rd Schedule tax (backed out of MRP)"}
                         {showSRO && " · SRO Schedule + Item No referenced for reduced-rate items"}
                       </p>
@@ -913,4 +946,5 @@ const styles = {
 
   // Bulk-apply Item Type toolbar — surfaces above the items table when 2+ rows exist
   bulkApplyBar: { display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", padding: "0.55rem 0.85rem", marginBottom: "0.5rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff" },
+  bulkClearBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
 };
