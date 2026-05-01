@@ -27,6 +27,11 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
+  // triggerRect drives the portaled dropdown's viewport position. Stored
+  // in state so changes (scroll, resize, layout shift) trigger a
+  // re-render with the new coordinates — without this the dropdown would
+  // float in place while the input scrolls away under it.
+  const [triggerRect, setTriggerRect] = useState(null);
   const wrapperRef = useRef(null);
   const debounceRef = useRef(null);
 
@@ -48,6 +53,26 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
       clearTimeout(debounceRef.current);
     };
   }, []);
+
+  // Keep triggerRect in sync with the input's actual position on screen.
+  // We listen on the capture phase so any ancestor's scroll fires the
+  // handler — the dashboard's content area is scrollable independently
+  // of <body>, and a popup modal has its own scrollable body too. resize
+  // covers viewport changes (mobile rotation, devtools open).
+  useEffect(() => {
+    if (!showDropdown) return;
+    const update = () => {
+      const el = wrapperRef.current;
+      if (el) setTriggerRect(el.getBoundingClientRect());
+    };
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [showDropdown]);
 
   // Fetches HS codes. Empty query → backend returns the first 100 (browse mode)
   // so the user can scroll the catalog without knowing keywords up front.
@@ -123,7 +148,7 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
       />
       {showDropdown && (
         createPortal(
-          <ul style={styles.dropdown(wrapperRef.current)}>
+          <ul style={styles.dropdown(triggerRect)}>
             {loading && <li style={styles.loading}>Searching FBR catalog…</li>}
             {!loading && suggestions.length === 0 && query && (
               <li style={styles.empty}>No HS codes match "{query}". Try a different keyword.</li>
@@ -151,13 +176,17 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
 }
 
 const styles = {
-  dropdown: (el) => {
-    const rect = el?.getBoundingClientRect() ?? { bottom: 0, left: 0, width: 300 };
+  dropdown: (rect) => {
+    // position:fixed + viewport coords. The triggerRect state is updated
+    // on every scroll (capture phase) so the dropdown re-renders glued
+    // to the input as it moves on screen. position:absolute with +scrollY
+    // would drift on inner-container scroll because we never re-render.
+    const r = rect ?? { bottom: 0, left: 0, width: 300 };
     return {
-      position: "absolute",
-      top: rect.bottom + window.scrollY,
-      left: rect.left + window.scrollX,
-      width: Math.max(rect.width, 400),
+      position: "fixed",
+      top: r.bottom,
+      left: r.left,
+      width: Math.max(r.width, 400),
       maxHeight: 340,
       overflowY: "auto",
       backgroundColor: "#fff",
