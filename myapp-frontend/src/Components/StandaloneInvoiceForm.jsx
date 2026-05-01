@@ -113,6 +113,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [scenarioCode, setScenarioCode] = useState("");
   const [rows, setRows] = useState([blankRow()]);
 
+  // Bulk-apply mode for the "set Item Type on every row" toolbar — saves
+  // the operator from picking the same catalog row N times when every
+  // line on the bill is the same FBR category. Mirrors the InvoiceForm
+  // (with-challan) bulk apply.
+  const [bulkApplyMode, setBulkApplyMode] = useState("all");
+
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -164,6 +170,17 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     })),
     [scenarios],
   );
+
+  // Default to SN001 when applicable — most operators bill registered B2B
+  // at standard rate, so opening on SN001 saves a click. If SN001 isn't in
+  // the applicable list (e.g. company has a niche profile that excludes it),
+  // we fall through to the empty / "pick a scenario" state.
+  useEffect(() => {
+    if (!scenarioCode && enrichedScenarios.length > 0) {
+      const sn001 = enrichedScenarios.find((s) => s.code === "SN001");
+      if (sn001) setScenarioCode("SN001");
+    }
+  }, [enrichedScenarios, scenarioCode]);
 
   const chosenScenario = useMemo(
     () => enrichedScenarios.find((s) => s.code === scenarioCode) || null,
@@ -227,6 +244,38 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       saleType: picked.saleType || "",
     });
   };
+
+  // Bulk-apply: stamp one Item Type onto every row (or only empty rows).
+  // Mirrors InvoiceForm's applyItemTypeToAll — saves repetitive picking
+  // when every line on the bill is the same FBR category.
+  const applyItemTypeToRows = (picked, mode) => {
+    if (!picked) return;
+    setRows((prev) => prev.map((r) => {
+      if (mode === "empty" && r.itemTypeId) return r;
+      return {
+        ...r,
+        itemTypeId: picked.id,
+        itemTypeName: picked.name || "",
+        hsCode: picked.hsCode || "",
+        uom: picked.uom || "",
+        fbrUOMId: picked.fbrUOMId || null,
+        saleType: picked.saleType || "",
+      };
+    }));
+  };
+
+  // Item types compatible with the chosen scenario. When no scenario is
+  // chosen, every catalog row is visible. When a scenario is locked in,
+  // only items whose stored saleType matches the scenario's saleType
+  // surface — same rule the InvoiceForm uses, prevents 0052 mixed-bucket
+  // errors at FBR validation.
+  const filteredItemTypes = useMemo(() => {
+    if (!chosenScenario) return itemTypes;
+    const target = (chosenScenario.saleType || "").trim().toLowerCase();
+    return itemTypes.filter(
+      (t) => (t.saleType || "").trim().toLowerCase() === target,
+    );
+  }, [itemTypes, chosenScenario]);
 
   // Effective sale type for a row — locked to scenario when one's picked.
   const effectiveSaleType = (r) => (chosenScenario ? chosenScenario.saleType : r.saleType || "");
@@ -528,6 +577,37 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         </button>
                       </div>
 
+                      {/* Bulk-apply toolbar — single dropdown stamps the
+                          same catalog row across every line (or only the
+                          empty ones). Only shown once there are 2+ rows
+                          since it has no value at row count = 1. */}
+                      {rows.length > 1 && (
+                        <div style={styles.bulkApplyBar}>
+                          <span style={{ fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 500 }}>
+                            Apply same Item Type to:
+                          </span>
+                          <select
+                            value={bulkApplyMode}
+                            onChange={(e) => setBulkApplyMode(e.target.value)}
+                            style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", maxWidth: 180 }}
+                          >
+                            <option value="all">All {rows.length} rows</option>
+                            <option value="empty">Only empty rows</option>
+                          </select>
+                          <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
+                            <SearchableItemTypeSelect
+                              items={filteredItemTypes}
+                              value=""
+                              onChange={(_, picked) => applyItemTypeToRows(picked, bulkApplyMode)}
+                              placeholder={bulkApplyMode === "all"
+                                ? "— pick to apply to all —"
+                                : "— pick to fill empty rows —"}
+                              style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
                       <div style={styles.unifiedTableWrap}>
                         <table style={styles.unifiedTable}>
                           <thead>
@@ -556,7 +636,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     <div style={{ display: "flex", gap: "0.25rem", alignItems: "center" }}>
                                       <div style={{ flex: 1, minWidth: 0 }}>
                                         <SearchableItemTypeSelect
-                                          items={itemTypes}
+                                          items={filteredItemTypes}
                                           value={r.itemTypeId}
                                           onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
                                           placeholder="Pick from your catalog…"
@@ -1089,4 +1169,7 @@ const styles = {
   hsOption: { display: "flex", flexDirection: "column", alignItems: "flex-start", width: "100%", padding: "0.5rem 0.75rem", border: "none", borderBottom: `1px solid ${colors.cardBorder}`, backgroundColor: "#fff", textAlign: "left", cursor: "pointer", fontFamily: "inherit" },
   hsOptionCode: { fontWeight: 700, color: colors.blue, fontFamily: "monospace", fontSize: "0.85rem" },
   hsOptionDesc: { fontSize: "0.74rem", color: colors.textSecondary, marginTop: 2, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" },
+
+  // Bulk-apply Item Type toolbar — surfaces above the items table when 2+ rows exist
+  bulkApplyBar: { display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", padding: "0.55rem 0.85rem", marginBottom: "0.5rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff" },
 };

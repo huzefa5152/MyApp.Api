@@ -227,11 +227,25 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   }, [itemTypes, chosenScenario]);
 
   // When operator picks a scenario, snap the GST Rate to that scenario's
-  // canonical rate. Operator can still type over it but the default is
-  // always FBR-correct (e.g. 5% for SN005, 1% for SN020/SN025).
+  // canonical rate. Field is read-only while a scenario is locked — same
+  // behaviour as StandaloneInvoiceForm. Switch scenario to change rate.
   useEffect(() => {
     if (chosenScenario) setGstRate(chosenScenario.defaultRate);
   }, [chosenScenario]);
+
+  // Default to SN001 when applicable. Most operators bill registered
+  // B2B at standard rate; opening on SN001 saves a click. We only set
+  // it once after scenarios load AND when the form isn't already
+  // showing a different value (e.g. the prefillChallanId path may
+  // have its own implicit context later). If SN001 isn't applicable
+  // for this company's profile, fall through to the empty / "auto-
+  // detect" state.
+  useEffect(() => {
+    if (!scenarioCode && scenarios.length > 0) {
+      const sn001 = scenarios.find((s) => s.code === "SN001");
+      if (sn001) setScenarioCode("SN001");
+    }
+  }, [scenarios, scenarioCode]);
 
   // Filter challans for selected client, sorted by DC# descending
   const clientChallans = selectedClientId
@@ -495,8 +509,22 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
                       </div>
                       <div style={{ flex: 1, minWidth: 100 }}>
-                        <label style={styles.label}>GST Rate (%)</label>
-                        <input type="number" style={styles.input} value={gstRate} onChange={(e) => setGstRate(e.target.value)} min={0} max={100} step={0.5} />
+                        <label style={styles.label}>
+                          GST Rate (%){chosenScenario && <span style={styles.lockedTag}>scenario-locked</span>}
+                        </label>
+                        <input
+                          type="number"
+                          style={{
+                            ...styles.input,
+                            backgroundColor: chosenScenario ? "#eef5ff" : colors.inputBg,
+                            cursor: chosenScenario ? "not-allowed" : "text",
+                          }}
+                          value={gstRate}
+                          onChange={(e) => setGstRate(e.target.value)}
+                          readOnly={!!chosenScenario}
+                          title={chosenScenario ? `Locked by ${chosenScenario.code}. Switch scenario to change.` : ""}
+                          min={0} max={100} step={0.5}
+                        />
                       </div>
                       <div style={{ flex: 1, minWidth: 140 }}>
                         <label style={styles.label}>Payment Terms</label>
@@ -615,6 +643,21 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         </>
                       )}
                     </div>
+
+                    {/* Scenario-locked Sale Type banner — same affordance
+                        as StandaloneInvoiceForm so the operator can see at
+                        a glance which sale type every item line will end
+                        up with. Hidden when no scenario is picked
+                        (auto-detect mode). */}
+                    {chosenScenario && (
+                      <div style={styles.lockedSaleType}>
+                        <span style={styles.lockedSaleTypeIcon}>🔒</span>
+                        <span><b>Sale Type locked:</b> {chosenScenario.saleType}</span>
+                        <span style={styles.lockedSaleTypeHint}>
+                          (every item below uses this — required by {chosenScenario.code})
+                        </span>
+                      </div>
+                    )}
 
                     {/* Items - unified single-row table (same layout as Edit Bill) */}
                     {allItems.length > 0 && (
@@ -904,4 +947,10 @@ const styles = {
   unifiedTh: { padding: "0.5rem 0.45rem", textAlign: "left", fontSize: "0.7rem", fontWeight: 800, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
   unifiedRow: { backgroundColor: "#fff" },
   unifiedTd: { padding: "0.3rem 0.4rem", fontSize: "0.8rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
+
+  // Scenario-locked GST + Sale Type affordances (same look as StandaloneInvoiceForm).
+  lockedTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: "#e0f2f1", color: "#00695c", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase" },
+  lockedSaleType: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.85rem", marginBottom: "0.6rem", borderRadius: 8, backgroundColor: "#e0f2f1", border: "1px solid #80cbc4", color: "#00695c", fontSize: "0.82rem" },
+  lockedSaleTypeIcon: { fontSize: "0.85rem" },
+  lockedSaleTypeHint: { color: "#00695c", opacity: 0.8, fontSize: "0.75rem" },
 };
