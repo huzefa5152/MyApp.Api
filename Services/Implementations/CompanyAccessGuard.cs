@@ -69,38 +69,27 @@ namespace MyApp.Api.Services.Implementations
             if (_cache.TryGetValue<HashSet<int>>(cacheKey, out var cached) && cached is not null)
                 return cached;
 
-            // Rule: explicit grants OVERRIDE open companies.
+            // Fail-closed rule: a non-admin user sees ONLY the companies
+            // listed in UserCompanies. No rows = no access.
             //
-            //   • User has at least one UserCompanies row
-            //       → they see ONLY those companies, regardless of
-            //         IsTenantIsolated. Matches operator intent: "I
-            //         assigned them to Company A; they shouldn't also
-            //         see open Company B by accident."
+            // Existing users created before the Tenant Access UI shipped
+            // are seeded one row per open company by the one-time backfill
+            // in Program.cs (RBAC_USERCOMPANIES_BACKFILL_V1) so they don't
+            // go dark on the upgrade. New users (post-backfill) start with
+            // zero rows and see nothing until an operator explicitly
+            // assigns them via Configuration → Tenant Access.
             //
-            //   • User has zero UserCompanies rows
-            //       → legacy behaviour: every IsTenantIsolated=false
-            //         company is reachable. Lets existing operators who
-            //         haven't touched the new UI keep working.
-            //
-            //   • Seed admin → bypassed earlier; never lands here.
+            // The IsTenantIsolated flag on Company is now informational —
+            // it was meaningful under the previous "open mode falls
+            // through" semantics; under fail-closed it doesn't change
+            // access decisions. Kept in the schema to preserve operator
+            // intent and to drive the backfill (only OPEN companies are
+            // auto-granted to existing users).
             var explicitGrants = await _context.UserCompanies
                 .Where(uc => uc.UserId == userId)
                 .Select(uc => uc.CompanyId)
                 .ToListAsync();
-
-            HashSet<int> set;
-            if (explicitGrants.Count > 0)
-            {
-                set = new HashSet<int>(explicitGrants);
-            }
-            else
-            {
-                var open = await _context.Companies
-                    .Where(c => !c.IsTenantIsolated)
-                    .Select(c => c.Id)
-                    .ToListAsync();
-                set = new HashSet<int>(open);
-            }
+            var set = new HashSet<int>(explicitGrants);
 
             _cache.Set(cacheKey, set, new MemoryCacheEntryOptions
             {

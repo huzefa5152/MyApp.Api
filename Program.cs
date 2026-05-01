@@ -756,6 +756,46 @@ using (var scope = app.Services.CreateScope())
     var seedAdminUserId = builder.Configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
     await MyApp.Api.Data.RbacSeeder.SeedAsync(db, seedAdminUserId);
 
+    // ── One-time backfill: UserCompanies for existing non-admin users ──
+    //
+    // We just flipped to fail-closed semantics in CompanyAccessGuard:
+    // a non-admin user with zero UserCompanies rows now sees NOTHING.
+    // Without this backfill, every existing non-admin user would go dark
+    // on the next boot — anyone created before the Tenant Access UI
+    // shipped has zero rows.
+    //
+    // The fix: for every non-admin user with no rows yet, grant access
+    // to every IsTenantIsolated=false company at backfill time. That
+    // preserves their legacy access exactly. Isolated companies stay
+    // restricted (the operator clearly wanted that). After this runs,
+    // the rule is uniform: explicit rows = access; no rows = no access.
+    //
+    // Idempotent via the audit-log marker — runs once per database.
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'RBAC_USERCOMPANIES_BACKFILL_V1')
+        BEGIN
+            DECLARE @seedAdminId INT = " + seedAdminUserId + @";
+
+            INSERT INTO UserCompanies (UserId, CompanyId, AssignedAt, AssignedByUserId)
+            SELECT u.Id, c.Id, SYSUTCDATETIME(), @seedAdminId
+              FROM Users u
+              CROSS JOIN Companies c
+             WHERE u.Id <> @seedAdminId
+               AND c.IsTenantIsolated = 0
+               AND NOT EXISTS (SELECT 1 FROM UserCompanies x WHERE x.UserId = u.Id);
+
+            DECLARE @userCount INT = (SELECT COUNT(DISTINCT UserId) FROM UserCompanies);
+            DECLARE @rowCount  INT = (SELECT COUNT(*) FROM UserCompanies);
+
+            INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp])
+            VALUES ('Info', 'RBAC_USERCOMPANIES_BACKFILL_V1',
+                    CONCAT('Tenant access backfill: ', @userCount,
+                           ' user(s) granted access to ', @rowCount,
+                           ' (user, company) pairs. Fail-closed semantics now active.'),
+                    'STARTUP', '/seed/usercompanies/backfill', 200, SYSUTCDATETIME());
+        END
+    ");
+
     // ── One-time perm grant: tenantaccess.manage.* → Administrator role ──
     // The new keys are inserted by RbacSeeder (it walks PermissionCatalog),
     // but RolePermissions is empty for them by default. Grant them to the
