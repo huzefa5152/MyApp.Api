@@ -138,9 +138,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         if (picked.saleType) newSt[id] = picked.saleType;
         if (picked.uom) newUom[id] = picked.uom;
         if (picked.fbrUOMId) newFbrUom[id] = picked.fbrUOMId;
-        // Don't overwrite a description the operator already typed.
-        if (picked.name && !itemDescriptions[id]?.trim() && !item.description?.trim())
-          newDesc[id] = picked.name;
+        // Description ALWAYS becomes the item type's name now — the
+        // description input is read-only when an item type is set, so
+        // there's no preserved free-text edit to step on. Clearing the
+        // item type later will unlock the description for editing.
+        if (picked.name) newDesc[id] = picked.name;
       }
       // Apply the keyed updates outside this updater so each set runs.
       setTimeout(() => {
@@ -443,7 +445,13 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           uom: itemUoms[item.id]?.trim() || null,
           fbrUOMId: itemFbrUomIds[item.id] || null,
           hsCode: itemHsCodes[item.id]?.trim() || null,
-          saleType: itemSaleTypes[item.id]?.trim() || null,
+          // Sale Type: when a scenario is locked in, EVERY line ships the
+          // scenario's saleType regardless of any per-row override. Mixed-
+          // saletype bills get rejected by FBR with [0052]. The per-row
+          // select is only consulted in auto-detect (no scenario) mode.
+          saleType: chosenScenario
+            ? chosenScenario.saleType
+            : (itemSaleTypes[item.id]?.trim() || null),
         })),
         poDateUpdates,
       });
@@ -455,7 +463,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       const rememberPromises = allItems
         .filter((item) => {
           const hs = itemHsCodes[item.id]?.trim();
-          const st = itemSaleTypes[item.id]?.trim();
+          const st = chosenScenario ? chosenScenario.saleType : itemSaleTypes[item.id]?.trim();
           const uom = itemUoms[item.id]?.trim();
           const fbrUom = itemFbrUomIds[item.id];
           return hs || st || uom || fbrUom;
@@ -466,7 +474,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           return saveItemFbrDefaults({
             name,
             hsCode: itemHsCodes[item.id]?.trim() || null,
-            saleType: itemSaleTypes[item.id]?.trim() || null,
+            // Same scenario-wins precedence as the submit payload above.
+            saleType: chosenScenario
+              ? chosenScenario.saleType
+              : (itemSaleTypes[item.id]?.trim() || null),
             uom: itemUoms[item.id]?.trim() || item.unit || null,
             fbrUOMId: itemFbrUomIds[item.id] || null,
           }).catch(() => {});
@@ -936,6 +947,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                               setItemTypeIds((p) => ({ ...p, [item.id]: newId ? parseInt(newId) : null }));
                                               if (picked) {
                                                 // Picking an ItemType binds these fields to the catalog row.
+                                                // Description switches to the item type's name and the
+                                                // input goes read-only — same UX as the no-challan form.
+                                                if (picked.name) setItemDescriptions((p) => ({ ...p, [item.id]: picked.name }));
                                                 if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [item.id]: picked.hsCode }));
                                                 if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [item.id]: picked.saleType }));
                                                 if (picked.uom) setItemUoms((p) => ({ ...p, [item.id]: picked.uom }));
@@ -946,6 +960,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                                 // catalog row, so removing the link should remove the
                                                 // values too. Otherwise stale FBR fields stay on the
                                                 // line and the operator silently ships wrong data.
+                                                // Description is left as-is so the operator can keep
+                                                // editing or clear via SmartItemAutocomplete.
                                                 setItemHsCodes((p) => ({ ...p, [item.id]: "" }));
                                                 setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
                                                 setItemUoms((p) => ({ ...p, [item.id]: "" }));
@@ -969,14 +985,36 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                       </div>
                                     </td>
                                     <td style={styles.unifiedTd}>
-                                      <SmartItemAutocomplete
-                                        companyId={companyId}
-                                        value={itemDescriptions[item.id] ?? item.description}
-                                        onChange={(v) => handleDescriptionChange(item.id, v)}
-                                        onPick={(picked) => handleItemPick(item.id, picked)}
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                        placeholder="Search or type item…"
-                                      />
+                                      {/* Description is locked to the picked Item Type's name when
+                                          one is set — same rule as the no-challan form. Clearing the
+                                          Item Type unlocks SmartItemAutocomplete so the operator can
+                                          search saved items, pick from the FBR catalog, or type
+                                          freely. The challan's original description still seeds the
+                                          field on first load via the `?? item.description` fallback. */}
+                                      {itemTypeIds[item.id] ? (
+                                        <input
+                                          type="text"
+                                          readOnly
+                                          value={itemDescriptions[item.id] ?? item.description ?? ""}
+                                          style={{
+                                            ...styles.input,
+                                            padding: "0.3rem 0.5rem",
+                                            fontSize: "0.8rem",
+                                            backgroundColor: "#eef5ff",
+                                            cursor: "not-allowed",
+                                          }}
+                                          title="Locked to the picked Item Type's name. Clear the Item Type to edit."
+                                        />
+                                      ) : (
+                                        <SmartItemAutocomplete
+                                          companyId={companyId}
+                                          value={itemDescriptions[item.id] ?? item.description}
+                                          onChange={(v) => handleDescriptionChange(item.id, v)}
+                                          onPick={(picked) => handleItemPick(item.id, picked)}
+                                          style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                          placeholder="Search or type item…"
+                                        />
+                                      )}
                                     </td>
                                     <td style={{ ...styles.unifiedTd, textAlign: "right", fontSize: "0.82rem", paddingRight: "0.5rem" }}>
                                       {/* Strip trailing zeros so 1.0000 → "1",
@@ -1036,30 +1074,54 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                       />
                                     </td>
                                     <td style={styles.unifiedTd}>
-                                      <select
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                                        value={itemSaleTypes[item.id] || ""}
-                                        onChange={(e) => setItemSaleTypes((p) => ({ ...p, [item.id]: e.target.value }))}
-                                      >
-                                        <option value="">— select —</option>
-                                        <option>Goods at standard rate (default)</option>
-                                        <option>Goods at Reduced Rate</option>
-                                        <option>Goods at zero-rate</option>
-                                        <option>Exempt goods</option>
-                                        <option>3rd Schedule Goods</option>
-                                        <option>Services</option>
-                                        <option>Services (FED in ST Mode)</option>
-                                        <option>Goods (FED in ST Mode)</option>
-                                        <option>Steel Melting and re-rolling</option>
-                                        <option>Toll Manufacturing</option>
-                                        <option>Mobile Phones</option>
-                                        <option>Petroleum Products</option>
-                                        <option>Electric Vehicle</option>
-                                        <option>Cement /Concrete Block</option>
-                                        <option>Processing/Conversion of Goods</option>
-                                        <option>Cotton Ginners</option>
-                                        <option>Non-Adjustable Supplies</option>
-                                      </select>
+                                      {/* Scenario-locked Sale Type — every line on the bill must use
+                                          the scenario's saleType (FBR rejects mixed-saletype bills
+                                          with [0052]). When a scenario is picked we render this as a
+                                          read-only display showing the locked value; when no scenario
+                                          is picked (auto-detect mode) we fall back to the per-row
+                                          select so legacy mixed-cart bills still work. The submit
+                                          payload uses chosenScenario.saleType when set, see
+                                          handleSubmit's items.map. */}
+                                      {chosenScenario ? (
+                                        <input
+                                          type="text"
+                                          readOnly
+                                          value={chosenScenario.saleType}
+                                          style={{
+                                            ...styles.input,
+                                            padding: "0.3rem 0.5rem",
+                                            fontSize: "0.78rem",
+                                            backgroundColor: "#eef5ff",
+                                            cursor: "not-allowed",
+                                          }}
+                                          title={`Locked by ${chosenScenario.code}`}
+                                        />
+                                      ) : (
+                                        <select
+                                          style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                                          value={itemSaleTypes[item.id] || ""}
+                                          onChange={(e) => setItemSaleTypes((p) => ({ ...p, [item.id]: e.target.value }))}
+                                        >
+                                          <option value="">— select —</option>
+                                          <option>Goods at standard rate (default)</option>
+                                          <option>Goods at Reduced Rate</option>
+                                          <option>Goods at zero-rate</option>
+                                          <option>Exempt goods</option>
+                                          <option>3rd Schedule Goods</option>
+                                          <option>Services</option>
+                                          <option>Services (FED in ST Mode)</option>
+                                          <option>Goods (FED in ST Mode)</option>
+                                          <option>Steel Melting and re-rolling</option>
+                                          <option>Toll Manufacturing</option>
+                                          <option>Mobile Phones</option>
+                                          <option>Petroleum Products</option>
+                                          <option>Electric Vehicle</option>
+                                          <option>Cement /Concrete Block</option>
+                                          <option>Processing/Conversion of Goods</option>
+                                          <option>Cotton Ginners</option>
+                                          <option>Non-Adjustable Supplies</option>
+                                        </select>
+                                      )}
                                     </td>
                                   </tr>
                                 );
