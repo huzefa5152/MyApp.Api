@@ -16,8 +16,12 @@ import { getFbrHSCodes } from "../api/fbrApi";
  * Props:
  *   excludeHsCodes — optional array of HS codes to hide from results.
  *     Used by Item Catalog so the user can't pick a code already saved.
+ *   saleType — optional sale-type filter. When set, the FBR catalog is
+ *     narrowed server-side to HS codes whose HS-prefix heuristic maps to
+ *     that sale type. Used by the inline New-Item-Type popups when the
+ *     parent bill has a scenario-locked sale type.
  */
-export default function HsCodeAutocomplete({ companyId, value, onChange, style, placeholder, excludeHsCodes }) {
+export default function HsCodeAutocomplete({ companyId, value, onChange, style, placeholder, excludeHsCodes, saleType }) {
   const [query, setQuery] = useState(value || "");
   const [suggestions, setSuggestions] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -54,7 +58,7 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
       const term = (q || "").trim();
       setLoading(true);
       try {
-        const { data } = await getFbrHSCodes(companyId, term);
+        const { data } = await getFbrHSCodes(companyId, term, saleType || null);
         // Hide HS codes already used elsewhere in the user's catalog
         const exclude = new Set((excludeHsCodes || []).map((c) => (c || "").trim()));
         const filtered = (data || []).filter((h) => !exclude.has((h.hS_CODE || "").trim()));
@@ -66,7 +70,7 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
         setLoading(false);
       }
     }, 200);
-  }, [companyId, excludeHsCodes]);
+  }, [companyId, excludeHsCodes, saleType]);
 
   const handleSelect = (code) => {
     setQuery(code);

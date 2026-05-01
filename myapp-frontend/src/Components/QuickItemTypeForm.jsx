@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { MdLock, MdInfo, MdInventory2 } from "react-icons/md";
 import { createItemType, getItemTypeFbrHints } from "../api/itemTypeApi";
-import { getFbrHSCodes } from "../api/fbrApi";
 import { formStyles, modalSizes } from "../theme";
+import HsCodeAutocomplete from "./HsCodeAutocomplete";
 
 // Inline mini-form for "+ New Item Type". Scenario-aware:
 //
@@ -29,37 +29,25 @@ export default function QuickItemTypeForm({ companyId, onClose, onSaved, scenari
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // HS code typeahead state
-  const [hsQuery, setHsQuery] = useState("");
-  const [hsSuggestions, setHsSuggestions] = useState([]);
-  const [hsLoading, setHsLoading] = useState(false);
-  const [hsOpen, setHsOpen] = useState(false);
+  // FBR hint state — fetched after the operator picks an HS code via
+  // HsCodeAutocomplete. Drives UOM auto-fill and the sale-type-mismatch
+  // heads-up below.
   const [fbrHint, setFbrHint] = useState(null);
   const [hintLoading, setHintLoading] = useState(false);
 
-  useEffect(() => {
-    const q = hsQuery.trim();
-    if (q.length < 2) { setHsSuggestions([]); return; }
-    const t = setTimeout(async () => {
-      setHsLoading(true);
-      try {
-        const { data } = await getFbrHSCodes(companyId, q, scenarioSaleType || null);
-        setHsSuggestions(Array.isArray(data) ? data.slice(0, 30) : []);
-      } catch {
-        setHsSuggestions([]);
-      } finally {
-        setHsLoading(false);
-      }
-    }, 250);
-    return () => clearTimeout(t);
-  }, [hsQuery, companyId, scenarioSaleType]);
-
-  const pickHsCode = async (code) => {
+  // HsCodeAutocomplete fires onChange with the FULL HS code only when the
+  // operator clicks a suggestion (manual typing fires onChange with whatever
+  // they typed). We treat any change with a 4+ char numeric-ish value as a
+  // "pick" and trigger the FBR-hints lookup. The hint endpoint is cheap and
+  // the UOM auto-fill is the whole point of this form.
+  const onHsChange = async (code) => {
     setHsCode(code);
-    setHsQuery(code);
-    setHsOpen(false);
-    setFbrHint(null);
+    if (!code || code.replace(/\D/g, "").length < 4) {
+      setFbrHint(null);
+      return;
+    }
     setHintLoading(true);
+    setFbrHint(null);
     try {
       const { data } = await getItemTypeFbrHints(companyId, code);
       setFbrHint(data);
@@ -129,40 +117,29 @@ export default function QuickItemTypeForm({ companyId, onClose, onSaved, scenari
               <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
             </div>
 
-            <div style={{ ...formStyles.formGroup, position: "relative" }}>
+            <div style={formStyles.formGroup}>
               <label style={styles.label}>
                 HS Code
                 {hintLoading && <span style={styles.lockedTag}>looking up UOM…</span>}
               </label>
-              <input
+              {/* Reuse the same HsCodeAutocomplete the Item Types page uses —
+                  click/focus opens the catalog browser without typing, type
+                  to search. saleType prop narrows the catalog server-side
+                  to codes whose HS-prefix heuristic maps to the scenario's
+                  sale type, so SN001 only sees standard-rate codes, SN015
+                  only sees mobile-phone codes, etc. */}
+              <HsCodeAutocomplete
+                companyId={companyId}
+                value={hsCode}
+                onChange={onHsChange}
+                saleType={scenarioSaleType || null}
                 style={{ ...styles.input, fontFamily: "monospace" }}
-                value={hsQuery}
-                onChange={(e) => { setHsQuery(e.target.value); setHsOpen(true); setHsCode(e.target.value); }}
-                onFocus={() => setHsOpen(true)}
-                onBlur={() => setTimeout(() => setHsOpen(false), 180)}
-                placeholder="Type to search FBR catalog (e.g. 'mobile' or '8517')"
-                autoComplete="off"
+                placeholder={
+                  scenarioSaleType
+                    ? `Click to browse — filtered to ${scenarioSaleType}`
+                    : "Click to browse FBR catalog, or type e.g. 'valve', 'mobile'"
+                }
               />
-              {hsOpen && (hsLoading || hsSuggestions.length > 0) && (
-                <div style={styles.hsDropdown}>
-                  {hsLoading && <div style={styles.hsLoading}>Searching FBR catalog…</div>}
-                  {!hsLoading && hsSuggestions.length === 0 && (
-                    <div style={styles.hsLoading}>No matches.</div>
-                  )}
-                  {!hsLoading && hsSuggestions.map((row) => (
-                    <button
-                      type="button"
-                      key={row.hS_CODE}
-                      style={styles.hsOption}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => pickHsCode(row.hS_CODE)}
-                    >
-                      <span style={styles.hsOptionCode}>{row.hS_CODE}</span>
-                      <span style={styles.hsOptionDesc}>{row.description}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
               {fbrHint?.notes?.length > 0 && (
                 <span style={{ fontSize: "0.72rem", color: colors.textSecondary, marginTop: "0.2rem", display: "block" }}>
                   {fbrHint.notes[0]}
@@ -250,9 +227,4 @@ const styles = {
   warnAlert: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.65rem 0.85rem", borderRadius: 8, backgroundColor: colors.warnLight, border: `1px solid ${colors.warn}30`, color: colors.warn, fontSize: "0.85rem" },
   lockedTag: { marginLeft: "0.3rem", padding: "0.05rem 0.3rem", borderRadius: 4, backgroundColor: "#e0f2f1", color: "#00695c", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 2 },
   scenarioPillSmall: { marginLeft: "0.5rem", padding: "0.1rem 0.4rem", borderRadius: 4, backgroundColor: "#e3f2fd", color: "#0d47a1", fontSize: "0.7rem", fontWeight: 800, fontFamily: "monospace" },
-  hsDropdown: { position: "absolute", top: "100%", left: 0, right: 0, marginTop: "0.2rem", maxHeight: 260, overflowY: "auto", backgroundColor: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.08)", zIndex: 1200 },
-  hsLoading: { padding: "0.6rem 0.85rem", fontSize: "0.82rem", color: colors.textSecondary },
-  hsOption: { display: "flex", flexDirection: "column", alignItems: "flex-start", width: "100%", padding: "0.5rem 0.75rem", border: "none", borderBottom: `1px solid ${colors.cardBorder}`, backgroundColor: "#fff", textAlign: "left", cursor: "pointer", fontFamily: "inherit" },
-  hsOptionCode: { fontWeight: 700, color: colors.blue, fontFamily: "monospace", fontSize: "0.85rem" },
-  hsOptionDesc: { fontSize: "0.74rem", color: colors.textSecondary, marginTop: 2, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" },
 };
