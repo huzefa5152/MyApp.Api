@@ -45,6 +45,7 @@ namespace MyApp.Api.Controllers
 
         [HttpPost("company/{companyId}/import-excel/preview")]
         [RequestSizeLimit(MaxFilesPerRequest * MaxFileBytes)]
+        [AuthorizeCompany]
         public async Task<IActionResult> Preview(int companyId, [FromForm] List<IFormFile> files)
         {
             if (files == null || files.Count == 0)
@@ -140,6 +141,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPost("company/{companyId}/import-excel/commit")]
+        [AuthorizeCompany]
         public async Task<IActionResult> Commit(int companyId, [FromBody] List<ChallanImportPreviewDto> rows)
         {
             if (rows == null || rows.Count == 0)

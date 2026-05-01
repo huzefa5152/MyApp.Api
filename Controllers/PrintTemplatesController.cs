@@ -11,6 +11,7 @@ namespace MyApp.Api.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
+    [AuthorizeCompany]
     public class PrintTemplatesController : ControllerBase
     {
         private readonly IPrintTemplateRepository _repo;

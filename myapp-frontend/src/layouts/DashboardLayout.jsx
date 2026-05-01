@@ -27,6 +27,7 @@ import {
   MdShoppingCart,
   MdInventory,
   MdInventory2,
+  MdLock,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { Can, usePermissions } from "../contexts/PermissionsContext";
@@ -78,12 +79,11 @@ export default function DashboardLayout() {
     "printtemplates.manage.update",
     "fbr.config.update",
     "fbr.sandbox.view",
-    "tenantaccess.manage.view",
   ];
   const canSeeConfiguration = hasAny(configKeys);
 
   // Auto-expand Configuration submenu if a child route is active
-  const isConfigActive = location.pathname.startsWith("/companies") || location.pathname.startsWith("/Clients") || location.pathname.startsWith("/Suppliers") || location.pathname.startsWith("/item-types") || location.pathname.startsWith("/po-formats") || location.pathname.startsWith("/templates") || location.pathname.startsWith("/fbr-settings") || location.pathname.startsWith("/fbr-sandbox") || location.pathname.startsWith("/tenant-access");
+  const isConfigActive = location.pathname.startsWith("/companies") || location.pathname.startsWith("/Clients") || location.pathname.startsWith("/Suppliers") || location.pathname.startsWith("/item-types") || location.pathname.startsWith("/po-formats") || location.pathname.startsWith("/templates") || location.pathname.startsWith("/fbr-settings") || location.pathname.startsWith("/fbr-sandbox");
   useEffect(() => {
     if (isConfigActive) setConfigOpen(true);
   }, [isConfigActive]);
@@ -276,17 +276,6 @@ export default function DashboardLayout() {
                       FBR Sandbox
                     </NavLink>
                   </Can>
-                  <Can permission="tenantaccess.manage.view">
-                    <NavLink
-                      to="/tenant-access"
-                      className={({ isActive }) =>
-                        "dl-submenu__item" + (isActive ? " active" : "")
-                      }
-                    >
-                      <MdAdminPanelSettings aria-hidden="true" style={{ fontSize: "0.95rem", flexShrink: 0 }} />
-                      Tenant Access
-                    </NavLink>
-                  </Can>
                 </div>
               </div>
             </>
@@ -406,6 +395,18 @@ export default function DashboardLayout() {
             >
               <MdAdminPanelSettings className="dl-nav__icon" aria-hidden="true" />
               <span className="dl-nav__label">Roles &amp; Permissions</span>
+            </NavLink>
+          </Can>
+
+          <Can permission="tenantaccess.manage.view">
+            <NavLink
+              to="/tenant-access"
+              className={({ isActive }) =>
+                "dl-nav__item" + (isActive ? " active" : "")
+              }
+            >
+              <MdLock className="dl-nav__icon" aria-hidden="true" />
+              <span className="dl-nav__label">Tenant Access</span>
             </NavLink>
           </Can>
 
@@ -552,7 +553,7 @@ function getBreadcrumb(pathname) {
     "/templates": "Print Templates",
     "/fbr-settings": "Configuration / FBR Settings",
     "/fbr-sandbox": "Configuration / FBR Sandbox",
-    "/tenant-access": "Configuration / Tenant Access",
+    "/tenant-access": "Administration / Tenant Access",
     "/audit-logs": "Audit Logs",
   };
   return map[pathname] ?? pathname.replace(/\//g, " / ").replace(/^\s\/\s/, "");

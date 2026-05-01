@@ -26,6 +26,7 @@ namespace MyApp.Api.Controllers
         /// <summary>List all demo bills for a company (FBR Sandbox tab table).</summary>
         [HttpGet("{companyId}")]
         [HasPermission("fbr.sandbox.view")]
+        [AuthorizeCompany]
         public async Task<IActionResult> List(int companyId)
             => Ok(await _service.ListAsync(companyId));
 
@@ -38,6 +39,7 @@ namespace MyApp.Api.Controllers
         /// </summary>
         [HttpPost("{companyId}/seed")]
         [HasPermission("fbr.sandbox.seed")]
+        [AuthorizeCompany]
         public async Task<IActionResult> Seed(int companyId)
         {
             try
@@ -54,18 +56,21 @@ namespace MyApp.Api.Controllers
         /// <summary>Validate every demo bill against PRAL (no commitment).</summary>
         [HttpPost("{companyId}/validate-all")]
         [HasPermission("fbr.sandbox.run")]
+        [AuthorizeCompany]
         public async Task<IActionResult> ValidateAll(int companyId)
             => Ok(await _service.ValidateAllAsync(companyId));
 
         /// <summary>Submit every demo bill to PRAL (commits IRNs).</summary>
         [HttpPost("{companyId}/submit-all")]
         [HasPermission("fbr.sandbox.run")]
+        [AuthorizeCompany]
         public async Task<IActionResult> SubmitAll(int companyId)
             => Ok(await _service.SubmitAllAsync(companyId));
 
         /// <summary>Delete a single demo bill + its associated demo challan.</summary>
         [HttpDelete("{companyId}/bill/{billId}")]
         [HasPermission("fbr.sandbox.delete")]
+        [AuthorizeCompany]
         public async Task<IActionResult> DeleteOne(int companyId, int billId)
         {
             var ok = await _service.DeleteOneAsync(companyId, billId);
@@ -75,6 +80,7 @@ namespace MyApp.Api.Controllers
         /// <summary>Wipe ALL demo bills + challans for a company.</summary>
         [HttpDelete("{companyId}")]
         [HasPermission("fbr.sandbox.delete")]
+        [AuthorizeCompany]
         public async Task<IActionResult> DeleteAll(int companyId)
             => Ok(new { deleted = await _service.DeleteAllAsync(companyId) });
     }
