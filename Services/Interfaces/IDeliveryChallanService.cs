@@ -43,9 +43,11 @@ namespace MyApp.Api.Services.Interfaces
         /// reuses the same ChallanNumber. Used when one delivery covers multiple
         /// POs — each PO needs its own bill but the challan number must stay
         /// consistent with the physical delivery document. Source must be in
-        /// "Pending" or "Imported" status. The clone is created in "Pending"
-        /// status with PoNumber/Items copied as-is so the operator can edit
-        /// them in the next step.
+        /// "Pending" or "Imported" status. The clone inherits the source's
+        /// Status and IsImported flag so historical (Imported) and native
+        /// (Pending) populations stay correctly tagged for reporting; PO and
+        /// items are copied as-is so the operator can edit them in the next
+        /// step.
         /// </summary>
         Task<DeliveryChallanDto?> DuplicateAsync(int sourceId);
     }

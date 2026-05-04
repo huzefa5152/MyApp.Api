@@ -177,8 +177,9 @@ namespace MyApp.Api.Controllers
         /// <summary>
         /// Clone a Pending/Imported challan as a new row reusing the same
         /// ChallanNumber. Used when one delivery covers multiple POs and each
-        /// PO needs its own bill. The clone is returned in "Pending" status
-        /// so the operator can edit PO/items in the next step before saving.
+        /// PO needs its own bill. The clone inherits the source's Status
+        /// (Imported stays Imported, Pending stays Pending) and is opened in
+        /// the edit form so the operator can change PO/items before saving.
         /// Permission is "create" (not "update") because this materialises a
         /// new challan row, not a mutation of the source.
         /// </summary>

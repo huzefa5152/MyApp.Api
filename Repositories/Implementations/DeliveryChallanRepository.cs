@@ -247,14 +247,20 @@ namespace MyApp.Api.Repositories.Implementations
                 IndentNo = source.IndentNo,
                 DeliveryDate = source.DeliveryDate,
                 Site = source.Site,
-                // Reset to "Pending" regardless of source status. Imported
-                // copies become Pending too — once duplicated they're a
-                // freshly-billable unit, not a historical record.
-                Status = "Pending",
+                // Inherit Status from source so the historical-vs-native
+                // distinction carries through. Duplicating an "Imported"
+                // back-fill must produce another "Imported" row (its number
+                // is still below StartingChallanNumber); duplicating a native
+                // "Pending" produces another "Pending". Reports group on
+                // these two populations and shouldn't be skewed by copies.
+                Status = source.Status,
                 // Independent billing — copies must NOT inherit the source's
                 // invoice. Each gets billed on its own.
                 InvoiceId = null,
-                IsImported = false,
+                // Inherit IsImported flag too — keeps ReadyStatusFor() (which
+                // gates Imported-vs-Pending after PO edits) returning the
+                // same answer for the copy as it would for the source.
+                IsImported = source.IsImported,
                 IsDemo = source.IsDemo,
                 DuplicatedFromId = rootId,
                 Items = source.Items.Select(i => new DeliveryItem
