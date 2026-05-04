@@ -165,6 +165,15 @@ namespace MyApp.Api.Data
                 .HasForeignKey(dc => dc.ClientId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // DeliveryChallan -> DeliveryChallan (self-FK for "Duplicate")
+            // Restrict delete so the parent stays in place if a copy is removed,
+            // and so a parent isn't accidentally erased while copies still exist.
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasOne(dc => dc.DuplicatedFrom)
+                .WithMany()
+                .HasForeignKey(dc => dc.DuplicatedFromId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             // Performance indexes on frequently-queried foreign keys
             modelBuilder.Entity<Invoice>()
                 .HasIndex(i => i.ClientId);
@@ -184,6 +193,20 @@ namespace MyApp.Api.Data
 
             modelBuilder.Entity<DeliveryChallan>()
                 .HasIndex(dc => dc.InvoiceId);
+
+            // Composite index on (CompanyId, ChallanNumber) — kept NON-UNIQUE
+            // intentionally so the "Duplicate Challan" feature can insert
+            // multiple rows sharing the same number for a single company.
+            // Uniqueness is no longer a hard invariant — the create/import
+            // flows enforce "unique on create" in the service layer; the
+            // duplicate flow bypasses that check by design.
+            //
+            // The old DB had a unique variant of this index (created out-of-
+            // band, not from any source migration). The
+            // 20260504*_DropLegacyUniqueChallanNumberIndex migration drops
+            // that legacy index before this non-unique one is created.
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasIndex(dc => new { dc.CompanyId, dc.ChallanNumber });
 
             modelBuilder.Entity<InvoiceItem>()
                 .HasIndex(ii => ii.InvoiceId);

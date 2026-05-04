@@ -36,6 +36,18 @@
         /// so downstream reports can distinguish hand-created vs. imported.
         /// </summary>
         public bool IsImported { get; set; }
+        /// <summary>
+        /// Non-null when this challan was created via the "Duplicate" action.
+        /// Frontend uses this to (a) render the DUPLICATE pill on the card
+        /// and (b) lock all fields except PO Number, PO Date, and Items in
+        /// the edit form.
+        /// </summary>
+        public int? DuplicatedFromId { get; set; }
+        /// <summary>
+        /// Mirror of the parent's ChallanNumber for convenient display
+        /// ("Duplicate of #1042") without the frontend having to re-fetch.
+        /// </summary>
+        public int? DuplicatedFromChallanNumber { get; set; }
         public List<DeliveryItemDto> Items { get; set; } = new();
         public List<string> Warnings { get; set; } = new();
     }

@@ -27,6 +27,13 @@ export const updateChallanPo = (challanId, payload) =>
 export const updateChallan = (challanId, payload) =>
   httpClient.put(`/deliverychallans/${challanId}`, payload);
 
+// Clone a Pending/Imported challan as a new row reusing the same ChallanNumber.
+// Returns the new challan with `duplicatedFromId` populated. Use this when one
+// delivery covers multiple POs and each PO needs its own bill — the operator
+// then edits the PO/items in the next step before saving.
+export const duplicateChallan = (challanId) =>
+  httpClient.post(`/deliverychallans/${challanId}/duplicate`);
+
 export const cancelChallan = (challanId) =>
   httpClient.put(`/deliverychallans/${challanId}/cancel`);
 

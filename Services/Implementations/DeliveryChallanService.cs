@@ -105,6 +105,8 @@ namespace MyApp.Api.Services.Implementations
                 InvoiceFbrStatus = dc.Invoice?.FbrStatus,
                 IsEditable = IsEditable(dc),
                 IsImported = dc.IsImported,
+                DuplicatedFromId = dc.DuplicatedFromId,
+                DuplicatedFromChallanNumber = dc.DuplicatedFrom?.ChallanNumber,
                 Items = dc.Items.Select(i => new DeliveryItemDto
                 {
                     Id = i.Id,
@@ -859,6 +861,34 @@ namespace MyApp.Api.Services.Implementations
                 result.Error = ex.Message;
             }
             return result;
+        }
+
+        public async Task<DeliveryChallanDto?> DuplicateAsync(int sourceId)
+        {
+            var source = await _repository.GetByIdAsync(sourceId);
+            if (source == null) return null;
+
+            // Only billable-but-not-yet-billed statuses can be duplicated.
+            // Cancelled / Invoiced / Setup Required / No PO are intentionally
+            // excluded — duplicating those would create rows in inconsistent
+            // states.
+            if (source.Status != "Pending" && source.Status != "Imported")
+                throw new InvalidOperationException(
+                    $"Only Pending or Imported challans can be duplicated (this one is '{source.Status}').");
+
+            // Demo (FBR sandbox) challans live in their own world — they
+            // don't belong on the regular Challans page so duplicating one
+            // makes no sense.
+            if (source.IsDemo)
+                throw new InvalidOperationException("Demo (sandbox) challans cannot be duplicated.");
+
+            var clone = await _repository.DuplicateAsync(source);
+
+            // Re-fetch through the standard read path so the DTO has the same
+            // shape as every other challan response (Items + Client + Company
+            // + DuplicatedFrom navigation populated, FBR warnings computed).
+            var refreshed = await _repository.GetByIdAsync(clone.Id);
+            return refreshed == null ? null : ToDto(refreshed);
         }
     }
 }

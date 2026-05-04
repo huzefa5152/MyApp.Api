@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn } from "react-icons/md";
+import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn, MdContentCopy } from "react-icons/md";
 import ChallanModal from "./ChallanModal";
 import { cardStyles, cardHover } from "../theme";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -57,12 +57,13 @@ function WarningTooltip({ warnings }) {
   );
 }
 
-export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, exportingId }) {
+export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, exportingId, duplicatingId }) {
   const { has } = usePermissions();
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
   const permPrint = has("challans.print.view");
   const permCreateBill = has("invoices.manage.create");
+  const permCreate = has("challans.manage.create");
   const [selectedChallan, setSelectedChallan] = useState(null);
 
   if (!challans || challans.length === 0) return null;
@@ -83,6 +84,13 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
           // Generate Bill shortcut — only for billable statuses
           // (Pending / Imported), matching the backend's CreateAsync guard.
           const canGenerateBill = permCreateBill && (c.status === "Pending" || c.status === "Imported");
+          // Duplicate is available on the same statuses as Generate Bill —
+          // a duplicate is essentially a fast new-row create that reuses the
+          // challan number for a different PO. Backend's DuplicateAsync
+          // enforces the same guard.
+          const canDuplicate = permCreate && (c.status === "Pending" || c.status === "Imported");
+          const isDuplicate = c.duplicatedFromId != null;
+          const isDuplicating = duplicatingId === c.id;
           return (
             <div
               key={c.id}
@@ -99,14 +107,44 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       <MdReceipt style={{ color: colors.blue, marginRight: 6, verticalAlign: "middle" }} />
                       Challan #{c.challanNumber}
                     </h5>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
                       {hasWarnings && <WarningTooltip warnings={c.warnings} />}
+                      {/* DUPLICATE pill — shown when this row was created via
+                          the Duplicate action, so operators can tell at a
+                          glance which rows share a challan number with a
+                          sibling. Title shows the parent's number. */}
+                      {isDuplicate && (
+                        <span
+                          style={{ ...styles.statusBadge, ...styles.duplicateBadge }}
+                          title={c.duplicatedFromChallanNumber
+                            ? `Duplicate of Challan #${c.duplicatedFromChallanNumber} — separate billable copy`
+                            : "Duplicate — separate billable copy of an earlier challan"}
+                        >
+                          <MdContentCopy size={11} style={{ marginRight: 3 }} />
+                          DUPLICATE
+                        </span>
+                      )}
                       <span style={{ ...styles.statusBadge, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
                         {c.status === "Invoiced" ? "Billed" : c.status}
                       </span>
                     </div>
                   </div>
 
+                  {isDuplicate && c.duplicatedFromChallanNumber && (
+                    <p style={{
+                      ...cardStyles.text,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      color: "#6a1b9a",
+                      fontWeight: 600,
+                      fontSize: "0.78rem",
+                      marginTop: "-0.15rem",
+                    }}>
+                      <MdContentCopy size={13} style={{ flexShrink: 0 }} />
+                      Duplicate of Challan #{c.duplicatedFromChallanNumber}
+                    </p>
+                  )}
                   <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
                     <MdPerson style={{ color: colors.teal, flexShrink: 0 }} />
                     <strong>Client:</strong> {c.clientName}
@@ -183,6 +221,25 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       title={c.status === "Invoiced" ? "Edit items (bill will auto-sync)" : "Edit items"}
                     >
                       <MdEdit size={14} /> Edit
+                    </button>
+                  )}
+                  {canDuplicate && onDuplicate && (
+                    <button
+                      style={{
+                        ...styles.actionBtn,
+                        ...styles.duplicateBtn,
+                        opacity: isDuplicating || duplicatingId ? 0.55 : 1,
+                        cursor: isDuplicating || duplicatingId ? "not-allowed" : "pointer",
+                      }}
+                      // Disable the entire row's button while ANY duplicate is in
+                      // flight — prevents double-clicks AND prevents starting a
+                      // second duplicate before the first one finishes.
+                      disabled={!!duplicatingId}
+                      onClick={() => onDuplicate(c)}
+                      title="Create a new billable challan with the same number for a different PO"
+                    >
+                      {isDuplicating ? <span className="btn-spinner" /> : <MdContentCopy size={14} />}
+                      {isDuplicating ? "Duplicating…" : "Duplicate"}
                     </button>
                   )}
                   {canGenerateBill && (
@@ -286,4 +343,12 @@ const styles = {
   cancelBtn: { backgroundColor: "#fce4ec", color: "#c62828" },
   deleteBtn: { backgroundColor: "#ffebee", color: "#b71c1c" },
   generateBillBtn: { backgroundColor: "#e0f2f1", color: "#00695c" },
+  // Purple matches the "Duplicate of #N" subtitle and the DUPLICATE pill
+  // so all three signals form one visual cue across the card.
+  duplicateBtn: { backgroundColor: "#ede7f6", color: "#4527a0" },
+  duplicateBadge: {
+    backgroundColor: "#ede7f6",
+    color: "#4527a0",
+    border: "1px solid #4527a040",
+  },
 };

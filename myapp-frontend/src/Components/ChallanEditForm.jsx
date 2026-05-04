@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { MdAdd, MdDelete, MdInfo } from "react-icons/md";
+import { MdAdd, MdDelete, MdInfo, MdContentCopy } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import QuantityInput from "./QuantityInput";
@@ -42,6 +42,14 @@ const colors = {
  *    Invoiced  → stays Invoiced (status preserved — bill syncs separately)
  */
 export default function ChallanEditForm({ challan, onClose, onSaved }) {
+  // ── Duplicate mode ─────────────────────────────────────────────────────
+  // When this challan is itself a duplicate (cloned from another via the
+  // Duplicate action), only PO Number, PO Date, and Items may be edited.
+  // Client / Site / Delivery Date / Indent are inherited from the source
+  // and locked so the original physical-delivery context stays consistent
+  // across all copies of this challan number.
+  const isDuplicate = challan.duplicatedFromId != null;
+
   // ── Header fields ──
   const [clientId, setClientId] = useState(challan.clientId || "");
   const [site, setSite] = useState(challan.site || "");
@@ -207,12 +215,30 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     <div style={formStyles.backdrop}>
       <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
-          <h5 style={formStyles.title}>Edit Challan #{challan.challanNumber}</h5>
+          <h5 style={formStyles.title}>
+            {isDuplicate ? "Edit Duplicate Challan" : "Edit Challan"} #{challan.challanNumber}
+          </h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
             {error && <div style={styles.errorAlert}>{error}</div>}
+
+            {/* Duplicate-mode banner — explains why so many fields are
+                read-only and what the operator IS allowed to change. */}
+            {isDuplicate && (
+              <div style={styles.duplicateBanner}>
+                <MdContentCopy size={16} />
+                <span>
+                  This is a <strong>duplicate</strong>
+                  {challan.duplicatedFromChallanNumber
+                    ? <> of <strong>Challan #{challan.duplicatedFromChallanNumber}</strong></>
+                    : null}
+                  . Only <strong>PO Number</strong>, <strong>PO Date</strong>, and <strong>Items</strong> can be changed —
+                  Client, Site, Delivery Date, and Indent No are inherited from the original.
+                </span>
+              </div>
+            )}
 
             {/* Status preview banner — shows what the Save click will do to
                 the challan's status. Especially useful when clearing the PO. */}
@@ -228,12 +254,16 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
             {/* ── Header row: Client / Site / Delivery Date ── */}
             <div style={styles.rowGroup}>
               <div style={{ flex: 2, minWidth: 220 }}>
-                <label style={styles.label}>Client *</label>
+                <label style={styles.label}>
+                  Client *
+                  {isDuplicate && <span style={styles.lockedHint}> (locked — inherited)</span>}
+                </label>
                 <select
-                  style={styles.input}
+                  style={isDuplicate ? { ...styles.input, ...styles.lockedInput } : styles.input}
                   value={clientId}
                   onChange={(e) => setClientId(e.target.value)}
                   required
+                  disabled={isDuplicate}
                 >
                   <option value="">Select a client</option>
                   {clients.map((c) => (
@@ -242,30 +272,43 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                 </select>
               </div>
               <div style={{ flex: 1.5, minWidth: 180 }}>
-                <label style={styles.label}>Site / Department</label>
+                <label style={styles.label}>
+                  Site / Department
+                  {isDuplicate && <span style={styles.lockedHint}> (locked)</span>}
+                </label>
                 {clientSites.length > 0 ? (
-                  <select style={styles.input} value={site} onChange={(e) => setSite(e.target.value)}>
+                  <select
+                    style={isDuplicate ? { ...styles.input, ...styles.lockedInput } : styles.input}
+                    value={site}
+                    onChange={(e) => setSite(e.target.value)}
+                    disabled={isDuplicate}
+                  >
                     <option value="">(none)</option>
                     {clientSites.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 ) : (
                   <input
                     type="text"
-                    style={styles.input}
+                    style={isDuplicate ? { ...styles.input, ...styles.lockedInput } : styles.input}
                     placeholder="Optional"
                     value={site}
                     onChange={(e) => setSite(e.target.value)}
+                    disabled={isDuplicate}
                   />
                 )}
               </div>
               <div style={{ flex: 1, minWidth: 150 }}>
-                <label style={styles.label}>Delivery Date *</label>
+                <label style={styles.label}>
+                  Delivery Date *
+                  {isDuplicate && <span style={styles.lockedHint}> (locked)</span>}
+                </label>
                 <input
                   type="date"
-                  style={styles.input}
+                  style={isDuplicate ? { ...styles.input, ...styles.lockedInput } : styles.input}
                   value={deliveryDate}
                   onChange={(e) => setDeliveryDate(e.target.value)}
                   required
+                  disabled={isDuplicate}
                 />
               </div>
             </div>
@@ -302,14 +345,17 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               <div style={{ flex: 1, minWidth: 180 }}>
                 <label style={styles.label}>
                   Indent No
-                  <span style={styles.labelHint}> (optional)</span>
+                  {isDuplicate
+                    ? <span style={styles.lockedHint}> (locked)</span>
+                    : <span style={styles.labelHint}> (optional)</span>}
                 </label>
                 <input
                   type="text"
-                  style={styles.input}
+                  style={isDuplicate ? { ...styles.input, ...styles.lockedInput } : styles.input}
                   placeholder="Leave blank if not used"
                   value={indentNo}
                   onChange={(e) => setIndentNo(e.target.value)}
+                  disabled={isDuplicate}
                 />
               </div>
             </div>
@@ -445,6 +491,30 @@ const styles = {
     border: "1px solid",
     fontSize: "0.82rem",
     marginBottom: "0.9rem",
+  },
+  duplicateBanner: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.65rem 0.85rem",
+    borderRadius: 10,
+    border: "1px solid #b39ddb",
+    backgroundColor: "#ede7f6",
+    color: "#4527a0",
+    fontSize: "0.82rem",
+    marginBottom: "0.75rem",
+    lineHeight: 1.45,
+  },
+  lockedInput: {
+    backgroundColor: "#eef0f4",
+    color: "#5f6d7e",
+    cursor: "not-allowed",
+  },
+  lockedHint: {
+    fontWeight: 400,
+    fontSize: "0.72rem",
+    color: "#4527a0",
+    marginLeft: 4,
   },
   rowGroup: {
     display: "flex",

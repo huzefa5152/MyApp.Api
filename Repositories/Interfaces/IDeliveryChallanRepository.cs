@@ -35,6 +35,17 @@ namespace MyApp.Api.Repositories.Interfaces
         Task<bool> ChallanNumberExistsAsync(int companyId, int challanNumber);
 
         /// <summary>
+        /// Clone an existing challan: same ChallanNumber, fresh Id, Items deep-
+        /// copied, Status reset to "Pending", InvoiceId cleared, IsImported
+        /// preserved, DuplicatedFromId set to the source's id (or to the
+        /// source's parent id if the source itself was already a duplicate, so
+        /// every copy points back to the same root for grouping). Does NOT
+        /// touch Company.CurrentChallanNumber — the live counter must stay
+        /// the highest assigned number.
+        /// </summary>
+        Task<DeliveryChallan> DuplicateAsync(DeliveryChallan source);
+
+        /// <summary>
         /// Batched version of <see cref="ChallanNumberExistsAsync"/>. Given a
         /// list of candidate challan numbers, returns just the subset that
         /// already exists on this company. Used by the preview endpoint to

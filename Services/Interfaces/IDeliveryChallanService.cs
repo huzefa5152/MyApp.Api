@@ -37,5 +37,16 @@ namespace MyApp.Api.Services.Interfaces
         /// already taken on this company. Marks the row as IsImported.
         /// </summary>
         Task<ChallanImportResultDto> ImportHistoricalAsync(int companyId, ChallanImportPreviewDto dto);
+
+        /// <summary>
+        /// Clone an existing challan as a new, independently-billable row that
+        /// reuses the same ChallanNumber. Used when one delivery covers multiple
+        /// POs — each PO needs its own bill but the challan number must stay
+        /// consistent with the physical delivery document. Source must be in
+        /// "Pending" or "Imported" status. The clone is created in "Pending"
+        /// status with PoNumber/Items copied as-is so the operator can edit
+        /// them in the next step.
+        /// </summary>
+        Task<DeliveryChallanDto?> DuplicateAsync(int sourceId);
     }
 }

@@ -25,6 +25,7 @@ namespace MyApp.Api.Repositories.Implementations
                                  .Include(dc => dc.Client)
                                  .Include(dc => dc.Company)
                                  .Include(dc => dc.Invoice)
+                                 .Include(dc => dc.DuplicatedFrom)
                                  .Where(dc => dc.CompanyId == companyId && !dc.IsDemo)
                                  .OrderBy(dc => dc.ChallanNumber)
                                  .ToListAsync();
@@ -40,6 +41,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(dc => dc.Client)
                 .Include(dc => dc.Company)
                 .Include(dc => dc.Invoice)
+                .Include(dc => dc.DuplicatedFrom)
                 .Where(dc => dc.CompanyId == companyId && !dc.IsDemo);
 
             if (!string.IsNullOrWhiteSpace(status))
@@ -84,6 +86,7 @@ namespace MyApp.Api.Repositories.Implementations
                                  .Include(dc => dc.Company)
                                  .Include(dc => dc.Invoice)
                                      .ThenInclude(inv => inv!.Items)
+                                 .Include(dc => dc.DuplicatedFrom)
                                  .FirstOrDefaultAsync(dc => dc.Id == id);
         }
 
@@ -225,6 +228,50 @@ namespace MyApp.Api.Repositories.Implementations
         {
             return await _context.DeliveryChallans
                 .AnyAsync(dc => dc.CompanyId == companyId && dc.ChallanNumber == challanNumber);
+        }
+
+        public async Task<DeliveryChallan> DuplicateAsync(DeliveryChallan source)
+        {
+            // Point every copy back to the original root, not to whichever
+            // specific copy was clicked. Means "Duplicate of #1042" stays
+            // truthful even when the second copy was made from the first copy.
+            int rootId = source.DuplicatedFromId ?? source.Id;
+
+            var clone = new DeliveryChallan
+            {
+                CompanyId = source.CompanyId,
+                ChallanNumber = source.ChallanNumber, // intentionally reused
+                ClientId = source.ClientId,
+                PoNumber = source.PoNumber,
+                PoDate = source.PoDate,
+                IndentNo = source.IndentNo,
+                DeliveryDate = source.DeliveryDate,
+                Site = source.Site,
+                // Reset to "Pending" regardless of source status. Imported
+                // copies become Pending too — once duplicated they're a
+                // freshly-billable unit, not a historical record.
+                Status = "Pending",
+                // Independent billing — copies must NOT inherit the source's
+                // invoice. Each gets billed on its own.
+                InvoiceId = null,
+                IsImported = false,
+                IsDemo = source.IsDemo,
+                DuplicatedFromId = rootId,
+                Items = source.Items.Select(i => new DeliveryItem
+                {
+                    ItemTypeId = i.ItemTypeId,
+                    Description = i.Description,
+                    Quantity = i.Quantity,
+                    Unit = i.Unit
+                }).ToList()
+            };
+
+            _context.DeliveryChallans.Add(clone);
+            await _context.SaveChangesAsync();
+            await _context.Entry(clone).Reference(dc => dc.Client).LoadAsync();
+            await _context.Entry(clone).Reference(dc => dc.Company).LoadAsync();
+            await _context.Entry(clone).Reference(dc => dc.DuplicatedFrom).LoadAsync();
+            return clone;
         }
 
         public async Task<HashSet<int>> GetExistingChallanNumbersAsync(int companyId, IEnumerable<int> candidateNumbers)
