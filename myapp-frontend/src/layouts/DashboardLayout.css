@@ -875,20 +875,111 @@ body.dl-body--locked {
     gap: 0.6rem;
     padding: 0.6rem;
   }
-  .audit-card {
-    background: #fff;
-    border: 1px solid #e8edf3;
-    border-radius: 10px;
-    padding: 0.85rem;
-    cursor: pointer;
-    transition: box-shadow 0.15s;
-  }
-  .audit-card:active {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  }
   .audit-detail-grid {
     grid-template-columns: 1fr !important;
   }
+}
+
+/* Audit card layout — defined outside the media query so the styles
+   apply whenever the card list is visible (which today is mobile only).
+   Box-sizing + width:100% + min-width:0 throughout to prevent the
+   horizontal overflow that pushed status codes off the right edge. */
+.audit-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 10px;
+  padding: 0.75rem 0.85rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  transition: box-shadow 0.15s;
+}
+.audit-card:active {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.audit-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.audit-card__level {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.audit-card__time {
+  font-size: 0.72rem;
+  color: #5f6d7e;
+  white-space: nowrap;
+}
+
+.audit-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  font-size: 0.78rem;
+}
+
+.audit-card__method {
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+.audit-card__status {
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+.audit-card__user {
+  font-size: 0.72rem;
+  color: #5f6d7e;
+}
+.audit-card__user::before {
+  content: "User: ";
+  color: #98a4b3;
+}
+
+/* Path: word-break: break-all is essential for long URLs that contain
+   no natural wrap points (e.g. "/api/printtemplates/companies/3/excel/Challan").
+   overflow-wrap alone won't break inside an unbroken token. */
+.audit-card__path {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  color: #1a2332;
+  background: #f5f8fc;
+  border: 1px solid #e8edf3;
+  border-radius: 6px;
+  padding: 0.35rem 0.55rem;
+  word-break: break-all;
+  line-height: 1.35;
+}
+
+/* Message: wrap freely on phones, clamped to 3 lines so a stack-like
+   message doesn't blow out the card height. */
+.audit-card__msg {
+  font-size: 0.8rem;
+  color: #1a2332;
+  line-height: 1.4;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* ---------- Item Rate History: table on desktop, cards on mobile ----------
