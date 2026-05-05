@@ -1533,6 +1533,330 @@ body.dl-body--locked {
 }
 .it-card__delete:hover { background: #ffe0e3; }
 
+/* ---------- PO Formats: table on desktop, cards on mobile ---------- */
+.pof-table { display: block; }
+.pof-cards { display: none; }
+
+@media (max-width: 767.98px) {
+  .pof-page {
+    padding: 1rem 0.85rem 1.25rem !important;
+  }
+  .pof-table { display: none; }
+  .pof-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+}
+
+.pof-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.pof-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.pof-card__title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.pof-card__name {
+  font-weight: 700;
+  color: #1a2332;
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+.pof-card__version {
+  font-size: 0.72rem;
+  color: #5f6d7e;
+  font-family: monospace;
+}
+
+.pof-card__status {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.pof-card__status--active {
+  background: #e8f5e9;
+  color: #28a745;
+}
+.pof-card__status--muted {
+  background: #f2f4f7;
+  color: #5f6d7e;
+}
+
+.pof-card__meta {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem 0.85rem;
+  align-items: center;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.pof-card__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pof-card__field-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5f6d7e;
+  font-weight: 600;
+}
+
+.pof-card__field-value {
+  font-size: 0.82rem;
+  color: #1a2332;
+  font-weight: 500;
+}
+
+.pof-card__chip {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #e3f2fd;
+  color: #0d47a1;
+  align-self: flex-start;
+  word-break: break-word;
+}
+.pof-card__chip--muted {
+  background: #f2f4f7;
+  color: #5f6d7e;
+}
+
+.pof-card__actions {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.pof-card__edit,
+.pof-card__delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 36px;
+}
+
+.pof-card__edit {
+  border-color: #90caf9;
+  background: #e3f2fd;
+  color: #0d47a1;
+}
+.pof-card__edit:hover { background: #bbdefb; }
+
+.pof-card__delete {
+  border-color: rgba(220, 53, 69, 0.3);
+  background: #fff0f1;
+  color: #c62828;
+}
+.pof-card__delete:hover { background: #ffe0e3; }
+
+/* ---------- FBR Sandbox: table on desktop, cards on mobile ---------- */
+.fbr-table { display: block; }
+.fbr-cards { display: none; }
+
+@media (max-width: 991.98px) {
+  .fbr-page {
+    padding: 1rem 0.85rem 1.25rem !important;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .fbr-table { display: none; }
+  .fbr-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+}
+
+.fbr-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.fbr-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.fbr-card__sn-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.fbr-card__sn {
+  font-weight: 700;
+  color: #0d47a1;
+  font-size: 0.95rem;
+  font-family: monospace;
+}
+
+.fbr-card__bill {
+  font-size: 0.75rem;
+  color: #5f6d7e;
+}
+
+.fbr-card__status {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.fbr-card__status--success { background: #e8f5e9; color: #2e7d32; }
+.fbr-card__status--warn    { background: #fff8e1; color: #f57c00; }
+.fbr-card__status--fail    { background: #fff0f1; color: #dc3545; }
+.fbr-card__status--muted   { background: #f2f4f7; color: #5f6d7e; }
+
+.fbr-card__desc {
+  font-size: 0.85rem;
+  color: #1a2332;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.fbr-card__meta {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem 0.85rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.fbr-card__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fbr-card__field-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5f6d7e;
+  font-weight: 600;
+}
+
+.fbr-card__field-value {
+  font-size: 0.85rem;
+  color: #1a2332;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.fbr-card__total {
+  font-weight: 700;
+  color: #0d47a1;
+  white-space: nowrap;
+}
+
+/* IRN: monospace pill, breaks anywhere because PRAL IRNs can be long
+   tokens with no natural wrap points. */
+.fbr-card__irn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+.fbr-card__irn-value {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  color: #2e7d32;
+  background: #f5f8fc;
+  border: 1px solid #e8edf3;
+  border-radius: 6px;
+  padding: 0.35rem 0.55rem;
+  word-break: break-all;
+  line-height: 1.35;
+}
+
+/* Full error message — visible (not truncated to 60 chars like the
+   table) so on mobile the operator can read what FBR rejected. Clamped
+   to 4 lines so a giant stack doesn't blow up the card. */
+.fbr-card__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  background: #fff0f1;
+  border: 1px solid rgba(220, 53, 69, 0.25);
+  border-radius: 8px;
+  color: #c62828;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  word-break: break-word;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  display: -webkit-box;
+}
+
+.fbr-card__delete {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  background: #fff0f1;
+  color: #c62828;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 36px;
+}
+.fbr-card__delete:hover { background: #ffe0e3; }
+
 /* ---------- Tenant Access: table on desktop, cards on mobile ---------- */
 .tenant-table { display: block; }
 .tenant-cards { display: none; }

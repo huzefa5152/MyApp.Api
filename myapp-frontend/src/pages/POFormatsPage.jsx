@@ -97,7 +97,7 @@ export default function POFormatsPage() {
   };
 
   return (
-    <div style={styles.page}>
+    <div className="pof-page" style={styles.page}>
       <div style={styles.header}>
         <div style={{ flex: 1 }}>
           <h1 style={styles.title}>PO Formats</h1>
@@ -135,60 +135,117 @@ export default function POFormatsPage() {
           )}
         </div>
       ) : (
-        <div style={styles.card}>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Name</th>
-                <th style={styles.th}>Client</th>
-                <th style={styles.th}>Status</th>
-                <th style={styles.th}>Last updated</th>
-                <th style={{ ...styles.th, textAlign: "right" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {formats.map((f) => (
-                <tr key={f.id}>
-                  <td style={styles.td}>
-                    <div style={{ fontWeight: 600, color: colors.textPrimary }}>{f.name}</div>
-                    <div style={{ fontSize: "0.75rem", color: colors.textSecondary }}>v{f.currentVersion}</div>
-                  </td>
-                  <td style={styles.td}>
-                    {/* Prefer the ClientGroup display name — that's the
-                        canonical "client" the format applies to (across
-                        every tenant). Fallback to per-tenant ClientName
-                        for legacy formats not yet group-bound. */}
-                    {f.clientGroupName ? (
-                      <span style={styles.chip}>{f.clientGroupName}</span>
-                    ) : f.clientName ? (
-                      <span style={styles.chip}>{f.clientName}</span>
-                    ) : (
-                      <span style={{ ...styles.chip, ...styles.chipMuted }}>Unassigned</span>
-                    )}
-                  </td>
-                  <td style={styles.td}>
-                    {f.isActive ? (
-                      <span style={{ ...styles.chip, ...styles.chipSuccess }}>Active</span>
-                    ) : (
-                      <span style={{ ...styles.chip, ...styles.chipMuted }}>Inactive</span>
-                    )}
-                  </td>
-                  <td style={{ ...styles.td, color: colors.textSecondary, fontSize: "0.85rem" }}>
-                    {new Date(f.updatedAt).toLocaleDateString()}
-                  </td>
-                  <td style={{ ...styles.td, textAlign: "right" }}>
-                    {canUpdate && (
-                      <button style={styles.iconBtn} onClick={() => handleEdit(f)} title="Edit"><MdEdit size={16} /></button>
-                    )}
-                    {canDelete && (
-                      <button style={{ ...styles.iconBtn, ...styles.iconBtnDanger }} onClick={() => handleDelete(f)} title="Delete"><MdDelete size={16} /></button>
-                    )}
-                  </td>
+        <>
+          {/* Desktop / tablet — table */}
+          <div className="pof-table" style={styles.card}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>Name</th>
+                  <th style={styles.th}>Client</th>
+                  <th style={styles.th}>Status</th>
+                  <th style={styles.th}>Last updated</th>
+                  <th style={{ ...styles.th, textAlign: "right" }}>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {formats.map((f) => (
+                  <tr key={f.id}>
+                    <td style={styles.td}>
+                      <div style={{ fontWeight: 600, color: colors.textPrimary }}>{f.name}</div>
+                      <div style={{ fontSize: "0.75rem", color: colors.textSecondary }}>v{f.currentVersion}</div>
+                    </td>
+                    <td style={styles.td}>
+                      {/* Prefer the ClientGroup display name — that's the
+                          canonical "client" the format applies to (across
+                          every tenant). Fallback to per-tenant ClientName
+                          for legacy formats not yet group-bound. */}
+                      {f.clientGroupName ? (
+                        <span style={styles.chip}>{f.clientGroupName}</span>
+                      ) : f.clientName ? (
+                        <span style={styles.chip}>{f.clientName}</span>
+                      ) : (
+                        <span style={{ ...styles.chip, ...styles.chipMuted }}>Unassigned</span>
+                      )}
+                    </td>
+                    <td style={styles.td}>
+                      {f.isActive ? (
+                        <span style={{ ...styles.chip, ...styles.chipSuccess }}>Active</span>
+                      ) : (
+                        <span style={{ ...styles.chip, ...styles.chipMuted }}>Inactive</span>
+                      )}
+                    </td>
+                    <td style={{ ...styles.td, color: colors.textSecondary, fontSize: "0.85rem" }}>
+                      {new Date(f.updatedAt).toLocaleDateString()}
+                    </td>
+                    <td style={{ ...styles.td, textAlign: "right" }}>
+                      {canUpdate && (
+                        <button style={styles.iconBtn} onClick={() => handleEdit(f)} title="Edit"><MdEdit size={16} /></button>
+                      )}
+                      {canDelete && (
+                        <button style={{ ...styles.iconBtn, ...styles.iconBtnDanger }} onClick={() => handleDelete(f)} title="Delete"><MdDelete size={16} /></button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile — stacked cards */}
+          <div className="pof-cards">
+            {formats.map((f) => {
+              const clientLabel = f.clientGroupName || f.clientName;
+              return (
+                <div key={f.id} className="pof-card">
+                  <div className="pof-card__top">
+                    <div className="pof-card__title">
+                      <div className="pof-card__name">{f.name}</div>
+                      <div className="pof-card__version">v{f.currentVersion}</div>
+                    </div>
+                    {f.isActive ? (
+                      <span className="pof-card__status pof-card__status--active">Active</span>
+                    ) : (
+                      <span className="pof-card__status pof-card__status--muted">Inactive</span>
+                    )}
+                  </div>
+
+                  <div className="pof-card__meta">
+                    <div className="pof-card__field">
+                      <span className="pof-card__field-label">Client</span>
+                      {clientLabel ? (
+                        <span className="pof-card__chip">{clientLabel}</span>
+                      ) : (
+                        <span className="pof-card__chip pof-card__chip--muted">Unassigned</span>
+                      )}
+                    </div>
+                    <div className="pof-card__field">
+                      <span className="pof-card__field-label">Updated</span>
+                      <span className="pof-card__field-value">
+                        {new Date(f.updatedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {(canUpdate || canDelete) && (
+                    <div className="pof-card__actions">
+                      {canUpdate && (
+                        <button className="pof-card__edit" onClick={() => handleEdit(f)}>
+                          <MdEdit size={14} /> Edit
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button className="pof-card__delete" onClick={() => handleDelete(f)}>
+                          <MdDelete size={14} /> Delete
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {showForm && (
