@@ -1,8 +1,23 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MyApp.Api.Controllers;
 
+/// <summary>
+/// Public catalog endpoints used by the marketing landing page. Returns
+/// image URLs from <c>wwwroot/images/products/</c> grouped by category —
+/// no DB access, no tenant data, no PII. Intentionally anonymous so the
+/// pre-login landing page can fetch product imagery without a token.
+///
+/// Inputs are tightly bounded:
+///   - Category names are regex-restricted to <c>[a-zA-Z0-9-]+</c>, so
+///     path-traversal via "../something" is rejected at the controller.
+///   - File listing is restricted to a fixed image-extension whitelist.
+/// If a future change adds non-public folders under <c>images/products/</c>
+/// (e.g. tenant-specific assets), revisit the AllowAnonymous gate.
+/// </summary>
 [ApiController]
+[AllowAnonymous]
 [Route("api/product-images")]
 public class ProductImagesController : ControllerBase
 {
