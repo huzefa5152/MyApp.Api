@@ -207,6 +207,34 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Clone a Pending/Imported challan as a new row reusing the same
+        /// ChallanNumber. Used when one delivery covers multiple POs and each
+        /// PO needs its own bill. The clone inherits the source's Status
+        /// (Imported stays Imported, Pending stays Pending) and is opened in
+        /// the edit form so the operator can change PO/items before saving.
+        /// Permission is "create" (not "update") because this materialises a
+        /// new challan row, not a mutation of the source.
+        /// </summary>
+        [HttpPost("{id}/duplicate")]
+        [HasPermission("challans.manage.create")]
+        public async Task<ActionResult<DeliveryChallanDto>> Duplicate(int id)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            try
+            {
+                var clone = await _service.DuplicateAsync(id);
+                if (clone == null) return NotFound();
+                return CreatedAtAction(nameof(GetById), new { id = clone.Id }, clone);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
         [HttpPut("{id}/cancel")]
         [HasPermission("challans.manage.update")]
         public async Task<IActionResult> Cancel(int id)

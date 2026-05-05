@@ -34,10 +34,17 @@
         /// </summary>
         public bool IsDemo { get; set; }
 
+        // Self-FK to the original challan when this row was created via
+        // the "Duplicate" action. Same ChallanNumber as the parent, but a
+        // separate billable unit with its own PO/items/InvoiceId. Null
+        // for natively-created and imported challans.
+        public int? DuplicatedFromId { get; set; }
+
         // Navigation
         public Company Company { get; set; } = null!;
         public Client Client { get; set; } = null!;
         public Invoice? Invoice { get; set; }
+        public DeliveryChallan? DuplicatedFrom { get; set; }
         public ICollection<DeliveryItem> Items { get; set; } = new List<DeliveryItem>();
     }
 }

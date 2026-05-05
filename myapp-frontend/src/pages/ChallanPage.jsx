@@ -10,6 +10,7 @@ import {
   createDeliveryChallan,
   cancelChallan,
   deleteChallan,
+  duplicateChallan,
   getChallanPrintData,
 } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
@@ -65,6 +66,12 @@ export default function ChallanPage() {
   const [dateTo, setDateTo] = useState("");
   const [hasExcelTpl, setHasExcelTpl] = useState(false);
   const [exportingId, setExportingId] = useState(null);
+  // Set to the challan id while a duplicate POST is in flight. Acts as
+  // the click-lock — the button on every row disables itself when this
+  // is non-null, so the operator can't fire two duplicate requests in
+  // parallel (which would otherwise create two clones with the same
+  // shared challan number).
+  const [duplicatingId, setDuplicatingId] = useState(null);
 
   const fetchClients = async (companyId) => {
     try {
@@ -191,6 +198,39 @@ export default function ChallanPage() {
   const handleEditSaved = () => {
     setEditChallan(null);
     fetchChallans(selectedCompany.id, page);
+  };
+
+  const handleDuplicate = async (challan) => {
+    // Defensive — the button is already disabled while duplicatingId is
+    // set, but a stale render could still slip through. Bail early.
+    if (duplicatingId) return;
+    const ok = await confirm({
+      title: "Duplicate Challan?",
+      message:
+        `Create a new billable copy of Challan #${challan.challanNumber}? ` +
+        `The new copy will reuse the same challan number so you can bill a different PO. ` +
+        `You'll only be able to change PO Number, PO Date, and Items on the copy.`,
+      variant: "info",
+      confirmText: "Duplicate",
+    });
+    if (!ok) return;
+    setDuplicatingId(challan.id);
+    try {
+      const { data: clone } = await duplicateChallan(challan.id);
+      // Refresh the list so the new card appears, then jump straight into
+      // the edit form so the operator can change PO/items in the next step
+      // — matches the spec: "Open the same edit configuration UI".
+      await fetchChallans(selectedCompany.id, page);
+      setEditChallan(clone);
+      notify(
+        `Challan #${clone.challanNumber} duplicated. Update the PO and items, then save.`,
+        "success"
+      );
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to duplicate challan.", "error");
+    } finally {
+      setDuplicatingId(null);
+    }
   };
 
   const handleExportPdf = async (challan) => {
@@ -350,7 +390,9 @@ export default function ChallanPage() {
             onExportPdf={handleExportPdf}
             onExportExcel={hasExcelTpl ? handleExportExcel : null}
             onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
+            onDuplicate={handleDuplicate}
             exportingId={exportingId}
+            duplicatingId={duplicatingId}
           />
           {/* Pagination */}
           {totalPages > 1 && (
