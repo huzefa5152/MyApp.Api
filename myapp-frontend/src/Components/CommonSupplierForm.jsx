@@ -3,6 +3,7 @@ import { MdClose, MdInfo, MdBusiness, MdCheckCircle, MdDelete } from "react-icon
 import { getCommonSupplierById, updateCommonSupplier, deleteCommonSupplier } from "../api/supplierApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { usePermissions } from "../contexts/PermissionsContext";
+import { useConfirm } from "./ConfirmDialog";
 import { formStyles, modalSizes } from "../theme";
 
 /**
@@ -16,6 +17,7 @@ import { formStyles, modalSizes } from "../theme";
  */
 export default function CommonSupplierForm({ groupId, onClose, onSaved }) {
   const { has } = usePermissions();
+  const confirm = useConfirm();
   const canDelete = has("suppliers.manage.delete");
 
   const [loading, setLoading] = useState(true);
@@ -112,14 +114,17 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved }) {
 
     // Strong confirmation — same shape as the per-tenant delete UX
     // multiplied by N tenants.
-    const confirmation = window.confirm(
-      `Delete "${detail.displayName}" from ${memberCount} compan${memberCount === 1 ? "y" : "ies"} ` +
-        `(${companyList})?\n\n` +
+    const confirmation = await confirm({
+      title: `Delete from all ${memberCount} compan${memberCount === 1 ? "y" : "ies"}?`,
+      message:
+        `"${detail.displayName}" will be removed from ${companyList}.\n\n` +
         (hasBills
-          ? "⚠️ At least one company has purchase bills against this supplier — the per-tenant SupplierService.DeleteAsync will refuse to delete those rows. Remove the bills first.\n\n"
+          ? "⚠ At least one company has purchase bills against this supplier — the per-tenant SupplierService.DeleteAsync will refuse to delete those rows. Remove the bills first.\n\n"
           : "") +
-        "This cannot be undone."
-    );
+        "This cannot be undone.",
+      variant: "danger",
+      confirmText: "Delete from all",
+    });
     if (!confirmation) return;
 
     setDeleting(true);

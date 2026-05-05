@@ -17,6 +17,7 @@ import { defaultBillTemplate, defaultTaxInvoiceTemplate } from "../utils/default
 import { exportToPdf } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { notify } from "../utils/notify";
+import { useConfirm } from "../Components/ConfirmDialog";
 
 const colors = {
   blue: "#0d47a1",
@@ -31,6 +32,7 @@ const colors = {
 export default function InvoicePage() {
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
+  const confirm = useConfirm();
   const canCreate = has("invoices.manage.create");
   // Separate permission for the "Create Bill (No Challan)" flow — gates
   // the standalone create button. A role can be granted only this without
@@ -271,7 +273,13 @@ export default function InvoicePage() {
       notify("Please validate with FBR first before submitting.", "error");
       return;
     }
-    if (!confirm(`Submit Bill #${inv.invoiceNumber} to FBR? This action cannot be undone.`)) return;
+    const ok = await confirm({
+      title: `Submit Bill #${inv.invoiceNumber} to FBR?`,
+      message: "Once submitted, the bill is locked from edits and assigned an IRN. This action cannot be undone.",
+      variant: "warning",
+      confirmText: "Submit to FBR",
+    });
+    if (!ok) return;
     setFbrLoading(inv.id + "-submit");
     try {
       const { data } = await submitInvoiceToFbr(inv.id);
@@ -294,7 +302,13 @@ export default function InvoicePage() {
       notify("Cannot delete an FBR-submitted bill.", "error");
       return;
     }
-    if (!confirm(`Delete Bill #${inv.invoiceNumber}? This will revert linked challans back to Pending.`)) return;
+    const ok = await confirm({
+      title: `Delete Bill #${inv.invoiceNumber}?`,
+      message: "Linked delivery challans will revert back to Pending and become billable again.",
+      variant: "danger",
+      confirmText: "Delete bill",
+    });
+    if (!ok) return;
     try {
       await deleteInvoice(inv.id);
       notify(`Bill #${inv.invoiceNumber} deleted.`, "success");
@@ -329,10 +343,17 @@ export default function InvoicePage() {
 
   const handleToggleFbrExcluded = async (inv) => {
     const nextExcluded = !inv.isFbrExcluded;
-    const confirmMsg = nextExcluded
-      ? `Exclude Bill #${inv.invoiceNumber} from FBR bulk actions?\n\nValidate All / Submit All will skip this bill. Per-bill Validate / Submit still work.`
-      : `Include Bill #${inv.invoiceNumber} back in FBR bulk actions?`;
-    if (!confirm(confirmMsg)) return;
+    const ok = await confirm({
+      title: nextExcluded
+        ? `Exclude Bill #${inv.invoiceNumber} from FBR bulk actions?`
+        : `Include Bill #${inv.invoiceNumber} back in FBR bulk actions?`,
+      message: nextExcluded
+        ? "Validate All / Submit All will skip this bill. Per-bill Validate / Submit still work."
+        : "This bill will be picked up by Validate All / Submit All again.",
+      variant: nextExcluded ? "warning" : "info",
+      confirmText: nextExcluded ? "Exclude" : "Include",
+    });
+    if (!ok) return;
     try {
       await setInvoiceFbrExcluded(inv.id, nextExcluded);
       notify(
@@ -440,7 +461,13 @@ export default function InvoicePage() {
       notify(`No locally-validated bills to submit${filterNote}. Click Validate All first.`, "error");
       setBulkFbrLoading(false); setFbrLoading(null); return;
     }
-    if (!confirm(`Submit ${toSubmit.length} validated bill${toSubmit.length !== 1 ? "s" : ""}${filterNote} to FBR? This cannot be undone.`)) {
+    const ok = await confirm({
+      title: `Submit ${toSubmit.length} bill${toSubmit.length !== 1 ? "s" : ""} to FBR?`,
+      message: `${toSubmit.length} locally-validated bill${toSubmit.length !== 1 ? "s" : ""}${filterNote} will be sent to FBR. Once submitted, each bill is locked from edits and assigned an IRN. This cannot be undone.`,
+      variant: "warning",
+      confirmText: "Submit all",
+    });
+    if (!ok) {
       setBulkFbrLoading(false); setFbrLoading(null); return;
     }
     const results = [];

@@ -3,6 +3,7 @@ import { MdClose, MdInfo, MdBusiness, MdCheckCircle, MdDelete } from "react-icon
 import { getCommonClientById, updateCommonClient, deleteCommonClient, deleteClient } from "../api/clientApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { usePermissions } from "../contexts/PermissionsContext";
+import { useConfirm } from "./ConfirmDialog";
 import { formStyles, modalSizes } from "../theme";
 
 /**
@@ -18,6 +19,7 @@ import { formStyles, modalSizes } from "../theme";
  */
 export default function CommonClientForm({ groupId, onClose, onSaved, onChange }) {
   const { has } = usePermissions();
+  const confirm = useConfirm();
   const canDelete = has("clients.manage.delete");
 
   const [loading, setLoading] = useState(true);
@@ -128,14 +130,17 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
     // shape as the per-company delete (which also cascades hard) but
     // multiplied by N tenants in one click, so the prompt has to
     // make the blast radius obvious.
-    const confirmation = window.confirm(
-      `Delete "${detail.displayName}" from ${memberCount} compan${memberCount === 1 ? "y" : "ies"} ` +
-        `(${companyList})?\n\n` +
+    const confirmation = await confirm({
+      title: `Delete from all ${memberCount} compan${memberCount === 1 ? "y" : "ies"}?`,
+      message:
+        `"${detail.displayName}" will be removed from ${companyList}.\n\n` +
         (hasInvoices
-          ? "⚠️ At least one company has invoices for this client — those invoices and their delivery challans will ALSO be deleted.\n\n"
+          ? "⚠ At least one company has invoices for this client — those invoices and their delivery challans will ALSO be deleted.\n\n"
           : "") +
-        "This cannot be undone."
-    );
+        "This cannot be undone.",
+      variant: "danger",
+      confirmText: "Delete from all",
+    });
     if (!confirmation) return;
 
     setDeleting(true);
@@ -182,16 +187,20 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
     if (!member || !detail || deletingMemberId || deleting || saving) return;
 
     const remainingCount = (detail.members?.length || 1) - 1;
-    const confirmation = window.confirm(
-      `Remove "${detail.displayName}" from ${member.companyName}?\n\n` +
+    const confirmation = await confirm({
+      title: `Remove from ${member.companyName}?`,
+      message:
+        `"${detail.displayName}" will be removed from ${member.companyName} only.\n\n` +
         (remainingCount > 0
-          ? `Other compan${remainingCount === 1 ? "y" : "ies"} (${remainingCount} remaining) will keep their copy of this client.\n\n`
-          : `This is the last company holding this client — the Common Client will become a regular per-company client only.\n\n`) +
+          ? `Other compan${remainingCount === 1 ? "y" : "ies"} (${remainingCount} remaining) keep their copy of this client.\n\n`
+          : "This is the last company holding this client — the Common Client will become a regular per-company client only.\n\n") +
         (member.hasInvoices
           ? `⚠ ${member.companyName} has invoices for this client. Those invoices and their delivery challans will ALSO be deleted.\n\n`
           : "") +
-        "This cannot be undone."
-    );
+        "This cannot be undone.",
+      variant: "danger",
+      confirmText: "Remove",
+    });
     if (!confirmation) return;
 
     setDeletingMemberId(member.clientId);

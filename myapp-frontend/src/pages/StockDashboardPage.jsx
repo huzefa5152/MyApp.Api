@@ -5,6 +5,7 @@ import { getItemTypes } from "../api/itemTypeApi";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
+import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 
 const colors = {
@@ -22,6 +23,7 @@ const colors = {
 export default function StockDashboardPage() {
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
+  const confirm = useConfirm();
   const canManageOpening = has("stock.opening.manage");
   const canAdjust = has("stock.adjust.create");
   const canViewMovements = has("stock.movements.view");
@@ -103,6 +105,24 @@ export default function StockDashboardPage() {
       fetchAll();
     } catch (err) {
       notify(err.response?.data?.error || "Failed to save opening balance.", "error");
+    }
+  };
+
+  // Single delete handler shared between the desktop table and the
+  // mobile card so the confirm dialog stays consistent across viewports.
+  const handleDeleteOpening = async (o) => {
+    const ok = await confirm({
+      title: "Delete opening balance?",
+      message: `Remove the opening balance for "${o.itemTypeName}"? This won't affect movement-driven stock; only the seeded starting quantity is removed.`,
+      variant: "danger",
+      confirmText: "Delete",
+    });
+    if (!ok) return;
+    try {
+      await deleteOpeningBalance(o.id);
+      fetchAll();
+    } catch (err) {
+      notify(err?.response?.data?.error || "Failed to delete opening balance.", "error");
     }
   };
 
@@ -312,12 +332,7 @@ export default function StockDashboardPage() {
                             <td style={styles.td}>{new Date(o.asOfDate).toLocaleDateString()}</td>
                             <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>{o.notes || "—"}</td>
                             <td style={styles.td}>
-                              <button style={btnTiny} onClick={async () => {
-                                if (confirm(`Delete opening balance for ${o.itemTypeName}?`)) {
-                                  await deleteOpeningBalance(o.id);
-                                  fetchAll();
-                                }
-                              }}><MdClose size={14} /></button>
+                              <button style={btnTiny} onClick={() => handleDeleteOpening(o)}><MdClose size={14} /></button>
                             </td>
                           </tr>
                         ))}
@@ -346,12 +361,7 @@ export default function StockDashboardPage() {
                         )}
                         <button
                           className="stock-card__delete"
-                          onClick={async () => {
-                            if (confirm(`Delete opening balance for ${o.itemTypeName}?`)) {
-                              await deleteOpeningBalance(o.id);
-                              fetchAll();
-                            }
-                          }}
+                          onClick={() => handleDeleteOpening(o)}
                         >
                           <MdClose size={14} /> Delete
                         </button>

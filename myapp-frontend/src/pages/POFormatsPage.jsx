@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { MdAdd, MdEdit, MdDelete, MdDescription, MdWarning, MdInfoOutline, MdBusiness } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
+import { useConfirm } from "../Components/ConfirmDialog";
 import { listPoFormats, getPoFormat, deletePoFormat } from "../api/poFormatApi";
 import POFormatForm from "../Components/POFormatForm";
 
@@ -23,6 +24,7 @@ const colors = {
 
 export default function POFormatsPage() {
   const { has } = usePermissions();
+  const confirm = useConfirm();
   const canCreate = has("poformats.manage.create");
   const canUpdate = has("poformats.manage.update");
   const canDelete = has("poformats.manage.delete");
@@ -55,7 +57,13 @@ export default function POFormatsPage() {
   }, [load]);
 
   const handleDelete = async (format) => {
-    if (!confirm(`Delete PO format "${format.name}"? Future PDFs with this layout will no longer auto-parse.`)) return;
+    const ok = await confirm({
+      title: `Delete PO format "${format.name}"?`,
+      message: "Future PDFs with this layout will no longer auto-parse — they'll need a fresh format wizard run.",
+      variant: "danger",
+      confirmText: "Delete",
+    });
+    if (!ok) return;
     try {
       await deletePoFormat(format.id);
       load();
