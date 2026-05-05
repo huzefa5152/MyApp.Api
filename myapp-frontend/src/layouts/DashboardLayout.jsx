@@ -318,6 +318,30 @@ export default function DashboardLayout() {
             </>
           )}
 
+          <Can permission="challans.import.create">
+            <NavLink
+              to="/challans/import"
+              className={({ isActive }) =>
+                "dl-nav__item" + (isActive ? " active" : "")
+              }
+            >
+              <MdFileUpload className="dl-nav__icon" aria-hidden="true" />
+              <span className="dl-nav__label">Import Challans</span>
+            </NavLink>
+          </Can>
+
+          <Can permission="challans.list.view">
+            <NavLink
+              to="/challans"
+              className={({ isActive }) =>
+                "dl-nav__item" + (isActive ? " active" : "")
+              }
+            >
+              <MdDescription className="dl-nav__icon" aria-hidden="true" />
+              <span className="dl-nav__label">Delivery Challans</span>
+            </NavLink>
+          </Can>
+
           <Can permission="invoices.list.view">
             <NavLink
               to="/invoices"
@@ -339,30 +363,6 @@ export default function DashboardLayout() {
             >
               <MdHistory className="dl-nav__icon" aria-hidden="true" />
               <span className="dl-nav__label">Item Rate History</span>
-            </NavLink>
-          </Can>
-
-          <Can permission="challans.list.view">
-            <NavLink
-              to="/challans"
-              className={({ isActive }) =>
-                "dl-nav__item" + (isActive ? " active" : "")
-              }
-            >
-              <MdDescription className="dl-nav__icon" aria-hidden="true" />
-              <span className="dl-nav__label">Delivery Challans</span>
-            </NavLink>
-          </Can>
-
-          <Can permission="challans.import.create">
-            <NavLink
-              to="/challans/import"
-              className={({ isActive }) =>
-                "dl-nav__item" + (isActive ? " active" : "")
-              }
-            >
-              <MdFileUpload className="dl-nav__icon" aria-hidden="true" />
-              <span className="dl-nav__label">Import Challans</span>
             </NavLink>
           </Can>
 
