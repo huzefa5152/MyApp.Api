@@ -730,6 +730,15 @@ body.dl-body--locked {
   max-width: 240px;
 }
 
+/* Wider search variant for pages where free-text is the primary filter
+   (Item Rate History etc). Defined as a class — never as an inline
+   flex value — so the mobile column-flex media query can correctly
+   collapse it back to 100% width without an !important fight. */
+.filter-search-wrap--wide {
+  flex: 1.6 1 220px;
+  max-width: 320px;
+}
+
 .filter-search-icon {
   position: absolute;
   left: 8px;
@@ -1006,6 +1015,109 @@ body.dl-body--locked {
 }
 .irh-card__view-btn:hover {
   background: #bbdefb;
+}
+
+/* ---------- Import Challans: mobile pass ----------
+   Tighten paddings on phones, hide the per-row items TABLE and show
+   stacked card editors instead so each input is easy to thumb-edit. */
+.imp-page { width: 100%; }
+
+.imp-items-table { display: block; }
+.imp-items-cards { display: none; }
+.imp-items-empty {
+  padding: 0.85rem;
+  text-align: center;
+  color: #5f6d7e;
+  font-size: 0.85rem;
+  background: #fff;
+  border: 1px dashed #d0d7e2;
+  border-radius: 8px;
+}
+
+@media (max-width: 767.98px) {
+  .imp-page {
+    padding-left: 0.85rem !important;
+    padding-right: 0.85rem !important;
+  }
+  /* Stepper labels are too wordy on phones — drop them, keep only
+     the step circles + connecting line so it scans cleanly. */
+  .imp-stepper {
+    padding: 0.5rem 0.75rem !important;
+    gap: 0.25rem !important;
+  }
+  .imp-stepper__label { display: none; }
+  .imp-stepper__line {
+    width: 1.25rem !important;
+  }
+
+  .imp-items-table { display: none; }
+  .imp-items-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+}
+
+.imp-item-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 10px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.imp-item-card__row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.imp-item-card__row--two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.imp-item-card__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #5f6d7e;
+}
+
+.imp-item-card__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid #d0d7e2;
+  font-size: 0.95rem;
+  background: #fff;
+  outline: none;
+  min-height: 40px;
+}
+
+.imp-item-card__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  align-self: flex-end;
+  padding: 0.5rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  background: #fff0f1;
+  color: #dc3545;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 36px;
+}
+.imp-item-card__remove:hover {
+  background: #ffe0e3;
 }
 
 /* ---------- IRH pagination: shared between desktop + mobile, but

@@ -187,7 +187,7 @@ export default function ImportChallansPage() {
   }
 
   return (
-    <div style={styles.wrap}>
+    <div className="imp-page" style={styles.wrap}>
       <div style={styles.header}>
         <div>
           <h2 style={styles.title}>Import Historical Challans</h2>
@@ -254,9 +254,9 @@ function Stepper({ step }) {
     { n: 3, label: "Results" },
   ];
   return (
-    <div style={styles.stepper}>
+    <div className="imp-stepper" style={styles.stepper}>
       {items.map((it, idx) => (
-        <div key={it.n} style={styles.stepWrap}>
+        <div key={it.n} className="imp-stepper__item" style={styles.stepWrap}>
           <div
             style={{
               ...styles.stepDot,
@@ -266,6 +266,7 @@ function Stepper({ step }) {
             {step > it.n ? <MdCheckCircle size={20} /> : it.n}
           </div>
           <span
+            className="imp-stepper__label"
             style={{
               ...styles.stepLabel,
               fontWeight: step === it.n ? 700 : 500,
@@ -276,6 +277,7 @@ function Stepper({ step }) {
           </span>
           {idx < items.length - 1 && (
             <div
+              className="imp-stepper__line"
               style={{
                 ...styles.stepLine,
                 background: step > it.n ? colors.blue : colors.inputBorder,
@@ -658,7 +660,9 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                   + Add item
                 </button>
               </div>
-              <div style={{ overflowX: "auto" }}>
+
+              {/* Desktop / tablet — table */}
+              <div className="imp-items-table" style={{ overflowX: "auto" }}>
                 <table style={styles.itemTable}>
                   <thead>
                     <tr>
@@ -709,6 +713,58 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                     )}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Mobile — stacked-card editors. Description on its own row
+                  (full width — usually the longest), then Qty + Unit
+                  side-by-side, with the delete button as a labelled
+                  trash icon at the end. Far easier to thumb-edit than
+                  a horizontally-scrolled table. */}
+              <div className="imp-items-cards">
+                {(row.items || []).length === 0 ? (
+                  <div className="imp-items-empty">
+                    No items. Tap "+ Add item" to create one.
+                  </div>
+                ) : (
+                  (row.items || []).map((it, itemIdx) => (
+                    <div key={itemIdx} className="imp-item-card">
+                      <div className="imp-item-card__row">
+                        <label className="imp-item-card__label">Description</label>
+                        <input
+                          value={it.description}
+                          onChange={(e) => updateItem(rowIdx, itemIdx, { description: e.target.value })}
+                          className="imp-item-card__input"
+                        />
+                      </div>
+                      <div className="imp-item-card__row imp-item-card__row--two">
+                        <div>
+                          <label className="imp-item-card__label">Qty</label>
+                          <input
+                            type="number"
+                            value={it.quantity}
+                            onChange={(e) => updateItem(rowIdx, itemIdx, { quantity: parseInt(e.target.value) || 0 })}
+                            className="imp-item-card__input"
+                          />
+                        </div>
+                        <div>
+                          <label className="imp-item-card__label">Unit</label>
+                          <input
+                            value={it.unit}
+                            onChange={(e) => updateItem(rowIdx, itemIdx, { unit: e.target.value })}
+                            className="imp-item-card__input"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="imp-item-card__remove"
+                        onClick={() => removeItem(rowIdx, itemIdx)}
+                      >
+                        <MdDelete size={16} /> Remove item
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>

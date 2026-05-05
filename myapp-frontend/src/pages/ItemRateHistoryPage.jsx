@@ -183,7 +183,7 @@ export default function ItemRateHistoryPage() {
           {/* Filters */}
           {selectedCompany && (
             <div className="filters-row">
-              <div className="filter-search-wrap" style={{ flex: "2 1 240px" }}>
+              <div className="filter-search-wrap filter-search-wrap--wide">
                 <MdSearch size={15} className="filter-search-icon" />
                 <input
                   type="text"
