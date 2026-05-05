@@ -98,16 +98,15 @@ export default function POFormatsPage() {
 
   return (
     <div className="pof-page" style={styles.page}>
-      <div style={styles.header}>
-        <div style={{ flex: 1 }}>
-          <h1 style={styles.title}>PO Formats</h1>
-          <p style={styles.subtitle}>
-            One PO format per client (across ALL companies). Configure once for a client and the same layout parses
-            automatically whenever ANY tenant receives a PO from them.
+      <div className="pof-header">
+        <div className="pof-header__title-block">
+          <h1 className="pof-header__title">PO Formats</h1>
+          <p className="pof-header__subtitle">
+            One PO format per client (across ALL companies). Configure once and the same layout parses automatically whenever any tenant receives a PO from that client.
           </p>
         </div>
         {canCreate && (
-          <button style={styles.addBtn} onClick={handleAdd}>
+          <button className="pof-header__add" onClick={handleAdd}>
             <MdAdd size={18} /> Add PO Format
           </button>
         )}

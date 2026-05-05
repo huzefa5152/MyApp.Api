@@ -166,21 +166,21 @@ export default function FbrSandboxPage() {
 
   return (
     <div className="fbr-page" style={styles.page}>
-      <header style={styles.header}>
-        <div>
-          <h2 style={styles.title}><MdScience size={22} style={{ verticalAlign: "middle", marginRight: "0.4rem" }} />FBR Sandbox</h2>
-          <p style={styles.subtitle}>
+      <header className="fbr-header">
+        <div className="fbr-header__title-block">
+          <h2 className="fbr-header__title"><MdScience size={22} style={{ verticalAlign: "middle", marginRight: "0.4rem" }} />FBR Sandbox</h2>
+          <p className="fbr-header__subtitle">
             Validate FBR scenario test bills for the selected company without
             touching its real bill numbering. Demo bills live in the <code>900000+</code> range and are
             invisible to the regular Bills / Challans pages.
           </p>
         </div>
-        <div style={styles.headerActions}>
-          {/* Page-local company picker — independent of the global top-bar
-              company switcher so testing scenarios for one company doesn't
-              change which company the rest of the app is showing. */}
+        {/* Page-local company picker — independent of the global top-bar
+            company switcher so testing scenarios for one company doesn't
+            change which company the rest of the app is showing. */}
+        <div className="fbr-header__actions">
           <select
-            style={styles.companySelect}
+            className="fbr-header__company-select"
             value={companyId || ""}
             onChange={(e) => setCompanyId(Number(e.target.value) || "")}
             aria-label="Company"
@@ -190,9 +190,9 @@ export default function FbrSandboxPage() {
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-          <button onClick={refresh} style={styles.iconBtn} title="Reload" disabled={!selectedCompany}><MdRefresh /></button>
+          <button onClick={refresh} className="fbr-header__icon-btn" title="Reload" disabled={!selectedCompany}><MdRefresh /></button>
           {canSeed && (
-            <button onClick={handleSeed} disabled={running || !selectedCompany} style={styles.primaryBtn}>
+            <button onClick={handleSeed} disabled={running || !selectedCompany} className="fbr-header__seed-btn">
               <MdAdd /> Seed Applicable Scenarios
             </button>
           )}

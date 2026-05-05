@@ -566,11 +566,13 @@ function getBreadcrumb(pathname) {
     "/profile": "My Profile",
     "/users": "User Management",
     "/roles": "Roles & Permissions",
-    "/templates": "Print Templates",
+    "/templates": "Configuration / Print Templates",
+    "/po-formats": "Configuration / PO Formats",
+    "/units": "Configuration / Units",
     "/fbr-settings": "Configuration / FBR Settings",
     "/fbr-sandbox": "Configuration / FBR Sandbox",
     "/tenant-access": "Administration / Tenant Access",
-    "/audit-logs": "Audit Logs",
+    "/audit-logs": "Administration / Audit Logs",
   };
   return map[pathname] ?? pathname.replace(/\//g, " / ").replace(/^\s\/\s/, "");
 }

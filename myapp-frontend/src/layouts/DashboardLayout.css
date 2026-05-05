@@ -1533,6 +1533,79 @@ body.dl-body--locked {
 }
 .it-card__delete:hover { background: #ffe0e3; }
 
+/* ---------- PO Formats page header ----------
+   Desktop: title-block on the left, "+ Add PO Format" button right.
+   Mobile: stack vertically — title + subtitle take full width so the
+   subtitle stops wrapping inside a narrow flex column next to the
+   button (the bug your screenshot showed). Button becomes full-width
+   for an easy thumb tap. */
+.pof-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.pof-header__title-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.pof-header__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a2332;
+  line-height: 1.2;
+}
+
+.pof-header__subtitle {
+  margin: 0.35rem 0 0;
+  color: #5f6d7e;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  max-width: 720px;
+}
+
+.pof-header__add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  border: none;
+  background: #0d47a1;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-height: 40px;
+}
+.pof-header__add:hover { background: #1565c0; }
+
+@media (max-width: 767.98px) {
+  .pof-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.85rem;
+    margin-bottom: 1rem;
+  }
+  .pof-header__title { font-size: 1.3rem; }
+  .pof-header__subtitle {
+    font-size: 0.82rem;
+    line-height: 1.45;
+  }
+  .pof-header__add {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+    font-size: 0.92rem;
+  }
+}
+
 /* ---------- PO Formats: table on desktop, cards on mobile ---------- */
 .pof-table { display: block; }
 .pof-cards { display: none; }
@@ -1685,6 +1758,133 @@ body.dl-body--locked {
   color: #c62828;
 }
 .pof-card__delete:hover { background: #ffe0e3; }
+
+/* ---------- FBR Sandbox page header ----------
+   Same problem as the PO Formats header — on mobile the inline-flex
+   layout squeezed the subtitle into a narrow column. Now: title-block
+   takes full width above, then a single action row that wraps from
+   row-flex on desktop to full-width stacked on phones. */
+.fbr-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.fbr-header__title-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.fbr-header__title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #1a2332;
+  line-height: 1.2;
+}
+
+.fbr-header__subtitle {
+  margin: 0.35rem 0 0;
+  color: #5f6d7e;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  max-width: 720px;
+}
+
+.fbr-header__subtitle code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 0.8rem;
+  background: #f5f8fc;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.fbr-header__actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.fbr-header__company-select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d0d7e2;
+  border-radius: 6px;
+  background: #fff;
+  color: #1a2332;
+  font-size: 0.85rem;
+  font-weight: 600;
+  min-width: 200px;
+  cursor: pointer;
+}
+
+.fbr-header__icon-btn {
+  padding: 0.5rem;
+  border: 1px solid #e8edf3;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  color: #1a2332;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  min-height: 38px;
+}
+.fbr-header__icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.fbr-header__seed-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  background: #0d47a1;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.84rem;
+  white-space: nowrap;
+  min-height: 38px;
+}
+.fbr-header__seed-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.fbr-header__seed-btn:not(:disabled):hover { background: #1565c0; }
+
+@media (max-width: 767.98px) {
+  .fbr-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.85rem;
+  }
+  .fbr-header__title { font-size: 1.2rem; }
+  .fbr-header__subtitle {
+    font-size: 0.8rem;
+    line-height: 1.45;
+  }
+  /* Company select takes the full first row; reload + seed share the
+     second row side-by-side. flex-basis: 100% on the select forces a
+     wrap before the buttons hit it. */
+  .fbr-header__actions {
+    gap: 0.5rem;
+  }
+  .fbr-header__company-select {
+    flex: 1 1 100%;
+    min-width: 0;
+    min-height: 44px;
+  }
+  .fbr-header__icon-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .fbr-header__seed-btn {
+    flex: 1;
+    justify-content: center;
+    min-height: 44px;
+  }
+}
 
 /* ---------- FBR Sandbox: table on desktop, cards on mobile ---------- */
 .fbr-table { display: block; }
