@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { MdClose, MdInfo, MdBusiness, MdCheckCircle, MdDelete } from "react-icons/md";
-import { getCommonClientById, updateCommonClient, deleteCommonClient } from "../api/clientApi";
+import { getCommonClientById, updateCommonClient, deleteCommonClient, deleteClient } from "../api/clientApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { formStyles, modalSizes } from "../theme";
@@ -16,13 +16,17 @@ import { formStyles, modalSizes } from "../theme";
  * and what site list each one carries — operator can confirm the
  * propagation will land on the rows they expect before saving.
  */
-export default function CommonClientForm({ groupId, onClose, onSaved }) {
+export default function CommonClientForm({ groupId, onClose, onSaved, onChange }) {
   const { has } = usePermissions();
   const canDelete = has("clients.manage.delete");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // While a per-member delete is in flight, this holds that member's
+  // clientId so we can spin only the right row's button + lock all the
+  // other actions (bulk delete / save / cancel) without ambiguity.
+  const [deletingMemberId, setDeletingMemberId] = useState(null);
   const [error, setError] = useState("");
   const [detail, setDetail] = useState(null);
   // Province dropdown options — same FBR Lookup category the per-
@@ -146,6 +150,95 @@ export default function CommonClientForm({ groupId, onClose, onSaved }) {
       setError(e?.response?.data?.message || "Failed to delete.");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  /**
+   * Per-member delete — removes ONLY this client from one company while
+   * leaving the rest of the group intact. Different button, different
+   * confirmation, different blast radius from the bulk "Delete from all
+   * companies" action above.
+   *
+   * Edge cases handled:
+   *   - Has invoices: confirmation amplifies the warning; backend cascade
+   *     deletes the invoices + their delivery challans for that company.
+   *   - Last surviving member: after this delete the group has 0 members,
+   *     so the Common Clients panel filter (HAVING COUNT >= 2) silently
+   *     drops it and the surviving company-side ClientsPage stops hiding
+   *     it. We close the modal and bubble onSaved() so the parent
+   *     refreshes both lists.
+   *   - Members > 0 remain: refetch detail in place + bubble onChange()
+   *     so the parent's lists refresh WITHOUT closing the modal — the
+   *     operator can keep editing or remove from another company.
+   *   - Tenant-access denied (403): the per-company delete endpoint
+   *     enforces ICompanyAccessGuard, so the error message comes back
+   *     verbatim and is shown in the modal's existing error banner.
+   *   - Permission missing: the per-row button doesn't render at all.
+   *   - Concurrent clicks: deletingMemberId locks every other action
+   *     until this one finishes; the row's button shows "Removing…".
+   *   - Refetch 404: treated as "group is gone" → close + onSaved.
+   */
+  const handleDeleteMember = async (member) => {
+    if (!member || !detail || deletingMemberId || deleting || saving) return;
+
+    const remainingCount = (detail.members?.length || 1) - 1;
+    const confirmation = window.confirm(
+      `Remove "${detail.displayName}" from ${member.companyName}?\n\n` +
+        (remainingCount > 0
+          ? `Other compan${remainingCount === 1 ? "y" : "ies"} (${remainingCount} remaining) will keep their copy of this client.\n\n`
+          : `This is the last company holding this client — the Common Client will become a regular per-company client only.\n\n`) +
+        (member.hasInvoices
+          ? `⚠ ${member.companyName} has invoices for this client. Those invoices and their delivery challans will ALSO be deleted.\n\n`
+          : "") +
+        "This cannot be undone."
+    );
+    if (!confirmation) return;
+
+    setDeletingMemberId(member.clientId);
+    setError("");
+    try {
+      await deleteClient(member.clientId);
+
+      // Tell the parent to refresh its per-company list + Common Clients
+      // panel WITHOUT closing the modal — we stay open if there are still
+      // members to manage.
+      onChange?.();
+
+      // Refetch the group detail so the row disappears + member count
+      // updates. If the group is now empty (all rows removed), the API
+      // either still returns it (with an empty members array) or 404s —
+      // either way we close the modal and let the parent fully refresh.
+      try {
+        const { data } = await getCommonClientById(groupId);
+        if (!data?.members?.length) {
+          onSaved?.(null);
+          onClose?.();
+        } else {
+          setDetail(data);
+        }
+      } catch (refreshErr) {
+        // 404 means the group has no members left and was either dropped
+        // by the service or filtered out. Treat the modal as done.
+        if (refreshErr?.response?.status === 404) {
+          onSaved?.(null);
+          onClose?.();
+        } else {
+          // Other refresh failures: client IS deleted but we can't
+          // refresh — surface a soft message and close so the user
+          // doesn't see stale state.
+          setError(
+            refreshErr?.response?.data?.message ||
+              `Removed from ${member.companyName}, but failed to refresh. Close and reopen to see the latest state.`
+          );
+        }
+      }
+    } catch (e) {
+      setError(
+        e?.response?.data?.message ||
+          `Failed to remove from ${member.companyName}.`
+      );
+    } finally {
+      setDeletingMemberId(null);
     }
   };
 
@@ -377,9 +470,13 @@ export default function CommonClientForm({ groupId, onClose, onSaved }) {
                   </span>
                 </div>
 
-                {/* Member breakdown — read-only, lets the operator
-                    sanity-check that propagation lands on the rows they
-                    expect (and see per-company sites that WON'T change). */}
+                {/* Member breakdown — lists every per-company copy of this
+                    client. Each row supports an inline "remove from this
+                    company" delete (gated on clients.manage.delete) so the
+                    operator can decommission the client from one tenant
+                    without touching the others. The bulk "Delete from all
+                    companies" button at the modal footer handles the
+                    "kill the legal entity" case. */}
                 {detail?.members?.length > 0 && (
                   <div style={s.membersBlock}>
                     <div style={s.membersHeader}>
@@ -390,17 +487,44 @@ export default function CommonClientForm({ groupId, onClose, onSaved }) {
                       </span>
                     </div>
                     <div style={s.membersTable}>
-                      {detail.members.map((m) => (
-                        <div key={m.clientId} style={s.memberRow}>
-                          <div style={s.memberCompany}>
-                            <MdCheckCircle size={14} color="#28a745" /> {m.companyName}
+                      {detail.members.map((m) => {
+                        const removingThis = deletingMemberId === m.clientId;
+                        const otherActionInFlight =
+                          (deletingMemberId !== null && !removingThis) ||
+                          deleting || saving;
+                        return (
+                          <div key={m.clientId} style={s.memberRow}>
+                            <div style={s.memberCompany}>
+                              <MdCheckCircle size={14} color="#28a745" /> {m.companyName}
+                            </div>
+                            <div style={s.memberSite}>{m.site || <em style={{ color: "#aab3bf" }}>(no sites)</em>}</div>
+                            <div style={s.memberFlag}>
+                              {m.hasInvoices ? "Has bills" : <span style={{ color: "#aab3bf" }}>—</span>}
+                            </div>
+                            {canDelete ? (
+                              <button
+                                type="button"
+                                style={{
+                                  ...s.memberDeleteBtn,
+                                  opacity: removingThis || otherActionInFlight ? 0.55 : 1,
+                                  cursor: removingThis || otherActionInFlight ? "not-allowed" : "pointer",
+                                }}
+                                onClick={() => handleDeleteMember(m)}
+                                disabled={removingThis || otherActionInFlight}
+                                title={`Remove this client from ${m.companyName} only`}
+                                aria-label={`Remove from ${m.companyName}`}
+                              >
+                                <MdDelete size={14} />
+                                <span style={s.memberDeleteText}>
+                                  {removingThis ? "Removing…" : "Remove"}
+                                </span>
+                              </button>
+                            ) : (
+                              <span />
+                            )}
                           </div>
-                          <div style={s.memberSite}>{m.site || <em style={{ color: "#aab3bf" }}>(no sites)</em>}</div>
-                          <div style={s.memberFlag}>
-                            {m.hasInvoices ? "Has bills" : <span style={{ color: "#aab3bf" }}>—</span>}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -418,7 +542,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved }) {
                 type="button"
                 style={{ ...formStyles.button, ...s.deleteBtn }}
                 onClick={handleDelete}
-                disabled={deleting || saving || loading}
+                disabled={deleting || saving || loading || deletingMemberId !== null}
                 title="Delete this client from every company that has it"
               >
                 <MdDelete size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} />
@@ -431,14 +555,14 @@ export default function CommonClientForm({ groupId, onClose, onSaved }) {
                 type="button"
                 style={{ ...formStyles.button, ...formStyles.cancel }}
                 onClick={onClose}
-                disabled={saving || deleting}
+                disabled={saving || deleting || deletingMemberId !== null}
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 style={{ ...formStyles.button, ...formStyles.submit }}
-                disabled={saving || deleting || loading}
+                disabled={saving || deleting || loading || deletingMemberId !== null}
               >
                 {saving ? "Saving…" : "Save & propagate"}
               </button>
@@ -485,17 +609,42 @@ const s = {
   },
   memberRow: {
     display: "grid",
-    gridTemplateColumns: "1fr 2fr auto",
+    // 4-column layout: company name, site list, has-bills flag,
+    // per-row remove button. The auto-sized last column sits on the
+    // far right; the company column's 1fr keeps name aligned and the
+    // site column's 2fr soaks up the rest.
+    gridTemplateColumns: "1fr 2fr auto auto",
     gap: "0.5rem",
+    alignItems: "center",
     fontSize: "0.82rem",
-    padding: "0.35rem 0.4rem",
+    padding: "0.4rem 0.5rem",
     borderRadius: 6,
     background: "#fff",
     border: "1px solid #f0f3f7",
   },
-  memberCompany: { display: "inline-flex", alignItems: "center", gap: "0.25rem", fontWeight: 600, color: "#1a2332" },
-  memberSite: { color: "#5f6d7e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  memberFlag: { color: "#5f6d7e", fontSize: "0.78rem" },
+  memberCompany: { display: "inline-flex", alignItems: "center", gap: "0.25rem", fontWeight: 600, color: "#1a2332", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  memberSite: { color: "#5f6d7e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 },
+  memberFlag: { color: "#5f6d7e", fontSize: "0.78rem", whiteSpace: "nowrap" },
+  memberDeleteBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    padding: "0.3rem 0.55rem",
+    borderRadius: 6,
+    border: "1px solid rgba(220, 53, 69, 0.25)",
+    background: "#fff0f1",
+    color: "#dc3545",
+    fontSize: "0.74rem",
+    fontWeight: 600,
+    transition: "background 150ms ease, border-color 150ms ease",
+    whiteSpace: "nowrap",
+  },
+  memberDeleteText: {
+    // Hide the "Remove" / "Removing…" text on tiny widths — the trash
+    // icon alone communicates the action and the title attr remains
+    // for accessibility.
+    fontSize: "0.74rem",
+  },
   fieldHelp: {
     fontSize: "0.75rem",
     color: "#5f6d7e",
