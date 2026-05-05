@@ -110,20 +110,34 @@ body.dl-body--locked {
   display: none;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: rgba(255, 255, 255, 0.1);
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.14);
   color: #ffffff;
-  border-radius: 8px;
-  font-size: 1.1rem;
+  border-radius: 10px;
   cursor: pointer;
-  transition: background var(--transition-fast) var(--easing-standard);
   flex-shrink: 0;
+  padding: 0;
+  line-height: 0;
+  transition: background var(--transition-fast) var(--easing-standard),
+              border-color var(--transition-fast) var(--easing-standard);
 }
-.dl-brand__close:hover { background: rgba(255, 255, 255, 0.2); }
+.dl-brand__close:hover {
+  background: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+.dl-brand__close:active {
+  background: rgba(255, 255, 255, 0.36);
+}
+.dl-brand__close svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+  fill: currentColor;
+}
 @media (max-width: 991.98px) {
-  .dl-brand__close { display: flex; }
+  .dl-brand__close { display: inline-flex; }
 }
 
 /* ---------- Nav ---------- */
