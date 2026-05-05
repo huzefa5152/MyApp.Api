@@ -5,16 +5,32 @@
 
 /* ---------- CSS Custom Properties ---------- */
 :root {
-  --sidebar-width: 260px;
+  --sidebar-width: 268px;
   --sidebar-bg-from: #0d47a1;
   --sidebar-bg-to: #00897b;
   --sidebar-text: #e8f4f8;
-  --sidebar-active-bg: rgba(255, 255, 255, 0.18);
+  --sidebar-text-muted: rgba(255, 255, 255, 0.72);
+  --sidebar-active-bg: rgba(255, 255, 255, 0.16);
   --sidebar-active-text: #ffffff;
-  --sidebar-hover-bg: rgba(255, 255, 255, 0.10);
-  --sidebar-border-accent: rgba(255, 255, 255, 0.25);
+  --sidebar-hover-bg: rgba(255, 255, 255, 0.08);
+  --sidebar-border-accent: rgba(255, 255, 255, 0.18);
+  --sidebar-tree-line: rgba(255, 255, 255, 0.18);
   --topbar-height: 56px;
-  --transition-speed: 0.28s;
+  --transition-fast: 150ms;
+  --transition-normal: 200ms;
+  --transition-slow: 250ms;
+  --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Body scroll-lock when mobile drawer is open. The sidebar scrolls
+   internally but the page beneath should stay put on iOS especially. */
+body.dl-body--locked {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+}
+@media (min-width: 992px) {
+  body.dl-body--locked { position: static; overflow: auto; }
 }
 
 /* ---------- Layout Shell ---------- */
@@ -35,7 +51,7 @@
   top: 0;
   left: 0;
   z-index: 1040;
-  transition: transform var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform var(--transition-slow) var(--easing-standard);
   box-shadow: 4px 0 24px rgba(13, 71, 161, 0.22);
   overflow: hidden;
 }
@@ -43,9 +59,11 @@
 .dl-sidebar::-webkit-scrollbar { width: 4px; }
 .dl-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 4px; }
 
-/* Mobile: slide out left by default, slide in when .open */
+/* Mobile: drawer width clamps so it doesn't fill the whole screen on
+   phones (visual hint that you can dismiss by tapping outside). */
 @media (max-width: 991.98px) {
   .dl-sidebar {
+    width: min(88vw, 320px);
     transform: translateX(-100%);
   }
   .dl-sidebar.dl-sidebar--open {
@@ -55,42 +73,66 @@
 
 /* ---------- Brand / Logo Area ---------- */
 .dl-brand {
-  padding: 1.6rem 1.25rem 1.2rem;
+  padding: 1.1rem 1rem;
   border-bottom: 1px solid var(--sidebar-border-accent);
   flex-shrink: 0;
 }
 
-.dl-brand__name {
-  font-size: 1.35rem;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  color: #ffffff;
-  line-height: 1.2;
-  margin: 0;
-}
-
-.dl-brand__tagline {
-  font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.65);
-  margin: 0.25rem 0 0;
-  font-style: italic;
-  letter-spacing: 0.4px;
+.dl-brand__row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .dl-brand__icon {
-  font-size: 1.75rem;
-  margin-bottom: 0.5rem;
-  display: block;
-  opacity: 0.9;
+  font-size: 1.4rem;
+  flex-shrink: 0;
+  opacity: 0.95;
+}
+
+.dl-brand__name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: #ffffff;
+  line-height: 1.25;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Close button — only visible inside the drawer on mobile, so users
+   don't have to reach back up to the topbar hamburger to dismiss. */
+.dl-brand__close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: background var(--transition-fast) var(--easing-standard);
+  flex-shrink: 0;
+}
+.dl-brand__close:hover { background: rgba(255, 255, 255, 0.2); }
+@media (max-width: 991.98px) {
+  .dl-brand__close { display: flex; }
 }
 
 /* ---------- Nav ---------- */
 .dl-nav {
   flex: 1;
-  padding: 1rem 0.75rem;
+  padding: 0.5rem 0.5rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 1px;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
@@ -99,132 +141,273 @@
 .dl-nav::-webkit-scrollbar { width: 4px; }
 .dl-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 4px; }
 
-/* Nav Items */
-.dl-nav__item {
+/* ---------- Top-level item (Dashboard, etc.) ----------
+   No transform jiggle — just a clean color fade and a left-edge
+   accent on active. Min-height = 44px keeps it tap-friendly on touch. */
+.dl-item {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.6rem 0.85rem;
-  border-radius: 10px;
+  gap: 0.7rem;
+  padding: 0.55rem 0.75rem;
+  min-height: 40px;
+  border-radius: 8px;
   color: var(--sidebar-text);
   text-decoration: none;
-  font-size: 0.925rem;
+  font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background var(--transition-speed), color var(--transition-speed), transform 0.15s;
   user-select: none;
   border: none;
   background: transparent;
   width: 100%;
   text-align: left;
+  position: relative;
+  transition: background var(--transition-fast) var(--easing-standard),
+              color var(--transition-fast) var(--easing-standard);
 }
 
-.dl-nav__item:hover {
+.dl-item:hover {
   background: var(--sidebar-hover-bg);
   color: #ffffff;
-  transform: translateX(3px);
 }
 
-.dl-nav__item.active,
-.dl-nav__item--active {
+.dl-item--active {
   background: var(--sidebar-active-bg);
   color: var(--sidebar-active-text);
-  font-weight: 700;
-  box-shadow: inset 3px 0 0 #ffffff, inset 0 0 0 1px rgba(255,255,255,0.15);
+  font-weight: 600;
 }
 
-.dl-nav__item .dl-nav__icon {
-  font-size: 1.05rem;
+.dl-item--active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  background: #ffffff;
+  border-radius: 0 3px 3px 0;
+}
+
+.dl-item__icon {
+  font-size: 1.1rem;
   flex-shrink: 0;
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
-.dl-nav__item .dl-nav__label {
+.dl-item__label {
   flex: 1;
+  min-width: 0;
 }
 
-.dl-nav__item .dl-nav__arrow {
-  font-size: 0.75rem;
-  transition: transform var(--transition-speed);
+@media (max-width: 991.98px) {
+  .dl-item {
+    min-height: 44px;
+    padding: 0.65rem 0.75rem;
+    font-size: 0.95rem;
+  }
+}
+
+/* ---------- Collapsible group ----------
+   Header doubles as the toggle button. Count badge and chevron sit
+   on the right; chevron rotates 180° when open. */
+.dl-group {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.35rem;
+}
+
+.dl-group__header {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0.75rem;
+  min-height: 40px;
+  border-radius: 8px;
+  color: var(--sidebar-text);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  user-select: none;
+  position: relative;
+  transition: background var(--transition-fast) var(--easing-standard),
+              color var(--transition-fast) var(--easing-standard);
+}
+
+.dl-group__header:hover {
+  background: var(--sidebar-hover-bg);
+  color: #ffffff;
+}
+
+@media (max-width: 991.98px) {
+  .dl-group__header {
+    min-height: 44px;
+    padding: 0.65rem 0.75rem;
+    font-size: 0.95rem;
+  }
+}
+
+.dl-group__icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.dl-group__title {
+  flex: 1;
+  min-width: 0;
+}
+
+.dl-group__count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.dl-group__chevron {
+  font-size: 1rem;
+  flex-shrink: 0;
   opacity: 0.7;
+  transition: transform var(--transition-normal) var(--easing-standard);
 }
 
-.dl-nav__item .dl-nav__arrow--open {
+.dl-group--open > .dl-group__header > .dl-group__chevron {
   transform: rotate(180deg);
 }
 
-/* Submenu – pure CSS toggle, no JS measurement needed */
-.dl-submenu {
+/* When a child route is active and the group is collapsed, surface
+   that with a quieter accent on the header so the user knows their
+   current page lives behind a closed group. */
+.dl-group--child-active:not(.dl-group--open) > .dl-group__header {
+  color: #ffffff;
+}
+.dl-group--child-active:not(.dl-group--open) > .dl-group__header::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 0 3px 3px 0;
+}
+.dl-group--child-active:not(.dl-group--open) > .dl-group__header > .dl-group__count {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+/* Body — pure-CSS height transition. max-height upper bound covers
+   the largest section we ship (Configuration, 9 items ≈ 360px). */
+.dl-group__body {
   overflow: hidden;
   max-height: 0;
-  flex-shrink: 0;
-  transition: max-height var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+  transition: max-height var(--transition-normal) var(--easing-standard);
 }
 
-.dl-submenu.dl-submenu--open {
-  max-height: 300px;
+.dl-group--open > .dl-group__body {
+  max-height: 480px;
 }
 
-.dl-submenu__inner {
-  padding: 0.25rem 0 0.25rem 1rem;
+.dl-group__body-inner {
+  padding: 2px 0 4px;
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 1px;
+  position: relative;
 }
 
-.dl-submenu__item {
+/* Vertical guide line — file-tree style, lines up under the group's
+   icon column so children visually descend from the parent. */
+.dl-group__body-inner::before {
+  content: "";
+  position: absolute;
+  left: 17px;        /* icon-column center, matches header padding+icon */
+  top: 4px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--sidebar-tree-line);
+}
+
+/* ---------- Submenu item ----------
+   Indented to clear the guide line, no bullet, no transform jiggle. */
+.dl-subitem {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.5rem 0.85rem;
+  gap: 0.6rem;
+  padding: 0.45rem 0.75rem 0.45rem 2rem;
+  min-height: 36px;
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--sidebar-text-muted);
   text-decoration: none;
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   font-weight: 400;
-  transition: background var(--transition-speed), color var(--transition-speed), transform 0.15s;
+  position: relative;
+  transition: background var(--transition-fast) var(--easing-standard),
+              color var(--transition-fast) var(--easing-standard);
 }
 
-.dl-submenu__item:before {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.45);
-  flex-shrink: 0;
-  transition: background var(--transition-speed);
-}
-
-.dl-submenu__item:hover {
+.dl-subitem:hover {
   background: var(--sidebar-hover-bg);
   color: #ffffff;
-  transform: translateX(3px);
 }
 
-.dl-submenu__item:hover:before,
-.dl-submenu__item.active:before {
-  background: #ffffff;
-}
-
-.dl-submenu__item.active {
+.dl-subitem--active {
   background: var(--sidebar-active-bg);
   color: #ffffff;
   font-weight: 600;
 }
 
+.dl-subitem--active::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18);
+}
+
+.dl-subitem__icon {
+  font-size: 0.95rem;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+@media (max-width: 991.98px) {
+  .dl-subitem {
+    min-height: 40px;
+    padding: 0.55rem 0.75rem 0.55rem 2rem;
+    font-size: 0.9rem;
+  }
+}
+
 /* ---------- Sidebar Bottom (Account + Footer – pinned) ---------- */
 .dl-sidebar-bottom {
   flex-shrink: 0;
-  padding: 0 0.75rem 0.75rem;
+  padding: 0.6rem 0.5rem 0.75rem;
   border-top: 1px solid var(--sidebar-border-accent);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
 }
 
-.dl-sidebar-footer__copy {
-  font-size: 0.7rem;
-  color: rgba(255,255,255,0.45);
-  text-align: center;
-  margin-bottom: 0.75rem;
+.dl-item__avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 
 .dl-logout-btn {
@@ -232,21 +415,33 @@
   align-items: center;
   gap: 0.6rem;
   width: 100%;
-  padding: 0.55rem 0.85rem;
-  border-radius: 10px;
-  background: rgba(255, 82, 82, 0.18);
+  padding: 0.55rem 0.75rem;
+  min-height: 38px;
+  border-radius: 8px;
+  background: rgba(255, 82, 82, 0.14);
   color: #ffcdd2;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 500;
-  border: 1px solid rgba(255, 82, 82, 0.3);
+  border: 1px solid rgba(255, 82, 82, 0.25);
   cursor: pointer;
-  transition: background var(--transition-speed), color var(--transition-speed);
   text-align: left;
+  transition: background var(--transition-fast) var(--easing-standard),
+              color var(--transition-fast) var(--easing-standard),
+              border-color var(--transition-fast) var(--easing-standard);
 }
 
 .dl-logout-btn:hover {
-  background: rgba(255, 82, 82, 0.35);
+  background: rgba(255, 82, 82, 0.3);
   color: #ffffff;
+  border-color: rgba(255, 82, 82, 0.5);
+}
+
+.dl-sidebar-footer__copy {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  margin: 0.25rem 0 0;
+  letter-spacing: 0.3px;
 }
 
 /* ---------- Content Area ---------- */
@@ -365,14 +560,6 @@
   border-radius: 50%;
 }
 
-/* Sidebar profile avatar */
-.dl-nav__avatar-img {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-}
 
 /* User dropdown menu */
 .dl-user-menu {
@@ -464,17 +651,17 @@
 .dl-nav__divider {
   height: 1px;
   background: var(--sidebar-border-accent);
-  margin: 0.5rem 0.5rem;
+  margin: 0.5rem 0.25rem;
   border: none;
 }
 
 .dl-nav__section-label {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   text-transform: uppercase;
-  letter-spacing: 1.2px;
-  color: rgba(255,255,255,0.45);
-  padding: 0.5rem 0.85rem 0.2rem;
-  font-weight: 600;
+  letter-spacing: 1.4px;
+  color: rgba(255,255,255,0.42);
+  padding: 0.85rem 0.85rem 0.35rem;
+  font-weight: 700;
 }
 
 /* ---------- Card Grid Responsive ---------- */
@@ -655,34 +842,10 @@
   }
 }
 
-/* ---------- Mobile: compact sidebar so logout is visible without scrolling ---------- */
+/* ---------- Mobile drawer: bumped overlay opacity so the page beneath
+   reads as clearly out-of-focus, helping the drawer stand out. ---------- */
 @media (max-width: 991.98px) {
-  .dl-brand {
-    padding: 0.8rem 1rem 0.6rem;
-  }
-  .dl-brand__icon {
-    font-size: 1.3rem;
-    margin-bottom: 0.25rem;
-  }
-  .dl-brand__name {
-    font-size: 1.1rem;
-  }
-  .dl-brand__tagline {
-    font-size: 0.65rem;
-  }
-  .dl-nav {
-    padding: 0.5rem 0.75rem;
-  }
-  .dl-nav__item {
-    padding: 0.45rem 0.85rem;
-  }
-  .dl-sidebar-bottom {
-    padding: 0 0.5rem 0.5rem;
-  }
-  .dl-sidebar-bottom .dl-nav__item {
-    padding: 0.4rem 0.85rem;
-  }
-  .dl-sidebar-footer__copy {
-    margin-bottom: 0.3rem;
+  .dl-overlay {
+    background: rgba(0, 0, 0, 0.5);
   }
 }
