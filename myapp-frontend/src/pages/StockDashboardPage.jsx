@@ -31,6 +31,9 @@ export default function StockDashboardPage() {
   const [movements, setMovements] = useState([]);
   const [movPage, setMovPage] = useState(1);
   const [movTotal, setMovTotal] = useState(0);
+  // Server-driven page size from appsettings Pagination:DefaultPageSize.
+  // Set after the first response so the pagination math is accurate.
+  const [movPageSize, setMovPageSize] = useState(0);
   const [openings, setOpenings] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
   const [search, setSearch] = useState("");
@@ -63,9 +66,13 @@ export default function StockDashboardPage() {
   const fetchMovements = useCallback(async (pg) => {
     if (!selectedCompany || !canViewMovements) return;
     try {
-      const { data } = await getStockMovements(selectedCompany.id, { page: pg || movPage, pageSize: 25 });
+      // Don't send pageSize — let the server apply Pagination:DefaultPageSize
+      // from appsettings.json. Read it back from the response so totalPages
+      // is accurate.
+      const { data } = await getStockMovements(selectedCompany.id, { page: pg || movPage });
       setMovements(data.items || []);
       setMovTotal(data.totalCount || 0);
+      setMovPageSize(data.pageSize || 0);
     } catch {
       setMovements([]); setMovTotal(0);
     }
@@ -120,7 +127,7 @@ export default function StockDashboardPage() {
   };
 
   return (
-    <div>
+    <div className="stock-page">
       <div style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={styles.headerIcon}><MdInventory size={28} color="#fff" /></div>
@@ -192,80 +199,168 @@ export default function StockDashboardPage() {
                   </p>
                 </div>
               ) : (
-                <div style={styles.tableWrap}>
-                  <table style={styles.table}>
-                    <thead>
-                      <tr>
-                        <th style={styles.th}>Item</th>
-                        <th style={styles.th}>HS Code</th>
-                        <th style={styles.th}>UOM</th>
-                        <th style={{ ...styles.th, textAlign: "right" }}>Opening</th>
-                        <th style={{ ...styles.th, textAlign: "right" }}>Total IN</th>
-                        <th style={{ ...styles.th, textAlign: "right" }}>Total OUT</th>
-                        <th style={{ ...styles.th, textAlign: "right" }}>On-Hand</th>
-                        <th style={styles.th}>Last Movement</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredOnhand.map((r, idx) => (
-                        <tr key={r.itemTypeId} style={{ backgroundColor: idx % 2 === 0 ? "#fff" : colors.rowAlt }}>
-                          <td style={styles.td}><strong>{r.itemTypeName}</strong></td>
-                          <td style={{ ...styles.td, fontFamily: "monospace", fontSize: "0.78rem" }}>{r.hsCode || "—"}</td>
-                          <td style={styles.td}>{r.uom || "—"}</td>
-                          <td style={{ ...styles.td, textAlign: "right" }}>{r.openingBalance.toLocaleString()}</td>
-                          <td style={{ ...styles.td, textAlign: "right", color: "#2e7d32" }}>+{r.totalIn.toLocaleString()}</td>
-                          <td style={{ ...styles.td, textAlign: "right", color: "#c62828" }}>−{r.totalOut.toLocaleString()}</td>
-                          <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: r.onHand < 0 ? "#c62828" : colors.blue }}>{r.onHand.toLocaleString()}</td>
-                          <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>
-                            {r.lastMovementAt ? new Date(r.lastMovementAt).toLocaleDateString() : "—"}
-                          </td>
+                <>
+                  {/* Desktop / tablet — table */}
+                  <div className="stock-table" style={styles.tableWrap}>
+                    <table style={styles.table}>
+                      <thead>
+                        <tr>
+                          <th style={styles.th}>Item</th>
+                          <th style={styles.th}>HS Code</th>
+                          <th style={styles.th}>UOM</th>
+                          <th style={{ ...styles.th, textAlign: "right" }}>Opening</th>
+                          <th style={{ ...styles.th, textAlign: "right" }}>Total IN</th>
+                          <th style={{ ...styles.th, textAlign: "right" }}>Total OUT</th>
+                          <th style={{ ...styles.th, textAlign: "right" }}>On-Hand</th>
+                          <th style={styles.th}>Last Movement</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {filteredOnhand.map((r, idx) => (
+                          <tr key={r.itemTypeId} style={{ backgroundColor: idx % 2 === 0 ? "#fff" : colors.rowAlt }}>
+                            <td style={styles.td}><strong>{r.itemTypeName}</strong></td>
+                            <td style={{ ...styles.td, fontFamily: "monospace", fontSize: "0.78rem" }}>{r.hsCode || "—"}</td>
+                            <td style={styles.td}>{r.uom || "—"}</td>
+                            <td style={{ ...styles.td, textAlign: "right" }}>{r.openingBalance.toLocaleString()}</td>
+                            <td style={{ ...styles.td, textAlign: "right", color: "#2e7d32" }}>+{r.totalIn.toLocaleString()}</td>
+                            <td style={{ ...styles.td, textAlign: "right", color: "#c62828" }}>−{r.totalOut.toLocaleString()}</td>
+                            <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: r.onHand < 0 ? "#c62828" : colors.blue }}>{r.onHand.toLocaleString()}</td>
+                            <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>
+                              {r.lastMovementAt ? new Date(r.lastMovementAt).toLocaleDateString() : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile — On-hand stack. The "answer" the page exists to
+                      show is on-hand quantity, so it goes top-right at large
+                      size. IN / OUT / Opening are secondary stats below. */}
+                  <div className="stock-cards">
+                    {filteredOnhand.map((r) => (
+                      <div key={r.itemTypeId} className="stock-card">
+                        <div className="stock-card__top">
+                          <div className="stock-card__top-left">
+                            <span className="stock-card__name">{r.itemTypeName}</span>
+                            {r.hsCode && <span className="stock-card__hs">{r.hsCode}</span>}
+                          </div>
+                          <div className="stock-card__onhand">
+                            <span className="stock-card__onhand-label">On-Hand</span>
+                            <span
+                              className="stock-card__onhand-value"
+                              style={{ color: r.onHand < 0 ? "#c62828" : colors.blue }}
+                            >
+                              {r.onHand.toLocaleString()}
+                              {r.uom && <span className="stock-card__uom"> {r.uom}</span>}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="stock-card__stats">
+                          <div className="stock-card__stat">
+                            <span className="stock-card__stat-label">Opening</span>
+                            <span className="stock-card__stat-value">{r.openingBalance.toLocaleString()}</span>
+                          </div>
+                          <div className="stock-card__stat">
+                            <span className="stock-card__stat-label">Total IN</span>
+                            <span className="stock-card__stat-value" style={{ color: "#2e7d32" }}>+{r.totalIn.toLocaleString()}</span>
+                          </div>
+                          <div className="stock-card__stat">
+                            <span className="stock-card__stat-label">Total OUT</span>
+                            <span className="stock-card__stat-value" style={{ color: "#c62828" }}>−{r.totalOut.toLocaleString()}</span>
+                          </div>
+                          <div className="stock-card__stat">
+                            <span className="stock-card__stat-label">Last Move</span>
+                            <span className="stock-card__stat-value stock-card__stat-value--muted">
+                              {r.lastMovementAt ? new Date(r.lastMovementAt).toLocaleDateString() : "—"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </>
           )}
 
           {tab === "opening" && canManageOpening && (
-            <div style={styles.tableWrap}>
+            <>
               {openings.length === 0 ? (
                 <div style={{ ...styles.empty, padding: "2rem 1rem" }}>
                   <p style={{ color: colors.textSecondary }}>No opening balances set yet. Click "Opening Balance" above to add one.</p>
                 </div>
               ) : (
-                <table style={styles.table}>
-                  <thead>
-                    <tr>
-                      <th style={styles.th}>Item</th>
-                      <th style={{ ...styles.th, textAlign: "right" }}>Quantity</th>
-                      <th style={styles.th}>As Of</th>
-                      <th style={styles.th}>Notes</th>
-                      <th style={{ ...styles.th, width: 60 }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {openings.map((o, idx) => (
-                      <tr key={o.id} style={{ backgroundColor: idx % 2 === 0 ? "#fff" : colors.rowAlt }}>
-                        <td style={styles.td}><strong>{o.itemTypeName}</strong></td>
-                        <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>{o.quantity.toLocaleString()}</td>
-                        <td style={styles.td}>{new Date(o.asOfDate).toLocaleDateString()}</td>
-                        <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>{o.notes || "—"}</td>
-                        <td style={styles.td}>
-                          <button style={btnTiny} onClick={async () => {
+                <>
+                  {/* Desktop — table */}
+                  <div className="stock-table" style={styles.tableWrap}>
+                    <table style={styles.table}>
+                      <thead>
+                        <tr>
+                          <th style={styles.th}>Item</th>
+                          <th style={{ ...styles.th, textAlign: "right" }}>Quantity</th>
+                          <th style={styles.th}>As Of</th>
+                          <th style={styles.th}>Notes</th>
+                          <th style={{ ...styles.th, width: 60 }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {openings.map((o, idx) => (
+                          <tr key={o.id} style={{ backgroundColor: idx % 2 === 0 ? "#fff" : colors.rowAlt }}>
+                            <td style={styles.td}><strong>{o.itemTypeName}</strong></td>
+                            <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>{o.quantity.toLocaleString()}</td>
+                            <td style={styles.td}>{new Date(o.asOfDate).toLocaleDateString()}</td>
+                            <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>{o.notes || "—"}</td>
+                            <td style={styles.td}>
+                              <button style={btnTiny} onClick={async () => {
+                                if (confirm(`Delete opening balance for ${o.itemTypeName}?`)) {
+                                  await deleteOpeningBalance(o.id);
+                                  fetchAll();
+                                }
+                              }}><MdClose size={14} /></button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile — opening balance cards */}
+                  <div className="stock-cards">
+                    {openings.map((o) => (
+                      <div key={o.id} className="stock-card">
+                        <div className="stock-card__top">
+                          <div className="stock-card__top-left">
+                            <span className="stock-card__name">{o.itemTypeName}</span>
+                            <span className="stock-card__hs">As of {new Date(o.asOfDate).toLocaleDateString()}</span>
+                          </div>
+                          <div className="stock-card__onhand">
+                            <span className="stock-card__onhand-label">Quantity</span>
+                            <span className="stock-card__onhand-value" style={{ color: colors.blue }}>
+                              {o.quantity.toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                        {o.notes && (
+                          <div className="stock-card__notes">{o.notes}</div>
+                        )}
+                        <button
+                          className="stock-card__delete"
+                          onClick={async () => {
                             if (confirm(`Delete opening balance for ${o.itemTypeName}?`)) {
                               await deleteOpeningBalance(o.id);
                               fetchAll();
                             }
-                          }}><MdClose size={14} /></button>
-                        </td>
-                      </tr>
+                          }}
+                        >
+                          <MdClose size={14} /> Delete
+                        </button>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </>
               )}
-            </div>
+            </>
           )}
 
           {tab === "movements" && canViewMovements && (
@@ -277,7 +372,8 @@ export default function StockDashboardPage() {
                 </div>
               ) : (
                 <>
-                  <div style={styles.tableWrap}>
+                  {/* Desktop — table */}
+                  <div className="stock-table" style={styles.tableWrap}>
                     <table style={styles.table}>
                       <thead>
                         <tr>
@@ -303,11 +399,45 @@ export default function StockDashboardPage() {
                       </tbody>
                     </table>
                   </div>
-                  {movTotal > 25 && (
-                    <div style={styles.pagination}>
-                      <button style={styles.pageBtn} disabled={movPage <= 1} onClick={() => setMovPage(movPage - 1)}>Prev</button>
-                      <span style={styles.pageInfo}>Page {movPage} of {Math.ceil(movTotal / 25)} ({movTotal} total)</span>
-                      <button style={styles.pageBtn} disabled={movPage * 25 >= movTotal} onClick={() => setMovPage(movPage + 1)}>Next</button>
+
+                  {/* Mobile — movement cards */}
+                  <div className="stock-cards">
+                    {movements.map((m) => (
+                      <div key={m.id} className="stock-card">
+                        <div className="stock-card__top">
+                          <div className="stock-card__top-left">
+                            <span className="stock-card__name">{m.itemTypeName}</span>
+                            <span className="stock-card__hs">{new Date(m.movementDate).toLocaleDateString()}</span>
+                          </div>
+                          <div className="stock-card__onhand">
+                            <span
+                              className="stock-card__direction"
+                              style={{ color: m.direction === "In" ? "#2e7d32" : "#c62828" }}
+                            >
+                              {m.direction === "In" ? "+" : "−"}{m.quantity.toLocaleString()}
+                            </span>
+                            <span className="stock-card__direction-label">{m.direction}</span>
+                          </div>
+                        </div>
+                        <div className="stock-card__source">
+                          <span className="stock-card__stat-label">Source</span>
+                          <span className="stock-card__stat-value">
+                            {m.sourceType}{m.sourceId ? ` #${m.sourceId}` : ""}
+                          </span>
+                        </div>
+                        {m.notes && <div className="stock-card__notes">{m.notes}</div>}
+                      </div>
+                    ))}
+                  </div>
+
+                  {movPageSize > 0 && movTotal > movPageSize && (
+                    <div className="irh-pagination">
+                      <button className="irh-page-btn" disabled={movPage <= 1} onClick={() => setMovPage(movPage - 1)}>Prev</button>
+                      <span className="irh-page-info">
+                        Page {movPage} of {Math.ceil(movTotal / movPageSize)}{" "}
+                        <span className="irh-page-info__count">({movTotal} total)</span>
+                      </span>
+                      <button className="irh-page-btn" disabled={movPage * movPageSize >= movTotal} onClick={() => setMovPage(movPage + 1)}>Next</button>
                     </div>
                   )}
                 </>

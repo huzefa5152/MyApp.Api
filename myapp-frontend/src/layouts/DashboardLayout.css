@@ -843,11 +843,37 @@ body.dl-body--locked {
 .audit-cards { display: none; }
 
 @media (max-width: 767.98px) {
+  .audit-page {
+    padding: 1rem 0.85rem 1.25rem !important;
+  }
+  /* Header summary chips wrap below the title rather than getting squeezed
+     to the right. */
+  .audit-page > div:first-child {
+    gap: 0.6rem !important;
+  }
+  /* Filter row stacks: level select is full-width, search form is full-
+     width below, total count goes on its own line. */
+  .audit-filters {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+  }
+  .audit-filters > select { width: 100% !important; }
+  .audit-filters > form {
+    max-width: 100% !important;
+    flex: 1 1 auto !important;
+  }
+  .audit-filters > span {
+    margin-left: 0 !important;
+    text-align: right;
+  }
+
   .audit-table-wrap { display: none; }
   .audit-cards {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.6rem;
+    padding: 0.6rem;
   }
   .audit-card {
     background: #fff;
@@ -1119,6 +1145,302 @@ body.dl-body--locked {
 .imp-item-card__remove:hover {
   background: #ffe0e3;
 }
+
+/* ---------- Stock Dashboard: table on desktop, cards on mobile ----------
+   Same pattern as Item Rate History above. The mobile card layout
+   surfaces the page's primary "answer" top-right at large size — for
+   On-Hand it's the on-hand quantity; for Movements it's the +/- delta. */
+.stock-page { padding: 1.5rem 2rem; }
+.stock-table { display: block; }
+.stock-cards { display: none; }
+
+@media (max-width: 991.98px) {
+  .stock-page {
+    padding: 1rem 0.85rem 1.25rem;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .stock-table { display: none; }
+  .stock-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+}
+
+.stock-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.stock-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.stock-card__top-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.stock-card__name {
+  font-weight: 700;
+  color: #1a2332;
+  font-size: 0.92rem;
+  word-break: break-word;
+}
+
+.stock-card__hs {
+  font-size: 0.75rem;
+  color: #5f6d7e;
+  font-family: monospace;
+}
+
+.stock-card__onhand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.stock-card__onhand-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #5f6d7e;
+  font-weight: 600;
+}
+.stock-card__onhand-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.stock-card__uom {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #5f6d7e;
+}
+
+.stock-card__direction {
+  font-size: 1.1rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.stock-card__direction-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #5f6d7e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stock-card__stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem 0.85rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.stock-card__stat,
+.stock-card__source {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.stock-card__stat-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5f6d7e;
+  font-weight: 600;
+}
+.stock-card__stat-value {
+  font-size: 0.85rem;
+  color: #1a2332;
+  font-weight: 600;
+}
+.stock-card__stat-value--muted {
+  color: #5f6d7e;
+  font-weight: 400;
+}
+
+.stock-card__source {
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.stock-card__notes {
+  font-size: 0.78rem;
+  color: #5f6d7e;
+  font-style: italic;
+  word-break: break-word;
+}
+
+.stock-card__delete {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  background: #fff0f1;
+  color: #c62828;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 36px;
+}
+.stock-card__delete:hover {
+  background: #ffe0e3;
+}
+
+/* ---------- Item Types: row-list on desktop, cards on mobile ----------
+   The desktop row layout has min-width: 720px which works fine on tablet+;
+   below 768 we hide it entirely and render the same data as cards. */
+.it-list-wrap { display: block; }
+.it-cards { display: none; }
+
+@media (max-width: 767.98px) {
+  .it-list-wrap { display: none; }
+  .it-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+}
+
+.it-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.it-card__top {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.it-card__star {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: -2px;
+}
+
+.it-card__title {
+  flex: 1;
+  min-width: 0;
+}
+
+.it-card__name {
+  font-weight: 700;
+  color: #1a2332;
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+.it-card__desc {
+  font-size: 0.76rem;
+  color: #5f6d7e;
+  margin-top: 2px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.it-card__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem 0.85rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.it-card__field {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.it-card__field--full {
+  grid-column: 1 / -1;
+}
+
+.it-card__field-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5f6d7e;
+  font-weight: 600;
+}
+
+.it-card__field-value {
+  font-size: 0.85rem;
+  color: #1a2332;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.it-card__actions {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.it-card__edit,
+.it-card__delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 36px;
+}
+
+.it-card__edit {
+  border-color: #90caf9;
+  background: #e3f2fd;
+  color: #0d47a1;
+}
+.it-card__edit:hover { background: #bbdefb; }
+
+.it-card__delete {
+  border-color: rgba(220, 53, 69, 0.3);
+  background: #fff0f1;
+  color: #c62828;
+}
+.it-card__delete:hover { background: #ffe0e3; }
 
 /* ---------- IRH pagination: shared between desktop + mobile, but
    stacks vertically on narrow screens so the page-info isn't squeezed. */

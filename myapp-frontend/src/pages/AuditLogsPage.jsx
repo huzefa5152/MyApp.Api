@@ -46,7 +46,6 @@ export default function AuditLogsPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(20);
   const [level, setLevel] = useState("");
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -57,7 +56,10 @@ export default function AuditLogsPage() {
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await getAuditLogs(page, pageSize, level || undefined, search || undefined);
+      // Don't send pageSize — let the server apply Pagination:DefaultPageSize
+      // from appsettings.json. The response carries page + pageSize +
+      // totalPages back so the UI's pagination math stays accurate.
+      const { data } = await getAuditLogs(page, undefined, level || undefined, search || undefined);
       setLogs(data.items);
       setTotalCount(data.totalCount);
       setTotalPages(data.totalPages);
@@ -66,7 +68,7 @@ export default function AuditLogsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, level, search]);
+  }, [page, level, search]);
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -95,7 +97,7 @@ export default function AuditLogsPage() {
   }
 
   return (
-    <div style={{ padding: "1.5rem", maxWidth: 1200, margin: "0 auto" }}>
+    <div className="audit-page" style={{ padding: "1.5rem", maxWidth: 1200, margin: "0 auto" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
         <div style={{ width: 44, height: 44, borderRadius: 12, background: `linear-gradient(135deg, ${colors.danger}, #b71c1c)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -118,7 +120,7 @@ export default function AuditLogsPage() {
       </div>
 
       {/* Filters */}
-      <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap", alignItems: "center" }}>
+      <div className="audit-filters" style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap", alignItems: "center" }}>
         <select
           value={level}
           onChange={(e) => { setLevel(e.target.value); setPage(1); }}

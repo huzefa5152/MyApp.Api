@@ -23,12 +23,14 @@ namespace MyApp.Api.Controllers
         private readonly AppDbContext _context;
         private readonly IStockService _stock;
         private readonly ICompanyAccessGuard _access;
+        private readonly int _defaultPageSize;
 
-        public StockController(AppDbContext context, IStockService stock, ICompanyAccessGuard access)
+        public StockController(AppDbContext context, IStockService stock, ICompanyAccessGuard access, IConfiguration configuration)
         {
             _context = context;
             _stock = stock;
             _access = access;
+            _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
 
         private int CurrentUserId =>
@@ -113,12 +115,18 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<PagedResult<StockMovementRowDto>>> GetMovements(
             int companyId,
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 25,
+            [FromQuery] int? pageSize = null,
             [FromQuery] int? itemTypeId = null,
             [FromQuery] string? sourceType = null,
             [FromQuery] DateTime? dateFrom = null,
             [FromQuery] DateTime? dateTo = null)
         {
+            // Resolve page size: caller can override via ?pageSize=NN, otherwise
+            // fall back to Pagination:DefaultPageSize from appsettings — same
+            // convention DeliveryChallans + InvoicesController follow so the
+            // operator's tuned default value flows through here too.
+            var size = pageSize ?? _defaultPageSize;
+
             var q = _context.StockMovements
                 .Include(m => m.ItemType)
                 .Where(m => m.CompanyId == companyId);
@@ -135,8 +143,8 @@ namespace MyApp.Api.Controllers
             var rows = await q
                 .OrderByDescending(m => m.MovementDate)
                 .ThenByDescending(m => m.Id)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
+                .Skip((page - 1) * size)
+                .Take(size)
                 .Select(m => new StockMovementRowDto
                 {
                     Id = m.Id,
@@ -155,7 +163,7 @@ namespace MyApp.Api.Controllers
                 Items = rows,
                 TotalCount = total,
                 Page = page,
-                PageSize = pageSize,
+                PageSize = size,
             });
         }
 
