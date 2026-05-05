@@ -856,6 +856,211 @@ body.dl-body--locked {
   }
 }
 
+/* ---------- Item Rate History: table on desktop, cards on mobile ----------
+   Same pattern as audit logs above. The card layout puts Unit Price
+   (the "answer" the page exists to show) in the top-right at large size,
+   so a glance is enough. */
+.irh-page {
+  padding: 1.5rem 2rem;
+}
+.irh-table { display: block; }
+.irh-cards { display: none; }
+
+@media (max-width: 767.98px) {
+  .irh-page {
+    padding: 1rem 0.85rem 1.25rem;
+  }
+  .irh-table { display: none; }
+  .irh-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+}
+
+.irh-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.irh-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.irh-card__top-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.irh-card__bill {
+  font-weight: 700;
+  color: #0d47a1;
+  font-size: 0.95rem;
+}
+
+.irh-card__date {
+  font-size: 0.78rem;
+  color: #5f6d7e;
+}
+
+.irh-card__rate {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.irh-card__rate-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #5f6d7e;
+  font-weight: 600;
+}
+.irh-card__rate-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #00695c;
+  white-space: nowrap;
+}
+
+.irh-card__client {
+  font-size: 0.85rem;
+  color: #1a2332;
+  font-weight: 600;
+}
+
+.irh-card__desc {
+  font-size: 0.82rem;
+  color: #1a2332;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.irh-card__itemtype {
+  font-size: 0.72rem;
+  color: #5f6d7e;
+  font-style: italic;
+}
+
+.irh-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+  flex-wrap: wrap;
+}
+
+.irh-card__qty,
+.irh-card__total {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.irh-card__total { flex: 1; }
+
+.irh-card__field-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5f6d7e;
+  font-weight: 600;
+}
+.irh-card__field-value {
+  font-size: 0.85rem;
+  color: #1a2332;
+  font-weight: 600;
+}
+.irh-card__uom {
+  font-size: 0.75rem;
+  color: #5f6d7e;
+  font-weight: 400;
+}
+
+.irh-card__view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #90caf9;
+  background: #e3f2fd;
+  color: #0d47a1;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.irh-card__view-btn:hover {
+  background: #bbdefb;
+}
+
+/* ---------- IRH pagination: shared between desktop + mobile, but
+   stacks vertically on narrow screens so the page-info isn't squeezed. */
+.irh-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 0;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.irh-page-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #d0d7e2;
+  background: #fff;
+  color: #0d47a1;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 38px;
+}
+.irh-page-btn:disabled { cursor: not-allowed; }
+
+.irh-page-info {
+  font-size: 0.85rem;
+  color: #5f6d7e;
+  font-weight: 500;
+  text-align: center;
+}
+.irh-page-info__count {
+  color: #98a4b3;
+  font-weight: 400;
+}
+
+@media (max-width: 480px) {
+  .irh-pagination {
+    gap: 0.5rem;
+  }
+  .irh-page-btn {
+    flex: 1;
+    justify-content: center;
+  }
+  .irh-page-info {
+    flex-basis: 100%;
+    order: -1;
+  }
+}
+
 /* ---------- Mobile drawer: bumped overlay opacity so the page beneath
    reads as clearly out-of-focus, helping the drawer stand out. ---------- */
 @media (max-width: 991.98px) {
