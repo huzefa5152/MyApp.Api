@@ -1533,6 +1533,163 @@ body.dl-body--locked {
 }
 .it-card__delete:hover { background: #ffe0e3; }
 
+/* ---------- Tenant Access: table on desktop, cards on mobile ---------- */
+.tenant-table { display: block; }
+.tenant-cards { display: none; }
+
+@media (max-width: 767.98px) {
+  .tenant-page {
+    padding: 1rem 0.85rem 1.25rem !important;
+  }
+  .tenant-table { display: none; }
+  .tenant-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+}
+
+.tenant-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.tenant-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.tenant-card__avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #1565c0;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.tenant-card__who {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tenant-card__name {
+  font-weight: 700;
+  color: #1a2332;
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+.tenant-card__username {
+  font-size: 0.78rem;
+  color: #5f6d7e;
+  font-family: monospace;
+}
+
+.tenant-card__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 0.85rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.tenant-card__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.tenant-card__stat-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5f6d7e;
+  font-weight: 600;
+}
+
+.tenant-card__pill {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: #f8f9fb;
+  border: 1px solid #e8edf3;
+  color: #1a2332;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tenant-card__pill--muted {
+  color: #5f6d7e;
+  background: transparent;
+  border-color: transparent;
+  font-weight: 500;
+  padding-left: 0;
+}
+.tenant-card__pill--success {
+  background: #eafbef;
+  border-color: #28a745;
+  color: #28a745;
+}
+.tenant-card__pill--warn {
+  background: #fff4e0;
+  border-color: #b26a00;
+  color: #b26a00;
+}
+.tenant-card__pill--danger {
+  background: #fff0f1;
+  border-color: #dc3545;
+  color: #dc3545;
+}
+
+.tenant-card__edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.55rem 0.85rem;
+  border-radius: 8px;
+  border: none;
+  background: #0d47a1;
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 40px;
+}
+.tenant-card__edit:disabled {
+  background: #98a4b3;
+  cursor: not-allowed;
+}
+.tenant-card__edit:not(:disabled):hover {
+  background: #1565c0;
+}
+
+/* Tenant Edit modal — let the per-company rows wrap their Isolated/Open
+   badge below the company name on narrow screens so nothing gets clipped. */
+@media (max-width: 480px) {
+  .tenant-page label {
+    flex-wrap: wrap !important;
+  }
+}
+
 /* ---------- IRH pagination: shared between desktop + mobile, but
    stacks vertically on narrow screens so the page-info isn't squeezed. */
 .irh-pagination {

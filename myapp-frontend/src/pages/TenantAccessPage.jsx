@@ -128,7 +128,7 @@ export default function TenantAccessPage() {
   };
 
   return (
-    <div style={pageStyles.shell}>
+    <div className="tenant-page" style={pageStyles.shell}>
       <div style={pageStyles.header}>
         <div style={pageStyles.headerInner}>
           <MdAdminPanelSettings size={28} color={colors.blue} />
@@ -167,70 +167,130 @@ export default function TenantAccessPage() {
           <p>No users match that search.</p>
         </div>
       ) : (
-        <div style={pageStyles.tableWrap}>
-          <table style={pageStyles.table}>
-            <thead>
-              <tr>
-                <th style={pageStyles.th}>User</th>
-                <th style={pageStyles.th}>Username</th>
-                <th style={pageStyles.th}>Explicit Grants</th>
-                <th style={pageStyles.th}>Isolated Companies</th>
-                <th style={{ ...pageStyles.th, textAlign: "right" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => {
-                const grants = row.companies.filter((c) => c.hasExplicitGrant);
-                const isolated = row.companies.filter((c) => c.isTenantIsolated);
-                const reachableIsolated = isolated.filter((c) => c.hasExplicitGrant);
-                return (
-                  <tr key={row.userId} style={pageStyles.tr}>
-                    <td style={pageStyles.td}>
-                      <div style={pageStyles.userCell}>
-                        <div style={pageStyles.avatar}>
-                          {row.fullName?.[0]?.toUpperCase() ?? "?"}
+        <>
+          {/* Desktop / tablet — table */}
+          <div className="tenant-table" style={pageStyles.tableWrap}>
+            <table style={pageStyles.table}>
+              <thead>
+                <tr>
+                  <th style={pageStyles.th}>User</th>
+                  <th style={pageStyles.th}>Username</th>
+                  <th style={pageStyles.th}>Explicit Grants</th>
+                  <th style={pageStyles.th}>Isolated Companies</th>
+                  <th style={{ ...pageStyles.th, textAlign: "right" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((row) => {
+                  const grants = row.companies.filter((c) => c.hasExplicitGrant);
+                  const isolated = row.companies.filter((c) => c.isTenantIsolated);
+                  const reachableIsolated = isolated.filter((c) => c.hasExplicitGrant);
+                  return (
+                    <tr key={row.userId} style={pageStyles.tr}>
+                      <td style={pageStyles.td}>
+                        <div style={pageStyles.userCell}>
+                          <div style={pageStyles.avatar}>
+                            {row.fullName?.[0]?.toUpperCase() ?? "?"}
+                          </div>
+                          <div>
+                            <div style={pageStyles.userName}>{row.fullName}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div style={pageStyles.userName}>{row.fullName}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={pageStyles.td}>{row.username}</td>
-                    <td style={pageStyles.td}>
-                      <span style={pageStyles.pill}>{grants.length} / {row.companies.length}</span>
-                    </td>
-                    <td style={pageStyles.td}>
-                      {isolated.length === 0 ? (
-                        <span style={pageStyles.muted}>none isolated</span>
-                      ) : (
-                        <span style={
-                          reachableIsolated.length === isolated.length
-                            ? pageStyles.pillSuccess
-                            : reachableIsolated.length === 0
-                            ? pageStyles.pillDanger
-                            : pageStyles.pillWarn
-                        }>
-                          {reachableIsolated.length} / {isolated.length}
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ ...pageStyles.td, textAlign: "right" }}>
-                      <button
-                        type="button"
-                        style={pageStyles.btnPrimary}
-                        disabled={!canAssign}
-                        title={canAssign ? "" : "Requires tenantaccess.manage.assign permission"}
-                        onClick={() => openEdit(row)}
-                      >
-                        <MdEdit /> Edit Access
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      </td>
+                      <td style={pageStyles.td}>{row.username}</td>
+                      <td style={pageStyles.td}>
+                        <span style={pageStyles.pill}>{grants.length} / {row.companies.length}</span>
+                      </td>
+                      <td style={pageStyles.td}>
+                        {isolated.length === 0 ? (
+                          <span style={pageStyles.muted}>none isolated</span>
+                        ) : (
+                          <span style={
+                            reachableIsolated.length === isolated.length
+                              ? pageStyles.pillSuccess
+                              : reachableIsolated.length === 0
+                              ? pageStyles.pillDanger
+                              : pageStyles.pillWarn
+                          }>
+                            {reachableIsolated.length} / {isolated.length}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ ...pageStyles.td, textAlign: "right" }}>
+                        <button
+                          type="button"
+                          style={pageStyles.btnPrimary}
+                          disabled={!canAssign}
+                          title={canAssign ? "" : "Requires tenantaccess.manage.assign permission"}
+                          onClick={() => openEdit(row)}
+                        >
+                          <MdEdit /> Edit Access
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile — stacked cards. Username under the name; both stat
+              pills on a labelled row; full-width Edit button at the
+              bottom for an easy thumb target. */}
+          <div className="tenant-cards">
+            {filtered.map((row) => {
+              const grants = row.companies.filter((c) => c.hasExplicitGrant);
+              const isolated = row.companies.filter((c) => c.isTenantIsolated);
+              const reachableIsolated = isolated.filter((c) => c.hasExplicitGrant);
+              const isolatedPillClass =
+                isolated.length === 0
+                  ? "tenant-card__pill tenant-card__pill--muted"
+                  : reachableIsolated.length === isolated.length
+                  ? "tenant-card__pill tenant-card__pill--success"
+                  : reachableIsolated.length === 0
+                  ? "tenant-card__pill tenant-card__pill--danger"
+                  : "tenant-card__pill tenant-card__pill--warn";
+              const isolatedPillText =
+                isolated.length === 0 ? "none isolated" : `${reachableIsolated.length} / ${isolated.length}`;
+              return (
+                <div key={row.userId} className="tenant-card">
+                  <div className="tenant-card__head">
+                    <div className="tenant-card__avatar">
+                      {row.fullName?.[0]?.toUpperCase() ?? "?"}
+                    </div>
+                    <div className="tenant-card__who">
+                      <div className="tenant-card__name">{row.fullName}</div>
+                      <div className="tenant-card__username">@{row.username}</div>
+                    </div>
+                  </div>
+
+                  <div className="tenant-card__stats">
+                    <div className="tenant-card__stat">
+                      <span className="tenant-card__stat-label">Explicit Grants</span>
+                      <span className="tenant-card__pill">
+                        {grants.length} / {row.companies.length}
+                      </span>
+                    </div>
+                    <div className="tenant-card__stat">
+                      <span className="tenant-card__stat-label">Isolated</span>
+                      <span className={isolatedPillClass}>{isolatedPillText}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="tenant-card__edit"
+                    disabled={!canAssign}
+                    title={canAssign ? "" : "Requires tenantaccess.manage.assign permission"}
+                    onClick={() => openEdit(row)}
+                  >
+                    <MdEdit size={16} /> Edit Access
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {editUser && (
