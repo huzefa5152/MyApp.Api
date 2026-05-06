@@ -81,6 +81,10 @@ const blankRow = () => ({
   localId: Math.random().toString(36).slice(2, 10),
   itemTypeId: "",
   itemTypeName: "",       // mirrored from the picked ItemType for the read-only Description column
+  // Free-text description used in Bills mode (where the Item Type column
+  // is hidden so r.itemTypeName never gets populated). In Invoices mode
+  // this stays empty and the description still derives from itemTypeName.
+  description: "",
   hsCode: "",
   uom: "",
   fbrUOMId: null,
@@ -97,7 +101,11 @@ const blankRow = () => ({
   sroItemSerialNo: "",
 });
 
-export default function StandaloneInvoiceForm({ companyId, company, onClose, onSaved }) {
+export default function StandaloneInvoiceForm({ companyId, company, onClose, onSaved, hideItemType = false }) {
+  // hideItemType: true when this form is mounted from the Bills tab.
+  // Hides Item Type column header, per-row picker, bulk-apply controls,
+  // and the "+ New Item Type" button. The form still posts the same
+  // payload — itemTypeId stays whatever it was (null on a fresh row).
   const { has } = usePermissions();
   const canCreateClient   = has("clients.manage.create");
   const canCreateItemType = has("itemtypes.manage.create");
@@ -313,7 +321,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
   const rowErrors = (r) => {
     const errs = [];
-    if (!r.itemTypeId) errs.push("itemType");
+    // In Bills mode the Item Type column is hidden; description carries
+    // the line text instead. Item type becomes optional (operator
+    // classifies later from the Invoices tab).
+    if (hideItemType) {
+      if (!r.description?.trim()) errs.push("description");
+    } else {
+      if (!r.itemTypeId) errs.push("itemType");
+    }
     const q = parseFloat(r.quantity);
     if (!(q > 0)) errs.push("qty>0");
     const p = parseFloat(r.unitPrice);
@@ -337,7 +352,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (!selectedClientId) return setError("Select a buyer first.");
     if (!company || company.startingInvoiceNumber === 0)
       return setError("Starting bill number not set for this company. Configure it on the Companies page first.");
-    if (!chosenScenario) return setError("Pick an FBR scenario first.");
+    // Bills mode: FBR scenario is optional. The bill saves without an
+    // FBR scenarioId; an operator picks one later from the Invoices tab.
+    if (!hideItemType && !chosenScenario) return setError("Pick an FBR scenario first.");
     if (!allRowsValid) {
       const missing = rows.flatMap(rowErrors);
       return setError(`Fill all required fields. Missing: ${[...new Set(missing)].join(", ")}.`);
@@ -356,9 +373,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         paymentMode: paymentMode || null,
         items: rows.map((r) => ({
           itemTypeId: r.itemTypeId ? parseInt(r.itemTypeId) : null,
-          // Description is the item type's name — the operator never edits
-          // it directly. CreateStandaloneAsync stores it on InvoiceItem.Description.
-          description: r.itemTypeName || "",
+          // Description in Invoices mode is the item type's name (locked).
+          // In Bills mode the operator types it directly into r.description
+          // since the Item Type column is hidden. Either way it lands on
+          // InvoiceItem.Description.
+          description: (hideItemType ? r.description : r.itemTypeName)?.trim() || "",
           quantity: parseFloat(r.quantity),
           uom: r.uom?.trim() || null,
           unitPrice: parseFloat(r.unitPrice),
@@ -371,11 +390,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           // matches what FBR expects; the per-unit MRP itself is a UI
           // affordance only and isn't persisted separately.
           fixedNotifiedValueOrRetailPrice:
-            chosenScenario.meta.needsMRP && r.mrp && r.quantity
+            chosenScenario?.meta.needsMRP && r.mrp && r.quantity
               ? Math.round(parseFloat(r.mrp) * parseFloat(r.quantity) * 100) / 100
               : null,
-          sroScheduleNo: chosenScenario.meta.needsSRO ? r.sroScheduleNo?.trim() || null : null,
-          sroItemSerialNo: chosenScenario.meta.needsSRO ? r.sroItemSerialNo?.trim() || null : null,
+          sroScheduleNo: chosenScenario?.meta.needsSRO ? r.sroScheduleNo?.trim() || null : null,
+          sroItemSerialNo: chosenScenario?.meta.needsSRO ? r.sroItemSerialNo?.trim() || null : null,
         })),
       });
       onSaved();
@@ -425,7 +444,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
               <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading…</div>
             ) : (
               <>
-                {/* ── Step 1: Pick FBR scenario ─────────────── */}
+                {/* ── Step 1: Pick FBR scenario ───────────────
+                    Hidden in Bills mode — operator classifies on the
+                    Invoices tab. The form auto-selects SN001 (b2b
+                    standard) when applicable so Steps 2/3 still render
+                    with reasonable defaults. */}
+                {!hideItemType && (
                 <div style={{ marginBottom: "1rem" }}>
                   <label style={styles.stepLabel}>
                     <span style={styles.stepNum}>1</span> Pick FBR Scenario
@@ -479,9 +503,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* ── Step 2: Buyer ─────────────── */}
-                {chosenScenario && (
+                {(chosenScenario || hideItemType) && (
                   <div style={{ marginBottom: "1rem" }}>
                     <label style={styles.stepLabel}>
                       <span style={styles.stepNum}>2</span>
@@ -535,7 +560,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                 )}
 
                 {/* ── Step 3: Bill header + items ─────────────── */}
-                {chosenScenario && selectedClientId && (
+                {(chosenScenario || hideItemType) && selectedClientId && (
                   <>
                     <label style={styles.stepLabel}>
                       <span style={styles.stepNum}>3</span> Bill Details
@@ -548,14 +573,21 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       </div>
                       <div style={{ flex: 1, minWidth: 100 }}>
                         <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
-                          GST Rate (%) <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}><MdLock size={10} /> locked</span>
+                          GST Rate (%){chosenScenario && (
+                            <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}><MdLock size={10} /> locked</span>
+                          )}
                         </label>
                         <input
                           type="number"
-                          style={{ ...styles.input, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+                          style={chosenScenario
+                            ? { ...styles.input, backgroundColor: "#eef5ff", cursor: "not-allowed" }
+                            : styles.input}
                           value={gstRate}
-                          readOnly
-                          title={`Locked by ${chosenScenario.code}. Switch scenario to change.`}
+                          readOnly={!!chosenScenario}
+                          onChange={(e) => !chosenScenario && setGstRate(e.target.value)}
+                          title={chosenScenario
+                            ? `Locked by ${chosenScenario.code}. Switch scenario to change.`
+                            : "Enter GST rate"}
                         />
                       </div>
                       <div style={{ flex: 1, minWidth: 140 }}>
@@ -583,24 +615,23 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       </div>
                     </div>
 
-                    <div style={styles.lockedSaleType}>
-                      <MdLock size={14} color={colors.teal} />
-                      <span><b>Sale Type locked:</b> {chosenScenario.saleType}</span>
-                      <span style={styles.lockedSaleTypeHint}>(every line uses this — required by {chosenScenario.code})</span>
-                    </div>
+                    {chosenScenario && (
+                      <div style={styles.lockedSaleType}>
+                        <MdLock size={14} color={colors.teal} />
+                        <span><b>Sale Type locked:</b> {chosenScenario.saleType}</span>
+                        <span style={styles.lockedSaleTypeHint}>(every line uses this — required by {chosenScenario.code})</span>
+                      </div>
+                    )}
 
                     {/* Items table */}
                     <div>
                       <div style={styles.itemsHeaderBar}>
                         <label style={{ ...styles.label, margin: 0 }}>Items ({rows.length})</label>
                         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                          {/* '+ New Item Type' lives once here, above the
-                              grid (was per-row before). The operator
-                              creates the catalog row, then picks it via
-                              the per-row dropdown or the bulk-apply
-                              toolbar below. Hidden behind a permission
-                              hint when the user lacks itemtypes.manage.create. */}
-                          {canCreateItemType ? (
+                          {/* Bills mode hides the catalog "+ New Item Type"
+                              button — item-type management is the Invoices
+                              tab's responsibility. */}
+                          {!hideItemType && (canCreateItemType ? (
                             <button
                               type="button"
                               style={styles.inlineAddBtn}
@@ -611,7 +642,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                             </button>
                           ) : (
                             <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
-                          )}
+                          ))}
                           <button type="button" style={styles.addRowBtn} onClick={addRow}>
                             <MdAdd size={14} /> Add Row
                           </button>
@@ -625,8 +656,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                           the operator picked the wrong category in bulk
                           and wants to start over. Only shown once there
                           are 2+ rows since both actions have no value at
-                          row count = 1. */}
-                      {rows.length > 1 && (
+                          row count = 1. Hidden in Bills mode. */}
+                      {!hideItemType && rows.length > 1 && (
                         <div style={styles.bulkApplyBar}>
                           <span style={{ fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 500 }}>
                             Apply same Item Type to:
@@ -666,8 +697,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         <table style={styles.unifiedTable}>
                           <thead>
                             <tr style={styles.unifiedThead}>
-                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "22%" : "26%" }}>Item Type *</th>
-                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "16%" : "20%" }}>Description</th>
+                              {!hideItemType && (
+                                <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "22%" : "26%" }}>Item Type *</th>
+                              )}
+                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "16%" : "20%" }}>Description{hideItemType ? " *" : ""}</th>
                               <th style={{ ...styles.unifiedTh, width: "7%" }}>Qty *</th>
                               <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
                               <th style={{ ...styles.unifiedTh, width: "9%" }}>Unit Price *</th>
@@ -686,18 +719,33 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               const p = parseFloat(r.unitPrice) || 0;
                               return (
                                 <tr key={r.localId} style={styles.unifiedRow}>
-                                  <td style={styles.unifiedTd}>
-                                    <SearchableItemTypeSelect
-                                      items={filteredItemTypes}
-                                      value={r.itemTypeId}
-                                      onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
-                                      placeholder="Pick from your catalog…"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                    />
-                                  </td>
-                                  <td style={{ ...styles.unifiedTd, color: r.itemTypeName ? colors.textPrimary : colors.textSecondary, fontStyle: r.itemTypeName ? "normal" : "italic" }}>
-                                    {r.itemTypeName || "(pick an item type)"}
-                                  </td>
+                                  {!hideItemType && (
+                                    <td style={styles.unifiedTd}>
+                                      <SearchableItemTypeSelect
+                                        items={filteredItemTypes}
+                                        value={r.itemTypeId}
+                                        onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
+                                        placeholder="Pick from your catalog…"
+                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                      />
+                                    </td>
+                                  )}
+                                  {/* Description: locked to itemTypeName in Invoices mode, free-text input in Bills mode */}
+                                  {hideItemType ? (
+                                    <td style={styles.unifiedTd}>
+                                      <input
+                                        type="text"
+                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                        value={r.description}
+                                        onChange={(e) => updateRow(r.localId, { description: e.target.value })}
+                                        placeholder="Item description"
+                                      />
+                                    </td>
+                                  ) : (
+                                    <td style={{ ...styles.unifiedTd, color: r.itemTypeName ? colors.textPrimary : colors.textSecondary, fontStyle: r.itemTypeName ? "normal" : "italic" }}>
+                                      {r.itemTypeName || "(pick an item type)"}
+                                    </td>
+                                  )}
                                   <td style={styles.unifiedTd}>
                                     <input
                                       type="number" min={0} step="any"

@@ -66,7 +66,13 @@ const SCENARIO_META = {
   SN028: { buyerKind: "walk-in" },
 };
 
-export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId }) {
+export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId, hideItemType = false }) {
+  // hideItemType: true when this form is mounted from the Bills tab.
+  // Hides the Item Type (FBR) column header, the per-row ItemType picker,
+  // and the bulk-apply / "+ New Item Type" controls. Existing items still
+  // post their data to the same endpoint — the column is presentational
+  // only, the per-item itemTypeId stays whatever it was (null on create).
+  // Operators classify items later via the Invoices tab.
   const { has } = usePermissions();
   const canCreateClient   = has("clients.manage.create");
   const canCreateItemType = has("itemtypes.manage.create");
@@ -862,13 +868,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             Items ({allItems.length})
                           </label>
                           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                            {/* '+ New Item Type' lives once here, above the
-                                grid (was per-row before). The new catalog
-                                row appears in every dropdown and in the
-                                bulk-apply toolbar — operator picks it
-                                explicitly. Hidden behind a permission hint
-                                when the user lacks itemtypes.manage.create. */}
-                            {canCreateItemType ? (
+                            {/* Bills mode hides the Item Type controls — the
+                                catalog "+ New Item Type" button, the bulk
+                                Apply, and the FBR-tip pill. Operators classify
+                                items on the Invoices tab; the Bills tab is
+                                financial entry only. */}
+                            {!hideItemType && (canCreateItemType ? (
                               <button
                                 type="button"
                                 style={styles.inlineAddBtn}
@@ -879,11 +884,13 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               </button>
                             ) : (
                               <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
+                            ))}
+                            {!hideItemType && (
+                              <div style={styles.hintRow}>
+                                <span style={styles.hintPill}>Tip</span>
+                                Pick from <b>SAVED</b> (remembered defaults) or <b>FBR catalog</b> to auto-fill HS Code & UOM.
+                              </div>
                             )}
-                            <div style={styles.hintRow}>
-                              <span style={styles.hintPill}>Tip</span>
-                              Pick from <b>SAVED</b> (remembered defaults) or <b>FBR catalog</b> to auto-fill HS Code & UOM.
-                            </div>
                           </div>
                         </div>
 
@@ -905,8 +912,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         {/* Bulk Item Type apply — single dropdown sets the
                             same catalog row across all lines. Saves 20+
                             picks when every item on the bill is the same
-                            FBR category. */}
-                        {allItems.length > 1 && (
+                            FBR category. Hidden in Bills mode. */}
+                        {!hideItemType && allItems.length > 1 && (
                           <div style={{
                             display: "flex", alignItems: "center", gap: "0.65rem",
                             flexWrap: "wrap", padding: "0.55rem 0.85rem",
@@ -961,7 +968,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             <thead>
                               <tr style={styles.unifiedThead}>
                                 <th style={{ ...styles.unifiedTh, width: "4%" }}>DC#</th>
-                                <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type (FBR)</th>
+                                {!hideItemType && (
+                                  <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type (FBR)</th>
+                                )}
                                 <th style={{ ...styles.unifiedTh, width: "16%" }}>Description</th>
                                 <th style={{ ...styles.unifiedTh, width: "9%" }}>Qty</th>
                                 <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
@@ -980,6 +989,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                     <td style={{ ...styles.unifiedTd, fontSize: "0.76rem", color: colors.textSecondary }}>
                                       {item.challanNumber}
                                     </td>
+                                    {!hideItemType && (
                                     <td style={styles.unifiedTd}>
                                       {/* Picking an ItemType auto-fills HS Code, UOM, SaleType,
                                           FbrUOMId on this row — identical behaviour to EditBillForm.
@@ -1017,6 +1027,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                         style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                                       />
                                     </td>
+                                    )}
                                     <td style={styles.unifiedTd}>
                                       {/* Description is locked to the picked Item Type's name when
                                           one is set — same rule as the no-challan form. Clearing the
@@ -1024,7 +1035,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                           search saved items, pick from the FBR catalog, or type
                                           freely. The challan's original description still seeds the
                                           field on first load via the `?? item.description` fallback. */}
-                                      {itemTypeIds[item.id] ? (
+                                      {(!hideItemType && itemTypeIds[item.id]) ? (
                                         <input
                                           type="text"
                                           readOnly

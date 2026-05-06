@@ -52,7 +52,13 @@ export default function App() {
           <Route path="/po-formats" element={<POFormatsPage />} />
           <Route path="/challans" element={<ChallansPage />} />
           <Route path="/challans/import" element={<ImportChallansPage />} />
-          <Route path="/invoices" element={<InvoicePage />} />
+          {/* Bills tab — pre-FBR data entry. No item-type column, no FBR
+              bulk actions, but shows a per-row "Submitted to FBR" badge so
+              the operator knows which bills are locked. */}
+          <Route path="/bills" element={<InvoicePage mode="bills" />} />
+          {/* Invoices tab — FBR classification & submission. Item-type
+              editing + Validate All / Submit All bulk actions live here. */}
+          <Route path="/invoices" element={<InvoicePage mode="invoices" />} />
           <Route path="/item-rate-history" element={<ItemRateHistoryPage />} />
           <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
           <Route path="/goods-receipts" element={<GoodsReceiptsPage />} />

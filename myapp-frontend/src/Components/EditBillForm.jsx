@@ -38,7 +38,11 @@ const colors = {
  * Description and UOM use LookupAutocomplete with /api/lookup/items and /api/lookup/units,
  * matching the delivery challan form — picks existing values, creates new ones if needed.
  */
-export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = false }) {
+export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = false, hideItemType = false }) {
+  // hideItemType: true when this form is mounted from the Bills tab.
+  // Hides the Item Type (FBR) column header, the per-row picker, and the
+  // bulk-apply toolbar. Existing item-type bindings on the bill are
+  // preserved on save — Bills mode just doesn't expose editing them.
   const { has } = usePermissions();
   // Three permission tiers for editing a bill, ordered narrowest → broadest:
   //   • invoices.manage.update.itemtype       → ONLY Item Type column
@@ -539,8 +543,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                       - "All rows": overwrites Item Type on every row
                       - "Empty rows only": fills only rows that don't have one
                     Available to narrow-perm users too — it's still just an
-                    Item Type pick. */}
-                {!lockItemType && items.length > 1 && (
+                    Item Type pick. Hidden in Bills mode. */}
+                {!hideItemType && !lockItemType && items.length > 1 && (
                   <div style={styles.bulkApplyBar}>
                     <span style={styles.bulkApplyLabel}>
                       Apply same Item Type to:
@@ -574,7 +578,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                   <table style={styles.table}>
                     <thead>
                       <tr style={styles.thead}>
-                        <th style={{ ...styles.th, width: 180, minWidth: 180 }}>Item Type (FBR)</th>
+                        {!hideItemType && (
+                          <th style={{ ...styles.th, width: 180, minWidth: 180 }}>Item Type (FBR)</th>
+                        )}
                         <th style={{ ...styles.th, minWidth: 140 }}>Description</th>
                         <th style={{ ...styles.th, width: 120, minWidth: 120 }}>Qty</th>
                         <th style={{ ...styles.th, width: 110, minWidth: 110 }}>UOM</th>
@@ -589,19 +595,21 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                         const hasItemType = !!item.itemTypeId;
                         return (
                           <tr key={item.id || `new-${idx}`}>
-                            <td style={styles.td}>
-                              {lockItemType ? (
-                                <div style={styles.readOnlyText}>{item.itemTypeName || <span style={styles.muted}>—</span>}</div>
-                              ) : (
-                                <SearchableItemTypeSelect
-                                  items={filteredItemTypes}
-                                  value={item.itemTypeId || ""}
-                                  onChange={(newId, picked) => updateItemType(idx, newId ? parseInt(newId) : null, picked)}
-                                  placeholder="Pick item…"
-                                  style={styles.tableInput}
-                                />
-                              )}
-                            </td>
+                            {!hideItemType && (
+                              <td style={styles.td}>
+                                {lockItemType ? (
+                                  <div style={styles.readOnlyText}>{item.itemTypeName || <span style={styles.muted}>—</span>}</div>
+                                ) : (
+                                  <SearchableItemTypeSelect
+                                    items={filteredItemTypes}
+                                    value={item.itemTypeId || ""}
+                                    onChange={(newId, picked) => updateItemType(idx, newId ? parseInt(newId) : null, picked)}
+                                    placeholder="Pick item…"
+                                    style={styles.tableInput}
+                                  />
+                                )}
+                              </td>
+                            )}
                             <td style={styles.td}>
                               {lockNonItemType ? (
                                 <div style={styles.readOnlyText}>{item.description || <span style={styles.muted}>—</span>}</div>

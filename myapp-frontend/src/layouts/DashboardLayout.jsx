@@ -187,7 +187,7 @@ export default function DashboardLayout() {
   // recomputing on every render.
   const activeSection = useMemo(() => {
     const p = location.pathname.toLowerCase();
-    if (p.startsWith("/challans") || p === "/invoices" || p === "/item-rate-history") return "sales";
+    if (p.startsWith("/challans") || p === "/bills" || p === "/invoices" || p === "/item-rate-history") return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock")) return "purchases";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
@@ -295,10 +295,20 @@ export default function DashboardLayout() {
                   <span>Delivery Challans</span>
                 </NavLink>
               </Can>
+              {/* Sales tab is split: Bills = pre-FBR data entry (no item-type
+                  column, no Validate All / Submit All); Invoices = FBR
+                  classification + submission. Both behind invoices.list.view —
+                  the same dataset, two views. */}
+              <Can permission="invoices.list.view">
+                <NavLink to="/bills" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdReceipt className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Bills</span>
+                </NavLink>
+              </Can>
               <Can permission="invoices.list.view">
                 <NavLink to="/invoices" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdReceipt className="dl-subitem__icon" aria-hidden="true" />
-                  <span>Bills</span>
+                  <span>Invoices</span>
                 </NavLink>
               </Can>
               <Can permission="itemratehistory.view">
