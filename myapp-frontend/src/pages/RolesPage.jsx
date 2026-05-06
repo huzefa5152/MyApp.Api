@@ -28,6 +28,9 @@ import { notify } from "../utils/notify";
 // Shared modal baseline — gradient header, blurred backdrop, size tiers,
 // non-movable. See comment in theme.js modalSizes for tier guidance.
 import { formStyles, modalSizes } from "../theme";
+// Section layout config — maps catalog modules to navbar super-groups.
+// Edit this file to add a new module/screen; nothing else here needs to change.
+import { groupTreeBySections, getModuleLabel } from "../config/permissionSections";
 
 const colors = {
   blue: "#0d47a1",
@@ -46,6 +49,7 @@ const colors = {
   warn: "#b26a00",
   warnLight: "#fff4e0",
 };
+
 
 export default function RolesPage() {
   const { user: currentUser } = useAuth();
@@ -67,6 +71,7 @@ export default function RolesPage() {
   const [msg, setMsg] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [collapsedModules, setCollapsedModules] = useState(() => new Set());
+  const [collapsedSections, setCollapsedSections] = useState(() => new Set());
 
   const fetchAll = async () => {
     setLoading(true);
@@ -88,12 +93,17 @@ export default function RolesPage() {
   // module headers at first glance, and can drill in only where they need
   // to. Far less overwhelming than seeing 57 permissions sprawled out.
   const allModulesCollapsed = () => new Set(tree.map((m) => m.module));
+  // Sections start expanded so the operator immediately sees the navbar
+  // structure (Sales / Purchases / Configuration / Administration); modules
+  // inside them stay collapsed for a tidy stack.
+  const allSectionsExpanded = () => new Set();
 
   const openCreate = () => {
     setEditRole(null);
     setForm({ name: "", description: "", permissionKeys: new Set() });
     setMsg(null);
     setCollapsedModules(allModulesCollapsed());
+    setCollapsedSections(allSectionsExpanded());
     setModalOpen(true);
   };
 
@@ -106,6 +116,7 @@ export default function RolesPage() {
     });
     setMsg(null);
     setCollapsedModules(allModulesCollapsed());
+    setCollapsedSections(allSectionsExpanded());
     setModalOpen(true);
   };
 
@@ -155,6 +166,30 @@ export default function RolesPage() {
       if (next.has(moduleName)) next.delete(moduleName);
       else next.add(moduleName);
       return next;
+    });
+  };
+
+  const toggleSectionCollapsed = (sectionName) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(sectionName)) next.delete(sectionName);
+      else next.add(sectionName);
+      return next;
+    });
+  };
+
+  const toggleSection = (sectionGroup, allSelected) => {
+    setForm((f) => {
+      const next = new Set(f.permissionKeys);
+      sectionGroup.modules.forEach((mod) =>
+        mod.pages.forEach((pg) =>
+          pg.permissions.forEach((p) => {
+            if (allSelected) next.delete(p.key);
+            else next.add(p.key);
+          })
+        )
+      );
+      return { ...f, permissionKeys: next };
     });
   };
 
@@ -218,6 +253,12 @@ export default function RolesPage() {
     () => tree.reduce((n, m) => n + m.pages.reduce((pn, pg) => pn + pg.permissions.length, 0), 0),
     [tree]
   );
+
+  // Re-bucket the API tree (which is module → page → permission) into
+  // section → module → page → permission so the Roles editor mirrors the
+  // sidebar layout. The mapping config lives in
+  // `src/config/permissionSections.js` — edit there to add modules.
+  const groupedSections = useMemo(() => groupTreeBySections(tree), [tree]);
 
   // ── Render ───────────────────────────────────────────────────────────────
   if (!canView) {
@@ -383,8 +424,11 @@ export default function RolesPage() {
                   <button
                     type="button"
                     style={styles.smallLinkBtn}
-                    onClick={() => setCollapsedModules(new Set(tree.map((m) => m.module)))}
-                    title="Collapse every module group"
+                    onClick={() => {
+                      setCollapsedSections(new Set(groupedSections.map((s) => s.section)));
+                      setCollapsedModules(new Set(tree.map((m) => m.module)));
+                    }}
+                    title="Collapse every section and module"
                   >
                     Collapse all
                   </button>
@@ -392,8 +436,11 @@ export default function RolesPage() {
                   <button
                     type="button"
                     style={styles.smallLinkBtn}
-                    onClick={() => setCollapsedModules(new Set())}
-                    title="Expand every module group"
+                    onClick={() => {
+                      setCollapsedSections(new Set());
+                      setCollapsedModules(new Set());
+                    }}
+                    title="Expand every section and module"
                   >
                     Expand all
                   </button>
@@ -404,7 +451,47 @@ export default function RolesPage() {
               </div>
 
               <div style={styles.permTree}>
-                {tree.map((mod) => {
+                {groupedSections.map((sec) => {
+                  const secKeys = sec.modules.flatMap((m) =>
+                    m.pages.flatMap((pg) => pg.permissions.map((p) => p.key))
+                  );
+                  const secSelected = secKeys.filter((k) => form.permissionKeys.has(k)).length;
+                  const secAll = secSelected === secKeys.length;
+                  const secSome = secSelected > 0 && secSelected < secKeys.length;
+                  const secCollapsed = collapsedSections.has(sec.section);
+
+                  return (
+                    <div key={sec.section} style={styles.sectionBlock}>
+                      <div style={styles.sectionHeader}>
+                        <button
+                          type="button"
+                          style={styles.sectionToggle}
+                          onClick={() => toggleSectionCollapsed(sec.section)}
+                          aria-expanded={!secCollapsed}
+                        >
+                          {secCollapsed ? <MdExpandMore /> : <MdExpandLess />}
+                        </button>
+                        <button
+                          type="button"
+                          style={styles.sectionCheckBtn}
+                          onClick={() => toggleSection(sec, secAll)}
+                          title={secAll ? "Clear section" : "Select all in section"}
+                        >
+                          {secAll ? (
+                            <MdCheckBox style={{ color: "#fff", fontSize: "1.2rem" }} />
+                          ) : secSome ? (
+                            <MdIndeterminateCheckBox style={{ color: "#fff", fontSize: "1.2rem" }} />
+                          ) : (
+                            <MdCheckBoxOutlineBlank style={{ color: "rgba(255,255,255,0.85)", fontSize: "1.2rem" }} />
+                          )}
+                          <span style={styles.sectionName}>{sec.section}</span>
+                          <span style={styles.sectionCount}>
+                            {secSelected}/{secKeys.length}
+                          </span>
+                        </button>
+                      </div>
+
+                      {!secCollapsed && sec.modules.map((mod) => {
                   const modKeys = mod.pages.flatMap((pg) => pg.permissions.map((p) => p.key));
                   const modSelected = modKeys.filter((k) => form.permissionKeys.has(k)).length;
                   const modAll = modSelected === modKeys.length;
@@ -435,7 +522,7 @@ export default function RolesPage() {
                           ) : (
                             <MdCheckBoxOutlineBlank style={{ color: colors.textSecondary, fontSize: "1.15rem" }} />
                           )}
-                          <span style={styles.moduleName}>{mod.module}</span>
+                          <span style={styles.moduleName}>{getModuleLabel(mod.module)}</span>
                           <span style={styles.moduleCount}>
                             {modSelected}/{modKeys.length}
                           </span>
@@ -484,6 +571,9 @@ export default function RolesPage() {
                           </div>
                         );
                       })}
+                    </div>
+                  );
+                })}
                     </div>
                   );
                 })}
@@ -737,6 +827,54 @@ const styles = {
     maxHeight: "46vh",
     overflowY: "auto",
     background: "#fafcfe",
+  },
+  sectionBlock: { borderBottom: `2px solid ${colors.cardBorder}` },
+  sectionToggle: {
+    background: "transparent",
+    border: "none",
+    color: "#fff",
+    cursor: "pointer",
+    padding: "0.2rem",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "none",
+  },
+  sectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+    padding: "0.5rem 0.6rem",
+    gap: "0.25rem",
+    color: "#fff",
+    position: "sticky",
+    top: 0,
+    zIndex: 1,
+  },
+  sectionCheckBtn: {
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    padding: "0.25rem",
+    fontWeight: 700,
+    color: "#fff",
+    fontSize: "0.95rem",
+    textAlign: "left",
+    letterSpacing: "0.02em",
+    textTransform: "uppercase",
+  },
+  sectionName: { flex: 1 },
+  sectionCount: {
+    fontWeight: 700,
+    color: colors.blue,
+    fontSize: "0.78rem",
+    background: "#fff",
+    borderRadius: 50,
+    padding: "0.1rem 0.6rem",
   },
   moduleBlock: { borderBottom: `1px solid ${colors.cardBorder}` },
   moduleHeader: {
