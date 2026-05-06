@@ -204,7 +204,7 @@ export default function DashboardPage() {
         permCheck("companies.manage.view") ? getCompanies()                       : skip,
         permCheck("clients.manage.view")   ? getClientsCount(cid)                 : skip,
         permCheck("challans.list.view")    ? getDeliveryChallansCount(cid)        : skip,
-        permCheck("invoices.list.view")    ? getInvoicesCount(cid)                : skip,
+        permCheck("bills.list.view")       ? getInvoicesCount(cid)                : skip,
       ]);
       const [companiesRes, clientsCountRes, challansCountRes, invoicesCountRes] = results;
       const pickNum = (r) => r.status === "fulfilled" && r.value && typeof r.value.data === "number" ? r.value.data : 0;
@@ -317,9 +317,9 @@ export default function DashboardPage() {
       desc: "Create bills from pending challans, print bills and submit tax invoices to FBR.",
       borderColor: "#e1bee7",
       btnColor: "#6a1b9a",
-      path: "/invoices",
+      path: "/bills",
       btnLabel: "Go to Bills",
-      permission: "invoices.list.view",
+      permission: "bills.list.view",
     },
   ].filter((card) => permCheck(card.permission));
 

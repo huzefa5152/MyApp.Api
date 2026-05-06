@@ -50,54 +50,58 @@ namespace MyApp.Api.Helpers
             new("challans.import.create",  "Challans", "Import", "Create", "Import challans from an Excel template"),
             new("challans.print.view",     "Challans", "Print",  "View",   "Print or download challans"),
 
-            // ── Invoices ────────────────────────────────────────────────────
-            new("invoices.list.view",      "Invoices", "List",   "View",   "View the invoices list"),
-            new("invoices.manage.create",  "Invoices", "Manage", "Create", "Create a new invoice"),
+            // ── Bills (data entry — no FBR concerns) ────────────────────────
+            // Sales is split across two screens that view the same underlying
+            // bill data:
+            //   • Bills tab — operational billing (create / edit / delete /
+            //     print). Item Type is the only FBR-classification field
+            //     exposed here; HS Code / Sale Type / scenario picker are
+            //     hidden.
+            //   • Invoices tab — FBR classification & submission (Tax Invoice
+            //     print / Validate / Submit / FBR preview / Exclude).
+            // Each side has its own permissions so a bookkeeper role can hold
+            // bills.* without invoices.fbr.*, and an FBR officer role can hold
+            // invoices.fbr.* without bills.manage.*.
+            new("bills.list.view",          "Bills", "List",   "View",   "View the bills list (powers both Bills and Invoices tabs)"),
+            new("bills.manage.create",      "Bills", "Manage", "Create", "Create a new bill (challan-linked)"),
             // Standalone create — operator can issue a bill WITHOUT a linked
-            // delivery challan. Useful for FBR-only flows where a challan
-            // wasn't issued (e.g. service invoices, retail sales, ad-hoc
-            // billing). Carved out as a separate permission so a role can
-            // be granted ONLY this without also gaining the regular
+            // delivery challan. Carved out as a separate permission so a role
+            // can be granted ONLY this without also gaining the regular
             // create-from-challan flow, or vice-versa.
-            new("invoices.manage.create.standalone", "Invoices", "Manage", "Create (No Challan)", "Create a bill directly without linking a delivery challan (FBR-only flow)"),
-            new("invoices.manage.update",  "Invoices", "Manage", "Update", "Edit an invoice (all fields)"),
-            // Narrow permission: lets a user re-classify an invoice line by
-            // picking a different ItemType, but blocks every other edit
-            // (price, qty, description, GST rate, dates, payment terms,
-            // doc type, etc.). Useful for FBR-classification helpers who
-            // shouldn't touch commercial values. SUPERSEDED by the broader
-            // invoices.manage.update — granting both is safe; granting only
-            // .itemtype restricts the user to the narrow flow.
-            new("invoices.manage.update.itemtype", "Invoices", "Manage", "Update Item Type", "Edit ONLY the Item Type column on a bill (no other fields)"),
-            // Strict superset of update.itemtype: same narrow flow, but the
-            // operator can also adjust the Quantity column (everything else
-            // still locked — price / desc / GST / dates / payment terms /
-            // doc type / SRO etc. remain read-only). Use this for users
-            // who classify bills AND need to correct qty mistakes that the
-            // challan can't correct (e.g. a returned item) without giving
-            // them full price-edit power.
-            new("invoices.manage.update.itemtype.qty", "Invoices", "Manage", "Update Item Type + Qty", "Edit Item Type and Quantity columns on a bill (no other fields)"),
-            new("invoices.manage.delete",  "Invoices", "Manage", "Delete", "Delete an invoice"),
+            new("bills.manage.create.standalone", "Bills", "Manage", "Create (No Challan)", "Create a bill directly without linking a delivery challan"),
+            new("bills.manage.update",      "Bills", "Manage", "Update", "Edit a bill (all fields)"),
+            new("bills.manage.delete",      "Bills", "Manage", "Delete", "Delete a bill"),
+            new("bills.print.view",         "Bills", "Print",  "View",   "Print or download a Bill (Bill print, Bill PDF, Bill XLS)"),
+
+            // ── Invoices (FBR classification + submission) ──────────────────
+            new("invoices.list.view",      "Invoices", "List",   "View",   "View the Invoices tab (FBR submission view of bills)"),
+            // Narrow edit permissions live under Invoices because item-type
+            // classification is the Invoices tab's responsibility — a Bills-
+            // only user (bookkeeper) doesn't need to set ItemType. The
+            // bookkeeping fields (price, dates, descriptions) stay locked
+            // when these are the user's only update perm; only Item Type
+            // (and optionally Qty) become editable.
+            new("invoices.manage.update.itemtype",     "Invoices", "Manage", "Update Item Type",       "Edit ONLY the Item Type column on a bill from the Invoices tab"),
+            new("invoices.manage.update.itemtype.qty", "Invoices", "Manage", "Update Item Type + Qty", "Edit Item Type and Quantity columns on a bill from the Invoices tab"),
             // Two granular FBR permissions — separating dry-run from real
             // submission so an operator can be allowed to validate without
-            // being trusted to commit. A user with .submit but not
-            // .validate would never get to use the validate button, so
-            // most roles will get both. Granting .validate alone is the
-            // useful asymmetric case (junior operator preparing bills,
-            // senior reviewer submits).
-            new("invoices.fbr.validate",   "Invoices", "FBR",    "Validate", "Dry-run validate an invoice with FBR (no commit, no IRN issued)"),
-            new("invoices.fbr.submit",     "Invoices", "FBR",    "Submit",   "Submit an invoice to FBR digital invoicing (commits, returns IRN)"),
+            // being trusted to commit. A user with .submit but not .validate
+            // would never get to use the validate button, so most roles will
+            // get both. Granting .validate alone is the useful asymmetric case
+            // (junior operator preparing bills, senior reviewer submits).
+            new("invoices.fbr.validate",   "Invoices", "FBR",    "Validate", "Dry-run validate a bill with FBR (no commit, no IRN issued)"),
+            new("invoices.fbr.submit",     "Invoices", "FBR",    "Submit",   "Submit a bill to FBR digital invoicing (commits, returns IRN)"),
             // View the JSON we would POST to FBR — grouped items, totals,
             // tax breakdown — without sending anything. Useful for review
             // / sign-off before clicking the real Validate / Submit button.
             new("invoices.fbr.preview",    "Invoices", "FBR",    "Preview",  "View the FBR submission preview (grouped items, totals, raw JSON) without sending to FBR"),
             // Independent permission for the per-bill "Exclude from FBR /
             // Include in FBR" toggle. Excluded bills are skipped by Validate
-            // All / Submit All. Carved out of invoices.manage.update so an
-            // operator can be trusted to flip the toggle without being
-            // trusted to edit prices, dates, or items on the bill itself.
+            // All / Submit All. Carved out of bills.manage.update so an
+            // operator can be trusted to flip the toggle without being trusted
+            // to edit prices, dates, or items on the bill itself.
             new("invoices.fbr.exclude",    "Invoices", "FBR",    "Exclude/Include", "Mark a bill as excluded from FBR bulk Validate/Submit, or re-include it"),
-            new("invoices.print.view",     "Invoices", "Print",  "View",   "Print or download invoices"),
+            new("invoices.print.view",     "Invoices", "Print",  "View",   "Print or download a Tax Invoice (Tax Invoice print, Tax PDF, Tax XLS)"),
 
             // ── PO Formats (Purchase-Order parser registry) ─────────────────
             new("poformats.manage.view",   "POFormats", "Manage", "View",   "View registered PO formats"),

@@ -55,10 +55,14 @@ export default function App() {
           {/* Bills tab — pre-FBR data entry. No item-type column, no FBR
               bulk actions, but shows a per-row "Submitted to FBR" badge so
               the operator knows which bills are locked. */}
-          <Route path="/bills" element={<InvoicePage mode="bills" />} />
+          {/* Distinct keys force a fresh mount when switching tabs so
+              filter state (search, client, dates) doesn't leak between
+              modes — and so the ?search= deep-link from a Bill card's
+              "Open in Invoices" button always re-seeds the search box. */}
+          <Route path="/bills" element={<InvoicePage key="bills" mode="bills" />} />
           {/* Invoices tab — FBR classification & submission. Item-type
               editing + Validate All / Submit All bulk actions live here. */}
-          <Route path="/invoices" element={<InvoicePage mode="invoices" />} />
+          <Route path="/invoices" element={<InvoicePage key="invoices" mode="invoices" />} />
           <Route path="/item-rate-history" element={<ItemRateHistoryPage />} />
           <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
           <Route path="/goods-receipts" element={<GoodsReceiptsPage />} />

@@ -62,7 +62,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
   const permPrint = has("challans.print.view");
-  const permCreateBill = has("invoices.manage.create");
+  const permCreateBill = has("bills.manage.create");
   const permCreate = has("challans.manage.create");
   const [selectedChallan, setSelectedChallan] = useState(null);
 

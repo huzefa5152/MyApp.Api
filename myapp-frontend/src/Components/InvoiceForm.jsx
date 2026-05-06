@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { MdSearch, MdCheck, MdInfo, MdLock, MdAdd, MdPersonAdd } from "react-icons/md";
+import { MdSearch, MdCheck, MdInfo, MdLock, MdAdd, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { getPendingChallansByCompany } from "../api/challanApi";
 import { createInvoice, getLastRatesForChallan } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
@@ -66,13 +66,15 @@ const SCENARIO_META = {
   SN028: { buyerKind: "walk-in" },
 };
 
-export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId, hideItemType = false }) {
-  // hideItemType: true when this form is mounted from the Bills tab.
-  // Hides the Item Type (FBR) column header, the per-row ItemType picker,
-  // and the bulk-apply / "+ New Item Type" controls. Existing items still
-  // post their data to the same endpoint — the column is presentational
-  // only, the per-item itemTypeId stays whatever it was (null on create).
-  // Operators classify items later via the Invoices tab.
+export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId, billsMode = false }) {
+  // billsMode: true when this form is mounted from the Bills tab. Hides
+  // every FBR-classification control — Item Type column + picker, "+ New
+  // Item Type" button, bulk-apply toolbar, HS Code column, Sale Type
+  // column, FBR scenario picker. The challan items still flow through and
+  // their auto-detected FBR fields (HSCode/UOM/SaleType inherited from
+  // the catalog) are sent to the API; they're just not editable here.
+  // Item-Type classification happens on the Invoices tab. Description
+  // stays the existing challan-style SmartItemAutocomplete.
   const { has } = usePermissions();
   const canCreateClient   = has("clients.manage.create");
   const canCreateItemType = has("itemtypes.manage.create");
@@ -121,6 +123,13 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // every item happens to share the same sale type.
   const [scenarios, setScenarios] = useState([]);
   const [scenarioCode, setScenarioCode] = useState("");
+  // Step 1 (FBR scenario) is collapsed by default — most bills use the
+  // auto-defaulted SN001 and the operator never needs to switch. Steps 2
+  // (Buyer) and 3 (Bill Details inputs row) stay expanded by default
+  // since they hold required input. Same UX as StandaloneInvoiceForm.
+  const [scenarioPickerOpen, setScenarioPickerOpen] = useState(false);
+  const [buyerOpen, setBuyerOpen] = useState(true);
+  const [billHeaderOpen, setBillHeaderOpen] = useState(true);
 
   // Bulk-apply mode — drives the "Apply same Item Type to: [All / Only empty]"
   // selector above the items grid. Saves 20+ catalog picks when every line on
@@ -581,187 +590,280 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
               <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading...</div>
             ) : (
               <>
-                {/* Step 1 — Pick FBR scenario. Same card grid as
-                    StandaloneInvoiceForm so both flows feel identical. */}
+                {/* Step 1 — Pick FBR scenario. Collapsed by default —
+                    operator sees a one-line summary of the auto-defaulted
+                    scenario and can expand to switch. Auto-collapses on
+                    pick so the form scrolls back into Buyer / Items.
+                    Same UX as StandaloneInvoiceForm. */}
                 <div style={{ marginBottom: "1rem" }}>
-                  <label style={styles.stepLabel}>
-                    <span style={styles.stepNum}>1</span> Pick FBR Scenario
-                  </label>
-                  <p style={styles.stepHint}>
-                    Each scenario locks the Sale Type, GST rate, and buyer type.
-                    Only the scenarios applicable to your company's profile
-                    ({company?.fbrBusinessActivity || "—"} · {company?.fbrSector || "—"}) are listed.
-                  </p>
-                  {enrichedScenarios.length === 0 ? (
-                    <div style={styles.warnAlert}>
-                      <MdInfo size={16} /> No FBR scenarios available. Configure Business Activity
-                      and Sector on the Company before creating a bill.
-                    </div>
-                  ) : (
-                    <div style={styles.scenarioGrid}>
-                      {enrichedScenarios.map((s) => {
-                        const active = scenarioCode === s.code;
-                        return (
-                          <button
-                            type="button"
-                            key={s.code}
-                            onClick={() => setScenarioCode(s.code)}
-                            style={{
-                              ...styles.scenarioCard,
-                              borderColor: active ? colors.blue : colors.cardBorder,
-                              backgroundColor: active ? "#e3f2fd" : "#fff",
-                            }}
-                          >
-                            <div style={styles.scenarioCardHeader}>
-                              <span style={styles.scenarioCode}>{s.code}</span>
-                              {active && <MdCheck size={16} color={colors.blue} />}
-                            </div>
-                            <div style={styles.scenarioSaleType}>{s.saleType}</div>
-                            <div style={styles.scenarioRate}>{s.defaultRate}% GST</div>
-                            <div style={styles.scenarioBadges}>
-                              {s.meta.buyerKind === "b2b-registered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>Registered buyer</span>}
-                              {s.meta.buyerKind === "b2b-unregistered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}>Unregistered buyer</span>}
-                              {s.meta.buyerKind === "walk-in" && <span style={{ ...styles.scenarioBadge, ...styles.badgePurple }}>Walk-in retail</span>}
-                            </div>
-                          </button>
-                        );
-                      })}
+                  <button
+                    type="button"
+                    onClick={() => setScenarioPickerOpen((v) => !v)}
+                    style={styles.scenarioCollapseHeader}
+                  >
+                    <span style={styles.stepNum}>1</span>
+                    <span style={styles.scenarioCollapseTitle}>FBR Scenario</span>
+                    {chosenScenario ? (
+                      <span style={styles.scenarioCollapseSummary}>
+                        <span style={styles.scenarioCollapseCode}>{chosenScenario.code}</span>
+                        <span>·</span>
+                        <span>{chosenScenario.saleType}</span>
+                        <span>·</span>
+                        <span>{chosenScenario.defaultRate}% GST</span>
+                        {chosenScenario.meta.buyerKind === "b2b-registered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>Registered</span>}
+                        {chosenScenario.meta.buyerKind === "b2b-unregistered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}>Unregistered</span>}
+                        {chosenScenario.meta.buyerKind === "walk-in" && <span style={{ ...styles.scenarioBadge, ...styles.badgePurple }}>Walk-in</span>}
+                      </span>
+                    ) : (
+                      <span style={styles.scenarioCollapseSummaryMuted}>
+                        Pick an FBR scenario to start
+                      </span>
+                    )}
+                    <span style={styles.scenarioCollapseChevron}>
+                      {scenarioPickerOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
+                      <span style={styles.scenarioCollapseChevronLabel}>
+                        {scenarioPickerOpen ? "Hide" : "Change"}
+                      </span>
+                    </span>
+                  </button>
+
+                  {scenarioPickerOpen && (
+                    <div style={styles.scenarioCollapseBody}>
+                      <p style={styles.stepHint}>
+                        Each scenario locks the Sale Type, GST rate, and buyer type.
+                        Only the scenarios applicable to your company's profile
+                        ({company?.fbrBusinessActivity || "—"} · {company?.fbrSector || "—"}) are listed.
+                      </p>
+                      {enrichedScenarios.length === 0 ? (
+                        <div style={styles.warnAlert}>
+                          <MdInfo size={16} /> No FBR scenarios available. Configure Business Activity
+                          and Sector on the Company before creating a bill.
+                        </div>
+                      ) : (
+                        <div style={styles.scenarioGrid}>
+                          {enrichedScenarios.map((s) => {
+                            const active = scenarioCode === s.code;
+                            return (
+                              <button
+                                type="button"
+                                key={s.code}
+                                onClick={() => {
+                                  setScenarioCode(s.code);
+                                  setScenarioPickerOpen(false);
+                                }}
+                                style={{
+                                  ...styles.scenarioCard,
+                                  borderColor: active ? colors.blue : colors.cardBorder,
+                                  backgroundColor: active ? "#e3f2fd" : "#fff",
+                                }}
+                              >
+                                <div style={styles.scenarioCardHeader}>
+                                  <span style={styles.scenarioCode}>{s.code}</span>
+                                  {active && <MdCheck size={16} color={colors.blue} />}
+                                </div>
+                                <div style={styles.scenarioSaleType}>{s.saleType}</div>
+                                <div style={styles.scenarioRate}>{s.defaultRate}% GST</div>
+                                <div style={styles.scenarioBadges}>
+                                  {s.meta.buyerKind === "b2b-registered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>Registered buyer</span>}
+                                  {s.meta.buyerKind === "b2b-unregistered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}>Unregistered buyer</span>}
+                                  {s.meta.buyerKind === "walk-in" && <span style={{ ...styles.scenarioBadge, ...styles.badgePurple }}>Walk-in retail</span>}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
 
-                {/* Step 2 — Pick a client. Filtered by scenario.buyerKind +
-                    "has at least one pending challan". Inline + button next
-                    to the dropdown spawns a ClientForm modal so the operator
-                    can create a buyer mid-flow. Permission gate matches
-                    StandaloneInvoiceForm. */}
-                {chosenScenario && (
-                  <div style={{ marginBottom: "1.25rem" }}>
-                    <label style={styles.stepLabel}>
-                      <span style={styles.stepNum}>2</span>
-                      {chosenScenario.meta.buyerKind === "walk-in" ? "Walk-in Buyer" : "Buyer"}
-                    </label>
-                    <div style={styles.inlineRow}>
-                      {clientsForScenario.length === 0 ? (
-                        <div style={{ ...styles.warnAlert, flex: 1 }}>
-                          <MdInfo size={16} />
-                          No matching{" "}
-                          {chosenScenario.meta.buyerKind === "b2b-registered" ? "Registered"
-                            : chosenScenario.meta.buyerKind === "b2b-unregistered" ? "Unregistered"
-                            : chosenScenario.meta.buyerKind === "walk-in" ? "Unregistered (Walk-in)" : ""}{" "}
-                          clients with pending challans.
-                          {canCreateClient ? " Add a buyer below." : " Switch scenarios or ask an admin to add one."}
+                {/* Step 2 — Pick a client. Collapsible — expanded by
+                    default. Filtered by scenario.buyerKind + "has at least
+                    one pending challan". Inline "+ New Buyer" button. */}
+                {chosenScenario && (() => {
+                  const selectedBuyer = clientsForScenario.find((c) => String(c.id) === String(selectedClientId));
+                  const pendingCount = selectedBuyer ? allChallans.filter((ch) => ch.clientId === selectedBuyer.id).length : 0;
+                  return (
+                    <div style={{ marginBottom: "1.25rem" }}>
+                      <button
+                        type="button"
+                        onClick={() => setBuyerOpen((v) => !v)}
+                        style={styles.scenarioCollapseHeader}
+                      >
+                        <span style={styles.stepNum}>2</span>
+                        <span style={styles.scenarioCollapseTitle}>
+                          {chosenScenario.meta.buyerKind === "walk-in" ? "Walk-in Buyer" : "Buyer"}
+                        </span>
+                        {selectedBuyer ? (
+                          <span style={styles.scenarioCollapseSummary}>
+                            <span>{selectedBuyer.name}</span>
+                            <span style={styles.scenarioCollapseMeta}>· {pendingCount} pending DC{pendingCount !== 1 ? "s" : ""}</span>
+                          </span>
+                        ) : (
+                          <span style={styles.scenarioCollapseSummaryMuted}>
+                            Choose a buyer
+                          </span>
+                        )}
+                        <span style={styles.scenarioCollapseChevron}>
+                          {buyerOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
+                          <span style={styles.scenarioCollapseChevronLabel}>
+                            {buyerOpen ? "Hide" : "Change"}
+                          </span>
+                        </span>
+                      </button>
+
+                      {buyerOpen && (
+                        <div style={styles.scenarioCollapseBody}>
+                          <div style={styles.inlineRow}>
+                            {clientsForScenario.length === 0 ? (
+                              <div style={{ ...styles.warnAlert, flex: 1 }}>
+                                <MdInfo size={16} />
+                                No matching{" "}
+                                {chosenScenario.meta.buyerKind === "b2b-registered" ? "Registered"
+                                  : chosenScenario.meta.buyerKind === "b2b-unregistered" ? "Unregistered"
+                                  : chosenScenario.meta.buyerKind === "walk-in" ? "Unregistered (Walk-in)" : ""}{" "}
+                                clients with pending challans.
+                                {canCreateClient ? " Add a buyer below." : " Switch scenarios or ask an admin to add one."}
+                              </div>
+                            ) : (
+                              <select
+                                style={{ ...styles.select, flex: 1 }}
+                                value={selectedClientId}
+                                onChange={handleClientChange}
+                              >
+                                <option value="">— Choose a buyer —</option>
+                                {clientsForScenario.map((cl) => {
+                                  const count = allChallans.filter((ch) => ch.clientId === cl.id).length;
+                                  return (
+                                    <option key={cl.id} value={cl.id}>
+                                      {cl.name} ({count} pending DC{count !== 1 ? "s" : ""})
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            )}
+                            {canCreateClient ? (
+                              <button
+                                type="button"
+                                style={styles.inlineAddBtn}
+                                onClick={() => setShowAddClient(true)}
+                                title="Create a new buyer without leaving this form"
+                              >
+                                <MdPersonAdd size={14} /> New Buyer
+                              </button>
+                            ) : (
+                              <PermissionLackedHint perm="clients.manage.create" what="add a new buyer" />
+                            )}
+                          </div>
+                          {company && company.startingInvoiceNumber === 0 && (
+                            <div style={{ ...styles.errorAlert, marginTop: "0.5rem", marginBottom: 0 }}>
+                              Starting bill number not set for this company. Please configure it in the Companies page.
+                            </div>
+                          )}
+                          {company && company.startingInvoiceNumber > 0 && (
+                            <span style={{ fontSize: "0.78rem", color: colors.textSecondary, marginTop: "0.3rem", display: "block" }}>
+                              Next bill #: {company.currentInvoiceNumber > 0 ? company.currentInvoiceNumber + 1 : company.startingInvoiceNumber}
+                            </span>
+                          )}
                         </div>
-                      ) : (
-                        <select
-                          style={{ ...styles.select, flex: 1 }}
-                          value={selectedClientId}
-                          onChange={handleClientChange}
-                        >
-                          <option value="">— Choose a buyer —</option>
-                          {clientsForScenario.map((cl) => {
-                            const count = allChallans.filter((ch) => ch.clientId === cl.id).length;
-                            return (
-                              <option key={cl.id} value={cl.id}>
-                                {cl.name} ({count} pending DC{count !== 1 ? "s" : ""})
-                              </option>
-                            );
-                          })}
-                        </select>
-                      )}
-                      {canCreateClient ? (
-                        <button
-                          type="button"
-                          style={styles.inlineAddBtn}
-                          onClick={() => setShowAddClient(true)}
-                          title="Create a new buyer without leaving this form"
-                        >
-                          <MdPersonAdd size={14} /> New Buyer
-                        </button>
-                      ) : (
-                        <PermissionLackedHint perm="clients.manage.create" what="add a new buyer" />
                       )}
                     </div>
-                    {company && company.startingInvoiceNumber === 0 && (
-                      <div style={{ ...styles.errorAlert, marginTop: "0.5rem", marginBottom: 0 }}>
-                        Starting bill number not set for this company. Please configure it in the Companies page.
-                      </div>
-                    )}
-                    {company && company.startingInvoiceNumber > 0 && (
-                      <span style={{ fontSize: "0.78rem", color: colors.textSecondary, marginTop: "0.3rem", display: "block" }}>
-                        Next bill #: {company.currentInvoiceNumber > 0 ? company.currentInvoiceNumber + 1 : company.startingInvoiceNumber}
-                      </span>
-                    )}
-                  </div>
-                )}
+                  );
+                })()}
 
-                {/* Step 3 — Bill details + DC selection + items.
-                    Mirrors StandaloneInvoiceForm's Step 3 numbering for
-                    visual consistency. Scenario is now Step 1, so it's no
-                    longer in this header row. */}
+                {/* Step 3 — Bill details (collapsible inputs row) +
+                    DC selection + items. Same UX as StandaloneInvoiceForm:
+                    the inputs row is collapsible (default open) so the
+                    operator can free vertical space for the items grid. */}
                 {chosenScenario && selectedClientId && company?.startingInvoiceNumber > 0 && (
                   <>
-                    <label style={styles.stepLabel}>
-                      <span style={styles.stepNum}>3</span> Bill Details
-                    </label>
-                    <div style={styles.row}>
-                      <div style={{ flex: 1, minWidth: 140 }}>
-                        <label style={styles.label}>Bill Date</label>
-                        <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 100 }}>
-                        <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
-                          GST Rate (%){chosenScenario && <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}>🔒 locked</span>}
-                        </label>
-                        <input
-                          type="number"
-                          style={{
-                            ...styles.input,
-                            backgroundColor: chosenScenario ? "#eef5ff" : colors.inputBg,
-                            cursor: chosenScenario ? "not-allowed" : "text",
-                          }}
-                          value={gstRate}
-                          onChange={(e) => setGstRate(e.target.value)}
-                          readOnly={!!chosenScenario}
-                          title={chosenScenario ? `Locked by ${chosenScenario.code}. Switch scenario to change.` : ""}
-                          min={0} max={100} step={0.5}
-                        />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 140 }}>
-                        <label style={styles.label}>Payment Terms</label>
-                        <input type="text" style={styles.input} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Optional" />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 140 }}>
-                        <label style={styles.label}>
-                          Document Type <span style={styles.optionalTag}>FBR</span>
-                        </label>
-                        <select
-                          style={styles.input}
-                          value={documentType}
-                          onChange={(e) => setDocumentType(parseInt(e.target.value))}
-                        >
-                          <option value={4}>Sale Invoice</option>
-                          <option value={9}>Debit Note</option>
-                          <option value={10}>Credit Note</option>
-                        </select>
-                      </div>
-                      <div style={{ flex: 1, minWidth: 140 }}>
-                        <label style={styles.label}>
-                          Payment Mode <span style={styles.optionalTag}>FBR</span>
-                        </label>
-                        <select
-                          style={styles.input}
-                          value={paymentMode}
-                          onChange={(e) => setPaymentMode(e.target.value)}
-                        >
-                          <option value="">— optional —</option>
-                          <option>Cash</option>
-                          <option>Credit</option>
-                          <option>Bank Transfer</option>
-                          <option>Cheque</option>
-                          <option>Online</option>
-                        </select>
-                      </div>
+                    <div style={{ marginBottom: "0.75rem" }}>
+                      <button
+                        type="button"
+                        onClick={() => setBillHeaderOpen((v) => !v)}
+                        style={styles.scenarioCollapseHeader}
+                      >
+                        <span style={styles.stepNum}>3</span>
+                        <span style={styles.scenarioCollapseTitle}>Bill Details</span>
+                        <span style={styles.scenarioCollapseSummary}>
+                          <span>{invoiceDate || "—"}</span>
+                          <span>·</span>
+                          <span>{gstRate}% GST</span>
+                          <span>·</span>
+                          <span>{documentType === 4 ? "Sale Invoice" : documentType === 9 ? "Debit Note" : documentType === 10 ? "Credit Note" : "—"}</span>
+                          {paymentMode && <><span>·</span><span>{paymentMode}</span></>}
+                        </span>
+                        <span style={styles.scenarioCollapseChevron}>
+                          {billHeaderOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
+                          <span style={styles.scenarioCollapseChevronLabel}>
+                            {billHeaderOpen ? "Hide" : "Edit"}
+                          </span>
+                        </span>
+                      </button>
+
+                      {billHeaderOpen && (
+                        <div style={{ ...styles.scenarioCollapseBody, marginBottom: 0 }}>
+                          <div style={styles.row}>
+                            <div style={{ flex: 1, minWidth: 140 }}>
+                              <label style={styles.label}>Bill Date</label>
+                              <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 100 }}>
+                              <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
+                                GST Rate (%){chosenScenario && <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}>🔒 locked</span>}
+                              </label>
+                              <input
+                                type="number"
+                                style={{
+                                  ...styles.input,
+                                  backgroundColor: chosenScenario ? "#eef5ff" : colors.inputBg,
+                                  cursor: chosenScenario ? "not-allowed" : "text",
+                                }}
+                                value={gstRate}
+                                onChange={(e) => setGstRate(e.target.value)}
+                                readOnly={!!chosenScenario}
+                                title={chosenScenario ? `Locked by ${chosenScenario.code}. Switch scenario to change.` : ""}
+                                min={0} max={100} step={0.5}
+                              />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 140 }}>
+                              <label style={styles.label}>Payment Terms</label>
+                              <input type="text" style={styles.input} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Optional" />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 140 }}>
+                              <label style={styles.label}>
+                                Document Type <span style={styles.optionalTag}>FBR</span>
+                              </label>
+                              <select
+                                style={styles.input}
+                                value={documentType}
+                                onChange={(e) => setDocumentType(parseInt(e.target.value))}
+                              >
+                                <option value={4}>Sale Invoice</option>
+                                <option value={9}>Debit Note</option>
+                                <option value={10}>Credit Note</option>
+                              </select>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 140 }}>
+                              <label style={styles.label}>
+                                Payment Mode <span style={styles.optionalTag}>FBR</span>
+                              </label>
+                              <select
+                                style={styles.input}
+                                value={paymentMode}
+                                onChange={(e) => setPaymentMode(e.target.value)}
+                              >
+                                <option value="">— optional —</option>
+                                <option>Cash</option>
+                                <option>Credit</option>
+                                <option>Bank Transfer</option>
+                                <option>Cheque</option>
+                                <option>Online</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Challan selection */}
@@ -868,12 +970,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             Items ({allItems.length})
                           </label>
                           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                            {/* Bills mode hides the Item Type controls — the
-                                catalog "+ New Item Type" button, the bulk
-                                Apply, and the FBR-tip pill. Operators classify
+                            {/* Bills mode hides all item-type-management
+                                controls — the catalog "+ New Item Type"
+                                button, the FBR-tip pill. Operators classify
                                 items on the Invoices tab; the Bills tab is
                                 financial entry only. */}
-                            {!hideItemType && (canCreateItemType ? (
+                            {!billsMode && (canCreateItemType ? (
                               <button
                                 type="button"
                                 style={styles.inlineAddBtn}
@@ -885,7 +987,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             ) : (
                               <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
                             ))}
-                            {!hideItemType && (
+                            {!billsMode && (
                               <div style={styles.hintRow}>
                                 <span style={styles.hintPill}>Tip</span>
                                 Pick from <b>SAVED</b> (remembered defaults) or <b>FBR catalog</b> to auto-fill HS Code & UOM.
@@ -913,7 +1015,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             same catalog row across all lines. Saves 20+
                             picks when every item on the bill is the same
                             FBR category. Hidden in Bills mode. */}
-                        {!hideItemType && allItems.length > 1 && (
+                        {!billsMode && allItems.length > 1 && (
                           <div style={{
                             display: "flex", alignItems: "center", gap: "0.65rem",
                             flexWrap: "wrap", padding: "0.55rem 0.85rem",
@@ -968,7 +1070,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             <thead>
                               <tr style={styles.unifiedThead}>
                                 <th style={{ ...styles.unifiedTh, width: "4%" }}>DC#</th>
-                                {!hideItemType && (
+                                {!billsMode && (
                                   <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type (FBR)</th>
                                 )}
                                 <th style={{ ...styles.unifiedTh, width: "16%" }}>Description</th>
@@ -989,7 +1091,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                     <td style={{ ...styles.unifiedTd, fontSize: "0.76rem", color: colors.textSecondary }}>
                                       {item.challanNumber}
                                     </td>
-                                    {!hideItemType && (
+                                    {!billsMode && (
                                     <td style={styles.unifiedTd}>
                                       {/* Picking an ItemType auto-fills HS Code, UOM, SaleType,
                                           FbrUOMId on this row — identical behaviour to EditBillForm.
@@ -1035,7 +1137,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                           search saved items, pick from the FBR catalog, or type
                                           freely. The challan's original description still seeds the
                                           field on first load via the `?? item.description` fallback. */}
-                                      {(!hideItemType && itemTypeIds[item.id]) ? (
+                                      {/* Bills mode never has Item Type set on a row (column is hidden),
+                                          so the description always renders as SmartItemAutocomplete.
+                                          Invoices mode keeps the existing locked-to-itemTypeName branch. */}
+                                      {(!billsMode && itemTypeIds[item.id]) ? (
                                         <input
                                           type="text"
                                           readOnly
@@ -1108,14 +1213,18 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                     <td style={{ ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
                                       {(item.quantity * price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
-                                    <td style={styles.unifiedTd}>
-                                      <input
-                                        type="text"
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem", fontFamily: "monospace" }}
-                                        value={itemHsCodes[item.id] || ""}
-                                        onChange={(e) => setItemHsCodes((p) => ({ ...p, [item.id]: e.target.value }))}
-                                        placeholder="auto"
-                                      />
+                                    <td
+                                      style={{
+                                        ...styles.unifiedTd,
+                                        backgroundColor: "#f4f6fa",
+                                        fontFamily: "monospace",
+                                        fontSize: "0.78rem",
+                                        color: itemHsCodes[item.id] ? colors.textPrimary : colors.textSecondary,
+                                        fontStyle: itemHsCodes[item.id] ? "normal" : "italic",
+                                      }}
+                                      title="HS Code auto-fills from the picked Item Type"
+                                    >
+                                      {itemHsCodes[item.id] || "—"}
                                     </td>
                                     <td style={styles.unifiedTd}>
                                       {/* Scenario-locked Sale Type — every line on the bill must use
@@ -1280,8 +1389,77 @@ const styles = {
 
   // ── Step labels + scenario picker grid (same as StandaloneInvoiceForm) ──
   stepLabel: { display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary, marginBottom: "0.4rem" },
-  stepNum: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", backgroundColor: colors.blue, color: "#fff", fontSize: "0.78rem", fontWeight: 800 },
+  stepNum: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", backgroundColor: colors.blue, color: "#fff", fontSize: "0.78rem", fontWeight: 800, flexShrink: 0 },
   stepHint: { margin: "0 0 0.6rem 30px", fontSize: "0.78rem", color: colors.textSecondary, lineHeight: 1.4 },
+  // Collapsible Step 1 (FBR Scenario picker) — clickable header bar that
+  // shows the auto-defaulted scenario summary and toggles the card grid.
+  // Mirrors StandaloneInvoiceForm so the two creation flows feel identical.
+  scenarioCollapseHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.6rem",
+    width: "100%",
+    padding: "0.6rem 0.85rem",
+    borderRadius: 10,
+    border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: "#f8faff",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    textAlign: "left",
+    boxShadow: "none",
+    margin: 0,
+  },
+  scenarioCollapseTitle: {
+    fontSize: "0.92rem",
+    fontWeight: 700,
+    color: colors.textPrimary,
+    flexShrink: 0,
+  },
+  scenarioCollapseSummary: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    flex: 1,
+    fontSize: "0.82rem",
+    color: colors.textPrimary,
+    flexWrap: "wrap",
+    minWidth: 0,
+  },
+  scenarioCollapseSummaryMuted: {
+    flex: 1,
+    fontSize: "0.82rem",
+    color: colors.textSecondary,
+    fontStyle: "italic",
+  },
+  scenarioCollapseMeta: {
+    color: colors.textSecondary,
+    fontSize: "0.78rem",
+  },
+  scenarioCollapseCode: {
+    fontWeight: 700,
+    color: colors.blue,
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  },
+  scenarioCollapseChevron: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.2rem",
+    color: colors.blue,
+    fontWeight: 600,
+    fontSize: "0.78rem",
+    flexShrink: 0,
+  },
+  scenarioCollapseChevronLabel: {
+    fontSize: "0.78rem",
+    fontWeight: 600,
+  },
+  scenarioCollapseBody: {
+    marginTop: "0.65rem",
+    padding: "0.65rem 0.85rem",
+    borderRadius: 10,
+    border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: "#fff",
+  },
   warnAlert: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.65rem 0.85rem", borderRadius: 8, backgroundColor: colors.warnLight, border: `1px solid ${colors.warn}30`, color: colors.warn, fontSize: "0.85rem" },
   scenarioGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "0.6rem", marginTop: "0.25rem" },
   scenarioCard: { textAlign: "left", padding: "0.7rem 0.85rem", borderRadius: 10, border: "2px solid", cursor: "pointer", display: "flex", flexDirection: "column", gap: "0.3rem", transition: "all 0.15s", backgroundColor: "#fff", fontFamily: "inherit" },

@@ -29,6 +29,11 @@ export default function SmartItemAutocomplete({
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
+  // Bumped on every scroll/resize while the dropdown is open so the portal
+  // re-renders with fresh getBoundingClientRect coords. Combined with
+  // position:fixed in viewport coords below, this keeps the dropdown glued
+  // to the input even when an ancestor (modal body, page root) scrolls.
+  const [, setReflow] = useState(0);
   const wrapperRef = useRef(null);
   const debounceRef = useRef(null);
 
@@ -48,6 +53,20 @@ export default function SmartItemAutocomplete({
       clearTimeout(debounceRef.current);
     };
   }, []);
+
+  // Follow scroll/resize while open. Capture-phase scroll listener catches
+  // scrolls inside any ancestor (modal body, table viewport), not just the
+  // window — bubbling doesn't propagate scroll events.
+  useEffect(() => {
+    if (!showDropdown) return;
+    const reflow = () => setReflow((n) => n + 1);
+    window.addEventListener("scroll", reflow, true);
+    window.addEventListener("resize", reflow);
+    return () => {
+      window.removeEventListener("scroll", reflow, true);
+      window.removeEventListener("resize", reflow);
+    };
+  }, [showDropdown]);
 
   const fetchBoth = useCallback((q) => {
     clearTimeout(debounceRef.current);
@@ -237,12 +256,17 @@ export default function SmartItemAutocomplete({
 }
 
 const styles = {
+  // position:fixed uses viewport coords (no scrollY math). The component's
+  // scroll/resize listener forces a re-render so this reads fresh
+  // getBoundingClientRect() coords each time — dropdown stays glued to the
+  // input as ancestors scroll. Same pattern as LookupAutocomplete and
+  // SearchableItemTypeSelect.
   dropdown: (el) => {
     const rect = el?.getBoundingClientRect() ?? { bottom: 0, left: 0, width: 300 };
     return {
-      position: "absolute",
-      top: rect.bottom + window.scrollY,
-      left: rect.left + window.scrollX,
+      position: "fixed",
+      top: rect.bottom,
+      left: rect.left,
       width: Math.max(rect.width, 420),
       maxHeight: 380,
       overflowY: "auto",

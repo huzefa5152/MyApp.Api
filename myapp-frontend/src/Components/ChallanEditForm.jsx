@@ -1,11 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { MdAdd, MdDelete, MdInfo, MdContentCopy } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
-import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import QuantityInput from "./QuantityInput";
 import { updateChallan } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
-import { getItemTypes } from "../api/itemTypeApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
 import { formStyles, modalSizes } from "../theme";
@@ -61,10 +59,15 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   const [indentNo, setIndentNo] = useState(challan.indentNo || "");
 
   // ── Line items ──
+  // Item Type isn't captured on challans anymore — that classification
+  // happens on the Invoices tab during FBR submission. We still preserve
+  // any pre-existing itemTypeId on the row so legacy challans round-trip
+  // unchanged through Save (the backend's diff helper sees no qty/desc/unit
+  // change and won't touch them).
   const [items, setItems] = useState(
     challan.items.map((i) => ({
       id: i.id,
-      itemTypeId: i.itemTypeId || "",
+      itemTypeId: i.itemTypeId || null,
       description: i.description,
       quantity: i.quantity,
       unit: i.unit,
@@ -73,7 +76,6 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
 
   // ── Lookups ──
   const [clients, setClients] = useState([]);
-  const [itemTypes, setItemTypes] = useState([]);
   // Units list — gates each row's quantity input on the picked UOM.
   const [units, setUnits] = useState([]);
 
@@ -87,7 +89,6 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     if (challan.companyId) {
       getClientsByCompany(challan.companyId).then(({ data }) => setClients(data)).catch(() => {});
     }
-    getItemTypes().then(({ data }) => setItemTypes(data)).catch(() => {});
     getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
   }, [challan.companyId]);
 
@@ -143,7 +144,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   };
 
   const addItem = () => {
-    setItems([...items, { id: 0, itemTypeId: "", description: "", quantity: 1, unit: "" }]);
+    setItems([...items, { id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }]);
   };
 
   const removeItem = (index) => {
@@ -192,6 +193,9 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         deliveryDate: new Date(deliveryDate).toISOString(),
         items: validItems.map((i) => ({
           id: i.id || 0,
+          // Preserved from the row for legacy challans whose lines were
+          // typed pre-split. New rows have itemTypeId=null. Either way the
+          // backend stores it as-is; classification happens on Invoices.
           itemTypeId: i.itemTypeId ? parseInt(i.itemTypeId) : null,
           description: i.description.trim(),
           // parseFloat preserves decimals (12.5, 0.0004) — server-side
@@ -363,55 +367,14 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
             {/* ── Items ── */}
             <label style={{ ...styles.label, marginTop: "0.75rem" }}>Items *</label>
 
-            {/* Bulk Item Type apply — saves picking the same catalog row N times. */}
-            {items.length > 1 && (
-              <div style={{
-                display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap",
-                padding: "0.5rem 0.65rem", marginBottom: "0.5rem",
-                borderRadius: 8, border: "1px solid #e8edf3", backgroundColor: "#f8faff",
-              }}>
-                <span style={{ fontSize: "0.8rem", color: "#1a2332" }}>
-                  Apply same Item Type to all {items.length} rows:
-                </span>
-                <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
-                  <SearchableItemTypeSelect
-                    items={itemTypes}
-                    value=""
-                    onChange={(newId, picked) => {
-                      if (!newId) return;
-                      const newIdNum = parseInt(newId);
-                      const next = items.map((row) => {
-                        const updated = { ...row, itemTypeId: newIdNum };
-                        if (picked?.uom) updated.unit = picked.uom;
-                        return updated;
-                      });
-                      setItems(next);
-                    }}
-                    placeholder="— pick to apply to all —"
-                    style={{ padding: "0.45rem 0.55rem", fontSize: "0.82rem" }}
-                  />
-                </div>
-              </div>
-            )}
+            {/* Item Type lives on the Invoices tab now — challans capture
+                description / qty / unit only. Operators classify each line
+                by Item Type when preparing the bill for FBR submission. */}
 
             <div ref={containerRef} style={styles.itemsContainer}>
               {items.map((item, idx) => (
                 <div key={idx} style={styles.itemRow}>
                   <div style={styles.itemIndex}>{idx + 1}</div>
-                  <div style={{ width: 180, flexShrink: 0 }}>
-                    <SearchableItemTypeSelect
-                      items={itemTypes}
-                      value={item.itemTypeId || ""}
-                      onChange={(newId, picked) => {
-                        const next = [...items];
-                        next[idx].itemTypeId = newId ? parseInt(newId) : "";
-                        if (picked && picked.uom) next[idx].unit = picked.uom;
-                        setItems(next);
-                      }}
-                      placeholder="Item (optional)"
-                      style={{ padding: "0.55rem 0.55rem", fontSize: "0.82rem" }}
-                    />
-                  </div>
                   <div style={{ flex: 2, minWidth: 0 }}>
                     <LookupAutocomplete
                       label="Description"

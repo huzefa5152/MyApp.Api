@@ -28,6 +28,11 @@ export const PERMISSION_SECTIONS = [
     section: "Sales",
     modules: [
       { key: "Challans", label: "Delivery Challans" },
+      // Bills (data entry) and Invoices (FBR submission) are two views of
+      // the same underlying bill data. Each has its own permission namespace
+      // so a bookkeeper role can hold bills.* without invoices.fbr.*, and
+      // an FBR officer role can hold invoices.* without bills.manage.*.
+      { key: "Bills", label: "Bill" },
       { key: "Invoices" },
       { key: "Item Rate History" },
     ],

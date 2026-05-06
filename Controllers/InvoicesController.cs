@@ -30,7 +30,7 @@ namespace MyApp.Api.Controllers
                 out var id) ? id : 0;
 
         [HttpGet("count")]
-        [HasPermission("invoices.list.view")]
+        [HasPermission("bills.list.view")]
         public async Task<ActionResult<int>> GetTotalCount([FromQuery] int? companyId)
         {
             if (companyId.HasValue)
@@ -49,7 +49,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("company/{companyId}")]
-        [HasPermission("invoices.list.view")]
+        [HasPermission("bills.list.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<InvoiceDto>>> GetByCompany(int companyId)
         {
@@ -58,7 +58,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("company/{companyId}/paged")]
-        [HasPermission("invoices.list.view")]
+        [HasPermission("bills.list.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<PagedResult<InvoiceDto>>> GetPagedByCompany(
             int companyId,
@@ -76,7 +76,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("{id}")]
-        [HasPermission("invoices.list.view")]
+        [HasPermission("bills.list.view")]
         public async Task<ActionResult<InvoiceDto>> GetById(int id)
         {
             var invoice = await _service.GetByIdAsync(id);
@@ -119,7 +119,7 @@ namespace MyApp.Api.Controllers
         /// you can't make a bill, you don't need rate suggestions.
         /// </summary>
         [HttpGet("company/{companyId}/last-rates")]
-        [HasPermission("invoices.manage.create")]
+        [HasPermission("bills.manage.create")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<LastRateDto>>> GetLastRatesForChallan(
             int companyId, [FromQuery] int challanId)
@@ -161,7 +161,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPost]
-        [HasPermission("invoices.manage.create")]
+        [HasPermission("bills.manage.create")]
         public async Task<ActionResult<InvoiceDto>> Create([FromBody] CreateInvoiceDto dto)
         {
             await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
@@ -202,7 +202,7 @@ namespace MyApp.Api.Controllers
         /// gaining the regular create-from-challan flow, or vice-versa.
         /// </summary>
         [HttpPost("standalone")]
-        [HasPermission("invoices.manage.create.standalone")]
+        [HasPermission("bills.manage.create.standalone")]
         public async Task<ActionResult<InvoiceDto>> CreateStandalone([FromBody] CreateStandaloneInvoiceDto dto)
         {
             await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
@@ -231,7 +231,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPut("{id}")]
-        [HasPermission("invoices.manage.update")]
+        [HasPermission("bills.manage.update")]
         public async Task<ActionResult<InvoiceDto>> Update(int id, [FromBody] UpdateInvoiceDto dto)
         {
             var existing = await _service.GetByIdAsync(id);
@@ -321,7 +321,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpDelete("{id}")]
-        [HasPermission("invoices.manage.delete")]
+        [HasPermission("bills.manage.delete")]
         public async Task<IActionResult> Delete(int id)
         {
             var existing = await _service.GetByIdAsync(id);
@@ -367,7 +367,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("{id}/print/bill")]
-        [HasPermission("invoices.print.view")]
+        [HasPermission("bills.print.view")]
         public async Task<ActionResult<PrintBillDto>> GetPrintBill(int id)
         {
             var existing = await _service.GetByIdAsync(id);

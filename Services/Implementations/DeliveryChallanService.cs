@@ -332,57 +332,7 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Compute what's removed, changed, added
-                var updatedIds = items.Where(i => i.Id > 0).Select(i => i.Id).ToHashSet();
-                var toRemove = dc.Items.Where(i => !updatedIds.Contains(i.Id)).ToList();
-                var removedDeliveryItemIds = toRemove.Select(i => i.Id).ToList();
-
-                var quantityChanges = new Dictionary<int, decimal>(); // deliveryItemId → newQuantity
-                var newItems = new List<DeliveryItem>();
-
-                foreach (var itemDto in items)
-                {
-                    var existing = dc.Items.FirstOrDefault(i => i.Id == itemDto.Id && itemDto.Id > 0);
-                    if (existing != null)
-                    {
-                        if (existing.Quantity != itemDto.Quantity ||
-                            existing.Description != itemDto.Description ||
-                            existing.Unit != itemDto.Unit)
-                        {
-                            quantityChanges[existing.Id] = itemDto.Quantity;
-                        }
-                        existing.ItemTypeId = itemDto.ItemTypeId;
-                        existing.Description = itemDto.Description;
-                        existing.Quantity = itemDto.Quantity;
-                        existing.Unit = itemDto.Unit;
-                    }
-                    else
-                    {
-                        var newItem = new DeliveryItem
-                        {
-                            DeliveryChallanId = challanId,
-                            ItemTypeId = itemDto.ItemTypeId,
-                            Description = itemDto.Description,
-                            Quantity = itemDto.Quantity,
-                            Unit = itemDto.Unit
-                        };
-                        dc.Items.Add(newItem);
-                        newItems.Add(newItem);
-                    }
-                }
-
-                // ── Sync linked invoice items BEFORE deleting delivery items ──
-                // EF's FK cascade (SET NULL on InvoiceItem.DeliveryItemId) would otherwise
-                // null the FKs and prevent the sync from matching items.
-                if (dc.InvoiceId.HasValue && dc.Invoice != null && dc.Invoice.FbrStatus != "Submitted")
-                {
-                    await SyncInvoiceItemsForChallanEditAsync(dc, removedDeliveryItemIds, quantityChanges, newItems);
-                }
-
-                // Now it's safe to delete removed delivery items
-                foreach (var item in toRemove)
-                    await _repository.DeleteItemAsync(item);
-
+                await ApplyItemsDiffAsync(dc, items);
                 await _repository.UpdateAsync(dc);
 
                 // Same upsert as on create — newly added item descriptions
@@ -399,6 +349,75 @@ namespace MyApp.Api.Services.Implementations
                 await transaction.RollbackAsync();
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Diff-then-sync items update. Computes additions/updates/removals
+        /// against <paramref name="dc"/>.Items, mutates existing rows in place,
+        /// adds new rows to dc.Items, syncs the linked invoice (when one is
+        /// linked and not yet FBR-submitted), then hard-deletes the removed
+        /// rows via the repository.
+        ///
+        /// Callers own the surrounding transaction and the final
+        /// <c>UpdateAsync(dc)</c>. Two callers — <see cref="UpdateItemsAsync"/>
+        /// (items-only PUT) and <see cref="UpdateChallanAsync"/> (whole-
+        /// challan PUT) — share this helper so both paths sync the bill the
+        /// same way. Before this consolidation, UpdateChallanAsync did a
+        /// blanket RemoveRange + rebuild that orphaned linked InvoiceItems
+        /// (FK cascade SET NULL) without ever creating matching items on the
+        /// bill — bills got stuck out of sync with their challans.
+        /// </summary>
+        private async Task ApplyItemsDiffAsync(DeliveryChallan dc, List<DeliveryItemDto> items)
+        {
+            var updatedIds = items.Where(i => i.Id > 0).Select(i => i.Id).ToHashSet();
+            var toRemove = dc.Items.Where(i => !updatedIds.Contains(i.Id)).ToList();
+            var removedDeliveryItemIds = toRemove.Select(i => i.Id).ToList();
+
+            var quantityChanges = new Dictionary<int, decimal>(); // deliveryItemId → newQuantity
+            var newItems = new List<DeliveryItem>();
+
+            foreach (var itemDto in items)
+            {
+                var existing = dc.Items.FirstOrDefault(i => i.Id == itemDto.Id && itemDto.Id > 0);
+                if (existing != null)
+                {
+                    if (existing.Quantity != itemDto.Quantity ||
+                        existing.Description != itemDto.Description ||
+                        existing.Unit != itemDto.Unit)
+                    {
+                        quantityChanges[existing.Id] = itemDto.Quantity;
+                    }
+                    existing.ItemTypeId = itemDto.ItemTypeId;
+                    existing.Description = itemDto.Description;
+                    existing.Quantity = itemDto.Quantity;
+                    existing.Unit = itemDto.Unit;
+                }
+                else
+                {
+                    var newItem = new DeliveryItem
+                    {
+                        DeliveryChallanId = dc.Id,
+                        ItemTypeId = itemDto.ItemTypeId,
+                        Description = itemDto.Description,
+                        Quantity = itemDto.Quantity,
+                        Unit = itemDto.Unit
+                    };
+                    dc.Items.Add(newItem);
+                    newItems.Add(newItem);
+                }
+            }
+
+            // ── Sync linked invoice items BEFORE deleting delivery items ──
+            // EF's FK cascade (SET NULL on InvoiceItem.DeliveryItemId) would
+            // otherwise null the FKs and prevent the sync from matching items.
+            if (dc.InvoiceId.HasValue && dc.Invoice != null && dc.Invoice.FbrStatus != "Submitted")
+            {
+                await SyncInvoiceItemsForChallanEditAsync(dc, removedDeliveryItemIds, quantityChanges, newItems);
+            }
+
+            // Now it's safe to delete removed delivery items
+            foreach (var item in toRemove)
+                await _repository.DeleteItemAsync(item);
         }
 
         /// <summary>
@@ -656,34 +675,42 @@ namespace MyApp.Api.Services.Implementations
             // print template's {{#if indentNo}} block hides correctly.
             dc.IndentNo = string.IsNullOrWhiteSpace(dto.IndentNo) ? null : dto.IndentNo.Trim();
 
-            // Items: full replace (same semantics as UpdateItemsAsync but inline
-            // so we don't do two DB round-trips)
-            if (dto.Items != null && dto.Items.Any())
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                // Clear existing items, add new ones
-                _context.DeliveryItems.RemoveRange(dc.Items);
-                dc.Items = dto.Items.Select(i => new Models.DeliveryItem
+                // Items: diff-based update so the linked bill stays in sync.
+                // Earlier this block did a blanket RemoveRange + rebuild that
+                // silently broke any linked InvoiceItems (FK cascade SET NULL)
+                // without ever adding matching rows to the bill — challan and
+                // bill drifted apart. ApplyItemsDiffAsync mirrors what
+                // UpdateItemsAsync does so both endpoints behave identically.
+                if (dto.Items != null && dto.Items.Any())
                 {
-                    DeliveryChallanId = dc.Id,
-                    ItemTypeId = i.ItemTypeId,
-                    Description = i.Description,
-                    Quantity = i.Quantity,
-                    Unit = i.Unit
-                }).ToList();
-            }
+                    await ApplyItemsDiffAsync(dc, dto.Items);
+                }
 
-            // Recompute status — preserve "Invoiced" for challans already billed
-            if (dc.Status != "Invoiced")
+                // Recompute status — preserve "Invoiced" for challans already billed
+                if (dc.Status != "Invoiced")
+                {
+                    var fbrReady = IsFbrReady(dc.Company, dc.Client);
+                    dc.Status = !fbrReady ? "Setup Required"
+                              : hasPo     ? ReadyStatusFor(dc)
+                                          : "No PO";
+                }
+
+                await _repository.UpdateAsync(dc);
+                await EnsureItemDescriptionsAsync(dto.Items?.Select(i => i.Description) ?? Enumerable.Empty<string?>());
+
+                await transaction.CommitAsync();
+
+                var reloaded = await _repository.GetByIdAsync(challanId);
+                return reloaded == null ? null : ToDto(reloaded);
+            }
+            catch
             {
-                var fbrReady = IsFbrReady(dc.Company, dc.Client);
-                dc.Status = !fbrReady ? "Setup Required"
-                          : hasPo     ? ReadyStatusFor(dc)
-                                      : "No PO";
+                await transaction.RollbackAsync();
+                throw;
             }
-
-            await _repository.UpdateAsync(dc);
-            var reloaded = await _repository.GetByIdAsync(challanId);
-            return reloaded == null ? null : ToDto(reloaded);
         }
 
         public async Task<DeliveryChallanDto?> UpdatePoAsync(int challanId, string poNumber, DateTime? poDate)

@@ -2,10 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { MdAdd, MdClose, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
-import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import SelectDropdown from "./SelectDropdown";
 import QuantityInput from "./QuantityInput";
-import { getItemTypes } from "../api/itemTypeApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
 import { formStyles, modalSizes } from "../theme";
@@ -32,9 +30,8 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const [indentNo, setIndentNo] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
   const [items, setItems] = useState([
-    { itemTypeId: "", description: "", quantity: 1, unit: "" },
+    { description: "", quantity: 1, unit: "" },
   ]);
-  const [itemTypes, setItemTypes] = useState([]);
   // Units list with the AllowsDecimalQuantity flag — drives whether each
   // row's quantity input accepts decimals or only whole numbers. Loaded
   // once on mount; cheap (≤50 rows) and the operator can flip flags via
@@ -45,7 +42,6 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const itemsContainerRef = useRef(null);
 
   useEffect(() => {
-    getItemTypes().then(({ data }) => setItemTypes(data)).catch(() => {});
     getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
   }, []);
 
@@ -90,7 +86,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       return;
     }
     setError("");
-    setItems([...items, { itemTypeId: "", description: "", quantity: 1, unit: "" }]);
+    setItems([...items, { description: "", quantity: 1, unit: "" }]);
   };
 
   const removeItem = (index) => setItems(items.filter((_, i) => i !== index));
@@ -122,7 +118,10 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
         deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : null,
         items: validItems.map((i) => ({
           ...i,
-          itemTypeId: i.itemTypeId || null,
+          // Item Type isn't captured on the challan side anymore — that
+          // happens on the Invoices tab during FBR classification. Send
+          // null so the backend stores DeliveryItem.ItemTypeId=null.
+          itemTypeId: null,
           // parseFloat preserves decimals (12.5 KG, 0.0004 Carat). The
           // QuantityInput already coerces correctly per UOM, this is just
           // defensive in case a string slips through.
@@ -233,58 +232,14 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
             <div style={{ marginTop: "0.25rem" }}>
               <label style={{ ...styles.label, marginBottom: "0.5rem" }}>Items</label>
 
-              {/* Bulk Item Type apply — saves picking the same catalog row N times. */}
-              {items.length > 1 && (
-                <div style={{
-                  display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap",
-                  padding: "0.5rem 0.65rem", marginBottom: "0.5rem",
-                  borderRadius: 8, border: "1px solid #e8edf3", backgroundColor: "#f8faff",
-                }}>
-                  <span style={{ fontSize: "0.8rem", color: "#1a2332" }}>
-                    Apply same Item Type to all {items.length} rows:
-                  </span>
-                  <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
-                    <SearchableItemTypeSelect
-                      items={itemTypes}
-                      value=""
-                      onChange={(newId, picked) => {
-                        if (!newId) return;
-                        const newIdNum = parseInt(newId);
-                        const newItems = items.map((row) => {
-                          const next = { ...row, itemTypeId: newIdNum };
-                          if (picked?.uom) next.unit = picked.uom;
-                          return next;
-                        });
-                        setItems(newItems);
-                      }}
-                      placeholder="— pick to apply to all —"
-                      style={{ padding: "0.45rem 0.55rem", fontSize: "0.82rem" }}
-                    />
-                  </div>
-                </div>
-              )}
+              {/* Item Type lives on the Invoices tab now — challans capture
+                  description / qty / unit only. Operators classify each line
+                  by Item Type when preparing the bill for FBR submission. */}
 
               <div ref={itemsContainerRef} style={styles.itemsContainer}>
                 {items.map((item, idx) => (
                   <div key={idx} style={styles.itemRow}>
                     <div style={styles.itemIndex}>{idx + 1}</div>
-
-                    {/* Item Type — searchable dropdown; picking one auto-fills UOM only (user types description) */}
-                    <div style={{ width: 180, flexShrink: 0 }}>
-                      <SearchableItemTypeSelect
-                        items={itemTypes}
-                        value={item.itemTypeId || ""}
-                        onChange={(newId, picked) => {
-                          const newItems = [...items];
-                          newItems[idx].itemTypeId = newId ? parseInt(newId) : "";
-                          // Only auto-fill UOM from the catalog — description stays user-entered
-                          if (picked && picked.uom) newItems[idx].unit = picked.uom;
-                          setItems(newItems);
-                        }}
-                        placeholder="Item (optional)"
-                        style={{ padding: "0.55rem 0.55rem", fontSize: "0.82rem" }}
-                      />
-                    </div>
 
                     <div style={{ flex: 2, minWidth: 0 }}>
                       <LookupAutocomplete

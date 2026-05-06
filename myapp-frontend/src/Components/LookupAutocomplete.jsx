@@ -9,6 +9,13 @@ export default function LookupAutocomplete({ label, endpoint, value, onChange, i
     const [inputValue, setInputValue] = useState(value || "");
     const [loading, setLoading] = useState(false);
     const [highlightIndex, setHighlightIndex] = useState(-1);
+    // Bumped on every scroll/resize event while the dropdown is open so the
+    // portal re-renders with fresh getBoundingClientRect coords. The
+    // dropdown is rendered via createPortal(document.body) using
+    // position:fixed in viewport coords; without this re-flow the dropdown
+    // would stay anchored to the input's initial viewport position and
+    // visually detach the moment the modal/page scrolls.
+    const [, setReflow] = useState(0);
     const wrapperRef = useRef(null);
     const debounceRef = useRef(null);
 
@@ -25,6 +32,20 @@ export default function LookupAutocomplete({ label, endpoint, value, onChange, i
             clearTimeout(debounceRef.current);
         };
     }, []);
+
+    // While the dropdown is open, follow scroll/resize so it stays glued
+    // to the input. Capture-phase scroll listener catches scrolls inside
+    // any ancestor (e.g. a modal body), not just the window.
+    useEffect(() => {
+        if (!showDropdown) return;
+        const reflow = () => setReflow((n) => n + 1);
+        window.addEventListener("scroll", reflow, true);
+        window.addEventListener("resize", reflow);
+        return () => {
+            window.removeEventListener("scroll", reflow, true);
+            window.removeEventListener("resize", reflow);
+        };
+    }, [showDropdown]);
 
     // Update inputValue if parent value changes
     useEffect(() => {
@@ -132,20 +153,27 @@ export default function LookupAutocomplete({ label, endpoint, value, onChange, i
                 autoComplete="off"
             />
 
-            {showDropdown && (
-                createPortal(
+            {showDropdown && (() => {
+                // position:fixed in viewport coords so the dropdown stays
+                // glued to the input even when an ancestor (modal body, page
+                // root) scrolls. The reflow effect above re-renders this on
+                // scroll/resize so getBoundingClientRect() returns current
+                // viewport coords every time.
+                const rect = wrapperRef.current?.getBoundingClientRect();
+                if (!rect) return null;
+                return createPortal(
                     <ul
                         className="list-group shadow-sm"
                         style={{
-                            position: "absolute",
+                            position: "fixed",
                             zIndex: 9999,
                             maxHeight: "300px",
                             overflowY: "auto",
                             borderRadius: "0.375rem",
                             background: "#fff",
-                            top: wrapperRef.current?.getBoundingClientRect().bottom + window.scrollY,
-                            left: wrapperRef.current?.getBoundingClientRect().left + window.scrollX,
-                            width: wrapperRef.current?.offsetWidth
+                            top: rect.bottom,
+                            left: rect.left,
+                            width: rect.width
                         }}
                     >
 
@@ -173,8 +201,8 @@ export default function LookupAutocomplete({ label, endpoint, value, onChange, i
                             </li>
                         )}
                     </ul>,
-                    document.body)
-            )}
+                    document.body);
+            })()}
         </div>
     );
 }

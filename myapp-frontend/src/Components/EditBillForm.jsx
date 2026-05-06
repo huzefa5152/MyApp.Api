@@ -38,11 +38,19 @@ const colors = {
  * Description and UOM use LookupAutocomplete with /api/lookup/items and /api/lookup/units,
  * matching the delivery challan form — picks existing values, creates new ones if needed.
  */
-export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = false, hideItemType = false }) {
-  // hideItemType: true when this form is mounted from the Bills tab.
-  // Hides the Item Type (FBR) column header, the per-row picker, and the
-  // bulk-apply toolbar. Existing item-type bindings on the bill are
-  // preserved on save — Bills mode just doesn't expose editing them.
+export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = false, billsMode = false, forceItemTypeAndQty = false }) {
+  // billsMode: true when this form is mounted from the Bills tab. Hides
+  // the Item Type column + picker and the bulk-apply toolbar (item-type
+  // classification is the Invoices tab's responsibility). Existing item-
+  // type bindings on the bill are preserved on save — Bills mode just
+  // doesn't expose editing them. HS Code, Sale Type, scenario stay visible.
+  //
+  // forceItemTypeAndQty: true when this form is mounted from the Invoices
+  // tab. Forces the existing itemTypeAndQtyMode flow regardless of the
+  // user's permission tier — only Item Type and Qty are editable, every
+  // other field locks read-only. Use case: FBR officer classifies items
+  // and corrects qty without touching prices/dates that the bookkeeper
+  // set on Bills.
   const { has } = usePermissions();
   // Three permission tiers for editing a bill, ordered narrowest → broadest:
   //   • invoices.manage.update.itemtype       → ONLY Item Type column
@@ -53,13 +61,16 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // but shouldn't touch commercial values. When the user has only a narrow
   // permission, every input on this form outside its scope becomes
   // read-only and Save POSTs to the matching narrow PATCH endpoint.
-  const canFullEdit          = has("invoices.manage.update");
+  const canFullEdit          = has("bills.manage.update");
   const canEditItemTypeAndQty = has("invoices.manage.update.itemtype.qty");
   const canEditItemType       = has("invoices.manage.update.itemtype");
   // Mode flags — exactly one of these is true at a time (in priority order).
   // canFullEdit takes precedence: a full-editor doesn't need the narrow modes.
-  const itemTypeOnlyMode     = !canFullEdit && !canEditItemTypeAndQty && canEditItemType;
-  const itemTypeAndQtyMode   = !canFullEdit && canEditItemTypeAndQty;
+  // forceItemTypeAndQty (caller override, set when launched from Invoices tab)
+  // wins over the permission-derived flags so the form locks down to
+  // ItemType + Qty editing regardless of how broad the user's perms are.
+  const itemTypeOnlyMode     = !forceItemTypeAndQty && (!canFullEdit && !canEditItemTypeAndQty && canEditItemType);
+  const itemTypeAndQtyMode   = forceItemTypeAndQty || (!canFullEdit && canEditItemTypeAndQty);
 
   // Effective read-only: caller-forced OR no edit permission at all.
   const effectiveReadOnly = readOnly || (!canFullEdit && !canEditItemTypeAndQty && !canEditItemType);
@@ -544,7 +555,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                       - "Empty rows only": fills only rows that don't have one
                     Available to narrow-perm users too — it's still just an
                     Item Type pick. Hidden in Bills mode. */}
-                {!hideItemType && !lockItemType && items.length > 1 && (
+                {!billsMode && !lockItemType && items.length > 1 && (
                   <div style={styles.bulkApplyBar}>
                     <span style={styles.bulkApplyLabel}>
                       Apply same Item Type to:
@@ -578,7 +589,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                   <table style={styles.table}>
                     <thead>
                       <tr style={styles.thead}>
-                        {!hideItemType && (
+                        {!billsMode && (
                           <th style={{ ...styles.th, width: 180, minWidth: 180 }}>Item Type (FBR)</th>
                         )}
                         <th style={{ ...styles.th, minWidth: 140 }}>Description</th>
@@ -595,7 +606,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                         const hasItemType = !!item.itemTypeId;
                         return (
                           <tr key={item.id || `new-${idx}`}>
-                            {!hideItemType && (
+                            {!billsMode && (
                               <td style={styles.td}>
                                 {lockItemType ? (
                                   <div style={styles.readOnlyText}>{item.itemTypeName || <span style={styles.muted}>—</span>}</div>

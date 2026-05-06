@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdDelete, MdEdit, MdVisibility, MdBlock, MdRestore } from "react-icons/md";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import StandaloneInvoiceForm from "../Components/StandaloneInvoiceForm";
 import EditBillForm from "../Components/EditBillForm";
@@ -39,12 +40,12 @@ export default function InvoicePage({ mode = "invoices" }) {
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
   const confirm = useConfirm();
-  const canCreate = has("invoices.manage.create");
+  const canCreate = has("bills.manage.create");
   // Separate permission for the "Create Bill (No Challan)" flow — gates
   // the standalone create button. A role can be granted only this without
   // also gaining the regular create-from-challan flow, or vice-versa.
-  const canCreateStandalone = has("invoices.manage.create.standalone");
-  const canUpdate = has("invoices.manage.update");
+  const canCreateStandalone = has("bills.manage.create.standalone");
+  const canUpdate = has("bills.manage.update");
   // Users with only the narrow ItemType-only permission still need the
   // Edit button to reach the form, even though they can only change the
   // ItemType column inside it. EditBillForm enforces the field-level
@@ -54,8 +55,13 @@ export default function InvoicePage({ mode = "invoices" }) {
   // Edit button entry point, EditBillForm enforces field-level lock.
   const canEditItemTypeAndQty = has("invoices.manage.update.itemtype.qty");
   const canOpenEdit = canUpdate || canEditItemTypeAndQty || canEditItemType;
-  const canDelete = has("invoices.manage.delete");
-  const canPrint = has("invoices.print.view");
+  const canDelete = has("bills.manage.delete");
+  // Print is split now: bills.print.view → Bill print/PDF/XLS,
+  // invoices.print.view → Tax-Invoice print/PDF/XLS. Bills tab uses
+  // canPrintBill, Invoices tab uses canPrintTax.
+  const canPrintBill = has("bills.print.view");
+  const canPrintTax  = has("invoices.print.view");
+  const canPrint = isBillsMode ? canPrintBill : canPrintTax;
   // Two granular FBR perms — operator can be allowed to dry-run without
   // being trusted to commit. canFbrAny is just for showing the bulk bar.
   const canFbrValidate = has("invoices.fbr.validate");
@@ -82,11 +88,39 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [viewingId, setViewingId] = useState(null);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
 
+  const navigate = useNavigate();
+  // ?search=<bill-number> deep-link support — let a Bill card on the
+  // Bills tab jump directly to the matching record on the Invoices tab.
+  // The card's "Open in Invoices" button navigates to
+  // `/invoices?search={billNumber}`; this hook seeds the search-box
+  // state with that value on mount and the existing fetch pipeline
+  // narrows the list to a single card automatically. Distinct route
+  // keys in App.jsx force a remount on tab switch so this initializer
+  // always sees the current URL.
+  //
+  // The search box is also two-way bound to ?search below — when the
+  // operator clears it, the URL drops the param so a page reload or
+  // browser back/forward doesn't re-seed a stale filter.
+  const [searchParams, setSearchParams] = useSearchParams();
+
   // Pagination & filters
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("search") || "");
+  // Keep the URL's ?search= in sync with the search-box state. Without
+  // this, clearing the box would still leave the param in the URL, and
+  // a page reload would re-seed the box from the stale value (which is
+  // exactly what bit us when "Open in Invoices" left a sticky filter).
+  // replace:true so each keystroke doesn't pollute browser history.
+  useEffect(() => {
+    const current = searchParams.get("search") || "";
+    if (search === current) return;
+    const next = new URLSearchParams(searchParams);
+    if (search) next.set("search", search);
+    else next.delete("search");
+    setSearchParams(next, { replace: true });
+  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
   const [clientFilter, setClientFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -671,7 +705,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                   <div>
                     <h5 style={cardStyles.title}>
                       <MdReceipt style={{ color: colors.blue, marginRight: 6 }} />
-                      Bill #{inv.invoiceNumber}
+                      {isBillsMode ? "Bill" : "Invoice"} #{inv.invoiceNumber}
                     </h5>
                     <p style={cardStyles.text}><strong>Client:</strong> {inv.clientName}</p>
                     {/* PO Number / Indent No / Site come from the linked
@@ -687,106 +721,130 @@ export default function InvoicePage({ mode = "invoices" }) {
                       DC#{inv.challanNumbers?.join(", #")} | {inv.items?.length} items
                     </p>
                     {/* FBR status row — shows current status OR 'Setup Incomplete' when fields are missing.
-                        In Bills mode we keep only the binary "Submitted to FBR" / "Pending FBR"
-                        identifier so the operator sees at a glance which rows are locked.
+                        In Bills mode we keep only the binary "Submitted to FBR" / "Pending FBR submission"
+                        identifier as a pill so the operator sees at a glance which rows are locked.
                         Workflow detail (Ready / Setup Incomplete / Excluded) lives on the Invoices tab. */}
                     {inv.fbrStatus === "Submitted" && (
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.25rem" }}>
-                        <MdCheckCircle size={14} color="#2e7d32" />
-                        <span style={{ fontSize: "0.76rem", fontWeight: 600, color: "#2e7d32" }}>
-                          {isBillsMode ? "Submitted to FBR" : "FBR: Submitted"}
-                        </span>
-                        {inv.fbrIRN && <span style={{ fontSize: "0.72rem", color: colors.textSecondary }}>(IRN: {inv.fbrIRN})</span>}
-                      </div>
+                      isBillsMode ? (
+                        <div style={styles.fbrPillSubmitted} title={inv.fbrIRN ? `IRN: ${inv.fbrIRN}` : "This bill has been submitted to FBR and is locked from edits."}>
+                          <MdCheckCircle size={14} color="#1b5e20" />
+                          <span>Submitted to FBR</span>
+                          {inv.fbrIRN && <span style={styles.fbrPillIrn}>IRN {inv.fbrIRN}</span>}
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.25rem" }}>
+                          <MdCheckCircle size={14} color="#2e7d32" />
+                          <span style={{ fontSize: "0.76rem", fontWeight: 600, color: "#2e7d32" }}>
+                            FBR: Submitted
+                          </span>
+                          {inv.fbrIRN && <span style={{ fontSize: "0.72rem", color: colors.textSecondary }}>(IRN: {inv.fbrIRN})</span>}
+                        </div>
+                      )
                     )}
                     {isBillsMode && inv.fbrStatus !== "Submitted" && (
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.25rem" }}>
-                        <MdError size={14} color="#b26a00" />
-                        <span style={{ fontSize: "0.76rem", fontWeight: 600, color: "#b26a00" }}>
-                          Pending FBR
-                        </span>
+                      <div style={styles.fbrPillPending} title="This bill hasn't been submitted to FBR yet. Open the Invoices tab to validate and submit.">
+                        <MdHourglassEmpty size={14} color="#b26a00" />
+                        <span>Pending FBR submission</span>
                       </div>
                     )}
                     {!isBillsMode && inv.fbrStatus === "Failed" && (
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.25rem" }}>
-                        <MdError size={14} color="#c62828" />
-                        <span style={{ fontSize: "0.76rem", fontWeight: 600, color: "#c62828" }}>FBR: Failed</span>
+                      <div style={styles.fbrPillFailed} title={inv.fbrErrorMessage || "FBR rejected this submission. Open View FBR for details."}>
+                        <MdError size={14} color="#b71c1c" />
+                        <span>FBR Failed</span>
                       </div>
                     )}
                     {!isBillsMode && inv.fbrStatus === "Failed" && inv.fbrErrorMessage && (
-                      <p style={{ fontSize: "0.72rem", color: "#c62828", marginTop: "0.15rem", wordBreak: "break-word" }}>{inv.fbrErrorMessage}</p>
+                      <p style={{ fontSize: "0.72rem", color: "#c62828", marginTop: "0.35rem", wordBreak: "break-word", lineHeight: 1.35 }}>
+                        {inv.fbrErrorMessage}
+                      </p>
                     )}
                     {!isBillsMode && inv.fbrStatus !== "Submitted" && !inv.fbrReady && (
                       <div
-                        style={{ display: "flex", alignItems: "flex-start", gap: "0.35rem", marginTop: "0.25rem", padding: "0.35rem 0.5rem", backgroundColor: "#fff8e1", border: "1px solid #ffcc80", borderRadius: 4 }}
+                        style={styles.fbrPillIncomplete}
                         title={inv.fbrMissing?.length ? `Missing:\n• ${inv.fbrMissing.join("\n• ")}` : ""}
                       >
-                        <MdError size={14} color="#e65100" style={{ flexShrink: 0, marginTop: 1 }} />
-                        <div style={{ fontSize: "0.74rem", color: "#e65100", lineHeight: 1.3 }}>
-                          <b>FBR Setup Incomplete</b>
+                        <MdError size={14} color="#b26a00" style={{ flexShrink: 0 }} />
+                        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.3 }}>
+                          <span>FBR Setup Incomplete</span>
                           {inv.fbrMissing?.length > 0 && (
-                            <div style={{ fontSize: "0.7rem", color: "#bf360c", marginTop: 1 }}>
-                              {inv.fbrMissing.slice(0, 3).join(", ")}
-                              {inv.fbrMissing.length > 3 && ` +${inv.fbrMissing.length - 3} more`}
-                            </div>
+                            <span style={styles.fbrPillIncompleteHint}>
+                              {inv.fbrMissing.slice(0, 3).join(" · ")}
+                              {inv.fbrMissing.length > 3 && ` · +${inv.fbrMissing.length - 3} more`}
+                            </span>
                           )}
                         </div>
                       </div>
                     )}
                     {!isBillsMode && inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded && (
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.25rem" }}>
+                      <div style={styles.fbrPillReady} title="All FBR fields are set. Click Validate to dry-run, or Submit to issue the IRN.">
                         <MdCheckCircle size={14} color="#0d47a1" />
-                        <span style={{ fontSize: "0.76rem", fontWeight: 600, color: "#0d47a1" }}>
-                          FBR: Ready to Validate
-                        </span>
+                        <span>Ready to Validate</span>
                       </div>
                     )}
                     {!isBillsMode && inv.fbrStatus !== "Submitted" && inv.isFbrExcluded && (
                       <div
-                        style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.25rem", padding: "0.25rem 0.5rem", backgroundColor: "#eceff1", border: "1px solid #b0bec5", borderRadius: 4 }}
+                        style={styles.fbrPillExcluded}
                         title="This bill is excluded from Validate All / Submit All bulk actions. Per-bill Validate / Submit still work."
                       >
-                        <MdBlock size={14} color="#546e7a" />
-                        <span style={{ fontSize: "0.74rem", fontWeight: 600, color: "#546e7a" }}>
-                          FBR-excluded (bulk skipped)
-                        </span>
+                        <MdBlock size={14} color="#455a64" />
+                        <span>Excluded from FBR bulk</span>
                       </div>
                     )}
                   </div>
                   <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
-                    <button
-                      style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
-                      onClick={() => setViewingId(inv.id)}
-                      title="View bill details (read-only)"
-                    >
-                      <MdVisibility size={14} /> View
-                    </button>
-                    {canPrint && (
+                    {/* Bills card: View, Print Bill, Bill PDF, Bill XLS, Edit, Delete.
+                        Invoices card: Tax Print, Tax PDF, Tax XLS, View FBR, Validate, Submit. */}
+                    {isBillsMode && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
+                        onClick={() => setViewingId(inv.id)}
+                        title="View bill details (read-only)"
+                      >
+                        <MdVisibility size={14} /> View
+                      </button>
+                    )}
+                    {/* Cross-tab locator — Bills tab only. Navigates to
+                        the Invoices tab with ?search=<billNumber> seeded;
+                        the Invoices page reads the param on mount so the
+                        list filters down to a single card. Operator can
+                        clear the search box to see the full Invoices list
+                        again. Reuses the existing search pipeline so no
+                        new filter logic is needed. */}
+                    {isBillsMode && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#e0f2f1", color: "#00695c", border: "1px solid #80cbc4" }}
+                        onClick={() => navigate(`/invoices?search=${encodeURIComponent(inv.invoiceNumber)}`)}
+                        title="Find this bill on the Invoices tab so you can classify items and submit to FBR"
+                      >
+                        <MdOpenInNew size={14} /> Open in Invoices
+                      </button>
+                    )}
+                    {isBillsMode && canPrint && (
                       <button style={styles.printBtn} onClick={() => handlePrintBill(inv)}>
                         <MdPrint size={14} /> Bill
                       </button>
                     )}
-                    {canPrint && (
+                    {!isBillsMode && canPrint && (
                       <button style={styles.taxBtn} onClick={() => handlePrintTax(inv)}>
                         <MdDescription size={14} /> Tax Invoice
                       </button>
                     )}
-                    {canPrint && (
+                    {isBillsMode && canPrint && (
                       <button style={{ ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportBillPdf(inv)}>
                         {exportingId === inv.id + "-bill-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Bill PDF
                       </button>
                     )}
-                    {canPrint && (
+                    {!isBillsMode && canPrint && (
                       <button style={{ ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxPdf(inv)}>
                         {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Tax PDF
                       </button>
                     )}
-                    {canPrint && hasExcelBill && (
+                    {isBillsMode && canPrint && hasExcelBill && (
                       <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportBillExcel(inv)}>
                         {exportingId === inv.id + "-bill-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Bill XLS
                       </button>
                     )}
-                    {canPrint && hasExcelTax && (
+                    {!isBillsMode && canPrint && hasExcelTax && (
                       <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxExcel(inv)}>
                         {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Tax XLS
                       </button>
@@ -853,13 +911,31 @@ export default function InvoicePage({ mode = "invoices" }) {
                         )}
                       </>
                     )}
-                    {canOpenEdit && inv.fbrStatus !== "Submitted" && (
+                    {/* Edit on Bills tab: full bill edit (per the user's
+                        permissions) — items, prices, dates, etc. Item Type
+                        column is hidden so classification only happens on
+                        the Invoices tab. Hidden once FBR-submitted (locks
+                        edits permanently). */}
+                    {isBillsMode && canOpenEdit && inv.fbrStatus !== "Submitted" && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
                         title={canUpdate
                           ? "Edit items and prices on this bill"
-                          : "Re-classify line items by Item Type (your permissions)"}
+                          : "Edit bill (your permissions)"}
+                      >
+                        <MdEdit size={14} /> Edit
+                      </button>
+                    )}
+                    {/* Edit on Invoices tab: ONLY allows picking the Item
+                        Type for each line. Everything else (items, prices,
+                        qty, dates) is read-only and reflects whatever was
+                        last saved on the Bills tab. Hidden once submitted. */}
+                    {!isBillsMode && canOpenEdit && inv.fbrStatus !== "Submitted" && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
+                        onClick={() => setEditingId(inv.id)}
+                        title="Classify line items by Item Type (other fields read-only — edit on the Bills tab)"
                       >
                         <MdEdit size={14} /> Edit
                       </button>
@@ -883,7 +959,9 @@ export default function InvoicePage({ mode = "invoices" }) {
                         {inv.isFbrExcluded ? "Include in FBR" : "Exclude from FBR"}
                       </button>
                     )}
-                    {canDelete && inv.fbrStatus !== "Submitted" && inv.isLatest && (
+                    {/* Delete: Bills tab only, last-created bill only,
+                        not FBR-submitted. Same gates as before plus Bills mode. */}
+                    {isBillsMode && canDelete && inv.fbrStatus !== "Submitted" && inv.isLatest && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#ffebee", color: "#c62828", border: "1px solid #ef9a9a" }}
                         onClick={() => handleDeleteInvoice(inv)}
@@ -922,15 +1000,17 @@ export default function InvoicePage({ mode = "invoices" }) {
         </>
       )}
 
-      {/* Bills mode hides the Item Type column in all three forms — that
-          classification step lives on the Invoices tab. The bill is still
-          fully usable; FBR readiness simply remains "incomplete" until an
-          operator opens the Invoices tab and assigns item types. */}
+      {/* Bills mode shows the Item Type column (item-type pick is the
+          ONE FBR-classification field exposed in Bills) but hides the
+          rest of the FBR machinery (HS Code, Sale Type, scenario picker).
+          Picking an item type still auto-fills HS / UOM / Sale Type
+          behind the scenes so the bill is ready for FBR validation on
+          the Invoices tab. */}
       {showForm && selectedCompany && (
         <InvoiceForm
           companyId={selectedCompany.id}
           company={selectedCompany}
-          hideItemType={isBillsMode}
+          billsMode={isBillsMode}
           onClose={() => setShowForm(false)}
           onSaved={handleCreated}
         />
@@ -940,7 +1020,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         <StandaloneInvoiceForm
           companyId={selectedCompany.id}
           company={selectedCompany}
-          hideItemType={isBillsMode}
+          billsMode={isBillsMode}
           onClose={() => setShowStandaloneForm(false)}
           onSaved={() => { setShowStandaloneForm(false); handleCreated(); }}
         />
@@ -949,7 +1029,12 @@ export default function InvoicePage({ mode = "invoices" }) {
       {editingId && (
         <EditBillForm
           invoiceId={editingId}
-          hideItemType={isBillsMode}
+          billsMode={isBillsMode}
+          // Invoices-tab edit lets the FBR officer set Item Type AND Qty —
+          // descriptions, prices, dates, payment terms etc. stay read-only
+          // and reflect whatever was last saved on the Bills tab. Set on
+          // the Invoice card's Edit button only.
+          forceItemTypeAndQty={!isBillsMode}
           onClose={() => setEditingId(null)}
           onSaved={() => {
             setEditingId(null);
@@ -1019,6 +1104,115 @@ const styles = {
   fbrValidateBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#fff3e0", color: "#e65100" },
   fbrSubmitBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#e3f2fd", color: "#0d47a1" },
   fbrBulkBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1rem", padding: "0.65rem 1rem", borderRadius: 10, border: "1px solid #e3f2fd", backgroundColor: "#f8faff" },
+  // FBR-status pills used in Bills mode. Soft-tinted background with a
+  // matching border + an icon and label, sitting under the bill metadata
+  // row so the operator gets a clear at-a-glance "locked / not yet" cue.
+  fbrPillPending: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    marginTop: "0.5rem",
+    padding: "0.3rem 0.7rem",
+    borderRadius: 999,
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    color: "#8a4b00",
+    backgroundColor: "#fff4e0",
+    border: "1px solid #ffcc80",
+    letterSpacing: "0.01em",
+  },
+  fbrPillSubmitted: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    marginTop: "0.5rem",
+    padding: "0.3rem 0.7rem",
+    borderRadius: 999,
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    color: "#1b5e20",
+    backgroundColor: "#eafbef",
+    border: "1px solid #a5d6a7",
+    letterSpacing: "0.01em",
+  },
+  fbrPillIrn: {
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+    fontSize: "0.7rem",
+    fontWeight: 600,
+    color: "#2e7d32",
+    backgroundColor: "#fff",
+    padding: "0.05rem 0.4rem",
+    borderRadius: 50,
+    border: "1px solid #c8e6c9",
+  },
+  // Invoices-mode FBR status pills — same shape as the Bills-mode ones
+  // (Pending / Submitted) but tinted for the workflow states the FBR
+  // officer needs to track: Ready, Setup Incomplete, Failed, Excluded.
+  fbrPillReady: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    marginTop: "0.5rem",
+    padding: "0.3rem 0.7rem",
+    borderRadius: 999,
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    color: "#0d47a1",
+    backgroundColor: "#e3f2fd",
+    border: "1px solid #90caf9",
+    letterSpacing: "0.01em",
+  },
+  fbrPillIncomplete: {
+    display: "inline-flex",
+    alignItems: "flex-start",
+    gap: "0.45rem",
+    marginTop: "0.5rem",
+    padding: "0.35rem 0.7rem",
+    borderRadius: 12,
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    color: "#8a4b00",
+    backgroundColor: "#fff4e0",
+    border: "1px solid #ffcc80",
+    letterSpacing: "0.01em",
+    maxWidth: "100%",
+  },
+  fbrPillIncompleteHint: {
+    display: "block",
+    fontSize: "0.7rem",
+    fontWeight: 500,
+    color: "#a35400",
+    marginTop: "0.15rem",
+    wordBreak: "break-word",
+  },
+  fbrPillFailed: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    marginTop: "0.5rem",
+    padding: "0.3rem 0.7rem",
+    borderRadius: 999,
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    color: "#b71c1c",
+    backgroundColor: "#ffebee",
+    border: "1px solid #ef9a9a",
+    letterSpacing: "0.01em",
+  },
+  fbrPillExcluded: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    marginTop: "0.5rem",
+    padding: "0.3rem 0.7rem",
+    borderRadius: 999,
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    color: "#37474f",
+    backgroundColor: "#eceff1",
+    border: "1px solid #b0bec5",
+    letterSpacing: "0.01em",
+  },
   fbrBulkBtn: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 1rem", borderRadius: 8, border: "none", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", transition: "filter 0.2s" },
   fbrBulkValidateBtn: { backgroundColor: "#fff3e0", color: "#e65100" },
   fbrBulkSubmitBtn: { backgroundColor: "#0d47a1", color: "#fff", boxShadow: "0 2px 8px rgba(13,71,161,0.2)" },

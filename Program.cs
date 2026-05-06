@@ -450,6 +450,232 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
+    // ── One-time perm migration: split invoices.* into bills.* + invoices.* ──
+    // Sales is now two screens (Bills + Invoices) with their own permission
+    // namespaces. The bookkeeping side moved to bills.*; invoices.* keeps
+    // only the FBR-classification & print perms. We:
+    //   1. Insert the new bills.* perm rows if they don't exist yet (the
+    //      RbacSeeder does this anyway; doing it here so step 2 has IDs).
+    //   2. Copy each role's grant of an old invoices.manage.* perm onto its
+    //      bills.* equivalent so existing roles keep working.
+    //   3. Copy invoices.list.view → bills.list.view (the list endpoint now
+    //      requires bills.list.view; invoices.list.view keeps gating only
+    //      the Invoices tab visibility).
+    //   4. Copy invoices.print.view → bills.print.view (operator who could
+    //      print bills before keeps that ability; the surviving
+    //      invoices.print.view is narrowed to Tax-Invoice prints only).
+    // After this migration runs once, RbacSeeder.UpsertPermissionsAsync
+    // removes the now-stale invoices.manage.* keys (no longer in catalog),
+    // cascading the old role grants away. Idempotent: NOT EXISTS guards
+    // make subsequent restarts no-ops.
+    db.Database.ExecuteSqlRaw(@"
+        -- Step 1: ensure new bills.* perm rows exist (RbacSeeder upserts
+        -- them too, but we need them present BEFORE step 2 can copy grants).
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'bills.list.view', 'Bills', 'List', 'View',
+               'View the bills list (powers both Bills and Invoices tabs)'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.list.view');
+
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'bills.manage.create', 'Bills', 'Manage', 'Create',
+               'Create a new bill (challan-linked)'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.manage.create');
+
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'bills.manage.create.standalone', 'Bills', 'Manage', 'Create (No Challan)',
+               'Create a bill directly without linking a delivery challan'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.manage.create.standalone');
+
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'bills.manage.update', 'Bills', 'Manage', 'Update',
+               'Edit a bill (all fields)'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.manage.update');
+
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'bills.manage.update.itemtype', 'Bills', 'Manage', 'Update Item Type',
+               'Edit ONLY the Item Type column on a bill (no other fields)'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.manage.update.itemtype');
+
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'bills.manage.update.itemtype.qty', 'Bills', 'Manage', 'Update Item Type + Qty',
+               'Edit Item Type and Quantity columns on a bill (no other fields)'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.manage.update.itemtype.qty');
+
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'bills.manage.delete', 'Bills', 'Manage', 'Delete', 'Delete a bill'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.manage.delete');
+
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'bills.print.view', 'Bills', 'Print', 'View',
+               'Print or download a Bill (Bill print, Bill PDF, Bill XLS)'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.print.view');
+
+        -- Step 2: copy invoices.manage.* grants to bills.manage.*
+        DECLARE @oldKey NVARCHAR(200), @newKey NVARCHAR(200);
+        DECLARE pairs CURSOR LOCAL FOR
+            SELECT 'invoices.manage.create',                  'bills.manage.create' UNION ALL
+            SELECT 'invoices.manage.create.standalone',       'bills.manage.create.standalone' UNION ALL
+            SELECT 'invoices.manage.update',                  'bills.manage.update' UNION ALL
+            SELECT 'invoices.manage.update.itemtype',         'bills.manage.update.itemtype' UNION ALL
+            SELECT 'invoices.manage.update.itemtype.qty',     'bills.manage.update.itemtype.qty' UNION ALL
+            SELECT 'invoices.manage.delete',                  'bills.manage.delete' UNION ALL
+            SELECT 'invoices.list.view',                      'bills.list.view' UNION ALL
+            SELECT 'invoices.print.view',                     'bills.print.view';
+        OPEN pairs;
+        FETCH NEXT FROM pairs INTO @oldKey, @newKey;
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+            DECLARE @oId INT = (SELECT Id FROM Permissions WHERE [Key] = @oldKey);
+            DECLARE @nId INT = (SELECT Id FROM Permissions WHERE [Key] = @newKey);
+            IF @oId IS NOT NULL AND @nId IS NOT NULL
+            BEGIN
+                INSERT INTO RolePermissions (RoleId, PermissionId)
+                SELECT rp.RoleId, @nId FROM RolePermissions rp
+                WHERE rp.PermissionId = @oId
+                  AND NOT EXISTS (SELECT 1 FROM RolePermissions x
+                                   WHERE x.RoleId = rp.RoleId AND x.PermissionId = @nId);
+            END
+            FETCH NEXT FROM pairs INTO @oldKey, @newKey;
+        END
+        CLOSE pairs;
+        DEALLOCATE pairs;
+    ");
+
+    // ── One-time backfill: heal bills orphaned by the legacy UpdateChallanAsync bug ──
+    // Before the diff/sync refactor of UpdateChallanAsync, the whole-challan
+    // PUT replaced dc.Items via RemoveRange, which cascaded SET NULL on
+    // InvoiceItem.DeliveryItemId without ever syncing the bill — so any
+    // challan edit that touched items left the bill stuck with orphaned
+    // InvoiceItems (dlvId IS NULL) and no row for newly-added DeliveryItems.
+    //
+    // This block does two passes:
+    //   1. Re-link orphan InvoiceItems (dlvId IS NULL) to a matching unlinked
+    //      DeliveryItem on one of the bill's challans, matched by exact
+    //      Description (case-insensitive) AND Quantity.
+    //   2. Insert a fresh InvoiceItem (UnitPrice=0) for any DeliveryItem on a
+    //      linked challan that still has no matching InvoiceItem — the
+    //      operator opens Bill Edit afterwards to set the price.
+    //
+    // Skips FBR-submitted bills (the IRN is locked at FBR — we don't touch
+    // them). Idempotent: NOT EXISTS guards make re-runs no-ops, audit-log
+    // marker records what was healed on first run.
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'BILL_CHALLAN_SYNC_BACKFILL_V1')
+        BEGIN
+            DECLARE @relinked INT = 0, @added INT = 0;
+
+            -- Pass 1: re-link orphan InvoiceItems to unlinked DeliveryItems
+            -- on the same bill's challans, matching Description + Quantity.
+            DECLARE @iiId INT, @invId INT, @desc NVARCHAR(MAX), @qty DECIMAL(18,4);
+            DECLARE orphan_cur CURSOR LOCAL FOR
+                SELECT ii.Id, ii.InvoiceId, ii.Description, ii.Quantity
+                FROM InvoiceItems ii
+                INNER JOIN Invoices i ON i.Id = ii.InvoiceId
+                WHERE ii.DeliveryItemId IS NULL
+                  AND (i.FbrStatus IS NULL OR i.FbrStatus <> 'Submitted')
+                  AND EXISTS (SELECT 1 FROM DeliveryChallans dc WHERE dc.InvoiceId = ii.InvoiceId);
+
+            OPEN orphan_cur;
+            FETCH NEXT FROM orphan_cur INTO @iiId, @invId, @desc, @qty;
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+                DECLARE @diId INT = (
+                    SELECT TOP 1 di.Id
+                    FROM DeliveryItems di
+                    INNER JOIN DeliveryChallans dc ON dc.Id = di.DeliveryChallanId
+                    WHERE dc.InvoiceId = @invId
+                      AND di.Quantity = @qty
+                      AND LOWER(di.Description) = LOWER(@desc)
+                      AND NOT EXISTS (SELECT 1 FROM InvoiceItems x WHERE x.DeliveryItemId = di.Id)
+                    ORDER BY di.Id
+                );
+                IF @diId IS NOT NULL
+                BEGIN
+                    UPDATE InvoiceItems SET DeliveryItemId = @diId WHERE Id = @iiId;
+                    SET @relinked = @relinked + 1;
+                END
+                FETCH NEXT FROM orphan_cur INTO @iiId, @invId, @desc, @qty;
+            END
+            CLOSE orphan_cur;
+            DEALLOCATE orphan_cur;
+
+            -- Pass 2: insert missing InvoiceItems (UnitPrice=0) for any
+            -- DeliveryItem on a linked, non-submitted bill that has no
+            -- matching InvoiceItem. Matches the SyncInvoiceItemsForChallanEditAsync
+            -- new-item shape — operator sets the price via Bill Edit.
+            INSERT INTO InvoiceItems (InvoiceId, DeliveryItemId, ItemTypeId, ItemTypeName, Description, Quantity, UOM, UnitPrice, LineTotal)
+            SELECT
+                dc.InvoiceId,
+                di.Id,
+                di.ItemTypeId,
+                ISNULL(it.Name, N''),
+                di.Description,
+                di.Quantity,
+                di.Unit,
+                0,
+                0
+            FROM DeliveryItems di
+            INNER JOIN DeliveryChallans dc ON dc.Id = di.DeliveryChallanId
+            INNER JOIN Invoices i ON i.Id = dc.InvoiceId
+            LEFT JOIN ItemTypes it ON it.Id = di.ItemTypeId
+            WHERE dc.InvoiceId IS NOT NULL
+              AND (i.FbrStatus IS NULL OR i.FbrStatus <> 'Submitted')
+              AND NOT EXISTS (SELECT 1 FROM InvoiceItems ii2 WHERE ii2.DeliveryItemId = di.Id);
+            SET @added = @@ROWCOUNT;
+
+            INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp])
+            VALUES ('Info', 'BILL_CHALLAN_SYNC_BACKFILL_V1',
+                    CONCAT('Bill/challan sync backfill: re-linked ', @relinked,
+                           ' orphan invoice item(s); added ', @added,
+                           ' missing invoice item(s) at UnitPrice=0. Operators must edit affected bills to set prices.'),
+                    'STARTUP', '/migrations/bill-challan-sync-backfill', 200, SYSUTCDATETIME());
+        END
+    ");
+
+    // ── One-time perm migration: move itemtype perms back to Invoices ──
+    // The narrow itemtype perms (`bills.manage.update.itemtype` and
+    // `bills.manage.update.itemtype.qty`) live under Invoices, not Bills —
+    // item-type classification is the Invoices tab's responsibility, so
+    // FBR-officer roles need them without holding any other bills.* perm.
+    // Copies any existing `bills.*` itemtype grants onto the new
+    // `invoices.*` keys; the seeder then auto-removes the stale `bills.*`
+    // ones (no longer in catalog), cascading away the old grants. Idempotent
+    // via the NOT EXISTS guard.
+    db.Database.ExecuteSqlRaw(@"
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'invoices.manage.update.itemtype', 'Invoices', 'Manage', 'Update Item Type',
+               'Edit ONLY the Item Type column on a bill from the Invoices tab'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'invoices.manage.update.itemtype');
+
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'invoices.manage.update.itemtype.qty', 'Invoices', 'Manage', 'Update Item Type + Qty',
+               'Edit Item Type and Quantity columns on a bill from the Invoices tab'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'invoices.manage.update.itemtype.qty');
+
+        DECLARE @oldKey NVARCHAR(200), @newKey NVARCHAR(200);
+        DECLARE pairs2 CURSOR LOCAL FOR
+            SELECT 'bills.manage.update.itemtype',     'invoices.manage.update.itemtype' UNION ALL
+            SELECT 'bills.manage.update.itemtype.qty', 'invoices.manage.update.itemtype.qty';
+        OPEN pairs2;
+        FETCH NEXT FROM pairs2 INTO @oldKey, @newKey;
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+            DECLARE @oId INT = (SELECT Id FROM Permissions WHERE [Key] = @oldKey);
+            DECLARE @nId INT = (SELECT Id FROM Permissions WHERE [Key] = @newKey);
+            IF @oId IS NOT NULL AND @nId IS NOT NULL
+            BEGIN
+                INSERT INTO RolePermissions (RoleId, PermissionId)
+                SELECT rp.RoleId, @nId FROM RolePermissions rp
+                WHERE rp.PermissionId = @oId
+                  AND NOT EXISTS (SELECT 1 FROM RolePermissions x
+                                   WHERE x.RoleId = rp.RoleId AND x.PermissionId = @nId);
+            END
+            FETCH NEXT FROM pairs2 INTO @oldKey, @newKey;
+        END
+        CLOSE pairs2;
+        DEALLOCATE pairs2;
+    ");
+
     // ── One-time backfill: Common Clients grouping ──
     // Walks every existing Client and assigns it to a ClientGroup based on
     // the same canonical key the runtime EnsureGroupForClientAsync uses

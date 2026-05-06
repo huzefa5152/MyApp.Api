@@ -152,6 +152,9 @@ export default function DashboardLayout() {
     "fbr.sandbox.view",
   ];
   const salesKeys = [
+    // Sales tab visible if the user has any of: see-bills (Bills + Invoices
+    // tabs), see-challans, import-challans, item-rate-history.
+    "bills.list.view",
     "invoices.list.view",
     "itemratehistory.view",
     "challans.list.view",
@@ -295,11 +298,11 @@ export default function DashboardLayout() {
                   <span>Delivery Challans</span>
                 </NavLink>
               </Can>
-              {/* Sales tab is split: Bills = pre-FBR data entry (no item-type
-                  column, no Validate All / Submit All); Invoices = FBR
-                  classification + submission. Both behind invoices.list.view —
-                  the same dataset, two views. */}
-              <Can permission="invoices.list.view">
+              {/* Sales tab is split: Bills = data entry (gated by
+                  bills.list.view); Invoices = FBR classification + submission
+                  (gated by invoices.list.view). Same underlying dataset, two
+                  views with their own permission namespaces — see catalog. */}
+              <Can permission="bills.list.view">
                 <NavLink to="/bills" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdReceipt className="dl-subitem__icon" aria-hidden="true" />
                   <span>Bills</span>
@@ -569,10 +572,11 @@ function getBreadcrumb(pathname) {
     "/goods-receipts": "Purchases / Goods Receipts",
     "/stock": "Purchases / Stock Dashboard",
     "/item-types": "Configuration / Item Types",
-    "/challans": "Challans",
-    "/challans/import": "Challans / Import Historical",
-    "/invoices": "Bills",
-    "/item-rate-history": "Item Rate History",
+    "/challans": "Sales / Delivery Challans",
+    "/challans/import": "Sales / Import Challans",
+    "/bills": "Sales / Bills",
+    "/invoices": "Sales / Invoices",
+    "/item-rate-history": "Sales / Item Rate History",
     "/profile": "My Profile",
     "/users": "User Management",
     "/roles": "Roles & Permissions",
