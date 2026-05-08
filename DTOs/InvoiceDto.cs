@@ -257,6 +257,18 @@ namespace MyApp.Api.DTOs
         /// flow strictly to type re-classification.
         /// </summary>
         public decimal? Quantity { get; set; }
+        /// <summary>
+        /// Optional unit-price update. Honoured ONLY on the .qty path
+        /// (same gate as Quantity). The service then enforces a total-
+        /// preservation rule: Σ (qty × unitPrice) across the new lines
+        /// must equal the bill's original Subtotal within a small
+        /// tolerance (configurable, default 2 PKR). This lets the
+        /// operator re-distribute quantities and prices across lines
+        /// (a common move during FBR classification — splitting one
+        /// purchase into multiple HS-coded lines) without changing the
+        /// total amount the buyer was actually billed.
+        /// </summary>
+        public decimal? UnitPrice { get; set; }
     }
 
     /// <summary>

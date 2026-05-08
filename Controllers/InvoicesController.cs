@@ -279,7 +279,7 @@ namespace MyApp.Api.Controllers
             try
             {
                 // allowQuantityEdit=false — qty fields in payload are ignored
-                var updated = await _service.UpdateItemTypesAsync(id, dto, allowQuantityEdit: false);
+                var updated = await _service.UpdateItemTypesAsync(id, dto, allowQuantityEdit: false, actorUserName: User.Identity?.Name);
                 if (updated == null) return NotFound(new { error = "Bill not found." });
                 return Ok(updated);
             }
@@ -310,7 +310,7 @@ namespace MyApp.Api.Controllers
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             try
             {
-                var updated = await _service.UpdateItemTypesAsync(id, dto, allowQuantityEdit: true);
+                var updated = await _service.UpdateItemTypesAsync(id, dto, allowQuantityEdit: true, actorUserName: User.Identity?.Name);
                 if (updated == null) return NotFound(new { error = "Bill not found." });
                 return Ok(updated);
             }

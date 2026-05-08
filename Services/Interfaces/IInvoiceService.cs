@@ -33,7 +33,7 @@ namespace MyApp.Api.Services.Interfaces
         ///   • allowQuantityEdit=true  → invoices.manage.update.itemtype.qty
         ///       (Item Type + Quantity, with decimal validation)
         /// </summary>
-        Task<InvoiceDto?> UpdateItemTypesAsync(int id, UpdateInvoiceItemTypesDto dto, bool allowQuantityEdit = false);
+        Task<InvoiceDto?> UpdateItemTypesAsync(int id, UpdateInvoiceItemTypesDto dto, bool allowQuantityEdit = false, string? actorUserName = null);
         Task<bool> DeleteAsync(int id);
         /// <summary>
         /// Flip the IsFbrExcluded flag. Excluded bills are skipped by the

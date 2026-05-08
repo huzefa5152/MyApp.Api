@@ -142,6 +142,15 @@ builder.Services.AddScoped<IFbrPurchaseImportMatcher, FbrPurchaseImportMatcher>(
 builder.Services.AddScoped<IFbrPurchaseImportCommitter, FbrPurchaseImportCommitter>();
 builder.Services.AddScoped<IFbrPurchaseImportService, FbrPurchaseImportService>();
 
+// Dashboard KPI aggregator. Scoped because it depends on AppDbContext
+// and IPermissionService — both Scoped — and the queries use the
+// per-request user identity for permission checks.
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+
+// Tax-claim helper — drives the in-form HS-stock panel on the
+// Invoices-tab edit screen. Scoped (depends on AppDbContext).
+builder.Services.AddScoped<ITaxClaimService, TaxClaimService>();
+
 // Historical challan import (reverse Excel template → preview → commit).
 // Reverse mapper is a Singleton because it holds an in-memory cache keyed on
 // the template file path + lastWriteTime — rebuilds automatically when the
@@ -365,11 +374,18 @@ using (var scope = app.Services.CreateScope())
          );
     ");
 
-    // Baseline PO formats (Lotte Kolson, Soorty, Meko) — runs ONCE when the
-    // POFormats table is empty. Operator-curated formats added via the
-    // Configuration → PO Formats UI are preserved across restarts.
-    var fp = scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.IPOFormatFingerprintService>();
-    await MyApp.Api.Data.POFormatSeeder.SeedAsync(db, fp);
+    // PO format baseline seeding has been REMOVED. Fresh databases now
+    // start with zero PO formats — operators onboard each client layout
+    // through Configuration → PO Formats. Existing databases (Hakimi,
+    // Roshan, etc.) that ALREADY have the baseline formats keep them
+    // untouched: the seeder was idempotent (insert-if-missing only),
+    // not destructive, so removing the call doesn't delete anything.
+    //
+    // The seeder code at Data/POFormatSeeder.cs is preserved as
+    // reference for the rule-set JSON shape. Re-enable by un-commenting
+    // the two lines below if you ever want the baselines back.
+    //   var fp = scope.ServiceProvider.GetRequiredService<IPOFormatFingerprintService>();
+    //   await POFormatSeeder.SeedAsync(db, fp);
 
     // ── One-time perm migration: split invoices.fbr.post → validate + submit ──
     // The legacy single perm has been removed from the catalog and replaced

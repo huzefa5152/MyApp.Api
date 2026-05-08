@@ -375,13 +375,38 @@ namespace MyApp.Api.Services.Implementations
 
             // Apply header changes
             if (dto.Date.HasValue) bill.Date = dto.Date.Value.Date;
+            // Capture the old IRN BEFORE we overwrite it — the
+            // reconciliation transition below needs to know whether the
+            // IRN value actually changed (vs a no-op edit that touched
+            // other fields).
+            var oldIrn = bill.SupplierIRN?.Trim();
+            var newIrn = dto.SupplierIRN?.Trim();
+
             bill.SupplierBillNumber = dto.SupplierBillNumber?.Trim();
-            bill.SupplierIRN = dto.SupplierIRN?.Trim();
+            bill.SupplierIRN = newIrn;
             bill.GSTRate = dto.GSTRate;
             bill.PaymentTerms = dto.PaymentTerms;
             bill.DocumentType = dto.DocumentType;
             bill.PaymentMode = dto.PaymentMode;
-            bill.ReconciliationStatus = string.IsNullOrWhiteSpace(dto.SupplierIRN) ? "ManualOnly" : bill.ReconciliationStatus;
+            // Reconciliation status transitions:
+            //   • IRN cleared             → "ManualOnly" (downgrade — input
+            //                               tax claim no longer eligible)
+            //   • IRN newly added on a    → "Pending" (upgrade — eligible
+            //     "ManualOnly" bill         once supplier files in IRIS)
+            //   • IRN VALUE changed on a  → "Pending" (the previous
+            //     "Matched" or "Disputed"   reconciliation no longer holds
+            //     bill                      for the new IRN — IRIS reconcile
+            //                               job needs to re-validate)
+            //   • Otherwise               → keep current status
+            var irnChanged = !string.Equals(oldIrn, newIrn, StringComparison.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(newIrn))
+                bill.ReconciliationStatus = "ManualOnly";
+            else if (bill.ReconciliationStatus == "ManualOnly")
+                bill.ReconciliationStatus = "Pending";
+            else if (irnChanged
+                     && (bill.ReconciliationStatus == "Matched"
+                         || bill.ReconciliationStatus == "Disputed"))
+                bill.ReconciliationStatus = "Pending";
 
             // Replace items wholesale (simpler than a diff, fine for v1)
             _context.PurchaseItems.RemoveRange(bill.Items);

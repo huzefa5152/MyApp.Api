@@ -15,6 +15,17 @@ namespace MyApp.Api.Helpers
 
         public static readonly IReadOnlyList<PermissionDef> All = new List<PermissionDef>
         {
+            // ── Dashboard ──────────────────────────────────────────────────
+            // Five-tier model: dashboard.view gates the page itself; the four
+            // .kpi.* perms gate which sections of the page render. A user
+            // with dashboard.view but no kpi.* perms sees only the welcome
+            // banner — no money numbers leak.
+            new("dashboard.view",                "Dashboard", "Page",          "View", "Access the Dashboard page"),
+            new("dashboard.kpi.sales.view",      "Dashboard", "Sales KPI",     "View", "See sales KPIs (Total Sales, top clients, recent invoices, sales trend)"),
+            new("dashboard.kpi.purchases.view",  "Dashboard", "Purchase KPI",  "View", "See purchase KPIs (Total Purchases, top suppliers, recent purchase bills, purchase trend)"),
+            new("dashboard.kpi.fbr.view",        "Dashboard", "FBR KPI",       "View", "See FBR / compliance KPIs (pending submission, validated, submitted, failed)"),
+            new("dashboard.kpi.inventory.view",  "Dashboard", "Inventory KPI", "View", "See inventory KPIs (stock value, low-stock items, recent stock movements, top items by movement)"),
+
             // ── RBAC (role & permission administration) ─────────────────────
             new("rbac.roles.view",         "RBAC", "Roles",        "View",   "View the list of roles and their assigned permissions"),
             new("rbac.roles.create",       "RBAC", "Roles",        "Create", "Create new roles"),

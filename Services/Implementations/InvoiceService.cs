@@ -15,19 +15,25 @@ namespace MyApp.Api.Services.Implementations
         private readonly ICompanyRepository _companyRepo;
         private readonly IClientRepository _clientRepo;
         private readonly AppDbContext _context;
+        private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
+        private readonly IAuditLogService _auditLog;
 
         public InvoiceService(
             IInvoiceRepository invoiceRepo,
             IDeliveryChallanRepository challanRepo,
             ICompanyRepository companyRepo,
             IClientRepository clientRepo,
-            AppDbContext context)
+            AppDbContext context,
+            Microsoft.Extensions.Configuration.IConfiguration config,
+            IAuditLogService auditLog)
         {
             _invoiceRepo = invoiceRepo;
             _challanRepo = challanRepo;
             _companyRepo = companyRepo;
             _clientRepo = clientRepo;
             _context = context;
+            _config = config;
+            _auditLog = auditLog;
         }
 
         /// <summary>
@@ -883,7 +889,7 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
-        // ── Narrow edit path: Item Type re-classification (+ optional Qty) ─
+        // ── Narrow edit path: Item Type re-classification (+ optional Qty + Price) ─
         //
         // Two permission flows feed this method, distinguished by the
         // allowQuantityEdit flag (set by the controller from the request's
@@ -891,18 +897,21 @@ namespace MyApp.Api.Services.Implementations
         //
         //   • allowQuantityEdit = false  → invoices.manage.update.itemtype
         //       Operator can only change which ItemType each line points
-        //       at. Quantity values in the payload are ignored. Used by
-        //       the FBR-classification helper role.
+        //       at. Quantity / UnitPrice values in the payload are
+        //       ignored. Used by the FBR-classification helper role.
         //
         //   • allowQuantityEdit = true   → invoices.manage.update.itemtype.qty
-        //       Same as above PLUS the operator can adjust Quantity. Useful
-        //       for users who need to correct qty mistakes that the source
-        //       challan can't fix (returned items, miscount), without giving
-        //       them full price-edit power.
+        //       Item Type + Quantity + UnitPrice. Common during FBR
+        //       classification: operator splits one line into multiple
+        //       HS-coded lines, redistributing qty and price. The total-
+        //       preservation guard below ensures the bill's bottom line
+        //       stays equal to what the buyer was actually billed —
+        //       within a small tolerance (configurable, default 2 PKR)
+        //       to absorb rounding noise from the rebalance.
         //
-        // EVERY OTHER FIELD on the bill (price, desc, GST, dates, payment
-        // terms, doc type, SRO, etc.) is still ignored on both paths.
-        public async Task<InvoiceDto?> UpdateItemTypesAsync(int id, UpdateInvoiceItemTypesDto dto, bool allowQuantityEdit = false)
+        // GST rate, dates, payment terms, doc type, SRO refs, etc. are
+        // still ignored on both paths.
+        public async Task<InvoiceDto?> UpdateItemTypesAsync(int id, UpdateInvoiceItemTypesDto dto, bool allowQuantityEdit = false, string? actorUserName = null)
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return null;
@@ -912,6 +921,46 @@ namespace MyApp.Api.Services.Implementations
 
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("At least one item is required.");
+
+            // Restriction F: zero unit price not allowed when the .qty
+            // path is active (operator is editing prices, not just
+            // classifying). Negative is also blocked. Zero unit price on
+            // an FBR-imported bill would imply giveaway items, which is
+            // a real-business workaround not a tax-claim adjustment.
+            if (allowQuantityEdit)
+            {
+                var badPriceRows = dto.Items
+                    .Where(r => r.UnitPrice.HasValue && r.UnitPrice.Value <= 0m)
+                    .Select(r => r.Id).ToList();
+                if (badPriceRows.Count > 0)
+                    throw new InvalidOperationException(
+                        $"Unit price must be greater than zero. Bill item id(s) [{string.Join(", ", badPriceRows)}] " +
+                        $"have zero or negative unit price.");
+
+                var badQtyRows = dto.Items
+                    .Where(r => r.Quantity.HasValue && r.Quantity.Value <= 0m)
+                    .Select(r => r.Id).ToList();
+                if (badQtyRows.Count > 0)
+                    throw new InvalidOperationException(
+                        $"Quantity must be greater than zero. Bill item id(s) [{string.Join(", ", badQtyRows)}] " +
+                        $"have zero or negative quantity.");
+            }
+
+            // Capture before-state for the audit log. Snapshot the
+            // current values BEFORE we mutate them, so the log can show
+            // exactly what changed.
+            var beforeSnapshot = invoice.Items.ToDictionary(
+                ii => ii.Id,
+                ii => new
+                {
+                    ii.ItemTypeId,
+                    ItemTypeName = ii.ItemTypeName,
+                    ii.Quantity,
+                    ii.UnitPrice,
+                    ii.LineTotal,
+                });
+            var beforeSubtotal = invoice.Subtotal;
+            var beforeGrandTotal = invoice.GrandTotal;
 
             // Reject any incoming ItemId that doesn't exist on the bill
             // (mirror the safety check in UpdateAsync — operator cannot add /
@@ -1012,23 +1061,47 @@ namespace MyApp.Api.Services.Implementations
                         existing.SaleType = null;
                     }
 
-                    // Quantity edit only when the .qty perm path is active.
-                    // Recompute LineTotal so the bill's totals stay
-                    // consistent (UnitPrice is unchanged by this flow).
-                    if (allowQuantityEdit && row.Quantity.HasValue && row.Quantity.Value > 0)
+                    // Quantity / UnitPrice edits only on the .qty perm path.
+                    // We recompute LineTotal from whichever fields the row
+                    // touches, so the bill's totals stay self-consistent.
+                    // Both fields are independently optional — the operator
+                    // might change just qty, just price, or both per row.
+                    if (allowQuantityEdit)
                     {
-                        existing.Quantity = row.Quantity.Value;
-                        existing.LineTotal = existing.UnitPrice * row.Quantity.Value;
+                        if (row.Quantity.HasValue && row.Quantity.Value > 0)
+                            existing.Quantity = row.Quantity.Value;
+                        if (row.UnitPrice.HasValue && row.UnitPrice.Value >= 0)
+                            existing.UnitPrice = row.UnitPrice.Value;
+                        if (row.Quantity.HasValue || row.UnitPrice.HasValue)
+                            existing.LineTotal = Math.Round(existing.Quantity * existing.UnitPrice, 2, MidpointRounding.AwayFromZero);
                     }
                 }
 
-                // If qty changed, recompute bill-level totals from the
-                // refreshed line totals. Otherwise leave them untouched.
-                if (allowQuantityEdit && dto.Items.Any(r => r.Quantity.HasValue))
+                // If qty / unit price changed, recompute bill-level totals
+                // and enforce the total-preservation guard.
+                if (allowQuantityEdit && dto.Items.Any(r => r.Quantity.HasValue || r.UnitPrice.HasValue))
                 {
-                    invoice.Subtotal = invoice.Items.Sum(ii => ii.LineTotal);
-                    invoice.GSTAmount = Math.Round(invoice.Subtotal * (invoice.GSTRate / 100m), 2, MidpointRounding.AwayFromZero);
-                    invoice.GrandTotal = invoice.Subtotal + invoice.GSTAmount;
+                    var originalSubtotal = invoice.Subtotal;
+                    var newSubtotal = invoice.Items.Sum(ii => ii.LineTotal);
+                    var tolerance = _config.GetValue<decimal?>("Invoice:NarrowEditTotalTolerancePkr") ?? 2m;
+                    var diff = Math.Abs(newSubtotal - originalSubtotal);
+                    if (diff > tolerance)
+                    {
+                        // Reject. The whole purpose of the .qty path is to
+                        // re-shape lines while keeping the bill total
+                        // intact. A diff bigger than the rounding-noise
+                        // tolerance means the operator changed the actual
+                        // amount being billed, which requires full edit
+                        // rights (invoices.manage.update).
+                        throw new InvalidOperationException(
+                            $"New bill subtotal Rs. {newSubtotal:N2} differs from the original Rs. {originalSubtotal:N2} " +
+                            $"by Rs. {diff:N2} — exceeds the Rs. {tolerance:N2} rounding tolerance. " +
+                            $"Adjust qty / unit price so the totals match (within Rs. {tolerance:N0}), " +
+                            $"or use the full-edit path if you genuinely need to change the bill amount.");
+                    }
+                    invoice.Subtotal = newSubtotal;
+                    invoice.GSTAmount = Math.Round(newSubtotal * (invoice.GSTRate / 100m), 2, MidpointRounding.AwayFromZero);
+                    invoice.GrandTotal = newSubtotal + invoice.GSTAmount;
                 }
 
                 // Any edit invalidates a previous validation. Don't touch
@@ -1042,6 +1115,73 @@ namespace MyApp.Api.Services.Implementations
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
+
+                // ── Audit log (after commit so we don't log a rolled-back op) ──
+                // Per-row before/after snapshot for the narrow-edit path.
+                // Stored as JSON in RequestBody; the AuditLogs page can
+                // pretty-print it. Audit failures must never break the
+                // save itself — wrap in try/swallow.
+                try
+                {
+                    var changedRows = new List<object>();
+                    foreach (var current in invoice.Items)
+                    {
+                        if (!beforeSnapshot.TryGetValue(current.Id, out var before)) continue;
+                        var changed =
+                            before.ItemTypeId      != current.ItemTypeId
+                         || before.ItemTypeName    != current.ItemTypeName
+                         || before.Quantity        != current.Quantity
+                         || before.UnitPrice       != current.UnitPrice
+                         || before.LineTotal       != current.LineTotal;
+                        if (!changed) continue;
+                        changedRows.Add(new
+                        {
+                            invoiceItemId      = current.Id,
+                            previousItemTypeId = before.ItemTypeId,
+                            previousItemType   = before.ItemTypeName,
+                            newItemTypeId      = current.ItemTypeId,
+                            newItemType        = current.ItemTypeName,
+                            previousQuantity   = before.Quantity,
+                            newQuantity        = current.Quantity,
+                            previousUnitPrice  = before.UnitPrice,
+                            newUnitPrice       = current.UnitPrice,
+                            previousLineTotal  = before.LineTotal,
+                            newLineTotal       = current.LineTotal,
+                        });
+                    }
+                    if (changedRows.Count > 0)
+                    {
+                        var payload = System.Text.Json.JsonSerializer.Serialize(new
+                        {
+                            invoiceId          = invoice.Id,
+                            invoiceNumber      = invoice.InvoiceNumber,
+                            companyId          = invoice.CompanyId,
+                            mode               = allowQuantityEdit ? "itemtype+qty+price" : "itemtype-only",
+                            previousSubtotal   = beforeSubtotal,
+                            newSubtotal        = invoice.Subtotal,
+                            previousGrandTotal = beforeGrandTotal,
+                            newGrandTotal      = invoice.GrandTotal,
+                            differenceAmount   = Math.Abs(invoice.Subtotal - beforeSubtotal),
+                            rows               = changedRows,
+                        });
+
+                        await _auditLog.LogAsync(new AuditLog
+                        {
+                            Level         = "Info",
+                            UserName      = actorUserName,
+                            HttpMethod    = "PATCH",
+                            RequestPath   = $"/invoices/{invoice.Id}/{(allowQuantityEdit ? "itemtypes-and-qty" : "itemtypes")}",
+                            StatusCode    = 200,
+                            ExceptionType = "Invoice.NarrowEdit",
+                            Message       = $"Bill #{invoice.InvoiceNumber}: {changedRows.Count} line(s) edited "
+                                          + $"({(allowQuantityEdit ? "itemtype+qty+price" : "itemtype-only")}). "
+                                          + $"Subtotal {beforeSubtotal:N2} → {invoice.Subtotal:N2} "
+                                          + $"(diff Rs. {Math.Abs(invoice.Subtotal - beforeSubtotal):N2}).",
+                            RequestBody   = payload.Length > 4000 ? payload[..4000] : payload,
+                        });
+                    }
+                }
+                catch { /* audit must never break the save */ }
 
                 var reloaded = await _invoiceRepo.GetByIdAsync(id);
                 return reloaded == null ? null : ToDto(reloaded);

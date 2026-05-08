@@ -25,6 +25,15 @@
 
 export const PERMISSION_SECTIONS = [
   {
+    // Dashboard is the home page — sits at the top of the role editor
+    // so it's the first thing admins land on when curating roles.
+    // Five-tier model (one page perm + four KPI-section perms) gives a
+    // clean read in the editor: bookkeeper → Sales+Purchases, FBR officer
+    // → FBR, inventory manager → Inventory, etc.
+    section: "Dashboard",
+    modules: [{ key: "Dashboard" }],
+  },
+  {
     section: "Sales",
     modules: [
       { key: "Challans", label: "Delivery Challans" },

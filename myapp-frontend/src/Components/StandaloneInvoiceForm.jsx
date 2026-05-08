@@ -809,7 +809,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
                               <th style={{ ...styles.unifiedTh, width: "9%" }}>Unit Price *</th>
                               <th style={{ ...styles.unifiedTh, width: "10%" }}>Line Total</th>
-                              <th style={{ ...styles.unifiedTh, width: "10%" }}>HS Code</th>
+                              {/* HS Code is an FBR field — only relevant on
+                                  the Invoices tab. Bills mode is pre-FBR
+                                  data entry, so hide the column. */}
+                              {!billsMode && (
+                                <th style={{ ...styles.unifiedTh, width: "10%" }}>HS Code</th>
+                              )}
                               {showMRP && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: "#fff8e1" }}>MRP / unit *</th>}
                               {showMRP && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: "#fff8e1" }}>MRP × Qty</th>}
                               {showSRO && <th style={{ ...styles.unifiedTh, width: "10%", backgroundColor: "#fce4ec" }}>SRO Schedule *</th>}
@@ -865,19 +870,37 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     />
                                   </td>
                                   <td style={styles.unifiedTd}>
-                                    <input
-                                      type="text"
-                                      readOnly={!!r.itemTypeId}
-                                      style={{
-                                        ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem",
-                                        backgroundColor: r.itemTypeId ? "#eef5ff" : colors.inputBg,
-                                        cursor: r.itemTypeId ? "not-allowed" : "text",
-                                      }}
-                                      value={r.uom}
-                                      onChange={(e) => updateRow(r.localId, { uom: e.target.value })}
-                                      placeholder="auto from item type"
-                                      title={r.itemTypeId ? "Inherited from the picked item type" : ""}
-                                    />
+                                    {/* Bills mode (no challan): Unit autocomplete
+                                        bound to /lookup/units — same UX the
+                                        challan item form uses. New units the
+                                        operator types are upserted into the
+                                        Units table on save (see UnitRegistry).
+                                        Invoices mode keeps the locked-when-
+                                        itemTypeId input because UOM there is
+                                        derived from the picked Item Type. */}
+                                    {billsMode ? (
+                                      <LookupAutocomplete
+                                        label="Unit"
+                                        endpoint="/lookup/units"
+                                        value={r.uom || ""}
+                                        onChange={(val) => updateRow(r.localId, { uom: val })}
+                                        inputStyle={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                      />
+                                    ) : (
+                                      <input
+                                        type="text"
+                                        readOnly={!!r.itemTypeId}
+                                        style={{
+                                          ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem",
+                                          backgroundColor: r.itemTypeId ? "#eef5ff" : colors.inputBg,
+                                          cursor: r.itemTypeId ? "not-allowed" : "text",
+                                        }}
+                                        value={r.uom}
+                                        onChange={(e) => updateRow(r.localId, { uom: e.target.value })}
+                                        placeholder="auto from item type"
+                                        title={r.itemTypeId ? "Inherited from the picked item type" : ""}
+                                      />
+                                    )}
                                   </td>
                                   <td style={styles.unifiedTd}>
                                     <input
@@ -891,19 +914,21 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   <td style={{ ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
                                     {(q * p).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                   </td>
-                                  <td
-                                    style={{
-                                      ...styles.unifiedTd,
-                                      backgroundColor: "#f4f6fa",
-                                      fontFamily: "monospace",
-                                      fontSize: "0.78rem",
-                                      color: r.hsCode ? colors.textPrimary : colors.textSecondary,
-                                      fontStyle: r.hsCode ? "normal" : "italic",
-                                    }}
-                                    title="HS Code auto-fills from the picked Item Type"
-                                  >
-                                    {r.hsCode || "—"}
-                                  </td>
+                                  {!billsMode && (
+                                    <td
+                                      style={{
+                                        ...styles.unifiedTd,
+                                        backgroundColor: "#f4f6fa",
+                                        fontFamily: "monospace",
+                                        fontSize: "0.78rem",
+                                        color: r.hsCode ? colors.textPrimary : colors.textSecondary,
+                                        fontStyle: r.hsCode ? "normal" : "italic",
+                                      }}
+                                      title="HS Code auto-fills from the picked Item Type"
+                                    >
+                                      {r.hsCode || "—"}
+                                    </td>
+                                  )}
                                   {showMRP && (
                                     <td style={{ ...styles.unifiedTd, backgroundColor: "#fffdf5" }}>
                                       <input

@@ -1078,7 +1078,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
                                 <th style={{ ...styles.unifiedTh, width: "8%" }}>Unit Price *</th>
                                 <th style={{ ...styles.unifiedTh, width: "9%" }}>Line Total</th>
-                                <th style={{ ...styles.unifiedTh, width: "10%" }}>HS Code</th>
+                                {/* HS Code is FBR data — only relevant on the
+                                    Invoices tab. Bills mode is pre-FBR data
+                                    entry, so hide it. */}
+                                {!billsMode && (
+                                  <th style={{ ...styles.unifiedTh, width: "10%" }}>HS Code</th>
+                                )}
                                 <th style={{ ...styles.unifiedTh, width: "22%" }}>Sale Type</th>
                               </tr>
                             </thead>
@@ -1213,19 +1218,21 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                     <td style={{ ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
                                       {(item.quantity * price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
-                                    <td
-                                      style={{
-                                        ...styles.unifiedTd,
-                                        backgroundColor: "#f4f6fa",
-                                        fontFamily: "monospace",
-                                        fontSize: "0.78rem",
-                                        color: itemHsCodes[item.id] ? colors.textPrimary : colors.textSecondary,
-                                        fontStyle: itemHsCodes[item.id] ? "normal" : "italic",
-                                      }}
-                                      title="HS Code auto-fills from the picked Item Type"
-                                    >
-                                      {itemHsCodes[item.id] || "—"}
-                                    </td>
+                                    {!billsMode && (
+                                      <td
+                                        style={{
+                                          ...styles.unifiedTd,
+                                          backgroundColor: "#f4f6fa",
+                                          fontFamily: "monospace",
+                                          fontSize: "0.78rem",
+                                          color: itemHsCodes[item.id] ? colors.textPrimary : colors.textSecondary,
+                                          fontStyle: itemHsCodes[item.id] ? "normal" : "italic",
+                                        }}
+                                        title="HS Code auto-fills from the picked Item Type"
+                                      >
+                                        {itemHsCodes[item.id] || "—"}
+                                      </td>
+                                    )}
                                     <td style={styles.unifiedTd}>
                                       {/* Scenario-locked Sale Type — every line on the bill must use
                                           the scenario's saleType (FBR rejects mixed-saletype bills
