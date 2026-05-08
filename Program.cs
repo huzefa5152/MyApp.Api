@@ -472,6 +472,32 @@ using (var scope = app.Services.CreateScope())
     //   var fp = scope.ServiceProvider.GetRequiredService<IPOFormatFingerprintService>();
     //   await POFormatSeeder.SeedAsync(db, fp);
 
+    // ── One-time perm migration: challans.manage.duplicate carved out of create ──
+    // Pre-2026-05-08 the Duplicate button + endpoint were gated by
+    // challans.manage.create. We've split it into a dedicated permission so a
+    // role can be allowed to duplicate without also being granted
+    // create-from-scratch. To preserve existing capability, every role that
+    // already has challans.manage.create gets the new perm auto-granted on
+    // first run. NOT EXISTS guards keep this idempotent. RbacSeeder will
+    // insert the new permission row before this runs (because we INSERT it
+    // here defensively in case ordering changes).
+    db.Database.ExecuteSqlRaw(@"
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'challans.manage.duplicate', 'Challans', 'Manage', 'Duplicate',
+               'Duplicate a delivery challan (clone with the same number for a different PO)'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'challans.manage.duplicate');
+
+        DECLARE @createId INT = (SELECT Id FROM Permissions WHERE [Key] = 'challans.manage.create');
+        DECLARE @dupId    INT = (SELECT Id FROM Permissions WHERE [Key] = 'challans.manage.duplicate');
+        IF @createId IS NOT NULL AND @dupId IS NOT NULL
+        BEGIN
+            INSERT INTO RolePermissions (RoleId, PermissionId)
+            SELECT rp.RoleId, @dupId FROM RolePermissions rp
+            WHERE rp.PermissionId = @createId
+              AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @dupId);
+        END
+    ");
+
     // ── One-time perm migration: split invoices.fbr.post → validate + submit ──
     // The legacy single perm has been removed from the catalog and replaced
     // with two narrower ones. RbacSeeder below will purge the old permission

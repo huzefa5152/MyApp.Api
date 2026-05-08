@@ -24,6 +24,7 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
+import DuplicateChallanDialog from "../Components/DuplicateChallanDialog";
 
 const colors = {
   blue: "#0d47a1",
@@ -72,6 +73,10 @@ export default function ChallanPage() {
   // parallel (which would otherwise create two clones with the same
   // shared challan number).
   const [duplicatingId, setDuplicatingId] = useState(null);
+  // Source challan for the count-input dialog. null = dialog closed.
+  // 2026-05-08: replaces the legacy yes/no confirm so the operator can
+  // request N copies in a single round-trip.
+  const [duplicateSource, setDuplicateSource] = useState(null);
 
   const fetchClients = async (companyId) => {
     try {
@@ -200,32 +205,43 @@ export default function ChallanPage() {
     fetchChallans(selectedCompany.id, page);
   };
 
-  const handleDuplicate = async (challan) => {
-    // Defensive — the button is already disabled while duplicatingId is
-    // set, but a stale render could still slip through. Bail early.
+  // Click handler: open the count-input dialog. Defensive bail if a
+  // previous duplicate POST is still in flight (the button on every
+  // row also locks via the duplicatingId disable, so this is belt-
+  // and-braces).
+  const handleDuplicate = (challan) => {
     if (duplicatingId) return;
-    const ok = await confirm({
-      title: "Duplicate Challan?",
-      message:
-        `Create a new billable copy of Challan #${challan.challanNumber}? ` +
-        `The new copy will reuse the same challan number so you can bill a different PO. ` +
-        `You'll only be able to change PO Number, PO Date, and Items on the copy.`,
-      variant: "info",
-      confirmText: "Duplicate",
-    });
-    if (!ok) return;
+    setDuplicateSource(challan);
+  };
+
+  // Confirm-handler from DuplicateChallanDialog. Receives the chosen
+  // count (1..20). Server returns a single object when count === 1
+  // (back-compat) or an array when count > 1.
+  const handleDuplicateConfirm = async (count) => {
+    const challan = duplicateSource;
+    setDuplicateSource(null);
+    if (!challan || !count || count < 1) return;
     setDuplicatingId(challan.id);
     try {
-      const { data: clone } = await duplicateChallan(challan.id);
-      // Refresh the list so the new card appears, then jump straight into
-      // the edit form so the operator can change PO/items in the next step
-      // — matches the spec: "Open the same edit configuration UI".
+      const { data } = await duplicateChallan(challan.id, count);
+      const clones = Array.isArray(data) ? data : [data];
       await fetchChallans(selectedCompany.id, page);
-      setEditChallan(clone);
-      notify(
-        `Challan #${clone.challanNumber} duplicated. Update the PO and items, then save.`,
-        "success"
-      );
+      // For count === 1, jump straight into the edit form so the operator
+      // can tweak PO/items — same UX as before. For bulk count, just refresh
+      // the list and toast; the operator typically wants to leave the dialog
+      // batch-applied as-is and edit them one at a time afterwards.
+      if (count === 1) {
+        setEditChallan(clones[0]);
+        notify(
+          `Challan #${clones[0].challanNumber} duplicated. Update the PO and items, then save.`,
+          "success"
+        );
+      } else {
+        notify(
+          `Created ${clones.length} copies of Challan #${challan.challanNumber}.`,
+          "success"
+        );
+      }
     } catch (err) {
       notify(err.response?.data?.error || "Failed to duplicate challan.", "error");
     } finally {
@@ -448,6 +464,13 @@ export default function ChallanPage() {
           companyId={selectedCompany.id}
           company={selectedCompany}
           prefillChallanId={generateBillChallanId}
+          // 2026-05-08: Generate Bill from Challans always lands on the
+          // Bills view (no FBR fields). Same shape as the Bills tab's
+          // "+ New Bill" entry point. Without this, the form rendered
+          // Item Type / HS Code / Sale Type columns + the New Item Type
+          // button — visually inconsistent with the other bill-creation
+          // flows.
+          billsMode={true}
           onClose={() => setGenerateBillChallanId(null)}
           onSaved={() => {
             setGenerateBillChallanId(null);
@@ -456,6 +479,15 @@ export default function ChallanPage() {
           }}
         />
       )}
+
+      {/* Count-input dialog for the Duplicate flow. Replaces the
+          legacy yes/no confirm — see handleDuplicate above. */}
+      <DuplicateChallanDialog
+        open={!!duplicateSource}
+        challanNumber={duplicateSource?.challanNumber}
+        onConfirm={handleDuplicateConfirm}
+        onCancel={() => setDuplicateSource(null)}
+      />
 
     </div>
   );

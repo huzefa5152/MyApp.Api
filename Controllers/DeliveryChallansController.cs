@@ -223,17 +223,25 @@ namespace MyApp.Api.Controllers
         /// new challan row, not a mutation of the source.
         /// </summary>
         [HttpPost("{id}/duplicate")]
-        [HasPermission("challans.manage.create")]
-        public async Task<ActionResult<DeliveryChallanDto>> Duplicate(int id)
+        [HasPermission("challans.manage.duplicate")]
+        public async Task<ActionResult<List<DeliveryChallanDto>>> Duplicate(int id, [FromQuery] int count = 1)
         {
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             try
             {
-                var clone = await _service.DuplicateAsync(id);
-                if (clone == null) return NotFound();
-                return CreatedAtAction(nameof(GetById), new { id = clone.Id }, clone);
+                // 2026-05-08: count parameter — operator picks "create N copies"
+                // up-front instead of clicking Duplicate N times. Service caps
+                // count at 20 internally; values < 1 are treated as 1.
+                var clones = await _service.DuplicateAsync(id, count);
+                if (clones.Count == 0) return NotFound();
+                // Backwards-compat: when count == 1 (the default), return the
+                // single clone object so the existing frontend keeps working
+                // with its `data: clone` destructure pattern. count > 1 returns
+                // the full list.
+                if (count <= 1) return CreatedAtAction(nameof(GetById), new { id = clones[0].Id }, clones[0]);
+                return Ok(clones);
             }
             catch (InvalidOperationException ex)
             {

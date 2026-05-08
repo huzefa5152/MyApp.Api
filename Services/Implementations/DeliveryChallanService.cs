@@ -535,17 +535,26 @@ namespace MyApp.Api.Services.Implementations
             if (!IsEditable(dc))
                 throw new InvalidOperationException("Can only delete Pending, No PO, or Setup Required challans.");
 
-            // Only the LAST challan (highest number) can be deleted so the
-            // numbering sequence stays gap-free. If someone tries to delete
-            // an earlier one, they should edit it instead.
-            var maxNumber = await _context.DeliveryChallans
-                .Where(c => c.CompanyId == dc.CompanyId)
-                .MaxAsync(c => (int?)c.ChallanNumber) ?? 0;
-            if (dc.ChallanNumber != maxNumber)
-                throw new InvalidOperationException(
-                    $"Only the latest challan can be deleted (currently #{maxNumber}). " +
-                    $"To change challan #{dc.ChallanNumber}, edit it instead — " +
-                    "deleting earlier challans would leave gaps in the numbering.");
+            // 2026-05-08: carve-out for duplicates. They share the parent's
+            // ChallanNumber, so deleting a duplicate doesn't create a gap in
+            // the numbering sequence — the original keeps the number. The
+            // max-number rule below only applies to canonical (non-duplicate)
+            // challans.
+            var isDuplicate = dc.DuplicatedFromId != null;
+            if (!isDuplicate)
+            {
+                // Only the LAST challan (highest number) can be deleted so the
+                // numbering sequence stays gap-free. If someone tries to delete
+                // an earlier one, they should edit it instead.
+                var maxNumber = await _context.DeliveryChallans
+                    .Where(c => c.CompanyId == dc.CompanyId)
+                    .MaxAsync(c => (int?)c.ChallanNumber) ?? 0;
+                if (dc.ChallanNumber != maxNumber)
+                    throw new InvalidOperationException(
+                        $"Only the latest challan can be deleted (currently #{maxNumber}). " +
+                        $"To change challan #{dc.ChallanNumber}, edit it instead — " +
+                        "deleting earlier challans would leave gaps in the numbering.");
+            }
 
             var companyId = dc.CompanyId;
             await _repository.DeleteAsync(dc);
@@ -898,8 +907,29 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<DeliveryChallanDto?> DuplicateAsync(int sourceId)
         {
+            var clones = await DuplicateAsync(sourceId, 1);
+            return clones.FirstOrDefault();
+        }
+
+        /// <summary>
+        /// Create N duplicates of a single source challan in one transaction.
+        /// Returns the freshly-loaded DTO for each clone in creation order.
+        ///
+        /// 2026-05-08 UX upgrade: previously the operator had to click
+        /// Duplicate N times (and the laggy first-click let them double-fire
+        /// the request). The N-at-once flow plus the in-flight guard on the
+        /// frontend resolves both issues.
+        /// </summary>
+        public async Task<List<DeliveryChallanDto>> DuplicateAsync(int sourceId, int count)
+        {
+            if (count <= 0) count = 1;
+            // Hard cap so an accidental "999" entry doesn't lock the DB
+            // creating a bulk run that would later need cleanup. 20 is
+            // generous for any realistic same-PO-different-batch flow.
+            if (count > 20) count = 20;
+
             var source = await _repository.GetByIdAsync(sourceId);
-            if (source == null) return null;
+            if (source == null) return new();
 
             // Only billable-but-not-yet-billed statuses can be duplicated.
             // Cancelled / Invoiced / Setup Required / No PO are intentionally
@@ -915,13 +945,24 @@ namespace MyApp.Api.Services.Implementations
             if (source.IsDemo)
                 throw new InvalidOperationException("Demo (sandbox) challans cannot be duplicated.");
 
-            var clone = await _repository.DuplicateAsync(source);
+            // 2026-05-08: forbid duplicating a duplicate. The original is the
+            // only canonical "Challan #N" — operators can request N copies of
+            // it directly via the count parameter. Letting duplicates spawn
+            // their own duplicates fragments the lineage and confuses the
+            // "Duplicate of #N" subtitle on the cards.
+            if (source.DuplicatedFromId != null)
+                throw new InvalidOperationException(
+                    $"This challan is already a duplicate of #{source.ChallanNumber}. " +
+                    "Open the original challan to create more copies.");
 
-            // Re-fetch through the standard read path so the DTO has the same
-            // shape as every other challan response (Items + Client + Company
-            // + DuplicatedFrom navigation populated, FBR warnings computed).
-            var refreshed = await _repository.GetByIdAsync(clone.Id);
-            return refreshed == null ? null : ToDto(refreshed);
+            var clones = new List<DeliveryChallanDto>(count);
+            for (int i = 0; i < count; i++)
+            {
+                var clone = await _repository.DuplicateAsync(source);
+                var refreshed = await _repository.GetByIdAsync(clone.Id);
+                if (refreshed != null) clones.Add(ToDto(refreshed));
+            }
+            return clones;
         }
     }
 }

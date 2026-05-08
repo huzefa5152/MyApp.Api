@@ -55,9 +55,15 @@ namespace MyApp.Api.Helpers
 
             // ── Delivery Challans ───────────────────────────────────────────
             new("challans.list.view",      "Challans", "List",   "View",   "View the delivery-challan list"),
-            new("challans.manage.create",  "Challans", "Manage", "Create", "Create a new delivery challan"),
-            new("challans.manage.update",  "Challans", "Manage", "Update", "Edit a delivery challan"),
-            new("challans.manage.delete",  "Challans", "Manage", "Delete", "Delete a delivery challan"),
+            new("challans.manage.create",     "Challans", "Manage", "Create",    "Create a new delivery challan"),
+            new("challans.manage.update",     "Challans", "Manage", "Update",    "Edit a delivery challan"),
+            new("challans.manage.delete",     "Challans", "Manage", "Delete",    "Delete a delivery challan"),
+            // 2026-05-08: separate permission for the Duplicate action so an
+            // operator role can be allowed to spawn billable copies without
+            // also being granted full create-from-scratch rights, or vice-versa.
+            // Server-side gate is in DeliveryChallansController.Duplicate;
+            // frontend hides the button when missing.
+            new("challans.manage.duplicate",  "Challans", "Manage", "Duplicate", "Duplicate a delivery challan (clone with the same number for a different PO)"),
             new("challans.import.create",  "Challans", "Import", "Create", "Import challans from an Excel template"),
             new("challans.print.view",     "Challans", "Print",  "View",   "Print or download challans"),
 

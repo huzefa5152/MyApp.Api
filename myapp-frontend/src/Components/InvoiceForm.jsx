@@ -13,6 +13,11 @@ import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import ClientForm from "./ClientForm";
 import QuickItemTypeForm from "./QuickItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
+// 2026-05-08: Same UOM autocomplete the ChallanForm uses, hooked up
+// to /lookup/units. Replaces the plain text input on each row's UOM
+// cell so operators get the saved-units suggestions instead of having
+// to retype "Pcs" / "KG" / etc. each line.
+import LookupAutocomplete from "./LookupAutocomplete";
 
 const colors = {
   blue: "#0d47a1",
@@ -1111,7 +1116,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 {!billsMode && (
                                   <th style={{ ...styles.unifiedTh, width: "10%" }}>HS Code</th>
                                 )}
-                                <th style={{ ...styles.unifiedTh, width: "22%" }}>Sale Type</th>
+                                {/* Sale Type is FBR-only data — same gating as Item Type / HS Code.
+                                    2026-05-08: was visible in both modes, which broke the symmetry
+                                    with EditBillForm's Bills view. */}
+                                {!billsMode && (
+                                  <th style={{ ...styles.unifiedTh, width: "22%" }}>Sale Type</th>
+                                )}
                               </tr>
                             </thead>
                             <tbody>
@@ -1203,11 +1213,15 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                       {parseFloat(Number(item.quantity || 0).toFixed(4)).toString()}
                                     </td>
                                     <td style={styles.unifiedTd}>
-                                      <input
-                                        type="text"
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                        value={displayUom}
-                                        onChange={(e) => setItemUoms((p) => ({ ...p, [item.id]: e.target.value }))}
+                                      {/* UOM autocomplete (same backing endpoint
+                                          as ChallanForm). Pre-fix this was a plain
+                                          text input — operators had to retype
+                                          "Pcs" / "KG" each row instead of picking
+                                          from the saved-units list. */}
+                                      <LookupAutocomplete
+                                        endpoint="/lookup/units"
+                                        value={displayUom || ""}
+                                        onChange={(val) => setItemUoms((p) => ({ ...p, [item.id]: val }))}
                                       />
                                     </td>
                                     <td style={styles.unifiedTd}>
@@ -1260,6 +1274,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                         {itemHsCodes[item.id] || "—"}
                                       </td>
                                     )}
+                                    {!billsMode && (
                                     <td style={styles.unifiedTd}>
                                       {/* Scenario-locked Sale Type — every line on the bill must use
                                           the scenario's saleType (FBR rejects mixed-saletype bills
@@ -1310,6 +1325,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                         </select>
                                       )}
                                     </td>
+                                    )}
                                   </tr>
                                 );
                               })}
