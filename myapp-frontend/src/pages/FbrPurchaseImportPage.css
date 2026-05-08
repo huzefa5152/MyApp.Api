@@ -1,0 +1,273 @@
+/* FbrPurchaseImportPage — responsive overrides on top of inline styles. */
+
+/* ---------- Mobile cards vs desktop table toggle ---------- */
+.fbr-imp-table-wrap { display: block; }
+.fbr-imp-line-cards { display: none; }
+
+@media (max-width: 767.98px) {
+  .fbr-imp-table-wrap { display: none; }
+  .fbr-imp-line-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+}
+
+/* ---------- Outer page wrapper ---------- */
+@media (max-width: 767.98px) {
+  .fbr-imp-page {
+    padding: 0 !important;
+  }
+}
+
+/* ---------- Header ---------- */
+@media (max-width: 599.98px) {
+  .fbr-imp-header {
+    gap: 0.6rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+  .fbr-imp-header__icon {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 10px !important;
+  }
+  .fbr-imp-header__icon svg {
+    width: 22px !important;
+    height: 22px !important;
+  }
+  .fbr-imp-header__title {
+    font-size: 1.1rem !important;
+  }
+  .fbr-imp-header__subtitle {
+    font-size: 0.78rem !important;
+    line-height: 1.4 !important;
+  }
+}
+
+/* ---------- Card container ---------- */
+@media (max-width: 599.98px) {
+  .fbr-imp-card {
+    padding: 0.8rem !important;
+    margin: 0.65rem 0 !important;
+    border-radius: 10px !important;
+  }
+}
+
+/* ---------- Upload row ---------- */
+@media (max-width: 599.98px) {
+  .fbr-imp-upload-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.65rem !important;
+  }
+  .fbr-imp-upload-row__field {
+    width: 100% !important;
+    min-width: 0 !important;
+    flex: 1 1 100% !important;
+  }
+  .fbr-imp-upload-row__btns {
+    width: 100%;
+    flex-direction: column !important;
+  }
+  .fbr-imp-upload-row__btns > button {
+    width: 100% !important;
+    justify-content: center;
+    min-height: 42px;
+  }
+}
+
+/* ---------- Summary header (filename + actions) ---------- */
+@media (max-width: 599.98px) {
+  .fbr-imp-summary-head {
+    align-items: stretch !important;
+    gap: 0.55rem !important;
+  }
+  .fbr-imp-summary-meta {
+    display: block !important;
+    margin-left: 0 !important;
+    margin-top: 0.15rem;
+    font-size: 0.78rem !important;
+  }
+  .fbr-imp-summary-actions {
+    flex-direction: column !important;
+    gap: 0.4rem !important;
+    width: 100%;
+  }
+  .fbr-imp-summary-actions > a,
+  .fbr-imp-summary-actions > button {
+    width: 100% !important;
+    justify-content: center;
+    min-height: 42px;
+  }
+}
+
+/* ---------- Commit result chip row ---------- */
+@media (max-width: 599.98px) {
+  .fbr-imp-result-head {
+    align-items: stretch !important;
+  }
+  .fbr-imp-result-head > div:first-child {
+    flex-wrap: wrap;
+  }
+  .fbr-imp-result-head__time {
+    flex-basis: 100%;
+    margin-top: 0.15rem;
+  }
+}
+
+/* ---------- Invoice header (collapsible row) ----------
+   Switches to a 2-line layout on mobile so the operator can read both
+   the decision + invoice number AND the supplier/date/amount without
+   horizontal squeeze. */
+@media (max-width: 767.98px) {
+  .fbr-imp-invoice-header {
+    flex-wrap: wrap !important;
+    gap: 0.4rem !important;
+    padding: 0.65rem 0.85rem !important;
+    align-items: flex-start !important;
+  }
+  .fbr-imp-invoice-header__main {
+    flex-wrap: wrap !important;
+    gap: 0.4rem !important;
+    width: 100%;
+  }
+  .fbr-imp-invoice-header__sep {
+    display: none;
+  }
+  .fbr-imp-invoice-header__supplier,
+  .fbr-imp-invoice-header__date {
+    width: 100%;
+  }
+  .fbr-imp-invoice-header__meta {
+    width: 100%;
+    justify-content: space-between !important;
+    border-top: 1px dashed #eef2f7;
+    padding-top: 0.4rem;
+  }
+}
+
+/* ---------- Bill meta row (FBR Ref, NTN, Match...) ---------- */
+@media (max-width: 599.98px) {
+  .fbr-imp-bill-meta {
+    flex-direction: column !important;
+    gap: 0.35rem !important;
+    font-size: 0.76rem !important;
+  }
+}
+
+/* ---------- Invoice body wrapper on mobile ---------- */
+@media (max-width: 599.98px) {
+  .fbr-imp-invoice-body {
+    padding: 0.6rem 0.75rem 0.85rem !important;
+  }
+}
+
+/* ---------- Mobile line cards ---------- */
+.fbr-imp-line-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 10px;
+  padding: 0.65rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.fbr-imp-line-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.fbr-imp-line-card__row-num {
+  font-size: 0.72rem;
+  color: #5f6d7e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.fbr-imp-line-card__hs {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  color: #1a2332;
+  background: #f5f8fc;
+  border: 1px solid #e8edf3;
+  border-radius: 6px;
+  padding: 0.2rem 0.45rem;
+  display: inline-block;
+  align-self: flex-start;
+}
+
+.fbr-imp-line-card__desc {
+  font-size: 0.85rem;
+  color: #1a2332;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.fbr-imp-line-card__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem 0.55rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed #eef2f7;
+}
+
+.fbr-imp-line-card__field {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.fbr-imp-line-card__field-label {
+  font-size: 0.62rem;
+  color: #5f6d7e;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fbr-imp-line-card__field-value {
+  font-size: 0.82rem;
+  color: #1a2332;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+
+.fbr-imp-line-card__field-value--muted {
+  color: #98a4b3;
+  font-weight: 400;
+}
+
+.fbr-imp-line-card__match {
+  font-size: 0.78rem;
+  color: #1a2332;
+  padding-top: 0.35rem;
+  border-top: 1px dashed #eef2f7;
+}
+
+.fbr-imp-line-card__match-label {
+  font-size: 0.62rem;
+  color: #5f6d7e;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 0.35rem;
+}
+
+@media (max-width: 419.98px) {
+  .fbr-imp-line-card__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ---------- Decision chip wrap (so long labels don't bust the row) --- */
+@media (max-width: 599.98px) {
+  .fbr-imp-page .chip,
+  .fbr-imp-invoice-header__main > span {
+    white-space: normal;
+  }
+}

@@ -41,6 +41,7 @@ import Sparkline from "../Components/dashboard/Sparkline";
 import TopList from "../Components/dashboard/TopList";
 import ByCounterpartyCard from "../Components/dashboard/ByCounterpartyCard";
 import { notify } from "../utils/notify";
+import "./DashboardPage.css";
 
 const PERIOD_OPTIONS = [
   // "All Time" first + default — gives the operator a complete-history
@@ -180,7 +181,7 @@ export default function DashboardPage() {
               into per-section detail. Each card hides if the operator
               lacks the matching .kpi.* perm. */}
           {(data.sales || data.purchases) && (
-            <div style={styles.sectionGrid}>
+            <div className="dash-section-grid" style={styles.sectionGrid}>
               {data.sales && (
                 <ByCounterpartyCard
                   items={data.sales.topClients}
@@ -208,7 +209,7 @@ export default function DashboardPage() {
               stacked on mobile. The Top 5 lists were moved into the
               Sales/Purchases-by-Counterparty cards above; sections
               below stick to recent items + drill-through links. */}
-          <div style={styles.sectionGrid}>
+          <div className="dash-section-grid" style={styles.sectionGrid}>
             {data.sales      && <SalesSection data={data.sales} />}
             {data.purchases  && <PurchasesSection data={data.purchases} />}
             {data.fbr        && <FbrSection data={data.fbr} />}
@@ -223,8 +224,10 @@ export default function DashboardPage() {
 // ── Shell + header + helpers ────────────────────────────────────────
 
 function Shell({ children }) {
+  // .dl-main already provides outer padding (1.75rem 2rem desktop / 1.25rem 1rem mobile),
+  // so the dashboard itself only needs a max-width cap and the inner element gap.
   return (
-    <div style={{ padding: "clamp(1rem, 3vw, 1.75rem) clamp(1rem, 3vw, 2rem)", maxWidth: 1400, margin: "0 auto" }}>
+    <div style={{ maxWidth: 1480, margin: "0 auto" }}>
       {children}
     </div>
   );
@@ -237,12 +240,12 @@ function Header({ displayName, companies, selectedCompanyId, onCompanyChange, pe
   // dropdown is just visual noise.
   const showCompanyPicker = (companies?.length ?? 0) > 1;
   return (
-    <header style={styles.heroBanner}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <h1 style={styles.heroHeading}>
+    <header className="dash-hero" style={styles.heroBanner}>
+      <div className="dash-hero__title-block" style={{ flex: 1, minWidth: 0 }}>
+        <h1 className="dash-hero__heading" style={styles.heroHeading}>
           Hello, <span style={{ color: "#fff" }}>{displayName}</span> 👋
         </h1>
-        <p style={styles.heroSubtitle}>
+        <p className="dash-hero__subtitle" style={styles.heroSubtitle}>
           {selectedCompany?.name ? <><strong>{selectedCompany.name}</strong> · </> : null}
           Showing <strong>{periodLabel}</strong>
         </p>
@@ -250,11 +253,12 @@ function Header({ displayName, companies, selectedCompanyId, onCompanyChange, pe
       {/* Picker bar — wraps to a new line on phones (flex-wrap on
           parent), sits inline on desktop. Each control is full-width
           on phones so taps land easily. */}
-      <div style={styles.heroPickers}>
+      <div className="dash-hero__pickers" style={styles.heroPickers}>
         {showCompanyPicker && (
           <select
             value={selectedCompanyId ?? ""}
             onChange={(e) => onCompanyChange(parseInt(e.target.value, 10))}
+            className="dash-hero__select"
             style={styles.heroSelect}
             aria-label="Company"
           >
@@ -266,6 +270,7 @@ function Header({ displayName, companies, selectedCompanyId, onCompanyChange, pe
         <select
           value={period}
           onChange={(e) => onPeriodChange(e.target.value)}
+          className="dash-hero__select"
           style={styles.heroSelect}
           aria-label="Period"
         >
@@ -352,7 +357,7 @@ function HeroBand({ data }) {
   const showGstNet = showSales && showPurchases;
 
   return (
-    <section style={styles.heroGrid} aria-label="Headline KPIs">
+    <section className="dash-hero-grid" style={styles.heroGrid} aria-label="Headline KPIs">
       {showSales && (
         <KpiCard
           label="Total Sales"
@@ -410,15 +415,33 @@ function HeroBand({ data }) {
 function SectionCard({ title, accent, icon, children, headerExtra = null }) {
   const Icon = icon;
   return (
-    <section style={{ ...styles.card, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-      <header style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 1rem 0.65rem", borderBottom: "1px solid #eef2f7", background: "linear-gradient(90deg, " + accent + "14 0%, transparent 100%)" }}>
-        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 8, backgroundColor: accent, color: "#fff" }}>
+    <section style={{ ...styles.card, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column", borderTop: `3px solid ${accent}` }}>
+      <header className="dash-section-card__header" style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "0.55rem",
+        padding: "0.7rem 1rem",
+        borderBottom: "1px solid #eef2f7",
+        background: `linear-gradient(95deg, ${accent}1f 0%, ${accent}0a 55%, transparent 100%)`,
+      }}>
+        <span className="dash-section-card__header-icon" style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 30,
+          height: 30,
+          borderRadius: 9,
+          background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`,
+          color: "#fff",
+          boxShadow: `0 4px 10px -2px ${accent}66`,
+          flexShrink: 0,
+        }}>
           <Icon size={16} />
         </span>
-        <h2 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#1a2332", flex: 1 }}>{title}</h2>
+        <h2 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#1a2332", flex: 1, letterSpacing: "0.01em", minWidth: 0 }}>{title}</h2>
         {headerExtra}
       </header>
-      <div style={{ padding: "0.85rem 1rem", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+      <div className="dash-section-card__body" style={{ padding: "0.8rem 1rem", display: "flex", flexDirection: "column", gap: "0.8rem" }}>
         {children}
       </div>
     </section>
@@ -429,12 +452,12 @@ function SalesSection({ data }) {
   return (
     <SectionCard title="Sales" accent={accents.sales} icon={MdReceipt}
       headerExtra={
-        <Link to="/invoices" style={styles.headerLink} title="Open Invoices page">
-          <MdOpenInNew size={14} /> Open
+        <Link to="/invoices" className="dash-section-card__open" style={styles.headerLink} title="Open Invoices page">
+          <MdOpenInNew size={14} /> <span className="dash-section-card__open-label">Open</span>
         </Link>
       }
     >
-      <div style={styles.metaRow}>
+      <div className="dash-meta-row" style={styles.metaRow}>
         <Stat label="Invoices" value={data.invoiceCount} />
         <Stat label="Avg Invoice" value={formatPkr(data.averageInvoiceValue)} />
         <Stat label="Total" value={formatPkr(data.totalSales)} highlight />
@@ -454,12 +477,12 @@ function PurchasesSection({ data }) {
   return (
     <SectionCard title="Purchases" accent={accents.purchases} icon={MdShoppingCart}
       headerExtra={
-        <Link to="/purchase-bills" style={{ ...styles.headerLink, color: accents.purchases, borderColor: accents.purchases }} title="Open Purchase Bills page">
-          <MdOpenInNew size={14} /> Open
+        <Link to="/purchase-bills" className="dash-section-card__open" style={{ ...styles.headerLink, color: accents.purchases, borderColor: accents.purchases }} title="Open Purchase Bills page">
+          <MdOpenInNew size={14} /> <span className="dash-section-card__open-label">Open</span>
         </Link>
       }
     >
-      <div style={styles.metaRow}>
+      <div className="dash-meta-row" style={styles.metaRow}>
         <Stat label="Bills" value={data.billCount} />
         <Stat label="Avg Bill" value={formatPkr(data.averageBillValue)} />
         <Stat label="Total" value={formatPkr(data.totalPurchases)} highlight />
@@ -481,7 +504,7 @@ function FbrSection({ data }) {
   // the bottom row.
   return (
     <SectionCard title="FBR / Compliance" accent={accents.fbr} icon={MdCloudDone}>
-      <div style={styles.fbrGrid}>
+      <div className="dash-funnel-grid" style={styles.fbrGrid}>
         <Funnel label="Pending"   value={data.pendingSubmission} color="#f57c00" icon={MdHourglassEmpty} />
         <Funnel label="Validated" value={data.validated}         color="#0277bd" icon={MdCheckCircle} />
         <Funnel label="Submitted" value={data.submitted}         color="#2e7d32" icon={MdCloudDone} />
@@ -510,12 +533,12 @@ function InventorySection({ data }) {
   return (
     <SectionCard title="Inventory" accent={accents.inventory} icon={MdInventory}
       headerExtra={
-        <Link to="/stock" style={{ ...styles.headerLink, color: accents.inventory, borderColor: accents.inventory }} title="Open Stock Dashboard">
-          <MdOpenInNew size={14} /> Open
+        <Link to="/stock" className="dash-section-card__open" style={{ ...styles.headerLink, color: accents.inventory, borderColor: accents.inventory }} title="Open Stock Dashboard">
+          <MdOpenInNew size={14} /> <span className="dash-section-card__open-label">Open</span>
         </Link>
       }
     >
-      <div style={styles.metaRow}>
+      <div className="dash-meta-row" style={styles.metaRow}>
         <Stat label="Stock value" value={formatPkr(data.totalStockValue)} highlight />
         <Stat label="Items tracked" value={data.trackedItemCount} />
         <Stat label="Low stock" value={data.lowStockItemCount}
@@ -536,12 +559,12 @@ function InventorySection({ data }) {
           : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
               {data.recentMovements.map((m, i) => (
-                <div key={`${m.id}-${i}`} style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.83rem" }}>
+                <div key={`${m.id}-${i}`} className="dash-mov-row" style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.83rem" }}>
                   <span style={{ ...styles.miniChip, color: m.direction === "In" ? "#2e7d32" : "#c62828", backgroundColor: m.direction === "In" ? "#e8f5e9" : "#ffebee", border: `1px solid ${m.direction === "In" ? "#a5d6a7" : "#ef9a9a"}` }}>
                     {m.direction}
                   </span>
-                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#1a2332" }}>{m.itemTypeName}</span>
-                  <span style={{ fontFamily: "ui-monospace, monospace", fontWeight: 600, color: "#1a2332" }}>{m.quantity}</span>
+                  <span className="dash-mov-row__name" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#1a2332" }}>{m.itemTypeName}</span>
+                  <span className="dash-mov-row__qty" style={{ fontFamily: "ui-monospace, monospace", fontWeight: 600, color: "#1a2332" }}>{m.quantity}</span>
                   <span style={{ color: "#5f6d7e", fontSize: "0.75rem" }}>{formatDate(m.date)}</span>
                 </div>
               ))}
@@ -556,9 +579,9 @@ function InventorySection({ data }) {
 
 function Stat({ label, value, highlight = false, warn = false }) {
   return (
-    <div style={{ flex: 1, minWidth: 100 }}>
-      <div style={styles.statLabel}>{label}</div>
-      <div style={{
+    <div className="dash-stat" style={{ flex: 1, minWidth: 100 }}>
+      <div className="dash-stat-label" style={styles.statLabel}>{label}</div>
+      <div className="dash-stat-value" style={{
         ...styles.statValue,
         color: warn ? "#c62828" : highlight ? "#1a2332" : "#37474f",
         fontWeight: highlight ? 800 : 600,
@@ -570,10 +593,20 @@ function Stat({ label, value, highlight = false, warn = false }) {
 function Funnel({ label, value, color, icon }) {
   const Icon = icon;
   return (
-    <div style={{ ...styles.funnelCard, borderColor: `${color}33` }}>
-      <Icon size={18} color={color} />
+    <div className="dash-funnel-card" style={{
+      ...styles.funnelCard,
+      borderColor: `${color}40`,
+      background: `linear-gradient(160deg, ${color}10 0%, ${color}05 60%, #fff 100%)`,
+    }}>
+      <div style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 26, height: 26, borderRadius: 7,
+        background: `${color}1a`, color,
+      }}>
+        <Icon size={16} />
+      </div>
       <div style={{ fontSize: "0.72rem", color: "#5f6d7e", textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 600 }}>{label}</div>
-      <div style={{ fontFamily: "ui-monospace, monospace", fontSize: "1.3rem", fontWeight: 800, color }}>
+      <div className="dash-funnel-card__value" style={{ fontFamily: "ui-monospace, monospace", fontSize: "1.3rem", fontWeight: 800, color }}>
         {value || 0}
       </div>
     </div>
@@ -593,11 +626,11 @@ function RecentList({ rows }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
       {rows.map((r, i) => (
-        <div key={`${r.id}-${i}`} style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.83rem", flexWrap: "wrap" }}>
-          <span style={{ fontFamily: "ui-monospace, monospace", color: "#5f6d7e", flexShrink: 0 }}>#{r.number}</span>
-          <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#1a2332" }}>{r.counterpartyName || "(unknown)"}</span>
-          <span style={{ color: "#5f6d7e", fontSize: "0.75rem", flexShrink: 0 }}>{formatDate(r.date)}</span>
-          <span style={{ fontFamily: "ui-monospace, monospace", fontWeight: 700, color: "#1a2332", flexShrink: 0 }}>{formatPkr(r.grandTotal)}</span>
+        <div key={`${r.id}-${i}`} className="dash-recent-row" style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.83rem", flexWrap: "wrap" }}>
+          <span className="dash-recent-row__number" style={{ fontFamily: "ui-monospace, monospace", color: "#5f6d7e", flexShrink: 0 }}>#{r.number}</span>
+          <span className="dash-recent-row__name" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#1a2332" }}>{r.counterpartyName || "(unknown)"}</span>
+          <span className="dash-recent-row__date" style={{ color: "#5f6d7e", fontSize: "0.75rem", flexShrink: 0 }}>{formatDate(r.date)}</span>
+          <span className="dash-recent-row__amount" style={{ fontFamily: "ui-monospace, monospace", fontWeight: 700, color: "#1a2332", flexShrink: 0 }}>{formatPkr(r.grandTotal)}</span>
         </div>
       ))}
     </div>
@@ -616,16 +649,23 @@ function EmptyLine({ children }) {
 
 const styles = {
   heroBanner: {
-    background: "linear-gradient(135deg, #0d47a1 0%, #00897b 100%)",
-    borderRadius: 14,
-    padding: "1rem 1.1rem",
+    position: "relative",
+    background: "linear-gradient(135deg, #0d47a1 0%, #1565c0 35%, #00897b 100%)",
+    backgroundImage: `
+      radial-gradient(circle at 100% 0%, rgba(255,255,255,0.18) 0%, transparent 38%),
+      radial-gradient(circle at 0% 100%, rgba(255,255,255,0.10) 0%, transparent 45%),
+      linear-gradient(135deg, #0d47a1 0%, #1565c0 35%, #00897b 100%)
+    `,
+    borderRadius: 16,
+    padding: "0.95rem 1.15rem",
     color: "#fff",
     display: "flex",
     flexWrap: "wrap",
     alignItems: "center",
     gap: "0.85rem",
-    marginBottom: "0.85rem",
-    boxShadow: "0 6px 16px rgba(13, 71, 161, 0.18)",
+    marginBottom: "0.75rem",
+    boxShadow: "0 10px 24px -8px rgba(13, 71, 161, 0.45), 0 4px 10px rgba(0, 137, 123, 0.18)",
+    overflow: "hidden",
   },
   heroHeading: {
     margin: 0,
@@ -669,20 +709,21 @@ const styles = {
   heroGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
-    gap: "0.85rem",
-    marginBottom: "1rem",
+    gap: "0.7rem",
+    marginBottom: "0.75rem",
   },
   sectionGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))",
-    gap: "0.85rem",
+    gap: "0.75rem",
+    marginTop: "0.75rem",
   },
   card: {
     background: "#fff",
     border: "1px solid #e8edf3",
     borderRadius: 14,
     padding: "0.85rem 1rem",
-    boxShadow: "0 1px 2px rgba(13, 71, 161, 0.04)",
+    boxShadow: "0 2px 6px rgba(13, 71, 161, 0.06)",
   },
   metaRow: {
     display: "flex",

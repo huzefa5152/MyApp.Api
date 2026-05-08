@@ -18,6 +18,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { previewFbrPurchaseImport, commitFbrPurchaseImport } from "../api/fbrPurchaseImportApi";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
+import "./FbrPurchaseImportPage.css";
 
 const colors = {
   blue: "#0d47a1",
@@ -233,12 +234,12 @@ export default function FbrPurchaseImportPage() {
   }, [result]);
 
   return (
-    <div style={{ padding: "1.5rem 2rem", maxWidth: 1400, margin: "0 auto" }}>
-      <header style={{ display: "flex", alignItems: "center", gap: "0.85rem", marginBottom: "0.75rem" }}>
-        <div style={styles.headerIcon}><MdCloudUpload size={28} color="#fff" /></div>
-        <div>
-          <h2 style={styles.pageTitle}>FBR Purchase Import</h2>
-          <p style={styles.pageSubtitle}>
+    <div className="fbr-imp-page" style={{ padding: "1.5rem 2rem", maxWidth: 1400, margin: "0 auto" }}>
+      <header className="fbr-imp-header" style={{ display: "flex", alignItems: "center", gap: "0.85rem", marginBottom: "0.75rem" }}>
+        <div className="fbr-imp-header__icon" style={styles.headerIcon}><MdCloudUpload size={28} color="#fff" /></div>
+        <div style={{ minWidth: 0 }}>
+          <h2 className="fbr-imp-header__title" style={styles.pageTitle}>FBR Purchase Import</h2>
+          <p className="fbr-imp-header__subtitle" style={styles.pageSubtitle}>
             Phase 1 preview — upload your Annexure-A xls and see exactly which rows
             would land as new purchases (no DB writes yet).
           </p>
@@ -246,9 +247,9 @@ export default function FbrPurchaseImportPage() {
       </header>
 
       {/* ── Upload card ─────────────────────────────────────────────── */}
-      <section style={styles.card}>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "1rem" }}>
-          <div style={{ minWidth: 220 }}>
+      <section className="fbr-imp-card" style={styles.card}>
+        <div className="fbr-imp-upload-row" style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "1rem" }}>
+          <div className="fbr-imp-upload-row__field" style={{ minWidth: 220 }}>
             <label style={styles.label}>Company</label>
             <select
               style={styles.input}
@@ -263,7 +264,7 @@ export default function FbrPurchaseImportPage() {
             </select>
           </div>
 
-          <div style={{ flex: 1, minWidth: 280 }}>
+          <div className="fbr-imp-upload-row__field" style={{ flex: 1, minWidth: 280 }}>
             <label style={styles.label}>Annexure-A file (.xls / .xlsx)</label>
             <input
               ref={fileInputRef}
@@ -273,13 +274,13 @@ export default function FbrPurchaseImportPage() {
               style={{ ...styles.input, padding: "0.4rem 0.5rem" }}
             />
             {file && (
-              <div style={{ fontSize: "0.78rem", color: colors.textSecondary, marginTop: "0.3rem" }}>
+              <div style={{ fontSize: "0.78rem", color: colors.textSecondary, marginTop: "0.3rem", overflowWrap: "anywhere" }}>
                 {file.name} · {(file.size / 1024).toFixed(0)} KB
               </div>
             )}
           </div>
 
-          <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div className="fbr-imp-upload-row__btns" style={{ display: "flex", gap: "0.5rem" }}>
             <button
               type="button"
               style={{ ...styles.primaryBtn, opacity: running || !file ? 0.5 : 1 }}
@@ -303,12 +304,12 @@ export default function FbrPurchaseImportPage() {
            summarises what landed in the DB. The operator can clear and
            start over (Run Preview again) once they've reviewed it. */}
       {commitResult && (
-        <section style={{ ...styles.card, borderLeft: "4px solid #2e7d32" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+        <section className="fbr-imp-card" style={{ ...styles.card, borderLeft: "4px solid #2e7d32" }}>
+          <div className="fbr-imp-result-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
               <MdCheckCircle size={20} color="#2e7d32" />
               <strong style={{ fontSize: "1rem", color: "#2e7d32" }}>Import committed</strong>
-              <span style={{ fontSize: "0.82rem", color: colors.textSecondary }}>
+              <span className="fbr-imp-result-head__time" style={{ fontSize: "0.82rem", color: colors.textSecondary, overflowWrap: "anywhere" }}>
                 {commitResult.fileName} · {new Date(commitResult.committedAt).toLocaleString("en-PK")}
               </span>
             </div>
@@ -367,12 +368,12 @@ export default function FbrPurchaseImportPage() {
 
       {/* ── Workbook warnings ───────────────────────────────────────── */}
       {result?.warnings?.length > 0 && (
-        <section style={{ ...styles.card, borderLeft: "4px solid #e65100" }}>
+        <section className="fbr-imp-card" style={{ ...styles.card, borderLeft: "4px solid #e65100" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.4rem" }}>
             <MdWarning color="#e65100" />
             <strong style={{ color: "#e65100" }}>Workbook warnings</strong>
           </div>
-          <ul style={{ margin: 0, paddingLeft: "1.4rem", color: colors.textSecondary, fontSize: "0.83rem" }}>
+          <ul style={{ margin: 0, paddingLeft: "1.4rem", color: colors.textSecondary, fontSize: "0.83rem", overflowWrap: "anywhere" }}>
             {result.warnings.map((w, i) => <li key={i}>{w}</li>)}
           </ul>
         </section>
@@ -380,15 +381,15 @@ export default function FbrPurchaseImportPage() {
 
       {/* ── Summary chips ───────────────────────────────────────────── */}
       {summary && (
-        <section style={styles.card}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.6rem", marginBottom: "0.75rem" }}>
-            <div>
+        <section className="fbr-imp-card" style={styles.card}>
+          <div className="fbr-imp-summary-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.6rem", marginBottom: "0.75rem" }}>
+            <div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
               <strong style={{ fontSize: "1rem", color: colors.textPrimary }}>{summary.fileName}</strong>
-              <span style={{ marginLeft: "0.6rem", fontSize: "0.83rem", color: colors.textSecondary }}>
+              <span className="fbr-imp-summary-meta" style={{ marginLeft: "0.6rem", fontSize: "0.83rem", color: colors.textSecondary }}>
                 {summary.totalRows} rows · {summary.totalInvoices} invoices
               </span>
             </div>
-            <div style={{ display: "flex", gap: "0.4rem" }}>
+            <div className="fbr-imp-summary-actions" style={{ display: "flex", gap: "0.4rem" }}>
               {skippedCsvHref && (
                 <a
                   href={skippedCsvHref}
@@ -458,7 +459,7 @@ export default function FbrPurchaseImportPage() {
 
       {/* ── Invoice list ────────────────────────────────────────────── */}
       {summary && result.invoices.length === 0 && (
-        <section style={styles.card}>
+        <section className="fbr-imp-card" style={styles.card}>
           <p style={{ margin: 0, color: colors.textSecondary }}>
             No invoices parsed from this file. Check the workbook warnings above.
           </p>
@@ -470,26 +471,29 @@ export default function FbrPurchaseImportPage() {
         const Icon = cfg.icon;
         const open = expandedInvoices.has(idx);
         return (
-          <section key={`${inv.fbrInvoiceRefNo}-${idx}`} style={{ ...styles.card, padding: 0, overflow: "hidden" }}>
+          <section className="fbr-imp-card" key={`${inv.fbrInvoiceRefNo}-${idx}`} style={{ ...styles.card, padding: 0, overflow: "hidden" }}>
             <button
               type="button"
               onClick={() => toggleInvoice(idx)}
+              className="fbr-imp-invoice-header"
               style={{ ...styles.invoiceHeader, borderLeft: `4px solid ${cfg.border}` }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "0.55rem", flex: 1, minWidth: 0 }}>
+              <div className="fbr-imp-invoice-header__main" style={{ display: "flex", alignItems: "center", gap: "0.55rem", flex: 1, minWidth: 0, flexWrap: "wrap" }}>
                 <span style={{ ...styles.chip, color: cfg.color, backgroundColor: cfg.bg, border: `1px solid ${cfg.border}` }}>
                   <Icon size={14} />
                   {cfg.label}
                 </span>
-                <strong style={{ color: colors.textPrimary, fontSize: "0.95rem" }}>{inv.invoiceNo || "(no invoice no)"}</strong>
-                <span style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>
-                  · {inv.supplierName || inv.supplierNtn || "(unknown supplier)"}
+                <strong style={{ color: colors.textPrimary, fontSize: "0.95rem", overflowWrap: "anywhere" }}>{inv.invoiceNo || "(no invoice no)"}</strong>
+                <span className="fbr-imp-invoice-header__sep" style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>·</span>
+                <span className="fbr-imp-invoice-header__supplier" style={{ color: colors.textSecondary, fontSize: "0.82rem", overflowWrap: "anywhere", minWidth: 0 }}>
+                  {inv.supplierName || inv.supplierNtn || "(unknown supplier)"}
                 </span>
-                <span style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>
-                  · {formatDate(inv.invoiceDate)}
+                <span className="fbr-imp-invoice-header__sep" style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>·</span>
+                <span className="fbr-imp-invoice-header__date" style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>
+                  {formatDate(inv.invoiceDate)}
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.55rem", flexShrink: 0 }}>
+              <div className="fbr-imp-invoice-header__meta" style={{ display: "flex", alignItems: "center", gap: "0.55rem", flexShrink: 0 }}>
                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "0.82rem", color: colors.textPrimary }}>
                   Rs. {formatPkr(inv.totalGrossValue)}
                 </span>
@@ -501,9 +505,9 @@ export default function FbrPurchaseImportPage() {
             </button>
 
             {open && (
-              <div style={{ padding: "0.6rem 1rem 1rem", borderTop: `1px solid ${colors.cardBorder}` }}>
+              <div className="fbr-imp-invoice-body" style={{ padding: "0.6rem 1rem 1rem", borderTop: `1px solid ${colors.cardBorder}` }}>
                 {/* Bill-level meta */}
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.85rem", fontSize: "0.78rem", color: colors.textSecondary, marginBottom: "0.55rem" }}>
+                <div className="fbr-imp-bill-meta" style={{ display: "flex", flexWrap: "wrap", gap: "0.85rem", fontSize: "0.78rem", color: colors.textSecondary, marginBottom: "0.55rem" }}>
                   <span><strong>FBR Ref:</strong> {inv.fbrInvoiceRefNo || "—"}</span>
                   <span><strong>Supplier NTN:</strong> {inv.supplierNtn || "—"}</span>
                   <span><strong>Match:</strong> {inv.matchedSupplierId ? `Supplier #${inv.matchedSupplierId}` : "Will create"}</span>
@@ -512,8 +516,8 @@ export default function FbrPurchaseImportPage() {
                   )}
                 </div>
 
-                {/* Lines table */}
-                <div style={{ overflowX: "auto" }}>
+                {/* Lines table — desktop */}
+                <div className="fbr-imp-table-wrap" style={{ overflowX: "auto" }}>
                   <table style={styles.table}>
                     <thead>
                       <tr>
@@ -562,6 +566,69 @@ export default function FbrPurchaseImportPage() {
                       })}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Lines — mobile cards (CSS toggles visibility) */}
+                <div className="fbr-imp-line-cards">
+                  {inv.lines.map((ln, lidx) => {
+                    const lcfg = decisionCfg(ln.decision);
+                    const LIcon = lcfg.icon;
+                    return (
+                      <div className="fbr-imp-line-card" key={lidx}>
+                        <div className="fbr-imp-line-card__head">
+                          <span style={{ ...styles.chipSmall, color: lcfg.color, backgroundColor: lcfg.bg, border: `1px solid ${lcfg.border}` }}>
+                            <LIcon size={12} /> {lcfg.label}
+                          </span>
+                          <span className="fbr-imp-line-card__row-num">Row {ln.sourceRowNumber}</span>
+                        </div>
+
+                        {ln.hsCode && <div className="fbr-imp-line-card__hs">HS {ln.hsCode}</div>}
+
+                        <div className="fbr-imp-line-card__desc">
+                          {ln.description || <em style={{ color: colors.textSecondary }}>(blank)</em>}
+                        </div>
+
+                        <div className="fbr-imp-line-card__grid">
+                          <div className="fbr-imp-line-card__field">
+                            <span className="fbr-imp-line-card__field-label">Qty</span>
+                            <span className="fbr-imp-line-card__field-value">{formatQty(ln.quantity)}</span>
+                          </div>
+                          <div className="fbr-imp-line-card__field">
+                            <span className="fbr-imp-line-card__field-label">UoM</span>
+                            <span className={`fbr-imp-line-card__field-value${ln.uom ? "" : " fbr-imp-line-card__field-value--muted"}`}>
+                              {ln.uom || "—"}
+                            </span>
+                          </div>
+                          <div className="fbr-imp-line-card__field">
+                            <span className="fbr-imp-line-card__field-label">Excl Tax</span>
+                            <span className="fbr-imp-line-card__field-value">{formatPkr(ln.valueExclTax)}</span>
+                          </div>
+                          <div className="fbr-imp-line-card__field">
+                            <span className="fbr-imp-line-card__field-label">GST</span>
+                            <span className="fbr-imp-line-card__field-value">{formatPkr(ln.gstAmount)}</span>
+                          </div>
+                          <div className="fbr-imp-line-card__field">
+                            <span className="fbr-imp-line-card__field-label">Extra Tax</span>
+                            <span className="fbr-imp-line-card__field-value">{formatPkr(ln.extraTax)}</span>
+                          </div>
+                          <div className="fbr-imp-line-card__field">
+                            <span className="fbr-imp-line-card__field-label">ST Withheld</span>
+                            <span className="fbr-imp-line-card__field-value">{formatPkr(ln.stWithheldAtSource)}</span>
+                          </div>
+                        </div>
+
+                        <div className="fbr-imp-line-card__match">
+                          <span className="fbr-imp-line-card__match-label">Match</span>
+                          {ln.matchedItemTypeId ? (
+                            <span>
+                              {ln.matchedItemTypeName}
+                              <small style={{ color: colors.textSecondary }}> · {ln.matchedBy}</small>
+                            </span>
+                          ) : <em style={{ color: colors.textSecondary }}>—</em>}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

@@ -122,7 +122,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
   const [gstRate, setGstRate] = useState(18);
   const [paymentTerms, setPaymentTerms] = useState("");
-  const [documentType, setDocumentType] = useState(4);
+  // Document Type is locked to Sale Invoice (4) on the no-challan flow.
+  // Credit Note (10) and Debit Note (9) get their own dedicated screens
+  // — see InvoiceForm.jsx for the same rationale.
+  const documentType = 4;
   const [paymentMode, setPaymentMode] = useState("");
   const [scenarioCode, setScenarioCode] = useState("");
   // Step 1 (FBR scenario) is collapsed by default — most bills use the
@@ -241,6 +244,30 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chosenScenario]);
+
+  // Auto-default Payment Mode based on the buyer's registration status.
+  // Company-level config (FBR Settings) provides the default per bucket;
+  // when those are blank we fall back to "Credit" (registered) and
+  // "Cash" (unregistered) — same fallback the FBR Settings tooltip
+  // documents. Re-runs whenever the operator changes client so the
+  // dropdown stays consistent with the buyer. The operator can still
+  // override the dropdown afterwards — their selection survives until
+  // they pick a different client.
+  useEffect(() => {
+    if (!selectedClientId) return;
+    const client = clients.find((c) => String(c.id) === String(selectedClientId));
+    if (!client) return;
+    const registered = (client.registrationType || "").toLowerCase() === "registered";
+    const fromCompany = registered
+      ? company?.fbrDefaultPaymentModeRegistered
+      : company?.fbrDefaultPaymentModeUnregistered;
+    setPaymentMode(fromCompany || (registered ? "Credit" : "Cash"));
+  }, [
+    selectedClientId,
+    clients,
+    company?.fbrDefaultPaymentModeRegistered,
+    company?.fbrDefaultPaymentModeUnregistered,
+  ]);
 
   // Per-row helpers
   const updateRow = (localId, patch) =>
@@ -699,11 +726,13 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                             </div>
                             <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Document Type <span style={styles.optionalTag}>FBR</span></label>
-                              <select style={styles.input} value={documentType} onChange={(e) => setDocumentType(parseInt(e.target.value))}>
-                                <option value={4}>Sale Invoice</option>
-                                <option value={9}>Debit Note</option>
-                                <option value={10}>Credit Note</option>
-                              </select>
+                              <input
+                                type="text"
+                                style={{ ...styles.input, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+                                value="Sale Invoice"
+                                readOnly
+                                title="This screen creates Sale Invoices only. Credit / Debit Notes will get their own dedicated screens."
+                              />
                             </div>
                             <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Payment Mode <span style={styles.optionalTag}>FBR</span></label>

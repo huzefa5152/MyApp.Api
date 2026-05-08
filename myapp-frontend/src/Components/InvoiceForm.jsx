@@ -99,7 +99,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [loading, setLoading] = useState(true);
 
   // ── FBR optional fields (per item + invoice-level) ──
-  const [documentType, setDocumentType] = useState(4); // 4=Sale Invoice
+  // Document Type is locked to Sale Invoice (4) on the new-bill flow.
+  // Credit Note (10) and Debit Note (9) get their own dedicated screens
+  // — wiring them into the same form was creating workflow ambiguity
+  // (different validation, different ref-bill linkage, different perms),
+  // so this form is now Sale-Invoice-only.
+  const documentType = 4;
   const [paymentMode, setPaymentMode] = useState("");
   const [itemHsCodes, setItemHsCodes] = useState({});
   const [itemSaleTypes, setItemSaleTypes] = useState({});
@@ -338,6 +343,30 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       if (sn001) setScenarioCode("SN001");
     }
   }, [scenarios, scenarioCode]);
+
+  // Auto-default Payment Mode based on the buyer's registration status.
+  // Company-level config (FBR Settings) provides the default per bucket;
+  // when those are blank we fall back to "Credit" (registered) and
+  // "Cash" (unregistered) — same fallback the FBR Settings tooltip
+  // documents. Re-runs whenever the operator changes client so the
+  // dropdown stays consistent with the buyer. The operator can still
+  // override the dropdown afterwards — their selection survives until
+  // they pick a different client.
+  useEffect(() => {
+    if (!selectedClientId) return;
+    const client = clients.find((c) => String(c.id) === String(selectedClientId));
+    if (!client) return;
+    const registered = (client.registrationType || "").toLowerCase() === "registered";
+    const fromCompany = registered
+      ? company?.fbrDefaultPaymentModeRegistered
+      : company?.fbrDefaultPaymentModeUnregistered;
+    setPaymentMode(fromCompany || (registered ? "Credit" : "Cash"));
+  }, [
+    selectedClientId,
+    clients,
+    company?.fbrDefaultPaymentModeRegistered,
+    company?.fbrDefaultPaymentModeUnregistered,
+  ]);
 
   // Filter challans for selected client, sorted by DC# descending
   const clientChallans = selectedClientId
@@ -834,15 +863,13 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               <label style={styles.label}>
                                 Document Type <span style={styles.optionalTag}>FBR</span>
                               </label>
-                              <select
-                                style={styles.input}
-                                value={documentType}
-                                onChange={(e) => setDocumentType(parseInt(e.target.value))}
-                              >
-                                <option value={4}>Sale Invoice</option>
-                                <option value={9}>Debit Note</option>
-                                <option value={10}>Credit Note</option>
-                              </select>
+                              <input
+                                type="text"
+                                style={{ ...styles.input, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+                                value="Sale Invoice"
+                                readOnly
+                                title="This screen creates Sale Invoices only. Credit / Debit Notes will get their own dedicated screens."
+                              />
                             </div>
                             <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>

@@ -60,38 +60,55 @@ export default function KpiCard({
 
   return (
     <div
+      className="dash-kpi-card"
       style={{
         position: "relative",
-        background: "#fff",
-        border: "1px solid #e8edf3",
+        background: `
+          radial-gradient(circle at 100% 0%, ${accent}14 0%, transparent 55%),
+          linear-gradient(160deg, #ffffff 0%, ${accent}06 100%)
+        `,
+        border: `1px solid ${accent}26`,
         borderRadius: 14,
-        padding: "1rem 1.1rem",
+        padding: "0.95rem 1.05rem 0.85rem",
         display: "flex",
         flexDirection: "column",
-        gap: "0.55rem",
+        gap: "0.5rem",
         overflow: "hidden",
-        minHeight: 140,
+        minHeight: 132,
+        boxShadow: `0 4px 14px -6px ${accent}40, 0 1px 2px rgba(13, 71, 161, 0.04)`,
       }}
       title={title}
     >
       {/* Top accent strip — keeps section identity readable at a glance,
           even when the card is collapsed under its peers on mobile. */}
-      <div style={{ position: "absolute", inset: "0 0 auto 0", height: 3, backgroundColor: accent }} />
+      <div style={{
+        position: "absolute", inset: "0 0 auto 0", height: 4,
+        background: `linear-gradient(90deg, ${accent} 0%, ${accent}cc 50%, ${accent}66 100%)`,
+      }} />
 
-      <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", color: "#5f6d7e", fontSize: "0.78rem", fontWeight: 600, letterSpacing: "0.02em", textTransform: "uppercase" }}>
-        {icon && <span style={{ display: "inline-flex", color: accent }}>{icon}</span>}
-        <span>{label}</span>
+      <div className="dash-kpi-card__label" style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "#5f6d7e", fontSize: "0.74rem", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+        {icon && (
+          <span className="dash-kpi-card__icon" style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: 24, height: 24, borderRadius: 7,
+            background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`,
+            color: "#fff",
+            boxShadow: `0 3px 8px -2px ${accent}55`,
+            flexShrink: 0,
+          }}>{icon}</span>
+        )}
+        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
       </div>
 
-      <div style={{ fontSize: "clamp(1.2rem, 4.2vw, 1.8rem)", fontWeight: 800, color: "#1a2332", lineHeight: 1.1, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+      <div className="dash-kpi-card__value" style={{ fontSize: "clamp(1.25rem, 4.2vw, 1.85rem)", fontWeight: 800, color: "#0f1724", lineHeight: 1.1, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
         {format(value)}
       </div>
 
       {(deltaPct != null) && (
-        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", color: deltaColor, fontSize: "0.78rem", fontWeight: 600 }}>
+        <div className="dash-kpi-card__delta" style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", color: deltaColor, fontSize: "0.78rem", fontWeight: 600 }}>
           <DeltaIconComp size={14} />
           {deltaPct === Infinity ? "new" : formatPct(deltaPct)}
-          <span style={{ color: "#5f6d7e", fontWeight: 400 }}> vs prev</span>
+          <span className="dash-kpi-card__delta-suffix" style={{ color: "#5f6d7e", fontWeight: 400 }}> vs prev</span>
         </div>
       )}
 

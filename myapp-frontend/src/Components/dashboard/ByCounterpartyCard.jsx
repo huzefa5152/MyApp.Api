@@ -73,7 +73,7 @@ export default function ByCounterpartyCard({
     }}>
       <Header title={title} subtitle={subtitle} accent={accent} />
 
-      <div style={{
+      <div className="dash-cp-grid" style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
         gap: "1rem",
@@ -81,7 +81,7 @@ export default function ByCounterpartyCard({
         alignItems: "center",
       }}>
         {/* Donut */}
-        <div style={{ minWidth: 0 }}>
+        <div className="dash-cp-donut-wrap" style={{ minWidth: 0 }}>
           <DonutChart
             items={list}
             topN={topN}
@@ -95,7 +95,7 @@ export default function ByCounterpartyCard({
         </div>
 
         {/* List */}
-        <div style={{
+        <div className="dash-cp-list" style={{
           display: "flex",
           flexDirection: "column",
           gap: "0.4rem",
@@ -117,6 +117,7 @@ export default function ByCounterpartyCard({
               <button
                 type="button"
                 key={`${it.id}-${idx}`}
+                className="dash-cp-row"
                 onMouseEnter={() => setHighlight(isOthers ? -1 : idx)}
                 onMouseLeave={() => setHighlight(null)}
                 onClick={() => setHighlight((cur) => {
@@ -144,7 +145,7 @@ export default function ByCounterpartyCard({
                   backgroundColor: rowColors[idx],
                   flexShrink: 0,
                 }} aria-hidden="true" />
-                <span style={{
+                <span className="dash-cp-row__name" style={{
                   flex: 1, minWidth: 0,
                   fontSize: "0.83rem",
                   fontWeight: 600,
@@ -156,7 +157,7 @@ export default function ByCounterpartyCard({
                   <span style={{ color: "#5f6d7e", fontSize: "0.75rem", marginRight: "0.4rem" }}>#{idx + 1}</span>
                   {it.name || "(unknown)"}
                 </span>
-                <span style={{
+                <span className="dash-cp-row__pct" style={{
                   fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                   fontSize: "0.78rem",
                   color: "#5f6d7e",
@@ -166,7 +167,7 @@ export default function ByCounterpartyCard({
                 }}>
                   {pct.toFixed(1)}%
                 </span>
-                <span style={{
+                <span className="dash-cp-row__value" style={{
                   fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                   fontSize: "0.82rem",
                   fontWeight: 700,
@@ -189,12 +190,13 @@ function Header({ title, subtitle, accent }) {
     <header style={{
       padding: "0.7rem 1rem",
       borderBottom: "1px solid #eef2f7",
-      background: `linear-gradient(90deg, ${accent}14 0%, transparent 100%)`,
+      background: `linear-gradient(95deg, ${accent}1f 0%, ${accent}0a 55%, transparent 100%)`,
     }}>
       <h2 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#1a2332" }}>
         <span style={{
           display: "inline-block", width: 4, height: 14, borderRadius: 2,
-          backgroundColor: accent, marginRight: "0.5rem", verticalAlign: "middle",
+          background: `linear-gradient(180deg, ${accent} 0%, ${accent}aa 100%)`,
+          marginRight: "0.5rem", verticalAlign: "middle",
         }} />
         {title}
       </h2>
