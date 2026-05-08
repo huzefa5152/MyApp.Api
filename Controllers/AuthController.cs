@@ -76,7 +76,17 @@ namespace MyApp.Api.Controllers
                 user.Role,
                 user.AvatarPath,
                 IsSeedAdmin = user.Id == _seedAdminUserId,
-                SeedAdminUserId = _seedAdminUserId
+                SeedAdminUserId = _seedAdminUserId,
+                // 2026-05-09: app-wide config the frontend needs to render
+                // accurate UI hints. Pre-fix the EditBillForm hardcoded
+                // NARROW_EDIT_TOLERANCE_PKR = 2, but production has the
+                // value at 10 — operators saw "±Rs. 2" while the server
+                // happily accepted ±Rs. 10. Surface the live value so the
+                // running diff and toast match what's actually enforced.
+                AppConfig = new
+                {
+                    NarrowEditTolerancePkr = _configuration.GetValue<int>("Invoice:NarrowEditTotalTolerancePkr", 2),
+                }
             });
         }
 

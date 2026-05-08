@@ -9,6 +9,7 @@ import QuantityInput from "./QuantityInput";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { formStyles, modalSizes } from "../theme";
 import { usePermissions } from "../contexts/PermissionsContext";
+import { useAuth } from "../contexts/AuthContext";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import QuickItemTypeForm from "./QuickItemTypeForm";
@@ -54,6 +55,13 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // and corrects qty without touching prices/dates that the bookkeeper
   // set on Bills.
   const { has } = usePermissions();
+  // 2026-05-09: pull the live narrow-edit tolerance from the user object
+  // (populated by /api/auth/me from the server's appsettings). Falls back
+  // to 2 if the field hasn't loaded yet (e.g. during the first render
+  // before AuthContext finishes refreshUser). Pre-fix this was hardcoded
+  // to 2 even when production had it set to 10 — the running diff showed
+  // "exceeds Rs. 2 tolerance" while the server happily saved.
+  const { user } = useAuth();
   // Three permission tiers for editing a bill, ordered narrowest → broadest:
   //   • invoices.manage.update.itemtype       → ONLY Item Type column
   //   • invoices.manage.update.itemtype.qty   → Item Type + Quantity columns
@@ -411,7 +419,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // a small tolerance" so the bill amount the buyer paid can't change.
   // Mirror the check client-side so Save is disabled with a clear
   // running diff instead of producing a 400 from the server.
-  const NARROW_EDIT_TOLERANCE_PKR = 2;  // matches appsettings default
+  // Pulled from the server (Invoice:NarrowEditTotalTolerancePkr in appsettings)
+  // via /api/auth/me → AuthContext → user.appConfig. Fallback 2 keeps the
+  // form functional during the brief window before /me has resolved.
+  const NARROW_EDIT_TOLERANCE_PKR = user?.appConfig?.narrowEditTolerancePkr ?? 2;
   // Original subtotal — captured ONCE when the bill loads, before any
   // edits. Lives separately from the live `items` so the diff stays
   // meaningful as the operator types.
