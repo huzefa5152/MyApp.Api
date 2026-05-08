@@ -108,7 +108,8 @@ namespace MyApp.Api.Helpers
             new("poformats.manage.create", "POFormats", "Manage", "Create", "Register a new PO format"),
             new("poformats.manage.update", "POFormats", "Manage", "Update", "Edit a PO format ruleset"),
             new("poformats.manage.delete", "POFormats", "Manage", "Delete", "Delete a PO format"),
-            new("poformats.import.create", "POFormats", "Import", "Create", "Upload a PO file and import its parsed items"),
+            new("poformats.import.create",      "POFormats", "Import",        "Create", "Upload a PO file and import its parsed items"),
+            new("poformats.import.viewArchive", "POFormats", "Import Archive", "View",   "List archived PO PDFs (with parse outcome) and download originals for triage"),
 
             // ── Print Templates ─────────────────────────────────────────────
             new("printtemplates.manage.view",   "PrintTemplates", "Manage", "View",   "View print/merge templates"),

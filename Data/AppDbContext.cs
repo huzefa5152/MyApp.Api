@@ -27,6 +27,10 @@ namespace MyApp.Api.Data
         public DbSet<POFormat> POFormats { get; set; }
         public DbSet<POFormatVersion> POFormatVersions { get; set; }
         public DbSet<POGoldenSample> POGoldenSamples { get; set; }
+        // Audit / archive of every PO PDF the parser sees. Side-effect only;
+        // the parser flow doesn't read this back. Stored bytes live on disk
+        // under Data/uploads/po_imports — see PoImportArchive.StoredPath.
+        public DbSet<PoImportArchive> PoImportArchives { get; set; }
 
         // RBAC
         public DbSet<Permission> Permissions { get; set; }
@@ -321,6 +325,32 @@ namespace MyApp.Api.Data
                 .WithMany()
                 .HasForeignKey(v => v.POFormatId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // ── PoImportArchive ────────────────────────────────────────────
+            // No FKs on CompanyId / UploadedByUserId — the archive must
+            // outlive the rows it references (a deleted user/company should
+            // NOT prune their historical parse failures, that's the whole
+            // point of the audit). Indexed for the common triage queries:
+            //   "show me everything that didn't parse last week"
+            //   "show me Hakimi's failures grouped by format"
+            modelBuilder.Entity<PoImportArchive>()
+                .Property(x => x.OriginalFileName).HasMaxLength(255);
+            modelBuilder.Entity<PoImportArchive>()
+                .Property(x => x.StoredPath).HasMaxLength(500);
+            modelBuilder.Entity<PoImportArchive>()
+                .Property(x => x.ContentSha256).HasMaxLength(64);
+            modelBuilder.Entity<PoImportArchive>()
+                .Property(x => x.ParseOutcome).HasMaxLength(32);
+            modelBuilder.Entity<PoImportArchive>()
+                .Property(x => x.ErrorMessage).HasMaxLength(1000);
+            modelBuilder.Entity<PoImportArchive>()
+                .Property(x => x.Notes).HasMaxLength(1000);
+            modelBuilder.Entity<PoImportArchive>()
+                .HasIndex(x => x.UploadedAt);
+            modelBuilder.Entity<PoImportArchive>()
+                .HasIndex(x => new { x.CompanyId, x.UploadedAt });
+            modelBuilder.Entity<PoImportArchive>()
+                .HasIndex(x => x.ParseOutcome);
 
             // POGoldenSample: replayed on every rule-set update to prevent regressions.
             modelBuilder.Entity<POGoldenSample>()

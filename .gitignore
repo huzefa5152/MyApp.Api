@@ -11,6 +11,11 @@ appsettings.Production.json
 appsettings.Local.json
 appsettings.*.local.json
 
+# Runtime user uploads — operator-provided files (PO PDFs archived for
+# parser triage, etc.). Never commit; they may contain customer-confidential
+# document scans. Each year/month subdirectory is created on demand.
+Data/uploads/
+
 # User-specific files
 *.rsuser
 *.suo
