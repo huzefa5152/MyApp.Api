@@ -11,6 +11,7 @@ import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
 import PurchaseBillsPage from "./pages/PurchaseBillsPage";
 import GoodsReceiptsPage from "./pages/GoodsReceiptsPage";
 import StockDashboardPage from "./pages/StockDashboardPage";
+import FbrPurchaseImportPage from "./pages/FbrPurchaseImportPage";
 import ClientsPage from "./pages/ClientsPage";
 import SuppliersPage from "./pages/SuppliersPage";
 import ItemTypesPage from "./pages/ItemTypesPage";
@@ -67,6 +68,8 @@ export default function App() {
           <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
           <Route path="/goods-receipts" element={<GoodsReceiptsPage />} />
           <Route path="/stock" element={<StockDashboardPage />} />
+          {/* FBR Annexure-A purchase ledger import — Phase 1 preview only */}
+          <Route path="/fbr-import/purchase" element={<FbrPurchaseImportPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/roles" element={<RolesPage />} />

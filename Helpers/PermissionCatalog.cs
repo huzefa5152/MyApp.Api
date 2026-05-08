@@ -111,6 +111,10 @@ namespace MyApp.Api.Helpers
             new("poformats.import.create",      "POFormats", "Import",        "Create", "Upload a PO file and import its parsed items"),
             new("poformats.import.viewArchive", "POFormats", "Import Archive", "View",   "List archived PO PDFs (with parse outcome) and download originals for triage"),
 
+            // ── FBR Purchase Import (Annexure-A xls upload) ─────────────────
+            new("fbrimport.purchase.preview", "FBR Import", "Purchase", "Preview", "Upload an FBR Annexure-A xls and view the per-row import preview (no writes)"),
+            new("fbrimport.purchase.commit",  "FBR Import", "Purchase", "Commit",  "Commit an FBR Annexure-A import — auto-creates Suppliers, Purchase Bills, Item Types, and Stock Movements"),
+
             // ── Print Templates ─────────────────────────────────────────────
             new("printtemplates.manage.view",   "PrintTemplates", "Manage", "View",   "View print/merge templates"),
             new("printtemplates.manage.update", "PrintTemplates", "Manage", "Update", "Edit a print template"),

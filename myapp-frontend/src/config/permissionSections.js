@@ -43,6 +43,10 @@ export const PERMISSION_SECTIONS = [
       { key: "PurchaseBills", label: "Purchase Bills" },
       { key: "GoodsReceipts", label: "Goods Receipts" },
       { key: "Inventory" },
+      // FBR Annexure-A purchase ledger import — Module name in
+      // PermissionCatalog.cs is "FBR Import"; show it under Purchases
+      // since the resulting Suppliers / PurchaseBills land here.
+      { key: "FBR Import" },
     ],
   },
   {

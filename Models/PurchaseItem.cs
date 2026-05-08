@@ -22,7 +22,14 @@ namespace MyApp.Api.Models
 
         public string ItemTypeName { get; set; } = "";
         public string Description { get; set; } = "";
-        public int Quantity { get; set; }
+        // Widened from int to decimal(18,4) so FBR Annexure-A imports
+        // can carry fractional quantities (chemicals/textiles/fuel) and
+        // so the purchase side matches the sales side which already went
+        // decimal in 20260429_AddDecimalQuantityAndUnitFlag. Hakimi-style
+        // integer quantities round-trip cleanly. Existing callers that
+        // pass this to int-typed APIs (e.g. IStockService.RecordMovement)
+        // cast explicitly; no behaviour change for whole-number rows.
+        public decimal Quantity { get; set; }
         public string UOM { get; set; } = "";
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
@@ -35,6 +42,18 @@ namespace MyApp.Api.Models
         public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
         public string? SroScheduleNo { get; set; }
         public string? SroItemSerialNo { get; set; }
+
+        // FBR Annexure-A line-level taxes that don't fit into the simple
+        // GST rate × value model on PurchaseBill. Both nullable so they're
+        // additive — manual purchases that don't carry these still work.
+        //
+        //  • ExtraTax           — additional FBR tax on items like sugar,
+        //                          cement, 3rd Schedule goods.
+        //  • StWithheldAtSource — sales-tax amount the buyer (us) had
+        //                          withheld at source. Compliance-critical
+        //                          for STRN holders.
+        public decimal? ExtraTax { get; set; }
+        public decimal? StWithheldAtSource { get; set; }
 
         // Navigation
         public PurchaseBill PurchaseBill { get; set; } = null!;

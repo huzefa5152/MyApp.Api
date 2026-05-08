@@ -164,6 +164,7 @@ export default function DashboardLayout() {
     "purchasebills.list.view",
     "goodsreceipts.list.view",
     "stock.dashboard.view",
+    "fbrimport.purchase.preview",
   ];
   const adminKeys = [
     "users.manage.view",
@@ -191,7 +192,7 @@ export default function DashboardLayout() {
   const activeSection = useMemo(() => {
     const p = location.pathname.toLowerCase();
     if (p.startsWith("/challans") || p === "/bills" || p === "/invoices" || p === "/item-rate-history") return "sales";
-    if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock")) return "purchases";
+    if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
       || p.startsWith("/templates") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox")) return "configuration";
@@ -348,6 +349,12 @@ export default function DashboardLayout() {
                 <NavLink to="/stock" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdInventory className="dl-subitem__icon" aria-hidden="true" />
                   <span>Stock Dashboard</span>
+                </NavLink>
+              </Can>
+              <Can permission="fbrimport.purchase.preview">
+                <NavLink to="/fbr-import/purchase" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdFileUpload className="dl-subitem__icon" aria-hidden="true" />
+                  <span>FBR Purchase Import</span>
                 </NavLink>
               </Can>
             </NavGroup>
@@ -571,6 +578,7 @@ function getBreadcrumb(pathname) {
     "/purchase-bills": "Purchases / Purchase Bills",
     "/goods-receipts": "Purchases / Goods Receipts",
     "/stock": "Purchases / Stock Dashboard",
+    "/fbr-import/purchase": "Purchases / FBR Purchase Import",
     "/item-types": "Configuration / Item Types",
     "/challans": "Sales / Delivery Challans",
     "/challans/import": "Sales / Import Challans",

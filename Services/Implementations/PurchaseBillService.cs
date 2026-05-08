@@ -324,7 +324,10 @@ namespace MyApp.Api.Services.Implementations
                     companyId: bill.CompanyId,
                     itemTypeId: it.ItemTypeId.Value,
                     direction: StockMovementDirection.In,
-                    quantity: it.Quantity,
+                    // PurchaseItem.Quantity is decimal(18,4); IStockService still
+                    // uses int. Hakimi/Roshan stay integer-valued so this casts
+                    // cleanly (Math.Round prevents rare 0.9999999 truncation).
+                    quantity: (int)Math.Round(it.Quantity),
                     sourceType: StockMovementSourceType.PurchaseBill,
                     sourceId: bill.Id,
                     movementDate: bill.Date,
@@ -363,7 +366,7 @@ namespace MyApp.Api.Services.Implementations
                     companyId: bill.CompanyId,
                     itemTypeId: oi.ItemTypeId.Value,
                     direction: StockMovementDirection.Out,
-                    quantity: oi.Quantity,
+                    quantity: (int)Math.Round(oi.Quantity),
                     sourceType: StockMovementSourceType.PurchaseBill,
                     sourceId: bill.Id,
                     movementDate: bill.Date,
@@ -423,7 +426,7 @@ namespace MyApp.Api.Services.Implementations
                     companyId: bill.CompanyId,
                     itemTypeId: ni.ItemTypeId.Value,
                     direction: StockMovementDirection.In,
-                    quantity: ni.Quantity,
+                    quantity: (int)Math.Round(ni.Quantity),
                     sourceType: StockMovementSourceType.PurchaseBill,
                     sourceId: bill.Id,
                     movementDate: bill.Date,
@@ -460,7 +463,10 @@ namespace MyApp.Api.Services.Implementations
                     companyId: bill.CompanyId,
                     itemTypeId: it.ItemTypeId.Value,
                     direction: StockMovementDirection.Out,
-                    quantity: it.Quantity,
+                    // PurchaseItem.Quantity is decimal(18,4); IStockService still
+                    // uses int. Hakimi/Roshan stay integer-valued so this casts
+                    // cleanly (Math.Round prevents rare 0.9999999 truncation).
+                    quantity: (int)Math.Round(it.Quantity),
                     sourceType: StockMovementSourceType.PurchaseBill,
                     sourceId: bill.Id,
                     movementDate: bill.Date,

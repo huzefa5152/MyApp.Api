@@ -130,6 +130,18 @@ builder.Services.AddSingleton<IPOFormatFingerprintService, POFormatFingerprintSe
 builder.Services.AddScoped<IPOFormatRegistry, POFormatRegistry>();
 builder.Services.AddSingleton<IRuleBasedPOParser, RuleBasedPOParser>();
 builder.Services.AddScoped<IRegressionService, RegressionService>();
+
+// ── FBR Purchase Import (Annexure-A xls upload, Phase 1: preview) ──
+// Parser + filter are stateless / Scoped because they don't hold any
+// per-request data; the orchestrator depends on AppDbContext via the
+// matcher so it must be Scoped too. No singleton — keeps DB lifetime
+// management trivial.
+builder.Services.AddScoped<IFbrPurchaseLedgerParser, FbrPurchaseLedgerParser>();
+builder.Services.AddScoped<IFbrPurchaseImportFilter, FbrPurchaseImportFilter>();
+builder.Services.AddScoped<IFbrPurchaseImportMatcher, FbrPurchaseImportMatcher>();
+builder.Services.AddScoped<IFbrPurchaseImportCommitter, FbrPurchaseImportCommitter>();
+builder.Services.AddScoped<IFbrPurchaseImportService, FbrPurchaseImportService>();
+
 // Historical challan import (reverse Excel template → preview → commit).
 // Reverse mapper is a Singleton because it holds an in-memory cache keyed on
 // the template file path + lastWriteTime — rebuilds automatically when the

@@ -55,6 +55,16 @@ namespace MyApp.Api.Models
         /// </summary>
         public string ReconciliationStatus { get; set; } = "Pending";
 
+        /// <summary>
+        /// Lineage of the row — "manual" (operator typed it in) /
+        /// "fbr-import" (created from an Annexure-A xlsx upload). Phase 1
+        /// of the FBR purchase import doesn't create rows, but the column
+        /// goes in now so Phase 2 doesn't need a second migration. Null
+        /// is treated as "manual" everywhere — additive, doesn't disturb
+        /// existing rows.
+        /// </summary>
+        public string? Source { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation

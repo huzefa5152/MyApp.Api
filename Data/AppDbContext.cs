@@ -738,6 +738,15 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<PurchaseItem>().Property(pi => pi.UnitPrice).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseItem>().Property(pi => pi.LineTotal).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseItem>().Property(pi => pi.FixedNotifiedValueOrRetailPrice).HasPrecision(18, 2);
+            // Decimal Quantity (was int) — matches DeliveryItem/InvoiceItem
+            // precision so cross-module reports don't have a units mismatch.
+            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.Quantity).HasPrecision(18, 4);
+            // FBR-source line taxes — both nullable, additive.
+            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.ExtraTax).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.StWithheldAtSource).HasPrecision(18, 2);
+
+            // PurchaseBill.Source — short string column tagging row lineage.
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.Source).HasMaxLength(20);
 
             // GoodsReceipt — mirror of DeliveryChallan
             modelBuilder.Entity<GoodsReceipt>()
