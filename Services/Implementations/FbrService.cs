@@ -1095,6 +1095,24 @@ namespace MyApp.Api.Services.Implementations
                                 notes: $"Bill #{invoice.InvoiceNumber} submitted to FBR (IRN {irn})");
                         }
                     }
+                    else
+                    {
+                        // Validate success — persist FbrStatus = "Validated"
+                        // so the green-check survives a refresh and the
+                        // dashboard's Validated counter actually moves.
+                        // 2026-05-08: pre-fix this only set the result DTO,
+                        // so the DB stayed null and refresh wiped the UI.
+                        //
+                        // Guard: never downgrade a Submitted bill (which
+                        // already has a stronger state + IRN) back to
+                        // Validated. Re-validation of a Submitted bill
+                        // is allowed by FBR but doesn't change anything
+                        // useful on our side.
+                        if (!string.Equals(invoice.FbrStatus, "Submitted", StringComparison.OrdinalIgnoreCase))
+                        {
+                            await PersistStatus(invoice, "Validated", null, null);
+                        }
+                    }
 
                     var successMsg = isSubmit
                         ? $"Invoice {invoice.InvoiceNumber} submitted to FBR successfully. IRN: {irn}"

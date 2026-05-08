@@ -148,6 +148,23 @@ export default function InvoicePage({ mode = "invoices" }) {
       setInvoices(data.items);
       setTotalCount(data.totalCount);
       setTotalPages(data.totalPages);
+      // Hydrate the in-memory "locally validated" Set from the
+      // persisted FbrStatus. Pre-fix the Set was session-only, so a
+      // bill that had been validated successfully (now persisted as
+      // FbrStatus = "Validated", see FbrService 2026-05-08) would
+      // load with an empty Set after refresh and the UI would fall
+      // back to the orange "pending FBR" pill — confusing the
+      // operator who just saw the green "validated" pill before the
+      // refresh. Bills already at "Submitted" stay out of the Set —
+      // they're past validation and have the dedicated submitted
+      // pill / IRN display path.
+      setFbrValidated((prev) => {
+        const next = new Set(prev);
+        for (const inv of data.items || []) {
+          if (inv.fbrStatus === "Validated") next.add(inv.id);
+        }
+        return next;
+      });
     } catch { setInvoices([]); setTotalCount(0); setTotalPages(0); }
     finally { setLoadingInvoices(false); }
   }, [page, search, clientFilter, dateFrom, dateTo]);
@@ -299,12 +316,20 @@ export default function InvoicePage({ mode = "invoices" }) {
         notify("FBR validation passed! You can now submit this invoice.", "success");
         setFbrValidated(prev => new Set(prev).add(inv.id));
       } else {
+        // 2026-05-08: a failed re-validate must NOT wipe a bill's
+        // previously-Validated state. The backend doesn't persist
+        // failures (only successes write FbrStatus = "Validated"),
+        // so the DB still says Validated; if we drop the row from
+        // the Set here the badge flips orange until refresh, where
+        // hydration re-adds it. The bulk path already gets this
+        // right — single-validate now matches: toast the error,
+        // leave the Set alone.
         notify(`FBR validation failed: ${data.errorMessage}`, "error");
-        setFbrValidated(prev => { const s = new Set(prev); s.delete(inv.id); return s; });
       }
     } catch (err) {
       notify(err.response?.data?.errorMessage || "FBR validation failed.", "error");
-      setFbrValidated(prev => { const s = new Set(prev); s.delete(inv.id); return s; });
+      // Same rationale as the !data.success branch — don't touch
+      // the Set on failure.
     } finally { setFbrLoading(null); }
   };
 
@@ -734,22 +759,17 @@ export default function InvoicePage({ mode = "invoices" }) {
                         In Bills mode we keep only the binary "Submitted to FBR" / "Pending FBR submission"
                         identifier as a pill so the operator sees at a glance which rows are locked.
                         Workflow detail (Ready / Setup Incomplete / Excluded) lives on the Invoices tab. */}
+                    {/* 2026-05-08: Bills + Invoices modes now share the
+                        same green pill for Submitted. The Invoices mode
+                        previously rendered plain inline text so the
+                        styling was inconsistent with the other status
+                        pills (Ready / Validated / Failed / etc.). */}
                     {inv.fbrStatus === "Submitted" && (
-                      isBillsMode ? (
-                        <div style={styles.fbrPillSubmitted} title={inv.fbrIRN ? `IRN: ${inv.fbrIRN}` : "This bill has been submitted to FBR and is locked from edits."}>
-                          <MdCheckCircle size={14} color="#1b5e20" />
-                          <span>Submitted to FBR</span>
-                          {inv.fbrIRN && <span style={styles.fbrPillIrn}>IRN {inv.fbrIRN}</span>}
-                        </div>
-                      ) : (
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.25rem" }}>
-                          <MdCheckCircle size={14} color="#2e7d32" />
-                          <span style={{ fontSize: "0.76rem", fontWeight: 600, color: "#2e7d32" }}>
-                            FBR: Submitted
-                          </span>
-                          {inv.fbrIRN && <span style={{ fontSize: "0.72rem", color: colors.textSecondary }}>(IRN: {inv.fbrIRN})</span>}
-                        </div>
-                      )
+                      <div style={styles.fbrPillSubmitted} title={inv.fbrIRN ? `IRN: ${inv.fbrIRN}` : "This bill has been submitted to FBR and is locked from edits."}>
+                        <MdCheckCircle size={14} color="#1b5e20" />
+                        <span>{isBillsMode ? "Submitted to FBR" : "FBR: Submitted"}</span>
+                        {inv.fbrIRN && <span style={styles.fbrPillIrn}>IRN {inv.fbrIRN}</span>}
+                      </div>
                     )}
                     {isBillsMode && inv.fbrStatus !== "Submitted" && (
                       <div style={styles.fbrPillPending} title="This bill hasn't been submitted to FBR yet. Open the Invoices tab to validate and submit.">
