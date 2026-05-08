@@ -19,6 +19,7 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getFbrLogs, getFbrLogById, getFbrSummary } from "../api/fbrMonitorApi";
 import { notify } from "../utils/notify";
+import "./FbrMonitorPage.css";
 
 // Status -> visual config. Keys mirror FbrCommunicationLog.Status taxonomy.
 const STATUS_CFG = {
@@ -48,7 +49,7 @@ function fmtMs(ms) {
 }
 
 export default function FbrMonitorPage() {
-  const { selectedCompany } = useCompany();
+  const { selectedCompany, companies, setSelectedCompany } = useCompany();
   const { has, loading: permsLoading } = usePermissions();
 
   const canView = has?.("fbrmonitor.view") ?? false;
@@ -110,9 +111,9 @@ export default function FbrMonitorPage() {
   }, [canView, companyId, windowHours, page, pageSize, statusFilter, actionFilter]);
 
   // ── Permission / state gates ──────────────────────────────────
-  if (permsLoading) return <Shell><div style={S.placeholder}>Loading…</div></Shell>;
-  if (!canView) return <Shell><div style={S.placeholder}>You don't have permission to view FBR monitor.</div></Shell>;
-  if (!selectedCompany) return <Shell><div style={S.placeholder}>Pick a company first.</div></Shell>;
+  if (permsLoading) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>Loading…</div></Shell>;
+  if (!canView) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>You don't have permission to view FBR monitor.</div></Shell>;
+  if (!selectedCompany) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>Pick a company first.</div></Shell>;
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const filteredCount = total;
@@ -121,6 +122,15 @@ export default function FbrMonitorPage() {
     <Shell>
       <Header
         company={selectedCompany.name}
+        companies={companies}
+        selectedCompanyId={selectedCompany.id}
+        onCompanyChange={(id) => {
+          const c = companies.find((cc) => cc.id === id);
+          if (c) {
+            setSelectedCompany(c);
+            setPage(1);
+          }
+        }}
         windowHours={windowHours}
         onWindowChange={(h) => { setWindowHours(h); setPage(1); }}
         onRefresh={() => setPage((p) => p)}
@@ -161,19 +171,34 @@ export default function FbrMonitorPage() {
 // ── Layout ─────────────────────────────────────────────────────────
 
 function Shell({ children }) {
-  return <div style={{ maxWidth: 1480, margin: "0 auto" }}>{children}</div>;
+  return <div className="fbr-mon-page" style={{ maxWidth: 1480, margin: "0 auto" }}>{children}</div>;
 }
 
-function Header({ company, windowHours, onWindowChange, onRefresh }) {
+function Header({ company, companies, selectedCompanyId, onCompanyChange, windowHours, onWindowChange, onRefresh }) {
+  // Hide the picker when there's only one company — it'd just be visual
+  // noise. Same UX as the dashboard hero.
+  const showCompanyPicker = (companies?.length ?? 0) > 1;
   return (
-    <header style={S.heroBanner}>
+    <header className="fbr-mon-hero" style={S.heroBanner}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <h1 style={S.heroH1}>FBR Communication Monitor</h1>
-        <p style={S.heroSub}>
+        <h1 className="fbr-mon-hero__title" style={S.heroH1}>FBR Communication Monitor</h1>
+        <p className="fbr-mon-hero__sub" style={S.heroSub}>
           <strong>{company}</strong> · last {windowHours}h
         </p>
       </div>
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+      <div className="fbr-mon-hero__pickers" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        {showCompanyPicker && (
+          <select
+            value={selectedCompanyId ?? ""}
+            onChange={(e) => onCompanyChange(parseInt(e.target.value, 10))}
+            style={{ ...S.select, minWidth: 160 }}
+            aria-label="Company"
+          >
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        )}
         <select value={windowHours} onChange={(e) => onWindowChange(parseInt(e.target.value, 10))} style={S.select} aria-label="Window">
           <option value={1}>Last 1h</option>
           <option value={6}>Last 6h</option>
@@ -191,15 +216,15 @@ function Header({ company, windowHours, onWindowChange, onRefresh }) {
 
 function Summary({ summary, windowHours }) {
   const tile = (label, value, accent, icon) => (
-    <div style={{ ...S.tile, borderTop: `3px solid ${accent}` }}>
-      <div style={S.tileLabel}>{icon}<span>{label}</span></div>
-      <div style={{ ...S.tileValue, color: accent }}>{value ?? 0}</div>
+    <div className="fbr-mon-tile" style={{ ...S.tile, borderTop: `3px solid ${accent}` }}>
+      <div className="fbr-mon-tile__label" style={S.tileLabel}>{icon}<span>{label}</span></div>
+      <div className="fbr-mon-tile__value" style={{ ...S.tileValue, color: accent }}>{value ?? 0}</div>
     </div>
   );
   if (!summary) return <div style={S.tilesSkeleton}><div style={S.tile}>—</div></div>;
   return (
     <>
-      <div style={S.tiles}>
+      <div className="fbr-mon-tiles" style={S.tiles}>
         {tile("Total calls", summary.totalCalls, "#0d47a1", null)}
         {tile("Submitted", summary.submitted, "#2e7d32", null)}
         {tile("Validated", summary.acknowledged, "#0277bd", null)}
@@ -209,7 +234,7 @@ function Summary({ summary, windowHours }) {
         {tile("Avg duration", fmtMs(Math.round(summary.avgDurationMs || 0)), "#37474f", null)}
       </div>
       {summary.topErrorCodes && Object.keys(summary.topErrorCodes).length > 0 && (
-        <div style={S.errorBar}>
+        <div className="fbr-mon-error-bar" style={S.errorBar}>
           <span style={{ fontSize: "0.78rem", color: "#5f6d7e", fontWeight: 600, marginRight: "0.5rem" }}>
             Top FBR error codes ({windowHours}h):
           </span>
@@ -226,7 +251,7 @@ function Summary({ summary, windowHours }) {
 
 function FilterBar({ statusFilter, onStatus, actionFilter, onAction, count }) {
   return (
-    <section style={S.filterBar}>
+    <section className="fbr-mon-filter-bar" style={S.filterBar}>
       <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", color: "#5f6d7e", fontWeight: 600, fontSize: "0.82rem" }}>
         <MdFilterList size={14} /> Filter:
       </span>
@@ -244,7 +269,7 @@ function FilterBar({ statusFilter, onStatus, actionFilter, onAction, count }) {
         <option value="Validate">Validate</option>
         <option value="Preview">Preview</option>
       </select>
-      <span style={{ marginLeft: "auto", fontSize: "0.82rem", color: "#5f6d7e" }}>
+      <span className="fbr-mon-filter-bar__count" style={{ marginLeft: "auto", fontSize: "0.82rem", color: "#5f6d7e" }}>
         {count.toLocaleString()} {count === 1 ? "result" : "results"}
       </span>
     </section>
@@ -252,11 +277,11 @@ function FilterBar({ statusFilter, onStatus, actionFilter, onAction, count }) {
 }
 
 function RowsList({ rows, loading, onClickRow }) {
-  if (loading && rows.length === 0) return <div style={S.placeholder}>Loading…</div>;
-  if (rows.length === 0) return <div style={S.placeholder}>No FBR communication in the selected window.</div>;
+  if (loading && rows.length === 0) return <div className="fbr-mon-placeholder" style={S.placeholder}>Loading…</div>;
+  if (rows.length === 0) return <div className="fbr-mon-placeholder" style={S.placeholder}>No FBR communication in the selected window.</div>;
   return (
     <section style={S.list}>
-      <div style={S.listHeader}>
+      <div className="fbr-mon-list-header" style={S.listHeader}>
         <span style={{ width: 150 }}>Timestamp</span>
         <span style={{ width: 110 }}>Status</span>
         <span style={{ width: 90 }}>Action</span>
@@ -269,25 +294,25 @@ function RowsList({ rows, loading, onClickRow }) {
         const cfg = statusCfg(r.status);
         const Icon = cfg.icon;
         return (
-          <button type="button" key={r.id} onClick={() => onClickRow(r)} style={S.row}>
-            <span style={{ width: 150, fontSize: "0.78rem", color: "#5f6d7e", fontFamily: "ui-monospace, monospace" }}>{fmtDate(r.timestamp)}</span>
-            <span style={{ width: 110 }}>
+          <button type="button" key={r.id} onClick={() => onClickRow(r)} className="fbr-mon-row" style={S.row}>
+            <span className="fbr-mon-row__ts" style={{ width: 150, fontSize: "0.78rem", color: "#5f6d7e", fontFamily: "ui-monospace, monospace" }}>{fmtDate(r.timestamp)}</span>
+            <span className="fbr-mon-row__status" style={{ width: 110 }}>
               <span style={{ ...S.pill, color: cfg.color, backgroundColor: cfg.bg, border: `1px solid ${cfg.border}` }}>
                 <Icon size={12} /> {cfg.label}
               </span>
             </span>
-            <span style={{ width: 90, fontSize: "0.82rem", fontWeight: 600 }}>{r.action}</span>
-            <span style={{ width: 90, fontSize: "0.82rem", color: "#0d47a1", fontFamily: "ui-monospace, monospace" }}>
+            <span className="fbr-mon-row__action" style={{ width: 90, fontSize: "0.82rem", fontWeight: 600 }}>{r.action}</span>
+            <span className="fbr-mon-row__bill" style={{ width: 90, fontSize: "0.82rem", color: "#0d47a1", fontFamily: "ui-monospace, monospace" }}>
               {r.invoiceId ? `#${r.invoiceId}` : "—"}
             </span>
-            <span style={{ width: 70, textAlign: "right", fontSize: "0.82rem", fontFamily: "ui-monospace, monospace" }}>
+            <span className="fbr-mon-row__http" style={{ width: 70, textAlign: "right", fontSize: "0.82rem", fontFamily: "ui-monospace, monospace" }}>
               {r.httpStatusCode ?? "—"}
             </span>
-            <span style={{ flex: 1, minWidth: 0, fontSize: "0.82rem", color: r.fbrErrorMessage ? "#b71c1c" : "#1a2332", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span className="fbr-mon-row__err" style={{ flex: 1, minWidth: 0, fontSize: "0.82rem", color: r.fbrErrorMessage ? "#b71c1c" : "#1a2332", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {r.fbrErrorCode ? <strong>[{r.fbrErrorCode}] </strong> : null}
               {r.fbrErrorMessage || "—"}
             </span>
-            <span style={{ width: 80, textAlign: "right", fontSize: "0.78rem", color: "#5f6d7e" }}>{fmtMs(r.requestDurationMs)}</span>
+            <span className="fbr-mon-row__duration" style={{ width: 80, textAlign: "right", fontSize: "0.78rem", color: "#5f6d7e" }}>{fmtMs(r.requestDurationMs)}</span>
           </button>
         );
       })}
@@ -298,7 +323,7 @@ function RowsList({ rows, loading, onClickRow }) {
 function Pagination({ page, totalPages, total, onPage }) {
   if (totalPages <= 1) return null;
   return (
-    <div style={S.pagination}>
+    <div className="fbr-mon-pagination" style={S.pagination}>
       <button type="button" disabled={page <= 1} onClick={() => onPage(page - 1)} style={S.pageBtn}>← Prev</button>
       <span style={{ fontSize: "0.82rem", color: "#5f6d7e" }}>
         Page {page} of {totalPages} <span style={{ color: "#98a4b3" }}>({total.toLocaleString()} rows)</span>
@@ -312,8 +337,8 @@ function Drawer({ row, onClose }) {
   const cfg = statusCfg(row.status);
   return (
     <div style={S.drawerOverlay} onClick={onClose}>
-      <div style={S.drawerInner} onClick={(e) => e.stopPropagation()}>
-        <header style={S.drawerHeader}>
+      <div className="fbr-mon-drawer-inner" style={S.drawerInner} onClick={(e) => e.stopPropagation()}>
+        <header className="fbr-mon-drawer-header" style={S.drawerHeader}>
           <div>
             <h2 style={{ margin: 0, fontSize: "1.1rem" }}>FBR call detail</h2>
             <div style={{ fontSize: "0.8rem", color: "#5f6d7e" }}>
@@ -322,7 +347,7 @@ function Drawer({ row, onClose }) {
           </div>
           <button type="button" onClick={onClose} style={S.drawerClose} title="Close">×</button>
         </header>
-        <div style={S.drawerBody}>
+        <div className="fbr-mon-drawer-body" style={S.drawerBody}>
           <KeyValue label="Status" value={<span style={{ color: cfg.color, fontWeight: 600 }}>{cfg.label}</span>} />
           <KeyValue label="HTTP" value={row.httpStatusCode ?? "—"} />
           <KeyValue label="Duration" value={fmtMs(row.requestDurationMs)} />
@@ -335,11 +360,11 @@ function Drawer({ row, onClose }) {
 
           <div style={{ marginTop: "1rem" }}>
             <strong style={{ fontSize: "0.85rem", color: "#1a2332" }}>Request body (NTN/CNIC masked)</strong>
-            <pre style={S.pre}>{row.requestBodyMasked || "(empty)"}</pre>
+            <pre className="fbr-mon-pre" style={S.pre}>{row.requestBodyMasked || "(empty)"}</pre>
           </div>
           <div style={{ marginTop: "1rem" }}>
             <strong style={{ fontSize: "0.85rem", color: "#1a2332" }}>Response body</strong>
-            <pre style={S.pre}>{row.responseBodyMasked || "(empty)"}</pre>
+            <pre className="fbr-mon-pre" style={S.pre}>{row.responseBodyMasked || "(empty)"}</pre>
           </div>
         </div>
       </div>
@@ -349,7 +374,7 @@ function Drawer({ row, onClose }) {
 
 function KeyValue({ label, value }) {
   return (
-    <div style={{ display: "flex", gap: "0.85rem", fontSize: "0.85rem", padding: "0.25rem 0" }}>
+    <div className="fbr-mon-kv" style={{ display: "flex", gap: "0.85rem", fontSize: "0.85rem", padding: "0.25rem 0" }}>
       <span style={{ width: 130, color: "#5f6d7e", fontWeight: 600 }}>{label}</span>
       <span style={{ flex: 1, color: "#1a2332", overflow: "hidden", overflowWrap: "anywhere" }}>{value}</span>
     </div>
