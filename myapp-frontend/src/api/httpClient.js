@@ -96,6 +96,19 @@ httpClient.interceptors.response.use(
     if (error.response?.data) ensureMessage(error.response.data);
 
     if (status === 401 && window.location.pathname !== "/login") {
+      // Preserve where the operator was so re-login lands them back
+      // there instead of dropping to /dashboard. Captured via sessionStorage
+      // (survives the hard reload) — query-string would work too but a
+      // long bill-edit URL with #anchors is fragile in URL form.
+      try {
+        const here = window.location.pathname + window.location.search + window.location.hash;
+        if (here && !here.startsWith("/login")) {
+          sessionStorage.setItem("postLoginReturnTo", here);
+        }
+        // Distinct from the user typing a bad password — LoginPage uses
+        // this to render a "session expired" banner.
+        sessionStorage.setItem("loginReason", "expired");
+      } catch { /* sessionStorage may be disabled (private mode) — non-fatal */ }
       localStorage.removeItem("token");
       window.location.href = "/login";
     } else if (status === 403) {

@@ -1,5 +1,5 @@
 // src/pages/public/LoginPage.jsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import "./LoginPage.css";
@@ -15,6 +15,19 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   // Key to re-trigger shake animation on repeated failed attempts
   const [errorKey, setErrorKey] = useState(0);
+  // Banner shown when the user landed here because httpClient.js bounced
+  // them off a 401. Read once on mount and cleared so a manual logout
+  // (or a fresh navigation to /login) doesn't keep showing the message.
+  const [sessionExpired, setSessionExpired] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("loginReason") === "expired") {
+        setSessionExpired(true);
+        sessionStorage.removeItem("loginReason");
+      }
+    } catch { /* private mode — non-fatal */ }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,7 +36,18 @@ export default function LoginPage() {
 
     try {
       await login(username.trim(), password);
-      navigate("/dashboard", { replace: true });
+      // Return-to URL preservation: if the operator was bounced off a
+      // protected page by the 401 handler, send them back to it after a
+      // successful re-login instead of always landing on /dashboard.
+      let returnTo = "/dashboard";
+      try {
+        const stored = sessionStorage.getItem("postLoginReturnTo");
+        if (stored && stored.startsWith("/") && !stored.startsWith("/login")) {
+          returnTo = stored;
+        }
+        sessionStorage.removeItem("postLoginReturnTo");
+      } catch { /* non-fatal */ }
+      navigate(returnTo, { replace: true });
     } catch (err) {
       const msg =
         err?.response?.data?.message ||
@@ -87,6 +111,37 @@ export default function LoginPage() {
             <h2>Welcome Back</h2>
             <p>Sign in to your account to continue</p>
           </div>
+
+          {/* Session-expired banner — shown when httpClient.js bounced
+              the user off a 401. Distinct from the bad-password "error"
+              banner below so the operator immediately understands this
+              wasn't a typo. Auto-dismisses on first form interaction. */}
+          {sessionExpired && !error && (
+            <div
+              role="status"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.55rem",
+                padding: "0.7rem 0.9rem",
+                marginBottom: "0.85rem",
+                background: "#fff7e6",
+                border: "1px solid #ffd591",
+                borderRadius: 8,
+                color: "#8a4b00",
+                fontSize: "0.88rem",
+                lineHeight: 1.4,
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z"/>
+                <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z"/>
+              </svg>
+              <span>
+                <strong>Your session expired.</strong> Please sign in again to continue.
+              </span>
+            </div>
+          )}
 
           {/* Error message */}
           {error && (
