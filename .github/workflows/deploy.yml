@@ -114,8 +114,22 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./publish/
           server-dir: /wwwroot/
+          # dangerous-clean-slate=false → the action never deletes remote
+          # files that aren't in the local upload. Combined with the
+          # excludes below, this means the server's appsettings.Production.json
+          # (maintained manually on the host) is never overwritten and never
+          # deleted by a deploy.
           dangerous-clean-slate: false
           exclude: |
             **/.pdb
             **/runtimes/linux-*/**
             **/runtimes/osx-*/**
+            # Environment-specific config — managed directly on the server.
+            # appsettings.Production.json carries the real DB connection
+            # string and JWT signing key; appsettings.Development.json is
+            # local-only. Never let either travel through this pipeline.
+            **/appsettings.Development.json
+            **/appsettings.Production.json
+            # .example templates are dev-side documentation — no business
+            # being on the prod server.
+            **/appsettings.*.example.json
