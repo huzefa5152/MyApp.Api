@@ -361,6 +361,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // Bulk apply — sets the same ItemType on every row in one shot.
   // Good when the operator has 20+ items that should all be classified
   // the same way (typical for single-category sale bills).
+  // Passing newId=null + pickedType=null clears ItemType + UoM + HS Code
+  // + Sale Type on every row (the dedicated "Clear from all" button).
   const applyItemTypeToAll = (newId, pickedType, mode = "all") => {
     setItems((prev) => prev.map((row) => {
       // mode === "empty" → only fill rows that don't have an Item Type yet
@@ -368,6 +370,18 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
       return _applyItemTypeToRow(row, newId, pickedType);
     }));
   };
+
+  // Derived: what's the common Item Type across rows? Used to drive
+  // the bulk picker's `value` so the dropdown actually reflects what's
+  // applied (pre-fix it always showed the placeholder even after apply).
+  // Falls back to "" when rows diverge — operator can still re-pick or
+  // clear from there.
+  const commonItemTypeId = useMemo(() => {
+    if (!items || items.length === 0) return "";
+    const first = items[0]?.itemTypeId;
+    if (!first) return "";
+    return items.every((r) => r.itemTypeId === first) ? String(first) : "";
+  }, [items]);
 
   const subtotal = items.reduce((s, i) => s + (parseFloat(i.lineTotal) || 0), 0);
   const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
@@ -800,9 +814,20 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
                       <SearchableItemTypeSelect
                         items={filteredItemTypes}
-                        value=""
+                        // value derived from the rows themselves so the
+                        // dropdown reflects the applied selection. When
+                        // all rows share an Item Type, that one shows;
+                        // when they diverge (e.g. partial apply, manual
+                        // edits) the placeholder returns.
+                        value={commonItemTypeId}
                         onChange={(newId, picked) => {
-                          if (!newId) return;
+                          // Clearing the picker (× icon) wipes the row
+                          // selection too — same behaviour as the
+                          // dedicated "Clear from all" button below.
+                          if (!newId) {
+                            applyItemTypeToAll(null, null, bulkApplyMode);
+                            return;
+                          }
                           applyItemTypeToAll(parseInt(newId), picked, bulkApplyMode);
                         }}
                         placeholder={bulkApplyMode === "all"
@@ -811,6 +836,37 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                         style={styles.tableInput}
                       />
                     </div>
+                    {/* Dedicated "Clear from all" — clears Item Type +
+                        UoM + HS Code + Sale Type on every row in scope.
+                        Disabled when there's nothing to clear so the
+                        button doesn't pretend to be active. Important:
+                        the row-level clear (× on each row's picker)
+                        already wipes those fields per-row; this is the
+                        same operation in bulk. */}
+                    {(() => {
+                      const hasAnyItemType = items.some((r) => r.itemTypeId);
+                      return (
+                        <button
+                          type="button"
+                          // Always passes mode="all" — clearing only "empty"
+                          // rows is a no-op (they're already empty), so the
+                          // button intent is unambiguous: wipe ItemType +
+                          // HS Code + UoM + Sale Type from every row.
+                          onClick={() => applyItemTypeToAll(null, null, "all")}
+                          disabled={!hasAnyItemType}
+                          style={{
+                            ...styles.inlineAddBtn,
+                            color: hasAnyItemType ? "#c62828" : "#98a4b3",
+                            borderColor: hasAnyItemType ? "#ef9a9a" : "#dde1e6",
+                            backgroundColor: hasAnyItemType ? "#fff5f5" : "#f5f7fa",
+                            cursor: hasAnyItemType ? "pointer" : "not-allowed",
+                          }}
+                          title="Clear Item Type, HS Code, UoM, and Sale Type from every row"
+                        >
+                          Clear from all
+                        </button>
+                      );
+                    })()}
                     {/* "+ New Item Type" — placed AFTER the item-type
                         picker so the operator's natural left-to-right
                         flow is "try to find it → can't → add it here". */}
