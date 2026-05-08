@@ -30,7 +30,7 @@ namespace MyApp.Api.Controllers
                 out var id) ? id : 0;
 
         [HttpGet("count")]
-        [HasPermission("bills.list.view")]
+        [HasAnyPermission("bills.list.view", "invoices.list.view")]
         public async Task<ActionResult<int>> GetTotalCount([FromQuery] int? companyId)
         {
             if (companyId.HasValue)
@@ -49,7 +49,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("company/{companyId}")]
-        [HasPermission("bills.list.view")]
+        [HasAnyPermission("bills.list.view", "invoices.list.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<InvoiceDto>>> GetByCompany(int companyId)
         {
@@ -58,7 +58,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("company/{companyId}/paged")]
-        [HasPermission("bills.list.view")]
+        [HasAnyPermission("bills.list.view", "invoices.list.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<PagedResult<InvoiceDto>>> GetPagedByCompany(
             int companyId,
@@ -76,7 +76,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("{id}")]
-        [HasPermission("bills.list.view")]
+        [HasAnyPermission("bills.list.view", "invoices.list.view")]
         public async Task<ActionResult<InvoiceDto>> GetById(int id)
         {
             var invoice = await _service.GetByIdAsync(id);
