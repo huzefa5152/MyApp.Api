@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,11 +17,31 @@ namespace MyApp.Api.Controllers
     {
         private readonly IFbrService _fbrService;
         private readonly AppDbContext _db;
+        private readonly ICompanyAccessGuard _access;
 
-        public FbrController(IFbrService fbrService, AppDbContext db)
+        public FbrController(IFbrService fbrService, AppDbContext db, ICompanyAccessGuard access)
         {
             _fbrService = fbrService;
             _db = db;
+            _access = access;
+        }
+
+        private int CurrentUserId =>
+            int.TryParse(
+                User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
+                out var id) ? id : 0;
+
+        // Look up the invoice's company and assert the caller has tenant
+        // access to it. Used by every {invoiceId}/* endpoint below.
+        private async Task<IActionResult?> AssertAccessForInvoice(int invoiceId)
+        {
+            var companyId = await _db.Invoices
+                .Where(i => i.Id == invoiceId)
+                .Select(i => (int?)i.CompanyId)
+                .FirstOrDefaultAsync();
+            if (companyId == null) return NotFound(new { message = "Invoice not found." });
+            await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+            return null;
         }
 
         // ── Scenario catalog ────────────────────────────────────
@@ -40,6 +62,7 @@ namespace MyApp.Api.Controllers
         /// — better to show the full menu than nothing).
         /// </summary>
         [HttpGet("scenarios/applicable/{companyId}")]
+        [AuthorizeCompany]
         public async Task<IActionResult> GetApplicableScenarios(int companyId)
         {
             var company = await _db.Companies.AsNoTracking()
@@ -83,6 +106,8 @@ namespace MyApp.Api.Controllers
         public async Task<IActionResult> SubmitInvoice(
             int invoiceId, [FromQuery] string? scenarioId = null)
         {
+            var denied = await AssertAccessForInvoice(invoiceId);
+            if (denied != null) return denied;
             var result = await _fbrService.SubmitInvoiceAsync(invoiceId, scenarioId);
             // Always return 200 — result.Success indicates outcome;
             // FBR details are in our custom audit log, not middleware's generic log
@@ -94,6 +119,8 @@ namespace MyApp.Api.Controllers
         public async Task<IActionResult> ValidateInvoice(
             int invoiceId, [FromQuery] string? scenarioId = null)
         {
+            var denied = await AssertAccessForInvoice(invoiceId);
+            if (denied != null) return denied;
             var result = await _fbrService.ValidateInvoiceAsync(invoiceId, scenarioId);
             return Ok(result);
         }
@@ -111,6 +138,8 @@ namespace MyApp.Api.Controllers
         public async Task<IActionResult> PreviewPayload(
             int invoiceId, [FromQuery] string? scenarioId = null)
         {
+            var denied = await AssertAccessForInvoice(invoiceId);
+            if (denied != null) return denied;
             var result = await _fbrService.PreviewInvoicePayloadAsync(invoiceId, scenarioId);
             return Ok(result);
         }
@@ -118,32 +147,39 @@ namespace MyApp.Api.Controllers
         // ── Reference Data v1 ───────────────────────────────────
 
         [HttpGet("provinces/{companyId}")]
+        [AuthorizeCompany]
         public async Task<IActionResult> GetProvinces(int companyId)
             => Ok(await _fbrService.GetProvincesAsync(companyId));
 
         [HttpGet("doctypes/{companyId}")]
+        [AuthorizeCompany]
         public async Task<IActionResult> GetDocTypes(int companyId)
             => Ok(await _fbrService.GetDocTypesAsync(companyId));
 
         [HttpGet("hscodes/{companyId}")]
-        public async Task<IActionResult> GetHSCodes(int companyId, [FromQuery] string? search)
-            => Ok(await _fbrService.GetHSCodesAsync(companyId, search));
+        [AuthorizeCompany]
+        public async Task<IActionResult> GetHSCodes(int companyId, [FromQuery] string? search, [FromQuery] string? saleType)
+            => Ok(await _fbrService.GetHSCodesAsync(companyId, search, saleType));
 
         [HttpGet("uom/{companyId}")]
+        [AuthorizeCompany]
         public async Task<IActionResult> GetUOMs(int companyId)
             => Ok(await _fbrService.GetUOMsAsync(companyId));
 
         [HttpGet("transactiontypes/{companyId}")]
+        [AuthorizeCompany]
         public async Task<IActionResult> GetTransactionTypes(int companyId)
             => Ok(await _fbrService.GetTransactionTypesAsync(companyId));
 
         [HttpGet("sroitemcodes/{companyId}")]
+        [AuthorizeCompany]
         public async Task<IActionResult> GetSROItemCodes(int companyId)
             => Ok(await _fbrService.GetSROItemCodesAsync(companyId));
 
         // ── Reference Data v2 ───────────────────────────────────
 
         [HttpGet("saletyperates/{companyId}")]
+        [AuthorizeCompany]
         public async Task<IActionResult> GetSaleTypeRates(
             int companyId,
             [FromQuery] string date,
@@ -152,6 +188,7 @@ namespace MyApp.Api.Controllers
             => Ok(await _fbrService.GetSaleTypeRatesAsync(companyId, date, transTypeId, provinceId));
 
         [HttpGet("sroschedule/{companyId}")]
+        [AuthorizeCompany]
         public async Task<IActionResult> GetSROSchedule(
             int companyId,
             [FromQuery] int rateId,
@@ -160,6 +197,7 @@ namespace MyApp.Api.Controllers
             => Ok(await _fbrService.GetSROScheduleAsync(companyId, rateId, date, provinceId));
 
         [HttpGet("sroitems/{companyId}")]
+        [AuthorizeCompany]
         public async Task<IActionResult> GetSROItems(
             int companyId,
             [FromQuery] string date,
@@ -167,6 +205,7 @@ namespace MyApp.Api.Controllers
             => Ok(await _fbrService.GetSROItemsAsync(companyId, date, sroId));
 
         [HttpGet("hsuom/{companyId}")]
+        [AuthorizeCompany]
         public async Task<IActionResult> GetHSCodeUOM(
             int companyId,
             [FromQuery] string hsCode,
@@ -177,6 +216,7 @@ namespace MyApp.Api.Controllers
 
         [HttpPost("regstatus/{companyId}")]
         [HasPermission("fbr.config.view")]
+        [AuthorizeCompany]
         public async Task<IActionResult> CheckRegistrationStatus(
             int companyId,
             [FromQuery] string regNo,
@@ -188,6 +228,7 @@ namespace MyApp.Api.Controllers
 
         [HttpPost("regtype/{companyId}")]
         [HasPermission("fbr.config.view")]
+        [AuthorizeCompany]
         public async Task<IActionResult> GetRegistrationType(
             int companyId,
             [FromQuery] string regNo)

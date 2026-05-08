@@ -249,8 +249,8 @@ namespace MyApp.Api.Repositories.Implementations
                 Site = source.Site,
                 // Inherit Status from source so the historical-vs-native
                 // distinction carries through. Duplicating an "Imported"
-                // back-fill must produce another "Imported" row (its number
-                // is still below StartingChallanNumber); duplicating a native
+                // back-fill produces another "Imported" row (its number is
+                // still below StartingChallanNumber); duplicating a native
                 // "Pending" produces another "Pending". Reports group on
                 // these two populations and shouldn't be skewed by copies.
                 Status = source.Status,

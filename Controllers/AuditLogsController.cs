@@ -13,15 +13,20 @@ namespace MyApp.Api.Controllers
     public class AuditLogsController : ControllerBase
     {
         private readonly IAuditLogService _service;
-        public AuditLogsController(IAuditLogService service) => _service = service;
+        private readonly int _defaultPageSize;
+        public AuditLogsController(IAuditLogService service, IConfiguration configuration)
+        {
+            _service = service;
+            _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
+        }
 
         [HttpGet]
         public async Task<ActionResult<PagedResult<AuditLogDto>>> GetLogs(
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 20,
+            [FromQuery] int? pageSize = null,
             [FromQuery] string? level = null,
             [FromQuery] string? search = null)
-            => Ok(await _service.GetPagedAsync(page, pageSize, level, search));
+            => Ok(await _service.GetPagedAsync(page, pageSize ?? _defaultPageSize, level, search));
 
         [HttpGet("{id}")]
         public async Task<ActionResult<AuditLogDto>> GetLog(int id)

@@ -3,6 +3,19 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+# Environment-specific settings — hold real DB connection strings,
+# JWT signing keys, third-party API keys. The .example files are
+# tracked as templates; the real ones live on each machine only.
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Local.json
+appsettings.*.local.json
+
+# Runtime user uploads — operator-provided files (PO PDFs archived for
+# parser triage, etc.). Never commit; they may contain customer-confidential
+# document scans. Each year/month subdirectory is created on demand.
+Data/uploads/
+
 # User-specific files
 *.rsuser
 *.suo

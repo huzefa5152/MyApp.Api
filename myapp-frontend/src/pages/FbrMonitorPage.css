@@ -1,0 +1,215 @@
+/* FbrMonitorPage — responsive overrides on top of inline styles.
+   Inline styles can't do media queries, so the JSX tags key elements
+   with classNames and we override here at mobile/tablet breakpoints. */
+
+/* ---------- Outer ---------- */
+@media (max-width: 767.98px) {
+  .fbr-mon-page {
+    padding: 0 !important;
+  }
+}
+
+/* ---------- Hero banner ---------- */
+@media (max-width: 599.98px) {
+  .fbr-mon-hero {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 0.85rem 0.95rem !important;
+    border-radius: 14px !important;
+    gap: 0.55rem !important;
+    margin-bottom: 0.55rem !important;
+  }
+  .fbr-mon-hero__title {
+    font-size: 1.1rem !important;
+  }
+  .fbr-mon-hero__sub {
+    font-size: 0.78rem !important;
+  }
+  .fbr-mon-hero__pickers {
+    flex-direction: column !important;
+    gap: 0.4rem !important;
+    width: 100%;
+  }
+  .fbr-mon-hero__pickers > select,
+  .fbr-mon-hero__pickers > button {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 42px;
+    justify-content: center;
+  }
+}
+
+/* ---------- KPI tiles ---------- */
+@media (max-width: 599.98px) {
+  .fbr-mon-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.45rem !important;
+  }
+  .fbr-mon-tile {
+    padding: 0.55rem 0.7rem 0.6rem !important;
+    border-radius: 10px !important;
+  }
+  .fbr-mon-tile__label {
+    font-size: 0.62rem !important;
+    letter-spacing: 0.03em !important;
+  }
+  .fbr-mon-tile__value {
+    font-size: 1.1rem !important;
+  }
+}
+
+@media (max-width: 359.98px) {
+  .fbr-mon-tiles {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ---------- Error code bar ---------- */
+@media (max-width: 599.98px) {
+  .fbr-mon-error-bar {
+    padding: 0.45rem 0.7rem !important;
+    gap: 0.3rem !important;
+    font-size: 0.75rem !important;
+  }
+}
+
+/* ---------- Filter bar ---------- */
+@media (max-width: 599.98px) {
+  .fbr-mon-filter-bar {
+    flex-wrap: wrap !important;
+    padding: 0.5rem 0.65rem !important;
+    gap: 0.4rem !important;
+  }
+  .fbr-mon-filter-bar > select {
+    flex: 1 1 calc(50% - 0.2rem) !important;
+    min-width: 0 !important;
+    min-height: 38px;
+  }
+  .fbr-mon-filter-bar__count {
+    flex-basis: 100%;
+    text-align: right;
+    margin-left: 0 !important;
+  }
+}
+
+/* ---------- List: desktop row vs mobile card ---------- */
+.fbr-mon-list-header { display: flex; }
+.fbr-mon-row-card-meta { display: none; }
+
+@media (max-width: 767.98px) {
+  /* Hide the desktop column header — cards have their own labels. */
+  .fbr-mon-list-header { display: none !important; }
+
+  /* Reshape the row button into a stacked card. We can't restructure
+     the DOM (inline children stay) so we drive layout via CSS Grid
+     areas and let each child target a slot. */
+  .fbr-mon-row {
+    display: grid !important;
+    grid-template-columns: auto 1fr auto !important;
+    grid-template-rows: auto auto auto !important;
+    grid-template-areas:
+      "status action  duration"
+      "ts     ts      bill"
+      "err    err     err" !important;
+    gap: 0.25rem 0.5rem !important;
+    padding: 0.6rem 0.7rem !important;
+    border-bottom: 1px solid #f0f3f8 !important;
+  }
+  .fbr-mon-row > * { width: auto !important; }
+
+  .fbr-mon-row__ts {
+    grid-area: ts;
+    font-size: 0.72rem !important;
+  }
+  .fbr-mon-row__status {
+    grid-area: status;
+  }
+  .fbr-mon-row__action {
+    grid-area: action;
+    font-size: 0.78rem !important;
+  }
+  .fbr-mon-row__bill {
+    grid-area: bill;
+    text-align: right;
+    font-size: 0.78rem !important;
+  }
+  .fbr-mon-row__http {
+    /* No grid area — fold into ts cell as a small badge. We hide
+       the standalone HTTP column on mobile because the FBR error
+       message below is the diagnostic that matters. */
+    display: none !important;
+  }
+  .fbr-mon-row__err {
+    grid-area: err;
+    font-size: 0.78rem !important;
+    white-space: normal !important;
+    text-overflow: clip !important;
+    overflow: visible !important;
+    line-height: 1.35 !important;
+    padding-top: 0.15rem;
+    border-top: 1px dashed #eef2f7;
+  }
+  .fbr-mon-row__duration {
+    grid-area: duration;
+    font-size: 0.72rem !important;
+    text-align: right !important;
+  }
+}
+
+/* ---------- Pagination ---------- */
+@media (max-width: 599.98px) {
+  .fbr-mon-pagination {
+    flex-wrap: wrap !important;
+    gap: 0.55rem !important;
+    padding: 0.65rem 0 !important;
+  }
+  .fbr-mon-pagination > span {
+    flex-basis: 100%;
+    text-align: center;
+    order: -1;
+  }
+  .fbr-mon-pagination > button {
+    flex: 1;
+    min-height: 40px;
+  }
+}
+
+/* ---------- Drawer ---------- */
+@media (max-width: 599.98px) {
+  .fbr-mon-drawer-inner {
+    width: 100% !important;
+  }
+  .fbr-mon-drawer-header {
+    padding: 0.7rem 0.85rem !important;
+  }
+  .fbr-mon-drawer-header h2 {
+    font-size: 1rem !important;
+  }
+  .fbr-mon-drawer-body {
+    padding: 0.7rem 0.85rem 1.2rem !important;
+  }
+  /* KeyValue rows stack on mobile so the value can wrap freely. */
+  .fbr-mon-kv {
+    flex-direction: column !important;
+    gap: 0.1rem !important;
+    padding: 0.35rem 0 !important;
+  }
+  .fbr-mon-kv > span:first-child {
+    width: auto !important;
+    font-size: 0.7rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .fbr-mon-pre {
+    font-size: 0.72rem !important;
+    max-height: 220px !important;
+  }
+}
+
+/* ---------- Empty / placeholder ---------- */
+@media (max-width: 599.98px) {
+  .fbr-mon-placeholder {
+    padding: 1rem !important;
+    font-size: 0.85rem !important;
+  }
+}

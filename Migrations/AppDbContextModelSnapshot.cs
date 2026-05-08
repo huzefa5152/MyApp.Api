@@ -30,13 +30,28 @@ namespace MyApp.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CorrelationId")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("ExceptionType")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("Fingerprint")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("FirstOccurrence")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("HttpMethod")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("LastOccurrence")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Level")
                         .IsRequired()
@@ -45,6 +60,9 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("Message")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("OccurrenceCount")
+                        .HasColumnType("int");
 
                     b.Property<string>("QueryString")
                         .HasColumnType("nvarchar(max)");
@@ -70,7 +88,13 @@ namespace MyApp.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyId")
+                        .HasFilter("[CompanyId] IS NOT NULL");
+
                     b.HasIndex("Timestamp");
+
+                    b.HasIndex("Fingerprint", "Timestamp")
+                        .HasFilter("[Fingerprint] IS NOT NULL");
 
                     b.ToTable("AuditLogs");
                 });
@@ -190,7 +214,13 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("CurrentChallanNumber")
                         .HasColumnType("int");
 
+                    b.Property<int>("CurrentGoodsReceiptNumber")
+                        .HasColumnType("int");
+
                     b.Property<int>("CurrentInvoiceNumber")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CurrentPurchaseBillNumber")
                         .HasColumnType("int");
 
                     b.Property<string>("FbrBusinessActivity")
@@ -223,8 +253,14 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("FullAddress")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("InventoryTrackingEnabled")
+                        .HasColumnType("bit");
+
                     b.Property<string>("InvoiceNumberPrefix")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsTenantIsolated")
+                        .HasColumnType("bit");
 
                     b.Property<string>("LogoPath")
                         .HasColumnType("nvarchar(max)");
@@ -245,8 +281,17 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("StartingChallanNumber")
                         .HasColumnType("int");
 
+                    b.Property<int>("StartingGoodsReceiptNumber")
+                        .HasColumnType("int");
+
                     b.Property<int>("StartingInvoiceNumber")
                         .HasColumnType("int");
+
+                    b.Property<int>("StartingPurchaseBillNumber")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("StockGuardHardBlock")
+                        .HasColumnType("bit");
 
                     b.HasKey("Id");
 
@@ -352,6 +397,79 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("ItemTypeId");
 
                     b.ToTable("DeliveryItems");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.FbrCommunicationLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CorrelationId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Endpoint")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FbrErrorCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FbrErrorMessage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("HttpMethod")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("HttpStatusCode")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("InvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RequestBodyMasked")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("RequestDurationMs")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ResponseBodyMasked")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("RetryAttempt")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceId")
+                        .HasFilter("[InvoiceId] IS NOT NULL");
+
+                    b.HasIndex("CompanyId", "Status");
+
+                    b.HasIndex("CompanyId", "Timestamp")
+                        .IsDescending(false, true);
+
+                    b.ToTable("FbrCommunicationLogs");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.FbrLookup", b =>
@@ -765,6 +883,92 @@ namespace MyApp.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.GoodsReceipt", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("GoodsReceiptNumber")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PurchaseBillId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ReceiptDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Site")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Pending");
+
+                    b.Property<string>("SupplierChallanNumber")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SupplierId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("PurchaseBillId");
+
+                    b.HasIndex("SupplierId");
+
+                    b.HasIndex("CompanyId", "GoodsReceiptNumber");
+
+                    b.ToTable("GoodsReceipts");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.GoodsReceiptItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("GoodsReceiptId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ItemTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GoodsReceiptId");
+
+                    b.HasIndex("ItemTypeId");
+
+                    b.ToTable("GoodsReceiptItems");
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.Invoice", b =>
                 {
                     b.Property<int>("Id")
@@ -984,6 +1188,9 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsFavorite")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsHsCodePartial")
                         .HasColumnType("bit");
 
                     b.Property<DateTime?>("LastUsedAt")
@@ -1937,6 +2144,42 @@ namespace MyApp.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.OpeningStockBalance", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AsOfDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ItemTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemTypeId");
+
+                    b.HasIndex("CompanyId", "ItemTypeId")
+                        .IsUnique();
+
+                    b.ToTable("OpeningStockBalances");
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.POFormat", b =>
                 {
                     b.Property<int>("Id")
@@ -2129,6 +2372,76 @@ namespace MyApp.Api.Migrations
                     b.ToTable("Permissions");
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.PoImportArchive", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ContentSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<long>("FileSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("ItemsExtracted")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MatchedFormatId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MatchedFormatVersion")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int>("ParseDurationMs")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ParseOutcome")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("StoredPath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UploadedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParseOutcome");
+
+                    b.HasIndex("UploadedAt");
+
+                    b.HasIndex("CompanyId", "UploadedAt");
+
+                    b.ToTable("PoImportArchives");
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.PrintTemplate", b =>
                 {
                     b.Property<int>("Id")
@@ -2166,6 +2479,187 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("PrintTemplates");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.PurchaseBill", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AmountInWords")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("DocumentType")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("GSTAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("GSTRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal>("GrandTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("PaymentMode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PaymentTerms")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("PurchaseBillNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReconciliationStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Pending");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("SupplierBillNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("SupplierIRN")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("SupplierId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("SupplierIRN");
+
+                    b.HasIndex("SupplierId");
+
+                    b.HasIndex("CompanyId", "PurchaseBillNumber");
+
+                    b.ToTable("PurchaseBills");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.PurchaseItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("ExtraTax")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("FbrUOMId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("FixedNotifiedValueOrRetailPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("GoodsReceiptItemId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("HSCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("ItemTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ItemTypeName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("LineTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("PurchaseBillId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int?>("RateId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SaleType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SroItemSerialNo")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SroScheduleNo")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("StWithheldAtSource")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("UOM")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GoodsReceiptItemId");
+
+                    b.HasIndex("ItemTypeId");
+
+                    b.HasIndex("PurchaseBillId");
+
+                    b.ToTable("PurchaseItems");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.PurchaseItemSourceLine", b =>
+                {
+                    b.Property<int>("PurchaseItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("InvoiceItemId")
+                        .HasColumnType("int");
+
+                    b.HasKey("PurchaseItemId", "InvoiceItemId");
+
+                    b.HasIndex("InvoiceItemId");
+
+                    b.ToTable("PurchaseItemSourceLines");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Role", b =>
@@ -2215,6 +2709,155 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("PermissionId");
 
                     b.ToTable("RolePermissions");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.StockMovement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Direction")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ItemTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("MovementDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SourceId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SourceType")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemTypeId");
+
+                    b.HasIndex("CompanyId", "ItemTypeId");
+
+                    b.HasIndex("SourceType", "SourceId");
+
+                    b.ToTable("StockMovements");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.Supplier", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CNIC")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("FbrProvinceCode")
+                        .HasColumnType("int");
+
+                    b.Property<string>("NTN")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("Phone")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RegistrationType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("STRN")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Site")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("SupplierGroupId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("SupplierGroupId");
+
+                    b.ToTable("Suppliers");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.SupplierGroup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GroupKey")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("NormalizedNtn")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GroupKey")
+                        .IsUnique();
+
+                    b.HasIndex("NormalizedName");
+
+                    b.HasIndex("NormalizedNtn");
+
+                    b.ToTable("SupplierGroups");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Unit", b =>
@@ -2287,6 +2930,27 @@ namespace MyApp.Api.Migrations
                             Role = "Admin",
                             Username = "admin"
                         });
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.UserCompany", b =>
+                {
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("AssignedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("UserId", "CompanyId");
+
+                    b.HasIndex("CompanyId");
+
+                    b.ToTable("UserCompanies");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.UserRole", b =>
@@ -2379,6 +3043,50 @@ namespace MyApp.Api.Migrations
                     b.Navigation("ItemType");
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.GoodsReceipt", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Company", "Company")
+                        .WithMany("GoodsReceipts")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.PurchaseBill", "PurchaseBill")
+                        .WithMany("GoodsReceipts")
+                        .HasForeignKey("PurchaseBillId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MyApp.Api.Models.Supplier", "Supplier")
+                        .WithMany("GoodsReceipts")
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+
+                    b.Navigation("PurchaseBill");
+
+                    b.Navigation("Supplier");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.GoodsReceiptItem", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.GoodsReceipt", "GoodsReceipt")
+                        .WithMany("Items")
+                        .HasForeignKey("GoodsReceiptId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.ItemType", "ItemType")
+                        .WithMany()
+                        .HasForeignKey("ItemTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("GoodsReceipt");
+
+                    b.Navigation("ItemType");
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.Invoice", b =>
                 {
                     b.HasOne("MyApp.Api.Models.Client", "Client")
@@ -2418,6 +3126,25 @@ namespace MyApp.Api.Migrations
                     b.Navigation("DeliveryItem");
 
                     b.Navigation("Invoice");
+
+                    b.Navigation("ItemType");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.OpeningStockBalance", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.ItemType", "ItemType")
+                        .WithMany()
+                        .HasForeignKey("ItemTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Company");
 
                     b.Navigation("ItemType");
                 });
@@ -2479,6 +3206,69 @@ namespace MyApp.Api.Migrations
                     b.Navigation("Company");
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.PurchaseBill", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Company", "Company")
+                        .WithMany("PurchaseBills")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.Supplier", "Supplier")
+                        .WithMany("PurchaseBills")
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+
+                    b.Navigation("Supplier");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.PurchaseItem", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.GoodsReceiptItem", "GoodsReceiptItem")
+                        .WithMany()
+                        .HasForeignKey("GoodsReceiptItemId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MyApp.Api.Models.ItemType", "ItemType")
+                        .WithMany()
+                        .HasForeignKey("ItemTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MyApp.Api.Models.PurchaseBill", "PurchaseBill")
+                        .WithMany("Items")
+                        .HasForeignKey("PurchaseBillId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GoodsReceiptItem");
+
+                    b.Navigation("ItemType");
+
+                    b.Navigation("PurchaseBill");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.PurchaseItemSourceLine", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.InvoiceItem", "InvoiceItem")
+                        .WithMany()
+                        .HasForeignKey("InvoiceItemId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.PurchaseItem", "PurchaseItem")
+                        .WithMany("SourceLines")
+                        .HasForeignKey("PurchaseItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("InvoiceItem");
+
+                    b.Navigation("PurchaseItem");
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.RolePermission", b =>
                 {
                     b.HasOne("MyApp.Api.Models.Permission", "Permission")
@@ -2496,6 +3286,62 @@ namespace MyApp.Api.Migrations
                     b.Navigation("Permission");
 
                     b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.StockMovement", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.ItemType", "ItemType")
+                        .WithMany()
+                        .HasForeignKey("ItemTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+
+                    b.Navigation("ItemType");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.Supplier", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Company", "Company")
+                        .WithMany("Suppliers")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.SupplierGroup", "SupplierGroup")
+                        .WithMany("Suppliers")
+                        .HasForeignKey("SupplierGroupId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Company");
+
+                    b.Navigation("SupplierGroup");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.UserCompany", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.UserRole", b =>
@@ -2535,10 +3381,21 @@ namespace MyApp.Api.Migrations
 
                     b.Navigation("DeliveryChallans");
 
+                    b.Navigation("GoodsReceipts");
+
                     b.Navigation("Invoices");
+
+                    b.Navigation("PurchaseBills");
+
+                    b.Navigation("Suppliers");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.DeliveryChallan", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.GoodsReceipt", b =>
                 {
                     b.Navigation("Items");
                 });
@@ -2555,11 +3412,35 @@ namespace MyApp.Api.Migrations
                     b.Navigation("RolePermissions");
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.PurchaseBill", b =>
+                {
+                    b.Navigation("GoodsReceipts");
+
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.PurchaseItem", b =>
+                {
+                    b.Navigation("SourceLines");
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.Role", b =>
                 {
                     b.Navigation("RolePermissions");
 
                     b.Navigation("UserRoles");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.Supplier", b =>
+                {
+                    b.Navigation("GoodsReceipts");
+
+                    b.Navigation("PurchaseBills");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.SupplierGroup", b =>
+                {
+                    b.Navigation("Suppliers");
                 });
 #pragma warning restore 612, 618
         }

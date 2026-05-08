@@ -36,12 +36,14 @@ namespace MyApp.Api.Repositories.Interfaces
 
         /// <summary>
         /// Clone an existing challan: same ChallanNumber, fresh Id, Items deep-
-        /// copied, Status reset to "Pending", InvoiceId cleared, IsImported
-        /// preserved, DuplicatedFromId set to the source's id (or to the
-        /// source's parent id if the source itself was already a duplicate, so
-        /// every copy points back to the same root for grouping). Does NOT
-        /// touch Company.CurrentChallanNumber — the live counter must stay
-        /// the highest assigned number.
+        /// copied, Status + IsImported inherited from the source so historical
+        /// (Imported) and native (Pending) populations stay correctly tagged
+        /// for reporting. InvoiceId cleared so the copy bills independently.
+        /// DuplicatedFromId is set to the source's id (or to the source's
+        /// parent id if the source itself was already a duplicate, so every
+        /// copy points back to the same root for grouping). Does NOT touch
+        /// Company.CurrentChallanNumber — the live counter must stay the
+        /// highest assigned number.
         /// </summary>
         Task<DeliveryChallan> DuplicateAsync(DeliveryChallan source);
 

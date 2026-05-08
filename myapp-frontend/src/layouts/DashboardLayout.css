@@ -5,16 +5,32 @@
 
 /* ---------- CSS Custom Properties ---------- */
 :root {
-  --sidebar-width: 260px;
+  --sidebar-width: 268px;
   --sidebar-bg-from: #0d47a1;
   --sidebar-bg-to: #00897b;
   --sidebar-text: #e8f4f8;
-  --sidebar-active-bg: rgba(255, 255, 255, 0.18);
+  --sidebar-text-muted: rgba(255, 255, 255, 0.72);
+  --sidebar-active-bg: rgba(255, 255, 255, 0.16);
   --sidebar-active-text: #ffffff;
-  --sidebar-hover-bg: rgba(255, 255, 255, 0.10);
-  --sidebar-border-accent: rgba(255, 255, 255, 0.25);
+  --sidebar-hover-bg: rgba(255, 255, 255, 0.08);
+  --sidebar-border-accent: rgba(255, 255, 255, 0.18);
+  --sidebar-tree-line: rgba(255, 255, 255, 0.18);
   --topbar-height: 56px;
-  --transition-speed: 0.28s;
+  --transition-fast: 150ms;
+  --transition-normal: 200ms;
+  --transition-slow: 250ms;
+  --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Body scroll-lock when mobile drawer is open. The sidebar scrolls
+   internally but the page beneath should stay put on iOS especially. */
+body.dl-body--locked {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+}
+@media (min-width: 992px) {
+  body.dl-body--locked { position: static; overflow: auto; }
 }
 
 /* ---------- Layout Shell ---------- */
@@ -35,7 +51,7 @@
   top: 0;
   left: 0;
   z-index: 1040;
-  transition: transform var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform var(--transition-slow) var(--easing-standard);
   box-shadow: 4px 0 24px rgba(13, 71, 161, 0.22);
   overflow: hidden;
 }
@@ -43,9 +59,11 @@
 .dl-sidebar::-webkit-scrollbar { width: 4px; }
 .dl-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 4px; }
 
-/* Mobile: slide out left by default, slide in when .open */
+/* Mobile: drawer width clamps so it doesn't fill the whole screen on
+   phones (visual hint that you can dismiss by tapping outside). */
 @media (max-width: 991.98px) {
   .dl-sidebar {
+    width: min(88vw, 320px);
     transform: translateX(-100%);
   }
   .dl-sidebar.dl-sidebar--open {
@@ -55,42 +73,80 @@
 
 /* ---------- Brand / Logo Area ---------- */
 .dl-brand {
-  padding: 1.6rem 1.25rem 1.2rem;
+  padding: 1.1rem 1rem;
   border-bottom: 1px solid var(--sidebar-border-accent);
   flex-shrink: 0;
 }
 
-.dl-brand__name {
-  font-size: 1.35rem;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  color: #ffffff;
-  line-height: 1.2;
-  margin: 0;
-}
-
-.dl-brand__tagline {
-  font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.65);
-  margin: 0.25rem 0 0;
-  font-style: italic;
-  letter-spacing: 0.4px;
+.dl-brand__row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .dl-brand__icon {
-  font-size: 1.75rem;
-  margin-bottom: 0.5rem;
+  font-size: 1.4rem;
+  flex-shrink: 0;
+  opacity: 0.95;
+}
+
+.dl-brand__name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: #ffffff;
+  line-height: 1.25;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Close button — only visible inside the drawer on mobile, so users
+   don't have to reach back up to the topbar hamburger to dismiss. */
+.dl-brand__close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  border-radius: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 0;
+  transition: background var(--transition-fast) var(--easing-standard),
+              border-color var(--transition-fast) var(--easing-standard);
+}
+.dl-brand__close:hover {
+  background: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+.dl-brand__close:active {
+  background: rgba(255, 255, 255, 0.36);
+}
+.dl-brand__close svg {
+  width: 22px;
+  height: 22px;
   display: block;
-  opacity: 0.9;
+  fill: currentColor;
+}
+@media (max-width: 991.98px) {
+  .dl-brand__close { display: inline-flex; }
 }
 
 /* ---------- Nav ---------- */
 .dl-nav {
   flex: 1;
-  padding: 1rem 0.75rem;
+  padding: 0.5rem 0.5rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 1px;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
@@ -99,132 +155,273 @@
 .dl-nav::-webkit-scrollbar { width: 4px; }
 .dl-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 4px; }
 
-/* Nav Items */
-.dl-nav__item {
+/* ---------- Top-level item (Dashboard, etc.) ----------
+   No transform jiggle — just a clean color fade and a left-edge
+   accent on active. Min-height = 44px keeps it tap-friendly on touch. */
+.dl-item {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.6rem 0.85rem;
-  border-radius: 10px;
+  gap: 0.7rem;
+  padding: 0.55rem 0.75rem;
+  min-height: 40px;
+  border-radius: 8px;
   color: var(--sidebar-text);
   text-decoration: none;
-  font-size: 0.925rem;
+  font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background var(--transition-speed), color var(--transition-speed), transform 0.15s;
   user-select: none;
   border: none;
   background: transparent;
   width: 100%;
   text-align: left;
+  position: relative;
+  transition: background var(--transition-fast) var(--easing-standard),
+              color var(--transition-fast) var(--easing-standard);
 }
 
-.dl-nav__item:hover {
+.dl-item:hover {
   background: var(--sidebar-hover-bg);
   color: #ffffff;
-  transform: translateX(3px);
 }
 
-.dl-nav__item.active,
-.dl-nav__item--active {
+.dl-item--active {
   background: var(--sidebar-active-bg);
   color: var(--sidebar-active-text);
-  font-weight: 700;
-  box-shadow: inset 3px 0 0 #ffffff, inset 0 0 0 1px rgba(255,255,255,0.15);
+  font-weight: 600;
 }
 
-.dl-nav__item .dl-nav__icon {
-  font-size: 1.05rem;
+.dl-item--active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  background: #ffffff;
+  border-radius: 0 3px 3px 0;
+}
+
+.dl-item__icon {
+  font-size: 1.1rem;
   flex-shrink: 0;
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
-.dl-nav__item .dl-nav__label {
+.dl-item__label {
   flex: 1;
+  min-width: 0;
 }
 
-.dl-nav__item .dl-nav__arrow {
-  font-size: 0.75rem;
-  transition: transform var(--transition-speed);
+@media (max-width: 991.98px) {
+  .dl-item {
+    min-height: 44px;
+    padding: 0.65rem 0.75rem;
+    font-size: 0.95rem;
+  }
+}
+
+/* ---------- Collapsible group ----------
+   Header doubles as the toggle button. Count badge and chevron sit
+   on the right; chevron rotates 180° when open. */
+.dl-group {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.35rem;
+}
+
+.dl-group__header {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0.75rem;
+  min-height: 40px;
+  border-radius: 8px;
+  color: var(--sidebar-text);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  user-select: none;
+  position: relative;
+  transition: background var(--transition-fast) var(--easing-standard),
+              color var(--transition-fast) var(--easing-standard);
+}
+
+.dl-group__header:hover {
+  background: var(--sidebar-hover-bg);
+  color: #ffffff;
+}
+
+@media (max-width: 991.98px) {
+  .dl-group__header {
+    min-height: 44px;
+    padding: 0.65rem 0.75rem;
+    font-size: 0.95rem;
+  }
+}
+
+.dl-group__icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.dl-group__title {
+  flex: 1;
+  min-width: 0;
+}
+
+.dl-group__count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.dl-group__chevron {
+  font-size: 1rem;
+  flex-shrink: 0;
   opacity: 0.7;
+  transition: transform var(--transition-normal) var(--easing-standard);
 }
 
-.dl-nav__item .dl-nav__arrow--open {
+.dl-group--open > .dl-group__header > .dl-group__chevron {
   transform: rotate(180deg);
 }
 
-/* Submenu – pure CSS toggle, no JS measurement needed */
-.dl-submenu {
+/* When a child route is active and the group is collapsed, surface
+   that with a quieter accent on the header so the user knows their
+   current page lives behind a closed group. */
+.dl-group--child-active:not(.dl-group--open) > .dl-group__header {
+  color: #ffffff;
+}
+.dl-group--child-active:not(.dl-group--open) > .dl-group__header::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 0 3px 3px 0;
+}
+.dl-group--child-active:not(.dl-group--open) > .dl-group__header > .dl-group__count {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+/* Body — pure-CSS height transition. max-height upper bound covers
+   the largest section we ship (Configuration, 9 items ≈ 360px). */
+.dl-group__body {
   overflow: hidden;
   max-height: 0;
-  flex-shrink: 0;
-  transition: max-height var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+  transition: max-height var(--transition-normal) var(--easing-standard);
 }
 
-.dl-submenu.dl-submenu--open {
-  max-height: 300px;
+.dl-group--open > .dl-group__body {
+  max-height: 480px;
 }
 
-.dl-submenu__inner {
-  padding: 0.25rem 0 0.25rem 1rem;
+.dl-group__body-inner {
+  padding: 2px 0 4px;
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 1px;
+  position: relative;
 }
 
-.dl-submenu__item {
+/* Vertical guide line — file-tree style, lines up under the group's
+   icon column so children visually descend from the parent. */
+.dl-group__body-inner::before {
+  content: "";
+  position: absolute;
+  left: 17px;        /* icon-column center, matches header padding+icon */
+  top: 4px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--sidebar-tree-line);
+}
+
+/* ---------- Submenu item ----------
+   Indented to clear the guide line, no bullet, no transform jiggle. */
+.dl-subitem {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.5rem 0.85rem;
+  gap: 0.6rem;
+  padding: 0.45rem 0.75rem 0.45rem 2rem;
+  min-height: 36px;
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--sidebar-text-muted);
   text-decoration: none;
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   font-weight: 400;
-  transition: background var(--transition-speed), color var(--transition-speed), transform 0.15s;
+  position: relative;
+  transition: background var(--transition-fast) var(--easing-standard),
+              color var(--transition-fast) var(--easing-standard);
 }
 
-.dl-submenu__item:before {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.45);
-  flex-shrink: 0;
-  transition: background var(--transition-speed);
-}
-
-.dl-submenu__item:hover {
+.dl-subitem:hover {
   background: var(--sidebar-hover-bg);
   color: #ffffff;
-  transform: translateX(3px);
 }
 
-.dl-submenu__item:hover:before,
-.dl-submenu__item.active:before {
-  background: #ffffff;
-}
-
-.dl-submenu__item.active {
+.dl-subitem--active {
   background: var(--sidebar-active-bg);
   color: #ffffff;
   font-weight: 600;
 }
 
+.dl-subitem--active::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18);
+}
+
+.dl-subitem__icon {
+  font-size: 0.95rem;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+@media (max-width: 991.98px) {
+  .dl-subitem {
+    min-height: 40px;
+    padding: 0.55rem 0.75rem 0.55rem 2rem;
+    font-size: 0.9rem;
+  }
+}
+
 /* ---------- Sidebar Bottom (Account + Footer – pinned) ---------- */
 .dl-sidebar-bottom {
   flex-shrink: 0;
-  padding: 0 0.75rem 0.75rem;
+  padding: 0.6rem 0.5rem 0.75rem;
   border-top: 1px solid var(--sidebar-border-accent);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
 }
 
-.dl-sidebar-footer__copy {
-  font-size: 0.7rem;
-  color: rgba(255,255,255,0.45);
-  text-align: center;
-  margin-bottom: 0.75rem;
+.dl-item__avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 
 .dl-logout-btn {
@@ -232,21 +429,33 @@
   align-items: center;
   gap: 0.6rem;
   width: 100%;
-  padding: 0.55rem 0.85rem;
-  border-radius: 10px;
-  background: rgba(255, 82, 82, 0.18);
+  padding: 0.55rem 0.75rem;
+  min-height: 38px;
+  border-radius: 8px;
+  background: rgba(255, 82, 82, 0.14);
   color: #ffcdd2;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 500;
-  border: 1px solid rgba(255, 82, 82, 0.3);
+  border: 1px solid rgba(255, 82, 82, 0.25);
   cursor: pointer;
-  transition: background var(--transition-speed), color var(--transition-speed);
   text-align: left;
+  transition: background var(--transition-fast) var(--easing-standard),
+              color var(--transition-fast) var(--easing-standard),
+              border-color var(--transition-fast) var(--easing-standard);
 }
 
 .dl-logout-btn:hover {
-  background: rgba(255, 82, 82, 0.35);
+  background: rgba(255, 82, 82, 0.3);
   color: #ffffff;
+  border-color: rgba(255, 82, 82, 0.5);
+}
+
+.dl-sidebar-footer__copy {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  margin: 0.25rem 0 0;
+  letter-spacing: 0.3px;
 }
 
 /* ---------- Content Area ---------- */
@@ -365,14 +574,6 @@
   border-radius: 50%;
 }
 
-/* Sidebar profile avatar */
-.dl-nav__avatar-img {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-}
 
 /* User dropdown menu */
 .dl-user-menu {
@@ -464,17 +665,17 @@
 .dl-nav__divider {
   height: 1px;
   background: var(--sidebar-border-accent);
-  margin: 0.5rem 0.5rem;
+  margin: 0.5rem 0.25rem;
   border: none;
 }
 
 .dl-nav__section-label {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   text-transform: uppercase;
-  letter-spacing: 1.2px;
-  color: rgba(255,255,255,0.45);
-  padding: 0.5rem 0.85rem 0.2rem;
-  font-weight: 600;
+  letter-spacing: 1.4px;
+  color: rgba(255,255,255,0.42);
+  padding: 0.85rem 0.85rem 0.35rem;
+  font-weight: 700;
 }
 
 /* ---------- Card Grid Responsive ---------- */
@@ -527,6 +728,15 @@
   flex: 1 1 160px;
   min-width: 120px;
   max-width: 240px;
+}
+
+/* Wider search variant for pages where free-text is the primary filter
+   (Item Rate History etc). Defined as a class — never as an inline
+   flex value — so the mobile column-flex media query can correctly
+   collapse it back to 100% width without an !important fight. */
+.filter-search-wrap--wide {
+  flex: 1.6 1 220px;
+  max-width: 320px;
 }
 
 .filter-search-icon {
@@ -633,56 +843,1434 @@
 .audit-cards { display: none; }
 
 @media (max-width: 767.98px) {
+  .audit-page {
+    padding: 1rem 0.85rem 1.25rem !important;
+  }
+  /* Header summary chips wrap below the title rather than getting squeezed
+     to the right. */
+  .audit-page > div:first-child {
+    gap: 0.6rem !important;
+  }
+  /* Filter row stacks: level select is full-width, search form is full-
+     width below, total count goes on its own line. */
+  .audit-filters {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+  }
+  .audit-filters > select { width: 100% !important; }
+  .audit-filters > form {
+    max-width: 100% !important;
+    flex: 1 1 auto !important;
+  }
+  .audit-filters > span {
+    margin-left: 0 !important;
+    text-align: right;
+  }
+
   .audit-table-wrap { display: none; }
   .audit-cards {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-  }
-  .audit-card {
-    background: #fff;
-    border: 1px solid #e8edf3;
-    border-radius: 10px;
-    padding: 0.85rem;
-    cursor: pointer;
-    transition: box-shadow 0.15s;
-  }
-  .audit-card:active {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    gap: 0.6rem;
+    padding: 0.6rem;
   }
   .audit-detail-grid {
     grid-template-columns: 1fr !important;
   }
 }
 
-/* ---------- Mobile: compact sidebar so logout is visible without scrolling ---------- */
+/* Audit card layout — defined outside the media query so the styles
+   apply whenever the card list is visible (which today is mobile only).
+   Box-sizing + width:100% + min-width:0 throughout to prevent the
+   horizontal overflow that pushed status codes off the right edge. */
+.audit-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 10px;
+  padding: 0.75rem 0.85rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  transition: box-shadow 0.15s;
+}
+.audit-card:active {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.audit-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.audit-card__level {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.audit-card__time {
+  font-size: 0.72rem;
+  color: #5f6d7e;
+  white-space: nowrap;
+}
+
+.audit-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  font-size: 0.78rem;
+}
+
+.audit-card__method {
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+.audit-card__status {
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+.audit-card__user {
+  font-size: 0.72rem;
+  color: #5f6d7e;
+}
+.audit-card__user::before {
+  content: "User: ";
+  color: #98a4b3;
+}
+
+/* Path: word-break: break-all is essential for long URLs that contain
+   no natural wrap points (e.g. "/api/printtemplates/companies/3/excel/Challan").
+   overflow-wrap alone won't break inside an unbroken token. */
+.audit-card__path {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  color: #1a2332;
+  background: #f5f8fc;
+  border: 1px solid #e8edf3;
+  border-radius: 6px;
+  padding: 0.35rem 0.55rem;
+  word-break: break-all;
+  line-height: 1.35;
+}
+
+/* Message: wrap freely on phones, clamped to 3 lines so a stack-like
+   message doesn't blow out the card height. */
+.audit-card__msg {
+  font-size: 0.8rem;
+  color: #1a2332;
+  line-height: 1.4;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---------- Item Rate History: table on desktop, cards on mobile ----------
+   Same pattern as audit logs above. The card layout puts Unit Price
+   (the "answer" the page exists to show) in the top-right at large size,
+   so a glance is enough. */
+.irh-page {
+  padding: 1.5rem 2rem;
+}
+.irh-table { display: block; }
+.irh-cards { display: none; }
+
+@media (max-width: 767.98px) {
+  .irh-page {
+    padding: 1rem 0.85rem 1.25rem;
+  }
+  .irh-table { display: none; }
+  .irh-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+}
+
+.irh-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.irh-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.irh-card__top-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.irh-card__bill {
+  font-weight: 700;
+  color: #0d47a1;
+  font-size: 0.95rem;
+}
+
+.irh-card__date {
+  font-size: 0.78rem;
+  color: #5f6d7e;
+}
+
+.irh-card__rate {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.irh-card__rate-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #5f6d7e;
+  font-weight: 600;
+}
+.irh-card__rate-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #00695c;
+  white-space: nowrap;
+}
+
+.irh-card__client {
+  font-size: 0.85rem;
+  color: #1a2332;
+  font-weight: 600;
+}
+
+.irh-card__desc {
+  font-size: 0.82rem;
+  color: #1a2332;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.irh-card__itemtype {
+  font-size: 0.72rem;
+  color: #5f6d7e;
+  font-style: italic;
+}
+
+.irh-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+  flex-wrap: wrap;
+}
+
+.irh-card__qty,
+.irh-card__total {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.irh-card__total { flex: 1; }
+
+.irh-card__field-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5f6d7e;
+  font-weight: 600;
+}
+.irh-card__field-value {
+  font-size: 0.85rem;
+  color: #1a2332;
+  font-weight: 600;
+}
+.irh-card__uom {
+  font-size: 0.75rem;
+  color: #5f6d7e;
+  font-weight: 400;
+}
+
+.irh-card__view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #90caf9;
+  background: #e3f2fd;
+  color: #0d47a1;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.irh-card__view-btn:hover {
+  background: #bbdefb;
+}
+
+/* ---------- Import Challans: mobile pass ----------
+   Tighten paddings on phones, hide the per-row items TABLE and show
+   stacked card editors instead so each input is easy to thumb-edit. */
+.imp-page { width: 100%; }
+
+.imp-items-table { display: block; }
+.imp-items-cards { display: none; }
+.imp-items-empty {
+  padding: 0.85rem;
+  text-align: center;
+  color: #5f6d7e;
+  font-size: 0.85rem;
+  background: #fff;
+  border: 1px dashed #d0d7e2;
+  border-radius: 8px;
+}
+
+@media (max-width: 767.98px) {
+  .imp-page {
+    padding-left: 0.85rem !important;
+    padding-right: 0.85rem !important;
+  }
+  /* Stepper labels are too wordy on phones — drop them, keep only
+     the step circles + connecting line so it scans cleanly. */
+  .imp-stepper {
+    padding: 0.5rem 0.75rem !important;
+    gap: 0.25rem !important;
+  }
+  .imp-stepper__label { display: none; }
+  .imp-stepper__line {
+    width: 1.25rem !important;
+  }
+
+  .imp-items-table { display: none; }
+  .imp-items-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+}
+
+.imp-item-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 10px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.imp-item-card__row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.imp-item-card__row--two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.imp-item-card__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #5f6d7e;
+}
+
+.imp-item-card__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid #d0d7e2;
+  font-size: 0.95rem;
+  background: #fff;
+  outline: none;
+  min-height: 40px;
+}
+
+.imp-item-card__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  align-self: flex-end;
+  padding: 0.5rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  background: #fff0f1;
+  color: #dc3545;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 36px;
+}
+.imp-item-card__remove:hover {
+  background: #ffe0e3;
+}
+
+/* ---------- Stock Dashboard: table on desktop, cards on mobile ----------
+   Same pattern as Item Rate History above. The mobile card layout
+   surfaces the page's primary "answer" top-right at large size — for
+   On-Hand it's the on-hand quantity; for Movements it's the +/- delta. */
+.stock-page { padding: 1.5rem 2rem; }
+.stock-table { display: block; }
+.stock-cards { display: none; }
+
 @media (max-width: 991.98px) {
-  .dl-brand {
-    padding: 0.8rem 1rem 0.6rem;
+  .stock-page {
+    padding: 1rem 0.85rem 1.25rem;
   }
-  .dl-brand__icon {
-    font-size: 1.3rem;
-    margin-bottom: 0.25rem;
+}
+
+@media (max-width: 767.98px) {
+  .stock-table { display: none; }
+  .stock-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
   }
-  .dl-brand__name {
-    font-size: 1.1rem;
+}
+
+.stock-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.stock-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.stock-card__top-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.stock-card__name {
+  font-weight: 700;
+  color: #1a2332;
+  font-size: 0.92rem;
+  word-break: break-word;
+}
+
+.stock-card__hs {
+  font-size: 0.75rem;
+  color: #5f6d7e;
+  font-family: monospace;
+}
+
+.stock-card__onhand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.stock-card__onhand-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #5f6d7e;
+  font-weight: 600;
+}
+.stock-card__onhand-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.stock-card__uom {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #5f6d7e;
+}
+
+.stock-card__direction {
+  font-size: 1.1rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.stock-card__direction-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #5f6d7e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stock-card__stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem 0.85rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.stock-card__stat,
+.stock-card__source {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.stock-card__stat-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5f6d7e;
+  font-weight: 600;
+}
+.stock-card__stat-value {
+  font-size: 0.85rem;
+  color: #1a2332;
+  font-weight: 600;
+}
+.stock-card__stat-value--muted {
+  color: #5f6d7e;
+  font-weight: 400;
+}
+
+.stock-card__source {
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.stock-card__notes {
+  font-size: 0.78rem;
+  color: #5f6d7e;
+  font-style: italic;
+  word-break: break-word;
+}
+
+.stock-card__delete {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  background: #fff0f1;
+  color: #c62828;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 36px;
+}
+.stock-card__delete:hover {
+  background: #ffe0e3;
+}
+
+/* ---------- Item Types: row-list on desktop, cards on mobile ----------
+   The desktop row layout has min-width: 720px which works fine on tablet+;
+   below 768 we hide it entirely and render the same data as cards. */
+.it-list-wrap { display: block; }
+.it-cards { display: none; }
+
+@media (max-width: 767.98px) {
+  .it-list-wrap { display: none; }
+  .it-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
   }
-  .dl-brand__tagline {
-    font-size: 0.65rem;
+}
+
+.it-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.it-card__top {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.it-card__star {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: -2px;
+}
+
+.it-card__title {
+  flex: 1;
+  min-width: 0;
+}
+
+.it-card__name {
+  font-weight: 700;
+  color: #1a2332;
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+.it-card__desc {
+  font-size: 0.76rem;
+  color: #5f6d7e;
+  margin-top: 2px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.it-card__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem 0.85rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.it-card__field {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.it-card__field--full {
+  grid-column: 1 / -1;
+}
+
+.it-card__field-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5f6d7e;
+  font-weight: 600;
+}
+
+.it-card__field-value {
+  font-size: 0.85rem;
+  color: #1a2332;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.it-card__actions {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.it-card__edit,
+.it-card__delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 36px;
+}
+
+.it-card__edit {
+  border-color: #90caf9;
+  background: #e3f2fd;
+  color: #0d47a1;
+}
+.it-card__edit:hover { background: #bbdefb; }
+
+.it-card__delete {
+  border-color: rgba(220, 53, 69, 0.3);
+  background: #fff0f1;
+  color: #c62828;
+}
+.it-card__delete:hover { background: #ffe0e3; }
+
+/* ---------- PO Formats page header ----------
+   Desktop: title-block on the left, "+ Add PO Format" button right.
+   Mobile: stack vertically — title + subtitle take full width so the
+   subtitle stops wrapping inside a narrow flex column next to the
+   button (the bug your screenshot showed). Button becomes full-width
+   for an easy thumb tap. */
+.pof-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.pof-header__title-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.pof-header__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a2332;
+  line-height: 1.2;
+}
+
+.pof-header__subtitle {
+  margin: 0.35rem 0 0;
+  color: #5f6d7e;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  max-width: 720px;
+}
+
+.pof-header__add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  border: none;
+  background: #0d47a1;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-height: 40px;
+}
+.pof-header__add:hover { background: #1565c0; }
+
+@media (max-width: 767.98px) {
+  .pof-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.85rem;
+    margin-bottom: 1rem;
   }
-  .dl-nav {
-    padding: 0.5rem 0.75rem;
+  .pof-header__title { font-size: 1.3rem; }
+  .pof-header__subtitle {
+    font-size: 0.82rem;
+    line-height: 1.45;
   }
-  .dl-nav__item {
-    padding: 0.45rem 0.85rem;
+  .pof-header__add {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+    font-size: 0.92rem;
   }
-  .dl-sidebar-bottom {
-    padding: 0 0.5rem 0.5rem;
+}
+
+/* ---------- PO Formats: table on desktop, cards on mobile ---------- */
+.pof-table { display: block; }
+.pof-cards { display: none; }
+
+@media (max-width: 767.98px) {
+  .pof-page {
+    padding: 1rem 0.85rem 1.25rem !important;
   }
-  .dl-sidebar-bottom .dl-nav__item {
-    padding: 0.4rem 0.85rem;
+  .pof-table { display: none; }
+  .pof-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
   }
-  .dl-sidebar-footer__copy {
-    margin-bottom: 0.3rem;
+}
+
+.pof-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.pof-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.pof-card__title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.pof-card__name {
+  font-weight: 700;
+  color: #1a2332;
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+.pof-card__version {
+  font-size: 0.72rem;
+  color: #5f6d7e;
+  font-family: monospace;
+}
+
+.pof-card__status {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.pof-card__status--active {
+  background: #e8f5e9;
+  color: #28a745;
+}
+.pof-card__status--muted {
+  background: #f2f4f7;
+  color: #5f6d7e;
+}
+
+.pof-card__meta {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem 0.85rem;
+  align-items: center;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.pof-card__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pof-card__field-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5f6d7e;
+  font-weight: 600;
+}
+
+.pof-card__field-value {
+  font-size: 0.82rem;
+  color: #1a2332;
+  font-weight: 500;
+}
+
+.pof-card__chip {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #e3f2fd;
+  color: #0d47a1;
+  align-self: flex-start;
+  word-break: break-word;
+}
+.pof-card__chip--muted {
+  background: #f2f4f7;
+  color: #5f6d7e;
+}
+
+.pof-card__actions {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.pof-card__edit,
+.pof-card__delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 36px;
+}
+
+.pof-card__edit {
+  border-color: #90caf9;
+  background: #e3f2fd;
+  color: #0d47a1;
+}
+.pof-card__edit:hover { background: #bbdefb; }
+
+.pof-card__delete {
+  border-color: rgba(220, 53, 69, 0.3);
+  background: #fff0f1;
+  color: #c62828;
+}
+.pof-card__delete:hover { background: #ffe0e3; }
+
+/* ---------- FBR Sandbox page header ----------
+   Same problem as the PO Formats header — on mobile the inline-flex
+   layout squeezed the subtitle into a narrow column. Now: title-block
+   takes full width above, then a single action row that wraps from
+   row-flex on desktop to full-width stacked on phones. */
+.fbr-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.fbr-header__title-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.fbr-header__title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #1a2332;
+  line-height: 1.2;
+}
+
+.fbr-header__subtitle {
+  margin: 0.35rem 0 0;
+  color: #5f6d7e;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  max-width: 720px;
+}
+
+.fbr-header__subtitle code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 0.8rem;
+  background: #f5f8fc;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.fbr-header__actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.fbr-header__company-select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d0d7e2;
+  border-radius: 6px;
+  background: #fff;
+  color: #1a2332;
+  font-size: 0.85rem;
+  font-weight: 600;
+  min-width: 200px;
+  cursor: pointer;
+}
+
+.fbr-header__icon-btn {
+  padding: 0.5rem;
+  border: 1px solid #e8edf3;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  color: #1a2332;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  min-height: 38px;
+}
+.fbr-header__icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.fbr-header__seed-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  background: #0d47a1;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.84rem;
+  white-space: nowrap;
+  min-height: 38px;
+}
+.fbr-header__seed-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.fbr-header__seed-btn:not(:disabled):hover { background: #1565c0; }
+
+@media (max-width: 767.98px) {
+  .fbr-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.85rem;
+  }
+  .fbr-header__title { font-size: 1.2rem; }
+  .fbr-header__subtitle {
+    font-size: 0.8rem;
+    line-height: 1.45;
+  }
+  /* Company select takes the full first row; reload + seed share the
+     second row side-by-side. flex-basis: 100% on the select forces a
+     wrap before the buttons hit it. */
+  .fbr-header__actions {
+    gap: 0.5rem;
+  }
+  .fbr-header__company-select {
+    flex: 1 1 100%;
+    min-width: 0;
+    min-height: 44px;
+  }
+  .fbr-header__icon-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .fbr-header__seed-btn {
+    flex: 1;
+    justify-content: center;
+    min-height: 44px;
+  }
+}
+
+/* ---------- FBR Sandbox: table on desktop, cards on mobile ---------- */
+.fbr-table { display: block; }
+.fbr-cards { display: none; }
+
+@media (max-width: 991.98px) {
+  .fbr-page {
+    padding: 1rem 0.85rem 1.25rem !important;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .fbr-table { display: none; }
+  .fbr-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+}
+
+.fbr-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.fbr-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.fbr-card__sn-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.fbr-card__sn {
+  font-weight: 700;
+  color: #0d47a1;
+  font-size: 0.95rem;
+  font-family: monospace;
+}
+
+.fbr-card__bill {
+  font-size: 0.75rem;
+  color: #5f6d7e;
+}
+
+.fbr-card__status {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.fbr-card__status--success { background: #e8f5e9; color: #2e7d32; }
+.fbr-card__status--warn    { background: #fff8e1; color: #f57c00; }
+.fbr-card__status--fail    { background: #fff0f1; color: #dc3545; }
+.fbr-card__status--muted   { background: #f2f4f7; color: #5f6d7e; }
+
+.fbr-card__desc {
+  font-size: 0.85rem;
+  color: #1a2332;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.fbr-card__meta {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem 0.85rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.fbr-card__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fbr-card__field-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5f6d7e;
+  font-weight: 600;
+}
+
+.fbr-card__field-value {
+  font-size: 0.85rem;
+  color: #1a2332;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.fbr-card__total {
+  font-weight: 700;
+  color: #0d47a1;
+  white-space: nowrap;
+}
+
+/* IRN: monospace pill, breaks anywhere because PRAL IRNs can be long
+   tokens with no natural wrap points. */
+.fbr-card__irn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+.fbr-card__irn-value {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  color: #2e7d32;
+  background: #f5f8fc;
+  border: 1px solid #e8edf3;
+  border-radius: 6px;
+  padding: 0.35rem 0.55rem;
+  word-break: break-all;
+  line-height: 1.35;
+}
+
+/* Full error message — visible (not truncated to 60 chars like the
+   table) so on mobile the operator can read what FBR rejected. Clamped
+   to 4 lines so a giant stack doesn't blow up the card. */
+.fbr-card__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  background: #fff0f1;
+  border: 1px solid rgba(220, 53, 69, 0.25);
+  border-radius: 8px;
+  color: #c62828;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  word-break: break-word;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  display: -webkit-box;
+}
+
+.fbr-card__delete {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  background: #fff0f1;
+  color: #c62828;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 36px;
+}
+.fbr-card__delete:hover { background: #ffe0e3; }
+
+/* ---------- Tenant Access: table on desktop, cards on mobile ---------- */
+.tenant-table { display: block; }
+.tenant-cards { display: none; }
+
+@media (max-width: 767.98px) {
+  .tenant-page {
+    padding: 1rem 0.85rem 1.25rem !important;
+  }
+  .tenant-table { display: none; }
+  .tenant-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+}
+
+.tenant-card {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.tenant-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.tenant-card__avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #1565c0;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.tenant-card__who {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tenant-card__name {
+  font-weight: 700;
+  color: #1a2332;
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+.tenant-card__username {
+  font-size: 0.78rem;
+  color: #5f6d7e;
+  font-family: monospace;
+}
+
+.tenant-card__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 0.85rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.tenant-card__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.tenant-card__stat-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5f6d7e;
+  font-weight: 600;
+}
+
+.tenant-card__pill {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: #f8f9fb;
+  border: 1px solid #e8edf3;
+  color: #1a2332;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tenant-card__pill--muted {
+  color: #5f6d7e;
+  background: transparent;
+  border-color: transparent;
+  font-weight: 500;
+  padding-left: 0;
+}
+.tenant-card__pill--success {
+  background: #eafbef;
+  border-color: #28a745;
+  color: #28a745;
+}
+.tenant-card__pill--warn {
+  background: #fff4e0;
+  border-color: #b26a00;
+  color: #b26a00;
+}
+.tenant-card__pill--danger {
+  background: #fff0f1;
+  border-color: #dc3545;
+  color: #dc3545;
+}
+
+.tenant-card__edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.55rem 0.85rem;
+  border-radius: 8px;
+  border: none;
+  background: #0d47a1;
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 40px;
+}
+.tenant-card__edit:disabled {
+  background: #98a4b3;
+  cursor: not-allowed;
+}
+.tenant-card__edit:not(:disabled):hover {
+  background: #1565c0;
+}
+
+/* Tenant Edit modal — let the per-company rows wrap their Isolated/Open
+   badge below the company name on narrow screens so nothing gets clipped. */
+@media (max-width: 480px) {
+  .tenant-page label {
+    flex-wrap: wrap !important;
+  }
+}
+
+/* ---------- IRH pagination: shared between desktop + mobile, but
+   stacks vertically on narrow screens so the page-info isn't squeezed. */
+.irh-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 0;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.irh-page-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #d0d7e2;
+  background: #fff;
+  color: #0d47a1;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 38px;
+}
+.irh-page-btn:disabled { cursor: not-allowed; }
+
+.irh-page-info {
+  font-size: 0.85rem;
+  color: #5f6d7e;
+  font-weight: 500;
+  text-align: center;
+}
+.irh-page-info__count {
+  color: #98a4b3;
+  font-weight: 400;
+}
+
+@media (max-width: 480px) {
+  .irh-pagination {
+    gap: 0.5rem;
+  }
+  .irh-page-btn {
+    flex: 1;
+    justify-content: center;
+  }
+  .irh-page-info {
+    flex-basis: 100%;
+    order: -1;
+  }
+}
+
+/* ---------- Mobile drawer: bumped overlay opacity so the page beneath
+   reads as clearly out-of-focus, helping the drawer stand out. ---------- */
+@media (max-width: 991.98px) {
+  .dl-overlay {
+    background: rgba(0, 0, 0, 0.5);
   }
 }

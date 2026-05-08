@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
@@ -15,19 +16,28 @@ namespace MyApp.Api.Services.Implementations
         private readonly ICompanyRepository _companyRepo;
         private readonly IClientRepository _clientRepo;
         private readonly AppDbContext _context;
+        private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
+        private readonly IAuditLogService _auditLog;
+        private readonly ILogger<InvoiceService> _logger;
 
         public InvoiceService(
             IInvoiceRepository invoiceRepo,
             IDeliveryChallanRepository challanRepo,
             ICompanyRepository companyRepo,
             IClientRepository clientRepo,
-            AppDbContext context)
+            AppDbContext context,
+            Microsoft.Extensions.Configuration.IConfiguration config,
+            IAuditLogService auditLog,
+            ILogger<InvoiceService> logger)
         {
             _invoiceRepo = invoiceRepo;
             _challanRepo = challanRepo;
             _companyRepo = companyRepo;
             _clientRepo = clientRepo;
             _context = context;
+            _config = config;
+            _logger = logger;
+            _auditLog = auditLog;
         }
 
         /// <summary>
@@ -444,10 +454,276 @@ namespace MyApp.Api.Services.Implementations
                 var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
                 return ToDto(loaded!);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "InvoiceService: transaction rolled back");
                 await transaction.RollbackAsync();
                 throw;
+            }
+        }
+
+        // ── Standalone bill creation (no linked delivery challan) ─────────
+        //
+        // For FBR-only flows where the operator never issued a challan
+        // (service invoices, retail walk-ins, ad-hoc billing). Re-uses the
+        // regular bill numbering sequence so these bills appear on the same
+        // Bills page and feed Item Rate History identically. The major
+        // differences from CreateAsync above:
+        //
+        //   • No ChallanIds — operator types items directly. InvoiceItems
+        //     are persisted with DeliveryItemId = null (the column is
+        //     already nullable on the model).
+        //   • No DeliveryChallans navigation gets populated, so no challan
+        //     transitions, no PO-date updates, no DeliveryItem usage-count
+        //     bump.
+        //   • UnitRegistry.EnsureNamesAsync registers any new UOM strings
+        //     the operator typed (matches what UpdateAsync already does
+        //     for the edit path), then fractional-qty validation runs
+        //     against the picked UOMs.
+        public async Task<InvoiceDto> CreateStandaloneAsync(CreateStandaloneInvoiceDto dto)
+        {
+            var company = await _companyRepo.GetByIdAsync(dto.CompanyId);
+            if (company == null) throw new KeyNotFoundException("Company not found.");
+
+            var client = await _context.Clients.FindAsync(dto.ClientId);
+            if (client == null) throw new KeyNotFoundException("Client not found.");
+            if (client.CompanyId != dto.CompanyId)
+                throw new InvalidOperationException("Client does not belong to this company.");
+
+            if (dto.Items == null || dto.Items.Count == 0)
+                throw new InvalidOperationException("At least one item is required.");
+            if (dto.Items.Any(i => i.Quantity <= 0))
+                throw new InvalidOperationException("Quantity must be greater than zero.");
+            if (dto.Items.Any(i => i.UnitPrice <= 0))
+                throw new InvalidOperationException("All items must have a positive unit price.");
+            if (dto.GSTRate < 0 || dto.GSTRate > 100)
+                throw new InvalidOperationException("GST rate must be between 0 and 100.");
+
+            // Cap bill date at end-of-today UTC — same FBR [0043] guard as UpdateAsync.
+            var maxDate = DateTime.UtcNow.Date.AddDays(1).AddTicks(-1);
+            if (dto.Date > maxDate)
+                throw new InvalidOperationException("Bill date cannot be in the future. [FBR 0043]");
+
+            // Register any newly-typed UOM names + reject fractional qty
+            // for integer-only UOMs. Mirrors the contract on the regular
+            // create path (which inherits UOM from the challan's DeliveryItem
+            // and is already validated upstream).
+            await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.UOM));
+            await ValidateStandaloneItemDecimalQuantitiesAsync(dto.Items);
+
+            // Preload referenced ItemTypes in a single round-trip
+            var referencedTypeIds = dto.Items
+                .Where(i => i.ItemTypeId.HasValue)
+                .Select(i => i.ItemTypeId!.Value)
+                .Distinct()
+                .ToList();
+            var typeMap = referencedTypeIds.Count == 0
+                ? new Dictionary<int, ItemType>()
+                : await _context.ItemTypes
+                    .Where(t => referencedTypeIds.Contains(t.Id))
+                    .ToDictionaryAsync(t => t.Id);
+
+            // Per-company FBR defaults — same precedence chain as CreateAsync
+            // minus step 3 (DeliveryItem.Unit), since there's no challan.
+            var companyDefaultUOM = !string.IsNullOrWhiteSpace(company.FbrDefaultUOM)
+                ? company.FbrDefaultUOM
+                : "Numbers, pieces, units";
+            var companyDefaultSaleType = !string.IsNullOrWhiteSpace(company.FbrDefaultSaleType)
+                ? company.FbrDefaultSaleType
+                : "Goods at Standard Rate (default)";
+
+            var invoiceItems = new List<InvoiceItem>();
+            foreach (var itemDto in dto.Items)
+            {
+                ItemType? itemType = null;
+                if (itemDto.ItemTypeId.HasValue)
+                    typeMap.TryGetValue(itemDto.ItemTypeId.Value, out itemType);
+
+                // Same precedence as CreateAsync: explicit DTO field → ItemType
+                // catalog → company default → seed value.
+                var effectiveUOM = !string.IsNullOrWhiteSpace(itemDto.UOM)
+                    ? itemDto.UOM!
+                    : !string.IsNullOrWhiteSpace(itemType?.UOM)
+                        ? itemType!.UOM!
+                        : companyDefaultUOM;
+                var effectiveHSCode = !string.IsNullOrWhiteSpace(itemDto.HSCode)
+                    ? itemDto.HSCode
+                    : itemType?.HSCode;
+                var effectiveFbrUOMId = itemDto.FbrUOMId ?? itemType?.FbrUOMId;
+                var effectiveSaleType = !string.IsNullOrWhiteSpace(itemDto.SaleType)
+                    ? itemDto.SaleType
+                    : !string.IsNullOrWhiteSpace(itemType?.SaleType)
+                        ? itemType!.SaleType
+                        : companyDefaultSaleType;
+
+                var lineTotal = itemDto.Quantity * itemDto.UnitPrice;
+
+                invoiceItems.Add(new InvoiceItem
+                {
+                    DeliveryItemId = null,            // standalone — no source line
+                    ItemTypeId = itemType?.Id,
+                    ItemTypeName = itemType?.Name ?? "",
+                    Description = itemDto.Description ?? "",
+                    Quantity = itemDto.Quantity,
+                    UOM = effectiveUOM,
+                    UnitPrice = itemDto.UnitPrice,
+                    LineTotal = lineTotal,
+                    HSCode = effectiveHSCode,
+                    FbrUOMId = effectiveFbrUOMId,
+                    SaleType = effectiveSaleType,
+                    RateId = itemDto.RateId,
+                    FixedNotifiedValueOrRetailPrice = itemDto.FixedNotifiedValueOrRetailPrice,
+                    // SRO refs flow through directly — they're scenario-driven
+                    // (only SN028-style reduced-rate bills set them) and are
+                    // never derived from the catalog.
+                    SroScheduleNo = string.IsNullOrWhiteSpace(itemDto.SroScheduleNo) ? null : itemDto.SroScheduleNo,
+                    SroItemSerialNo = string.IsNullOrWhiteSpace(itemDto.SroItemSerialNo) ? null : itemDto.SroItemSerialNo,
+                });
+
+                if (itemType != null)
+                {
+                    itemType.UsageCount += 1;
+                    itemType.LastUsedAt = DateTime.UtcNow;
+                    _context.ItemTypes.Update(itemType);
+                }
+            }
+
+            // Bill-header defaults — identical to CreateAsync.
+            const int SeededDefaultDocType = 4;
+            var effectiveDocType = dto.DocumentType ?? SeededDefaultDocType;
+
+            string? effectivePaymentMode = dto.PaymentMode;
+            if (string.IsNullOrWhiteSpace(effectivePaymentMode))
+            {
+                var isRegistered = client.RegistrationType == "Registered";
+                effectivePaymentMode = isRegistered
+                    ? (!string.IsNullOrWhiteSpace(company.FbrDefaultPaymentModeRegistered)
+                        ? company.FbrDefaultPaymentModeRegistered
+                        : "Credit")
+                    : (!string.IsNullOrWhiteSpace(company.FbrDefaultPaymentModeUnregistered)
+                        ? company.FbrDefaultPaymentModeUnregistered
+                        : "Cash");
+            }
+
+            var subtotal = invoiceItems.Sum(i => i.LineTotal);
+            var gstAmount = Math.Round(subtotal * dto.GSTRate / 100, 2);
+            var grandTotal = subtotal + gstAmount;
+
+            if (company.StartingInvoiceNumber == 0)
+                throw new InvalidOperationException("Starting invoice number has not been set for this company. Please set it first.");
+
+            // Share the regular numbering sequence — standalone bills are
+            // real bills, not demos. MAX(InvoiceNumber) excluding IsDemo
+            // matches CreateAsync.
+            int maxExistingInvoice = await _context.Invoices
+                .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo)
+                .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+
+            int nextInvoiceNumber = maxExistingInvoice > 0
+                ? maxExistingInvoice + 1
+                : company.StartingInvoiceNumber;
+            company.CurrentInvoiceNumber = nextInvoiceNumber;
+
+            // Auto-tag PaymentTerms with the scenario code so FbrService can
+            // route Validate / Submit calls to the correct scenarioId without
+            // the operator having to type "[SNxxx]" themselves. Pattern matches
+            // what InvoiceForm already does on the regular create path.
+            //   • If dto.ScenarioId is set AND the existing PaymentTerms
+            //     doesn't already start with "[SNxxx]", prepend it.
+            //   • If neither is set, PaymentTerms passes through untouched.
+            string? finalPaymentTerms = dto.PaymentTerms;
+            if (!string.IsNullOrWhiteSpace(dto.ScenarioId))
+            {
+                var existing = (finalPaymentTerms ?? "").TrimStart();
+                var hasTag = existing.StartsWith("[") && existing.Contains("]");
+                if (!hasTag)
+                    finalPaymentTerms = $"[{dto.ScenarioId.Trim()}] {finalPaymentTerms ?? ""}".Trim();
+            }
+
+            var invoice = new Invoice
+            {
+                InvoiceNumber = nextInvoiceNumber,
+                Date = dto.Date,
+                CompanyId = dto.CompanyId,
+                ClientId = dto.ClientId,
+                Subtotal = subtotal,
+                GSTRate = dto.GSTRate,
+                GSTAmount = gstAmount,
+                GrandTotal = grandTotal,
+                AmountInWords = NumberToWordsConverter.Convert(grandTotal),
+                PaymentTerms = finalPaymentTerms,
+                DocumentType = effectiveDocType,
+                PaymentMode = effectivePaymentMode,
+                FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
+                    ? nextInvoiceNumber.ToString()
+                    : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
+                Items = invoiceItems
+            };
+
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var created = await _invoiceRepo.CreateAsync(invoice);
+                await _companyRepo.UpdateAsync(company);
+
+                // Auto-save typed item descriptions for future autocomplete —
+                // mirrors CreateAsync.
+                var newDescs = dto.Items
+                    .Where(i => !string.IsNullOrWhiteSpace(i.Description))
+                    .Select(i => i.Description!)
+                    .Distinct()
+                    .ToList();
+                if (newDescs.Count > 0)
+                {
+                    var existing = await _context.ItemDescriptions
+                        .Where(d => newDescs.Contains(d.Name))
+                        .Select(d => d.Name)
+                        .ToListAsync();
+                    foreach (var desc in newDescs.Where(d => !existing.Contains(d)))
+                        _context.ItemDescriptions.Add(new ItemDescription { Name = desc });
+                    await _context.SaveChangesAsync();
+                }
+
+                await transaction.CommitAsync();
+
+                var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
+                return ToDto(loaded!);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "InvoiceService: transaction rolled back");
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Same fractional-qty contract as ValidateUpdateItemDecimalQuantitiesAsync
+        /// but for the standalone-create DTO shape.
+        /// </summary>
+        private async Task ValidateStandaloneItemDecimalQuantitiesAsync(List<CreateStandaloneInvoiceItemDto> items)
+        {
+            var unitNames = items
+                .Select(i => i.UOM)
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (unitNames.Count == 0) return;
+
+            var unitConfig = (await _context.Units
+                .Where(u => unitNames.Contains(u.Name))
+                .Select(u => new { u.Name, u.AllowsDecimalQuantity })
+                .ToListAsync())
+                .ToDictionary(u => u.Name, u => u.AllowsDecimalQuantity, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var it in items)
+            {
+                if (string.IsNullOrWhiteSpace(it.UOM)) continue;
+                if (it.Quantity == Math.Truncate(it.Quantity)) continue;
+                if (!unitConfig.TryGetValue(it.UOM!, out var allows) || !allows)
+                    throw new InvalidOperationException(
+                        $"Quantity '{it.Quantity}' for unit '{it.UOM}' must be a whole number. " +
+                        $"Enable decimal quantity for this unit on the Units admin page if fractions are allowed.");
             }
         }
 
@@ -508,6 +784,25 @@ namespace MyApp.Api.Services.Implementations
                 invoice.PaymentTerms = dto.PaymentTerms;
                 invoice.DocumentType = dto.DocumentType;
                 invoice.PaymentMode = dto.PaymentMode;
+
+                // Allow buyer reassignment ONLY on standalone bills (no
+                // linked delivery challan). For challan-linked bills the
+                // buyer is owned by the challan; changing it here would
+                // put the bill out of sync with its source challan, so
+                // we surface a clear error instead of silently accepting.
+                if (dto.ClientId.HasValue && dto.ClientId.Value != invoice.ClientId)
+                {
+                    if (invoice.DeliveryChallans != null && invoice.DeliveryChallans.Any())
+                        throw new InvalidOperationException(
+                            "Cannot change the buyer on a challan-linked bill. " +
+                            "Edit the buyer on the linked delivery challan, or recreate the bill.");
+                    var newClient = await _context.Clients.FindAsync(dto.ClientId.Value);
+                    if (newClient == null)
+                        throw new InvalidOperationException($"Client {dto.ClientId.Value} not found.");
+                    if (newClient.CompanyId != invoice.CompanyId)
+                        throw new InvalidOperationException("Client does not belong to this company.");
+                    invoice.ClientId = newClient.Id;
+                }
 
                 // Preload any referenced ItemTypes in one round-trip
                 var referencedTypeIds = dto.Items
@@ -593,14 +888,15 @@ namespace MyApp.Api.Services.Implementations
                 var reloaded = await _invoiceRepo.GetByIdAsync(id);
                 return reloaded == null ? null : ToDto(reloaded);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "InvoiceService: transaction rolled back");
                 await transaction.RollbackAsync();
                 throw;
             }
         }
 
-        // ── Narrow edit path: Item Type re-classification (+ optional Qty) ─
+        // ── Narrow edit path: Item Type re-classification (+ optional Qty + Price) ─
         //
         // Two permission flows feed this method, distinguished by the
         // allowQuantityEdit flag (set by the controller from the request's
@@ -608,18 +904,21 @@ namespace MyApp.Api.Services.Implementations
         //
         //   • allowQuantityEdit = false  → invoices.manage.update.itemtype
         //       Operator can only change which ItemType each line points
-        //       at. Quantity values in the payload are ignored. Used by
-        //       the FBR-classification helper role.
+        //       at. Quantity / UnitPrice values in the payload are
+        //       ignored. Used by the FBR-classification helper role.
         //
         //   • allowQuantityEdit = true   → invoices.manage.update.itemtype.qty
-        //       Same as above PLUS the operator can adjust Quantity. Useful
-        //       for users who need to correct qty mistakes that the source
-        //       challan can't fix (returned items, miscount), without giving
-        //       them full price-edit power.
+        //       Item Type + Quantity + UnitPrice. Common during FBR
+        //       classification: operator splits one line into multiple
+        //       HS-coded lines, redistributing qty and price. The total-
+        //       preservation guard below ensures the bill's bottom line
+        //       stays equal to what the buyer was actually billed —
+        //       within a small tolerance (configurable, default 2 PKR)
+        //       to absorb rounding noise from the rebalance.
         //
-        // EVERY OTHER FIELD on the bill (price, desc, GST, dates, payment
-        // terms, doc type, SRO, etc.) is still ignored on both paths.
-        public async Task<InvoiceDto?> UpdateItemTypesAsync(int id, UpdateInvoiceItemTypesDto dto, bool allowQuantityEdit = false)
+        // GST rate, dates, payment terms, doc type, SRO refs, etc. are
+        // still ignored on both paths.
+        public async Task<InvoiceDto?> UpdateItemTypesAsync(int id, UpdateInvoiceItemTypesDto dto, bool allowQuantityEdit = false, string? actorUserName = null)
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return null;
@@ -629,6 +928,46 @@ namespace MyApp.Api.Services.Implementations
 
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("At least one item is required.");
+
+            // Restriction F: zero unit price not allowed when the .qty
+            // path is active (operator is editing prices, not just
+            // classifying). Negative is also blocked. Zero unit price on
+            // an FBR-imported bill would imply giveaway items, which is
+            // a real-business workaround not a tax-claim adjustment.
+            if (allowQuantityEdit)
+            {
+                var badPriceRows = dto.Items
+                    .Where(r => r.UnitPrice.HasValue && r.UnitPrice.Value <= 0m)
+                    .Select(r => r.Id).ToList();
+                if (badPriceRows.Count > 0)
+                    throw new InvalidOperationException(
+                        $"Unit price must be greater than zero. Bill item id(s) [{string.Join(", ", badPriceRows)}] " +
+                        $"have zero or negative unit price.");
+
+                var badQtyRows = dto.Items
+                    .Where(r => r.Quantity.HasValue && r.Quantity.Value <= 0m)
+                    .Select(r => r.Id).ToList();
+                if (badQtyRows.Count > 0)
+                    throw new InvalidOperationException(
+                        $"Quantity must be greater than zero. Bill item id(s) [{string.Join(", ", badQtyRows)}] " +
+                        $"have zero or negative quantity.");
+            }
+
+            // Capture before-state for the audit log. Snapshot the
+            // current values BEFORE we mutate them, so the log can show
+            // exactly what changed.
+            var beforeSnapshot = invoice.Items.ToDictionary(
+                ii => ii.Id,
+                ii => new
+                {
+                    ii.ItemTypeId,
+                    ItemTypeName = ii.ItemTypeName,
+                    ii.Quantity,
+                    ii.UnitPrice,
+                    ii.LineTotal,
+                });
+            var beforeSubtotal = invoice.Subtotal;
+            var beforeGrandTotal = invoice.GrandTotal;
 
             // Reject any incoming ItemId that doesn't exist on the bill
             // (mirror the safety check in UpdateAsync — operator cannot add /
@@ -729,23 +1068,47 @@ namespace MyApp.Api.Services.Implementations
                         existing.SaleType = null;
                     }
 
-                    // Quantity edit only when the .qty perm path is active.
-                    // Recompute LineTotal so the bill's totals stay
-                    // consistent (UnitPrice is unchanged by this flow).
-                    if (allowQuantityEdit && row.Quantity.HasValue && row.Quantity.Value > 0)
+                    // Quantity / UnitPrice edits only on the .qty perm path.
+                    // We recompute LineTotal from whichever fields the row
+                    // touches, so the bill's totals stay self-consistent.
+                    // Both fields are independently optional — the operator
+                    // might change just qty, just price, or both per row.
+                    if (allowQuantityEdit)
                     {
-                        existing.Quantity = row.Quantity.Value;
-                        existing.LineTotal = existing.UnitPrice * row.Quantity.Value;
+                        if (row.Quantity.HasValue && row.Quantity.Value > 0)
+                            existing.Quantity = row.Quantity.Value;
+                        if (row.UnitPrice.HasValue && row.UnitPrice.Value >= 0)
+                            existing.UnitPrice = row.UnitPrice.Value;
+                        if (row.Quantity.HasValue || row.UnitPrice.HasValue)
+                            existing.LineTotal = Math.Round(existing.Quantity * existing.UnitPrice, 2, MidpointRounding.AwayFromZero);
                     }
                 }
 
-                // If qty changed, recompute bill-level totals from the
-                // refreshed line totals. Otherwise leave them untouched.
-                if (allowQuantityEdit && dto.Items.Any(r => r.Quantity.HasValue))
+                // If qty / unit price changed, recompute bill-level totals
+                // and enforce the total-preservation guard.
+                if (allowQuantityEdit && dto.Items.Any(r => r.Quantity.HasValue || r.UnitPrice.HasValue))
                 {
-                    invoice.Subtotal = invoice.Items.Sum(ii => ii.LineTotal);
-                    invoice.GSTAmount = Math.Round(invoice.Subtotal * (invoice.GSTRate / 100m), 2, MidpointRounding.AwayFromZero);
-                    invoice.GrandTotal = invoice.Subtotal + invoice.GSTAmount;
+                    var originalSubtotal = invoice.Subtotal;
+                    var newSubtotal = invoice.Items.Sum(ii => ii.LineTotal);
+                    var tolerance = _config.GetValue<decimal?>("Invoice:NarrowEditTotalTolerancePkr") ?? 2m;
+                    var diff = Math.Abs(newSubtotal - originalSubtotal);
+                    if (diff > tolerance)
+                    {
+                        // Reject. The whole purpose of the .qty path is to
+                        // re-shape lines while keeping the bill total
+                        // intact. A diff bigger than the rounding-noise
+                        // tolerance means the operator changed the actual
+                        // amount being billed, which requires full edit
+                        // rights (invoices.manage.update).
+                        throw new InvalidOperationException(
+                            $"New bill subtotal Rs. {newSubtotal:N2} differs from the original Rs. {originalSubtotal:N2} " +
+                            $"by Rs. {diff:N2} — exceeds the Rs. {tolerance:N2} rounding tolerance. " +
+                            $"Adjust qty / unit price so the totals match (within Rs. {tolerance:N0}), " +
+                            $"or use the full-edit path if you genuinely need to change the bill amount.");
+                    }
+                    invoice.Subtotal = newSubtotal;
+                    invoice.GSTAmount = Math.Round(newSubtotal * (invoice.GSTRate / 100m), 2, MidpointRounding.AwayFromZero);
+                    invoice.GrandTotal = newSubtotal + invoice.GSTAmount;
                 }
 
                 // Any edit invalidates a previous validation. Don't touch
@@ -760,11 +1123,79 @@ namespace MyApp.Api.Services.Implementations
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
+                // ── Audit log (after commit so we don't log a rolled-back op) ──
+                // Per-row before/after snapshot for the narrow-edit path.
+                // Stored as JSON in RequestBody; the AuditLogs page can
+                // pretty-print it. Audit failures must never break the
+                // save itself — wrap in try/swallow.
+                try
+                {
+                    var changedRows = new List<object>();
+                    foreach (var current in invoice.Items)
+                    {
+                        if (!beforeSnapshot.TryGetValue(current.Id, out var before)) continue;
+                        var changed =
+                            before.ItemTypeId      != current.ItemTypeId
+                         || before.ItemTypeName    != current.ItemTypeName
+                         || before.Quantity        != current.Quantity
+                         || before.UnitPrice       != current.UnitPrice
+                         || before.LineTotal       != current.LineTotal;
+                        if (!changed) continue;
+                        changedRows.Add(new
+                        {
+                            invoiceItemId      = current.Id,
+                            previousItemTypeId = before.ItemTypeId,
+                            previousItemType   = before.ItemTypeName,
+                            newItemTypeId      = current.ItemTypeId,
+                            newItemType        = current.ItemTypeName,
+                            previousQuantity   = before.Quantity,
+                            newQuantity        = current.Quantity,
+                            previousUnitPrice  = before.UnitPrice,
+                            newUnitPrice       = current.UnitPrice,
+                            previousLineTotal  = before.LineTotal,
+                            newLineTotal       = current.LineTotal,
+                        });
+                    }
+                    if (changedRows.Count > 0)
+                    {
+                        var payload = System.Text.Json.JsonSerializer.Serialize(new
+                        {
+                            invoiceId          = invoice.Id,
+                            invoiceNumber      = invoice.InvoiceNumber,
+                            companyId          = invoice.CompanyId,
+                            mode               = allowQuantityEdit ? "itemtype+qty+price" : "itemtype-only",
+                            previousSubtotal   = beforeSubtotal,
+                            newSubtotal        = invoice.Subtotal,
+                            previousGrandTotal = beforeGrandTotal,
+                            newGrandTotal      = invoice.GrandTotal,
+                            differenceAmount   = Math.Abs(invoice.Subtotal - beforeSubtotal),
+                            rows               = changedRows,
+                        });
+
+                        await _auditLog.LogAsync(new AuditLog
+                        {
+                            Level         = "Info",
+                            UserName      = actorUserName,
+                            HttpMethod    = "PATCH",
+                            RequestPath   = $"/invoices/{invoice.Id}/{(allowQuantityEdit ? "itemtypes-and-qty" : "itemtypes")}",
+                            StatusCode    = 200,
+                            ExceptionType = "Invoice.NarrowEdit",
+                            Message       = $"Bill #{invoice.InvoiceNumber}: {changedRows.Count} line(s) edited "
+                                          + $"({(allowQuantityEdit ? "itemtype+qty+price" : "itemtype-only")}). "
+                                          + $"Subtotal {beforeSubtotal:N2} → {invoice.Subtotal:N2} "
+                                          + $"(diff Rs. {Math.Abs(invoice.Subtotal - beforeSubtotal):N2}).",
+                            RequestBody   = payload.Length > 4000 ? payload[..4000] : payload,
+                        });
+                    }
+                }
+                catch { /* audit must never break the save */ }
+
                 var reloaded = await _invoiceRepo.GetByIdAsync(id);
                 return reloaded == null ? null : ToDto(reloaded);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "InvoiceService: transaction rolled back");
                 await transaction.RollbackAsync();
                 throw;
             }
@@ -890,8 +1321,9 @@ namespace MyApp.Api.Services.Implementations
                 await transaction.CommitAsync();
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "InvoiceService: transaction rolled back");
                 await transaction.RollbackAsync();
                 throw;
             }
@@ -1041,6 +1473,154 @@ namespace MyApp.Api.Services.Implementations
         public async Task<int> GetCountByCompanyAsync(int companyId)
         {
             return await _invoiceRepo.GetCountByCompanyAsync(companyId);
+        }
+
+        public async Task<List<AwaitingPurchaseInvoiceDto>> GetAwaitingPurchaseAsync(int companyId)
+        {
+            // A bill qualifies for the "Purchase Against Sale Bill" picker if:
+            //   • not yet submitted to FBR (still mutable)
+            //   • EVERY line on it has an ItemTypeId set (so grouping works)
+            //   • at least one line has empty HSCode (= needs procurement)
+            //   • that line still has remaining qty (sold − already procured)
+            //
+            // Bills with mixed-classification lines (some with ItemTypeId,
+            // some without) are excluded — operator must classify all
+            // lines first so the procurement form can show clean groups.
+
+            // Sum of "already procured" qty per InvoiceItem, computed from
+            // the join table.
+            var procuredPerItem = _context.PurchaseItemSourceLines
+                .Join(_context.PurchaseItems,
+                      psl => psl.PurchaseItemId,
+                      pi => pi.Id,
+                      (psl, pi) => new { psl.InvoiceItemId, pi.Quantity });
+
+            // We need raw item rows to compute the per-bill qualification
+            // server-side. EF will translate the LINQ to a single query.
+            var rawLines = await (
+                from i in _context.Invoices
+                join ii in _context.InvoiceItems on i.Id equals ii.InvoiceId
+                where i.CompanyId == companyId
+                   && i.FbrStatus != "Submitted"
+                   && !i.IsDemo
+                select new
+                {
+                    i.Id,
+                    i.InvoiceNumber,
+                    i.Date,
+                    i.ClientId,
+                    ClientName = i.Client.Name,
+                    InvoiceItemId = ii.Id,
+                    ii.HSCode,
+                    ii.ItemTypeId,
+                    SoldQty = ii.Quantity,
+                    PurchasedQty = procuredPerItem
+                        .Where(p => p.InvoiceItemId == ii.Id)
+                        .Sum(p => (int?)p.Quantity) ?? 0,
+                }).ToListAsync();
+
+            var grouped = rawLines.GroupBy(x => new {
+                x.Id, x.InvoiceNumber, x.Date, x.ClientId, x.ClientName
+            });
+
+            var result = new List<AwaitingPurchaseInvoiceDto>();
+            foreach (var bill in grouped)
+            {
+                var lines = bill.ToList();
+                // Every line must have ItemTypeId — bills with stragglers
+                // are filtered out per the user's rule ("if no item type
+                // is selected on bill, that bill doesn't show").
+                if (lines.Any(l => l.ItemTypeId == null)) continue;
+
+                var awaiting = lines
+                    .Where(l => string.IsNullOrWhiteSpace(l.HSCode)
+                             && (l.SoldQty - l.PurchasedQty) > 0)
+                    .ToList();
+                if (awaiting.Count == 0) continue;
+
+                result.Add(new AwaitingPurchaseInvoiceDto
+                {
+                    InvoiceId = bill.Key.Id,
+                    InvoiceNumber = bill.Key.InvoiceNumber,
+                    Date = bill.Key.Date,
+                    ClientId = bill.Key.ClientId,
+                    ClientName = bill.Key.ClientName,
+                    LinesAwaiting = awaiting.Count,
+                    TotalQtyRemaining = awaiting.Sum(l => l.SoldQty - l.PurchasedQty),
+                });
+            }
+            return result.OrderByDescending(x => x.Date)
+                         .ThenByDescending(x => x.InvoiceNumber)
+                         .ToList();
+        }
+
+        public async Task<PurchaseTemplateDto?> GetPurchaseTemplateAsync(int invoiceId)
+        {
+            var invoice = await _context.Invoices
+                .Include(i => i.Client)
+                .Include(i => i.Items)
+                    .ThenInclude(ii => ii.ItemType)
+                .FirstOrDefaultAsync(i => i.Id == invoiceId);
+            if (invoice == null) return null;
+
+            var lineIds = invoice.Items.Select(x => x.Id).ToList();
+
+            // Pre-compute already-procured qty per InvoiceItem in one query.
+            var procuredMap = await _context.PurchaseItemSourceLines
+                .Where(psl => lineIds.Contains(psl.InvoiceItemId))
+                .Join(_context.PurchaseItems,
+                      psl => psl.PurchaseItemId,
+                      pi => pi.Id,
+                      (psl, pi) => new { psl.InvoiceItemId, pi.Quantity })
+                .GroupBy(x => x.InvoiceItemId)
+                .Select(g => new { InvoiceItemId = g.Key, Total = g.Sum(x => x.Quantity) })
+                .ToDictionaryAsync(x => x.InvoiceItemId, x => x.Total);
+
+            // Group HSCode-empty lines by ItemTypeId. Lines without
+            // ItemTypeId would have disqualified the bill at picker
+            // level, so we shouldn't see any here — but defensively skip.
+            var groups = invoice.Items
+                .Where(ii => string.IsNullOrWhiteSpace(ii.HSCode) && ii.ItemTypeId.HasValue)
+                .GroupBy(ii => ii.ItemTypeId!.Value)
+                .Select(g => {
+                    var sample = g.First();
+                    var soldQty = g.Sum(x => x.Quantity);
+                    var procuredQty = g.Sum(x => procuredMap.GetValueOrDefault(x.Id));
+                    var remaining = soldQty - procuredQty;
+                    var firstDesc = g.First().Description;
+                    var moreCount = g.Count() - 1;
+                    return new PurchaseTemplateLineDto
+                    {
+                        ItemTypeId = g.Key,
+                        ItemTypeName = sample.ItemType?.Name ?? sample.ItemTypeName,
+                        InvoiceItemIds = g.Select(x => x.Id).ToList(),
+                        LineCount = g.Count(),
+                        Description = moreCount > 0
+                            ? $"{firstDesc} (+ {moreCount} more)"
+                            : firstDesc,
+                        SoldQty = soldQty,
+                        PurchasedQty = procuredQty,
+                        RemainingQty = remaining,
+                        SaleUom = g.GroupBy(x => x.UOM)
+                            .OrderByDescending(g2 => g2.Count())
+                            .Select(g2 => g2.Key)
+                            .FirstOrDefault(),
+                        AvgSaleUnitPrice = g.Average(x => x.UnitPrice),
+                    };
+                })
+                .Where(line => line.RemainingQty > 0)
+                .OrderBy(line => line.ItemTypeName)
+                .ToList();
+
+            return new PurchaseTemplateDto
+            {
+                InvoiceId = invoice.Id,
+                InvoiceNumber = invoice.InvoiceNumber,
+                Date = invoice.Date,
+                ClientId = invoice.ClientId,
+                ClientName = invoice.Client?.Name ?? "",
+                Items = groups,
+            };
         }
 
         public async Task<ItemRateHistoryResultDto> GetItemRateHistoryAsync(

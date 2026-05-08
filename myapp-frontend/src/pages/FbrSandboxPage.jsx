@@ -165,22 +165,22 @@ export default function FbrSandboxPage() {
   const unseededScenarios = scenarios.filter((s) => !seededSns.has(s.code));
 
   return (
-    <div style={styles.page}>
-      <header style={styles.header}>
-        <div>
-          <h2 style={styles.title}><MdScience size={22} style={{ verticalAlign: "middle", marginRight: "0.4rem" }} />FBR Sandbox</h2>
-          <p style={styles.subtitle}>
+    <div className="fbr-page" style={styles.page}>
+      <header className="fbr-header">
+        <div className="fbr-header__title-block">
+          <h2 className="fbr-header__title"><MdScience size={22} style={{ verticalAlign: "middle", marginRight: "0.4rem" }} />FBR Sandbox</h2>
+          <p className="fbr-header__subtitle">
             Validate FBR scenario test bills for the selected company without
             touching its real bill numbering. Demo bills live in the <code>900000+</code> range and are
             invisible to the regular Bills / Challans pages.
           </p>
         </div>
-        <div style={styles.headerActions}>
-          {/* Page-local company picker — independent of the global top-bar
-              company switcher so testing scenarios for one company doesn't
-              change which company the rest of the app is showing. */}
+        {/* Page-local company picker — independent of the global top-bar
+            company switcher so testing scenarios for one company doesn't
+            change which company the rest of the app is showing. */}
+        <div className="fbr-header__actions">
           <select
-            style={styles.companySelect}
+            className="fbr-header__company-select"
             value={companyId || ""}
             onChange={(e) => setCompanyId(Number(e.target.value) || "")}
             aria-label="Company"
@@ -190,9 +190,9 @@ export default function FbrSandboxPage() {
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-          <button onClick={refresh} style={styles.iconBtn} title="Reload" disabled={!selectedCompany}><MdRefresh /></button>
+          <button onClick={refresh} className="fbr-header__icon-btn" title="Reload" disabled={!selectedCompany}><MdRefresh /></button>
           {canSeed && (
-            <button onClick={handleSeed} disabled={running || !selectedCompany} style={styles.primaryBtn}>
+            <button onClick={handleSeed} disabled={running || !selectedCompany} className="fbr-header__seed-btn">
               <MdAdd /> Seed Applicable Scenarios
             </button>
           )}
@@ -251,62 +251,122 @@ export default function FbrSandboxPage() {
           <p>{canSeed ? "Click \"Seed Applicable Scenarios\" to generate one demo bill per scenario." : "Ask an admin to grant you fbr.sandbox.seed."}</p>
         </div>
       ) : (
-        <div style={styles.tableWrap}>
-          <table style={styles.table}>
-            <thead>
-              <tr style={styles.thead}>
-                <th style={styles.th}>SN</th>
-                <th style={styles.th}>Bill #</th>
-                <th style={styles.th}>Description</th>
-                <th style={styles.th}>Client</th>
-                <th style={{ ...styles.th, textAlign: "right" }}>Total</th>
-                <th style={styles.th}>FBR Status</th>
-                <th style={styles.th}>IRN / Error</th>
-                <th style={styles.th}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {bills.map((b) => (
-                <tr key={b.id}>
-                  <td style={{ ...styles.td, fontWeight: 700, color: colors.blue }}>{b.scenarioCode}</td>
-                  <td style={styles.td}>{b.invoiceNumber}</td>
-                  <td style={styles.td}>{b.description}</td>
-                  <td style={styles.td}>{b.clientName}</td>
-                  <td style={{ ...styles.td, textAlign: "right" }}>Rs. {Math.round(b.grandTotal).toLocaleString()}</td>
-                  <td style={styles.td}>
-                    {b.fbrStatus === "Submitted" ? (
-                      <span style={styles.successBadge}>Submitted</span>
-                    ) : b.fbrStatus === "Validated" ? (
-                      <span style={styles.warnBadge}>Validated</span>
-                    ) : b.fbrStatus === "Failed" ? (
-                      <span style={styles.failBadge}>Failed</span>
-                    ) : (
-                      <span style={styles.muted}>—</span>
-                    )}
-                  </td>
-                  <td style={{ ...styles.td, fontSize: "0.74rem", maxWidth: 300, wordBreak: "break-all" }}>
-                    {b.fbrIRN ? (
-                      <code style={styles.irn}>{b.fbrIRN}</code>
-                    ) : b.fbrErrorMessage ? (
-                      <span title={b.fbrErrorMessage} style={{ color: colors.danger }}>
-                        <MdError size={12} /> {b.fbrErrorMessage.slice(0, 60)}…
-                      </span>
-                    ) : (
-                      <span style={styles.muted}>—</span>
-                    )}
-                  </td>
-                  <td style={styles.td}>
-                    {canDelete && (
-                      <button onClick={() => handleDeleteBill(b)} style={styles.iconBtnSmall} title="Delete">
-                        <MdDelete size={14} />
-                      </button>
-                    )}
-                  </td>
+        <>
+          {/* Desktop / tablet — table */}
+          <div className="fbr-table" style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead>
+                <tr style={styles.thead}>
+                  <th style={styles.th}>SN</th>
+                  <th style={styles.th}>Bill #</th>
+                  <th style={styles.th}>Description</th>
+                  <th style={styles.th}>Client</th>
+                  <th style={{ ...styles.th, textAlign: "right" }}>Total</th>
+                  <th style={styles.th}>FBR Status</th>
+                  <th style={styles.th}>IRN / Error</th>
+                  <th style={styles.th}></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {bills.map((b) => (
+                  <tr key={b.id}>
+                    <td style={{ ...styles.td, fontWeight: 700, color: colors.blue }}>{b.scenarioCode}</td>
+                    <td style={styles.td}>{b.invoiceNumber}</td>
+                    <td style={styles.td}>{b.description}</td>
+                    <td style={styles.td}>{b.clientName}</td>
+                    <td style={{ ...styles.td, textAlign: "right" }}>Rs. {Math.round(b.grandTotal).toLocaleString()}</td>
+                    <td style={styles.td}>
+                      {b.fbrStatus === "Submitted" ? (
+                        <span style={styles.successBadge}>Submitted</span>
+                      ) : b.fbrStatus === "Validated" ? (
+                        <span style={styles.warnBadge}>Validated</span>
+                      ) : b.fbrStatus === "Failed" ? (
+                        <span style={styles.failBadge}>Failed</span>
+                      ) : (
+                        <span style={styles.muted}>—</span>
+                      )}
+                    </td>
+                    <td style={{ ...styles.td, fontSize: "0.74rem", maxWidth: 300, wordBreak: "break-all" }}>
+                      {b.fbrIRN ? (
+                        <code style={styles.irn}>{b.fbrIRN}</code>
+                      ) : b.fbrErrorMessage ? (
+                        <span title={b.fbrErrorMessage} style={{ color: colors.danger }}>
+                          <MdError size={12} /> {b.fbrErrorMessage.slice(0, 60)}…
+                        </span>
+                      ) : (
+                        <span style={styles.muted}>—</span>
+                      )}
+                    </td>
+                    <td style={styles.td}>
+                      {canDelete && (
+                        <button onClick={() => handleDeleteBill(b)} style={styles.iconBtnSmall} title="Delete">
+                          <MdDelete size={14} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile — stacked cards. Scenario code top-left bold blue +
+              FBR status badge top-right; total prominent on its own row;
+              IRN/error wraps freely at the bottom. */}
+          <div className="fbr-cards">
+            {bills.map((b) => (
+              <div key={b.id} className="fbr-card">
+                <div className="fbr-card__top">
+                  <div className="fbr-card__sn-wrap">
+                    <span className="fbr-card__sn">{b.scenarioCode}</span>
+                    <span className="fbr-card__bill">Bill #{b.invoiceNumber}</span>
+                  </div>
+                  {b.fbrStatus === "Submitted" ? (
+                    <span className="fbr-card__status fbr-card__status--success">Submitted</span>
+                  ) : b.fbrStatus === "Validated" ? (
+                    <span className="fbr-card__status fbr-card__status--warn">Validated</span>
+                  ) : b.fbrStatus === "Failed" ? (
+                    <span className="fbr-card__status fbr-card__status--fail">Failed</span>
+                  ) : (
+                    <span className="fbr-card__status fbr-card__status--muted">Pending</span>
+                  )}
+                </div>
+
+                <div className="fbr-card__desc">{b.description}</div>
+
+                <div className="fbr-card__meta">
+                  <div className="fbr-card__field">
+                    <span className="fbr-card__field-label">Client</span>
+                    <span className="fbr-card__field-value">{b.clientName}</span>
+                  </div>
+                  <div className="fbr-card__field">
+                    <span className="fbr-card__field-label">Total</span>
+                    <span className="fbr-card__field-value fbr-card__total">
+                      Rs. {Math.round(b.grandTotal).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                {b.fbrIRN ? (
+                  <div className="fbr-card__irn">
+                    <span className="fbr-card__field-label">IRN</span>
+                    <code className="fbr-card__irn-value">{b.fbrIRN}</code>
+                  </div>
+                ) : b.fbrErrorMessage ? (
+                  <div className="fbr-card__error" title={b.fbrErrorMessage}>
+                    <MdError size={14} /> {b.fbrErrorMessage}
+                  </div>
+                ) : null}
+
+                {canDelete && (
+                  <button className="fbr-card__delete" onClick={() => handleDeleteBill(b)}>
+                    <MdDelete size={14} /> Delete
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
       )}
       </>
       )}

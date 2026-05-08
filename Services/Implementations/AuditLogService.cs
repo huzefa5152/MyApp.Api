@@ -1,3 +1,8 @@
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
@@ -8,8 +13,21 @@ namespace MyApp.Api.Services.Implementations
     public class AuditLogService : IAuditLogService
     {
         private readonly IAuditLogRepository _repository;
+        private readonly AppDbContext _db;
+        private readonly ILogger<AuditLogService> _logger;
 
-        public AuditLogService(IAuditLogRepository repository) => _repository = repository;
+        // Audit H-8 (2026-05-08): same fingerprint within this window
+        // increments OccurrenceCount on the existing row instead of
+        // inserting a fresh one. Keeps the audit table sane during
+        // FBR brownouts that produce hundreds of identical errors.
+        private static readonly TimeSpan DedupWindow = TimeSpan.FromMinutes(5);
+
+        public AuditLogService(IAuditLogRepository repository, AppDbContext db, ILogger<AuditLogService> logger)
+        {
+            _repository = repository;
+            _db = db;
+            _logger = logger;
+        }
 
         private static AuditLogDto ToDto(AuditLog a) => new()
         {
@@ -31,12 +49,51 @@ namespace MyApp.Api.Services.Implementations
         {
             try
             {
+                // Compute the dedup fingerprint if the caller didn't supply one.
+                // SHA1 is plenty for in-app dedup keys (not cryptographic).
+                if (string.IsNullOrEmpty(log.Fingerprint))
+                    log.Fingerprint = ComputeFingerprint(log);
+
+                if (log.FirstOccurrence == null) log.FirstOccurrence = log.Timestamp;
+                if (log.LastOccurrence == null) log.LastOccurrence = log.Timestamp;
+
+                // Try dedup: find a row with the same fingerprint within the window.
+                var since = log.Timestamp - DedupWindow;
+                var existing = await _db.AuditLogs
+                    .Where(a => a.Fingerprint == log.Fingerprint && a.LastOccurrence >= since)
+                    .OrderByDescending(a => a.Id)
+                    .FirstOrDefaultAsync();
+
+                if (existing != null)
+                {
+                    existing.OccurrenceCount += 1;
+                    existing.LastOccurrence = log.Timestamp;
+                    await _db.SaveChangesAsync();
+                    return;
+                }
+
                 await _repository.CreateAsync(log);
             }
-            catch
+            catch (Exception ex)
             {
-                // Swallow — logging must never crash the app
+                // Logging must never crash the app — fall through to the
+                // file sink so the failure isn't silent.
+                _logger.LogWarning(ex, "AuditLog persist failed (level={Level}, path={Path})", log.Level, log.RequestPath);
             }
+        }
+
+        // Stable hash over the dimensions that define "the same kind of error".
+        // Path is included so a flood of "/api/invoices/12 → 500" doesn't hide
+        // a separate flood on /api/clients. Message is normalised (variable
+        // numbers stripped) to avoid one fingerprint per primary key.
+        private static string ComputeFingerprint(AuditLog log)
+        {
+            var msgNormalised = System.Text.RegularExpressions.Regex.Replace(
+                log.Message ?? "", @"\d+", "#");
+            var raw = $"{log.Level}|{log.ExceptionType}|{msgNormalised}|{log.RequestPath}|{log.StatusCode}";
+            using var sha = SHA1.Create();
+            var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(raw));
+            return Convert.ToHexString(bytes).ToLowerInvariant()[..40];
         }
 
         public async Task<PagedResult<AuditLogDto>> GetPagedAsync(int page, int pageSize, string? level = null, string? search = null)

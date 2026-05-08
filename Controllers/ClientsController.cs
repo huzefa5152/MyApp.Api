@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
@@ -13,11 +15,18 @@ namespace MyApp.Api.Controllers
     {
         private readonly IClientService _service;
         private readonly IClientGroupService _groupService;
-        public ClientsController(IClientService service, IClientGroupService groupService)
+        private readonly ICompanyAccessGuard _access;
+        public ClientsController(IClientService service, IClientGroupService groupService, ICompanyAccessGuard access)
         {
             _service = service;
             _groupService = groupService;
+            _access = access;
         }
+
+        private int CurrentUserId =>
+            int.TryParse(
+                User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
+                out var id) ? id : 0;
 
         // ── Common Clients (shared across companies via grouping) ──
         // Sits under /api/clients/common* so it lives next to the
@@ -30,6 +39,7 @@ namespace MyApp.Api.Controllers
         /// clients are excluded — they remain in the per-company list.
         /// </summary>
         [HttpGet("common")]
+        [AuthorizeCompany]
         public async Task<ActionResult<List<CommonClientDto>>> GetCommon([FromQuery] int companyId)
             => Ok(await _groupService.GetCommonClientsAsync(companyId));
 
@@ -112,21 +122,31 @@ namespace MyApp.Api.Controllers
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<ClientDto>>> GetClients()
-            => Ok(await _service.GetAllAsync());
+        {
+            // Tenant filter — return only clients of companies the caller
+            // can reach. Replaces the earlier "everything across tenants"
+            // behaviour. Matches what SuppliersController.GetSuppliers does.
+            var allowed = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            var rows = await _service.GetAllAsync();
+            return Ok(rows.Where(r => allowed.Contains(r.CompanyId)));
+        }
 
         [HttpGet("count")]
         public async Task<ActionResult<int>> GetCount([FromQuery] int? companyId)
         {
             if (companyId.HasValue)
             {
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
                 var clients = await _service.GetByCompanyAsync(companyId.Value);
                 return Ok(clients.Count());
             }
+            var allowed = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
             var all = await _service.GetAllAsync();
-            return Ok(all.Count());
+            return Ok(all.Count(r => allowed.Contains(r.CompanyId)));
         }
 
         [HttpGet("company/{companyId}")]
+        [AuthorizeCompany]
         public async Task<ActionResult<IEnumerable<ClientDto>>> GetClientsByCompany(int companyId)
             => Ok(await _service.GetByCompanyAsync(companyId));
 
@@ -135,6 +155,7 @@ namespace MyApp.Api.Controllers
         {
             var client = await _service.GetByIdAsync(id);
             if (client == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, client.CompanyId);
             return Ok(client);
         }
 
@@ -143,7 +164,7 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<ClientDto>> CreateClient([FromBody] ClientDto dto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
-
+            await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
             try
             {
                 var result = await _service.CreateAsync(dto);
@@ -188,6 +209,12 @@ namespace MyApp.Api.Controllers
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
+            // Authorize on the existing row's company — body fields can't
+            // smuggle the client into another tenant.
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+
             dto.Id = id;
             try
             {
@@ -208,6 +235,9 @@ namespace MyApp.Api.Controllers
         [HasPermission("clients.manage.delete")]
         public async Task<IActionResult> DeleteClient(int id)
         {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             await _service.DeleteAsync(id);
             return NoContent();
         }

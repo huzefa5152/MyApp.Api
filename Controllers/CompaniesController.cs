@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
@@ -12,23 +14,34 @@ namespace MyApp.Api.Controllers
     public class CompaniesController : ControllerBase
     {
         private readonly ICompanyService _companyService;
+        private readonly ICompanyAccessGuard _access;
         private readonly IWebHostEnvironment _env;
 
-        public CompaniesController(ICompanyService companyService, IWebHostEnvironment env)
+        public CompaniesController(ICompanyService companyService, ICompanyAccessGuard access, IWebHostEnvironment env)
         {
             _companyService = companyService;
+            _access = access;
             _env = env;
         }
 
+        private int CurrentUserId =>
+            int.TryParse(
+                User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
+                out var id) ? id : 0;
+
         // GET: api/companies
-        // Reads are open to any authenticated user — the company list is a
-        // foundational dependency for challan/invoice/client flows. Write
-        // operations below require explicit companies.manage.* permissions.
+        // Returns only the companies the caller has tenant access to. Today
+        // most companies are IsTenantIsolated=false → CompanyAccessGuard
+        // returns "everything", preserving legacy behaviour. Once a company
+        // is flipped isolated, only users with a UserCompanies row see it
+        // here — which means every company-picker dropdown in the SPA gets
+        // filtered automatically without per-page changes.
         [HttpGet]
         public async Task<ActionResult<IEnumerable<CompanyDto>>> GetCompanies()
         {
             var companies = await _companyService.GetAllAsync();
-            return Ok(companies);
+            var allowed = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            return Ok(companies.Where(c => allowed.Contains(c.Id)));
         }
 
         // GET: api/companies/{id}
@@ -38,7 +51,7 @@ namespace MyApp.Api.Controllers
             var company = await _companyService.GetByIdAsync(id);
             if (company == null)
                 return NotFound();
-
+            await _access.AssertAccessAsync(CurrentUserId, id);
             return Ok(company);
         }
 
@@ -70,12 +83,19 @@ namespace MyApp.Api.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
+            await _access.AssertAccessAsync(CurrentUserId, id);
             try
             {
                 var updatedCompany = await _companyService.UpdateAsync(id, dto);
 
                 if (updatedCompany == null)
                     return NotFound();
+
+                // The IsTenantIsolated flag may have just changed, which
+                // affects who passes the "open mode" branch in the access
+                // guard. Bump the generation so cached accessible-company
+                // sets re-evaluate on next request.
+                _access.InvalidateAll();
 
                 return Ok(updatedCompany);
             }

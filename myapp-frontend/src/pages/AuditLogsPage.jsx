@@ -46,7 +46,6 @@ export default function AuditLogsPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(20);
   const [level, setLevel] = useState("");
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -57,7 +56,10 @@ export default function AuditLogsPage() {
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await getAuditLogs(page, pageSize, level || undefined, search || undefined);
+      // Don't send pageSize — let the server apply Pagination:DefaultPageSize
+      // from appsettings.json. The response carries page + pageSize +
+      // totalPages back so the UI's pagination math stays accurate.
+      const { data } = await getAuditLogs(page, undefined, level || undefined, search || undefined);
       setLogs(data.items);
       setTotalCount(data.totalCount);
       setTotalPages(data.totalPages);
@@ -66,7 +68,7 @@ export default function AuditLogsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, level, search]);
+  }, [page, level, search]);
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -95,7 +97,7 @@ export default function AuditLogsPage() {
   }
 
   return (
-    <div style={{ padding: "1.5rem", maxWidth: 1200, margin: "0 auto" }}>
+    <div className="audit-page" style={{ padding: "1.5rem", maxWidth: 1200, margin: "0 auto" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
         <div style={{ width: 44, height: 44, borderRadius: 12, background: `linear-gradient(135deg, ${colors.danger}, #b71c1c)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -118,7 +120,7 @@ export default function AuditLogsPage() {
       </div>
 
       {/* Filters */}
-      <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap", alignItems: "center" }}>
+      <div className="audit-filters" style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap", alignItems: "center" }}>
         <select
           value={level}
           onChange={(e) => { setLevel(e.target.value); setPage(1); }}
@@ -217,21 +219,44 @@ export default function AuditLogsPage() {
             <div style={{ padding: 40, textAlign: "center", color: colors.textSecondary }}>No audit logs found</div>
           ) : logs.map((log) => {
             const badge = levelBadge[log.level] || levelBadge.Info;
+            const statusColor =
+              log.statusCode >= 500 ? colors.danger
+              : log.statusCode >= 400 ? "#fd7e14"
+              : colors.teal;
             return (
               <div key={log.id} className="audit-card" onClick={() => setSelectedLog(log)}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 6, background: badge.bg, color: badge.color, fontSize: "0.75rem", fontWeight: 600 }}>
+                {/* Row 1: level pill + timestamp on the right */}
+                <div className="audit-card__head">
+                  <span className="audit-card__level" style={{ background: badge.bg, color: badge.color }}>
                     {badge.icon} {log.level}
                   </span>
-                  <span style={{ fontSize: "0.72rem", color: colors.textSecondary }}>{formatDate(log.timestamp)}</span>
+                  <span className="audit-card__time">{formatDate(log.timestamp)}</span>
                 </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                  <span style={{ fontWeight: 700, fontSize: "0.78rem", color: methodColor[log.httpMethod] || colors.textPrimary }}>{log.httpMethod}</span>
-                  <span style={{ fontFamily: "monospace", fontSize: "0.78rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: colors.textPrimary }}>{log.requestPath}</span>
-                  <span style={{ fontWeight: 700, fontSize: "0.82rem", color: log.statusCode >= 500 ? colors.danger : log.statusCode >= 400 ? "#fd7e14" : colors.teal, flexShrink: 0 }}>{log.statusCode}</span>
+
+                {/* Row 2: method + status. Path on its own row below so it
+                    can wrap freely without fighting the status code for
+                    horizontal space (the bug your screenshot caught). */}
+                <div className="audit-card__meta">
+                  <span className="audit-card__method" style={{ color: methodColor[log.httpMethod] || colors.textPrimary }}>
+                    {log.httpMethod}
+                  </span>
+                  <span className="audit-card__status" style={{ color: statusColor }}>
+                    HTTP {log.statusCode}
+                  </span>
+                  {log.userName && (
+                    <span className="audit-card__user">{log.userName}</span>
+                  )}
                 </div>
-                {log.userName && <div style={{ fontSize: "0.75rem", color: colors.textSecondary, marginBottom: 4 }}>User: {log.userName}</div>}
-                {log.message && <div style={{ fontSize: "0.8rem", color: colors.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{log.message}</div>}
+
+                {/* Path: full-width, monospace, breaks anywhere so long URLs
+                    wrap inside the card instead of overflowing it. */}
+                <div className="audit-card__path">{log.requestPath}</div>
+
+                {/* Message: wraps freely; clamped to 3 lines so a long
+                    stack message doesn't blow out the card height. */}
+                {log.message && (
+                  <div className="audit-card__msg">{log.message}</div>
+                )}
               </div>
             );
           })}

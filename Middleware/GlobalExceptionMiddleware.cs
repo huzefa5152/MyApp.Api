@@ -1,5 +1,7 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
 
@@ -8,8 +10,13 @@ namespace MyApp.Api.Middleware
     public class GlobalExceptionMiddleware
     {
         private readonly RequestDelegate _next;
+        private readonly ILogger<GlobalExceptionMiddleware> _logger;
 
-        public GlobalExceptionMiddleware(RequestDelegate next) => _next = next;
+        public GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExceptionMiddleware> logger)
+        {
+            _next = next;
+            _logger = logger;
+        }
 
         public async Task InvokeAsync(HttpContext context)
         {
@@ -32,6 +39,7 @@ namespace MyApp.Api.Middleware
 
         private static async Task LogResponseErrorAsync(HttpContext context)
         {
+            var redactor = context.RequestServices.GetRequiredService<ISensitiveDataRedactor>();
             string? requestBody = null;
             try
             {
@@ -42,6 +50,7 @@ namespace MyApp.Api.Middleware
                     requestBody = await reader.ReadToEndAsync();
                     if (string.IsNullOrWhiteSpace(requestBody)) requestBody = null;
                     else if (requestBody.Length > 4000) requestBody = requestBody[..4000] + "...(truncated)";
+                    requestBody = redactor.Scrub(requestBody);
                 }
             }
             catch { /* ignore */ }
@@ -58,7 +67,9 @@ namespace MyApp.Api.Middleware
                 StatusCode = statusCode,
                 ExceptionType = "",
                 Message = $"HTTP {statusCode} response",
-                RequestBody = requestBody
+                RequestBody = requestBody,
+                CorrelationId = CorrelationIdMiddleware.FromContext(context),
+                CompanyId = ResolveCompanyId(context),
             };
 
             try
@@ -69,9 +80,31 @@ namespace MyApp.Api.Middleware
             catch { /* logging must never crash the pipeline */ }
         }
 
-        private static async Task HandleExceptionAsync(HttpContext context, Exception ex)
+        /// <summary>
+        /// Best-effort tenant tagging for AuditLog rows. Sources, in order:
+        ///   1. HttpContext.Items["currentCompanyId"] — set by AuthorizeCompany
+        ///      attribute when the route is tenant-scoped.
+        ///   2. Route value {companyId} — fallback for endpoints that bypass
+        ///      AuthorizeCompany (e.g. POST /api/companies/{companyId}/...)
+        ///   3. Query string ?companyId=N
+        /// Returns null when nothing matches; CompanyId is nullable on the
+        /// AuditLog row so this is fine.
+        /// </summary>
+        private static int? ResolveCompanyId(HttpContext context)
         {
-            // Determine status code from exception type
+            if (context.Items.TryGetValue("currentCompanyId", out var v) && v is int cid && cid > 0) return cid;
+            if (context.Request.RouteValues.TryGetValue("companyId", out var rv) && int.TryParse(rv?.ToString(), out var rcid) && rcid > 0) return rcid;
+            if (context.Request.Query.TryGetValue("companyId", out var qv) && int.TryParse(qv.ToString(), out var qcid) && qcid > 0) return qcid;
+            return null;
+        }
+
+        private async Task HandleExceptionAsync(HttpContext context, Exception ex)
+        {
+            // Determine status code from exception type. UnauthorizedAccessException
+            // is reserved for tenant-scope failures from ICompanyAccessGuard —
+            // mapped to 403 so the frontend can distinguish it from a
+            // permission failure (which the HasPermissionAttribute already
+            // returns directly).
             var statusCode = ex switch
             {
                 KeyNotFoundException => (int)HttpStatusCode.NotFound,
@@ -79,6 +112,8 @@ namespace MyApp.Api.Middleware
                 UnauthorizedAccessException => (int)HttpStatusCode.Forbidden,
                 _ => (int)HttpStatusCode.InternalServerError
             };
+
+            var redactor = context.RequestServices.GetRequiredService<ISensitiveDataRedactor>();
 
             // Read request body (if buffering was enabled)
             string? requestBody = null;
@@ -91,9 +126,35 @@ namespace MyApp.Api.Middleware
                     requestBody = await reader.ReadToEndAsync();
                     if (requestBody.Length > 4000)
                         requestBody = requestBody[..4000] + "...(truncated)";
+                    requestBody = redactor.Scrub(requestBody);
                 }
             }
             catch { /* ignore body read failures */ }
+
+            // Mirror to ILogger so the durable file sink picks it up too —
+            // the AuditLogs DB row is the business trail, the structured
+            // log line is the operational trail. Stack-trace excluded from
+            // the message template to keep the file readable; full ex is
+            // passed positionally so the sink renders it.
+            if (statusCode >= 500)
+            {
+                _logger.LogError(ex,
+                    "Unhandled {ExceptionType} on {HttpMethod} {Path} (user={User})",
+                    ex.GetType().Name,
+                    context.Request.Method,
+                    context.Request.Path.Value,
+                    context.User.Identity?.Name ?? "anonymous");
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "{ExceptionType} on {HttpMethod} {Path}: {Message} (user={User})",
+                    ex.GetType().Name,
+                    context.Request.Method,
+                    context.Request.Path.Value,
+                    ex.Message,
+                    context.User.Identity?.Name ?? "anonymous");
+            }
 
             // Build audit log entry
             var auditLog = new AuditLog
@@ -108,7 +169,9 @@ namespace MyApp.Api.Middleware
                 ExceptionType = ex.GetType().Name,
                 Message = ex.Message,
                 StackTrace = statusCode >= 500 ? ex.StackTrace : null,
-                RequestBody = requestBody
+                RequestBody = requestBody,
+                CorrelationId = CorrelationIdMiddleware.FromContext(context),
+                CompanyId = ResolveCompanyId(context),
             };
 
             // Persist to database via scoped service
@@ -117,17 +180,30 @@ namespace MyApp.Api.Middleware
                 var auditService = context.RequestServices.GetRequiredService<IAuditLogService>();
                 await auditService.LogAsync(auditLog);
             }
-            catch { /* logging must never crash the pipeline */ }
+            catch (Exception logEx)
+            {
+                // Audit-DB write failed — fall back to the file sink so
+                // the failure isn't silent. Don't rethrow; logging must
+                // never crash the pipeline.
+                _logger.LogWarning(logEx, "AuditLog DB write failed; original exception was {OrigType}: {OrigMsg}", ex.GetType().Name, ex.Message);
+            }
 
-            // Return standardized JSON error response
+            // Return standardized JSON error response.
+            // 5xx → opaque message (don't leak ex.Message which may carry
+            // SQL / internal details).
+            // 4xx → exception's own message is fine for ValidationException
+            // and KeyNotFoundException; defensive trim on InvalidOperation
+            // so we don't accidentally leak internal state.
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = statusCode;
 
+            var userMessage = statusCode >= 500
+                ? "An unexpected error occurred. Please try again later."
+                : ex.Message;
+
             var response = new
             {
-                message = statusCode >= 500
-                    ? "An unexpected error occurred. Please try again later."
-                    : ex.Message,
+                message = userMessage,
                 statusCode
             };
 

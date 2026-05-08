@@ -237,6 +237,14 @@ export default function ClientsPage() {
             if (selectedCompany) fetchClients(selectedCompany.id);
             setCommonRefreshKey((k) => k + 1);
           }}
+          onChange={() => {
+            // Background-refresh signal — fired when the modal mutated
+            // something (e.g. a per-company "remove from this company"
+            // delete) but should stay open so the operator can keep
+            // managing the rest of the group.
+            if (selectedCompany) fetchClients(selectedCompany.id);
+            setCommonRefreshKey((k) => k + 1);
+          }}
         />
       )}
     </div>

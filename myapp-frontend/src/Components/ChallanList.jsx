@@ -62,8 +62,13 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
   const permPrint = has("challans.print.view");
-  const permCreateBill = has("invoices.manage.create");
+  const permCreateBill = has("bills.manage.create");
   const permCreate = has("challans.manage.create");
+  // 2026-05-08: Duplicate is gated by its own permission so a role can
+  // be allowed to spawn copies without also being granted create-from-
+  // scratch. The one-time migration in Program.cs auto-grants the new
+  // perm to every role that already had challans.manage.create.
+  const permDuplicate = has("challans.manage.duplicate");
   const [selectedChallan, setSelectedChallan] = useState(null);
 
   if (!challans || challans.length === 0) return null;
@@ -77,20 +82,28 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
           const isEditable = c.isEditable ?? (c.status === "Pending" || c.status === "Imported" || c.status === "No PO" || c.status === "Setup Required");
           // Separate flag: delete/cancel is only allowed when NOT billed
           const canCancel = c.status !== "Invoiced" && isEditable;
-          // Delete is only allowed on the LATEST challan so numbering stays
-          // gap-free — earlier challans must be edited instead.
-          const canDelete = canCancel && c.isLatest === true;
+          const isDuplicate = c.duplicatedFromId != null;
+          const isDuplicating = duplicatingId === c.id;
+          // Delete eligibility:
+          //   • Originals: only the LATEST challan (gap-free numbering rule).
+          //   • Duplicates: any unbilled duplicate (they share the parent's
+          //     number — deleting one doesn't create a numbering gap).
+          //     2026-05-08: this carve-out matches the new server-side rule
+          //     in DeliveryChallanService.DeleteAsync.
+          const canDelete = canCancel && (isDuplicate || c.isLatest === true);
           const hasWarnings = c.warnings && c.warnings.length > 0;
           // Generate Bill shortcut — only for billable statuses
           // (Pending / Imported), matching the backend's CreateAsync guard.
           const canGenerateBill = permCreateBill && (c.status === "Pending" || c.status === "Imported");
-          // Duplicate is available on the same statuses as Generate Bill —
-          // a duplicate is essentially a fast new-row create that reuses the
-          // challan number for a different PO. Backend's DuplicateAsync
-          // enforces the same guard.
-          const canDuplicate = permCreate && (c.status === "Pending" || c.status === "Imported");
-          const isDuplicate = c.duplicatedFromId != null;
-          const isDuplicating = duplicatingId === c.id;
+          // Duplicate is available on the same statuses as Generate Bill,
+          // EXCEPT duplicating-a-duplicate is not allowed (2026-05-08): the
+          // original is the only canonical row, and the new "create N copies"
+          // dialog removes any reason to duplicate-the-duplicate as a workaround.
+          // Permission gate: challans.manage.duplicate (split off from
+          // .create on 2026-05-08).
+          const canDuplicate = permDuplicate
+            && !isDuplicate
+            && (c.status === "Pending" || c.status === "Imported");
           return (
             <div
               key={c.id}
@@ -263,7 +276,9 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                     <button
                       style={{ ...styles.actionBtn, ...styles.deleteBtn }}
                       onClick={() => onDelete?.(c)}
-                      title="Only the latest challan can be deleted — earlier ones must be edited to keep numbering gap-free."
+                      title={isDuplicate
+                        ? "Delete this duplicate. The original challan keeps the same number — no gap."
+                        : "Only the latest challan can be deleted — earlier ones must be edited to keep numbering gap-free."}
                     >
                       <MdDelete size={14} /> Delete
                     </button>

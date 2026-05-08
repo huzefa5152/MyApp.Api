@@ -93,16 +93,38 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
     loadLookups();
   }, []);
 
+  // Registration-type → which identity fields apply.
+  // Pakistan FBR taxonomy:
+  //   • Registered    — NTN (7 digits) + STRN (13 digits) required.
+  //   • FTN           — Federal Tax Number lives in the NTN column;
+  //                     STRN is optional (most FTN entities don't have one).
+  //   • Unregistered  — no NTN/STRN; CNIC is the identity (13 digits).
+  //   • CNIC          — same as Unregistered for the form's purposes.
+  // Anything else / blank — show all fields with no auto-validation, so
+  // the operator picks the type first.
+  const regType = formData.registrationType;
+  const showNtn  = regType === "Registered" || regType === "FTN";
+  const showStrn = regType === "Registered"; // STRN truly required only for Registered
+  const showCnic = regType === "Unregistered" || regType === "CNIC";
+  const ntnLabel = regType === "FTN" ? "FTN *" : "NTN *";
+
   const validate = () => {
     const newErrors = {};
     if (!formData.name.trim()) newErrors.name = "Name is required";
-    if (!formData.ntn.trim()) newErrors.ntn = "NTN is required";
-    if (!formData.strn.trim()) newErrors.strn = "STRN is required";
     if (!formData.registrationType) newErrors.registrationType = "Registration Type is required";
     if (!formData.fbrProvinceCode && formData.fbrProvinceCode !== 0) newErrors.fbrProvinceCode = "Province is required";
-    if ((formData.registrationType === "Unregistered" || formData.registrationType === "CNIC") && !formData.cnic.trim()) {
-      newErrors.cnic = "CNIC is required for this registration type";
+
+    // NTN/STRN: required only for Registered and (NTN only) FTN. The
+    // form-level fields are still in state — if the operator switched
+    // type they get blanked on switch, so this stays in sync.
+    if (showNtn && !formData.ntn.trim()) newErrors.ntn = regType === "FTN" ? "FTN is required" : "NTN is required";
+    if (showStrn && !formData.strn.trim()) newErrors.strn = "STRN is required";
+    if (showCnic && !formData.cnic.trim()) newErrors.cnic = "CNIC is required for this registration type";
+    // CNIC must be 13 digits when present (Pakistan ID format).
+    if (showCnic && formData.cnic.trim() && formData.cnic.replace(/\D/g, "").length !== 13) {
+      newErrors.cnic = "CNIC must be 13 digits";
     }
+
     if (isCreate && showCompanyPicker && selectedCompanyIds.length === 0) {
       newErrors.companies = "Pick at least one company.";
     }
@@ -111,8 +133,28 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
   };
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-    setErrors({ ...errors, [e.target.name]: "" });
+    const { name, value } = e.target;
+
+    // Switching registration type clears the identity fields that no
+    // longer apply — so a Registered → Unregistered switch doesn't
+    // leave a stale NTN/STRN in state that the operator can't see and
+    // would silently get saved. Mirror behaviour: switching back to
+    // Registered keeps the new (empty) state until the operator types.
+    if (name === "registrationType") {
+      const next = { ...formData, registrationType: value };
+      const willShowNtn  = value === "Registered" || value === "FTN";
+      const willShowStrn = value === "Registered";
+      const willShowCnic = value === "Unregistered" || value === "CNIC";
+      if (!willShowNtn)  next.ntn  = "";
+      if (!willShowStrn) next.strn = "";
+      if (!willShowCnic) next.cnic = "";
+      setFormData(next);
+      setErrors({ ...errors, registrationType: "", ntn: "", strn: "", cnic: "" });
+      return;
+    }
+
+    setFormData({ ...formData, [name]: value });
+    setErrors({ ...errors, [name]: "" });
   };
 
   const handleSubmit = async (e) => {
@@ -239,25 +281,10 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
               </div>
             </div>
 
-            <div className="form-grid-2col">
-              <div style={formGroup}>
-                <label style={label}>NTN *</label>
-                <input type="text" name="ntn" value={formData.ntn} onChange={handleChange} style={{ ...input, ...fieldError("ntn") }} />
-                {errorMsg("ntn")}
-              </div>
-              <div style={formGroup}>
-                <label style={label}>STRN *</label>
-                <input type="text" name="strn" value={formData.strn} onChange={handleChange} style={{ ...input, ...fieldError("strn") }} />
-                {errorMsg("strn")}
-              </div>
-            </div>
-
-            <div style={formGroup}>
-              <label style={label}>Sites</label>
-              <input type="text" name="site" value={formData.site} onChange={handleChange} style={input} placeholder="e.g. Site-A ; Site-B ; Site-C" />
-              <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.25rem", display: "block" }}>Separate multiple sites with semicolons (;). These will appear as dropdown options when creating a delivery challan.</span>
-            </div>
-
+            {/* FBR identity — pick Registration Type first; the relevant
+                identity fields render below conditionally. Hides NTN/STRN
+                for Unregistered/CNIC entities and shows CNIC instead, per
+                Pakistan FBR convention.  */}
             <div style={{ marginTop: "0.5rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #0d47a130", backgroundColor: "#e3f2fd" }}>
               <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#0d47a1" }}>FBR Details</p>
               <div className="form-grid-2col">
@@ -282,13 +309,71 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                   {errorMsg("fbrProvinceCode")}
                 </div>
               </div>
-              {(formData.registrationType === "Unregistered" || formData.registrationType === "CNIC") && (
-                <div style={formGroup}>
-                  <label style={label}>CNIC (13 digits) *</label>
-                  <input type="text" name="cnic" value={formData.cnic} onChange={handleChange} style={{ ...input, ...fieldError("cnic") }} placeholder="3520112345678" maxLength={13} />
-                  {errorMsg("cnic")}
+
+              {/* Identity fields — type-driven. */}
+              {!regType && (
+                <p style={{ margin: "0.5rem 0 0", fontSize: "0.78rem", color: "#5f6d7e" }}>
+                  Pick a registration type to see the right identity fields.
+                </p>
+              )}
+
+              {(showNtn || showStrn) && (
+                <div className="form-grid-2col" style={{ marginTop: "0.5rem" }}>
+                  {showNtn && (
+                    <div style={formGroup}>
+                      <label style={label}>{ntnLabel}</label>
+                      <input
+                        type="text"
+                        name="ntn"
+                        value={formData.ntn}
+                        onChange={handleChange}
+                        style={{ ...input, ...fieldError("ntn") }}
+                        placeholder={regType === "FTN" ? "Federal Tax Number" : "7-digit NTN"}
+                      />
+                      {errorMsg("ntn")}
+                    </div>
+                  )}
+                  {showStrn && (
+                    <div style={formGroup}>
+                      <label style={label}>STRN *</label>
+                      <input
+                        type="text"
+                        name="strn"
+                        value={formData.strn}
+                        onChange={handleChange}
+                        style={{ ...input, ...fieldError("strn") }}
+                        placeholder="13-digit Sales Tax Registration Number"
+                      />
+                      {errorMsg("strn")}
+                    </div>
+                  )}
                 </div>
               )}
+
+              {showCnic && (
+                <div style={{ ...formGroup, marginTop: "0.5rem" }}>
+                  <label style={label}>CNIC (13 digits) *</label>
+                  <input
+                    type="text"
+                    name="cnic"
+                    value={formData.cnic}
+                    onChange={handleChange}
+                    style={{ ...input, ...fieldError("cnic") }}
+                    placeholder="3520112345678"
+                    maxLength={13}
+                  />
+                  {errorMsg("cnic")}
+                  <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
+                    Unregistered buyers don't have NTN/STRN — CNIC is the FBR identity for individuals.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div style={formGroup}>
+              <label style={label}>Sites</label>
+              <input type="text" name="site" value={formData.site} onChange={handleChange} style={input} placeholder="e.g. Site-A ; Site-B ; Site-C" />
+              <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.25rem", display: "block" }}>Separate multiple sites with semicolons (;). These will appear as dropdown options when creating a delivery challan.</span>
             </div>
 
           </div>

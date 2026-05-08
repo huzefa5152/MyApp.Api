@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { MdAdd, MdEdit, MdDelete, MdDescription, MdWarning, MdInfoOutline, MdBusiness } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
+import { useConfirm } from "../Components/ConfirmDialog";
 import { listPoFormats, getPoFormat, deletePoFormat } from "../api/poFormatApi";
 import POFormatForm from "../Components/POFormatForm";
 
@@ -23,6 +24,7 @@ const colors = {
 
 export default function POFormatsPage() {
   const { has } = usePermissions();
+  const confirm = useConfirm();
   const canCreate = has("poformats.manage.create");
   const canUpdate = has("poformats.manage.update");
   const canDelete = has("poformats.manage.delete");
@@ -55,7 +57,13 @@ export default function POFormatsPage() {
   }, [load]);
 
   const handleDelete = async (format) => {
-    if (!confirm(`Delete PO format "${format.name}"? Future PDFs with this layout will no longer auto-parse.`)) return;
+    const ok = await confirm({
+      title: `Delete PO format "${format.name}"?`,
+      message: "Future PDFs with this layout will no longer auto-parse — they'll need a fresh format wizard run.",
+      variant: "danger",
+      confirmText: "Delete",
+    });
+    if (!ok) return;
     try {
       await deletePoFormat(format.id);
       load();
@@ -89,17 +97,16 @@ export default function POFormatsPage() {
   };
 
   return (
-    <div style={styles.page}>
-      <div style={styles.header}>
-        <div style={{ flex: 1 }}>
-          <h1 style={styles.title}>PO Formats</h1>
-          <p style={styles.subtitle}>
-            One PO format per client (across ALL companies). Configure once for a client and the same layout parses
-            automatically whenever ANY tenant receives a PO from them.
+    <div className="pof-page" style={styles.page}>
+      <div className="pof-header">
+        <div className="pof-header__title-block">
+          <h1 className="pof-header__title">PO Formats</h1>
+          <p className="pof-header__subtitle">
+            One PO format per client (across ALL companies). Configure once and the same layout parses automatically whenever any tenant receives a PO from that client.
           </p>
         </div>
         {canCreate && (
-          <button style={styles.addBtn} onClick={handleAdd}>
+          <button className="pof-header__add" onClick={handleAdd}>
             <MdAdd size={18} /> Add PO Format
           </button>
         )}
@@ -127,60 +134,117 @@ export default function POFormatsPage() {
           )}
         </div>
       ) : (
-        <div style={styles.card}>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Name</th>
-                <th style={styles.th}>Client</th>
-                <th style={styles.th}>Status</th>
-                <th style={styles.th}>Last updated</th>
-                <th style={{ ...styles.th, textAlign: "right" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {formats.map((f) => (
-                <tr key={f.id}>
-                  <td style={styles.td}>
-                    <div style={{ fontWeight: 600, color: colors.textPrimary }}>{f.name}</div>
-                    <div style={{ fontSize: "0.75rem", color: colors.textSecondary }}>v{f.currentVersion}</div>
-                  </td>
-                  <td style={styles.td}>
-                    {/* Prefer the ClientGroup display name — that's the
-                        canonical "client" the format applies to (across
-                        every tenant). Fallback to per-tenant ClientName
-                        for legacy formats not yet group-bound. */}
-                    {f.clientGroupName ? (
-                      <span style={styles.chip}>{f.clientGroupName}</span>
-                    ) : f.clientName ? (
-                      <span style={styles.chip}>{f.clientName}</span>
-                    ) : (
-                      <span style={{ ...styles.chip, ...styles.chipMuted }}>Unassigned</span>
-                    )}
-                  </td>
-                  <td style={styles.td}>
-                    {f.isActive ? (
-                      <span style={{ ...styles.chip, ...styles.chipSuccess }}>Active</span>
-                    ) : (
-                      <span style={{ ...styles.chip, ...styles.chipMuted }}>Inactive</span>
-                    )}
-                  </td>
-                  <td style={{ ...styles.td, color: colors.textSecondary, fontSize: "0.85rem" }}>
-                    {new Date(f.updatedAt).toLocaleDateString()}
-                  </td>
-                  <td style={{ ...styles.td, textAlign: "right" }}>
-                    {canUpdate && (
-                      <button style={styles.iconBtn} onClick={() => handleEdit(f)} title="Edit"><MdEdit size={16} /></button>
-                    )}
-                    {canDelete && (
-                      <button style={{ ...styles.iconBtn, ...styles.iconBtnDanger }} onClick={() => handleDelete(f)} title="Delete"><MdDelete size={16} /></button>
-                    )}
-                  </td>
+        <>
+          {/* Desktop / tablet — table */}
+          <div className="pof-table" style={styles.card}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>Name</th>
+                  <th style={styles.th}>Client</th>
+                  <th style={styles.th}>Status</th>
+                  <th style={styles.th}>Last updated</th>
+                  <th style={{ ...styles.th, textAlign: "right" }}>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {formats.map((f) => (
+                  <tr key={f.id}>
+                    <td style={styles.td}>
+                      <div style={{ fontWeight: 600, color: colors.textPrimary }}>{f.name}</div>
+                      <div style={{ fontSize: "0.75rem", color: colors.textSecondary }}>v{f.currentVersion}</div>
+                    </td>
+                    <td style={styles.td}>
+                      {/* Prefer the ClientGroup display name — that's the
+                          canonical "client" the format applies to (across
+                          every tenant). Fallback to per-tenant ClientName
+                          for legacy formats not yet group-bound. */}
+                      {f.clientGroupName ? (
+                        <span style={styles.chip}>{f.clientGroupName}</span>
+                      ) : f.clientName ? (
+                        <span style={styles.chip}>{f.clientName}</span>
+                      ) : (
+                        <span style={{ ...styles.chip, ...styles.chipMuted }}>Unassigned</span>
+                      )}
+                    </td>
+                    <td style={styles.td}>
+                      {f.isActive ? (
+                        <span style={{ ...styles.chip, ...styles.chipSuccess }}>Active</span>
+                      ) : (
+                        <span style={{ ...styles.chip, ...styles.chipMuted }}>Inactive</span>
+                      )}
+                    </td>
+                    <td style={{ ...styles.td, color: colors.textSecondary, fontSize: "0.85rem" }}>
+                      {new Date(f.updatedAt).toLocaleDateString()}
+                    </td>
+                    <td style={{ ...styles.td, textAlign: "right" }}>
+                      {canUpdate && (
+                        <button style={styles.iconBtn} onClick={() => handleEdit(f)} title="Edit"><MdEdit size={16} /></button>
+                      )}
+                      {canDelete && (
+                        <button style={{ ...styles.iconBtn, ...styles.iconBtnDanger }} onClick={() => handleDelete(f)} title="Delete"><MdDelete size={16} /></button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile — stacked cards */}
+          <div className="pof-cards">
+            {formats.map((f) => {
+              const clientLabel = f.clientGroupName || f.clientName;
+              return (
+                <div key={f.id} className="pof-card">
+                  <div className="pof-card__top">
+                    <div className="pof-card__title">
+                      <div className="pof-card__name">{f.name}</div>
+                      <div className="pof-card__version">v{f.currentVersion}</div>
+                    </div>
+                    {f.isActive ? (
+                      <span className="pof-card__status pof-card__status--active">Active</span>
+                    ) : (
+                      <span className="pof-card__status pof-card__status--muted">Inactive</span>
+                    )}
+                  </div>
+
+                  <div className="pof-card__meta">
+                    <div className="pof-card__field">
+                      <span className="pof-card__field-label">Client</span>
+                      {clientLabel ? (
+                        <span className="pof-card__chip">{clientLabel}</span>
+                      ) : (
+                        <span className="pof-card__chip pof-card__chip--muted">Unassigned</span>
+                      )}
+                    </div>
+                    <div className="pof-card__field">
+                      <span className="pof-card__field-label">Updated</span>
+                      <span className="pof-card__field-value">
+                        {new Date(f.updatedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {(canUpdate || canDelete) && (
+                    <div className="pof-card__actions">
+                      {canUpdate && (
+                        <button className="pof-card__edit" onClick={() => handleEdit(f)}>
+                          <MdEdit size={14} /> Edit
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button className="pof-card__delete" onClick={() => handleDelete(f)}>
+                          <MdDelete size={14} /> Delete
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {showForm && (

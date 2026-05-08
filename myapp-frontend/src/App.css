@@ -1,6 +1,10 @@
 #root {
   margin: 0 auto;
-  text-align: center;
+  /* No text-align: center — that was a leftover from the Vite starter
+     template and was leaking down into every descendant (the topbar
+     breadcrumb in particular looked centered). Page-level alignment is
+     LTR by default; pages set explicit center where needed (modals,
+     empty states, etc.). */
 }
 
 .logo {

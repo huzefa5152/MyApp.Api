@@ -335,60 +335,132 @@ export default function ItemTypesPage() {
             : "No matching items."}
         </p>
       ) : (
-        <div className="responsive-table-wrap" style={styles.listWrap}>
-        <div style={styles.list}>
-          <div style={styles.listHeader}>
-            <span style={{ width: 32 }}></span>
-            <span style={{ flex: 2 }}>Name</span>
-            <span style={{ flex: 1.1 }}>HS Code</span>
-            <span style={{ flex: 1.5 }}>UOM</span>
-            <span style={{ flex: 1.8 }}>Sale Type</span>
-            <span style={{ flex: 0.7, textAlign: "center" }}>Used</span>
-            <span style={{ width: 90, textAlign: "right" }}></span>
+        <>
+          {/* Desktop / tablet — flex-row "list". The min-width: 720px on the
+              inner list pushes columns wide; on narrower screens the
+              .it-list-wrap below is hidden via media query and the mobile
+              card list takes over. */}
+          <div className="it-list-wrap" style={styles.listWrap}>
+            <div style={styles.list}>
+              <div style={styles.listHeader}>
+                <span style={{ width: 32 }}></span>
+                <span style={{ flex: 2 }}>Name</span>
+                <span style={{ flex: 1.1 }}>HS Code</span>
+                <span style={{ flex: 1.5 }}>UOM</span>
+                <span style={{ flex: 1.8 }}>Sale Type</span>
+                <span style={{ flex: 0.7, textAlign: "center" }}>Used</span>
+                <span style={{ width: 90, textAlign: "right" }}></span>
+              </div>
+              {filtered.map((it) => (
+                <div key={it.id} style={styles.item}>
+                  <button
+                    style={styles.starBtn}
+                    onClick={() => toggleFavorite(it)}
+                    title={it.isFavorite ? "Unfavorite" : "Add to favorites"}
+                  >
+                    {it.isFavorite
+                      ? <MdStar size={18} color={colors.favorite} />
+                      : <MdStarBorder size={18} color={colors.textSecondary} />}
+                  </button>
+                  <div style={{ flex: 2, minWidth: 0 }}>
+                    <div style={styles.itemName}>{it.name}</div>
+                    {it.fbrDescription && (
+                      <div style={styles.itemDesc} title={it.fbrDescription}>
+                        {it.fbrDescription}
+                      </div>
+                    )}
+                  </div>
+                  <span style={{ flex: 1.1, fontFamily: "monospace", fontSize: "0.82rem", color: it.hsCode ? colors.blue : colors.textSecondary }}>
+                    {it.hsCode || "—"}
+                  </span>
+                  <span style={{ flex: 1.5, fontSize: "0.82rem", color: colors.textPrimary }}>
+                    {it.uom || "—"}
+                  </span>
+                  <span style={{ flex: 1.8, fontSize: "0.78rem", color: colors.textSecondary }}>
+                    {it.saleType || "—"}
+                  </span>
+                  <span style={{ flex: 0.7, textAlign: "center", fontSize: "0.82rem", color: colors.textSecondary }}>
+                    {it.usageCount > 0 ? `${it.usageCount}×` : "—"}
+                  </span>
+                  <div style={{ width: 90, display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
+                    {canUpdate && (
+                      <button style={styles.editBtn} onClick={() => openEdit(it)} title="Edit"><MdEdit size={16} /></button>
+                    )}
+                    {canDelete && (
+                      <button style={styles.deleteBtn} onClick={() => handleDelete(it)} title="Delete"><MdDelete size={16} /></button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          {filtered.map((it) => (
-            <div key={it.id} style={styles.item}>
-              <button
-                style={styles.starBtn}
-                onClick={() => toggleFavorite(it)}
-                title={it.isFavorite ? "Unfavorite" : "Add to favorites"}
-              >
-                {it.isFavorite
-                  ? <MdStar size={18} color={colors.favorite} />
-                  : <MdStarBorder size={18} color={colors.textSecondary} />}
-              </button>
-              <div style={{ flex: 2, minWidth: 0 }}>
-                <div style={styles.itemName}>{it.name}</div>
-                {it.fbrDescription && (
-                  <div style={styles.itemDesc} title={it.fbrDescription}>
-                    {it.fbrDescription}
+
+          {/* Mobile — stacked cards */}
+          <div className="it-cards">
+            {filtered.map((it) => (
+              <div key={it.id} className="it-card">
+                <div className="it-card__top">
+                  <button
+                    className="it-card__star"
+                    onClick={() => toggleFavorite(it)}
+                    aria-label={it.isFavorite ? "Unfavorite" : "Add to favorites"}
+                  >
+                    {it.isFavorite
+                      ? <MdStar size={20} color={colors.favorite} />
+                      : <MdStarBorder size={20} color={colors.textSecondary} />}
+                  </button>
+                  <div className="it-card__title">
+                    <div className="it-card__name">{it.name}</div>
+                    {it.fbrDescription && (
+                      <div className="it-card__desc">{it.fbrDescription}</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="it-card__grid">
+                  <div className="it-card__field">
+                    <span className="it-card__field-label">HS Code</span>
+                    <span
+                      className="it-card__field-value"
+                      style={{ fontFamily: "monospace", color: it.hsCode ? colors.blue : colors.textSecondary }}
+                    >
+                      {it.hsCode || "—"}
+                    </span>
+                  </div>
+                  <div className="it-card__field">
+                    <span className="it-card__field-label">UOM</span>
+                    <span className="it-card__field-value">{it.uom || "—"}</span>
+                  </div>
+                  <div className="it-card__field it-card__field--full">
+                    <span className="it-card__field-label">Sale Type</span>
+                    <span className="it-card__field-value">{it.saleType || "—"}</span>
+                  </div>
+                  <div className="it-card__field">
+                    <span className="it-card__field-label">Used</span>
+                    <span className="it-card__field-value">
+                      {it.usageCount > 0 ? `${it.usageCount}×` : "—"}
+                    </span>
+                  </div>
+                </div>
+
+                {(canUpdate || canDelete) && (
+                  <div className="it-card__actions">
+                    {canUpdate && (
+                      <button className="it-card__edit" onClick={() => openEdit(it)}>
+                        <MdEdit size={14} /> Edit
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button className="it-card__delete" onClick={() => handleDelete(it)}>
+                        <MdDelete size={14} /> Delete
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
-              <span style={{ flex: 1.1, fontFamily: "monospace", fontSize: "0.82rem", color: it.hsCode ? colors.blue : colors.textSecondary }}>
-                {it.hsCode || "—"}
-              </span>
-              <span style={{ flex: 1.5, fontSize: "0.82rem", color: colors.textPrimary }}>
-                {it.uom || "—"}
-              </span>
-              <span style={{ flex: 1.8, fontSize: "0.78rem", color: colors.textSecondary }}>
-                {it.saleType || "—"}
-              </span>
-              <span style={{ flex: 0.7, textAlign: "center", fontSize: "0.82rem", color: colors.textSecondary }}>
-                {it.usageCount > 0 ? `${it.usageCount}×` : "—"}
-              </span>
-              <div style={{ width: 90, display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
-                {canUpdate && (
-                  <button style={styles.editBtn} onClick={() => openEdit(it)} title="Edit"><MdEdit size={16} /></button>
-                )}
-                {canDelete && (
-                  <button style={styles.deleteBtn} onClick={() => handleDelete(it)} title="Delete"><MdDelete size={16} /></button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-        </div>
+            ))}
+          </div>
+        </>
       )}
 
       {showForm && (

@@ -50,5 +50,14 @@ namespace MyApp.Api.Services.Interfaces
         /// step.
         /// </summary>
         Task<DeliveryChallanDto?> DuplicateAsync(int sourceId);
+
+        /// <summary>
+        /// Bulk version — creates <paramref name="count"/> duplicates of the
+        /// same source in one go. Same eligibility rules as the single
+        /// duplicate (Pending/Imported, non-Demo, non-already-a-duplicate).
+        /// Caps internally at 20 to prevent runaway entries. See
+        /// 2026-05-08 ChallanPage UX upgrade.
+        /// </summary>
+        Task<List<DeliveryChallanDto>> DuplicateAsync(int sourceId, int count);
     }
 }

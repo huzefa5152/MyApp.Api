@@ -29,5 +29,18 @@ namespace MyApp.Api.Models
         public bool IsFavorite { get; set; } = true;
         public int UsageCount { get; set; }
         public DateTime? LastUsedAt { get; set; }
+
+        /// <summary>
+        /// True when this ItemType was auto-created from an FBR Annexure-A
+        /// import row that only carried a 4-digit HS heading (e.g. "8301")
+        /// instead of a full 8-digit PCT code (e.g. "8301.1000"). PRAL's
+        /// /validateinvoicedata rejects 4-digit codes for sales (error
+        /// 0052 — confirmed via sandbox 2026-05-08), so flagged ItemTypes
+        /// must NOT be picked when creating a sales bill — the operator
+        /// has to first edit the row and pick a real PCT code from the
+        /// FBR catalog. Defaults false: existing manual ItemTypes were
+        /// always entered with a real catalog code.
+        /// </summary>
+        public bool IsHsCodePartial { get; set; }
     }
 }

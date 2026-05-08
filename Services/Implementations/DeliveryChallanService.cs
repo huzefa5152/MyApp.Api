@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
@@ -12,11 +13,13 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly IDeliveryChallanRepository _repository;
         private readonly AppDbContext _context;
+        private readonly ILogger<DeliveryChallanService> _logger;
 
-        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context)
+        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context, ILogger<DeliveryChallanService> logger)
         {
             _repository = repository;
             _context = context;
+            _logger = logger;
         }
 
         /// <summary>
@@ -332,57 +335,7 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Compute what's removed, changed, added
-                var updatedIds = items.Where(i => i.Id > 0).Select(i => i.Id).ToHashSet();
-                var toRemove = dc.Items.Where(i => !updatedIds.Contains(i.Id)).ToList();
-                var removedDeliveryItemIds = toRemove.Select(i => i.Id).ToList();
-
-                var quantityChanges = new Dictionary<int, decimal>(); // deliveryItemId → newQuantity
-                var newItems = new List<DeliveryItem>();
-
-                foreach (var itemDto in items)
-                {
-                    var existing = dc.Items.FirstOrDefault(i => i.Id == itemDto.Id && itemDto.Id > 0);
-                    if (existing != null)
-                    {
-                        if (existing.Quantity != itemDto.Quantity ||
-                            existing.Description != itemDto.Description ||
-                            existing.Unit != itemDto.Unit)
-                        {
-                            quantityChanges[existing.Id] = itemDto.Quantity;
-                        }
-                        existing.ItemTypeId = itemDto.ItemTypeId;
-                        existing.Description = itemDto.Description;
-                        existing.Quantity = itemDto.Quantity;
-                        existing.Unit = itemDto.Unit;
-                    }
-                    else
-                    {
-                        var newItem = new DeliveryItem
-                        {
-                            DeliveryChallanId = challanId,
-                            ItemTypeId = itemDto.ItemTypeId,
-                            Description = itemDto.Description,
-                            Quantity = itemDto.Quantity,
-                            Unit = itemDto.Unit
-                        };
-                        dc.Items.Add(newItem);
-                        newItems.Add(newItem);
-                    }
-                }
-
-                // ── Sync linked invoice items BEFORE deleting delivery items ──
-                // EF's FK cascade (SET NULL on InvoiceItem.DeliveryItemId) would otherwise
-                // null the FKs and prevent the sync from matching items.
-                if (dc.InvoiceId.HasValue && dc.Invoice != null && dc.Invoice.FbrStatus != "Submitted")
-                {
-                    await SyncInvoiceItemsForChallanEditAsync(dc, removedDeliveryItemIds, quantityChanges, newItems);
-                }
-
-                // Now it's safe to delete removed delivery items
-                foreach (var item in toRemove)
-                    await _repository.DeleteItemAsync(item);
-
+                await ApplyItemsDiffAsync(dc, items);
                 await _repository.UpdateAsync(dc);
 
                 // Same upsert as on create — newly added item descriptions
@@ -394,11 +347,81 @@ namespace MyApp.Api.Services.Implementations
                 var reloaded = await _repository.GetByIdAsync(challanId);
                 return reloaded == null ? null : ToDto(reloaded);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "UpdateItemsAsync transaction failed for challan {ChallanId}", challanId);
                 await transaction.RollbackAsync();
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Diff-then-sync items update. Computes additions/updates/removals
+        /// against <paramref name="dc"/>.Items, mutates existing rows in place,
+        /// adds new rows to dc.Items, syncs the linked invoice (when one is
+        /// linked and not yet FBR-submitted), then hard-deletes the removed
+        /// rows via the repository.
+        ///
+        /// Callers own the surrounding transaction and the final
+        /// <c>UpdateAsync(dc)</c>. Two callers — <see cref="UpdateItemsAsync"/>
+        /// (items-only PUT) and <see cref="UpdateChallanAsync"/> (whole-
+        /// challan PUT) — share this helper so both paths sync the bill the
+        /// same way. Before this consolidation, UpdateChallanAsync did a
+        /// blanket RemoveRange + rebuild that orphaned linked InvoiceItems
+        /// (FK cascade SET NULL) without ever creating matching items on the
+        /// bill — bills got stuck out of sync with their challans.
+        /// </summary>
+        private async Task ApplyItemsDiffAsync(DeliveryChallan dc, List<DeliveryItemDto> items)
+        {
+            var updatedIds = items.Where(i => i.Id > 0).Select(i => i.Id).ToHashSet();
+            var toRemove = dc.Items.Where(i => !updatedIds.Contains(i.Id)).ToList();
+            var removedDeliveryItemIds = toRemove.Select(i => i.Id).ToList();
+
+            var quantityChanges = new Dictionary<int, decimal>(); // deliveryItemId → newQuantity
+            var newItems = new List<DeliveryItem>();
+
+            foreach (var itemDto in items)
+            {
+                var existing = dc.Items.FirstOrDefault(i => i.Id == itemDto.Id && itemDto.Id > 0);
+                if (existing != null)
+                {
+                    if (existing.Quantity != itemDto.Quantity ||
+                        existing.Description != itemDto.Description ||
+                        existing.Unit != itemDto.Unit)
+                    {
+                        quantityChanges[existing.Id] = itemDto.Quantity;
+                    }
+                    existing.ItemTypeId = itemDto.ItemTypeId;
+                    existing.Description = itemDto.Description;
+                    existing.Quantity = itemDto.Quantity;
+                    existing.Unit = itemDto.Unit;
+                }
+                else
+                {
+                    var newItem = new DeliveryItem
+                    {
+                        DeliveryChallanId = dc.Id,
+                        ItemTypeId = itemDto.ItemTypeId,
+                        Description = itemDto.Description,
+                        Quantity = itemDto.Quantity,
+                        Unit = itemDto.Unit
+                    };
+                    dc.Items.Add(newItem);
+                    newItems.Add(newItem);
+                }
+            }
+
+            // ── Sync linked invoice items BEFORE deleting delivery items ──
+            // EF's FK cascade (SET NULL on InvoiceItem.DeliveryItemId) would
+            // otherwise null the FKs and prevent the sync from matching items.
+            if (dc.InvoiceId.HasValue && dc.Invoice != null && dc.Invoice.FbrStatus != "Submitted")
+            {
+                await SyncInvoiceItemsForChallanEditAsync(dc, removedDeliveryItemIds, quantityChanges, newItems);
+            }
+
+            // Now it's safe to delete removed delivery items
+            foreach (var item in toRemove)
+                await _repository.DeleteItemAsync(item);
         }
 
         /// <summary>
@@ -512,17 +535,26 @@ namespace MyApp.Api.Services.Implementations
             if (!IsEditable(dc))
                 throw new InvalidOperationException("Can only delete Pending, No PO, or Setup Required challans.");
 
-            // Only the LAST challan (highest number) can be deleted so the
-            // numbering sequence stays gap-free. If someone tries to delete
-            // an earlier one, they should edit it instead.
-            var maxNumber = await _context.DeliveryChallans
-                .Where(c => c.CompanyId == dc.CompanyId)
-                .MaxAsync(c => (int?)c.ChallanNumber) ?? 0;
-            if (dc.ChallanNumber != maxNumber)
-                throw new InvalidOperationException(
-                    $"Only the latest challan can be deleted (currently #{maxNumber}). " +
-                    $"To change challan #{dc.ChallanNumber}, edit it instead — " +
-                    "deleting earlier challans would leave gaps in the numbering.");
+            // 2026-05-08: carve-out for duplicates. They share the parent's
+            // ChallanNumber, so deleting a duplicate doesn't create a gap in
+            // the numbering sequence — the original keeps the number. The
+            // max-number rule below only applies to canonical (non-duplicate)
+            // challans.
+            var isDuplicate = dc.DuplicatedFromId != null;
+            if (!isDuplicate)
+            {
+                // Only the LAST challan (highest number) can be deleted so the
+                // numbering sequence stays gap-free. If someone tries to delete
+                // an earlier one, they should edit it instead.
+                var maxNumber = await _context.DeliveryChallans
+                    .Where(c => c.CompanyId == dc.CompanyId)
+                    .MaxAsync(c => (int?)c.ChallanNumber) ?? 0;
+                if (dc.ChallanNumber != maxNumber)
+                    throw new InvalidOperationException(
+                        $"Only the latest challan can be deleted (currently #{maxNumber}). " +
+                        $"To change challan #{dc.ChallanNumber}, edit it instead — " +
+                        "deleting earlier challans would leave gaps in the numbering.");
+            }
 
             var companyId = dc.CompanyId;
             await _repository.DeleteAsync(dc);
@@ -580,8 +612,9 @@ namespace MyApp.Api.Services.Implementations
                 await transaction.CommitAsync();
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "DeleteItemAsync transaction failed for challan {ChallanId} item {ItemId}", dc.Id, itemId);
                 await transaction.RollbackAsync();
                 throw;
             }
@@ -656,34 +689,43 @@ namespace MyApp.Api.Services.Implementations
             // print template's {{#if indentNo}} block hides correctly.
             dc.IndentNo = string.IsNullOrWhiteSpace(dto.IndentNo) ? null : dto.IndentNo.Trim();
 
-            // Items: full replace (same semantics as UpdateItemsAsync but inline
-            // so we don't do two DB round-trips)
-            if (dto.Items != null && dto.Items.Any())
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                // Clear existing items, add new ones
-                _context.DeliveryItems.RemoveRange(dc.Items);
-                dc.Items = dto.Items.Select(i => new Models.DeliveryItem
+                // Items: diff-based update so the linked bill stays in sync.
+                // Earlier this block did a blanket RemoveRange + rebuild that
+                // silently broke any linked InvoiceItems (FK cascade SET NULL)
+                // without ever adding matching rows to the bill — challan and
+                // bill drifted apart. ApplyItemsDiffAsync mirrors what
+                // UpdateItemsAsync does so both endpoints behave identically.
+                if (dto.Items != null && dto.Items.Any())
                 {
-                    DeliveryChallanId = dc.Id,
-                    ItemTypeId = i.ItemTypeId,
-                    Description = i.Description,
-                    Quantity = i.Quantity,
-                    Unit = i.Unit
-                }).ToList();
-            }
+                    await ApplyItemsDiffAsync(dc, dto.Items);
+                }
 
-            // Recompute status — preserve "Invoiced" for challans already billed
-            if (dc.Status != "Invoiced")
+                // Recompute status — preserve "Invoiced" for challans already billed
+                if (dc.Status != "Invoiced")
+                {
+                    var fbrReady = IsFbrReady(dc.Company, dc.Client);
+                    dc.Status = !fbrReady ? "Setup Required"
+                              : hasPo     ? ReadyStatusFor(dc)
+                                          : "No PO";
+                }
+
+                await _repository.UpdateAsync(dc);
+                await EnsureItemDescriptionsAsync(dto.Items?.Select(i => i.Description) ?? Enumerable.Empty<string?>());
+
+                await transaction.CommitAsync();
+
+                var reloaded = await _repository.GetByIdAsync(challanId);
+                return reloaded == null ? null : ToDto(reloaded);
+            }
+            catch (Exception ex)
             {
-                var fbrReady = IsFbrReady(dc.Company, dc.Client);
-                dc.Status = !fbrReady ? "Setup Required"
-                          : hasPo     ? ReadyStatusFor(dc)
-                                      : "No PO";
+                _logger.LogError(ex, "UpdateAsync transaction failed for challan {ChallanId}", challanId);
+                await transaction.RollbackAsync();
+                throw;
             }
-
-            await _repository.UpdateAsync(dc);
-            var reloaded = await _repository.GetByIdAsync(challanId);
-            return reloaded == null ? null : ToDto(reloaded);
         }
 
         public async Task<DeliveryChallanDto?> UpdatePoAsync(int challanId, string poNumber, DateTime? poDate)
@@ -865,8 +907,29 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<DeliveryChallanDto?> DuplicateAsync(int sourceId)
         {
+            var clones = await DuplicateAsync(sourceId, 1);
+            return clones.FirstOrDefault();
+        }
+
+        /// <summary>
+        /// Create N duplicates of a single source challan in one transaction.
+        /// Returns the freshly-loaded DTO for each clone in creation order.
+        ///
+        /// 2026-05-08 UX upgrade: previously the operator had to click
+        /// Duplicate N times (and the laggy first-click let them double-fire
+        /// the request). The N-at-once flow plus the in-flight guard on the
+        /// frontend resolves both issues.
+        /// </summary>
+        public async Task<List<DeliveryChallanDto>> DuplicateAsync(int sourceId, int count)
+        {
+            if (count <= 0) count = 1;
+            // Hard cap so an accidental "999" entry doesn't lock the DB
+            // creating a bulk run that would later need cleanup. 20 is
+            // generous for any realistic same-PO-different-batch flow.
+            if (count > 20) count = 20;
+
             var source = await _repository.GetByIdAsync(sourceId);
-            if (source == null) return null;
+            if (source == null) return new();
 
             // Only billable-but-not-yet-billed statuses can be duplicated.
             // Cancelled / Invoiced / Setup Required / No PO are intentionally
@@ -882,13 +945,24 @@ namespace MyApp.Api.Services.Implementations
             if (source.IsDemo)
                 throw new InvalidOperationException("Demo (sandbox) challans cannot be duplicated.");
 
-            var clone = await _repository.DuplicateAsync(source);
+            // 2026-05-08: forbid duplicating a duplicate. The original is the
+            // only canonical "Challan #N" — operators can request N copies of
+            // it directly via the count parameter. Letting duplicates spawn
+            // their own duplicates fragments the lineage and confuses the
+            // "Duplicate of #N" subtitle on the cards.
+            if (source.DuplicatedFromId != null)
+                throw new InvalidOperationException(
+                    $"This challan is already a duplicate of #{source.ChallanNumber}. " +
+                    "Open the original challan to create more copies.");
 
-            // Re-fetch through the standard read path so the DTO has the same
-            // shape as every other challan response (Items + Client + Company
-            // + DuplicatedFrom navigation populated, FBR warnings computed).
-            var refreshed = await _repository.GetByIdAsync(clone.Id);
-            return refreshed == null ? null : ToDto(refreshed);
+            var clones = new List<DeliveryChallanDto>(count);
+            for (int i = 0; i < count; i++)
+            {
+                var clone = await _repository.DuplicateAsync(source);
+                var refreshed = await _repository.GetByIdAsync(clone.Id);
+                if (refreshed != null) clones.Add(ToDto(refreshed));
+            }
+            return clones;
         }
     }
 }

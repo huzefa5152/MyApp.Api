@@ -48,6 +48,17 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         fbrDefaultUOM: "",
         fbrDefaultPaymentModeRegistered: "",
         fbrDefaultPaymentModeUnregistered: "",
+        // Inventory module — off by default. Operator turns it on once
+        // they've recorded opening balances and are ready to track stock.
+        inventoryTrackingEnabled: false,
+        startingPurchaseBillNumber: 0,
+        startingGoodsReceiptNumber: 0,
+        // Tenant isolation — off by default to preserve "any user with the
+        // right RBAC permission can reach this company" behaviour. When
+        // flipped true, only users with a UserCompanies row pass the
+        // CompanyAccessGuard. Manage assignments via Configuration → Tenant
+        // Access.
+        isTenantIsolated: false,
     });
     const [logoFile, setLogoFile] = useState(null);
     const [error, setError] = useState("");
@@ -106,6 +117,10 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 fbrDefaultUOM: freshCompany.fbrDefaultUOM || "",
                 fbrDefaultPaymentModeRegistered: freshCompany.fbrDefaultPaymentModeRegistered || "",
                 fbrDefaultPaymentModeUnregistered: freshCompany.fbrDefaultPaymentModeUnregistered || "",
+                inventoryTrackingEnabled: !!freshCompany.inventoryTrackingEnabled,
+                startingPurchaseBillNumber: freshCompany.startingPurchaseBillNumber || 0,
+                startingGoodsReceiptNumber: freshCompany.startingGoodsReceiptNumber || 0,
+                isTenantIsolated: !!freshCompany.isTenantIsolated,
             });
         }
     }, [freshCompany]);
@@ -138,12 +153,16 @@ export default function CompanyForm({ company, onClose, onSaved }) {
     }, []);
 
     const handleChange = (e) => {
-        const { name, value } = e.target;
+        const { name, value, type, checked } = e.target;
+        if (type === "checkbox") {
+            setForm({ ...form, [name]: checked });
+            return;
+        }
         if (name === "fbrProvinceCode") {
             setForm({ ...form, [name]: value === "" ? "" : Number(value) });
             return;
         }
-        if (["startingChallanNumber", "currentChallanNumber", "startingInvoiceNumber", "currentInvoiceNumber"].includes(name)) {
+        if (["startingChallanNumber", "currentChallanNumber", "startingInvoiceNumber", "currentInvoiceNumber", "startingPurchaseBillNumber", "startingGoodsReceiptNumber"].includes(name)) {
             const numberValue = Number(value);
             if (isNaN(numberValue) || numberValue < 0 || numberValue > INT32_MAX) return;
             setForm({ ...form, [name]: numberValue });
@@ -460,6 +479,78 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                     </div>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Inventory module ─────────────────────────────── */}
+                        <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #00695c30", backgroundColor: "#e0f2f1" }}>
+                            <p style={{ margin: "0 0 0.6rem", fontWeight: 700, fontSize: "0.85rem", color: "#00695c" }}>Inventory Module</p>
+
+                            <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.5rem", borderRadius: 8, backgroundColor: "#fff", border: "1px solid #b2dfdb", cursor: "pointer", marginBottom: "0.6rem" }}>
+                                <input
+                                    type="checkbox"
+                                    name="inventoryTrackingEnabled"
+                                    checked={!!form.inventoryTrackingEnabled}
+                                    onChange={handleChange}
+                                    style={{ marginTop: "0.15rem", flexShrink: 0 }}
+                                />
+                                <span style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.35 }}>
+                                    <strong style={{ display: "block" }}>Enable inventory tracking</strong>
+                                    <span style={{ fontSize: "0.74rem", color: "#5f6d7e" }}>
+                                        Stock IN moves on Purchase Bill save, Stock OUT moves on FBR submission. Pre-check blocks FBR submit when oversold. Leave OFF until you've recorded opening balances.
+                                    </span>
+                                </span>
+                            </label>
+
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                                <div style={formGroup}>
+                                    <label style={label}>Starting Purchase Bill #</label>
+                                    <input
+                                        type="number"
+                                        name="startingPurchaseBillNumber"
+                                        min={0}
+                                        value={form.startingPurchaseBillNumber}
+                                        onChange={handleChange}
+                                        style={input}
+                                    />
+                                    <span style={{ fontSize: "0.72rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
+                                        Independent of sales-invoice numbering. Locks once purchase bills exist.
+                                    </span>
+                                </div>
+                                <div style={formGroup}>
+                                    <label style={label}>Starting Goods Receipt #</label>
+                                    <input
+                                        type="number"
+                                        name="startingGoodsReceiptNumber"
+                                        min={0}
+                                        value={form.startingGoodsReceiptNumber}
+                                        onChange={handleChange}
+                                        style={input}
+                                    />
+                                    <span style={{ fontSize: "0.72rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
+                                        Locks once goods receipts exist.
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Tenant Isolation ─────────────────────────────── */}
+                        <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #b26a0030", backgroundColor: "#fff4e0" }}>
+                            <p style={{ margin: "0 0 0.6rem", fontWeight: 700, fontSize: "0.85rem", color: "#b26a00" }}>Tenant Isolation</p>
+                            <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.5rem", borderRadius: 8, backgroundColor: "#fff", border: "1px solid #ffd699", cursor: "pointer" }}>
+                                <input
+                                    type="checkbox"
+                                    name="isTenantIsolated"
+                                    checked={!!form.isTenantIsolated}
+                                    onChange={handleChange}
+                                    style={{ marginTop: "0.15rem", flexShrink: 0 }}
+                                />
+                                <span style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.35 }}>
+                                    <strong style={{ display: "block" }}>Restrict to assigned users only</strong>
+                                    <span style={{ fontSize: "0.74rem", color: "#5f6d7e" }}>
+                                        OFF (default) — any authenticated user with the right RBAC permission can reach this company. ON — only users with an explicit grant in <em>Configuration → Tenant Access</em> see this company in dropdowns and can read/write its data. The seed admin always bypasses.
+                                    </span>
+                                </span>
+                            </label>
                         </div>
                     </div>
 

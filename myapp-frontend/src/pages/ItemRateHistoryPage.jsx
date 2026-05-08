@@ -35,12 +35,15 @@ export default function ItemRateHistoryPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // Pagination
+  // Pagination — pageSize is server-driven, sourced from the appsettings
+  // Pagination:DefaultPageSize value via the controller. We don't send a
+  // pageSize on the request so the server applies the configured default,
+  // and we read the value back from the response so totalPages is accurate.
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(15);
+  const [pageSize, setPageSize] = useState(null);
   const [totalCount, setTotalCount] = useState(0);
   const totalPages = useMemo(
-    () => (pageSize ? Math.ceil(totalCount / pageSize) : 0),
+    () => (pageSize && pageSize > 0 ? Math.ceil(totalCount / pageSize) : 0),
     [totalCount, pageSize]
   );
 
@@ -64,7 +67,10 @@ export default function ItemRateHistoryPage() {
     if (!selectedCompany) return;
     setLoading(true);
     try {
-      const params = { page, pageSize };
+      // Intentionally NOT sending pageSize — the backend pulls the
+      // configured Pagination:DefaultPageSize so we get a single source
+      // of truth across pages and respect operator-tuned values.
+      const params = { page };
       if (itemTypeId) params.itemTypeId = itemTypeId;
       else if (search) params.search = search;
       if (clientId) params.clientId = clientId;
@@ -74,6 +80,7 @@ export default function ItemRateHistoryPage() {
       const { data } = await getItemRateHistory(selectedCompany.id, params);
       setRows(data.items || []);
       setTotalCount(data.totalCount || 0);
+      setPageSize(data.pageSize || 0);
       setSummary({
         avg: data.avgUnitPrice,
         min: data.minUnitPrice,
@@ -87,7 +94,7 @@ export default function ItemRateHistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany, page, pageSize, itemTypeId, search, clientId, dateFrom, dateTo]);
+  }, [selectedCompany, page, itemTypeId, search, clientId, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchRows();
@@ -130,7 +137,7 @@ export default function ItemRateHistoryPage() {
       : Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
-    <div style={{ padding: "1.5rem 2rem" }}>
+    <div className="irh-page">
       <div style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
           <div style={styles.headerIcon}>
@@ -176,7 +183,7 @@ export default function ItemRateHistoryPage() {
           {/* Filters */}
           {selectedCompany && (
             <div className="filters-row">
-              <div className="filter-search-wrap" style={{ flex: "2 1 240px" }}>
+              <div className="filter-search-wrap filter-search-wrap--wide">
                 <MdSearch size={15} className="filter-search-icon" />
                 <input
                   type="text"
@@ -276,7 +283,8 @@ export default function ItemRateHistoryPage() {
             </div>
           ) : selectedCompany ? (
             <>
-              <div style={styles.tableWrap}>
+              {/* Desktop / tablet — table */}
+              <div className="irh-table" style={styles.tableWrap}>
                 <table style={styles.table}>
                   <thead>
                     <tr>
@@ -342,20 +350,72 @@ export default function ItemRateHistoryPage() {
                 </table>
               </div>
 
+              {/* Mobile — stacked cards. Same data, prioritised differently:
+                  Unit Price is the answer this page exists to surface, so it
+                  goes top-right, large + bold. Description carries the visual
+                  weight in the middle since that's how operators recognise
+                  the line. Footer = qty, line total, view button. */}
+              <div className="irh-cards">
+                {rows.map((r) => (
+                  <div key={r.invoiceItemId} className="irh-card">
+                    <div className="irh-card__top">
+                      <div className="irh-card__top-left">
+                        <span className="irh-card__bill">#{r.invoiceNumber}</span>
+                        <span className="irh-card__date">{new Date(r.date).toLocaleDateString()}</span>
+                      </div>
+                      <div className="irh-card__rate">
+                        <span className="irh-card__rate-label">Rate</span>
+                        <span className="irh-card__rate-value">Rs. {fmt(r.unitPrice)}</span>
+                      </div>
+                    </div>
+
+                    <div className="irh-card__client">{r.clientName}</div>
+                    <div className="irh-card__desc">{r.description}</div>
+                    {r.itemTypeName && (
+                      <div className="irh-card__itemtype">{r.itemTypeName}</div>
+                    )}
+
+                    <div className="irh-card__footer">
+                      <div className="irh-card__qty">
+                        <span className="irh-card__field-label">Qty</span>
+                        <span className="irh-card__field-value">
+                          {r.quantity}
+                          {r.uom ? <span className="irh-card__uom"> {r.uom}</span> : null}
+                        </span>
+                      </div>
+                      <div className="irh-card__total">
+                        <span className="irh-card__field-label">Line Total</span>
+                        <span className="irh-card__field-value">Rs. {fmt(r.lineTotal)}</span>
+                      </div>
+                      <button
+                        className="irh-card__view-btn"
+                        onClick={() => setViewingId(r.invoiceId)}
+                        aria-label="View this bill"
+                      >
+                        <MdVisibility size={16} />
+                        <span>View</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               {totalPages > 1 && (
-                <div style={styles.pagination}>
+                <div className="irh-pagination">
                   <button
-                    style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }}
+                    className="irh-page-btn"
+                    style={{ opacity: page <= 1 ? 0.4 : 1 }}
                     disabled={page <= 1}
                     onClick={() => setPage(page - 1)}
                   >
                     <MdChevronLeft size={20} /> Prev
                   </button>
-                  <span style={styles.pageInfo}>
-                    Page {page} of {totalPages} ({totalCount} total)
+                  <span className="irh-page-info">
+                    Page {page} of {totalPages} <span className="irh-page-info__count">({totalCount} total)</span>
                   </span>
                   <button
-                    style={{ ...styles.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }}
+                    className="irh-page-btn"
+                    style={{ opacity: page >= totalPages ? 0.4 : 1 }}
                     disabled={page >= totalPages}
                     onClick={() => setPage(page + 1)}
                   >

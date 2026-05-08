@@ -39,6 +39,15 @@
     </PackageReference>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.4" />
     <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
+    <!-- Observability stack — see AUDIT_2026_05_08_OBSERVABILITY.md C-1, H-1, H-2.
+         Serilog gives us durable rolling-file logs in production (stdout was
+         disappearing on container restart). Microsoft.Extensions.Http.Resilience
+         is the .NET 8+ recommended Polly wrapper for HttpClientFactory and powers
+         the FBR retry / circuit-breaker / timeout policies. -->
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="9.0.0" />
   </ItemGroup>
 
 </Project>

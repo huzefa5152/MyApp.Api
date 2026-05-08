@@ -1,0 +1,233 @@
+/* DashboardPage — responsive overrides on top of inline styles.
+   Inline styles can't do media queries, so the JSX tags key elements
+   with classNames and we override here at the mobile/tablet breakpoints. */
+
+/* ---------- Hero banner ---------- */
+@media (max-width: 599.98px) {
+  .dash-hero {
+    padding: 0.85rem 0.95rem !important;
+    border-radius: 14px !important;
+    gap: 0.6rem !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .dash-hero__title-block {
+    flex: 0 0 auto !important;
+    width: 100%;
+  }
+  .dash-hero__heading {
+    font-size: 1.1rem !important;
+    white-space: normal;
+  }
+  .dash-hero__subtitle {
+    font-size: 0.78rem !important;
+    white-space: normal;
+  }
+  .dash-hero__pickers {
+    flex: 0 0 auto !important;
+    width: 100%;
+    gap: 0.4rem !important;
+    flex-direction: row !important;
+  }
+  .dash-hero__select {
+    flex: 1 1 0 !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    padding: 0.55rem 0.7rem !important;
+    font-size: 0.82rem !important;
+    width: 100%;
+  }
+}
+
+/* Very narrow phones — stack the two pickers vertically too,
+   so each one gets a comfortable tap target. */
+@media (max-width: 419.98px) {
+  .dash-hero__pickers {
+    flex-direction: column !important;
+  }
+  .dash-hero__select {
+    width: 100%;
+  }
+}
+
+/* ---------- KPI hero grid ---------- */
+@media (max-width: 599.98px) {
+  .dash-hero-grid {
+    gap: 0.55rem !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .dash-kpi-card {
+    min-height: 108px !important;
+    padding: 0.7rem 0.75rem 0.65rem !important;
+    gap: 0.35rem !important;
+  }
+  .dash-kpi-card__label {
+    font-size: 0.66rem !important;
+    gap: 0.4rem !important;
+  }
+  .dash-kpi-card__icon {
+    width: 20px !important;
+    height: 20px !important;
+    border-radius: 6px !important;
+  }
+  .dash-kpi-card__value {
+    font-size: 1.05rem !important;
+    word-break: break-all;
+  }
+  .dash-kpi-card__delta {
+    font-size: 0.7rem !important;
+  }
+  .dash-kpi-card__delta-suffix {
+    display: none;
+  }
+}
+
+/* Very narrow — fall to a single column rather than squeezing 2. */
+@media (max-width: 359.98px) {
+  .dash-hero-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ---------- Section grid + section cards ---------- */
+@media (max-width: 599.98px) {
+  .dash-section-grid {
+    gap: 0.55rem !important;
+    margin-top: 0.55rem !important;
+  }
+  .dash-section-card__header {
+    padding: 0.6rem 0.85rem !important;
+    gap: 0.5rem !important;
+  }
+  .dash-section-card__header h2 {
+    font-size: 0.88rem !important;
+  }
+  .dash-section-card__header-icon {
+    width: 26px !important;
+    height: 26px !important;
+    border-radius: 8px !important;
+  }
+  .dash-section-card__body {
+    padding: 0.7rem 0.85rem !important;
+    gap: 0.7rem !important;
+  }
+  .dash-section-card__open {
+    padding: 0.2rem 0.45rem !important;
+    font-size: 0.7rem !important;
+  }
+  .dash-section-card__open-label {
+    display: none;
+  }
+}
+
+/* ---------- Stat row inside Sales/Purchases/Inventory ---------- */
+@media (max-width: 599.98px) {
+  .dash-meta-row {
+    gap: 0.4rem !important;
+  }
+  .dash-stat {
+    flex: 1 1 33% !important;
+    min-width: 0 !important;
+  }
+  .dash-stat-label {
+    font-size: 0.62rem !important;
+  }
+  .dash-stat-value {
+    font-size: 0.82rem !important;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
+
+/* ---------- Recent list rows ----------
+   Two-line layout on phones: row1 = #number + counterparty,
+   row2 = date (left) + amount (right). Cleaner than the 4-up wrap. */
+@media (max-width: 599.98px) {
+  .dash-recent-row {
+    display: grid !important;
+    grid-template-columns: auto 1fr auto !important;
+    grid-template-rows: auto auto !important;
+    gap: 0.15rem 0.4rem !important;
+    padding: 0.4rem 0.5rem !important;
+    background: #f8fafd;
+    border-radius: 8px;
+  }
+  .dash-recent-row__number {
+    grid-row: 1;
+    grid-column: 1;
+  }
+  .dash-recent-row__name {
+    grid-row: 1;
+    grid-column: 2 / span 2;
+  }
+  .dash-recent-row__date {
+    grid-row: 2;
+    grid-column: 1 / span 2;
+    font-size: 0.7rem !important;
+  }
+  .dash-recent-row__amount {
+    grid-row: 2;
+    grid-column: 3;
+    text-align: right;
+  }
+}
+
+/* ---------- Stock movements row (Inventory) ---------- */
+@media (max-width: 599.98px) {
+  .dash-mov-row {
+    flex-wrap: wrap;
+    padding: 0.35rem 0.4rem;
+    background: #f8fafd;
+    border-radius: 8px;
+  }
+  .dash-mov-row__name {
+    flex: 1 1 60% !important;
+    font-size: 0.82rem;
+  }
+  .dash-mov-row__qty {
+    font-size: 0.85rem;
+  }
+}
+
+/* ---------- Funnel cards (FBR) ---------- */
+@media (max-width: 599.98px) {
+  .dash-funnel-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.4rem !important;
+  }
+  .dash-funnel-card {
+    padding: 0.55rem 0.5rem !important;
+  }
+  .dash-funnel-card__value {
+    font-size: 1.1rem !important;
+  }
+}
+
+/* ---------- ByCounterparty card (Sales by Client / Purchases by Supplier) ---------- */
+@media (max-width: 599.98px) {
+  .dash-cp-grid {
+    gap: 0.65rem !important;
+    padding: 0.65rem 0.85rem 0.85rem !important;
+    grid-template-columns: 1fr !important;
+  }
+  .dash-cp-donut-wrap {
+    display: flex;
+    justify-content: center;
+  }
+  .dash-cp-list {
+    max-height: 260px !important;
+  }
+  .dash-cp-row {
+    padding: 0.4rem 0.45rem !important;
+  }
+  .dash-cp-row__name {
+    font-size: 0.78rem !important;
+  }
+  .dash-cp-row__pct {
+    width: 38px !important;
+    font-size: 0.7rem !important;
+  }
+  .dash-cp-row__value {
+    font-size: 0.78rem !important;
+  }
+}

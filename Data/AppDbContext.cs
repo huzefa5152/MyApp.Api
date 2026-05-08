@@ -23,21 +23,66 @@ namespace MyApp.Api.Data
         public DbSet<PrintTemplate> PrintTemplates { get; set; }
         public DbSet<MergeField> MergeFields { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
+        // Audit H-3 (2026-05-08): dedicated FBR communication log so the
+        // FBR sync trail is queryable without sifting through general
+        // audit noise. Wires up in OnModelCreating below.
+        public DbSet<FbrCommunicationLog> FbrCommunicationLogs { get; set; }
         public DbSet<FbrLookup> FbrLookups { get; set; }
         public DbSet<POFormat> POFormats { get; set; }
         public DbSet<POFormatVersion> POFormatVersions { get; set; }
         public DbSet<POGoldenSample> POGoldenSamples { get; set; }
+        // Audit / archive of every PO PDF the parser sees. Side-effect only;
+        // the parser flow doesn't read this back. Stored bytes live on disk
+        // under Data/uploads/po_imports — see PoImportArchive.StoredPath.
+        public DbSet<PoImportArchive> PoImportArchives { get; set; }
 
         // RBAC
         public DbSet<Permission> Permissions { get; set; }
         public DbSet<Role> Roles { get; set; }
         public DbSet<RolePermission> RolePermissions { get; set; }
         public DbSet<UserRole> UserRoles { get; set; }
+        public DbSet<UserCompany> UserCompanies { get; set; }
+
+        // Purchase + Inventory module
+        public DbSet<Supplier> Suppliers { get; set; }
+        public DbSet<SupplierGroup> SupplierGroups { get; set; }
+        public DbSet<PurchaseBill> PurchaseBills { get; set; }
+        public DbSet<PurchaseItem> PurchaseItems { get; set; }
+        public DbSet<PurchaseItemSourceLine> PurchaseItemSourceLines { get; set; }
+        public DbSet<GoodsReceipt> GoodsReceipts { get; set; }
+        public DbSet<GoodsReceiptItem> GoodsReceiptItems { get; set; }
+        public DbSet<StockMovement> StockMovements { get; set; }
+        public DbSet<OpeningStockBalance> OpeningStockBalances { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<AuditLog>()
                 .HasIndex(a => a.Timestamp);
+
+            // Dedup lookup index — paired (Fingerprint, Timestamp DESC)
+            // so AuditLogService.LogAsync can find recent matches in one
+            // seek. Filtered to non-null fingerprints to keep the index
+            // narrow on legacy rows that pre-date H-8.
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(a => new { a.Fingerprint, a.Timestamp })
+                .HasFilter("[Fingerprint] IS NOT NULL");
+
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(a => a.CompanyId)
+                .HasFilter("[CompanyId] IS NOT NULL");
+
+            // FbrCommunicationLog — primary lookup paths:
+            //   • Latest N for one company (monitor page top)
+            //   • All for one invoice (drill-through from invoice list)
+            //   • Status-filtered for the failed-queue retry view
+            modelBuilder.Entity<FbrCommunicationLog>()
+                .HasIndex(f => new { f.CompanyId, f.Timestamp })
+                .IsDescending(false, true);
+            modelBuilder.Entity<FbrCommunicationLog>()
+                .HasIndex(f => f.InvoiceId)
+                .HasFilter("[InvoiceId] IS NOT NULL");
+            modelBuilder.Entity<FbrCommunicationLog>()
+                .HasIndex(f => new { f.CompanyId, f.Status });
 
             // Unique index on Username
             modelBuilder.Entity<User>()
@@ -166,8 +211,9 @@ namespace MyApp.Api.Data
                 .OnDelete(DeleteBehavior.Restrict);
 
             // DeliveryChallan -> DeliveryChallan (self-FK for "Duplicate")
-            // Restrict delete so the parent stays in place if a copy is removed,
-            // and so a parent isn't accidentally erased while copies still exist.
+            // Restrict delete so a parent isn't accidentally erased while
+            // copies still exist; the parent stays in place if a copy is
+            // removed.
             modelBuilder.Entity<DeliveryChallan>()
                 .HasOne(dc => dc.DuplicatedFrom)
                 .WithMany()
@@ -308,6 +354,32 @@ namespace MyApp.Api.Data
                 .WithMany()
                 .HasForeignKey(v => v.POFormatId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // ── PoImportArchive ────────────────────────────────────────────
+            // No FKs on CompanyId / UploadedByUserId — the archive must
+            // outlive the rows it references (a deleted user/company should
+            // NOT prune their historical parse failures, that's the whole
+            // point of the audit). Indexed for the common triage queries:
+            //   "show me everything that didn't parse last week"
+            //   "show me Hakimi's failures grouped by format"
+            modelBuilder.Entity<PoImportArchive>()
+                .Property(x => x.OriginalFileName).HasMaxLength(255);
+            modelBuilder.Entity<PoImportArchive>()
+                .Property(x => x.StoredPath).HasMaxLength(500);
+            modelBuilder.Entity<PoImportArchive>()
+                .Property(x => x.ContentSha256).HasMaxLength(64);
+            modelBuilder.Entity<PoImportArchive>()
+                .Property(x => x.ParseOutcome).HasMaxLength(32);
+            modelBuilder.Entity<PoImportArchive>()
+                .Property(x => x.ErrorMessage).HasMaxLength(1000);
+            modelBuilder.Entity<PoImportArchive>()
+                .Property(x => x.Notes).HasMaxLength(1000);
+            modelBuilder.Entity<PoImportArchive>()
+                .HasIndex(x => x.UploadedAt);
+            modelBuilder.Entity<PoImportArchive>()
+                .HasIndex(x => new { x.CompanyId, x.UploadedAt });
+            modelBuilder.Entity<PoImportArchive>()
+                .HasIndex(x => x.ParseOutcome);
 
             // POGoldenSample: replayed on every rule-set update to prevent regressions.
             modelBuilder.Entity<POGoldenSample>()
@@ -560,6 +632,224 @@ namespace MyApp.Api.Data
                 .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<UserRole>()
                 .HasIndex(ur => ur.RoleId);
+
+            // ── Tenant isolation: UserCompany ──
+            // Composite PK on (UserId, CompanyId). Both sides cascade so
+            // deleting a user or a company cleans up its grants. The
+            // CompanyAccessGuard reads this table when Company.IsTenantIsolated=true.
+            modelBuilder.Entity<UserCompany>()
+                .HasKey(uc => new { uc.UserId, uc.CompanyId });
+            modelBuilder.Entity<UserCompany>()
+                .HasOne(uc => uc.User)
+                .WithMany()
+                .HasForeignKey(uc => uc.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UserCompany>()
+                .HasOne(uc => uc.Company)
+                .WithMany()
+                .HasForeignKey(uc => uc.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UserCompany>()
+                .HasIndex(uc => uc.CompanyId);
+
+            // ── Purchase + Inventory module ────────────────────────────────
+
+            // Supplier — mirror of Client
+            modelBuilder.Entity<Supplier>()
+                .HasOne(s => s.Company)
+                .WithMany(co => co.Suppliers)
+                .HasForeignKey(s => s.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<Supplier>()
+                .HasIndex(s => s.CompanyId);
+            modelBuilder.Entity<Supplier>()
+                .Property(s => s.Name).HasMaxLength(300);
+            modelBuilder.Entity<Supplier>()
+                .Property(s => s.NTN).HasMaxLength(20);
+            modelBuilder.Entity<Supplier>()
+                .Property(s => s.STRN).HasMaxLength(20);
+            modelBuilder.Entity<Supplier>()
+                .Property(s => s.RegistrationType).HasMaxLength(20);
+            modelBuilder.Entity<Supplier>()
+                .Property(s => s.CNIC).HasMaxLength(20);
+
+            // ── Supplier → SupplierGroup (Common Suppliers grouping) ──
+            // Mirrors Client → ClientGroup. Nullable FK so existing rows
+            // stay valid until the one-time backfill assigns them. SetNull
+            // on group delete so removing the group row doesn't orphan /
+            // cascade-delete suppliers — they keep working as ungrouped
+            // per-company records.
+            modelBuilder.Entity<Supplier>()
+                .HasOne(s => s.SupplierGroup)
+                .WithMany(g => g.Suppliers)
+                .HasForeignKey(s => s.SupplierGroupId)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<Supplier>()
+                .HasIndex(s => s.SupplierGroupId);
+
+            // ── SupplierGroup unique key + lookup indexes ──
+            modelBuilder.Entity<SupplierGroup>()
+                .HasIndex(g => g.GroupKey)
+                .IsUnique();
+            modelBuilder.Entity<SupplierGroup>()
+                .HasIndex(g => g.NormalizedNtn);
+            modelBuilder.Entity<SupplierGroup>()
+                .HasIndex(g => g.NormalizedName);
+
+            // PurchaseBill — mirror of Invoice
+            modelBuilder.Entity<PurchaseBill>()
+                .HasOne(pb => pb.Company)
+                .WithMany(c => c.PurchaseBills)
+                .HasForeignKey(pb => pb.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<PurchaseBill>()
+                .HasOne(pb => pb.Supplier)
+                .WithMany(s => s.PurchaseBills)
+                .HasForeignKey(pb => pb.SupplierId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<PurchaseBill>()
+                .HasIndex(pb => pb.CompanyId);
+            modelBuilder.Entity<PurchaseBill>()
+                .HasIndex(pb => new { pb.CompanyId, pb.PurchaseBillNumber });
+            modelBuilder.Entity<PurchaseBill>()
+                .HasIndex(pb => pb.SupplierId);
+            modelBuilder.Entity<PurchaseBill>()
+                .HasIndex(pb => pb.SupplierIRN);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.Subtotal).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.GSTRate).HasPrecision(5, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.GSTAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.GrandTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.SupplierBillNumber).HasMaxLength(100);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.SupplierIRN).HasMaxLength(64);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.ReconciliationStatus).HasMaxLength(20).HasDefaultValue("Pending");
+
+            // PurchaseItem — mirror of InvoiceItem
+            modelBuilder.Entity<PurchaseItem>()
+                .HasOne(pi => pi.PurchaseBill)
+                .WithMany(pb => pb.Items)
+                .HasForeignKey(pi => pi.PurchaseBillId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PurchaseItem>()
+                .HasOne(pi => pi.ItemType)
+                .WithMany()
+                .HasForeignKey(pi => pi.ItemTypeId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<PurchaseItem>()
+                .HasOne(pi => pi.GoodsReceiptItem)
+                .WithMany()
+                .HasForeignKey(pi => pi.GoodsReceiptItemId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<PurchaseItem>()
+                .HasIndex(pi => pi.PurchaseBillId);
+            modelBuilder.Entity<PurchaseItem>()
+                .HasIndex(pi => pi.ItemTypeId);
+
+            // PurchaseItemSourceLine — join table for N:M between
+            // PurchaseItems and InvoiceItems. Composite PK; both sides
+            // cascade so cleanup is automatic when either parent is
+            // removed.
+            modelBuilder.Entity<PurchaseItemSourceLine>()
+                .HasKey(x => new { x.PurchaseItemId, x.InvoiceItemId });
+            modelBuilder.Entity<PurchaseItemSourceLine>()
+                .HasOne(x => x.PurchaseItem)
+                .WithMany(pi => pi.SourceLines)
+                .HasForeignKey(x => x.PurchaseItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PurchaseItemSourceLine>()
+                .HasOne(x => x.InvoiceItem)
+                .WithMany()
+                .HasForeignKey(x => x.InvoiceItemId)
+                .OnDelete(DeleteBehavior.NoAction); // avoid SQL Server "multiple cascade paths"
+            modelBuilder.Entity<PurchaseItemSourceLine>()
+                .HasIndex(x => x.InvoiceItemId);
+            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.UnitPrice).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.LineTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.FixedNotifiedValueOrRetailPrice).HasPrecision(18, 2);
+            // Decimal Quantity (was int) — matches DeliveryItem/InvoiceItem
+            // precision so cross-module reports don't have a units mismatch.
+            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.Quantity).HasPrecision(18, 4);
+            // FBR-source line taxes — both nullable, additive.
+            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.ExtraTax).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.StWithheldAtSource).HasPrecision(18, 2);
+
+            // PurchaseBill.Source — short string column tagging row lineage.
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.Source).HasMaxLength(20);
+
+            // GoodsReceipt — mirror of DeliveryChallan
+            modelBuilder.Entity<GoodsReceipt>()
+                .HasOne(gr => gr.Company)
+                .WithMany(c => c.GoodsReceipts)
+                .HasForeignKey(gr => gr.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<GoodsReceipt>()
+                .HasOne(gr => gr.Supplier)
+                .WithMany(s => s.GoodsReceipts)
+                .HasForeignKey(gr => gr.SupplierId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<GoodsReceipt>()
+                .HasOne(gr => gr.PurchaseBill)
+                .WithMany(pb => pb.GoodsReceipts)
+                .HasForeignKey(gr => gr.PurchaseBillId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<GoodsReceipt>()
+                .HasIndex(gr => gr.CompanyId);
+            modelBuilder.Entity<GoodsReceipt>()
+                .HasIndex(gr => new { gr.CompanyId, gr.GoodsReceiptNumber });
+            modelBuilder.Entity<GoodsReceipt>()
+                .HasIndex(gr => gr.SupplierId);
+            modelBuilder.Entity<GoodsReceipt>()
+                .Property(gr => gr.Status).HasMaxLength(20).HasDefaultValue("Pending");
+
+            // GoodsReceiptItem — mirror of DeliveryItem
+            modelBuilder.Entity<GoodsReceiptItem>()
+                .HasOne(gri => gri.GoodsReceipt)
+                .WithMany(gr => gr.Items)
+                .HasForeignKey(gri => gri.GoodsReceiptId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<GoodsReceiptItem>()
+                .HasOne(gri => gri.ItemType)
+                .WithMany()
+                .HasForeignKey(gri => gri.ItemTypeId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<GoodsReceiptItem>()
+                .HasIndex(gri => gri.GoodsReceiptId);
+
+            // StockMovement — append-only event log
+            modelBuilder.Entity<StockMovement>()
+                .HasOne(sm => sm.Company)
+                .WithMany()
+                .HasForeignKey(sm => sm.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<StockMovement>()
+                .HasOne(sm => sm.ItemType)
+                .WithMany()
+                .HasForeignKey(sm => sm.ItemTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Composite index for the hot-path on-hand query:
+            //   WHERE CompanyId = X AND ItemTypeId = Y
+            //   then SUM(Direction == In ? Quantity : -Quantity)
+            modelBuilder.Entity<StockMovement>()
+                .HasIndex(sm => new { sm.CompanyId, sm.ItemTypeId });
+            modelBuilder.Entity<StockMovement>()
+                .HasIndex(sm => new { sm.SourceType, sm.SourceId });
+
+            // OpeningStockBalance — at most one row per (Company, ItemType)
+            modelBuilder.Entity<OpeningStockBalance>()
+                .HasOne(osb => osb.Company)
+                .WithMany()
+                .HasForeignKey(osb => osb.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<OpeningStockBalance>()
+                .HasOne(osb => osb.ItemType)
+                .WithMany()
+                .HasForeignKey(osb => osb.ItemTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<OpeningStockBalance>()
+                .HasIndex(osb => new { osb.CompanyId, osb.ItemTypeId })
+                .IsUnique();
         }
 
     }

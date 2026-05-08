@@ -16,7 +16,11 @@ namespace MyApp.Api.Services.Interfaces
         // Reference APIs v1 (V1.12 §5.1–§5.6)
         Task<List<FbrProvinceDto>> GetProvincesAsync(int companyId);
         Task<List<FbrDocTypeDto>> GetDocTypesAsync(int companyId);
-        Task<List<FbrHSCodeDto>> GetHSCodesAsync(int companyId, string? search = null);
+        // saleType (optional) narrows the result to HS codes whose
+        // HS-prefix heuristic maps to that sale type — used by the inline
+        // New-Item-Type modal so its typeahead only suggests codes that
+        // are valid under the parent bill's locked scenario.
+        Task<List<FbrHSCodeDto>> GetHSCodesAsync(int companyId, string? search = null, string? saleType = null);
         Task<List<FbrUOMDto>> GetUOMsAsync(int companyId);
         Task<List<FbrTransactionTypeDto>> GetTransactionTypesAsync(int companyId);
         Task<List<FbrSROItemDto>> GetSROItemCodesAsync(int companyId);

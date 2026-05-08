@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
@@ -14,14 +15,16 @@ namespace MyApp.Api.Services.Implementations
         private readonly IInvoiceRepository _invoiceRepo;
         private readonly IDeliveryChallanService _challanService;
         private readonly AppDbContext _context;
+        private readonly ILogger<CompanyService> _logger;
 
-        public CompanyService(ICompanyRepository repository, IDeliveryChallanRepository challanRepo, IInvoiceRepository invoiceRepo, IDeliveryChallanService challanService, AppDbContext context)
+        public CompanyService(ICompanyRepository repository, IDeliveryChallanRepository challanRepo, IInvoiceRepository invoiceRepo, IDeliveryChallanService challanService, AppDbContext context, ILogger<CompanyService> logger)
         {
             _repository = repository;
             _challanRepo = challanRepo;
             _invoiceRepo = invoiceRepo;
             _challanService = challanService;
             _context = context;
+            _logger = logger;
         }
 
         private static CompanyDto ToDto(Company c, bool hasChallans = false, bool hasInvoices = false) => new()
@@ -50,7 +53,13 @@ namespace MyApp.Api.Services.Implementations
             FbrDefaultSaleType = c.FbrDefaultSaleType,
             FbrDefaultUOM = c.FbrDefaultUOM,
             FbrDefaultPaymentModeRegistered = c.FbrDefaultPaymentModeRegistered,
-            FbrDefaultPaymentModeUnregistered = c.FbrDefaultPaymentModeUnregistered
+            FbrDefaultPaymentModeUnregistered = c.FbrDefaultPaymentModeUnregistered,
+            InventoryTrackingEnabled = c.InventoryTrackingEnabled,
+            StartingPurchaseBillNumber = c.StartingPurchaseBillNumber,
+            CurrentPurchaseBillNumber = c.CurrentPurchaseBillNumber,
+            StartingGoodsReceiptNumber = c.StartingGoodsReceiptNumber,
+            CurrentGoodsReceiptNumber = c.CurrentGoodsReceiptNumber,
+            IsTenantIsolated = c.IsTenantIsolated,
         };
 
         public async Task<IEnumerable<CompanyDto>> GetAllAsync()
@@ -113,7 +122,13 @@ namespace MyApp.Api.Services.Implementations
                 FbrDefaultSaleType = dto.FbrDefaultSaleType,
                 FbrDefaultUOM = dto.FbrDefaultUOM,
                 FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered,
-                FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered
+                FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered,
+                InventoryTrackingEnabled = dto.InventoryTrackingEnabled,
+                StartingPurchaseBillNumber = dto.StartingPurchaseBillNumber,
+                CurrentPurchaseBillNumber = 0,
+                StartingGoodsReceiptNumber = dto.StartingGoodsReceiptNumber,
+                CurrentGoodsReceiptNumber = 0,
+                IsTenantIsolated = dto.IsTenantIsolated,
             };
 
             var created = await _repository.AddAsync(company);
@@ -151,6 +166,28 @@ namespace MyApp.Api.Services.Implementations
             company.FbrDefaultUOM = dto.FbrDefaultUOM;
             company.FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered;
             company.FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered;
+
+            // Tenant isolation flag — freely toggleable. Flipping it true
+            // immediately requires a UserCompanies row for non-admins; the
+            // CompanyAccessGuard cache TTL is 60s so propagation is bounded.
+            company.IsTenantIsolated = dto.IsTenantIsolated;
+
+            // Inventory module — flag is freely toggleable; starting numbers
+            // only apply if no purchase docs exist yet (same rule as the
+            // sales-side starting numbers).
+            company.InventoryTrackingEnabled = dto.InventoryTrackingEnabled;
+            var hasPurchaseBills = await _context.PurchaseBills.AnyAsync(p => p.CompanyId == id);
+            if (!hasPurchaseBills)
+            {
+                company.StartingPurchaseBillNumber = dto.StartingPurchaseBillNumber;
+                company.CurrentPurchaseBillNumber = 0;
+            }
+            var hasReceipts = await _context.GoodsReceipts.AnyAsync(g => g.CompanyId == id);
+            if (!hasReceipts)
+            {
+                company.StartingGoodsReceiptNumber = dto.StartingGoodsReceiptNumber;
+                company.CurrentGoodsReceiptNumber = 0;
+            }
 
             // Only allow changing starting challan number if no challans exist
             var hasChallans = await _challanRepo.HasChallansForCompanyAsync(id);
@@ -217,8 +254,9 @@ namespace MyApp.Api.Services.Implementations
 
                 await transaction.CommitAsync();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "CompanyService: delete-company transaction rolled back for companyId={CompanyId}", id);
                 await transaction.RollbackAsync();
                 throw;
             }

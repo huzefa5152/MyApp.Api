@@ -1,16 +1,64 @@
 ﻿using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using MyApp.Api.Data;
+using MyApp.Api.Helpers;
 using MyApp.Api.Repositories.Implementations;
 using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Implementations;
 using MyApp.Api.Services.Interfaces;
 using MyApp.Api.Services.Tax;
+using Polly;
+using Serilog;
+using Serilog.Events;
 
+// ── Serilog bootstrap (must precede WebApplication.CreateBuilder) ──
+// Captures startup-failure logs that would otherwise be lost. Real config
+// is read from appsettings (logger replaced via builder.Host.UseSerilog
+// below); this bootstrap logger only catches "the server crashed before
+// it could even read config" — rare but devastating without it.
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .WriteTo.Console()
+    .WriteTo.File(
+        path: Path.Combine(AppContext.BaseDirectory, "logs", "bootstrap-.log"),
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 7)
+    .CreateBootstrapLogger();
+
+try
+{
 var builder = WebApplication.CreateBuilder(args);
+
+// Serilog as the host logger — config from appsettings.{Environment}.json
+// "Serilog" section. Falls back to sensible defaults if config is missing.
+// Async sinks aren't strictly necessary at this scale; sticking with
+// synchronous file sink to keep diagnostics linear (a 50 ms write is
+// fine in exchange for guaranteed line ordering on crash).
+builder.Host.UseSerilog((ctx, services, lc) => lc
+    .ReadFrom.Configuration(ctx.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
+    .Enrich.WithProperty("Application", "MyApp.Api")
+    .Enrich.WithProperty("Environment", ctx.HostingEnvironment.EnvironmentName)
+    // Defaults if config doesn't override — durable rolling file in
+    // logs/ next to the binary, 30-day retention, 50 MB cap per file.
+    .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information)
+    .WriteTo.File(
+        path: Path.Combine(AppContext.BaseDirectory, "logs", "api-.log"),
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 30,
+        fileSizeLimitBytes: 50 * 1024 * 1024,
+        rollOnFileSizeLimit: true,
+        shared: true,
+        // Excluded the noisy framework loggers from the file sink — the
+        // Console sink keeps them at Warning so dev can still spot issues.
+        restrictedToMinimumLevel: LogEventLevel.Information));
 
 // Add services to the container
 builder.Services.AddControllers(); // 👈 Needed for controllers
@@ -22,7 +70,20 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// JWT Authentication
+// JWT Authentication — key MUST come from a non-committed source:
+//   • env var Jwt__Key  (recommended for prod)
+//   • appsettings.{Development,Production,Local}.json  (gitignored)
+// We refuse to start with an empty / default key so a misconfigured
+// deploy fails loudly rather than running on a forgeable signing key.
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey) || jwtKey.Length < 32)
+{
+    throw new InvalidOperationException(
+        "Jwt:Key is missing or too short (minimum 32 chars). Set it via " +
+        "the Jwt__Key environment variable or appsettings.{Environment}.json. " +
+        "Never commit a real signing key to git.");
+}
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -38,15 +99,36 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = builder.Configuration["Jwt:Issuer"],
         ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
     };
+});
+
+// Rate limiter — applied selectively below to /api/auth/login. Other
+// endpoints stay unrestricted to avoid breaking bulk operations the
+// operator runs (Validate All, Submit All, etc.).
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("login", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            // 10 attempts per IP per minute — generous enough for a typo
+            // recovery, tight enough to stop credential stuffing.
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+        });
+    });
 });
 
 // Register Repositories
 builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<IDeliveryChallanRepository, DeliveryChallanRepository>();
 builder.Services.AddScoped<IClientRepository, ClientRepository>();
+builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 builder.Services.AddScoped<IItemTypeRepository, ItemTypeRepository>();
 builder.Services.AddScoped<IPrintTemplateRepository, PrintTemplateRepository>();
@@ -62,11 +144,24 @@ builder.Services.AddScoped<IClientService, ClientService>();
 // alongside the per-company ClientService; existing per-company flows
 // keep working unchanged.
 builder.Services.AddScoped<IClientGroupService, ClientGroupService>();
+builder.Services.AddScoped<ISupplierService, SupplierService>();
+// "Common Suppliers" grouping — same shape as IClientGroupService for
+// the purchase side. Lets the same legal entity (matched by NTN, then
+// fallback to normalised name) act as a single supplier across multiple
+// tenants. Existing per-company SupplierService flows keep working
+// unchanged; this is purely additive.
+builder.Services.AddScoped<ISupplierGroupService, SupplierGroupService>();
+builder.Services.AddScoped<IPurchaseBillService, PurchaseBillService>();
+builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<IFbrService, FbrService>();
 builder.Services.AddScoped<IFbrLookupService, FbrLookupService>();
+// Inventory accounting: stock movements + on-hand + availability check.
+// All write operations are no-ops when Company.InventoryTrackingEnabled
+// is false, so existing tenants keep working unchanged.
+builder.Services.AddScoped<IStockService, StockService>();
 // Tax mapping engine: single source of truth for HS_UOM, SaleTypeToRate
 // and scenario rules. Used by ItemType save (auto-pick UOM) and FBR
 // pre-validate (combination check before submitting).
@@ -80,26 +175,110 @@ builder.Services.AddSingleton<IPOFormatFingerprintService, POFormatFingerprintSe
 builder.Services.AddScoped<IPOFormatRegistry, POFormatRegistry>();
 builder.Services.AddSingleton<IRuleBasedPOParser, RuleBasedPOParser>();
 builder.Services.AddScoped<IRegressionService, RegressionService>();
+
+// ── FBR Purchase Import (Annexure-A xls upload, Phase 1: preview) ──
+// Parser + filter are stateless / Scoped because they don't hold any
+// per-request data; the orchestrator depends on AppDbContext via the
+// matcher so it must be Scoped too. No singleton — keeps DB lifetime
+// management trivial.
+builder.Services.AddScoped<IFbrPurchaseLedgerParser, FbrPurchaseLedgerParser>();
+builder.Services.AddScoped<IFbrPurchaseImportFilter, FbrPurchaseImportFilter>();
+builder.Services.AddScoped<IFbrPurchaseImportMatcher, FbrPurchaseImportMatcher>();
+builder.Services.AddScoped<IFbrPurchaseImportCommitter, FbrPurchaseImportCommitter>();
+builder.Services.AddScoped<IFbrPurchaseImportService, FbrPurchaseImportService>();
+
+// Dashboard KPI aggregator. Scoped because it depends on AppDbContext
+// and IPermissionService — both Scoped — and the queries use the
+// per-request user identity for permission checks.
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+
+// Tax-claim helper — drives the in-form HS-stock panel on the
+// Invoices-tab edit screen. Scoped (depends on AppDbContext).
+builder.Services.AddScoped<ITaxClaimService, TaxClaimService>();
+
 // Historical challan import (reverse Excel template → preview → commit).
 // Reverse mapper is a Singleton because it holds an in-memory cache keyed on
 // the template file path + lastWriteTime — rebuilds automatically when the
 // operator re-uploads a template, and shared safely across requests.
 builder.Services.AddSingleton<IExcelTemplateReverseMapper, ExcelTemplateReverseMapper>();
 builder.Services.AddScoped<IChallanExcelImporter, ChallanExcelImporter>();
-builder.Services.AddHttpClient("FBR");
+// Sensitive-data redactor — shared by GlobalExceptionMiddleware and
+// FbrService for consistent NTN/CNIC masking + credential redaction.
+// Singleton because the regexes are stateless and compiled once.
+builder.Services.AddSingleton<ISensitiveDataRedactor, SensitiveDataRedactor>();
+
+// FBR communication log — dedicated trail for audit H-3.
+builder.Services.AddScoped<IFbrCommunicationLogService, FbrCommunicationLogService>();
+
+// HttpContextAccessor — needed by FbrService etc. so they can pull the
+// current request's CorrelationId without taking HttpContext directly.
+builder.Services.AddHttpContextAccessor();
+
+// FBR HttpClient — see audit H-1 (no retry), H-2 (no timeout).
+//   • 30 s timeout per attempt (vs 100 s framework default that was
+//     blocking Kestrel threads under FBR brownouts)
+//   • Standard resilience handler: retry transient failures, circuit-
+//     break after sustained failures, plus per-attempt timeout. The
+//     default policy in Microsoft.Extensions.Http.Resilience handles
+//     5xx and HttpRequestException with exponential backoff.
+builder.Services.AddHttpClient("FBR", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.Add("User-Agent", "MyApp.Api/1.0");
+})
+.AddStandardResilienceHandler(options =>
+{
+    // Total time across retries — must exceed per-attempt timeout × max
+    // attempts or the resilience pipeline trips its own guard.
+    options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(120);
+    options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(30);
+    options.Retry.MaxRetryAttempts = 3;
+    options.Retry.Delay = TimeSpan.FromSeconds(2);
+    options.Retry.BackoffType = DelayBackoffType.Exponential;
+    // Open circuit after 5 failures across a 30 s window; half-open
+    // after 15 s. Tuned to FBR sandbox behaviour (occasional 30-60 s
+    // outages during their nightly maintenance).
+    options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(60);
+    options.CircuitBreaker.MinimumThroughput = 5;
+    options.CircuitBreaker.FailureRatio = 0.5;
+    options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(15);
+});
 
 // RBAC: permission service needs an in-process cache for the per-user
 // permission-set TTL.
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
 
-// before builder.Build()
+// Tenant-scope guard — answers "may this user touch this company?"
+// in addition to RBAC's "may this user perform this action?". Reads
+// the UserCompany table when Company.IsTenantIsolated=true; passes
+// through otherwise (preserves Hakimi/Roshan behaviour).
+builder.Services.AddScoped<ICompanyAccessGuard, CompanyAccessGuard>();
+
+// CORS — origins read from configuration (Cors:AllowedOrigins, comma-
+// separated). Empty / missing collapses to "no cross-origin allowed",
+// which is correct when the SPA is served from the same host as the
+// API (the standard MonsterASP / Render setup here). Never falls back
+// to AllowAnyOrigin; that combined with a stolen JWT was the gap.
+var corsOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? "")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", p =>
-        p.AllowAnyOrigin()    // or .WithOrigins("https://localhost:5173")
-         .AllowAnyHeader()
-         .AllowAnyMethod());
+    {
+        if (corsOrigins.Length > 0)
+        {
+            p.WithOrigins(corsOrigins)
+             .AllowAnyHeader()
+             .AllowAnyMethod();
+        }
+        else
+        {
+            // No origins configured → effectively "same-origin only".
+            // No-op policy; the SPA from wwwroot still works because
+            // it never crosses an origin.
+        }
+    });
 });
 
 // Use PORT env variable for Docker/Render deployment; IIS/MonsterASP manages its own port
@@ -138,27 +317,49 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 
     // One-time tagging: any pre-existing bills whose paymentTerms start
-    // with "[SNxxx]" came from the FBR Sandbox seed flow (or the python
-    // script). They predate the IsDemo column, so the migration left
-    // them with IsDemo=false — meaning they still pollute the regular
+    // with "[SNxxx]" came from the legacy FBR Sandbox seed flow (or the
+    // python script). They predate the IsDemo column, so the migration
+    // left them with IsDemo=false — meaning they polluted the regular
     // Bills page. Flip them to IsDemo=true once.
-    // Idempotent: subsequent restarts find zero matching rows because
-    // the WHERE clause filters on IsDemo=0.
-    // Pattern: literal '[' + 'SN0' + any digits + literal ']' + any rest.
-    // The '[[]' escapes '[' so SQL Server treats it literally instead of
-    // as a character-set opener.
-    db.Database.ExecuteSqlRaw(@"
-        UPDATE Invoices
-           SET IsDemo = 1
-         WHERE IsDemo = 0
-           AND PaymentTerms LIKE '[[]SN0%]%';
-        UPDATE dc
-           SET dc.IsDemo = 1
-          FROM DeliveryChallans dc
-         WHERE dc.IsDemo = 0
-           AND EXISTS (SELECT 1 FROM Invoices i
-                        WHERE i.Id = dc.InvoiceId AND i.IsDemo = 1);
-    ");
+    //
+    // CRITICAL: this MUST be guarded by an audit-log marker, not by
+    // `WHERE IsDemo = 0`. The new StandaloneInvoiceForm flow legitimately
+    // tags every bill with "[SNxxx]" so FbrService can route the right
+    // scenarioId on Validate / Submit — those are REAL bills, not demos.
+    // Without this guard, every non-demo bill with a scenario tag gets
+    // hidden from the Bills page on the next backend restart.
+    //
+    // Marker pattern matches what RbacSeeder / ItemTypeSeeder /
+    // CommonClientsBackfill etc. already use elsewhere in this file.
+    var sandboxTagBackfillRan = await db.AuditLogs
+        .AnyAsync(a => a.ExceptionType == "SANDBOX_SNTAG_BACKFILL_V1");
+    if (!sandboxTagBackfillRan)
+    {
+        db.Database.ExecuteSqlRaw(@"
+            UPDATE Invoices
+               SET IsDemo = 1
+             WHERE IsDemo = 0
+               AND PaymentTerms LIKE '[[]SN0%]%';
+            UPDATE dc
+               SET dc.IsDemo = 1
+              FROM DeliveryChallans dc
+             WHERE dc.IsDemo = 0
+               AND EXISTS (SELECT 1 FROM Invoices i
+                            WHERE i.Id = dc.InvoiceId AND i.IsDemo = 1);
+        ");
+        db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
+        {
+            Timestamp = DateTime.UtcNow,
+            Level = "Info",
+            UserName = "system",
+            HttpMethod = "SEED",
+            RequestPath = "/migrations/sandbox-sntag-backfill",
+            StatusCode = 200,
+            ExceptionType = "SANDBOX_SNTAG_BACKFILL_V1",
+            Message = "One-time backfill: flagged legacy [SNxxx]-tagged bills as IsDemo=true."
+        });
+        await db.SaveChangesAsync();
+    }
 
     // Seed the starter catalog of FBR-mapped item types (idempotent — skips
     // any HS code / name already present, so it's safe to run on every boot)
@@ -258,11 +459,44 @@ using (var scope = app.Services.CreateScope())
          );
     ");
 
-    // Baseline PO formats (Lotte Kolson, Soorty, Meko) — runs ONCE when the
-    // POFormats table is empty. Operator-curated formats added via the
-    // Configuration → PO Formats UI are preserved across restarts.
-    var fp = scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.IPOFormatFingerprintService>();
-    await MyApp.Api.Data.POFormatSeeder.SeedAsync(db, fp);
+    // PO format baseline seeding has been REMOVED. Fresh databases now
+    // start with zero PO formats — operators onboard each client layout
+    // through Configuration → PO Formats. Existing databases (Hakimi,
+    // Roshan, etc.) that ALREADY have the baseline formats keep them
+    // untouched: the seeder was idempotent (insert-if-missing only),
+    // not destructive, so removing the call doesn't delete anything.
+    //
+    // The seeder code at Data/POFormatSeeder.cs is preserved as
+    // reference for the rule-set JSON shape. Re-enable by un-commenting
+    // the two lines below if you ever want the baselines back.
+    //   var fp = scope.ServiceProvider.GetRequiredService<IPOFormatFingerprintService>();
+    //   await POFormatSeeder.SeedAsync(db, fp);
+
+    // ── One-time perm migration: challans.manage.duplicate carved out of create ──
+    // Pre-2026-05-08 the Duplicate button + endpoint were gated by
+    // challans.manage.create. We've split it into a dedicated permission so a
+    // role can be allowed to duplicate without also being granted
+    // create-from-scratch. To preserve existing capability, every role that
+    // already has challans.manage.create gets the new perm auto-granted on
+    // first run. NOT EXISTS guards keep this idempotent. RbacSeeder will
+    // insert the new permission row before this runs (because we INSERT it
+    // here defensively in case ordering changes).
+    db.Database.ExecuteSqlRaw(@"
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'challans.manage.duplicate', 'Challans', 'Manage', 'Duplicate',
+               'Duplicate a delivery challan (clone with the same number for a different PO)'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'challans.manage.duplicate');
+
+        DECLARE @createId INT = (SELECT Id FROM Permissions WHERE [Key] = 'challans.manage.create');
+        DECLARE @dupId    INT = (SELECT Id FROM Permissions WHERE [Key] = 'challans.manage.duplicate');
+        IF @createId IS NOT NULL AND @dupId IS NOT NULL
+        BEGIN
+            INSERT INTO RolePermissions (RoleId, PermissionId)
+            SELECT rp.RoleId, @dupId FROM RolePermissions rp
+            WHERE rp.PermissionId = @createId
+              AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @dupId);
+        END
+    ");
 
     // ── One-time perm migration: split invoices.fbr.post → validate + submit ──
     // The legacy single perm has been removed from the catalog and replaced
@@ -353,6 +587,232 @@ using (var scope = app.Services.CreateScope())
             WHERE rp.PermissionId = @updateId
               AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @excludeId);
         END
+    ");
+
+    // ── One-time perm migration: split invoices.* into bills.* + invoices.* ──
+    // Sales is now two screens (Bills + Invoices) with their own permission
+    // namespaces. The bookkeeping side moved to bills.*; invoices.* keeps
+    // only the FBR-classification & print perms. We:
+    //   1. Insert the new bills.* perm rows if they don't exist yet (the
+    //      RbacSeeder does this anyway; doing it here so step 2 has IDs).
+    //   2. Copy each role's grant of an old invoices.manage.* perm onto its
+    //      bills.* equivalent so existing roles keep working.
+    //   3. Copy invoices.list.view → bills.list.view (the list endpoint now
+    //      requires bills.list.view; invoices.list.view keeps gating only
+    //      the Invoices tab visibility).
+    //   4. Copy invoices.print.view → bills.print.view (operator who could
+    //      print bills before keeps that ability; the surviving
+    //      invoices.print.view is narrowed to Tax-Invoice prints only).
+    // After this migration runs once, RbacSeeder.UpsertPermissionsAsync
+    // removes the now-stale invoices.manage.* keys (no longer in catalog),
+    // cascading the old role grants away. Idempotent: NOT EXISTS guards
+    // make subsequent restarts no-ops.
+    db.Database.ExecuteSqlRaw(@"
+        -- Step 1: ensure new bills.* perm rows exist (RbacSeeder upserts
+        -- them too, but we need them present BEFORE step 2 can copy grants).
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'bills.list.view', 'Bills', 'List', 'View',
+               'View the bills list (powers both Bills and Invoices tabs)'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.list.view');
+
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'bills.manage.create', 'Bills', 'Manage', 'Create',
+               'Create a new bill (challan-linked)'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.manage.create');
+
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'bills.manage.create.standalone', 'Bills', 'Manage', 'Create (No Challan)',
+               'Create a bill directly without linking a delivery challan'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.manage.create.standalone');
+
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'bills.manage.update', 'Bills', 'Manage', 'Update',
+               'Edit a bill (all fields)'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.manage.update');
+
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'bills.manage.update.itemtype', 'Bills', 'Manage', 'Update Item Type',
+               'Edit ONLY the Item Type column on a bill (no other fields)'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.manage.update.itemtype');
+
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'bills.manage.update.itemtype.qty', 'Bills', 'Manage', 'Update Item Type + Qty',
+               'Edit Item Type and Quantity columns on a bill (no other fields)'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.manage.update.itemtype.qty');
+
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'bills.manage.delete', 'Bills', 'Manage', 'Delete', 'Delete a bill'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.manage.delete');
+
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'bills.print.view', 'Bills', 'Print', 'View',
+               'Print or download a Bill (Bill print, Bill PDF, Bill XLS)'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.print.view');
+
+        -- Step 2: copy invoices.manage.* grants to bills.manage.*
+        DECLARE @oldKey NVARCHAR(200), @newKey NVARCHAR(200);
+        DECLARE pairs CURSOR LOCAL FOR
+            SELECT 'invoices.manage.create',                  'bills.manage.create' UNION ALL
+            SELECT 'invoices.manage.create.standalone',       'bills.manage.create.standalone' UNION ALL
+            SELECT 'invoices.manage.update',                  'bills.manage.update' UNION ALL
+            SELECT 'invoices.manage.update.itemtype',         'bills.manage.update.itemtype' UNION ALL
+            SELECT 'invoices.manage.update.itemtype.qty',     'bills.manage.update.itemtype.qty' UNION ALL
+            SELECT 'invoices.manage.delete',                  'bills.manage.delete' UNION ALL
+            SELECT 'invoices.list.view',                      'bills.list.view' UNION ALL
+            SELECT 'invoices.print.view',                     'bills.print.view';
+        OPEN pairs;
+        FETCH NEXT FROM pairs INTO @oldKey, @newKey;
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+            DECLARE @oId INT = (SELECT Id FROM Permissions WHERE [Key] = @oldKey);
+            DECLARE @nId INT = (SELECT Id FROM Permissions WHERE [Key] = @newKey);
+            IF @oId IS NOT NULL AND @nId IS NOT NULL
+            BEGIN
+                INSERT INTO RolePermissions (RoleId, PermissionId)
+                SELECT rp.RoleId, @nId FROM RolePermissions rp
+                WHERE rp.PermissionId = @oId
+                  AND NOT EXISTS (SELECT 1 FROM RolePermissions x
+                                   WHERE x.RoleId = rp.RoleId AND x.PermissionId = @nId);
+            END
+            FETCH NEXT FROM pairs INTO @oldKey, @newKey;
+        END
+        CLOSE pairs;
+        DEALLOCATE pairs;
+    ");
+
+    // ── One-time backfill: heal bills orphaned by the legacy UpdateChallanAsync bug ──
+    // Before the diff/sync refactor of UpdateChallanAsync, the whole-challan
+    // PUT replaced dc.Items via RemoveRange, which cascaded SET NULL on
+    // InvoiceItem.DeliveryItemId without ever syncing the bill — so any
+    // challan edit that touched items left the bill stuck with orphaned
+    // InvoiceItems (dlvId IS NULL) and no row for newly-added DeliveryItems.
+    //
+    // This block does two passes:
+    //   1. Re-link orphan InvoiceItems (dlvId IS NULL) to a matching unlinked
+    //      DeliveryItem on one of the bill's challans, matched by exact
+    //      Description (case-insensitive) AND Quantity.
+    //   2. Insert a fresh InvoiceItem (UnitPrice=0) for any DeliveryItem on a
+    //      linked challan that still has no matching InvoiceItem — the
+    //      operator opens Bill Edit afterwards to set the price.
+    //
+    // Skips FBR-submitted bills (the IRN is locked at FBR — we don't touch
+    // them). Idempotent: NOT EXISTS guards make re-runs no-ops, audit-log
+    // marker records what was healed on first run.
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'BILL_CHALLAN_SYNC_BACKFILL_V1')
+        BEGIN
+            DECLARE @relinked INT = 0, @added INT = 0;
+
+            -- Pass 1: re-link orphan InvoiceItems to unlinked DeliveryItems
+            -- on the same bill's challans, matching Description + Quantity.
+            DECLARE @iiId INT, @invId INT, @desc NVARCHAR(MAX), @qty DECIMAL(18,4);
+            DECLARE orphan_cur CURSOR LOCAL FOR
+                SELECT ii.Id, ii.InvoiceId, ii.Description, ii.Quantity
+                FROM InvoiceItems ii
+                INNER JOIN Invoices i ON i.Id = ii.InvoiceId
+                WHERE ii.DeliveryItemId IS NULL
+                  AND (i.FbrStatus IS NULL OR i.FbrStatus <> 'Submitted')
+                  AND EXISTS (SELECT 1 FROM DeliveryChallans dc WHERE dc.InvoiceId = ii.InvoiceId);
+
+            OPEN orphan_cur;
+            FETCH NEXT FROM orphan_cur INTO @iiId, @invId, @desc, @qty;
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+                DECLARE @diId INT = (
+                    SELECT TOP 1 di.Id
+                    FROM DeliveryItems di
+                    INNER JOIN DeliveryChallans dc ON dc.Id = di.DeliveryChallanId
+                    WHERE dc.InvoiceId = @invId
+                      AND di.Quantity = @qty
+                      AND LOWER(di.Description) = LOWER(@desc)
+                      AND NOT EXISTS (SELECT 1 FROM InvoiceItems x WHERE x.DeliveryItemId = di.Id)
+                    ORDER BY di.Id
+                );
+                IF @diId IS NOT NULL
+                BEGIN
+                    UPDATE InvoiceItems SET DeliveryItemId = @diId WHERE Id = @iiId;
+                    SET @relinked = @relinked + 1;
+                END
+                FETCH NEXT FROM orphan_cur INTO @iiId, @invId, @desc, @qty;
+            END
+            CLOSE orphan_cur;
+            DEALLOCATE orphan_cur;
+
+            -- Pass 2: insert missing InvoiceItems (UnitPrice=0) for any
+            -- DeliveryItem on a linked, non-submitted bill that has no
+            -- matching InvoiceItem. Matches the SyncInvoiceItemsForChallanEditAsync
+            -- new-item shape — operator sets the price via Bill Edit.
+            INSERT INTO InvoiceItems (InvoiceId, DeliveryItemId, ItemTypeId, ItemTypeName, Description, Quantity, UOM, UnitPrice, LineTotal)
+            SELECT
+                dc.InvoiceId,
+                di.Id,
+                di.ItemTypeId,
+                ISNULL(it.Name, N''),
+                di.Description,
+                di.Quantity,
+                di.Unit,
+                0,
+                0
+            FROM DeliveryItems di
+            INNER JOIN DeliveryChallans dc ON dc.Id = di.DeliveryChallanId
+            INNER JOIN Invoices i ON i.Id = dc.InvoiceId
+            LEFT JOIN ItemTypes it ON it.Id = di.ItemTypeId
+            WHERE dc.InvoiceId IS NOT NULL
+              AND (i.FbrStatus IS NULL OR i.FbrStatus <> 'Submitted')
+              AND NOT EXISTS (SELECT 1 FROM InvoiceItems ii2 WHERE ii2.DeliveryItemId = di.Id);
+            SET @added = @@ROWCOUNT;
+
+            INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp])
+            VALUES ('Info', 'BILL_CHALLAN_SYNC_BACKFILL_V1',
+                    CONCAT('Bill/challan sync backfill: re-linked ', @relinked,
+                           ' orphan invoice item(s); added ', @added,
+                           ' missing invoice item(s) at UnitPrice=0. Operators must edit affected bills to set prices.'),
+                    'STARTUP', '/migrations/bill-challan-sync-backfill', 200, SYSUTCDATETIME());
+        END
+    ");
+
+    // ── One-time perm migration: move itemtype perms back to Invoices ──
+    // The narrow itemtype perms (`bills.manage.update.itemtype` and
+    // `bills.manage.update.itemtype.qty`) live under Invoices, not Bills —
+    // item-type classification is the Invoices tab's responsibility, so
+    // FBR-officer roles need them without holding any other bills.* perm.
+    // Copies any existing `bills.*` itemtype grants onto the new
+    // `invoices.*` keys; the seeder then auto-removes the stale `bills.*`
+    // ones (no longer in catalog), cascading away the old grants. Idempotent
+    // via the NOT EXISTS guard.
+    db.Database.ExecuteSqlRaw(@"
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'invoices.manage.update.itemtype', 'Invoices', 'Manage', 'Update Item Type',
+               'Edit ONLY the Item Type column on a bill from the Invoices tab'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'invoices.manage.update.itemtype');
+
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'invoices.manage.update.itemtype.qty', 'Invoices', 'Manage', 'Update Item Type + Qty',
+               'Edit Item Type and Quantity columns on a bill from the Invoices tab'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'invoices.manage.update.itemtype.qty');
+
+        DECLARE @oldKey NVARCHAR(200), @newKey NVARCHAR(200);
+        DECLARE pairs2 CURSOR LOCAL FOR
+            SELECT 'bills.manage.update.itemtype',     'invoices.manage.update.itemtype' UNION ALL
+            SELECT 'bills.manage.update.itemtype.qty', 'invoices.manage.update.itemtype.qty';
+        OPEN pairs2;
+        FETCH NEXT FROM pairs2 INTO @oldKey, @newKey;
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+            DECLARE @oId INT = (SELECT Id FROM Permissions WHERE [Key] = @oldKey);
+            DECLARE @nId INT = (SELECT Id FROM Permissions WHERE [Key] = @newKey);
+            IF @oId IS NOT NULL AND @nId IS NOT NULL
+            BEGIN
+                INSERT INTO RolePermissions (RoleId, PermissionId)
+                SELECT rp.RoleId, @nId FROM RolePermissions rp
+                WHERE rp.PermissionId = @oId
+                  AND NOT EXISTS (SELECT 1 FROM RolePermissions x
+                                   WHERE x.RoleId = rp.RoleId AND x.PermissionId = @nId);
+            END
+            FETCH NEXT FROM pairs2 INTO @oldKey, @newKey;
+        END
+        CLOSE pairs2;
+        DEALLOCATE pairs2;
     ");
 
     // ── One-time backfill: Common Clients grouping ──
@@ -560,22 +1020,233 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
+    // ── One-time backfill: Common Suppliers grouping ──
+    // Mirrors the Common Clients backfill above. Walks every existing
+    // Supplier and assigns it to a SupplierGroup based on the same
+    // canonical key the runtime EnsureGroupForSupplierAsync uses
+    // (NTN-digits ≥ 7 ⇒ "NTN:..."; otherwise "NAME:lower-trimmed").
+    // Idempotent via the audit-log marker. Existing per-company supplier
+    // rows, controllers and UI are untouched — SupplierGroupId is a
+    // nullable additive column.
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'COMMON_SUPPLIERS_BACKFILL_V1')
+        BEGIN
+            ;WITH Digits(Id, DigitsNtn) AS (
+                SELECT s.Id,
+                       REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                         ISNULL(s.NTN, ''),
+                         ' ',  ''), '-', ''), '/', ''), '.', ''), '(', ''), ')', ''),
+                         ',', ''), ':', ''), '\', ''), '''', ''), '""', ''), '+', ''), CHAR(9), '')
+                  FROM Suppliers s
+            ),
+            Keyed AS (
+                SELECT s.Id, s.CompanyId, s.Name, s.NTN, s.CreatedAt,
+                       d.DigitsNtn,
+                       LOWER(LTRIM(RTRIM(s.Name))) AS NormName,
+                       CASE
+                         WHEN LEN(d.DigitsNtn) >= 7 THEN N'NTN:'  + d.DigitsNtn
+                         ELSE                            N'NAME:' + LOWER(LTRIM(RTRIM(s.Name)))
+                       END AS GroupKey
+                  FROM Suppliers s
+                  JOIN Digits  d ON d.Id = s.Id
+            )
+            INSERT INTO SupplierGroups (GroupKey, DisplayName, NormalizedNtn, NormalizedName, CreatedAt, UpdatedAt)
+            SELECT k.GroupKey,
+                   (SELECT TOP 1 k2.Name
+                      FROM Keyed k2
+                     WHERE k2.GroupKey = k.GroupKey
+                     ORDER BY k2.CreatedAt, k2.Id),
+                   CASE WHEN LEFT(k.GroupKey, 4) = N'NTN:' THEN SUBSTRING(k.GroupKey, 5, LEN(k.GroupKey)) ELSE NULL END,
+                   (SELECT TOP 1 k2.NormName
+                      FROM Keyed k2
+                     WHERE k2.GroupKey = k.GroupKey
+                     ORDER BY k2.CreatedAt, k2.Id),
+                   SYSUTCDATETIME(), SYSUTCDATETIME()
+              FROM (SELECT DISTINCT GroupKey FROM Keyed) k
+             WHERE NOT EXISTS (SELECT 1 FROM SupplierGroups g WHERE g.GroupKey = k.GroupKey);
+
+            ;WITH Digits2(Id, DigitsNtn) AS (
+                SELECT s.Id,
+                       REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                         ISNULL(s.NTN, ''),
+                         ' ',  ''), '-', ''), '/', ''), '.', ''), '(', ''), ')', ''),
+                         ',', ''), ':', ''), '\', ''), '''', ''), '""', ''), '+', ''), CHAR(9), '')
+                  FROM Suppliers s
+            ),
+            Keyed2 AS (
+                SELECT s.Id,
+                       CASE
+                         WHEN LEN(d.DigitsNtn) >= 7 THEN N'NTN:'  + d.DigitsNtn
+                         ELSE                            N'NAME:' + LOWER(LTRIM(RTRIM(s.Name)))
+                       END AS GroupKey
+                  FROM Suppliers s
+                  JOIN Digits2 d ON d.Id = s.Id
+                 WHERE s.SupplierGroupId IS NULL
+            )
+            UPDATE s
+               SET s.SupplierGroupId = g.Id
+              FROM Suppliers s
+              JOIN Keyed2  k ON k.Id = s.Id
+              JOIN SupplierGroups g ON g.GroupKey = k.GroupKey
+             WHERE s.SupplierGroupId IS NULL;
+
+            DECLARE @groupCount2 INT, @supplierLinked INT;
+            SELECT @groupCount2  = COUNT(*) FROM SupplierGroups;
+            SELECT @supplierLinked = COUNT(*) FROM Suppliers WHERE SupplierGroupId IS NOT NULL;
+
+            DECLARE @multiSupplierNames NVARCHAR(MAX) = (
+                SELECT STRING_AGG(g.DisplayName, N'; ')
+                  FROM SupplierGroups g
+                 WHERE (SELECT COUNT(DISTINCT s.CompanyId)
+                          FROM Suppliers s
+                         WHERE s.SupplierGroupId = g.Id) >= 2
+            );
+
+            INSERT INTO AuditLogs (Level, ExceptionType, Message, StackTrace, HttpMethod, RequestPath, StatusCode, [Timestamp])
+            VALUES (
+                'Info',
+                'COMMON_SUPPLIERS_BACKFILL_V1',
+                CONCAT(
+                    'Common Suppliers backfill: created/linked ', @groupCount2,
+                    ' groups, attached ', @supplierLinked, ' suppliers.'),
+                CASE WHEN @multiSupplierNames IS NULL THEN N'No multi-company suppliers detected yet.'
+                     ELSE N'Multi-company groups: ' + @multiSupplierNames END,
+                'STARTUP', '/seed/suppliergroups/backfill', 200, SYSUTCDATETIME());
+        END
+    ");
+
     // RBAC: sync PermissionCatalog into the Permissions table and ensure the
     // built-in "Administrator" system role exists and is wired to the seed
     // admin user. Idempotent — runs every start.
     var seedAdminUserId = builder.Configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
     await MyApp.Api.Data.RbacSeeder.SeedAsync(db, seedAdminUserId);
+
+    // ── One-time backfill: UserCompanies for existing non-admin users ──
+    //
+    // We just flipped to fail-closed semantics in CompanyAccessGuard:
+    // a non-admin user with zero UserCompanies rows now sees NOTHING.
+    // Without this backfill, every existing non-admin user would go dark
+    // on the next boot — anyone created before the Tenant Access UI
+    // shipped has zero rows.
+    //
+    // The fix: for every non-admin user with no rows yet, grant access
+    // to every IsTenantIsolated=false company at backfill time. That
+    // preserves their legacy access exactly. Isolated companies stay
+    // restricted (the operator clearly wanted that). After this runs,
+    // the rule is uniform: explicit rows = access; no rows = no access.
+    //
+    // Idempotent via the audit-log marker — runs once per database.
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'RBAC_USERCOMPANIES_BACKFILL_V1')
+        BEGIN
+            DECLARE @seedAdminId INT = " + seedAdminUserId + @";
+
+            INSERT INTO UserCompanies (UserId, CompanyId, AssignedAt, AssignedByUserId)
+            SELECT u.Id, c.Id, SYSUTCDATETIME(), @seedAdminId
+              FROM Users u
+              CROSS JOIN Companies c
+             WHERE u.Id <> @seedAdminId
+               AND c.IsTenantIsolated = 0
+               AND NOT EXISTS (SELECT 1 FROM UserCompanies x WHERE x.UserId = u.Id);
+
+            DECLARE @userCount INT = (SELECT COUNT(DISTINCT UserId) FROM UserCompanies);
+            DECLARE @rowCount  INT = (SELECT COUNT(*) FROM UserCompanies);
+
+            INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp])
+            VALUES ('Info', 'RBAC_USERCOMPANIES_BACKFILL_V1',
+                    CONCAT('Tenant access backfill: ', @userCount,
+                           ' user(s) granted access to ', @rowCount,
+                           ' (user, company) pairs. Fail-closed semantics now active.'),
+                    'STARTUP', '/seed/usercompanies/backfill', 200, SYSUTCDATETIME());
+        END
+    ");
+
+    // ── One-time perm grant: tenantaccess.manage.* → Administrator role ──
+    // The new keys are inserted by RbacSeeder (it walks PermissionCatalog),
+    // but RolePermissions is empty for them by default. Grant them to the
+    // built-in Administrator role on first run so the seed admin doesn't
+    // have to click into the role editor before the new screen works.
+    // Idempotent via the NOT EXISTS guard.
+    db.Database.ExecuteSqlRaw(@"
+        DECLARE @adminRoleId INT = (SELECT TOP 1 Id FROM Roles WHERE [Name] = 'Administrator');
+        IF @adminRoleId IS NOT NULL
+        BEGIN
+            DECLARE @viewId   INT = (SELECT Id FROM Permissions WHERE [Key] = 'tenantaccess.manage.view');
+            DECLARE @assignId INT = (SELECT Id FROM Permissions WHERE [Key] = 'tenantaccess.manage.assign');
+            IF @viewId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM RolePermissions WHERE RoleId = @adminRoleId AND PermissionId = @viewId)
+                INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (@adminRoleId, @viewId);
+            IF @assignId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM RolePermissions WHERE RoleId = @adminRoleId AND PermissionId = @assignId)
+                INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (@adminRoleId, @assignId);
+        END
+    ");
 }
 
 // Configure the HTTP request pipeline
 app.UseSwagger();
 app.UseSwaggerUI();
 
+// Honour X-Forwarded-Proto / X-Forwarded-For from the reverse proxy
+// (Render, MonsterASP, etc.). Without this, app.Request.IsHttps is
+// always false behind a TLS-terminating proxy, which trips up HSTS
+// and any same-site cookie defaults. KnownNetworks/Proxies is left
+// at the framework default — populate via config if you need to
+// restrict which proxies can rewrite these headers.
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+});
+
+// HSTS in non-dev — tells browsers to never speak plaintext to this
+// host once they've seen one HTTPS response. Dev keeps using
+// HttpsRedirection only.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
 // after app = builder.Build()
 app.UseCors("AllowFrontend");
 
 // Enable request body buffering so the exception middleware can read it
 app.Use(async (ctx, next) => { ctx.Request.EnableBuffering(); await next(); });
+
+// Correlation ID — must run BEFORE Serilog request logging and the
+// global exception middleware so all subsequent log lines for this
+// request carry the same CorrelationId property. See audit H-4.
+app.UseMiddleware<CorrelationIdMiddleware>();
+
+// Serilog request logging — one structured log line per request with
+// method, path, status, duration. Cheap and dramatically improves
+// diagnostics. Excluded from health-check / static asset noise via
+// the GetLevel callback below (returns Verbose for those, which is
+// below default minimum so they're filtered out without touching the
+// pipeline cost). Audit-log database writes are still handled by
+// GlobalExceptionMiddleware below — Serilog logs are the operational
+// trail; AuditLog is the business / security trail.
+app.UseSerilogRequestLogging(opts =>
+{
+    opts.GetLevel = (ctx, elapsed, ex) =>
+    {
+        if (ex != null) return LogEventLevel.Error;
+        if (ctx.Response.StatusCode >= 500) return LogEventLevel.Error;
+        if (ctx.Response.StatusCode >= 400) return LogEventLevel.Warning;
+        // Static assets / SPA shell — silence at default min level.
+        var path = ctx.Request.Path.Value ?? "";
+        if (path.StartsWith("/assets/", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".js", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".css", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".ico", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)) return LogEventLevel.Verbose;
+        return LogEventLevel.Information;
+    };
+    opts.EnrichDiagnosticContext = (diag, ctx) =>
+    {
+        diag.Set("UserName", ctx.User.Identity?.Name ?? "anonymous");
+        diag.Set("ClientIp", ctx.Connection.RemoteIpAddress?.ToString() ?? "");
+    };
+});
 
 // Global exception handling — logs to AuditLogs table
 app.UseMiddleware<GlobalExceptionMiddleware>();
@@ -585,6 +1256,8 @@ if (app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -607,4 +1280,18 @@ app.MapControllers(); // 👈 maps your controllers (like CompaniesController)
 // SPA fallback: serve index.html for any non-API, non-file routes
 app.MapFallbackToFile("index.html");
 
+Log.Information("MyApp.Api starting up — environment={Env}", app.Environment.EnvironmentName);
 app.Run();
+}
+catch (Exception ex) when (ex is not HostAbortedException
+                           && ex.GetType().FullName != "Microsoft.EntityFrameworkCore.Design.OperationException")
+{
+    // HostAbortedException is the OS shutdown signal — not a crash.
+    // EF Core's design-time tooling throws OperationException when
+    // running migrations; suppressing those keeps `dotnet ef` quiet.
+    Log.Fatal(ex, "Host terminated unexpectedly during startup or run");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
