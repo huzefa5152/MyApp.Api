@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
@@ -12,12 +13,14 @@ namespace MyApp.Api.Services.Implementations
         private readonly ISupplierRepository _repo;
         private readonly ISupplierGroupService _groupService;
         private readonly AppDbContext _context;
+        private readonly ILogger<SupplierService> _logger;
 
-        public SupplierService(ISupplierRepository repo, ISupplierGroupService groupService, AppDbContext context)
+        public SupplierService(ISupplierRepository repo, ISupplierGroupService groupService, AppDbContext context, ILogger<SupplierService> logger)
         {
             _repo = repo;
             _groupService = groupService;
             _context = context;
+            _logger = logger;
         }
 
         private static SupplierDto ToDto(Supplier s, bool hasPurchaseBills = false) => new()
@@ -159,8 +162,9 @@ namespace MyApp.Api.Services.Implementations
 
                 await tx.CommitAsync();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "SupplierService: transaction rolled back");
                 await tx.RollbackAsync();
                 throw;
             }

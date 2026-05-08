@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
@@ -17,6 +18,7 @@ namespace MyApp.Api.Services.Implementations
         private readonly AppDbContext _context;
         private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
         private readonly IAuditLogService _auditLog;
+        private readonly ILogger<InvoiceService> _logger;
 
         public InvoiceService(
             IInvoiceRepository invoiceRepo,
@@ -25,7 +27,8 @@ namespace MyApp.Api.Services.Implementations
             IClientRepository clientRepo,
             AppDbContext context,
             Microsoft.Extensions.Configuration.IConfiguration config,
-            IAuditLogService auditLog)
+            IAuditLogService auditLog,
+            ILogger<InvoiceService> logger)
         {
             _invoiceRepo = invoiceRepo;
             _challanRepo = challanRepo;
@@ -33,6 +36,7 @@ namespace MyApp.Api.Services.Implementations
             _clientRepo = clientRepo;
             _context = context;
             _config = config;
+            _logger = logger;
             _auditLog = auditLog;
         }
 
@@ -450,8 +454,9 @@ namespace MyApp.Api.Services.Implementations
                 var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
                 return ToDto(loaded!);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "InvoiceService: transaction rolled back");
                 await transaction.RollbackAsync();
                 throw;
             }
@@ -684,8 +689,9 @@ namespace MyApp.Api.Services.Implementations
                 var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
                 return ToDto(loaded!);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "InvoiceService: transaction rolled back");
                 await transaction.RollbackAsync();
                 throw;
             }
@@ -882,8 +888,9 @@ namespace MyApp.Api.Services.Implementations
                 var reloaded = await _invoiceRepo.GetByIdAsync(id);
                 return reloaded == null ? null : ToDto(reloaded);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "InvoiceService: transaction rolled back");
                 await transaction.RollbackAsync();
                 throw;
             }
@@ -1186,8 +1193,9 @@ namespace MyApp.Api.Services.Implementations
                 var reloaded = await _invoiceRepo.GetByIdAsync(id);
                 return reloaded == null ? null : ToDto(reloaded);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "InvoiceService: transaction rolled back");
                 await transaction.RollbackAsync();
                 throw;
             }
@@ -1313,8 +1321,9 @@ namespace MyApp.Api.Services.Implementations
                 await transaction.CommitAsync();
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "InvoiceService: transaction rolled back");
                 await transaction.RollbackAsync();
                 throw;
             }

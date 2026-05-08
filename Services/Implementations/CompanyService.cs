@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
@@ -14,14 +15,16 @@ namespace MyApp.Api.Services.Implementations
         private readonly IInvoiceRepository _invoiceRepo;
         private readonly IDeliveryChallanService _challanService;
         private readonly AppDbContext _context;
+        private readonly ILogger<CompanyService> _logger;
 
-        public CompanyService(ICompanyRepository repository, IDeliveryChallanRepository challanRepo, IInvoiceRepository invoiceRepo, IDeliveryChallanService challanService, AppDbContext context)
+        public CompanyService(ICompanyRepository repository, IDeliveryChallanRepository challanRepo, IInvoiceRepository invoiceRepo, IDeliveryChallanService challanService, AppDbContext context, ILogger<CompanyService> logger)
         {
             _repository = repository;
             _challanRepo = challanRepo;
             _invoiceRepo = invoiceRepo;
             _challanService = challanService;
             _context = context;
+            _logger = logger;
         }
 
         private static CompanyDto ToDto(Company c, bool hasChallans = false, bool hasInvoices = false) => new()
@@ -251,8 +254,9 @@ namespace MyApp.Api.Services.Implementations
 
                 await transaction.CommitAsync();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "CompanyService: delete-company transaction rolled back for companyId={CompanyId}", id);
                 await transaction.RollbackAsync();
                 throw;
             }

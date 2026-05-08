@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
@@ -17,10 +18,12 @@ namespace MyApp.Api.Services.Implementations
     public class GoodsReceiptService : IGoodsReceiptService
     {
         private readonly AppDbContext _context;
+        private readonly ILogger<GoodsReceiptService> _logger;
 
-        public GoodsReceiptService(AppDbContext context)
+        public GoodsReceiptService(AppDbContext context, ILogger<GoodsReceiptService> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         private static GoodsReceiptDto ToDto(GoodsReceipt gr) => new()
@@ -161,8 +164,9 @@ namespace MyApp.Api.Services.Implementations
                 await tx.CommitAsync();
                 return (await GetByIdAsync(receipt.Id))!;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "GoodsReceiptService: create transaction rolled back for company={CompanyId}", dto.CompanyId);
                 await tx.RollbackAsync();
                 throw;
             }
@@ -214,8 +218,9 @@ namespace MyApp.Api.Services.Implementations
             await tx.CommitAsync();
             return await GetByIdAsync(gr.Id);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "GoodsReceiptService: update transaction rolled back for receiptId={ReceiptId}", id);
                 await tx.RollbackAsync();
                 throw;
             }
@@ -233,8 +238,9 @@ namespace MyApp.Api.Services.Implementations
                 await tx.CommitAsync();
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "GoodsReceiptService: delete transaction rolled back for receiptId={ReceiptId}", id);
                 await tx.RollbackAsync();
                 throw;
             }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
@@ -14,13 +15,15 @@ namespace MyApp.Api.Services.Implementations
         private readonly IDeliveryChallanService _challanService;
         private readonly IClientGroupService _clientGroupService;
         private readonly AppDbContext _context;
-        public ClientService(IClientRepository repo, IInvoiceRepository invoiceRepo, IDeliveryChallanService challanService, IClientGroupService clientGroupService, AppDbContext context)
+        private readonly ILogger<ClientService> _logger;
+        public ClientService(IClientRepository repo, IInvoiceRepository invoiceRepo, IDeliveryChallanService challanService, IClientGroupService clientGroupService, AppDbContext context, ILogger<ClientService> logger)
         {
             _repo = repo;
             _invoiceRepo = invoiceRepo;
             _challanService = challanService;
             _clientGroupService = clientGroupService;
             _context = context;
+            _logger = logger;
         }
 
         private static ClientDto ToDto(Client c, bool hasInvoices = false) => new()
@@ -188,8 +191,9 @@ namespace MyApp.Api.Services.Implementations
 
                 await tx.CommitAsync();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "ClientService: bulk-create transaction rolled back");
                 await tx.RollbackAsync();
                 throw;
             }
@@ -273,8 +277,9 @@ namespace MyApp.Api.Services.Implementations
 
                 await transaction.CommitAsync();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "ClientService: delete-client transaction rolled back for clientId={ClientId}", id);
                 await transaction.RollbackAsync();
                 throw;
             }

@@ -711,8 +711,9 @@ namespace MyApp.Api.Services.Implementations
                 var reloaded = await _repository.GetByIdAsync(challanId);
                 return reloaded == null ? null : ToDto(reloaded);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "UpdateAsync transaction failed for challan {ChallanId}", challanId);
                 await transaction.RollbackAsync();
                 throw;
             }

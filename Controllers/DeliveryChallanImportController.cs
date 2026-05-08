@@ -18,7 +18,7 @@ namespace MyApp.Api.Controllers
     [Route("api/DeliveryChallans")]
     [Authorize]
     [HasPermission("challans.import.create")]
-    public class DeliveryChallanImportController : ControllerBase
+    public class DeliveryChallanImportController : LoggedControllerBase
     {
         private const int MaxFileBytes = 10 * 1024 * 1024;   // 10 MB per file
         private const int MaxFilesPerRequest = 50;            // keep a single preview bounded
@@ -28,19 +28,22 @@ namespace MyApp.Api.Controllers
         private readonly IChallanExcelImporter _importer;
         private readonly IDeliveryChallanService _challanService;
         private readonly IDeliveryChallanRepository _challanRepo;
+        private readonly new ILogger<DeliveryChallanImportController> _logger;
 
         public DeliveryChallanImportController(
             IPrintTemplateRepository templateRepo,
             IExcelTemplateReverseMapper reverseMapper,
             IChallanExcelImporter importer,
             IDeliveryChallanService challanService,
-            IDeliveryChallanRepository challanRepo)
+            IDeliveryChallanRepository challanRepo,
+            ILogger<DeliveryChallanImportController> logger) : base(logger)
         {
             _templateRepo = templateRepo;
             _reverseMapper = reverseMapper;
             _importer = importer;
             _challanService = challanService;
             _challanRepo = challanRepo;
+            _logger = logger;
         }
 
         [HttpPost("company/{companyId}/import-excel/preview")]
@@ -71,7 +74,8 @@ namespace MyApp.Api.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest(new { error = $"Failed to parse template: {ex.Message}" });
+                _logger.LogError(ex, "Challan import: template parse failed for company {CompanyId} ({Path})", companyId, templatePath);
+                return BadRequest(new { error = "Could not read the challan template. Please re-upload it on the Print Templates page." });
             }
 
             var previews = new List<ChallanImportPreviewDto>();
@@ -113,10 +117,11 @@ namespace MyApp.Api.Controllers
                 }
                 catch (Exception ex)
                 {
+                    _logger.LogWarning(ex, "Challan import: per-file parse failed for {FileName} (company {CompanyId})", file.FileName, companyId);
                     previews.Add(new ChallanImportPreviewDto
                     {
                         FileName = file.FileName,
-                        Warnings = { $"Parse error: {ex.Message}" }
+                        Warnings = { "Could not parse this file. Please verify it matches the configured Challan Excel template and try again." }
                     });
                 }
             }
@@ -157,12 +162,15 @@ namespace MyApp.Api.Controllers
                 }
                 catch (Exception ex)
                 {
+                    _logger.LogError(ex, "Challan import: commit row #{ChallanNumber} ({FileName}) failed", row.ChallanNumber, row.FileName);
                     results.Add(new ChallanImportResultDto
                     {
                         FileName = row.FileName,
                         ChallanNumber = row.ChallanNumber,
                         Success = false,
-                        Error = ex.Message
+                        // Operator-facing string only; the full exception is in
+                        // the Serilog file sink + AuditLog.
+                        Error = "Could not import this row. Check the matching delivery challan and try again."
                     });
                 }
             }

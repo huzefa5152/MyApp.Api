@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
@@ -17,11 +18,13 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly AppDbContext _context;
         private readonly IStockService _stock;
+        private readonly ILogger<PurchaseBillService> _logger;
 
-        public PurchaseBillService(AppDbContext context, IStockService stock)
+        public PurchaseBillService(AppDbContext context, IStockService stock, ILogger<PurchaseBillService> logger)
         {
             _context = context;
             _stock = stock;
+            _logger = logger;
         }
 
         private static PurchaseBillDto ToDto(PurchaseBill pb) => new()
@@ -337,8 +340,9 @@ namespace MyApp.Api.Services.Implementations
             await tx.CommitAsync();
             return (await GetByIdAsync(bill.Id))!;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "PurchaseBillService: transaction rolled back");
                 await tx.RollbackAsync();
                 throw;
             }
@@ -461,8 +465,9 @@ namespace MyApp.Api.Services.Implementations
             await tx.CommitAsync();
             return await GetByIdAsync(bill.Id);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "PurchaseBillService: transaction rolled back");
                 await tx.RollbackAsync();
                 throw;
             }
@@ -503,8 +508,9 @@ namespace MyApp.Api.Services.Implementations
             await tx.CommitAsync();
             return true;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "PurchaseBillService: transaction rolled back");
                 await tx.RollbackAsync();
                 throw;
             }
