@@ -207,6 +207,13 @@ builder.Services.AddScoped<IChallanExcelImporter, ChallanExcelImporter>();
 // Singleton because the regexes are stateless and compiled once.
 builder.Services.AddSingleton<ISensitiveDataRedactor, SensitiveDataRedactor>();
 
+// FBR communication log — dedicated trail for audit H-3.
+builder.Services.AddScoped<IFbrCommunicationLogService, FbrCommunicationLogService>();
+
+// HttpContextAccessor — needed by FbrService etc. so they can pull the
+// current request's CorrelationId without taking HttpContext directly.
+builder.Services.AddHttpContextAccessor();
+
 // FBR HttpClient — see audit H-1 (no retry), H-2 (no timeout).
 //   • 30 s timeout per attempt (vs 100 s framework default that was
 //     blocking Kestrel threads under FBR brownouts)
@@ -1176,6 +1183,11 @@ app.UseCors("AllowFrontend");
 
 // Enable request body buffering so the exception middleware can read it
 app.Use(async (ctx, next) => { ctx.Request.EnableBuffering(); await next(); });
+
+// Correlation ID — must run BEFORE Serilog request logging and the
+// global exception middleware so all subsequent log lines for this
+// request carry the same CorrelationId property. See audit H-4.
+app.UseMiddleware<CorrelationIdMiddleware>();
 
 // Serilog request logging — one structured log line per request with
 // method, path, status, duration. Cheap and dramatically improves

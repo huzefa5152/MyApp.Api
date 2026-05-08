@@ -27,6 +27,8 @@ namespace MyApp.Api.Services.Implementations
         private readonly IServiceProvider _services;   // resolves ITaxMappingEngine lazily to avoid circular DI
         private readonly ISensitiveDataRedactor _redactor;
         private readonly ILogger<FbrService> _logger;
+        private readonly IFbrCommunicationLogService _fbrComm;
+        private readonly IHttpContextAccessor _http;
 
         // ── V1.12 API URLs ──────────────────────────────────────
         // Submit/Validate: sandbox adds "_sb" suffix; routing also based on token
@@ -168,7 +170,9 @@ namespace MyApp.Api.Services.Implementations
             IStockService stock,
             IServiceProvider services,
             ISensitiveDataRedactor redactor,
-            ILogger<FbrService> logger)
+            ILogger<FbrService> logger,
+            IFbrCommunicationLogService fbrComm,
+            IHttpContextAccessor http)
         {
             _invoiceRepo = invoiceRepo;
             _companyRepo = companyRepo;
@@ -179,6 +183,8 @@ namespace MyApp.Api.Services.Implementations
             _services = services;
             _redactor = redactor;
             _logger = logger;
+            _fbrComm = fbrComm;
+            _http = http;
         }
 
         // ── Text sanitization for FBR payloads ──────────────────
@@ -1209,49 +1215,87 @@ namespace MyApp.Api.Services.Implementations
         }
 
         private async Task AuditFbr(string level, string action, int invoiceId,
-            string url, string? requestBody, string? responseBody, int httpStatus, string message)
+            string url, string? requestBody, string? responseBody, int httpStatus, string message,
+            int? companyId = null, int durationMs = 0, string? fbrErrorCode = null)
         {
+            // Truncate + redact bodies once. NTN/CNIC are masked to last-4,
+            // credentials (token / jwt) are fully redacted. See
+            // Helpers/SensitiveDataRedactor for the full field list.
+            // Audit C-2 (2026-05-08): pre-fix the raw payload was persisted verbatim.
+            var reqTruncated = requestBody?.Length > 4000 ? requestBody[..4000] : requestBody;
+            var respTruncated = responseBody?.Length > 4000 ? responseBody[..4000] : responseBody;
+            var reqScrubbed = _redactor.Scrub(reqTruncated);
+            var respScrubbed = _redactor.Scrub(respTruncated);
+
+            // Translate the legacy level/HTTP status into the new
+            // FbrCommunicationLog status taxonomy. The two systems
+            // run side-by-side for a transition period; FbrCommunicationLog
+            // is the queryable trail, AuditLogs no longer gets the
+            // request/response bodies but DOES get a low-volume marker
+            // row so legacy "search audit logs for FBR" still finds something.
+            var fbrStatus = ResolveFbrStatus(level, action, httpStatus);
+
+            // 1. Write to the dedicated FBR table — primary trail.
             try
             {
-                // Truncate then redact. NTN/CNIC are masked to last-4, credentials
-                // (token, jwt) are fully redacted — see Helpers/SensitiveDataRedactor.
-                // Audit C-2 (2026-05-08): pre-fix, the raw payload with full NTN
-                // and CNIC was being persisted to AuditLogs verbatim.
-                var reqTruncated = requestBody?.Length > 4000 ? requestBody[..4000] : requestBody;
-                var respTruncated = responseBody?.Length > 4000 ? responseBody[..4000] : responseBody;
-                var reqScrubbed = _redactor.Scrub(reqTruncated);
-                var respScrubbed = _redactor.Scrub(respTruncated);
+                var corr = MyApp.Api.Middleware.CorrelationIdMiddleware.FromContext(_http.HttpContext);
+                var resolvedCompanyId = companyId
+                    ?? (invoiceId > 0
+                        ? await _db.Invoices.AsNoTracking()
+                            .Where(i => i.Id == invoiceId)
+                            .Select(i => (int?)i.CompanyId)
+                            .FirstOrDefaultAsync() ?? 0
+                        : 0);
 
-                await _auditLog.LogAsync(new AuditLog
+                await _fbrComm.LogAsync(new FbrCommunicationLog
                 {
-                    Level = level,
+                    Timestamp = DateTime.UtcNow,
+                    CompanyId = resolvedCompanyId,
+                    InvoiceId = invoiceId > 0 ? invoiceId : null,
+                    CorrelationId = corr,
+                    Action = action,
+                    Endpoint = url,
                     HttpMethod = "POST",
-                    RequestPath = $"/fbr/{action.ToLower()}/{invoiceId}",
-                    StatusCode = httpStatus,
-                    ExceptionType = $"FBR_{action}",
-                    Message = message,
-                    RequestBody = reqScrubbed,
-                    StackTrace = respScrubbed,  // Store FBR response in StackTrace field
-                    QueryString = url
+                    HttpStatusCode = httpStatus > 0 ? httpStatus : null,
+                    Status = fbrStatus,
+                    FbrErrorCode = fbrErrorCode,
+                    FbrErrorMessage = level != "Info" ? message : null,
+                    RequestDurationMs = durationMs,
+                    RetryAttempt = 0,
+                    RequestBodyMasked = reqScrubbed,
+                    ResponseBodyMasked = respScrubbed,
+                    UserName = _http.HttpContext?.User.Identity?.Name,
                 });
-
-                // Mirror to file sink for ops-side diagnostics. The DB row is
-                // the long-term audit; the structured log line is what gets
-                // tail-read during an incident. Severity follows the audit
-                // level so warnings/errors surface at the right log level.
-                if (level == "Error")
-                    _logger.LogError("FBR {Action} invoice={InvoiceId} http={Status}: {Message}", action, invoiceId, httpStatus, message);
-                else if (level == "Warning")
-                    _logger.LogWarning("FBR {Action} invoice={InvoiceId} http={Status}: {Message}", action, invoiceId, httpStatus, message);
-                else
-                    _logger.LogInformation("FBR {Action} invoice={InvoiceId} http={Status}: {Message}", action, invoiceId, httpStatus, message);
             }
             catch (Exception ex)
             {
-                // Never let audit logging break the FBR flow — but do leave
-                // a breadcrumb in the file sink so the failure isn't silent.
-                _logger.LogWarning(ex, "AuditFbr failed for invoice {InvoiceId} action {Action}", invoiceId, action);
+                _logger.LogWarning(ex, "FbrCommunicationLog write failed for invoice {InvoiceId} action {Action}", invoiceId, action);
             }
+
+            // 2. Mirror to file sink for ops-side diagnostics — short marker,
+            // no body. The CorrelationId on every line stitches across the
+            // request boundary.
+            if (level == "Error")
+                _logger.LogError("FBR {Action} invoice={InvoiceId} http={Status}: {Message}", action, invoiceId, httpStatus, message);
+            else if (level == "Warning")
+                _logger.LogWarning("FBR {Action} invoice={InvoiceId} http={Status}: {Message}", action, invoiceId, httpStatus, message);
+            else
+                _logger.LogInformation("FBR {Action} invoice={InvoiceId} http={Status}: {Message}", action, invoiceId, httpStatus, message);
+        }
+
+        // Map legacy AuditFbr (level, action, httpStatus) → FbrCommunicationLog.Status.
+        // The new taxonomy:
+        //   submitted    — Submit returned 2xx + IRN issued
+        //   acknowledged — Validate returned 2xx (no IRN)
+        //   rejected     — FBR validation failed (2xx body but Status=Invalid)
+        //   failed       — non-2xx, network error, malformed response
+        //   uncertain    — TaskCanceled (timeout) — request may or may not have landed
+        private static string ResolveFbrStatus(string level, string action, int httpStatus)
+        {
+            if (level == "Info") return action.Equals("Submit", StringComparison.OrdinalIgnoreCase) ? "submitted" : "acknowledged";
+            if (level == "Warning") return "rejected";
+            if (httpStatus == 0) return "uncertain"; // network / timeout
+            return "failed";
         }
 
         // ═══════════════════════════════════════════════════════════

@@ -19,6 +19,7 @@ import {
   MdBugReport,
   MdTune,
   MdScience,
+  MdMonitorHeart,
   MdStraighten,
   MdFileUpload,
   MdAdminPanelSettings,
@@ -195,7 +196,7 @@ export default function DashboardLayout() {
     if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
-      || p.startsWith("/templates") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox")) return "configuration";
+      || p.startsWith("/templates") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor")) return "configuration";
     if (p.startsWith("/users") || p.startsWith("/roles") || p.startsWith("/tenant-access") || p.startsWith("/audit-logs")) return "administration";
     return "main";
   }, [location.pathname]);
@@ -423,6 +424,12 @@ export default function DashboardLayout() {
                   <span>FBR Sandbox</span>
                 </NavLink>
               </Can>
+              <Can permission="fbrmonitor.view">
+                <NavLink to="/fbr-monitor" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdMonitorHeart className="dl-subitem__icon" aria-hidden="true" />
+                  <span>FBR Monitor</span>
+                </NavLink>
+              </Can>
             </NavGroup>
           )}
 
@@ -593,6 +600,7 @@ function getBreadcrumb(pathname) {
     "/units": "Configuration / Units",
     "/fbr-settings": "Configuration / FBR Settings",
     "/fbr-sandbox": "Configuration / FBR Sandbox",
+    "/fbr-monitor": "Configuration / FBR Monitor",
     "/tenant-access": "Administration / Tenant Access",
     "/audit-logs": "Administration / Audit Logs",
   };

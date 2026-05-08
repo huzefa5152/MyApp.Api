@@ -23,6 +23,10 @@ namespace MyApp.Api.Data
         public DbSet<PrintTemplate> PrintTemplates { get; set; }
         public DbSet<MergeField> MergeFields { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
+        // Audit H-3 (2026-05-08): dedicated FBR communication log so the
+        // FBR sync trail is queryable without sifting through general
+        // audit noise. Wires up in OnModelCreating below.
+        public DbSet<FbrCommunicationLog> FbrCommunicationLogs { get; set; }
         public DbSet<FbrLookup> FbrLookups { get; set; }
         public DbSet<POFormat> POFormats { get; set; }
         public DbSet<POFormatVersion> POFormatVersions { get; set; }
@@ -54,6 +58,31 @@ namespace MyApp.Api.Data
         {
             modelBuilder.Entity<AuditLog>()
                 .HasIndex(a => a.Timestamp);
+
+            // Dedup lookup index — paired (Fingerprint, Timestamp DESC)
+            // so AuditLogService.LogAsync can find recent matches in one
+            // seek. Filtered to non-null fingerprints to keep the index
+            // narrow on legacy rows that pre-date H-8.
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(a => new { a.Fingerprint, a.Timestamp })
+                .HasFilter("[Fingerprint] IS NOT NULL");
+
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(a => a.CompanyId)
+                .HasFilter("[CompanyId] IS NOT NULL");
+
+            // FbrCommunicationLog — primary lookup paths:
+            //   • Latest N for one company (monitor page top)
+            //   • All for one invoice (drill-through from invoice list)
+            //   • Status-filtered for the failed-queue retry view
+            modelBuilder.Entity<FbrCommunicationLog>()
+                .HasIndex(f => new { f.CompanyId, f.Timestamp })
+                .IsDescending(false, true);
+            modelBuilder.Entity<FbrCommunicationLog>()
+                .HasIndex(f => f.InvoiceId)
+                .HasFilter("[InvoiceId] IS NOT NULL");
+            modelBuilder.Entity<FbrCommunicationLog>()
+                .HasIndex(f => new { f.CompanyId, f.Status });
 
             // Unique index on Username
             modelBuilder.Entity<User>()

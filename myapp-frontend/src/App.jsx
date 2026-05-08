@@ -25,6 +25,7 @@ import TemplateEditorPage from "./pages/TemplateEditorPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import FbrSettingsPage from "./pages/FbrSettingsPage";
 import FbrSandboxPage from "./pages/FbrSandboxPage";
+import FbrMonitorPage from "./pages/FbrMonitorPage";
 import LoginPage from "./pages/public/LoginPage";
 import LandingPage from "./pages/public/LandingPage";
 import ProtectedRoute from "./Components/ProtectedRoute";
@@ -77,6 +78,7 @@ export default function App() {
           <Route path="/templates" element={<TemplateEditorPage />} />
           <Route path="/fbr-settings" element={<FbrSettingsPage />} />
           <Route path="/fbr-sandbox" element={<FbrSandboxPage />} />
+          <Route path="/fbr-monitor" element={<FbrMonitorPage />} />
           <Route path="/audit-logs" element={<AuditLogsPage />} />
         </Route>
       </Route>

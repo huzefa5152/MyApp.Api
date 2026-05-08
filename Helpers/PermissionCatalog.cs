@@ -182,6 +182,13 @@ namespace MyApp.Api.Helpers
             // ── Audit Logs ──────────────────────────────────────────────────
             new("auditlogs.view",          "AuditLogs", "View", "View", "View application audit/exception logs"),
 
+            // ── FBR Monitor ─────────────────────────────────────────────────
+            // Dedicated trail for every FBR / PRAL HTTP call (request body
+            // masked, response body masked, status, retry count, duration).
+            // Distinct from auditlogs.view so an "FBR officer" role can see
+            // the FBR sync health without unrelated app audit access.
+            new("fbrmonitor.view",         "FBR",       "Monitor", "View", "View FBR communication trail and aggregate health"),
+
             // ── Tenant Access (User → Company assignments) ──────────────────
             // Decides who can SEE the per-company data. The `IsTenantIsolated`
             // flag on Company is the switch: while false, every authenticated

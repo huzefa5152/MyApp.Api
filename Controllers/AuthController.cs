@@ -13,17 +13,19 @@ namespace MyApp.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class AuthController : ControllerBase
+    public class AuthController : LoggedControllerBase
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
         private readonly int _seedAdminUserId;
+        private readonly new ILogger<AuthController> _logger;
 
-        public AuthController(AppDbContext context, IConfiguration configuration)
+        public AuthController(AppDbContext context, IConfiguration configuration, ILogger<AuthController> logger) : base(logger)
         {
             _context = context;
             _configuration = configuration;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
+            _logger = logger;
         }
 
         [HttpPost("login")]
@@ -35,12 +37,16 @@ namespace MyApp.Api.Controllers
 
             if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
             {
+                _logger.LogWarning("Failed login attempt for username={Username} from {Ip}",
+                    dto.Username, HttpContext.Connection.RemoteIpAddress);
                 return Unauthorized(new { message = "Invalid username or password" });
             }
 
             var token = GenerateJwtToken(user);
             var expiration = DateTime.UtcNow.AddHours(
                 double.Parse(_configuration["Jwt:ExpirationHours"] ?? "8"));
+
+            _logger.LogInformation("User {UserId} ({Username}) signed in", user.Id, user.Username);
 
             return Ok(new LoginResponseDto
             {

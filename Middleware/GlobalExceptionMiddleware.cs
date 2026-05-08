@@ -67,7 +67,9 @@ namespace MyApp.Api.Middleware
                 StatusCode = statusCode,
                 ExceptionType = "",
                 Message = $"HTTP {statusCode} response",
-                RequestBody = requestBody
+                RequestBody = requestBody,
+                CorrelationId = CorrelationIdMiddleware.FromContext(context),
+                CompanyId = ResolveCompanyId(context),
             };
 
             try
@@ -76,6 +78,24 @@ namespace MyApp.Api.Middleware
                 await auditService.LogAsync(auditLog);
             }
             catch { /* logging must never crash the pipeline */ }
+        }
+
+        /// <summary>
+        /// Best-effort tenant tagging for AuditLog rows. Sources, in order:
+        ///   1. HttpContext.Items["currentCompanyId"] — set by AuthorizeCompany
+        ///      attribute when the route is tenant-scoped.
+        ///   2. Route value {companyId} — fallback for endpoints that bypass
+        ///      AuthorizeCompany (e.g. POST /api/companies/{companyId}/...)
+        ///   3. Query string ?companyId=N
+        /// Returns null when nothing matches; CompanyId is nullable on the
+        /// AuditLog row so this is fine.
+        /// </summary>
+        private static int? ResolveCompanyId(HttpContext context)
+        {
+            if (context.Items.TryGetValue("currentCompanyId", out var v) && v is int cid && cid > 0) return cid;
+            if (context.Request.RouteValues.TryGetValue("companyId", out var rv) && int.TryParse(rv?.ToString(), out var rcid) && rcid > 0) return rcid;
+            if (context.Request.Query.TryGetValue("companyId", out var qv) && int.TryParse(qv.ToString(), out var qcid) && qcid > 0) return qcid;
+            return null;
         }
 
         private async Task HandleExceptionAsync(HttpContext context, Exception ex)
@@ -149,7 +169,9 @@ namespace MyApp.Api.Middleware
                 ExceptionType = ex.GetType().Name,
                 Message = ex.Message,
                 StackTrace = statusCode >= 500 ? ex.StackTrace : null,
-                RequestBody = requestBody
+                RequestBody = requestBody,
+                CorrelationId = CorrelationIdMiddleware.FromContext(context),
+                CompanyId = ResolveCompanyId(context),
             };
 
             // Persist to database via scoped service
