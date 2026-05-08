@@ -130,9 +130,14 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       });
       onClose();
     } catch (err) {
-      if (err.response?.data?.error) setError(err.response.data.error);
-      else if (err.message) setError(err.message);
-      else setError("Something went wrong.");
+      // Server-supplied user-friendly message wins; otherwise show a
+      // friendly stable string. Bare err.message from axios is
+      // "Network Error" / "Request failed with status code 500" —
+      // not user-facing, so we don't surface it.
+      const serverMsg = err.response?.data?.error || err.response?.data?.message;
+      if (serverMsg) setError(serverMsg);
+      else if (!err.response) setError("Could not reach the server. Please check your connection and try again.");
+      else setError("Could not save the challan. Please try again or contact an administrator.");
       setSaving(false);
     }
   };

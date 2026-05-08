@@ -1,4 +1,6 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
@@ -50,15 +52,18 @@ namespace MyApp.Api.Services.Implementations
         private readonly AppDbContext _context;
         private readonly ISupplierGroupService _supplierGroups;
         private readonly IStockService _stock;
+        private readonly ILogger<FbrPurchaseImportCommitter> _logger;
 
         public FbrPurchaseImportCommitter(
             AppDbContext context,
             ISupplierGroupService supplierGroups,
-            IStockService stock)
+            IStockService stock,
+            ILogger<FbrPurchaseImportCommitter> logger)
         {
             _context = context;
             _supplierGroups = supplierGroups;
             _stock = stock;
+            _logger = logger;
         }
 
         public async Task<FbrImportCommitInvoiceResult> CommitOneInvoiceAsync(
@@ -225,13 +230,48 @@ namespace MyApp.Api.Services.Implementations
                 result.LineCount = importableLines.Count;
                 return result;
             }
+            catch (DbUpdateException ex) when (IsDuplicateKeyViolation(ex))
+            {
+                // Audit C-3 (2026-05-08): re-uploading the same FBR file
+                // would previously create duplicate PurchaseBill rows
+                // because there was no unique constraint on
+                // (CompanyId, SupplierId, SupplierBillNumber). The unique
+                // constraint isn't deployed yet (needs a duplicate-cleanup
+                // pass on live tenants first), but if it's added later this
+                // catch turns the violation into a clean "skipped" outcome
+                // so the operator sees "12 imported, 5 already existed"
+                // instead of a 500 in the middle of the loop.
+                await tx.RollbackAsync();
+                _logger.LogInformation(
+                    "FBR import: invoice {InvoiceNo} (FBR ref {Ref}) already imported — skipping duplicate",
+                    invoice.InvoiceNo, invoice.FbrInvoiceRefNo);
+                result.Outcome = "already-imported";
+                result.ErrorMessage = "Already imported in a previous upload (skipped).";
+                return result;
+            }
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
+                _logger.LogError(ex,
+                    "FBR import commit failed for company {CompanyId} invoice {InvoiceNo} (FBR ref {Ref})",
+                    companyId, invoice.InvoiceNo, invoice.FbrInvoiceRefNo);
                 result.Outcome = "failed";
                 result.ErrorMessage = ex.Message.Length > 1000 ? ex.Message[..1000] : ex.Message;
                 return result;
             }
+        }
+
+        /// <summary>
+        /// SQL Server unique-constraint violation detection.
+        ///   2601 — duplicate index key (any unique index)
+        ///   2627 — primary-key / unique-constraint violation
+        /// Both surface as DbUpdateException wrapping a SqlException;
+        /// the inner exception's Number tells us which.
+        /// </summary>
+        private static bool IsDuplicateKeyViolation(DbUpdateException ex)
+        {
+            return ex.InnerException is SqlException sqlEx
+                && (sqlEx.Number == 2601 || sqlEx.Number == 2627);
         }
 
         // ── Helpers ─────────────────────────────────────────────────────

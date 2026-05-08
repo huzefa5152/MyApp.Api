@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
@@ -8,10 +9,12 @@ namespace MyApp.Api.Services.Implementations
     public class StockService : IStockService
     {
         private readonly AppDbContext _context;
+        private readonly ILogger<StockService> _logger;
 
-        public StockService(AppDbContext context)
+        public StockService(AppDbContext context, ILogger<StockService> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         public async Task<bool> IsTrackingEnabledAsync(int companyId)
@@ -22,6 +25,19 @@ namespace MyApp.Api.Services.Implementations
                 .FirstOrDefaultAsync();
         }
 
+        /// <summary>
+        /// Inserts a StockMovement row. Audit C-5 (2026-05-08): the inner
+        /// SaveChangesAsync is intentional — it makes the row visible to
+        /// the surrounding transaction immediately so subsequent reads
+        /// (e.g. on-hand checks) see consistent state. All callers run
+        /// inside their own BeginTransactionAsync block; failure here
+        /// rolls back atomically with the parent bill / receipt.
+        ///
+        /// Future work (audit H-1): wrap this SaveChanges in a Polly
+        /// retry policy keyed on SqlException 1205 (deadlock). Today a
+        /// deadlock here aborts the whole bill creation. Out of scope
+        /// for the C-2/C-4/C-5 batch.
+        /// </summary>
         public async Task RecordMovementAsync(
             int companyId,
             int itemTypeId,
@@ -47,7 +63,21 @@ namespace MyApp.Api.Services.Implementations
                 Notes = notes,
                 CreatedAt = DateTime.UtcNow,
             });
-            await _context.SaveChangesAsync();
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                // Surface a structured log line before letting the caller's
+                // outer transaction roll back. Pre-fix this was silent —
+                // the caller's catch was the only trail.
+                _logger.LogError(ex,
+                    "StockMovement insert failed for company={CompanyId} item={ItemTypeId} dir={Direction} qty={Qty} source={SourceType}#{SourceId}",
+                    companyId, itemTypeId, direction, quantity, sourceType, sourceId);
+                throw;
+            }
         }
 
         public async Task<int> GetOnHandAsync(int companyId, int itemTypeId, DateTime? asOfDate = null)

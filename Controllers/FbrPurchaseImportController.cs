@@ -63,8 +63,11 @@ namespace MyApp.Api.Controllers
             }
             catch (Exception ex)
             {
+                // Audit M-1 (2026-05-08): pre-fix this returned ex.Message
+                // verbatim. Now the full exception is in the file sink and
+                // AuditLog; the operator gets a generic message.
                 _logger.LogError(ex, "FBR purchase preview failed for company {CompanyId}", companyId);
-                return StatusCode(500, new { error = $"Failed to preview file: {ex.Message}" });
+                return StatusCode(500, new { error = "Failed to preview the FBR file. Please verify the file is a valid Annexure-A export and try again." });
             }
         }
 
@@ -103,7 +106,7 @@ namespace MyApp.Api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "FBR purchase commit failed for company {CompanyId}", companyId);
-                return StatusCode(500, new { error = $"Failed to commit import: {ex.Message}" });
+                return StatusCode(500, new { error = "Failed to commit the FBR import. The transaction was rolled back. Please retry; if the failure persists, contact an administrator." });
             }
         }
 

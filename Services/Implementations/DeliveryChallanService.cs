@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
@@ -12,11 +13,13 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly IDeliveryChallanRepository _repository;
         private readonly AppDbContext _context;
+        private readonly ILogger<DeliveryChallanService> _logger;
 
-        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context)
+        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context, ILogger<DeliveryChallanService> logger)
         {
             _repository = repository;
             _context = context;
+            _logger = logger;
         }
 
         /// <summary>
@@ -344,8 +347,9 @@ namespace MyApp.Api.Services.Implementations
                 var reloaded = await _repository.GetByIdAsync(challanId);
                 return reloaded == null ? null : ToDto(reloaded);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "UpdateItemsAsync transaction failed for challan {ChallanId}", challanId);
                 await transaction.RollbackAsync();
                 throw;
             }
@@ -599,8 +603,9 @@ namespace MyApp.Api.Services.Implementations
                 await transaction.CommitAsync();
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "DeleteItemAsync transaction failed for challan {ChallanId} item {ItemId}", dc.Id, itemId);
                 await transaction.RollbackAsync();
                 throw;
             }

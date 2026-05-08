@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
-using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
 
@@ -9,32 +10,12 @@ namespace MyApp.Api.Middleware
     public class GlobalExceptionMiddleware
     {
         private readonly RequestDelegate _next;
+        private readonly ILogger<GlobalExceptionMiddleware> _logger;
 
-        public GlobalExceptionMiddleware(RequestDelegate next) => _next = next;
-
-        // Field names whose value should be replaced with "***" before
-        // a request body is persisted to AuditLogs. The audit table is
-        // not encrypted and is itself viewable via auditlogs.view, so
-        // anything that looks like a credential / token must be scrubbed.
-        // Match is case-insensitive and applies to JSON bodies — form
-        // bodies are unusual on this API (JWT-bearer + JSON).
-        private static readonly string[] SensitiveFieldNames = new[]
+        public GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExceptionMiddleware> logger)
         {
-            "password", "currentpassword", "newpassword", "oldpassword",
-            "passwordhash", "confirmpassword",
-            "fbrtoken", "token", "apikey", "api_key", "secret",
-            "jwt", "authorization", "bearer",
-            "connectionstring",
-        };
-
-        private static readonly Regex SensitiveJsonRegex = new(
-            @"(""(?:" + string.Join("|", SensitiveFieldNames) + @")""\s*:\s*)(""(?:[^""\\]|\\.)*""|null)",
-            RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-        private static string? RedactSensitive(string? body)
-        {
-            if (string.IsNullOrEmpty(body)) return body;
-            return SensitiveJsonRegex.Replace(body, "$1\"***\"");
+            _next = next;
+            _logger = logger;
         }
 
         public async Task InvokeAsync(HttpContext context)
@@ -58,6 +39,7 @@ namespace MyApp.Api.Middleware
 
         private static async Task LogResponseErrorAsync(HttpContext context)
         {
+            var redactor = context.RequestServices.GetRequiredService<ISensitiveDataRedactor>();
             string? requestBody = null;
             try
             {
@@ -68,7 +50,7 @@ namespace MyApp.Api.Middleware
                     requestBody = await reader.ReadToEndAsync();
                     if (string.IsNullOrWhiteSpace(requestBody)) requestBody = null;
                     else if (requestBody.Length > 4000) requestBody = requestBody[..4000] + "...(truncated)";
-                    requestBody = RedactSensitive(requestBody);
+                    requestBody = redactor.Scrub(requestBody);
                 }
             }
             catch { /* ignore */ }
@@ -96,7 +78,7 @@ namespace MyApp.Api.Middleware
             catch { /* logging must never crash the pipeline */ }
         }
 
-        private static async Task HandleExceptionAsync(HttpContext context, Exception ex)
+        private async Task HandleExceptionAsync(HttpContext context, Exception ex)
         {
             // Determine status code from exception type. UnauthorizedAccessException
             // is reserved for tenant-scope failures from ICompanyAccessGuard —
@@ -111,6 +93,8 @@ namespace MyApp.Api.Middleware
                 _ => (int)HttpStatusCode.InternalServerError
             };
 
+            var redactor = context.RequestServices.GetRequiredService<ISensitiveDataRedactor>();
+
             // Read request body (if buffering was enabled)
             string? requestBody = null;
             try
@@ -122,10 +106,35 @@ namespace MyApp.Api.Middleware
                     requestBody = await reader.ReadToEndAsync();
                     if (requestBody.Length > 4000)
                         requestBody = requestBody[..4000] + "...(truncated)";
-                    requestBody = RedactSensitive(requestBody);
+                    requestBody = redactor.Scrub(requestBody);
                 }
             }
             catch { /* ignore body read failures */ }
+
+            // Mirror to ILogger so the durable file sink picks it up too —
+            // the AuditLogs DB row is the business trail, the structured
+            // log line is the operational trail. Stack-trace excluded from
+            // the message template to keep the file readable; full ex is
+            // passed positionally so the sink renders it.
+            if (statusCode >= 500)
+            {
+                _logger.LogError(ex,
+                    "Unhandled {ExceptionType} on {HttpMethod} {Path} (user={User})",
+                    ex.GetType().Name,
+                    context.Request.Method,
+                    context.Request.Path.Value,
+                    context.User.Identity?.Name ?? "anonymous");
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "{ExceptionType} on {HttpMethod} {Path}: {Message} (user={User})",
+                    ex.GetType().Name,
+                    context.Request.Method,
+                    context.Request.Path.Value,
+                    ex.Message,
+                    context.User.Identity?.Name ?? "anonymous");
+            }
 
             // Build audit log entry
             var auditLog = new AuditLog
@@ -149,17 +158,30 @@ namespace MyApp.Api.Middleware
                 var auditService = context.RequestServices.GetRequiredService<IAuditLogService>();
                 await auditService.LogAsync(auditLog);
             }
-            catch { /* logging must never crash the pipeline */ }
+            catch (Exception logEx)
+            {
+                // Audit-DB write failed — fall back to the file sink so
+                // the failure isn't silent. Don't rethrow; logging must
+                // never crash the pipeline.
+                _logger.LogWarning(logEx, "AuditLog DB write failed; original exception was {OrigType}: {OrigMsg}", ex.GetType().Name, ex.Message);
+            }
 
-            // Return standardized JSON error response
+            // Return standardized JSON error response.
+            // 5xx → opaque message (don't leak ex.Message which may carry
+            // SQL / internal details).
+            // 4xx → exception's own message is fine for ValidationException
+            // and KeyNotFoundException; defensive trim on InvalidOperation
+            // so we don't accidentally leak internal state.
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = statusCode;
 
+            var userMessage = statusCode >= 500
+                ? "An unexpected error occurred. Please try again later."
+                : ex.Message;
+
             var response = new
             {
-                message = statusCode >= 500
-                    ? "An unexpected error occurred. Please try again later."
-                    : ex.Message,
+                message = userMessage,
                 statusCode
             };
 

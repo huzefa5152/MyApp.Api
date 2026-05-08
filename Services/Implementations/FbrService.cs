@@ -5,8 +5,10 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Services.Interfaces;
@@ -23,6 +25,8 @@ namespace MyApp.Api.Services.Implementations
         private readonly AppDbContext _db;
         private readonly IStockService _stock;
         private readonly IServiceProvider _services;   // resolves ITaxMappingEngine lazily to avoid circular DI
+        private readonly ISensitiveDataRedactor _redactor;
+        private readonly ILogger<FbrService> _logger;
 
         // ── V1.12 API URLs ──────────────────────────────────────
         // Submit/Validate: sandbox adds "_sb" suffix; routing also based on token
@@ -162,7 +166,9 @@ namespace MyApp.Api.Services.Implementations
             IAuditLogService auditLogService,
             AppDbContext db,
             IStockService stock,
-            IServiceProvider services)
+            IServiceProvider services,
+            ISensitiveDataRedactor redactor,
+            ILogger<FbrService> logger)
         {
             _invoiceRepo = invoiceRepo;
             _companyRepo = companyRepo;
@@ -171,6 +177,8 @@ namespace MyApp.Api.Services.Implementations
             _db = db;
             _stock = stock;
             _services = services;
+            _redactor = redactor;
+            _logger = logger;
         }
 
         // ── Text sanitization for FBR payloads ──────────────────
@@ -591,6 +599,21 @@ namespace MyApp.Api.Services.Implementations
             if (invoice == null)
                 return Fail("Invoice not found.");
 
+            // Audit C-4 (2026-05-08): pre-fix, a network drop AFTER FBR
+            // received the submit but BEFORE we got the response would let
+            // the operator click Submit again and produce a duplicate IRN.
+            // Now: refuse re-submission of a bill that already has an IRN.
+            // Validate is allowed (it's idempotent on FBR's side); only
+            // commit-bearing Submit is blocked.
+            if (isSubmit && !dryRun && !string.IsNullOrWhiteSpace(invoice.FbrIRN))
+            {
+                _logger.LogWarning(
+                    "Refused duplicate FBR submit for invoice {InvoiceId} — IRN {Irn} already issued",
+                    invoiceId, invoice.FbrIRN);
+                return Fail($"This invoice was already submitted to FBR. IRN: {invoice.FbrIRN}. " +
+                            "If you believe the original submission did not reach FBR, contact an administrator.");
+            }
+
             var company = await _companyRepo.GetByIdAsync(invoice.CompanyId);
             if (company == null)
                 return Fail("Company not found.");
@@ -891,6 +914,13 @@ namespace MyApp.Api.Services.Implementations
                 var httpClient = CreateClient(company);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
+                // Idempotency key — stable hash of (companyId, invoiceId, version).
+                // Sent on every submit so if FBR ever adds server-side dedup
+                // (or a proxy / WAF inspects it) the same key prevents a double-
+                // submit. Validate calls also carry one for log correlation.
+                var idempotencyKey = ComputeIdempotencyKey(invoice.CompanyId, invoice.Id, invoice.CreatedAt);
+                content.Headers.Add("X-Idempotency-Key", idempotencyKey);
+
                 var response = await httpClient.PostAsync(url, content);
                 var responseBody = await response.Content.ReadAsStringAsync();
 
@@ -907,7 +937,14 @@ namespace MyApp.Api.Services.Implementations
                         if (errResp?.ValidationResponse?.Error != null)
                             fbrDetail = $" FBR says: \"{errResp.ValidationResponse.Error}\"";
                     }
-                    catch { /* ignore parse errors */ }
+                    catch (JsonException jx)
+                    {
+                        // FBR returned a non-success status with a body that
+                        // isn't the documented FbrApiResponse shape — still
+                        // worth logging so we can spot upstream API drift.
+                        _logger.LogWarning(jx, "FBR error-body parse failed (status {Status}, first 300 chars): {Body}",
+                            statusCode, responseBody.Length > 300 ? responseBody[..300] : responseBody);
+                    }
 
                     string errorMsg = statusCode switch
                     {
@@ -924,7 +961,24 @@ namespace MyApp.Api.Services.Implementations
                 }
 
                 // ── Parse response ──
-                var fbrResponse = JsonSerializer.Deserialize<FbrApiResponse>(responseBody, JsonOptions);
+                FbrApiResponse? fbrResponse;
+                try
+                {
+                    fbrResponse = JsonSerializer.Deserialize<FbrApiResponse>(responseBody, JsonOptions);
+                }
+                catch (JsonException jx)
+                {
+                    // FBR returned 2xx but the body doesn't match the
+                    // documented contract. Operator-facing message is
+                    // generic; full body is in the audit log.
+                    _logger.LogError(jx, "FBR success response not parseable as FbrApiResponse (first 500 chars): {Body}",
+                        responseBody.Length > 500 ? responseBody[..500] : responseBody);
+                    var pmsg = "FBR returned an unrecognised response. Please contact support with the request ID.";
+                    await AuditFbr("Error", action, invoice.Id, url, json, responseBody, 200, pmsg);
+                    if (isSubmit) await PersistStatus(invoice, "Failed", null, pmsg);
+                    return Fail(pmsg);
+                }
+
                 var validation = fbrResponse?.ValidationResponse;
 
                 if (validation == null)
@@ -1159,9 +1213,14 @@ namespace MyApp.Api.Services.Implementations
         {
             try
             {
-                // Truncate bodies to fit audit log limits
+                // Truncate then redact. NTN/CNIC are masked to last-4, credentials
+                // (token, jwt) are fully redacted — see Helpers/SensitiveDataRedactor.
+                // Audit C-2 (2026-05-08): pre-fix, the raw payload with full NTN
+                // and CNIC was being persisted to AuditLogs verbatim.
                 var reqTruncated = requestBody?.Length > 4000 ? requestBody[..4000] : requestBody;
                 var respTruncated = responseBody?.Length > 4000 ? responseBody[..4000] : responseBody;
+                var reqScrubbed = _redactor.Scrub(reqTruncated);
+                var respScrubbed = _redactor.Scrub(respTruncated);
 
                 await _auditLog.LogAsync(new AuditLog
                 {
@@ -1171,12 +1230,28 @@ namespace MyApp.Api.Services.Implementations
                     StatusCode = httpStatus,
                     ExceptionType = $"FBR_{action}",
                     Message = message,
-                    RequestBody = reqTruncated,
-                    StackTrace = respTruncated,  // Store FBR response in StackTrace field
+                    RequestBody = reqScrubbed,
+                    StackTrace = respScrubbed,  // Store FBR response in StackTrace field
                     QueryString = url
                 });
+
+                // Mirror to file sink for ops-side diagnostics. The DB row is
+                // the long-term audit; the structured log line is what gets
+                // tail-read during an incident. Severity follows the audit
+                // level so warnings/errors surface at the right log level.
+                if (level == "Error")
+                    _logger.LogError("FBR {Action} invoice={InvoiceId} http={Status}: {Message}", action, invoiceId, httpStatus, message);
+                else if (level == "Warning")
+                    _logger.LogWarning("FBR {Action} invoice={InvoiceId} http={Status}: {Message}", action, invoiceId, httpStatus, message);
+                else
+                    _logger.LogInformation("FBR {Action} invoice={InvoiceId} http={Status}: {Message}", action, invoiceId, httpStatus, message);
             }
-            catch { /* never let audit logging break the FBR flow */ }
+            catch (Exception ex)
+            {
+                // Never let audit logging break the FBR flow — but do leave
+                // a breadcrumb in the file sink so the failure isn't silent.
+                _logger.LogWarning(ex, "AuditFbr failed for invoice {InvoiceId} action {Action}", invoiceId, action);
+            }
         }
 
         // ═══════════════════════════════════════════════════════════
@@ -1304,15 +1379,7 @@ namespace MyApp.Api.Services.Implementations
 
             var httpClient = CreateClient(company);
             var url = $"{RefBaseV2}/SaleTypeToRate?date={date}&transTypeId={transTypeId}&originationSupplier={provinceId}";
-
-            try
-            {
-                var response = await httpClient.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return new();
-                var json = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<List<FbrSaleTypeRateDto>>(json, JsonOptions) ?? new();
-            }
-            catch { return new(); }
+            return await GetReferenceListAsync<FbrSaleTypeRateDto>(httpClient, url, "SaleTypeToRate");
         }
 
         // §5.7 — SroSchedule (v2)
@@ -1324,15 +1391,7 @@ namespace MyApp.Api.Services.Implementations
 
             var httpClient = CreateClient(company);
             var url = $"{RefBaseV2}/SroSchedule?rate_id={rateId}&date={date}&origination_supplier_csv={provinceId}";
-
-            try
-            {
-                var response = await httpClient.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return new();
-                var json = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<List<FbrSRODto>>(json, JsonOptions) ?? new();
-            }
-            catch { return new(); }
+            return await GetReferenceListAsync<FbrSRODto>(httpClient, url, "SroSchedule");
         }
 
         // §5.10 — SROItem (v2)
@@ -1344,15 +1403,7 @@ namespace MyApp.Api.Services.Implementations
 
             var httpClient = CreateClient(company);
             var url = $"{RefBaseV2}/SROItem?date={date}&sro_id={sroId}";
-
-            try
-            {
-                var response = await httpClient.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return new();
-                var json = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<List<FbrSROItemDto>>(json, JsonOptions) ?? new();
-            }
-            catch { return new(); }
+            return await GetReferenceListAsync<FbrSROItemDto>(httpClient, url, "SROItem");
         }
 
         // §5.9 — HS_UOM (v2)
@@ -1364,15 +1415,7 @@ namespace MyApp.Api.Services.Implementations
 
             var httpClient = CreateClient(company);
             var url = $"{RefBaseV2}/HS_UOM?hs_code={hsCode}&annexure_id={annexureId}";
-
-            try
-            {
-                var response = await httpClient.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return new();
-                var json = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<List<FbrUOMDto>>(json, JsonOptions) ?? new();
-            }
-            catch { return new(); }
+            return await GetReferenceListAsync<FbrUOMDto>(httpClient, url, "HS_UOM");
         }
 
         // ═══════════════════════════════════════════════════════════
@@ -1389,15 +1432,33 @@ namespace MyApp.Api.Services.Implementations
             var httpClient = CreateClient(company);
             var requestBody = JsonSerializer.Serialize(new { regno = regNo, date }, JsonOptions);
             var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
+            var url = $"{DistBase}/statl";
 
             try
             {
-                var response = await httpClient.PostAsync($"{DistBase}/statl", content);
-                if (!response.IsSuccessStatusCode) return null;
+                var response = await httpClient.PostAsync(url, content);
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("FBR ref STATL non-success {Status} for company {CompanyId}", (int)response.StatusCode, companyId);
+                    return null;
+                }
                 var json = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<FbrRegStatusDto>(json, JsonOptions);
+                try
+                {
+                    return JsonSerializer.Deserialize<FbrRegStatusDto>(json, JsonOptions);
+                }
+                catch (JsonException jx)
+                {
+                    _logger.LogError(jx, "FBR ref STATL returned malformed JSON (first 300 chars): {Body}",
+                        json.Length > 300 ? json[..300] : json);
+                    return null;
+                }
             }
-            catch { return null; }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "FBR ref STATL request failed for company {CompanyId}", companyId);
+                return null;
+            }
         }
 
         // §5.12 — Get registration type
@@ -1411,34 +1472,106 @@ namespace MyApp.Api.Services.Implementations
             // Use default options (no CamelCase) for this specific request since the field is "Registration_No"
             var requestBody = JsonSerializer.Serialize(new { Registration_No = regNo });
             var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
+            var url = $"{DistBase}/Get_Reg_Type";
 
             try
             {
-                var response = await httpClient.PostAsync($"{DistBase}/Get_Reg_Type", content);
-                if (!response.IsSuccessStatusCode) return null;
+                var response = await httpClient.PostAsync(url, content);
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("FBR ref Get_Reg_Type non-success {Status} for company {CompanyId}", (int)response.StatusCode, companyId);
+                    return null;
+                }
                 var json = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<FbrRegTypeDto>(json, JsonOptions);
+                try
+                {
+                    return JsonSerializer.Deserialize<FbrRegTypeDto>(json, JsonOptions);
+                }
+                catch (JsonException jx)
+                {
+                    _logger.LogError(jx, "FBR ref Get_Reg_Type returned malformed JSON (first 300 chars): {Body}",
+                        json.Length > 300 ? json[..300] : json);
+                    return null;
+                }
             }
-            catch { return null; }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "FBR ref Get_Reg_Type request failed for company {CompanyId}", companyId);
+                return null;
+            }
         }
 
-        // ── Shared GET helper ───────────────────────────────────
+        // ── Shared GET helpers ───────────────────────────────────
 
+        // Used by the V1 catalog endpoints (provinces, doctypecode, itemdesccode,
+        // uom, transtypecode, sroitemcode). Audit H-6 (2026-05-08): pre-fix, all
+        // failures returned an empty list silently — operators saw blank dropdowns
+        // with no diagnostic trail. Now logs at Warning so a brownout in the
+        // FBR catalog is visible in the file sink.
         private async Task<List<T>> GetReferenceData<T>(int companyId, string url)
         {
             var company = await _companyRepo.GetByIdAsync(companyId);
             if (company == null || string.IsNullOrEmpty(company.FbrToken)) return new();
 
             var httpClient = CreateClient(company);
+            return await GetReferenceListAsync<T>(httpClient, url, ExtractEndpointName(url));
+        }
 
+        // Used by the V2 endpoints (already have an HttpClient + URL). Same
+        // logging behaviour. JsonException is caught separately so the operator
+        // sees "FBR returned malformed JSON" rather than a generic 500.
+        private async Task<List<T>> GetReferenceListAsync<T>(HttpClient httpClient, string url, string endpoint)
+        {
             try
             {
                 var response = await httpClient.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return new();
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("FBR ref {Endpoint} non-success {Status}", endpoint, (int)response.StatusCode);
+                    return new();
+                }
                 var json = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<List<T>>(json, JsonOptions) ?? new();
+                try
+                {
+                    return JsonSerializer.Deserialize<List<T>>(json, JsonOptions) ?? new();
+                }
+                catch (JsonException jx)
+                {
+                    _logger.LogError(jx, "FBR ref {Endpoint} returned malformed JSON (first 300 chars): {Body}",
+                        endpoint, json.Length > 300 ? json[..300] : json);
+                    return new();
+                }
             }
-            catch { return new(); }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "FBR ref {Endpoint} request failed", endpoint);
+                return new();
+            }
+        }
+
+        // Stable per-invoice idempotency key. Same companyId+invoiceId+createdAt
+        // always yields the same key, so a retried submit (whether by the operator
+        // or by the resilience handler) carries the same X-Idempotency-Key.
+        // SHA-256 over the tuple, hex-encoded, truncated to 32 chars (128 bits
+        // entropy is plenty for a small per-tenant key space). See audit C-4.
+        private static string ComputeIdempotencyKey(int companyId, int invoiceId, DateTime createdAt)
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var raw = $"{companyId}|{invoiceId}|{createdAt:O}";
+            var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(raw));
+            var hex = Convert.ToHexString(bytes).ToLowerInvariant();
+            return hex[..32];
+        }
+
+        // Pulls the last URL segment for the log line ("uom" / "doctypecode" /
+        // "itemdesccode" etc) so a Serilog grep on Endpoint=uom shows the trail
+        // for that specific FBR catalog without needing to parse the full URL.
+        private static string ExtractEndpointName(string url)
+        {
+            var qIdx = url.IndexOf('?');
+            var path = qIdx >= 0 ? url[..qIdx] : url;
+            var slashIdx = path.LastIndexOf('/');
+            return slashIdx >= 0 && slashIdx < path.Length - 1 ? path[(slashIdx + 1)..] : path;
         }
     }
 }

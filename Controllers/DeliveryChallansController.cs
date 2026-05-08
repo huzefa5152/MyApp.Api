@@ -16,12 +16,14 @@ namespace MyApp.Api.Controllers
         private readonly IDeliveryChallanService _service;
         private readonly ICompanyAccessGuard _access;
         private readonly int _defaultPageSize;
+        private readonly ILogger<DeliveryChallansController> _logger;
 
-        public DeliveryChallansController(IDeliveryChallanService service, ICompanyAccessGuard access, IConfiguration configuration)
+        public DeliveryChallansController(IDeliveryChallanService service, ICompanyAccessGuard access, IConfiguration configuration, ILogger<DeliveryChallansController> logger)
         {
             _service = service;
             _access = access;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
+            _logger = logger;
         }
 
         private int CurrentUserId =>
@@ -126,7 +128,11 @@ namespace MyApp.Api.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                // Audit M-1 (2026-05-08): pre-fix this returned ex.Message
+                // verbatim, leaking internal SQL / EF detail to the client.
+                // Now: log the full exception and return a generic message.
+                _logger.LogError(ex, "Create challan failed for company {CompanyId}", companyId);
+                return StatusCode(500, new { error = "Could not create the challan. Please try again or contact an administrator if the problem persists." });
             }
         }
 

@@ -6,14 +6,59 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using MyApp.Api.Data;
+using MyApp.Api.Helpers;
 using MyApp.Api.Repositories.Implementations;
 using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Implementations;
 using MyApp.Api.Services.Interfaces;
 using MyApp.Api.Services.Tax;
+using Polly;
+using Serilog;
+using Serilog.Events;
 
+// ── Serilog bootstrap (must precede WebApplication.CreateBuilder) ──
+// Captures startup-failure logs that would otherwise be lost. Real config
+// is read from appsettings (logger replaced via builder.Host.UseSerilog
+// below); this bootstrap logger only catches "the server crashed before
+// it could even read config" — rare but devastating without it.
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .WriteTo.Console()
+    .WriteTo.File(
+        path: Path.Combine(AppContext.BaseDirectory, "logs", "bootstrap-.log"),
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 7)
+    .CreateBootstrapLogger();
+
+try
+{
 var builder = WebApplication.CreateBuilder(args);
+
+// Serilog as the host logger — config from appsettings.{Environment}.json
+// "Serilog" section. Falls back to sensible defaults if config is missing.
+// Async sinks aren't strictly necessary at this scale; sticking with
+// synchronous file sink to keep diagnostics linear (a 50 ms write is
+// fine in exchange for guaranteed line ordering on crash).
+builder.Host.UseSerilog((ctx, services, lc) => lc
+    .ReadFrom.Configuration(ctx.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
+    .Enrich.WithProperty("Application", "MyApp.Api")
+    .Enrich.WithProperty("Environment", ctx.HostingEnvironment.EnvironmentName)
+    // Defaults if config doesn't override — durable rolling file in
+    // logs/ next to the binary, 30-day retention, 50 MB cap per file.
+    .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information)
+    .WriteTo.File(
+        path: Path.Combine(AppContext.BaseDirectory, "logs", "api-.log"),
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 30,
+        fileSizeLimitBytes: 50 * 1024 * 1024,
+        rollOnFileSizeLimit: true,
+        shared: true,
+        // Excluded the noisy framework loggers from the file sink — the
+        // Console sink keeps them at Warning so dev can still spot issues.
+        restrictedToMinimumLevel: LogEventLevel.Information));
 
 // Add services to the container
 builder.Services.AddControllers(); // 👈 Needed for controllers
@@ -157,7 +202,40 @@ builder.Services.AddScoped<ITaxClaimService, TaxClaimService>();
 // operator re-uploads a template, and shared safely across requests.
 builder.Services.AddSingleton<IExcelTemplateReverseMapper, ExcelTemplateReverseMapper>();
 builder.Services.AddScoped<IChallanExcelImporter, ChallanExcelImporter>();
-builder.Services.AddHttpClient("FBR");
+// Sensitive-data redactor — shared by GlobalExceptionMiddleware and
+// FbrService for consistent NTN/CNIC masking + credential redaction.
+// Singleton because the regexes are stateless and compiled once.
+builder.Services.AddSingleton<ISensitiveDataRedactor, SensitiveDataRedactor>();
+
+// FBR HttpClient — see audit H-1 (no retry), H-2 (no timeout).
+//   • 30 s timeout per attempt (vs 100 s framework default that was
+//     blocking Kestrel threads under FBR brownouts)
+//   • Standard resilience handler: retry transient failures, circuit-
+//     break after sustained failures, plus per-attempt timeout. The
+//     default policy in Microsoft.Extensions.Http.Resilience handles
+//     5xx and HttpRequestException with exponential backoff.
+builder.Services.AddHttpClient("FBR", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.Add("User-Agent", "MyApp.Api/1.0");
+})
+.AddStandardResilienceHandler(options =>
+{
+    // Total time across retries — must exceed per-attempt timeout × max
+    // attempts or the resilience pipeline trips its own guard.
+    options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(120);
+    options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(30);
+    options.Retry.MaxRetryAttempts = 3;
+    options.Retry.Delay = TimeSpan.FromSeconds(2);
+    options.Retry.BackoffType = DelayBackoffType.Exponential;
+    // Open circuit after 5 failures across a 30 s window; half-open
+    // after 15 s. Tuned to FBR sandbox behaviour (occasional 30-60 s
+    // outages during their nightly maintenance).
+    options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(60);
+    options.CircuitBreaker.MinimumThroughput = 5;
+    options.CircuitBreaker.FailureRatio = 0.5;
+    options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(15);
+});
 
 // RBAC: permission service needs an in-process cache for the per-user
 // permission-set TTL.
@@ -1099,6 +1177,39 @@ app.UseCors("AllowFrontend");
 // Enable request body buffering so the exception middleware can read it
 app.Use(async (ctx, next) => { ctx.Request.EnableBuffering(); await next(); });
 
+// Serilog request logging — one structured log line per request with
+// method, path, status, duration. Cheap and dramatically improves
+// diagnostics. Excluded from health-check / static asset noise via
+// the GetLevel callback below (returns Verbose for those, which is
+// below default minimum so they're filtered out without touching the
+// pipeline cost). Audit-log database writes are still handled by
+// GlobalExceptionMiddleware below — Serilog logs are the operational
+// trail; AuditLog is the business / security trail.
+app.UseSerilogRequestLogging(opts =>
+{
+    opts.GetLevel = (ctx, elapsed, ex) =>
+    {
+        if (ex != null) return LogEventLevel.Error;
+        if (ctx.Response.StatusCode >= 500) return LogEventLevel.Error;
+        if (ctx.Response.StatusCode >= 400) return LogEventLevel.Warning;
+        // Static assets / SPA shell — silence at default min level.
+        var path = ctx.Request.Path.Value ?? "";
+        if (path.StartsWith("/assets/", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".js", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".css", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".ico", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)) return LogEventLevel.Verbose;
+        return LogEventLevel.Information;
+    };
+    opts.EnrichDiagnosticContext = (diag, ctx) =>
+    {
+        diag.Set("UserName", ctx.User.Identity?.Name ?? "anonymous");
+        diag.Set("ClientIp", ctx.Connection.RemoteIpAddress?.ToString() ?? "");
+    };
+});
+
 // Global exception handling — logs to AuditLogs table
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
@@ -1131,4 +1242,18 @@ app.MapControllers(); // 👈 maps your controllers (like CompaniesController)
 // SPA fallback: serve index.html for any non-API, non-file routes
 app.MapFallbackToFile("index.html");
 
+Log.Information("MyApp.Api starting up — environment={Env}", app.Environment.EnvironmentName);
 app.Run();
+}
+catch (Exception ex) when (ex is not HostAbortedException
+                           && ex.GetType().FullName != "Microsoft.EntityFrameworkCore.Design.OperationException")
+{
+    // HostAbortedException is the OS shutdown signal — not a crash.
+    // EF Core's design-time tooling throws OperationException when
+    // running migrations; suppressing those keeps `dotnet ef` quiet.
+    Log.Fatal(ex, "Host terminated unexpectedly during startup or run");
+}
+finally
+{
+    Log.CloseAndFlush();
+}

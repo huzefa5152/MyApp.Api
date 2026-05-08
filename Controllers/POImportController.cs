@@ -133,12 +133,15 @@ namespace MyApp.Api.Controllers
             catch (Exception ex)
             {
                 sw.Stop();
-                _logger.LogError(ex, "PO PDF parse failed");
+                _logger.LogError(ex, "PO PDF parse failed for company {CompanyId} ({FileName})", companyId, file.FileName);
                 archive.ParseOutcome = "error";
                 archive.ParseDurationMs = (int)sw.ElapsedMilliseconds;
                 archive.ErrorMessage = Truncate(ex.Message, 1000);
                 await TryPersistArchiveAsync(archive);
-                return BadRequest(new { error = $"Failed to process PDF: {ex.Message}" });
+                // Audit M-1 (2026-05-08): pre-fix this returned ex.Message —
+                // could leak PdfPig internals. Generic message; full detail
+                // lives in the audit log + Serilog file sink.
+                return BadRequest(new { error = "Could not process this PDF. The file may be corrupt or password-protected. If the issue persists, please fill the challan manually." });
             }
         }
 
@@ -181,7 +184,7 @@ namespace MyApp.Api.Controllers
             // the Remarks section (e.g. "For unit # 1 Lhr..." vs "For QC Depart").
             if (match == null)
             {
-                _logger.LogInformation("No PO format matched — returning miss payload");
+                _logger.LogDebug("No PO format matched — returning miss payload");
                 return (UnprocessableEntity(new ParseMissDto
                 {
                     Reason = "no-format",
@@ -268,7 +271,10 @@ namespace MyApp.Api.Controllers
             var ruleResult = _ruleParser.Parse(rawText, match.Format);
             if (ruleResult.Items.Count == 0 && string.IsNullOrEmpty(ruleResult.PONumber))
             {
-                _logger.LogInformation("Format {Id} matched but rule-set produced empty result", match.Format.Id);
+                // Warning level: format matched but produced nothing — usually
+                // means the sample / headers drifted and the format needs an
+                // edit. Operator-actionable, so it's worth surfacing.
+                _logger.LogWarning("Format {Id} matched but rule-set produced empty result", match.Format.Id);
                 return (UnprocessableEntity(new ParseMissDto
                 {
                     Reason = "rules-empty",
@@ -294,7 +300,7 @@ namespace MyApp.Api.Controllers
             // Strip internal diagnostic warnings from the response — the UI
             // only cares about the extracted fields now.
             ruleResult.Warnings = new List<string>();
-            _logger.LogInformation("Parsed via rule-set: formatId={Id} items={Items}", match.Format.Id, ruleResult.Items.Count);
+            _logger.LogDebug("Parsed via rule-set: formatId={Id} items={Items}", match.Format.Id, ruleResult.Items.Count);
             return (Ok(ruleResult), new ParseOutcomeInfo
             {
                 Outcome = "ok",

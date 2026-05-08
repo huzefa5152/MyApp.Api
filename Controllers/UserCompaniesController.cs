@@ -30,12 +30,14 @@ namespace MyApp.Api.Controllers
         private readonly AppDbContext _context;
         private readonly ICompanyAccessGuard _access;
         private readonly int _seedAdminUserId;
+        private readonly ILogger<UserCompaniesController> _logger;
 
-        public UserCompaniesController(AppDbContext context, ICompanyAccessGuard access, IConfiguration configuration)
+        public UserCompaniesController(AppDbContext context, ICompanyAccessGuard access, IConfiguration configuration, ILogger<UserCompaniesController> logger)
         {
             _context = context;
             _access = access;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
+            _logger = logger;
         }
 
         private int CurrentUserId =>
@@ -203,8 +205,9 @@ namespace MyApp.Api.Controllers
                     Total = requestedSet.Count,
                 });
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "SetUserCompanies transaction failed for userId={UserId}", userId);
                 await tx.RollbackAsync();
                 throw;
             }

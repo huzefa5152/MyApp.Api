@@ -477,11 +477,16 @@ export default function InvoicePage({ mode = "invoices" }) {
           }
         }
       } catch (err) {
-        const msg = err.response?.data?.errorMessage || err.message || "Unknown error";
+        // Prefer the server's user-facing message; fall back to a stable
+        // friendly string (axios's raw err.message is "Network Error" /
+        // "Request failed with status code 500" — not user-friendly).
+        const serverMsg = err.response?.data?.errorMessage || err.response?.data?.message;
+        const msg = serverMsg
+          || (!err.response ? "Could not reach the server." : "Request failed unexpectedly.");
         results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "failed", message: msg });
-        if (msg.includes("token") || msg.includes("authentication") || msg.includes("Cannot connect") || err.code === "ERR_NETWORK") {
+        if ((serverMsg && (serverMsg.includes("token") || serverMsg.includes("authentication") || serverMsg.includes("Cannot connect"))) || err.code === "ERR_NETWORK") {
           stopFurtherCalls = true;
-          stopReason = msg || "Cannot connect to FBR. Check your connection and FBR token.";
+          stopReason = msg;
         }
       }
     }
@@ -533,11 +538,16 @@ export default function InvoicePage({ mode = "invoices" }) {
           }
         }
       } catch (err) {
-        const msg = err.response?.data?.errorMessage || err.message || "Unknown error";
+        // Prefer the server's user-facing message; fall back to a stable
+        // friendly string (axios's raw err.message is "Network Error" /
+        // "Request failed with status code 500" — not user-friendly).
+        const serverMsg = err.response?.data?.errorMessage || err.response?.data?.message;
+        const msg = serverMsg
+          || (!err.response ? "Could not reach the server." : "Request failed unexpectedly.");
         results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "failed", message: msg });
-        if (msg.includes("token") || msg.includes("authentication") || msg.includes("Cannot connect") || err.code === "ERR_NETWORK") {
+        if ((serverMsg && (serverMsg.includes("token") || serverMsg.includes("authentication") || serverMsg.includes("Cannot connect"))) || err.code === "ERR_NETWORK") {
           stopFurtherCalls = true;
-          stopReason = msg || "Cannot connect to FBR. Check your connection and FBR token.";
+          stopReason = msg;
         }
       }
     }
