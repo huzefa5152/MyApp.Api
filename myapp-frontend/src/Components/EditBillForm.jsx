@@ -160,9 +160,13 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   useEffect(() => {
     const load = async () => {
       try {
-        const [{ data }, typesRes, unitsRes] = await Promise.all([
-          getInvoiceById(invoiceId),
-          getItemTypes().catch(() => ({ data: [] })),
+        // Invoice fetch is sequential because the next two calls need
+        // its companyId — the item-types endpoint sorts by per-company
+        // on-hand qty when companyId is passed (2026-05-12), so dropdowns
+        // surface what the operator can actually sell first.
+        const { data } = await getInvoiceById(invoiceId);
+        const [typesRes, unitsRes] = await Promise.all([
+          getItemTypes(data?.companyId).catch(() => ({ data: [] })),
           getAllUnits().catch(() => ({ data: [] })),
         ]);
         setInvoice(data);
@@ -366,8 +370,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
       });
     }
     // Best-effort refresh; if it fails the inline append above keeps
-    // the dropdown usable.
-    getItemTypes()
+    // the dropdown usable. Pass companyId so the refreshed list keeps
+    // the per-company on-hand sort applied on initial load.
+    getItemTypes(invoice?.companyId)
       .then((r) => setItemTypes(r.data || []))
       .catch(() => { /* silent */ });
     setShowAddItemType(false);

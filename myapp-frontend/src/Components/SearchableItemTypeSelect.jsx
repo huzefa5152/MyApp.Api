@@ -31,15 +31,26 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
   );
 
   // Sort:
-  //   1. Quick-entry items (no HS code) first — operators want these at the
-  //      top for draft/non-FBR lines and for in-progress cataloguing.
+  //   0. (2026-05-12) Items the operator can actually sell — availableQty
+  //      > 0 — bubble to the top so the dropdown leads with what's in
+  //      stock. Only present when the parent passed a companyId to
+  //      getItemTypes; admin pages that fetch the global catalog see
+  //      this layer collapse and the legacy ordering takes over.
+  //   1. Quick-entry items (no HS code) — for draft/non-FBR lines.
   //   2. Favorites next.
   //   3. Then by usage desc.
   //   4. Alphabetical tiebreaker.
   const sortedItems = useMemo(() => {
     const arr = [...(items || [])];
     const hasHs = (it) => !!(it.hsCode && it.hsCode.trim());
+    const inStock = (it) => (it.availableQty || 0) > 0;
     arr.sort((a, b) => {
+      if (inStock(a) !== inStock(b)) return inStock(a) ? -1 : 1;
+      if (inStock(a) && inStock(b)) {
+        const av = a.availableQty || 0;
+        const bv = b.availableQty || 0;
+        if (av !== bv) return bv - av;
+      }
       if (hasHs(a) !== hasHs(b)) return hasHs(a) ? 1 : -1;
       if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
       if ((b.usageCount || 0) !== (a.usageCount || 0)) return (b.usageCount || 0) - (a.usageCount || 0);
@@ -128,12 +139,21 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
     }
   };
 
-  // Split into three groups so the dropdown reads: Quick-entry (no HS)
-  // first for drafts and unclassified items, then Favorites, then Other.
+  // Split into groups so the dropdown reads (top→bottom):
+  //   0. (2026-05-12) IN STOCK — items with availableQty > 0, sorted
+  //      by qty desc. Only populated when the parent supplied a
+  //      companyId; otherwise empty and the legacy three-group layout
+  //      stands.
+  //   1. QUICK (no HS) — drafts/non-FBR.
+  //   2. FAVORITES.
+  //   3. OTHER.
   const hasHs = (it) => !!(it.hsCode && it.hsCode.trim());
-  const quick = filteredItems.filter((it) => !hasHs(it));
-  const favorites = filteredItems.filter((it) => hasHs(it) && it.isFavorite);
-  const others = filteredItems.filter((it) => hasHs(it) && !it.isFavorite);
+  const inStock = (it) => (it.availableQty || 0) > 0;
+  const stocked = filteredItems.filter((it) => inStock(it));
+  const rest = filteredItems.filter((it) => !inStock(it));
+  const quick = rest.filter((it) => !hasHs(it));
+  const favorites = rest.filter((it) => hasHs(it) && it.isFavorite);
+  const others = rest.filter((it) => hasHs(it) && !it.isFavorite);
 
   return (
     <div style={{ position: "relative", width: "100%" }}>
@@ -188,27 +208,35 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
               </div>
             )}
 
+            {stocked.length > 0 && (
+              <>
+                <div style={styles.sectionHeader}>📦 IN STOCK</div>
+                {stocked.map((it, i) => renderItem(it, i, highlightIdx, setHighlightIdx, handlePick))}
+              </>
+            )}
             {quick.length > 0 && (
               <>
                 <div style={styles.sectionHeader}>⚡ QUICK (no HS code)</div>
-                {quick.map((it, i) => renderItem(it, i, highlightIdx, setHighlightIdx, handlePick))}
+                {quick.map((it, i) => {
+                  const realIdx = stocked.length + i;
+                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
+                })}
               </>
             )}
             {favorites.length > 0 && (
               <>
-                {quick.length > 0 && <div style={styles.sectionHeader}>★ FAVORITES</div>}
-                {quick.length === 0 && <div style={styles.sectionHeader}>★ FAVORITES</div>}
+                <div style={styles.sectionHeader}>★ FAVORITES</div>
                 {favorites.map((it, i) => {
-                  const realIdx = quick.length + i;
+                  const realIdx = stocked.length + quick.length + i;
                   return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
                 })}
               </>
             )}
             {others.length > 0 && (
               <>
-                {(quick.length > 0 || favorites.length > 0) && <div style={styles.sectionHeader}>OTHER</div>}
+                {(stocked.length > 0 || quick.length > 0 || favorites.length > 0) && <div style={styles.sectionHeader}>OTHER</div>}
                 {others.map((it, i) => {
-                  const realIdx = quick.length + favorites.length + i;
+                  const realIdx = stocked.length + quick.length + favorites.length + i;
                   return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
                 })}
               </>
@@ -241,7 +269,12 @@ function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick) {
         <div style={styles.rowMeta}>
           {it.hsCode && <span style={styles.hsChip}>{it.hsCode}</span>}
           {it.uom && <span style={{ color: "#5f6d7e" }}> {it.uom}</span>}
-          {it.usageCount > 0 && <span style={{ color: "#5f6d7e", marginLeft: 8 }}>· used {it.usageCount}×</span>}
+          {typeof it.availableQty === "number" && (
+            <span style={(it.availableQty || 0) > 0 ? styles.stockChipOk : styles.stockChipEmpty}>
+              {(it.availableQty || 0) > 0 ? `${Number(it.availableQty).toLocaleString("en-PK")} in stock` : "out of stock"}
+            </span>
+          )}
+          {it.usageCount > 0 && <span style={{ color: "#5f6d7e", marginLeft: 4 }}>· used {it.usageCount}×</span>}
         </div>
       </div>
     </div>
@@ -353,6 +386,27 @@ const styles = {
     fontWeight: 700,
     fontSize: "0.7rem",
     borderRadius: 3,
+  },
+  // 2026-05-12: stock chips shown next to HS / UOM when the parent
+  // passed companyId to getItemTypes. Green = sellable now, muted =
+  // nothing left to ship under this Item Type.
+  stockChipOk: {
+    padding: "0.05rem 0.35rem",
+    backgroundColor: "#e8f5e9",
+    color: "#1b5e20",
+    fontWeight: 700,
+    fontSize: "0.7rem",
+    borderRadius: 3,
+    marginLeft: 4,
+  },
+  stockChipEmpty: {
+    padding: "0.05rem 0.35rem",
+    backgroundColor: "#f0f4f8",
+    color: "#5f6d7e",
+    fontWeight: 600,
+    fontSize: "0.7rem",
+    borderRadius: 3,
+    marginLeft: 4,
   },
   empty: { padding: "0.8rem 0.8rem", color: "#5f6d7e", fontSize: "0.82rem" },
 };

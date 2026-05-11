@@ -14,15 +14,21 @@ namespace MyApp.Api.Services.Implementations
         private readonly IItemTypeRepository _repo;
         private readonly AppDbContext _context;
         private readonly ITaxMappingEngine _taxEngine;
+        // 2026-05-12: optional dependency — used by GetAllAsync(companyId)
+        // to enrich each DTO with the company's current on-hand qty
+        // (opening + Σ in − Σ out) so dropdowns can sort by availability.
+        private readonly IStockService _stock;
 
         public ItemTypeService(
             IItemTypeRepository repo,
             AppDbContext context,
-            ITaxMappingEngine taxEngine)
+            ITaxMappingEngine taxEngine,
+            IStockService stock)
         {
             _repo = repo;
             _context = context;
             _taxEngine = taxEngine;
+            _stock = stock;
         }
 
         private static ItemTypeDto ToDto(ItemType it) => new()
@@ -38,17 +44,56 @@ namespace MyApp.Api.Services.Implementations
             UsageCount = it.UsageCount,
         };
 
-        public async Task<List<ItemTypeDto>> GetAllAsync()
+        public async Task<List<ItemTypeDto>> GetAllAsync(int? companyId = null)
         {
             var items = await _repo.GetAllAsync();
-            return items
-                // Favorites first, then by usage, then alphabetical — matches what the
-                // challan/bill dropdowns want to surface
-                .OrderByDescending(it => it.IsFavorite)
-                .ThenByDescending(it => it.UsageCount)
-                .ThenBy(it => it.Name)
-                .Select(ToDto)
-                .ToList();
+
+            // Legacy sort (favorite / usage / alpha) — used when no
+            // companyId is supplied OR when the company doesn't have
+            // inventory tracking on.
+            List<ItemType> sorted;
+            Dictionary<int, int>? onHandByItem = null;
+
+            if (companyId.HasValue && await _stock.IsTrackingEnabledAsync(companyId.Value))
+            {
+                // Pull on-hand for every catalog row in one bulk query
+                // — same numbers the Stock Dashboard shows. Items with
+                // no purchase/sale history get 0 from the bulk method
+                // (no row in the dictionary).
+                var ids = items.Select(i => i.Id).ToList();
+                onHandByItem = await _stock.GetOnHandBulkAsync(companyId.Value, ids);
+
+                sorted = items
+                    // Bucket 1: items with available stock — sorted by qty desc
+                    //            (most-available surfaces first).
+                    // Bucket 2: items with zero/negative on-hand — fall back
+                    //            to the legacy ordering so the dropdown stays
+                    //            useful even for fresh catalog rows.
+                    .OrderByDescending(it => onHandByItem!.TryGetValue(it.Id, out var q) && q > 0)
+                    .ThenByDescending(it => onHandByItem!.TryGetValue(it.Id, out var q) ? q : 0)
+                    .ThenByDescending(it => it.IsFavorite)
+                    .ThenByDescending(it => it.UsageCount)
+                    .ThenBy(it => it.Name)
+                    .ToList();
+            }
+            else
+            {
+                sorted = items
+                    .OrderByDescending(it => it.IsFavorite)
+                    .ThenByDescending(it => it.UsageCount)
+                    .ThenBy(it => it.Name)
+                    .ToList();
+            }
+
+            return sorted.Select(it =>
+            {
+                var dto = ToDto(it);
+                if (onHandByItem != null)
+                {
+                    dto.AvailableQty = onHandByItem.TryGetValue(it.Id, out var q) ? q : 0;
+                }
+                return dto;
+            }).ToList();
         }
 
         public async Task<ItemTypeDto?> GetByIdAsync(int id)

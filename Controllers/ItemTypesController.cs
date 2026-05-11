@@ -62,9 +62,15 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<List<ItemTypeDto>>> GetAll()
+        public async Task<ActionResult<List<ItemTypeDto>>> GetAll([FromQuery] int? companyId = null)
         {
-            var items = await _service.GetAllAsync();
+            // Optional companyId (2026-05-12) — when present AND the
+            // company has inventory tracking enabled, each DTO carries
+            // an AvailableQty and the list is sorted by available stock
+            // descending. Sales-side dropdowns (EditBillForm, etc.)
+            // pass it so operators see "what can I sell" up top; admin
+            // pages call without it for the legacy alpha sort.
+            var items = await _service.GetAllAsync(companyId);
             return Ok(items);
         }
 

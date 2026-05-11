@@ -18,6 +18,21 @@ namespace MyApp.Api.DTOs
         public int UsageCount { get; set; }
 
         /// <summary>
+        /// Per-company on-hand qty (opening balance + Σ purchase In − Σ sale Out)
+        /// — populated only when GET /api/itemtypes is called with
+        /// ?companyId=X AND that company has inventory tracking enabled.
+        /// Null otherwise.
+        ///
+        /// Frontend dropdowns sort by this descending so items the
+        /// operator can actually sell surface to the top — types with
+        /// no purchase history fall to the bottom. Source: shared
+        /// IStockService.GetOnHandBulkAsync so the number matches
+        /// exactly what the Stock Dashboard shows.
+        /// 2026-05-12: added.
+        /// </summary>
+        public int? AvailableQty { get; set; }
+
+        /// <summary>
         /// Set on UPDATE responses only — tells the UI how many bill /
         /// challan lines got auto-synced because this catalog row changed.
         /// Lets us notify the operator: "47 unposted lines updated; 3
