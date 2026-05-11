@@ -18,6 +18,13 @@ namespace MyApp.Api.Services.Implementations
         private readonly AppDbContext _context;
         private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
         private readonly IAuditLogService _auditLog;
+        // 2026-05-12: injected so every invoice save (create / update /
+        // narrow-edit) can sync the StockMovement rows for the bill.
+        // The deduction now happens on save, not on FBR submit, so the
+        // next bill picking the same Item Type sees reduced on-hand
+        // (and the availability pre-flight kicks in) without waiting
+        // for the operator to validate / submit.
+        private readonly IStockService _stock;
         private readonly ILogger<InvoiceService> _logger;
 
         public InvoiceService(
@@ -28,6 +35,7 @@ namespace MyApp.Api.Services.Implementations
             AppDbContext context,
             Microsoft.Extensions.Configuration.IConfiguration config,
             IAuditLogService auditLog,
+            IStockService stock,
             ILogger<InvoiceService> logger)
         {
             _invoiceRepo = invoiceRepo;
@@ -38,6 +46,7 @@ namespace MyApp.Api.Services.Implementations
             _config = config;
             _logger = logger;
             _auditLog = auditLog;
+            _stock = stock;
         }
 
         /// <summary>
@@ -151,7 +160,29 @@ namespace MyApp.Api.Services.Implementations
                 FbrUOMId = ii.FbrUOMId,
                 SaleType = ii.SaleType,
                 RateId = ii.RateId,
-                FixedNotifiedValueOrRetailPrice = ii.FixedNotifiedValueOrRetailPrice
+                FixedNotifiedValueOrRetailPrice = ii.FixedNotifiedValueOrRetailPrice,
+                // Dual-book overlay (2026-05-11). Null when no overlay
+                // exists for this line — frontend treats the row above
+                // as both bill-mode and invoice-mode values. Non-null
+                // means Invoice-mode view should render AdjustedXxx as
+                // "current" with the row's own fields as "original".
+                Adjustment = ii.Adjustment == null ? null : new InvoiceItemAdjustmentDto
+                {
+                    Id = ii.Adjustment.Id,
+                    AdjustedQuantity = ii.Adjustment.AdjustedQuantity,
+                    AdjustedUnitPrice = ii.Adjustment.AdjustedUnitPrice,
+                    AdjustedLineTotal = ii.Adjustment.AdjustedLineTotal,
+                    AdjustedItemTypeId = ii.Adjustment.AdjustedItemTypeId,
+                    AdjustedItemTypeName = ii.Adjustment.AdjustedItemTypeName,
+                    AdjustedDescription = ii.Adjustment.AdjustedDescription,
+                    AdjustedUOM = ii.Adjustment.AdjustedUOM,
+                    AdjustedFbrUOMId = ii.Adjustment.AdjustedFbrUOMId,
+                    AdjustedHSCode = ii.Adjustment.AdjustedHSCode,
+                    AdjustedSaleType = ii.Adjustment.AdjustedSaleType,
+                    Reason = ii.Adjustment.Reason,
+                    CreatedAt = ii.Adjustment.CreatedAt,
+                    UpdatedAt = ii.Adjustment.UpdatedAt,
+                },
             }).ToList(),
             ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
             // Aggregate Site / IndentNo / PoNumber from linked challans
@@ -448,6 +479,8 @@ namespace MyApp.Api.Services.Implementations
                     await _context.SaveChangesAsync();
                 }
 
+                // 2026-05-12: stock-out on save (create path).
+                await _stock.SyncInvoiceStockMovementsAsync(created);
                 await transaction.CommitAsync();
 
                 // Reload with includes
@@ -684,6 +717,8 @@ namespace MyApp.Api.Services.Implementations
                     await _context.SaveChangesAsync();
                 }
 
+                // 2026-05-12: stock-out on save (standalone create path).
+                await _stock.SyncInvoiceStockMovementsAsync(created);
                 await transaction.CommitAsync();
 
                 var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
@@ -883,6 +918,9 @@ namespace MyApp.Api.Services.Implementations
                 await SyncDeliveryItemsFromInvoiceEditAsync(invoice);
 
                 await _context.SaveChangesAsync();
+                // 2026-05-12: stock-out on save (full-edit path).
+                // See UpdateItemTypesAsync for rationale.
+                await _stock.SyncInvoiceStockMovementsAsync(invoice);
                 await transaction.CommitAsync();
 
                 var reloaded = await _invoiceRepo.GetByIdAsync(id);
@@ -1032,21 +1070,145 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
+            // Dual-book write-mode (2026-05-11):
+            //   "adjustment" — only honoured on the .qty path. Each row's
+            //                  honoured fields are persisted to an
+            //                  InvoiceItemAdjustment overlay (upsert).
+            //                  InvoiceItem rows stay untouched, so the
+            //                  printed bill keeps its real qty/price.
+            //   "bill" (default) — existing behaviour: mutate InvoiceItem
+            //                  directly. Both the bill print and the FBR
+            //                  view reflect the change.
+            //
+            // The plain .itemtype endpoint always behaves like "bill"
+            // because dto.WriteMode is ignored when allowQuantityEdit is
+            // false — Item Type re-classification belongs on the bill
+            // proper, not in a tax-filing overlay.
+            var asAdjustment = allowQuantityEdit
+                && string.Equals(dto.WriteMode, "adjustment", StringComparison.OrdinalIgnoreCase);
+
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                // Pre-load existing overlays for these items so we upsert
+                // in one shot (no per-row roundtrip).
+                Dictionary<int, InvoiceItemAdjustment> existingOverlays =
+                    asAdjustment
+                        ? await _context.InvoiceItemAdjustments
+                            .Where(a => a.InvoiceId == invoice.Id)
+                            .ToDictionaryAsync(a => a.InvoiceItemId)
+                        : new Dictionary<int, InvoiceItemAdjustment>();
+
                 foreach (var row in dto.Items)
                 {
                     var existing = invoice.Items.First(ii => ii.Id == row.Id);
 
-                    if (row.ItemTypeId.HasValue && typeMap.TryGetValue(row.ItemTypeId.Value, out var t))
+                    if (asAdjustment)
                     {
-                        existing.ItemTypeId = t.Id;
-                        existing.ItemTypeName = t.Name;
-                        existing.UOM = t.UOM ?? "";
-                        existing.FbrUOMId = t.FbrUOMId;
-                        existing.HSCode = t.HSCode;
-                        existing.SaleType = t.SaleType;
+                        // ── Adjustment path (2026-05-12 — narrowed scope) ──
+                        // Item Type / UOM / HS Code / Sale Type /
+                        // Description are LEGITIMATE bill data — they
+                        // describe WHAT was sold, not the qty/price
+                        // decomposition. The printed bill and the Tax
+                        // Invoice need those values to render correctly.
+                        // So we write them straight to InvoiceItem
+                        // exactly like the Bill-mode path does.
+                        //
+                        // ONLY Quantity / UnitPrice / LineTotal go to
+                        // the overlay — those are the tax-claim
+                        // optimization knobs that should leave the bill
+                        // print untouched.
+                        if (row.ItemTypeId.HasValue && typeMap.TryGetValue(row.ItemTypeId.Value, out var tAdj))
+                        {
+                            existing.ItemTypeId   = tAdj.Id;
+                            existing.ItemTypeName = tAdj.Name;
+                            existing.UOM          = tAdj.UOM ?? "";
+                            existing.FbrUOMId     = tAdj.FbrUOMId;
+                            existing.HSCode       = tAdj.HSCode;
+                            existing.SaleType     = tAdj.SaleType;
+                        }
+                        else if (!row.ItemTypeId.HasValue)
+                        {
+                            existing.ItemTypeId   = null;
+                            existing.ItemTypeName = "";
+                            existing.UOM          = "";
+                            existing.FbrUOMId     = null;
+                            existing.HSCode       = null;
+                            existing.SaleType     = null;
+                        }
+
+                        // Numerical decomposition → overlay.
+                        decimal? newQty   = row.Quantity.HasValue && row.Quantity.Value > 0 ? row.Quantity.Value : (decimal?)null;
+                        decimal? newPrice = row.UnitPrice.HasValue && row.UnitPrice.Value >= 0 ? row.UnitPrice.Value : (decimal?)null;
+                        decimal? newLineTotal = null;
+                        if (newQty.HasValue || newPrice.HasValue)
+                        {
+                            var qtyEff   = newQty   ?? existing.Quantity;
+                            var priceEff = newPrice ?? existing.UnitPrice;
+                            newLineTotal = Math.Round(qtyEff * priceEff, 2, MidpointRounding.AwayFromZero);
+                        }
+
+                        bool qtyDiverges       = newQty.HasValue       && newQty.Value       != existing.Quantity;
+                        bool priceDiverges     = newPrice.HasValue     && newPrice.Value     != existing.UnitPrice;
+                        bool lineTotalDiverges = newLineTotal.HasValue && newLineTotal.Value != existing.LineTotal;
+                        bool anyNumDivergence  = qtyDiverges || priceDiverges || lineTotalDiverges;
+
+                        existingOverlays.TryGetValue(existing.Id, out var overlay);
+                        if (!anyNumDivergence)
+                        {
+                            // Numerical values match the bill — drop any
+                            // existing overlay (operator reverted to bill
+                            // qty/price by way of Reset, or the only
+                            // change was an Item Type swap which we
+                            // already applied to InvoiceItem above).
+                            if (overlay != null)
+                            {
+                                _context.InvoiceItemAdjustments.Remove(overlay);
+                            }
+                            continue;
+                        }
+
+                        if (overlay == null)
+                        {
+                            overlay = new InvoiceItemAdjustment
+                            {
+                                InvoiceItemId = existing.Id,
+                                InvoiceId     = invoice.Id,
+                                Reason        = "tax-claim-optimization",
+                                CreatedAt     = DateTime.UtcNow,
+                            };
+                            _context.InvoiceItemAdjustments.Add(overlay);
+                        }
+                        else
+                        {
+                            overlay.UpdatedAt = DateTime.UtcNow;
+                        }
+                        // Numerical fields only — everything else stays null.
+                        overlay.AdjustedQuantity     = qtyDiverges       ? newQty       : null;
+                        overlay.AdjustedUnitPrice    = priceDiverges     ? newPrice     : null;
+                        overlay.AdjustedLineTotal   = lineTotalDiverges ? newLineTotal : null;
+                        // Explicitly null the deprecated text columns so
+                        // any stale rows from before this fix get cleared
+                        // on next save.
+                        overlay.AdjustedItemTypeId   = null;
+                        overlay.AdjustedItemTypeName = null;
+                        overlay.AdjustedUOM          = null;
+                        overlay.AdjustedFbrUOMId     = null;
+                        overlay.AdjustedHSCode       = null;
+                        overlay.AdjustedSaleType     = null;
+                        overlay.AdjustedDescription  = null;
+                        continue;
+                    }
+
+                    // ── Bill path (legacy) ──
+                    if (row.ItemTypeId.HasValue && typeMap.TryGetValue(row.ItemTypeId.Value, out var t2))
+                    {
+                        existing.ItemTypeId = t2.Id;
+                        existing.ItemTypeName = t2.Name;
+                        existing.UOM = t2.UOM ?? "";
+                        existing.FbrUOMId = t2.FbrUOMId;
+                        existing.HSCode = t2.HSCode;
+                        existing.SaleType = t2.SaleType;
                     }
                     else if (!row.ItemTypeId.HasValue)
                     {
@@ -1084,31 +1246,45 @@ namespace MyApp.Api.Services.Implementations
                     }
                 }
 
-                // If qty / unit price changed, recompute bill-level totals
-                // and enforce the total-preservation guard.
+                // Total-preservation guard.
+                //   Bill mode: subtotal driven by InvoiceItem.LineTotal.
+                //   Adjustment mode: subtotal driven by overlay.AdjustedLineTotal
+                //                    (when present) falling back to InvoiceItem.LineTotal.
+                //                    Invoice header totals are NOT mutated in
+                //                    adjustment mode — the bill total stays
+                //                    locked to the underlying InvoiceItem sum.
                 if (allowQuantityEdit && dto.Items.Any(r => r.Quantity.HasValue || r.UnitPrice.HasValue))
                 {
                     var originalSubtotal = invoice.Subtotal;
-                    var newSubtotal = invoice.Items.Sum(ii => ii.LineTotal);
+                    decimal newSubtotal;
+                    if (asAdjustment)
+                    {
+                        newSubtotal = invoice.Items.Sum(ii =>
+                            existingOverlays.TryGetValue(ii.Id, out var ov) && ov.AdjustedLineTotal.HasValue
+                                ? ov.AdjustedLineTotal.Value
+                                : ii.LineTotal);
+                    }
+                    else
+                    {
+                        newSubtotal = invoice.Items.Sum(ii => ii.LineTotal);
+                    }
                     var tolerance = _config.GetValue<decimal?>("Invoice:NarrowEditTotalTolerancePkr") ?? 2m;
                     var diff = Math.Abs(newSubtotal - originalSubtotal);
                     if (diff > tolerance)
                     {
-                        // Reject. The whole purpose of the .qty path is to
-                        // re-shape lines while keeping the bill total
-                        // intact. A diff bigger than the rounding-noise
-                        // tolerance means the operator changed the actual
-                        // amount being billed, which requires full edit
-                        // rights (invoices.manage.update).
                         throw new InvalidOperationException(
                             $"New bill subtotal Rs. {newSubtotal:N2} differs from the original Rs. {originalSubtotal:N2} " +
                             $"by Rs. {diff:N2} — exceeds the Rs. {tolerance:N2} rounding tolerance. " +
                             $"Adjust qty / unit price so the totals match (within Rs. {tolerance:N0}), " +
                             $"or use the full-edit path if you genuinely need to change the bill amount.");
                     }
-                    invoice.Subtotal = newSubtotal;
-                    invoice.GSTAmount = Math.Round(newSubtotal * (invoice.GSTRate / 100m), 2, MidpointRounding.AwayFromZero);
-                    invoice.GrandTotal = newSubtotal + invoice.GSTAmount;
+
+                    if (!asAdjustment)
+                    {
+                        invoice.Subtotal = newSubtotal;
+                        invoice.GSTAmount = Math.Round(newSubtotal * (invoice.GSTRate / 100m), 2, MidpointRounding.AwayFromZero);
+                        invoice.GrandTotal = newSubtotal + invoice.GSTAmount;
+                    }
                 }
 
                 // Any edit invalidates a previous validation. Don't touch
@@ -1121,6 +1297,14 @@ namespace MyApp.Api.Services.Implementations
                 }
 
                 await _context.SaveChangesAsync();
+                // 2026-05-12: stock-out on save. Idempotent — re-syncs
+                // the StockMovement rows for this invoice's current item
+                // state. Adjustment-mode saves don't change
+                // InvoiceItem.Quantity, but we still run the sync so any
+                // bill that didn't have movements yet (e.g. created
+                // before this code shipped) gets them now. No-op when
+                // inventory tracking is off for the company.
+                await _stock.SyncInvoiceStockMovementsAsync(invoice);
                 await transaction.CommitAsync();
 
                 // ── Audit log (after commit so we don't log a rolled-back op) ──
@@ -1289,6 +1473,19 @@ namespace MyApp.Api.Services.Implementations
                     dc.InvoiceId = null;
                     _context.DeliveryChallans.Update(dc);
                 }
+
+                // 2026-05-12: stock movements for this bill need to be
+                // purged before the row goes — otherwise the on-hand
+                // calculation keeps treating the (now-deleted) bill as
+                // a live deduction. SourceId references aren't FKs so
+                // EF won't cascade these; we delete explicitly.
+                var staleMovements = await _context.StockMovements
+                    .Where(m => m.CompanyId  == invoice.CompanyId
+                             && m.SourceType == StockMovementSourceType.Invoice
+                             && m.SourceId   == invoice.Id)
+                    .ToListAsync();
+                if (staleMovements.Count > 0)
+                    _context.StockMovements.RemoveRange(staleMovements);
 
                 // Remove all invoice items via tracked delete (avoids conflict with loaded graph)
                 foreach (var item in invoice.Items.ToList())

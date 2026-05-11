@@ -1115,6 +1115,146 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
+    // ── One-time backfill: narrow InvoiceItemAdjustment scope ──
+    // 2026-05-12: the dual-book overlay's scope was narrowed to ONLY
+    // carry numerical fields (Quantity / UnitPrice / LineTotal). Item
+    // Type, UOM, HS Code, Sale Type, and Description are legitimate
+    // bill data that belong on InvoiceItem so the printed bill and the
+    // Tax Invoice render them correctly.
+    //
+    // For any overlay row that still carries the deprecated text
+    // fields from the brief 2026-05-11 → 2026-05-12 window: copy them
+    // onto the underlying InvoiceItem (operator's intent was to
+    // change those fields on the bill), then null them on the overlay.
+    // Idempotent — guarded by an audit marker.
+    var adjScopeBackfillRan = await db.AuditLogs
+        .AnyAsync(a => a.ExceptionType == "INVOICEITEMADJ_SCOPE_NARROW_V1");
+    if (!adjScopeBackfillRan)
+    {
+        db.Database.ExecuteSqlRaw(@"
+            -- Copy stale text fields from overlay → InvoiceItem when they diverge.
+            UPDATE ii
+               SET ii.ItemTypeId   = COALESCE(a.AdjustedItemTypeId,   ii.ItemTypeId),
+                   ii.ItemTypeName = COALESCE(a.AdjustedItemTypeName, ii.ItemTypeName),
+                   ii.UOM          = COALESCE(a.AdjustedUOM,          ii.UOM),
+                   ii.FbrUOMId     = COALESCE(a.AdjustedFbrUOMId,     ii.FbrUOMId),
+                   ii.HSCode       = COALESCE(a.AdjustedHSCode,       ii.HSCode),
+                   ii.SaleType     = COALESCE(a.AdjustedSaleType,     ii.SaleType),
+                   ii.Description  = COALESCE(a.AdjustedDescription,  ii.Description)
+              FROM InvoiceItems ii
+              JOIN InvoiceItemAdjustments a ON a.InvoiceItemId = ii.Id
+             WHERE a.AdjustedItemTypeId   IS NOT NULL
+                OR a.AdjustedItemTypeName IS NOT NULL
+                OR a.AdjustedUOM          IS NOT NULL
+                OR a.AdjustedFbrUOMId     IS NOT NULL
+                OR a.AdjustedHSCode       IS NOT NULL
+                OR a.AdjustedSaleType     IS NOT NULL
+                OR a.AdjustedDescription  IS NOT NULL;
+
+            -- Null the deprecated text columns on every overlay row.
+            UPDATE InvoiceItemAdjustments
+               SET AdjustedItemTypeId   = NULL,
+                   AdjustedItemTypeName = NULL,
+                   AdjustedUOM          = NULL,
+                   AdjustedFbrUOMId     = NULL,
+                   AdjustedHSCode       = NULL,
+                   AdjustedSaleType     = NULL,
+                   AdjustedDescription  = NULL,
+                   UpdatedAt            = SYSUTCDATETIME();
+
+            -- Drop any overlay row that has nothing left after the narrowing
+            -- (operator only ever changed item-type fields, no qty/price
+            -- adjustment is now stored — the bill row already reflects what
+            -- they wanted).
+            DELETE FROM InvoiceItemAdjustments
+             WHERE AdjustedQuantity  IS NULL
+               AND AdjustedUnitPrice IS NULL
+               AND AdjustedLineTotal IS NULL;
+        ");
+        db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
+        {
+            Timestamp = DateTime.UtcNow,
+            Level = "Info",
+            UserName = "system",
+            HttpMethod = "SEED",
+            RequestPath = "/migrations/invoiceitemadj-scope-narrow",
+            StatusCode = 200,
+            ExceptionType = "INVOICEITEMADJ_SCOPE_NARROW_V1",
+            Message = "One-time backfill: copied overlay text fields (item type / UOM / HS code / sale type / description) onto InvoiceItem and nulled them on the overlay; dropped overlay rows that had no remaining numerical divergence.",
+        });
+        await db.SaveChangesAsync();
+    }
+
+    // ── One-time backfill: re-sync stock movements for adjusted bills ──
+    // 2026-05-12: the stock-out trigger moved from "emit on FBR submit"
+    // to "emit on invoice save" AND the quantity source flipped to use
+    // the InvoiceItemAdjustment overlay (FBR-facing qty) when present.
+    //
+    // Bills that already have overlays saved BEFORE this code shipped
+    // either (a) have stock movements with the wrong qty (= bill row's
+    // real qty rather than overlay) or (b) have none yet. Re-sync each
+    // of them so the dashboard / availability check reflect the
+    // adjusted qty consistently with what gets reported to FBR.
+    //
+    // Non-overlay bills are untouched — their stock movements (if any)
+    // came from the legacy FBR-submit path and InvoiceItem.Quantity is
+    // already authoritative for those.
+    //
+    // Idempotent: guarded by an audit marker + the per-bill sync
+    // itself deletes-and-rewrites cleanly.
+    var stockOverlaySyncRan = await db.AuditLogs
+        .AnyAsync(a => a.ExceptionType == "STOCKMOVEMENT_OVERLAY_SYNC_V1");
+    if (!stockOverlaySyncRan)
+    {
+        var adjustedInvoiceIds = await db.InvoiceItemAdjustments
+            .Where(a => a.AdjustedQuantity != null)
+            .Select(a => a.InvoiceId)
+            .Distinct()
+            .ToListAsync();
+        if (adjustedInvoiceIds.Count > 0)
+        {
+            var stockSvc = scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.IStockService>();
+            var invoiceRepoSvc = scope.ServiceProvider.GetRequiredService<MyApp.Api.Repositories.Interfaces.IInvoiceRepository>();
+            foreach (var invId in adjustedInvoiceIds)
+            {
+                var inv = await invoiceRepoSvc.GetByIdAsync(invId);
+                if (inv == null) continue;
+                try
+                {
+                    await stockSvc.SyncInvoiceStockMovementsAsync(inv);
+                }
+                catch (Exception ex)
+                {
+                    // Don't let one bad row halt the whole backfill —
+                    // the marker only gets written if we make it through.
+                    db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
+                    {
+                        Timestamp = DateTime.UtcNow,
+                        Level = "Warning",
+                        UserName = "system",
+                        HttpMethod = "SEED",
+                        RequestPath = "/migrations/stockmovement-overlay-sync",
+                        StatusCode = 500,
+                        ExceptionType = "STOCKMOVEMENT_OVERLAY_SYNC_V1_WARN",
+                        Message = $"Re-sync failed for invoice {invId}: {ex.Message}",
+                    });
+                }
+            }
+        }
+        db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
+        {
+            Timestamp = DateTime.UtcNow,
+            Level = "Info",
+            UserName = "system",
+            HttpMethod = "SEED",
+            RequestPath = "/migrations/stockmovement-overlay-sync",
+            StatusCode = 200,
+            ExceptionType = "STOCKMOVEMENT_OVERLAY_SYNC_V1",
+            Message = $"One-time backfill: re-synced StockMovements for {adjustedInvoiceIds.Count} bill(s) carrying tax-claim adjustment overlays. Quantity source = AdjustedQuantity (FBR-facing) when present, InvoiceItem.Quantity otherwise.",
+        });
+        await db.SaveChangesAsync();
+    }
+
     // RBAC: sync PermissionCatalog into the Permissions table and ensure the
     // built-in "Administrator" system role exists and is wired to the seed
     // admin user. Idempotent — runs every start.

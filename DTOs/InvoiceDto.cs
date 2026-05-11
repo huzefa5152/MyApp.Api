@@ -82,6 +82,39 @@ namespace MyApp.Api.DTOs
         /// "3rd Schedule Goods" to satisfy FBR error 0090.
         /// </summary>
         public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
+        /// <summary>
+        /// Optional dual-book overlay (2026-05-11). When present, the
+        /// frontend's Invoice-mode view should render the AdjustedXxx
+        /// values as "current" while keeping the row above as the
+        /// bill-mode source-of-truth. Bill print always uses the row
+        /// directly; ignore this field there.
+        /// </summary>
+        public InvoiceItemAdjustmentDto? Adjustment { get; set; }
+    }
+
+    /// <summary>
+    /// Wire-shape mirror of <c>Models.InvoiceItemAdjustment</c>. All
+    /// adjusted fields are optional — NULL means "use the InvoiceItem
+    /// value." Surfaced on every <see cref="InvoiceItemDto"/> when an
+    /// overlay exists for that line.
+    /// 2026-05-11: added.
+    /// </summary>
+    public class InvoiceItemAdjustmentDto
+    {
+        public int Id { get; set; }
+        public decimal? AdjustedQuantity { get; set; }
+        public decimal? AdjustedUnitPrice { get; set; }
+        public decimal? AdjustedLineTotal { get; set; }
+        public int? AdjustedItemTypeId { get; set; }
+        public string? AdjustedItemTypeName { get; set; }
+        public string? AdjustedDescription { get; set; }
+        public string? AdjustedUOM { get; set; }
+        public int? AdjustedFbrUOMId { get; set; }
+        public string? AdjustedHSCode { get; set; }
+        public string? AdjustedSaleType { get; set; }
+        public string Reason { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
     }
 
     public class CreateInvoiceDto
@@ -244,6 +277,25 @@ namespace MyApp.Api.DTOs
     public class UpdateInvoiceItemTypesDto
     {
         public List<UpdateInvoiceItemTypeRow> Items { get; set; } = new();
+
+        /// <summary>
+        /// Dual-book mode flag (2026-05-11):
+        ///   • "bill" (default) — every honoured field on each row is
+        ///     written directly to the underlying InvoiceItem. The
+        ///     bill print and the FBR view both see the new values.
+        ///     This is how Bill mode saves work.
+        ///   • "adjustment" — InvoiceItem stays UNTOUCHED. Any field
+        ///     that diverges from InvoiceItem is recorded on an
+        ///     InvoiceItemAdjustment overlay (upserted). If a row's
+        ///     values match InvoiceItem, any existing overlay for it
+        ///     is deleted (operator reverted). This is how Invoice
+        ///     mode saves work — the printed bill stays at real
+        ///     qty/price while the FBR claim sees the optimized
+        ///     decomposition.
+        /// Honoured only on the <c>.qty</c> endpoint. The plain
+        /// <c>.itemtype</c> endpoint always behaves like "bill".
+        /// </summary>
+        public string? WriteMode { get; set; }
     }
 
     public class UpdateInvoiceItemTypeRow

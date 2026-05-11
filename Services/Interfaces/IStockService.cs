@@ -68,6 +68,36 @@ namespace MyApp.Api.Services.Interfaces
         Task<List<StockShortage>> CheckAvailabilityAsync(
             int companyId,
             IEnumerable<StockRequirement> required);
+
+        /// <summary>
+        /// Idempotently sync the StockMovement rows for a single Invoice
+        /// against its current Items. Deletes any existing
+        /// (SourceType=Invoice, SourceId=invoice.Id) movements and
+        /// re-inserts fresh "Out" movements for every line bound to a
+        /// catalog ItemType.
+        ///
+        /// Quantity policy (2026-05-12): when an InvoiceItemAdjustment
+        /// overlay carries an AdjustedQuantity for the line, THAT value
+        /// is used — i.e. the FBR-facing decomposition (e.g. 116) drives
+        /// the deduction, not the printed bill's row qty (e.g. 1). This
+        /// keeps the operator's stock ledger consistent with what was
+        /// reported to FBR: a tax-claim split into 116 units removes 116
+        /// from inventory, just as the FBR side records 116. Lines with
+        /// no overlay use the bill row's Quantity directly.
+        ///
+        /// Called from every invoice save path (create / update / narrow
+        /// edit). Replaces the old "emit on FBR submit" trigger so the
+        /// stock dashboard and the availability pre-flight see the
+        /// deduction the instant a bill is saved — the next bill picking
+        /// the same Item Type sees reduced on-hand without having to wait
+        /// for FBR submission.
+        ///
+        /// No-op when inventory tracking is disabled for the company.
+        /// Must run inside the caller's transaction for atomicity.
+        ///
+        /// 2026-05-12: added; quantity-source flipped to overlay-first.
+        /// </summary>
+        Task SyncInvoiceStockMovementsAsync(Models.Invoice invoice);
     }
 
     /// <summary>One item demand on a bill: how much do we need.</summary>

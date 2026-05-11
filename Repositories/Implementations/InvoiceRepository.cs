@@ -79,6 +79,12 @@ namespace MyApp.Api.Repositories.Implementations
                     .ThenInclude(ii => ii.DeliveryItem)
                 .Include(i => i.Items)
                     .ThenInclude(ii => ii.ItemType)
+                // Dual-book overlay (2026-05-11). Pulled on detail
+                // fetches so EditBillForm in Invoice mode can hydrate
+                // the AdjustedXxx values as "current" while keeping
+                // the InvoiceItem row above as "original".
+                .Include(i => i.Items)
+                    .ThenInclude(ii => ii.Adjustment)
                 .Include(i => i.DeliveryChallans)
                     .ThenInclude(dc => dc.Items)
                 .FirstOrDefaultAsync(i => i.Id == id);

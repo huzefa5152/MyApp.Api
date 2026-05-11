@@ -50,20 +50,31 @@ export default function StockDashboardPage() {
     if (!selectedCompany) return;
     setLoading(true);
     try {
-      const [oh, op, it] = await Promise.all([
+      const [oh, op, it, mov] = await Promise.all([
         getStockOnHand(selectedCompany.id),
         canManageOpening ? getOpeningBalances(selectedCompany.id) : Promise.resolve({ data: [] }),
         getItemTypes(),
+        // 2026-05-12: also pull the movements first page on initial load
+        // so the "Movements (N)" tab label shows the correct count
+        // BEFORE the operator clicks into the tab. Pre-fix this was 0
+        // until the tab was opened, which made the tab look empty even
+        // when there were 20+ records waiting.
+        canViewMovements
+          ? getStockMovements(selectedCompany.id, { page: 1 }).catch(() => ({ data: { items: [], totalCount: 0, pageSize: 0 } }))
+          : Promise.resolve({ data: { items: [], totalCount: 0, pageSize: 0 } }),
       ]);
       setOnhand(oh.data || []);
       setOpenings(op.data || []);
       setItemTypes(it.data || []);
+      setMovements(mov.data?.items || []);
+      setMovTotal(mov.data?.totalCount || 0);
+      setMovPageSize(mov.data?.pageSize || 0);
     } catch {
       setOnhand([]); setOpenings([]); setItemTypes([]);
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany, canManageOpening]);
+  }, [selectedCompany, canManageOpening, canViewMovements]);
 
   const fetchMovements = useCallback(async (pg) => {
     if (!selectedCompany || !canViewMovements) return;

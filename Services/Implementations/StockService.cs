@@ -130,6 +130,95 @@ namespace MyApp.Api.Services.Implementations
             return result;
         }
 
+        public async Task SyncInvoiceStockMovementsAsync(Invoice invoice)
+        {
+            if (invoice == null) return;
+            if (!await IsTrackingEnabledAsync(invoice.CompanyId)) return;
+
+            // Delete any prior Out movements emitted for this invoice. The
+            // re-insert below uses the current Items, so any item-line
+            // qty change, item-type swap, or line deletion since the
+            // last save is automatically reflected.
+            //
+            // Append-only-log purity is sacrificed here intentionally —
+            // an invoice's edit history is already captured in
+            // AuditLog.Invoice.NarrowEdit / Invoice.Update entries, so
+            // we don't need a second audit trail in StockMovements.
+            // Keeping movements scoped 1:1 with the invoice's *current*
+            // state keeps on-hand math simple and avoids stale rows
+            // accumulating per edit.
+            var stale = await _context.StockMovements
+                .Where(m => m.CompanyId  == invoice.CompanyId
+                         && m.SourceType == StockMovementSourceType.Invoice
+                         && m.SourceId   == invoice.Id
+                         && m.Direction  == StockMovementDirection.Out)
+                .ToListAsync();
+            if (stale.Count > 0)
+            {
+                _context.StockMovements.RemoveRange(stale);
+            }
+
+            // Skip demo (sandbox) bills — they exist purely to validate
+            // FBR scenarios and don't represent real shipments.
+            if (invoice.IsDemo)
+            {
+                await _context.SaveChangesAsync();
+                return;
+            }
+
+            // 2026-05-12: use the FBR-facing adjusted qty when an overlay
+            // exists. Pre-fix this used InvoiceItem.Quantity (the real
+            // bill qty), but the operator's stock ledger needs to align
+            // with what they're filing — if 116 was reported to FBR for
+            // a row, 116 should leave inventory, not the 1 unit on the
+            // printed bill. The decomposition was a tax-claim choice;
+            // the dashboard reflects that choice consistently.
+            //
+            // Load adjustments fresh from the DB to avoid relying on EF
+            // nav-property fixup — the calling save may have just added
+            // the overlay row in the same transaction.
+            var overlayQtyByItemId = await _context.InvoiceItemAdjustments
+                .Where(a => a.InvoiceId == invoice.Id && a.AdjustedQuantity != null)
+                .ToDictionaryAsync(a => a.InvoiceItemId, a => a.AdjustedQuantity!.Value);
+
+            foreach (var item in invoice.Items)
+            {
+                if (!item.ItemTypeId.HasValue) continue;
+                var effectiveQty = overlayQtyByItemId.TryGetValue(item.Id, out var adjQty)
+                    ? adjQty
+                    : item.Quantity;
+                if (effectiveQty <= 0) continue;
+
+                var hasOverlay = overlayQtyByItemId.ContainsKey(item.Id);
+                _context.StockMovements.Add(new StockMovement
+                {
+                    CompanyId    = invoice.CompanyId,
+                    ItemTypeId   = item.ItemTypeId.Value,
+                    Direction    = StockMovementDirection.Out,
+                    Quantity     = (int)Math.Truncate(effectiveQty),
+                    SourceType   = StockMovementSourceType.Invoice,
+                    SourceId     = invoice.Id,
+                    MovementDate = invoice.Date,
+                    Notes        = hasOverlay
+                        ? $"Bill #{invoice.InvoiceNumber} saved (FBR-adjusted qty {effectiveQty:0.####}, bill row qty {item.Quantity:0.####})"
+                        : $"Bill #{invoice.InvoiceNumber} saved",
+                    CreatedAt    = DateTime.UtcNow,
+                });
+            }
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex,
+                    "SyncInvoiceStockMovements failed for invoice={InvoiceId} company={CompanyId}",
+                    invoice.Id, invoice.CompanyId);
+                throw;
+            }
+        }
+
         public async Task<List<StockShortage>> CheckAvailabilityAsync(
             int companyId,
             IEnumerable<StockRequirement> required)

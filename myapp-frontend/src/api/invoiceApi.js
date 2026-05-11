@@ -34,8 +34,14 @@ export const updateInvoiceItemTypes = (id, items) =>
 // Server still refuses to change price / desc / GST / dates / payment terms
 // / SRO etc. Decimal validation applies (fractional qty rejected for
 // integer-only UOMs). Gated by invoices.manage.update.itemtype.qty.
-export const updateInvoiceItemTypesAndQty = (id, items) =>
-  httpClient.patch(`/invoices/${id}/itemtypes-and-qty`, { items });
+//
+// writeMode (2026-05-11) — "bill" (default) writes straight to InvoiceItem,
+// "adjustment" persists changes as an InvoiceItemAdjustment overlay,
+// leaving the underlying bill row untouched. Use "adjustment" from
+// Invoice-mode saves so the printed bill stays at real qty/price while
+// the FBR-side claim math reads the optimized decomposition.
+export const updateInvoiceItemTypesAndQty = (id, items, writeMode = "bill") =>
+  httpClient.patch(`/invoices/${id}/itemtypes-and-qty`, { items, writeMode });
 
 export const deleteInvoice = (id) =>
   httpClient.delete(`/invoices/${id}`);

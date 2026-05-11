@@ -16,6 +16,10 @@ namespace MyApp.Api.Data
 
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<InvoiceItem> InvoiceItems { get; set; }
+        // 2026-05-11: dual-book overlay for invoice-mode tweaks. Keeps
+        // the printed bill at real qty/price while the FBR-side claim
+        // math reads the adjusted values. See InvoiceItemAdjustment.cs.
+        public DbSet<InvoiceItemAdjustment> InvoiceItemAdjustments { get; set; }
         public DbSet<ItemDescription> ItemDescriptions { get; set; }
         public DbSet<Unit> Units { get; set; }
         public DbSet<ItemType> ItemTypes { get; set; }
@@ -259,6 +263,41 @@ namespace MyApp.Api.Data
 
             modelBuilder.Entity<InvoiceItem>()
                 .HasIndex(ii => ii.DeliveryItemId);
+
+            // ── InvoiceItemAdjustment — dual-book overlay (2026-05-11) ─
+            // One-to-zero-or-one with InvoiceItem. Cascade on InvoiceItem
+            // delete (overlay can't outlive its anchor). Unique on
+            // InvoiceItemId so we never end up with two competing
+            // overlays for the same line. InvoiceId is denormalized +
+            // indexed so "all overlays for invoice X" is a single seek.
+            modelBuilder.Entity<InvoiceItemAdjustment>()
+                .HasOne(a => a.InvoiceItem)
+                .WithOne(ii => ii.Adjustment)
+                .HasForeignKey<InvoiceItemAdjustment>(a => a.InvoiceItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<InvoiceItemAdjustment>()
+                .HasIndex(a => a.InvoiceItemId)
+                .IsUnique();
+            modelBuilder.Entity<InvoiceItemAdjustment>()
+                .HasIndex(a => a.InvoiceId);
+            modelBuilder.Entity<InvoiceItemAdjustment>()
+                .Property(a => a.AdjustedQuantity).HasPrecision(18, 4);
+            modelBuilder.Entity<InvoiceItemAdjustment>()
+                .Property(a => a.AdjustedUnitPrice).HasPrecision(18, 2);
+            modelBuilder.Entity<InvoiceItemAdjustment>()
+                .Property(a => a.AdjustedLineTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<InvoiceItemAdjustment>()
+                .Property(a => a.AdjustedItemTypeName).HasMaxLength(300);
+            modelBuilder.Entity<InvoiceItemAdjustment>()
+                .Property(a => a.AdjustedDescription).HasMaxLength(1000);
+            modelBuilder.Entity<InvoiceItemAdjustment>()
+                .Property(a => a.AdjustedUOM).HasMaxLength(50);
+            modelBuilder.Entity<InvoiceItemAdjustment>()
+                .Property(a => a.AdjustedHSCode).HasMaxLength(20);
+            modelBuilder.Entity<InvoiceItemAdjustment>()
+                .Property(a => a.AdjustedSaleType).HasMaxLength(100);
+            modelBuilder.Entity<InvoiceItemAdjustment>()
+                .Property(a => a.Reason).HasMaxLength(64).HasDefaultValue("tax-claim-optimization");
 
             // Decimal precision for money columns
             modelBuilder.Entity<Invoice>().Property(i => i.Subtotal).HasPrecision(18, 2);

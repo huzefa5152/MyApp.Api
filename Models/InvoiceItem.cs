@@ -63,5 +63,12 @@ namespace MyApp.Api.Models
         public Invoice Invoice { get; set; } = null!;
         public DeliveryItem? DeliveryItem { get; set; }
         public ItemType? ItemType { get; set; }
+        /// <summary>
+        /// Optional dual-book overlay — when present, FBR submission and
+        /// tax-claim math read the AdjustedXxx values instead of the ones
+        /// on this row. Bill print always uses this row directly.
+        /// 2026-05-11: added.
+        /// </summary>
+        public InvoiceItemAdjustment? Adjustment { get; set; }
     }
 }

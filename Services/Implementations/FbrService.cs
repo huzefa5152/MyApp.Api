@@ -204,6 +204,55 @@ namespace MyApp.Api.Services.Implementations
         //    quotes, etc.) so descriptions pasted from Word/Excel don't
         //    cause malformed-JSON rejections
         //  • Anything above U+007F that we can't map is dropped
+        /// <summary>
+        /// Apply the dual-book overlay (<see cref="InvoiceItemAdjustment"/>)
+        /// to an InvoiceItem for FBR-side computations. Returns a fresh
+        /// InvoiceItem instance — NEVER mutates the source. Adjusted fields
+        /// from the overlay take precedence; NULL overlay fields fall back
+        /// to the underlying bill row.
+        ///
+        /// Used by Validate / Submit so FBR sees the operator's tax-claim-
+        /// optimized decomposition. The printed bill keeps its real
+        /// qty/price/item-type from the underlying InvoiceItem and is
+        /// unaffected.
+        ///
+        /// 2026-05-11: added.
+        /// </summary>
+        private static InvoiceItem ApplyAdjustmentOverlay(InvoiceItem ii)
+        {
+            if (ii.Adjustment == null) return ii;
+            var a = ii.Adjustment;
+            // 2026-05-12: narrowed scope. The overlay ONLY ever carries
+            // numerical fields (qty / unit_price / line_total). Item
+            // Type / UOM / HS Code / Sale Type / Description are
+            // legitimate bill data and live on InvoiceItem directly so
+            // the printed bill and the Tax Invoice can render them.
+            // We still read those fields off ii, never off the overlay,
+            // even if a row from before the 2026-05-12 fix has stale
+            // values in the deprecated columns.
+            return new InvoiceItem
+            {
+                Id              = ii.Id,
+                InvoiceId       = ii.InvoiceId,
+                DeliveryItemId  = ii.DeliveryItemId,
+                ItemTypeId      = ii.ItemTypeId,
+                ItemTypeName    = ii.ItemTypeName,
+                Description     = ii.Description,
+                Quantity        = a.AdjustedQuantity   ?? ii.Quantity,
+                UOM             = ii.UOM,
+                UnitPrice       = a.AdjustedUnitPrice  ?? ii.UnitPrice,
+                LineTotal       = a.AdjustedLineTotal  ?? ii.LineTotal,
+                HSCode          = ii.HSCode,
+                FbrUOMId        = ii.FbrUOMId,
+                SaleType        = ii.SaleType,
+                RateId          = ii.RateId,
+                FixedNotifiedValueOrRetailPrice = ii.FixedNotifiedValueOrRetailPrice,
+                SroScheduleNo   = ii.SroScheduleNo,
+                SroItemSerialNo = ii.SroItemSerialNo,
+                ItemType        = ii.ItemType,
+            };
+        }
+
         private static string SanitizeForFbr(string? value)
         {
             if (string.IsNullOrWhiteSpace(value)) return "";
@@ -779,6 +828,16 @@ namespace MyApp.Api.Services.Implementations
                 Items = new List<FbrInvoiceItemRequest>()
             };
 
+            // ── Dual-book overlay (2026-05-11) ───────────────────────────────
+            // Before grouping for FBR, apply any InvoiceItemAdjustment
+            // overlay so the digital invoice carries the operator's
+            // tax-claim-optimized decomposition (qty + unit_price + item-
+            // type) rather than the printed-bill values. Each row is
+            // projected into an "effective" copy — NULL overlay fields
+            // fall back to the underlying InvoiceItem. The printed bill
+            // is NEVER touched; only this in-memory view is.
+            var effectiveItems = invoice.Items.Select(ApplyAdjustmentOverlay).ToList();
+
             // ── Item-Type grouping (mirrors the Tax Invoice print) ───────────
             //
             // The Tax Invoice we hand to clients groups bill lines by ItemType
@@ -798,8 +857,8 @@ namespace MyApp.Api.Services.Implementations
             // same FBR-tax answer as summing per-line tax (linear in value).
             // 3rd Schedule items also work correctly: summed retail price
             // × rate is the same as sum of per-line retail × rate.
-            var fbrItems = invoice.Items.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName))
-                ? invoice.Items
+            var fbrItems = effectiveItems.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName))
+                ? effectiveItems
                     .GroupBy(ii => ii.ItemTypeName)
                     .Select(g =>
                     {
@@ -827,7 +886,7 @@ namespace MyApp.Api.Services.Implementations
                         };
                     })
                     .ToList()
-                : invoice.Items.ToList();
+                : effectiveItems.ToList();
 
             // Resolve UOM descriptions + compute FBR-compliant tax numbers per
             // (grouped) item. ComputeFbrTaxes encodes the three rules that
@@ -1063,37 +1122,13 @@ namespace MyApp.Api.Services.Implementations
                     {
                         await PersistStatus(invoice, "Submitted", irn, null);
 
-                        // Emit Stock OUT for every line bound to a catalog
-                        // ItemType. We do this AFTER PRAL acknowledged the
-                        // submission — a failed submit produces no movement,
-                        // and the pre-check above guarantees we won't
-                        // oversell here. Lines without an ItemTypeId are
-                        // intentionally skipped (we can't track what we
-                        // can't classify); StockService.RecordMovementAsync
-                        // is also a no-op when tracking is disabled, so
-                        // existing tenants pay zero cost.
-                        foreach (var item in invoice.Items)
-                        {
-                            if (!item.ItemTypeId.HasValue || item.Quantity <= 0) continue;
-                            // InvoiceItem.Quantity is decimal(18,4) since the
-                            // decimal-qty feature, but StockMovement.Quantity is
-                            // still int (purchase-module schema). Truncate at
-                            // the boundary — fractional sales are a sales-side
-                            // concern; stock tracking only follows whole units
-                            // until the purchase module also goes decimal.
-                            // TODO: promote StockMovement / PurchaseItem /
-                            // GoodsReceiptItem / OpeningStockBalance quantities
-                            // to decimal(18,4) and drop this cast.
-                            await _stock.RecordMovementAsync(
-                                companyId: invoice.CompanyId,
-                                itemTypeId: item.ItemTypeId.Value,
-                                direction: StockMovementDirection.Out,
-                                quantity: (int)Math.Truncate(item.Quantity),
-                                sourceType: StockMovementSourceType.Invoice,
-                                sourceId: invoice.Id,
-                                movementDate: invoice.Date,
-                                notes: $"Bill #{invoice.InvoiceNumber} submitted to FBR (IRN {irn})");
-                        }
+                        // 2026-05-12: stock-out is no longer emitted here.
+                        // The deduction now happens at invoice save time
+                        // (InvoiceService.SyncInvoiceStockMovementsAsync)
+                        // so the next bill picking the same Item Type sees
+                        // reduced on-hand without having to wait for an
+                        // FBR submission. The submit path is purely about
+                        // PRAL hand-off now.
                     }
                     else
                     {

@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { MdInfo, MdAdd, MdCheckCircle, MdWarning, MdInventory2, MdLightbulb, MdRefresh, MdError, MdExpandMore, MdExpandLess } from "react-icons/md";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { MdInfo, MdAdd, MdCheckCircle, MdWarning, MdInventory2, MdLightbulb, MdRefresh, MdError, MdExpandMore, MdExpandLess, MdAutoAwesome } from "react-icons/md";
 import { getInvoiceById, updateInvoice, updateInvoiceItemTypes, updateInvoiceItemTypesAndQty } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getClientsByCompany } from "../api/clientApi";
@@ -91,6 +91,28 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
 
   const [invoice, setInvoice] = useState(null);
   const [items, setItems] = useState([]);
+
+  // Bill-mode source-of-truth snapshot (2026-05-11).
+  //
+  // Captured ONCE when the bill loads. Represents whatever qty +
+  // unit_price the operator saved in Bill mode — those are legitimate
+  // bill values and act as the floor we return to whenever an
+  // Invoice-mode tweak needs to be undone.
+  //
+  // Two places consume this:
+  //   1. updateItemType / applyItemTypeToAll: in invoice mode
+  //      (!billsMode), switching a row's HS code resets that row's
+  //      qty + unit_price + lineTotal back to its original index entry.
+  //      The optimization suggestion is HS-code-specific, so the
+  //      qty/price applied for the OLD HS no longer make sense once
+  //      the operator picks a different HS.
+  //   2. resetItemsToOriginal: the panel's "Reset to original bill
+  //      values" button restores the entire items[] array.
+  //
+  // Stored as a ref (not state) so mutations to items[] don't trigger
+  // re-renders that would also bump this. Set exactly once in the
+  // load useEffect.
+  const originalItemsRef = useRef([]);
   const [itemTypes, setItemTypes] = useState([]);
   // Buyer reassignment — only meaningful for standalone bills (no
   // linked challan). Loaded lazily after the bill itself comes back so
@@ -144,7 +166,35 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           getAllUnits().catch(() => ({ data: [] })),
         ]);
         setInvoice(data);
-        setItems(data.items.map((it) => ({ ...it })));
+        // Bill-mode source-of-truth: every InvoiceItem field as the
+        // bill carries it. Used to seed both `items[]` (when no
+        // Invoice-mode overlay applies) AND originalItemsRef (which
+        // anchors the HS-change reset + the "Reset to bill values"
+        // button).
+        const billItems = data.items.map((it) => ({ ...it }));
+
+        // Invoice-mode overlay (2026-05-12 — narrowed scope):
+        // The InvoiceItemAdjustment overlay carries ONLY the
+        // numerical decomposition the operator filed for FBR
+        // tax-claim optimization (qty / unit_price / line_total).
+        // Item Type / UOM / HS Code / Sale Type / Description are
+        // legitimate bill data and live on InvoiceItem — those
+        // always render off bi.* directly so the printed bill and
+        // Tax Invoice stay accurate. Bill mode ignores the overlay
+        // entirely.
+        const editableItems = billItems.map((bi) => {
+          if (!forceItemTypeAndQty || !bi.adjustment) return { ...bi };
+          const adj = bi.adjustment;
+          const next = { ...bi };
+          if (adj.adjustedQuantity != null)  next.quantity  = adj.adjustedQuantity;
+          if (adj.adjustedUnitPrice != null) next.unitPrice = adj.adjustedUnitPrice;
+          if (adj.adjustedLineTotal != null) next.lineTotal = adj.adjustedLineTotal;
+          return next;
+        });
+        setItems(editableItems);
+        // originalItemsRef ALWAYS holds the raw bill values — the
+        // overlay is never the source of truth.
+        originalItemsRef.current = billItems.map((it) => ({ ...it }));
         setItemTypes(typesRes.data || []);
         setUnits(unitsRes.data || []);
         setClientId(data.clientId ? String(data.clientId) : "");
@@ -335,6 +385,203 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
     });
   };
 
+  // Reset all bill rows back to their bill-mode source-of-truth values.
+  // Restores qty + unit_price + lineTotal + item type + HS code +
+  // description + everything else exactly as it was loaded — undoes
+  // every invoice-mode tweak in one shot. Lets the operator "start
+  // over" with the tax-claim optimization without manually unwinding
+  // each row.
+  //
+  // 2026-05-11: added. Triggered by the Tax Claim panel's "Reset to
+  // original bill values" button (panel header).
+  const resetItemsToOriginal = () => {
+    setItems(originalItemsRef.current.map((it) => ({ ...it })));
+  };
+
+  // Apply a tax-claim optimization suggestion to the bill row(s) for a
+  // given HS code. Three outcomes:
+  //   • "applied"     — exactly one row carries this HS; we set its qty
+  //                     + unitPrice and recompute lineTotal. Subtotal
+  //                     is preserved (the backend's clean-factorization
+  //                     guarantees qty × unitPrice === original lineTotal).
+  //   • "distributed" — multiple rows share this HS (2026-05-11). We
+  //                     distribute the suggested aggregate qty across
+  //                     the contributing rows proportionally to each
+  //                     row's lineTotal share, snapping each row to a
+  //                     clean integer divisor of its lineTotal cents so
+  //                     qty_i × unit_price_i = the row's original
+  //                     subtotal EXACTLY. The aggregate qty sums to
+  //                     (≈) the HS-level suggested qty — the §8B claim
+  //                     math runs on the HS total so small deltas are
+  //                     fine. Per-row unit prices differ when the row
+  //                     lineTotals differ.
+  //   • "missing"     — no row found (shouldn't happen if panel is
+  //                     showing this HS, but guard anyway).
+  // Returns the outcome so the panel can render an inline notice with
+  // the actual per-row breakdown.
+  const applyOptimizationToHs = (hsCode, opt) => {
+    // Back-compat: callers that still pass (hsCode, qty, unitPrice) get
+    // a synthetic opt object. New callers pass the full optimization
+    // snapshot which carries the realistic band needed for per-row
+    // band-aware divisor selection.
+    if (typeof opt === "number") {
+      opt = {
+        suggestedQty: arguments[1],
+        suggestedUnitPrice: arguments[2],
+        realisticBandLow: 0,
+        realisticBandHigh: Number.POSITIVE_INFINITY,
+      };
+    }
+    const totalQty = Number(opt.suggestedQty) || 0;
+    const suggestedUnitPrice = Number(opt.suggestedUnitPrice) || 0;
+    const bandLow = Number(opt.realisticBandLow) || 0;
+    const bandHigh = Number(opt.realisticBandHigh) || Number.POSITIVE_INFINITY;
+    const bandLowCents = Math.round(bandLow * 100);
+    const bandHighCents = Number.isFinite(bandHigh)
+      ? Math.round(bandHigh * 100)
+      : Number.MAX_SAFE_INTEGER;
+
+    const matchingIndices = items
+      .map((it, i) => ({ it, i }))
+      .filter(({ it }) => (it.hsCode || "").trim() === hsCode)
+      .map(({ i }) => i);
+    if (matchingIndices.length === 0) return { status: "missing", count: 0 };
+
+    // ── Single-row path (fast & exact) ──
+    if (matchingIndices.length === 1) {
+      const idx = matchingIndices[0];
+      setItems((prev) => {
+        const next = [...prev];
+        const qty = totalQty;
+        const price = suggestedUnitPrice;
+        next[idx] = {
+          ...next[idx],
+          quantity: qty,
+          unitPrice: price,
+          lineTotal: Math.round(qty * price * 100) / 100,
+        };
+        return next;
+      });
+      return { status: "applied", count: 1 };
+    }
+
+    // ── Multi-row distribution path (2026-05-11) ──
+    // Each contributing row keeps its own lineTotal exactly preserved;
+    // qty + unit_price are re-decomposed so the SUM of qty across rows
+    // approximates the HS-level suggested total qty.
+    //
+    // Algorithm per row:
+    //   1. Compute the "fair share" target qty
+    //          = totalQty × (lineTotal_i / totalValue)
+    //      (last row inherits whatever qty is left so the sum lands as
+    //      close to totalQty as the clean-factorization grid allows).
+    //   2. Enumerate ALL integer divisors of lineTotal_i × 100. Each
+    //      divisor d gives a clean unit_price = lineTotal_i / d to two
+    //      decimals — no drift on that row.
+    //   3. Among divisors whose unit_price lands in [bandLow, bandHigh]
+    //      pick the one closest to the target qty (audit-defensible).
+    //   4. If no in-band divisor exists, fall back to the divisor
+    //      closest to target regardless of band, and flag the row as
+    //      out-of-band so the inline notice warns the operator.
+    const contributing = matchingIndices.map((idx) => {
+      const it = items[idx];
+      const q = parseFloat(it.quantity) || 0;
+      const p = parseFloat(it.unitPrice) || 0;
+      const lt = parseFloat(it.lineTotal) || q * p;
+      return { idx, lineTotal: lt };
+    });
+    const totalValue = contributing.reduce((s, r) => s + r.lineTotal, 0);
+
+    let remainingQty = totalQty;
+    const distributions = [];
+    for (let i = 0; i < contributing.length; i++) {
+      const isLast = i === contributing.length - 1;
+      const row = contributing[i];
+      const cents = Math.round(row.lineTotal * 100);
+
+      // Target qty for THIS row. Last row absorbs the rounding so the
+      // aggregate sum matches the suggestion as closely as possible.
+      let target;
+      if (isLast) {
+        target = Math.max(1, remainingQty);
+      } else {
+        const ideal = totalValue > 0 ? totalQty * (row.lineTotal / totalValue) : totalQty / contributing.length;
+        target = Math.max(1, Math.round(ideal));
+        // Leave at least 1 qty available per remaining row.
+        const minLeft = contributing.length - i - 1;
+        target = Math.min(target, Math.max(1, remainingQty - minLeft));
+      }
+
+      // Enumerate divisors. We don't cap availableQty here — the bank
+      // ceiling was already enforced when the HS-level suggestion was
+      // built. Tier 1 = unit_price in band; Tier 3 = best non-in-band.
+      let bestInBand = 0;
+      let bestInBandDist = Number.POSITIVE_INFINITY;
+      let bestAny = 0;
+      let bestAnyDist = Number.POSITIVE_INFINITY;
+      if (cents > 0) {
+        for (let d = 1; d * d <= cents; d++) {
+          if (cents % d !== 0) continue;
+          const d2 = cents / d;
+          for (const cand of [d, d2]) {
+            if (cand < 1) continue;
+            const unitCents = cents / cand;
+            const dist = Math.abs(cand - target);
+            const inBand = unitCents >= bandLowCents && unitCents <= bandHighCents;
+            if (inBand && dist < bestInBandDist) {
+              bestInBandDist = dist;
+              bestInBand = cand;
+            }
+            if (dist < bestAnyDist) {
+              bestAnyDist = dist;
+              bestAny = cand;
+            }
+          }
+        }
+      }
+      const chosenQty = bestInBand > 0 ? bestInBand : (bestAny > 0 ? bestAny : target);
+      const chosenInBand = bestInBand > 0;
+      const unitPrice = chosenQty > 0 ? Math.round(cents / chosenQty) / 100 : 0;
+      const recomposed = Math.round(chosenQty * unitPrice * 100) / 100;
+
+      distributions.push({
+        idx: row.idx,
+        qty: chosenQty,
+        unitPrice,
+        lineTotal: recomposed,
+        originalLineTotal: row.lineTotal,
+        inBand: chosenInBand,
+      });
+
+      remainingQty -= chosenQty;
+    }
+
+    // Commit the distribution to items[] in a single setItems pass.
+    setItems((prev) => {
+      const next = [...prev];
+      for (const d of distributions) {
+        next[d.idx] = {
+          ...next[d.idx],
+          quantity: d.qty,
+          unitPrice: d.unitPrice,
+          lineTotal: d.lineTotal,
+        };
+      }
+      return next;
+    });
+
+    const distributedTotalQty = distributions.reduce((s, d) => s + d.qty, 0);
+    const anyOutOfBand = distributions.some((d) => !d.inBand);
+    return {
+      status: "distributed",
+      count: distributions.length,
+      distributions,
+      distributedTotalQty,
+      suggestedTotalQty: totalQty,
+      anyOutOfBand,
+    };
+  };
+
   // Apply a catalog row to one bill line. Sets ItemType + the inherited
   // FBR fields (UOM, HS Code, Sale Type, FbrUOMId). Clearing the
   // ItemType wipes the inherited fields so stale data doesn't ship to FBR.
@@ -361,7 +608,36 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const updateItemType = (index, newId, pickedType) => {
     setItems((prev) => {
       const next = [...prev];
+      const oldHs = (next[index].hsCode || "").trim();
+      const newHs = (pickedType?.hsCode || "").trim();
+      const hsChanged = oldHs !== newHs;
       next[index] = _applyItemTypeToRow(next[index], newId, pickedType);
+
+      // Invoice-mode rule (2026-05-11): when the operator switches the
+      // HS code on a row, the qty + unit_price applied for the previous
+      // HS's optimization suggestion no longer make sense — the new HS
+      // has a different bank, a different break-even, a different
+      // realistic price band. Reset that row's qty + unit_price +
+      // lineTotal back to the bill-mode source-of-truth values so the
+      // operator starts the new HS's optimization from a clean slate.
+      //
+      // We do NOT touch other fields (item type, UOM, description,
+      // saleType) — _applyItemTypeToRow already set those to the new
+      // catalog row's values. Only the price/qty primitives reset.
+      //
+      // Bill mode (`billsMode`) is the source of truth — never auto-
+      // reset there. The operator's typed qty/price IS the bill.
+      if (!billsMode && hsChanged) {
+        const orig = originalItemsRef.current[index];
+        if (orig) {
+          next[index] = {
+            ...next[index],
+            quantity: orig.quantity,
+            unitPrice: orig.unitPrice,
+            lineTotal: orig.lineTotal,
+          };
+        }
+      }
       return next;
     });
   };
@@ -372,10 +648,27 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // Passing newId=null + pickedType=null clears ItemType + UoM + HS Code
   // + Sale Type on every row (the dedicated "Clear from all" button).
   const applyItemTypeToAll = (newId, pickedType, mode = "all") => {
-    setItems((prev) => prev.map((row) => {
+    setItems((prev) => prev.map((row, idx) => {
       // mode === "empty" → only fill rows that don't have an Item Type yet
       if (mode === "empty" && row.itemTypeId) return row;
-      return _applyItemTypeToRow(row, newId, pickedType);
+      const oldHs = (row.hsCode || "").trim();
+      const newHs = (pickedType?.hsCode || "").trim();
+      const hsChanged = oldHs !== newHs;
+      let nextRow = _applyItemTypeToRow(row, newId, pickedType);
+      // Same invoice-mode reset rule as updateItemType — applied per
+      // row when the bulk apply actually changed the HS code on it.
+      if (!billsMode && hsChanged) {
+        const orig = originalItemsRef.current[idx];
+        if (orig) {
+          nextRow = {
+            ...nextRow,
+            quantity: orig.quantity,
+            unitPrice: orig.unitPrice,
+            lineTotal: orig.lineTotal,
+          };
+        }
+      }
+      return nextRow;
     }));
   };
 
@@ -486,6 +779,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
             `Adjust qty / unit price so totals match within Rs. ${NARROW_EDIT_TOLERANCE_PKR}, or use full-edit access to change the bill amount.`
           );
         }
+        // writeMode (2026-05-11): Invoice-mode saves go through the
+        // dual-book overlay so the printed bill keeps its real
+        // qty/price. Bill-mode saves on this narrow path (rare —
+        // billsMode normally takes the full-edit branch) stay on the
+        // original "write straight to InvoiceItem" semantics.
+        const writeMode = forceItemTypeAndQty && !billsMode ? "adjustment" : "bill";
         await updateInvoiceItemTypesAndQty(
           invoiceId,
           items.map((i) => ({
@@ -494,6 +793,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
             quantity: parseFloat(i.quantity) || 0,
             unitPrice: parseFloat(i.unitPrice) || 0,
           })),
+          writeMode,
         );
       } else {
         // Full edit path — same validation as before.
@@ -800,6 +1100,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     onRefresh={() => setClaimRefreshTick((t) => t + 1)}
                     open={claimPanelOpen}
                     onToggle={() => setClaimPanelOpen((v) => !v)}
+                    onApplyOptimization={applyOptimizationToHs}
+                    onResetToOriginal={resetItemsToOriginal}
                   />
                 )}
 
@@ -1129,7 +1431,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
 // Strictly informational. The form's Save buttons don't depend on
 // this state — operators can save with shortfalls / no purchases and
 // reconcile later.
-function TaxClaimPanel({ summary, loading, period, onPeriodChange, onRefresh, open, onToggle }) {
+function TaxClaimPanel({ summary, loading, period, onPeriodChange, onRefresh, open, onToggle, onApplyOptimization, onResetToOriginal }) {
   const fmtMoney = (v) =>
     v == null || isNaN(v) ? "—" :
     `Rs. ${Number(v).toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
@@ -1142,6 +1444,89 @@ function TaxClaimPanel({ summary, loading, period, onPeriodChange, onRefresh, op
   const cfg = summary?.config;
   const periodLabel = summary?.period?.label || "—";
   const warnings = summary?.warnings || [];
+
+  // ── Snapshot store (2026-05-11) ──────────────────────────────────
+  // The /tax-claim/claim-summary endpoint recomputes the optimization
+  // every time the operator edits qty/unit_price. If we render
+  // row.optimization directly, the "Apply this qty+unit_price" target
+  // shifts under the operator's foot as soon as they start typing the
+  // suggested numbers in. Freeze the FIRST hasSuggestion result per
+  // HS code, and only re-snapshot when:
+  //   • The HS code drops out of the bill (operator deleted that
+  //     line) → garbage-collect its snapshot.
+  //   • The operator clicks "↻ Recalculate" on that card.
+  //   • The Refresh button at the top is clicked (we wipe all
+  //     snapshots so a fresh fetch starts a new freeze).
+  const [frozenOptByHs, setFrozenOptByHs] = useState({});
+  // Per-HS apply-result indicator: "applied" | "ambiguous" | "missing"
+  // | null. Renders an inline notice inside the optimization card.
+  const [applyResultByHs, setApplyResultByHs] = useState({});
+  // Per-HS "Why this price?" expanded state.
+  const [whyOpenByHs, setWhyOpenByHs] = useState({});
+
+  useEffect(() => {
+    if (!summary?.rows) return;
+    setFrozenOptByHs((prev) => {
+      const next = { ...prev };
+      // 1) Capture new suggestions
+      for (const r of summary.rows) {
+        if (r?.optimization?.hasSuggestion && !next[r.hsCode]) {
+          next[r.hsCode] = r.optimization;
+        }
+      }
+      // 2) Drop entries for HS codes no longer in the bill
+      const liveHs = new Set(summary.rows.map((r) => r.hsCode));
+      for (const k of Object.keys(next)) {
+        if (!liveHs.has(k)) delete next[k];
+      }
+      return next;
+    });
+  }, [summary]);
+
+  // Recalculate one HS — drop the frozen snapshot so the next render
+  // re-captures from the current (fresh) row.optimization.
+  const handleRecalculate = (hsCode) => {
+    setFrozenOptByHs((prev) => {
+      const next = { ...prev };
+      delete next[hsCode];
+      return next;
+    });
+    setApplyResultByHs((prev) => {
+      const next = { ...prev };
+      delete next[hsCode];
+      return next;
+    });
+  };
+
+  // Top-level refresh now wipes all snapshots so the operator can
+  // re-start with fresh anchors after a colleague imported new
+  // Annexure-A rows in another tab.
+  const handleTopRefresh = () => {
+    setFrozenOptByHs({});
+    setApplyResultByHs({});
+    if (onRefresh) onRefresh();
+  };
+
+  // Reset to original bill values — restores every row's qty +
+  // unit_price + lineTotal + item type to what the bill carried when
+  // the form first loaded. Wipes our local snapshot store too so the
+  // operator starts the optimization journey fresh.
+  const handleResetAll = () => {
+    if (onResetToOriginal) onResetToOriginal();
+    setFrozenOptByHs({});
+    setApplyResultByHs({});
+    setWhyOpenByHs({});
+  };
+
+  const handleApply = (hsCode, opt) => {
+    if (!onApplyOptimization) return;
+    // Pass the full optimization snapshot so the parent can use the
+    // realistic band when distributing across multiple rows that
+    // share this HS code (2026-05-11). Falls back to qty/price-only
+    // for parents that haven't adopted the new signature.
+    const result = onApplyOptimization(hsCode, opt);
+    setApplyResultByHs((prev) => ({ ...prev, [hsCode]: result }));
+  };
 
   // When collapsed: show ONLY the title row + a one-line summary chip
   // (claimable Rs / net new tax) so the operator can see "the answer"
@@ -1196,12 +1581,22 @@ function TaxClaimPanel({ summary, loading, period, onPeriodChange, onRefresh, op
               {onRefresh && (
                 <button
                   type="button"
-                  onClick={onRefresh}
+                  onClick={handleTopRefresh}
                   style={styles.refreshBtn}
-                  title="Refresh — pull latest purchases / sales (e.g. after running FBR Annexure-A import in another tab)"
+                  title="Refresh — pull latest purchases / sales (e.g. after running FBR Annexure-A import in another tab). Also re-anchors any frozen optimization suggestions."
                   disabled={loading}
                 >
                   <MdRefresh size={14} /> Refresh
+                </button>
+              )}
+              {onResetToOriginal && (
+                <button
+                  type="button"
+                  onClick={handleResetAll}
+                  style={styles.resetBillBtn}
+                  title="Reset Qty + Unit Price on every row back to the original bill values (Bill mode source of truth). Undoes any optimization suggestions you've applied in this session."
+                >
+                  ↺ Reset to bill values
                 </button>
               )}
               <select
@@ -1377,6 +1772,259 @@ function TaxClaimPanel({ summary, loading, period, onPeriodChange, onRefresh, op
                 <MdLightbulb size={13} color="#5f6d7e" style={{ flexShrink: 0, marginTop: 1 }} />
                 <span>{hint}</span>
               </div>
+
+              {/* Optimization suggestion — 2026-05-09 (audit-anchored
+                  2026-05-11). We render a FROZEN snapshot of the first
+                  meaningful suggestion seen for this HS, not the live
+                  row.optimization. That way the target qty + unit_price
+                  stays stable while the operator types the suggested
+                  values in. "↻ Recalculate" drops the snapshot and
+                  re-anchors to the current state. The "Apply" button
+                  writes qty + unit_price directly into the matching
+                  bill row (when there's exactly one). */}
+              {(() => {
+                const frozenOpt = frozenOptByHs[row.hsCode];
+                const liveOpt = row.optimization;
+                // Show the snapshot if we have one; otherwise fall back
+                // to the live one for the first render before useEffect
+                // captures it.
+                const opt = frozenOpt || (liveOpt?.hasSuggestion ? liveOpt : null);
+                if (!opt) return null;
+                const isFrozen = !!frozenOpt;
+                const isStale = isFrozen && liveOpt?.hasSuggestion && (
+                  Number(frozenOpt.suggestedQty) !== Number(liveOpt.suggestedQty)
+                  || Number(frozenOpt.suggestedUnitPrice) !== Number(liveOpt.suggestedUnitPrice)
+                );
+                const applyRes = applyResultByHs[row.hsCode];
+                const whyOpen = !!whyOpenByHs[row.hsCode];
+
+                const riskCfg = opt.auditRiskLevel === "high"
+                  ? { style: styles.taxRowOptimizationRiskHigh, label: "High audit risk", icon: MdError }
+                  : opt.auditRiskLevel === "moderate"
+                  ? { style: styles.taxRowOptimizationRiskModerate, label: "Moderate audit risk", icon: MdWarning }
+                  : { style: styles.taxRowOptimizationRiskLow, label: "Audit-defensible", icon: MdCheckCircle };
+                const RiskIcon = riskCfg.icon;
+                const refBills = opt.referencePurchaseBills || [];
+
+                return (
+                <div style={styles.taxRowOptimization}>
+                  <div style={styles.taxRowOptimizationHeader}>
+                    <MdAutoAwesome size={14} color="#0d47a1" />
+                    <span style={styles.taxRowOptimizationTitle}>
+                      Maximum-claim suggestion for this HS
+                    </span>
+                    <span style={styles.taxRowOptimizationDelta}>
+                      +{fmtMoney(opt.additionalClaimableInputTax)} extra input tax
+                    </span>
+                  </div>
+                  <div style={styles.taxRowOptimizationGrid}>
+                    <div>
+                      <div style={styles.taxRowOptimizationLabel}>Suggested Qty</div>
+                      <div style={styles.taxRowOptimizationValue}>{fmtQty(opt.suggestedQty)}</div>
+                    </div>
+                    <div>
+                      <div style={styles.taxRowOptimizationLabel}>Suggested Unit Price</div>
+                      <div style={styles.taxRowOptimizationValue}>Rs. {Number(opt.suggestedUnitPrice).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </div>
+                    <div>
+                      <div style={styles.taxRowOptimizationLabel}>Current claim</div>
+                      <div style={styles.taxRowOptimizationValueMuted}>{fmtMoney(opt.currentMatchedInputTax)}</div>
+                    </div>
+                    <div>
+                      <div style={styles.taxRowOptimizationLabel}>Suggested claim</div>
+                      <div style={styles.taxRowOptimizationValueHighlight}>{fmtMoney(opt.suggestedMatchedInputTax)}</div>
+                    </div>
+                  </div>
+                  {/* Audit-risk pill — sits prominently right under the
+                      headline numbers so the operator can't miss the
+                      "is this safe?" signal. */}
+                  <div style={{ ...styles.taxRowOptimizationRiskPill, ...riskCfg.style }}>
+                    <RiskIcon size={13} />
+                    <strong>{riskCfg.label}</strong>
+                    <span style={{ fontWeight: 400 }}>· {opt.auditRiskNote}</span>
+                  </div>
+                  {/* Subtotal-preservation receipt — proves to the operator
+                      that qty × unit_price recomposes to the same bill
+                      amount. Green check when exact; amber when there's a
+                      tiny rounding drift (rare prime-cents fallback). */}
+                  <div style={styles.taxRowOptimizationSubtotalProof}>
+                    <span style={{ color: colors.textSecondary }}>Recomposed subtotal:</span>{" "}
+                    <strong style={{ fontFamily: "ui-monospace, monospace" }}>
+                      {fmtQty(opt.suggestedQty)} × Rs. {Number(opt.suggestedUnitPrice).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} = {fmtMoney(opt.recomposedSubtotal)}
+                    </strong>{" "}
+                    <span style={{ color: colors.textSecondary }}>(original: {fmtMoney(row.bill.value)})</span>{" "}
+                    {opt.exactSubtotalPreserved ? (
+                      <span style={styles.taxRowOptimizationExactBadge}>
+                        <MdCheckCircle size={12} /> Exact match — no change to bill amount
+                      </span>
+                    ) : (
+                      <span style={styles.taxRowOptimizationDriftBadge}>
+                        <MdWarning size={12} /> Drift Rs. {fmtMoney(Math.abs((opt.recomposedSubtotal || 0) - (row.bill.value || 0))).replace("Rs. ", "")} — within narrow-edit tolerance
+                      </span>
+                    )}
+                  </div>
+                  <div style={styles.taxRowOptimizationRationale}>{opt.rationale}</div>
+
+                  {/* Apply + Recalculate controls */}
+                  <div style={styles.taxRowOptimizationActions}>
+                    <button
+                      type="button"
+                      style={styles.taxRowOptimizationApplyBtn}
+                      onClick={() => handleApply(row.hsCode, opt)}
+                      title="Set Qty + Unit Price on the matching bill row(s). When multiple lines share this HS, the qty is distributed across them proportionally to each line's subtotal, with per-row clean factorizations."
+                    >
+                      <MdCheckCircle size={13} /> Apply suggestion
+                    </button>
+                    <button
+                      type="button"
+                      style={styles.taxRowOptimizationRecalcBtn}
+                      onClick={() => handleRecalculate(row.hsCode)}
+                      title="Re-anchor the suggestion to the current bill state"
+                    >
+                      <MdRefresh size={13} /> Recalculate
+                    </button>
+                    <button
+                      type="button"
+                      style={styles.taxRowOptimizationWhyBtn}
+                      onClick={() => setWhyOpenByHs((p) => ({ ...p, [row.hsCode]: !p[row.hsCode] }))}
+                      aria-expanded={whyOpen}
+                    >
+                      {whyOpen ? <MdExpandLess size={13} /> : <MdExpandMore size={13} />}
+                      Why this price?
+                    </button>
+                    {isStale && (
+                      <span style={styles.taxRowOptimizationStaleHint}>
+                        Underlying bill state changed — click Recalculate for a fresh anchor.
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Inline apply-result notice */}
+                  {applyRes?.status === "applied" && (
+                    <div style={styles.taxRowOptimizationApplyOk}>
+                      <MdCheckCircle size={13} /> Applied to the matching bill row. Subtotal preserved.
+                    </div>
+                  )}
+                  {applyRes?.status === "distributed" && (
+                    <div style={applyRes.anyOutOfBand
+                        ? styles.taxRowOptimizationApplyWarn
+                        : styles.taxRowOptimizationApplyOk}>
+                      {applyRes.anyOutOfBand
+                        ? <MdWarning size={13} style={{ flexShrink: 0, marginTop: 2 }} />
+                        : <MdCheckCircle size={13} style={{ flexShrink: 0, marginTop: 2 }} />}
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", flex: 1, minWidth: 0 }}>
+                        <span>
+                          <strong>Distributed across {applyRes.count} line items.</strong>{" "}
+                          Aggregate qty {applyRes.distributedTotalQty.toLocaleString("en-PK")}
+                          {applyRes.distributedTotalQty !== applyRes.suggestedTotalQty &&
+                            ` (suggestion was ${applyRes.suggestedTotalQty.toLocaleString("en-PK")} — rounded to clean per-row factorization)`}
+                          . Each row's subtotal preserved exactly.
+                          {applyRes.anyOutOfBand && " One or more rows landed outside the audit-defensible band — review before saving."}
+                        </span>
+                        <div style={styles.taxRowOptimizationDistTable}>
+                          {applyRes.distributions.map((d, di) => (
+                            <div key={d.idx} style={styles.taxRowOptimizationDistRow}>
+                              <span style={styles.taxRowOptimizationDistLabel}>Row {di + 1}</span>
+                              <span style={styles.taxRowOptimizationDistQty}>
+                                {Number(d.qty).toLocaleString("en-PK")} × Rs. {Number(d.unitPrice).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                              <span style={styles.taxRowOptimizationDistTotal}>
+                                = Rs. {Number(d.lineTotal).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                              <span style={d.inBand ? styles.taxRowOptimizationDistBadgeOk : styles.taxRowOptimizationDistBadgeWarn}>
+                                {d.inBand ? "in band" : "out of band"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {applyRes?.status === "missing" && (
+                    <div style={styles.taxRowOptimizationApplyWarn}>
+                      <MdWarning size={13} />
+                      <span>No bill row found for this HS — open the relevant line and edit manually.</span>
+                    </div>
+                  )}
+
+                  {/* Why-this-price disclosure — collapsible.
+                      Renders the realistic band, math optimum, and the
+                      top reference purchase bills that JUSTIFY the
+                      suggested unit price. Without this the operator
+                      can't defend the number in an audit. */}
+                  {whyOpen && (
+                    <div style={styles.taxRowOptimizationWhy}>
+                      <div style={styles.taxRowOptimizationWhyHeader}>Audit anchor</div>
+                      <div style={styles.taxRowOptimizationWhyGrid}>
+                        <div>
+                          <div style={styles.taxRowOptimizationLabel}>Math optimum</div>
+                          <div style={styles.taxRowOptimizationWhyValueMuted}>
+                            Rs. {Number(opt.mathOptimalUnitPrice || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/unit
+                          </div>
+                          <div style={styles.taxRowOptimizationWhyHint}>
+                            Price that would fully bind the §8B cap. Ignored if outside the realistic band.
+                          </div>
+                        </div>
+                        <div>
+                          <div style={styles.taxRowOptimizationLabel}>Realistic band</div>
+                          <div style={styles.taxRowOptimizationWhyValue}>
+                            Rs. {Number(opt.realisticBandLow || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {" – "}
+                            Rs. {Number(opt.realisticBandHigh || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/unit
+                          </div>
+                          <div style={styles.taxRowOptimizationWhyHint}>
+                            Min actual purchase price → 1.5× weighted-avg cost.
+                          </div>
+                        </div>
+                        <div>
+                          <div style={styles.taxRowOptimizationLabel}>Weighted-avg cost</div>
+                          <div style={styles.taxRowOptimizationWhyValue}>
+                            Rs. {Number(opt.avgPurchaseUnitCost || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/unit
+                          </div>
+                          <div style={styles.taxRowOptimizationWhyHint}>
+                            Across {bank.purchaseBillCount || refBills.length} purchase bill{(bank.purchaseBillCount || refBills.length) === 1 ? "" : "s"}.
+                          </div>
+                        </div>
+                      </div>
+                      {refBills.length > 0 && (
+                        <>
+                          <div style={styles.taxRowOptimizationWhySubheader}>
+                            Reference purchase bills (audit cross-check)
+                          </div>
+                          <div style={styles.taxRowOptimizationRefBills}>
+                            {refBills.map((rb) => (
+                              <div key={rb.purchaseBillId} style={styles.taxRowOptimizationRefBill}>
+                                <div style={styles.taxRowOptimizationRefBillNum}>{rb.billNumber}</div>
+                                <div style={styles.taxRowOptimizationRefBillMeta}>
+                                  {new Date(rb.date).toLocaleDateString("en-PK")} ·{" "}
+                                  {fmtQty(rb.qty)} qty · {fmtMoney(rb.value)}
+                                </div>
+                                <div style={styles.taxRowOptimizationRefBillPrice}>
+                                  Rs. {Number(rb.unitPrice || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/unit
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  <div style={styles.taxRowOptimizationWarning}>
+                    <MdWarning size={12} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span>
+                      <strong>Only apply this if it reflects the real sale.</strong>{" "}
+                      Use it when invoice granularity should match purchase granularity
+                      (kit-priced item bought per-piece, bundled accessories, bulk
+                      consumables, etc.). Fabricating qty / under-pricing to harvest
+                      input tax is an FBR §3A violation — auditors cross-check qty
+                      against delivery challans, stock movements, and the buyer's
+                      Annexure-A. Bill-wide §8B cap still applies on save.
+                    </span>
+                  </div>
+                </div>
+                );
+              })()}
             </div>
           );
         })}
@@ -1603,6 +2251,371 @@ const styles = {
     color: colors.textPrimary,
     lineHeight: 1.4,
   },
+  // Optimization-suggestion card (2026-05-09).
+  // Distinct visual style (blue accent border + light gradient) so it
+  // doesn't blend into the regular row stats. The amber warning line
+  // at the bottom is the legal caveat — visually heavy on purpose.
+  taxRowOptimization: {
+    marginTop: "0.5rem",
+    padding: "0.6rem 0.7rem",
+    background: "linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 70%, #fbfdff 100%)",
+    border: "1px solid #90caf9",
+    borderLeft: "3px solid #0d47a1",
+    borderRadius: 8,
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.45rem",
+  },
+  taxRowOptimizationHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    flexWrap: "wrap",
+  },
+  taxRowOptimizationTitle: {
+    fontSize: "0.78rem",
+    fontWeight: 700,
+    color: "#0d47a1",
+    flex: 1,
+    minWidth: 0,
+  },
+  taxRowOptimizationDelta: {
+    fontSize: "0.74rem",
+    fontWeight: 700,
+    color: "#1b5e20",
+    background: "#e8f5e9",
+    border: "1px solid #a5d6a7",
+    padding: "0.15rem 0.45rem",
+    borderRadius: 999,
+  },
+  taxRowOptimizationGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+    gap: "0.5rem",
+  },
+  taxRowOptimizationLabel: {
+    fontSize: "0.68rem",
+    color: colors.textSecondary,
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    marginBottom: "0.1rem",
+  },
+  taxRowOptimizationValue: {
+    fontSize: "0.95rem",
+    fontWeight: 800,
+    color: "#0d47a1",
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  },
+  taxRowOptimizationValueMuted: {
+    fontSize: "0.88rem",
+    fontWeight: 600,
+    color: colors.textSecondary,
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+    textDecoration: "line-through",
+  },
+  taxRowOptimizationValueHighlight: {
+    fontSize: "0.95rem",
+    fontWeight: 800,
+    color: "#1b5e20",
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  },
+  // Subtotal-preservation receipt — proves qty × unit_price recomposes
+  // to the original bill amount. Sits between the grid and rationale.
+  // Lives on a white card to stand apart from the gradient background.
+  taxRowOptimizationSubtotalProof: {
+    fontSize: "0.74rem",
+    color: colors.textPrimary,
+    lineHeight: 1.55,
+    background: "#fff",
+    border: "1px solid #cfe3f6",
+    borderRadius: 6,
+    padding: "0.4rem 0.55rem",
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: "0.35rem",
+  },
+  taxRowOptimizationExactBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    fontSize: "0.68rem",
+    fontWeight: 700,
+    color: "#1b5e20",
+    background: "#e8f5e9",
+    border: "1px solid #a5d6a7",
+    padding: "0.15rem 0.45rem",
+    borderRadius: 999,
+    whiteSpace: "nowrap",
+  },
+  taxRowOptimizationDriftBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    fontSize: "0.68rem",
+    fontWeight: 700,
+    color: "#8a4b00",
+    background: "#fff4e0",
+    border: "1px solid #ffcc80",
+    padding: "0.15rem 0.45rem",
+    borderRadius: 999,
+    whiteSpace: "nowrap",
+  },
+  taxRowOptimizationRationale: {
+    fontSize: "0.74rem",
+    color: colors.textPrimary,
+    lineHeight: 1.45,
+    background: "#fff",
+    border: "1px dashed #b3d4f0",
+    borderRadius: 6,
+    padding: "0.4rem 0.55rem",
+  },
+  taxRowOptimizationWarning: {
+    display: "flex",
+    gap: "0.4rem",
+    padding: "0.4rem 0.55rem",
+    background: "#fff4e0",
+    border: "1px solid #ffcc80",
+    borderRadius: 6,
+    fontSize: "0.72rem",
+    color: "#8a4b00",
+    lineHeight: 1.45,
+  },
+  // ── Audit-risk pill (2026-05-11) ─────────────────────────────────
+  // Sits directly under the headline grid so the "can this survive an
+  // audit?" signal is impossible to miss. Background swaps to match
+  // severity.
+  taxRowOptimizationRiskPill: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "0.4rem",
+    padding: "0.4rem 0.55rem",
+    borderRadius: 6,
+    fontSize: "0.72rem",
+    lineHeight: 1.45,
+  },
+  taxRowOptimizationRiskLow: {
+    background: "#e8f5e9",
+    border: "1px solid #a5d6a7",
+    color: "#1b5e20",
+  },
+  taxRowOptimizationRiskModerate: {
+    background: "#fff4e0",
+    border: "1px solid #ffcc80",
+    color: "#8a4b00",
+  },
+  taxRowOptimizationRiskHigh: {
+    background: "#ffebee",
+    border: "1px solid #ef9a9a",
+    color: "#b71c1c",
+  },
+  // ── Action row (Apply / Recalculate / Why) ────────────────────────
+  taxRowOptimizationActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    flexWrap: "wrap",
+  },
+  taxRowOptimizationApplyBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.35rem 0.7rem",
+    background: "#1b5e20",
+    color: "#fff",
+    border: "1px solid #1b5e20",
+    borderRadius: 6,
+    fontSize: "0.74rem",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  taxRowOptimizationRecalcBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.35rem 0.65rem",
+    background: "#fff",
+    color: "#0d47a1",
+    border: "1px solid #90caf9",
+    borderRadius: 6,
+    fontSize: "0.72rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  taxRowOptimizationWhyBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    padding: "0.35rem 0.55rem",
+    background: "transparent",
+    color: "#0d47a1",
+    border: "1px dashed #90caf9",
+    borderRadius: 6,
+    fontSize: "0.72rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  taxRowOptimizationStaleHint: {
+    fontSize: "0.7rem",
+    color: "#8a4b00",
+    fontStyle: "italic",
+  },
+  taxRowOptimizationApplyOk: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.35rem",
+    fontSize: "0.72rem",
+    color: "#1b5e20",
+    background: "#e8f5e9",
+    border: "1px solid #a5d6a7",
+    borderRadius: 6,
+    padding: "0.35rem 0.55rem",
+  },
+  taxRowOptimizationApplyWarn: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "0.4rem",
+    fontSize: "0.72rem",
+    color: "#8a4b00",
+    background: "#fff4e0",
+    border: "1px solid #ffcc80",
+    borderRadius: 6,
+    padding: "0.4rem 0.55rem",
+    lineHeight: 1.45,
+  },
+  // Per-row distribution breakdown — rendered inside the apply-result
+  // notice when multiple rows share an HS and we auto-split the
+  // suggestion (2026-05-11). Compact grid: row-label | qty × unit |
+  // line total | in/out-of-band badge.
+  taxRowOptimizationDistTable: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.25rem",
+    marginTop: "0.2rem",
+  },
+  taxRowOptimizationDistRow: {
+    display: "grid",
+    gridTemplateColumns: "auto 1fr auto auto",
+    gap: "0.45rem",
+    alignItems: "center",
+    padding: "0.3rem 0.45rem",
+    background: "#fff",
+    border: "1px solid #e0eef8",
+    borderRadius: 5,
+    fontSize: "0.72rem",
+  },
+  taxRowOptimizationDistLabel: {
+    fontWeight: 700,
+    color: "#0d47a1",
+  },
+  taxRowOptimizationDistQty: {
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+    color: colors.textPrimary,
+  },
+  taxRowOptimizationDistTotal: {
+    fontWeight: 700,
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+    color: colors.textPrimary,
+  },
+  taxRowOptimizationDistBadgeOk: {
+    fontSize: "0.66rem",
+    fontWeight: 700,
+    color: "#1b5e20",
+    background: "#e8f5e9",
+    border: "1px solid #a5d6a7",
+    padding: "0.1rem 0.4rem",
+    borderRadius: 999,
+    whiteSpace: "nowrap",
+  },
+  taxRowOptimizationDistBadgeWarn: {
+    fontSize: "0.66rem",
+    fontWeight: 700,
+    color: "#8a4b00",
+    background: "#fff4e0",
+    border: "1px solid #ffcc80",
+    padding: "0.1rem 0.4rem",
+    borderRadius: 999,
+    whiteSpace: "nowrap",
+  },
+  // ── Why-this-price disclosure ─────────────────────────────────────
+  // Audit-anchor card that opens on click. Shows the math optimum, the
+  // realistic band, weighted-avg cost, and the top reference purchase
+  // bills the suggestion was anchored against.
+  taxRowOptimizationWhy: {
+    background: "#fff",
+    border: "1px solid #cfe3f6",
+    borderRadius: 6,
+    padding: "0.55rem 0.7rem",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.45rem",
+  },
+  taxRowOptimizationWhyHeader: {
+    fontSize: "0.74rem",
+    fontWeight: 700,
+    color: "#0d47a1",
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+  },
+  taxRowOptimizationWhyGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gap: "0.55rem",
+  },
+  taxRowOptimizationWhyValue: {
+    fontSize: "0.86rem",
+    fontWeight: 700,
+    color: "#0d47a1",
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  },
+  taxRowOptimizationWhyValueMuted: {
+    fontSize: "0.86rem",
+    fontWeight: 700,
+    color: colors.textSecondary,
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  },
+  taxRowOptimizationWhyHint: {
+    fontSize: "0.68rem",
+    color: colors.textSecondary,
+    lineHeight: 1.4,
+    marginTop: "0.15rem",
+  },
+  taxRowOptimizationWhySubheader: {
+    fontSize: "0.72rem",
+    fontWeight: 700,
+    color: colors.textPrimary,
+    marginTop: "0.2rem",
+  },
+  taxRowOptimizationRefBills: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.3rem",
+  },
+  taxRowOptimizationRefBill: {
+    display: "grid",
+    gridTemplateColumns: "auto 1fr auto",
+    gap: "0.5rem",
+    alignItems: "center",
+    padding: "0.35rem 0.5rem",
+    background: "#f5fbff",
+    border: "1px solid #e0eef8",
+    borderRadius: 5,
+    fontSize: "0.72rem",
+  },
+  taxRowOptimizationRefBillNum: {
+    fontWeight: 700,
+    color: "#0d47a1",
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  },
+  taxRowOptimizationRefBillMeta: {
+    color: colors.textSecondary,
+  },
+  taxRowOptimizationRefBillPrice: {
+    fontWeight: 700,
+    color: colors.textPrimary,
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  },
   // Phase B additions ───────────────────────────────────────────────
   periodSelect: {
     background: "#fff",
@@ -1667,6 +2680,22 @@ const styles = {
     background: "#fff",
     color: colors.blue,
     border: `1px solid ${colors.blue}`,
+    borderRadius: 8,
+    fontSize: "0.74rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  // Reset-to-original button — sits beside Refresh in the panel header.
+  // Muted amber so it reads as "undo / revert" rather than "destructive".
+  resetBillBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    padding: "0.3rem 0.6rem",
+    background: "#fff4e0",
+    color: "#8a4b00",
+    border: "1px solid #ffcc80",
     borderRadius: 8,
     fontSize: "0.74rem",
     fontWeight: 600,
