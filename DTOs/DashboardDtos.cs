@@ -133,7 +133,8 @@ namespace MyApp.Api.DTOs
         public DateTime Date { get; set; }
         public string ItemTypeName { get; set; } = "";
         public string Direction { get; set; } = "";   // "In" or "Out"
-        public int Quantity { get; set; }
+        // 2026-05-12: decimal alongside StockMovement.Quantity promotion.
+        public decimal Quantity { get; set; }
         public string SourceType { get; set; } = ""; // PurchaseBill / Invoice / Adjustment etc
     }
 

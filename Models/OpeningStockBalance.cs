@@ -17,7 +17,10 @@ namespace MyApp.Api.Models
         public int Id { get; set; }
         public int CompanyId { get; set; }
         public int ItemTypeId { get; set; }
-        public int Quantity { get; set; }
+        // 2026-05-12: promoted alongside StockMovement.Quantity so
+        // fractional UOMs (KG, Liter, Carat) can carry an accurate
+        // opening balance. Stored as decimal(18,4).
+        public decimal Quantity { get; set; }
         public DateTime AsOfDate { get; set; }
         public string? Notes { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

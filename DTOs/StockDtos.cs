@@ -11,10 +11,13 @@ namespace MyApp.Api.DTOs
         public string ItemTypeName { get; set; } = "";
         public string? HSCode { get; set; }
         public string? UOM { get; set; }
-        public int OnHand { get; set; }
-        public int OpeningBalance { get; set; }
-        public int TotalIn { get; set; }
-        public int TotalOut { get; set; }
+        // 2026-05-12: promoted to decimal alongside StockMovement.Quantity
+        // and OpeningStockBalance.Quantity so fractional UOMs (KG, Liter,
+        // Carat) display without truncation.
+        public decimal OnHand { get; set; }
+        public decimal OpeningBalance { get; set; }
+        public decimal TotalIn { get; set; }
+        public decimal TotalOut { get; set; }
         public DateTime? LastMovementAt { get; set; }
     }
 
@@ -28,7 +31,7 @@ namespace MyApp.Api.DTOs
         public int ItemTypeId { get; set; }
         public string ItemTypeName { get; set; } = "";
         public string Direction { get; set; } = ""; // "In" / "Out"
-        public int Quantity { get; set; }
+        public decimal Quantity { get; set; }
         public string SourceType { get; set; } = ""; // PurchaseBill, Invoice, OpeningBalance, ...
         public int? SourceId { get; set; }
         public DateTime MovementDate { get; set; }
@@ -41,7 +44,7 @@ namespace MyApp.Api.DTOs
         public int CompanyId { get; set; }
         public int ItemTypeId { get; set; }
         public string ItemTypeName { get; set; } = "";
-        public int Quantity { get; set; }
+        public decimal Quantity { get; set; }
         public DateTime AsOfDate { get; set; }
         public string? Notes { get; set; }
     }
@@ -50,7 +53,7 @@ namespace MyApp.Api.DTOs
     {
         public int CompanyId { get; set; }
         public int ItemTypeId { get; set; }
-        public int Quantity { get; set; }
+        public decimal Quantity { get; set; }
         public DateTime AsOfDate { get; set; }
         public string? Notes { get; set; }
     }
@@ -60,7 +63,7 @@ namespace MyApp.Api.DTOs
         public int CompanyId { get; set; }
         public int ItemTypeId { get; set; }
         /// <summary>Signed quantity — positive = adjust up, negative = down.</summary>
-        public int Delta { get; set; }
+        public decimal Delta { get; set; }
         public DateTime MovementDate { get; set; }
         public string? Notes { get; set; }
     }

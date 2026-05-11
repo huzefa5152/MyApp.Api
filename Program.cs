@@ -1211,6 +1211,7 @@ using (var scope = app.Services.CreateScope())
             .Select(a => a.InvoiceId)
             .Distinct()
             .ToListAsync();
+        var failedBillIds = new List<int>();
         if (adjustedInvoiceIds.Count > 0)
         {
             var stockSvc = scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.IStockService>();
@@ -1227,6 +1228,7 @@ using (var scope = app.Services.CreateScope())
                 {
                     // Don't let one bad row halt the whole backfill —
                     // the marker only gets written if we make it through.
+                    failedBillIds.Add(invId);
                     db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
                     {
                         Timestamp = DateTime.UtcNow,
@@ -1241,16 +1243,24 @@ using (var scope = app.Services.CreateScope())
                 }
             }
         }
+        // 2026-05-12 (#10): marker bumps to Warning when any bill failed,
+        // so the "show warnings/errors" filter in the AuditLogs page
+        // surfaces this run instead of burying it under the per-bill
+        // WARN rows. Message lists the failed ids inline for quick
+        // triage without needing a second query.
+        var anyFailed = failedBillIds.Count > 0;
         db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
         {
             Timestamp = DateTime.UtcNow,
-            Level = "Info",
+            Level = anyFailed ? "Warning" : "Info",
             UserName = "system",
             HttpMethod = "SEED",
             RequestPath = "/migrations/stockmovement-overlay-sync",
-            StatusCode = 200,
+            StatusCode = anyFailed ? 207 : 200, // 207 Multi-Status
             ExceptionType = "STOCKMOVEMENT_OVERLAY_SYNC_V1",
-            Message = $"One-time backfill: re-synced StockMovements for {adjustedInvoiceIds.Count} bill(s) carrying tax-claim adjustment overlays. Quantity source = AdjustedQuantity (FBR-facing) when present, InvoiceItem.Quantity otherwise.",
+            Message = anyFailed
+                ? $"One-time backfill: re-synced StockMovements for {adjustedInvoiceIds.Count - failedBillIds.Count} of {adjustedInvoiceIds.Count} bill(s). FAILED bill ids: [{string.Join(", ", failedBillIds)}]. See per-bill WARN entries with type STOCKMOVEMENT_OVERLAY_SYNC_V1_WARN for details."
+                : $"One-time backfill: re-synced StockMovements for {adjustedInvoiceIds.Count} bill(s) carrying tax-claim adjustment overlays. Quantity source = AdjustedQuantity (FBR-facing) when present, InvoiceItem.Quantity otherwise.",
         });
         await db.SaveChangesAsync();
     }

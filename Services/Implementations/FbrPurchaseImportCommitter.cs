@@ -212,11 +212,8 @@ namespace MyApp.Api.Services.Implementations
                         companyId: companyId,
                         itemTypeId: itemTypeId.Value,
                         direction: StockMovementDirection.In,
-                        // PurchaseItem.Quantity is decimal(18,4) but
-                        // StockMovement.Quantity is still int. Round
-                        // to be safe; FBR rows are typically integer-
-                        // valued.
-                        quantity: (int)Math.Round(line.Quantity),
+                        // 2026-05-12: decimal quantity flows through.
+                        quantity: line.Quantity,
                         sourceType: StockMovementSourceType.PurchaseBill,
                         sourceId: bill.Id,
                         movementDate: bill.Date,

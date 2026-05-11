@@ -27,12 +27,16 @@ namespace MyApp.Api.Services.Interfaces
         /// the company OR if itemTypeId is null (we can't track lines that
         /// aren't bound to a catalog row). Quantity must be positive — the
         /// sign comes from <paramref name="direction"/>.
+        ///
+        /// 2026-05-12: quantity is now <c>decimal</c> to match
+        /// InvoiceItem / DeliveryItem / PurchaseItem precision. Pre-fix
+        /// fractional UOMs were truncated at this boundary.
         /// </summary>
         Task RecordMovementAsync(
             int companyId,
             int itemTypeId,
             StockMovementDirection direction,
-            int quantity,
+            decimal quantity,
             StockMovementSourceType sourceType,
             int? sourceId,
             DateTime movementDate,
@@ -44,14 +48,14 @@ namespace MyApp.Api.Services.Interfaces
         /// <paramref name="asOfDate"/> (default: now). Returns 0 when no
         /// data exists. Reads work even when tracking is disabled.
         /// </summary>
-        Task<int> GetOnHandAsync(int companyId, int itemTypeId, DateTime? asOfDate = null);
+        Task<decimal> GetOnHandAsync(int companyId, int itemTypeId, DateTime? asOfDate = null);
 
         /// <summary>
         /// Bulk on-hand lookup — same math as <see cref="GetOnHandAsync"/>
         /// but for many items at once. Returns a dictionary keyed by
         /// itemTypeId; missing keys mean "no data, treat as 0".
         /// </summary>
-        Task<Dictionary<int, int>> GetOnHandBulkAsync(
+        Task<Dictionary<int, decimal>> GetOnHandBulkAsync(
             int companyId,
             IEnumerable<int> itemTypeIds,
             DateTime? asOfDate = null);
@@ -101,13 +105,13 @@ namespace MyApp.Api.Services.Interfaces
     }
 
     /// <summary>One item demand on a bill: how much do we need.</summary>
-    public record StockRequirement(int ItemTypeId, string ItemName, int Quantity);
+    public record StockRequirement(int ItemTypeId, string ItemName, decimal Quantity);
 
     /// <summary>One shortfall reported by <see cref="IStockService.CheckAvailabilityAsync"/>.</summary>
     public record StockShortage(
         int ItemTypeId,
         string ItemName,
-        int RequiredQuantity,
-        int OnHandQuantity,
-        int ShortBy);
+        decimal RequiredQuantity,
+        decimal OnHandQuantity,
+        decimal ShortBy);
 }

@@ -89,9 +89,11 @@ namespace MyApp.Api.Controllers
             {
                 var it = itemTypes.GetValueOrDefault(id);
                 if (it == null) continue;
-                int opening = openings.GetValueOrDefault(id);
-                int totalIn = moveAggs.Where(x => x.ItemTypeId == id && x.Direction == StockMovementDirection.In).Sum(x => x.Qty);
-                int totalOut = moveAggs.Where(x => x.ItemTypeId == id && x.Direction == StockMovementDirection.Out).Sum(x => x.Qty);
+                // 2026-05-12: decimal opening + totalIn/Out matches the
+                // promoted StockMovement / OpeningStockBalance columns.
+                decimal opening = openings.GetValueOrDefault(id);
+                decimal totalIn = moveAggs.Where(x => x.ItemTypeId == id && x.Direction == StockMovementDirection.In).Sum(x => x.Qty);
+                decimal totalOut = moveAggs.Where(x => x.ItemTypeId == id && x.Direction == StockMovementDirection.Out).Sum(x => x.Qty);
                 rows.Add(new StockOnHandRowDto
                 {
                     ItemTypeId = id,

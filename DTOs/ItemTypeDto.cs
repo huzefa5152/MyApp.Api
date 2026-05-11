@@ -28,9 +28,10 @@ namespace MyApp.Api.DTOs
         /// no purchase history fall to the bottom. Source: shared
         /// IStockService.GetOnHandBulkAsync so the number matches
         /// exactly what the Stock Dashboard shows.
-        /// 2026-05-12: added.
+        /// 2026-05-12: added; promoted to decimal alongside
+        /// StockMovement.Quantity precision bump.
         /// </summary>
-        public int? AvailableQty { get; set; }
+        public decimal? AvailableQty { get; set; }
 
         /// <summary>
         /// Set on UPDATE responses only — tells the UI how many bill /

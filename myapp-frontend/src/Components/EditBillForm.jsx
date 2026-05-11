@@ -160,13 +160,18 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   useEffect(() => {
     const load = async () => {
       try {
-        // Invoice fetch is sequential because the next two calls need
-        // its companyId — the item-types endpoint sorts by per-company
-        // on-hand qty when companyId is passed (2026-05-12), so dropdowns
-        // surface what the operator can actually sell first.
-        const { data } = await getInvoiceById(invoiceId);
-        const [typesRes, unitsRes] = await Promise.all([
-          getItemTypes(data?.companyId).catch(() => ({ data: [] })),
+        // Parallel fan-out + companyId-aware refire (#5 — 2026-05-12).
+        // Round 1: fire invoice / units / item-types together (item-types
+        // without companyId for fast first paint — uses legacy alpha
+        // sort). Round 2 (kicked off non-blocking after invoice resolves):
+        // refetch item-types WITH companyId so the dropdown gets the
+        // per-company on-hand sort + AvailableQty chips. Operators in
+        // a slow connection see a usable dropdown immediately;
+        // everyone else only sees a brief flash before the sorted
+        // version replaces it.
+        const [{ data }, typesRes, unitsRes] = await Promise.all([
+          getInvoiceById(invoiceId),
+          getItemTypes().catch(() => ({ data: [] })),
           getAllUnits().catch(() => ({ data: [] })),
         ]);
         setInvoice(data);
@@ -225,6 +230,13 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           getClientsByCompany(data.companyId)
             .then((res) => setClients(res.data || []))
             .catch(() => setClients([]));
+          // Round-2 refire: re-fetch item types WITH companyId so the
+          // dropdown gets per-company AvailableQty + on-hand sort. This
+          // is non-blocking; the legacy-sort list from Round 1 above is
+          // already on screen and gets seamlessly replaced.
+          getItemTypes(data.companyId)
+            .then((r) => setItemTypes(r.data || []))
+            .catch(() => { /* keep round-1 list */ });
         }
       } catch {
         setError("Failed to load bill.");
@@ -504,6 +516,13 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
       const row = contributing[i];
       const cents = Math.round(row.lineTotal * 100);
 
+      // Zero-lineTotal guard (#7): a bill row with no subtotal has no
+      // meaningful factorization. Skip — preserve the existing qty /
+      // unit_price on that row and don't write any distribution entry
+      // for it. The aggregate sum will just fall short by however much
+      // the empty row "owed".
+      if (cents <= 0) continue;
+
       // Target qty for THIS row. Last row absorbs the rounding so the
       // aggregate sum matches the suggestion as closely as possible.
       let target;
@@ -517,35 +536,48 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         target = Math.min(target, Math.max(1, remainingQty - minLeft));
       }
 
-      // Enumerate divisors. We don't cap availableQty here — the bank
-      // ceiling was already enforced when the HS-level suggestion was
-      // built. Tier 1 = unit_price in band; Tier 3 = best non-in-band.
-      let bestInBand = 0;
-      let bestInBandDist = Number.POSITIVE_INFINITY;
-      let bestAny = 0;
-      let bestAnyDist = Number.POSITIVE_INFINITY;
-      if (cents > 0) {
-        for (let d = 1; d * d <= cents; d++) {
-          if (cents % d !== 0) continue;
-          const d2 = cents / d;
-          for (const cand of [d, d2]) {
-            if (cand < 1) continue;
-            const unitCents = cents / cand;
+      // Enumerate divisors with the SAME three-tier preference as the
+      // backend's main HS suggestion (#3 — was missing here, frontend
+      // would pick "below floor" Tier 3 when an "above ceiling" Tier 2
+      // sat slightly further from target qty but was the safer audit
+      // direction). Now mirrors TaxClaimService:
+      //   Tier 1: unit_price ∈ [bandLow, bandHigh] — largest qty wins
+      //           (= lowest in-band price = most claim while defensible)
+      //   Tier 2: unit_price > bandHigh — largest qty wins (= unit price
+      //           closest to ceiling from above; safe direction — high
+      //           prices don't trigger fabrication concerns)
+      //   Tier 3: unit_price < bandLow — closest to target qty wins
+      //           (operator gets a usable suggestion but the row badge
+      //           flags it as out-of-band so the operator can re-think)
+      let bestTier1 = 0;
+      let bestTier2 = 0;
+      let bestTier3 = 0;
+      let bestTier3Dist = Number.POSITIVE_INFINITY;
+      for (let d = 1; d * d <= cents; d++) {
+        if (cents % d !== 0) continue;
+        const d2 = cents / d;
+        for (const cand of [d, d2]) {
+          if (cand < 1) continue;
+          const unitCents = cents / cand;
+          if (unitCents >= bandLowCents && unitCents <= bandHighCents) {
+            if (cand > bestTier1) bestTier1 = cand;
+          } else if (unitCents > bandHighCents) {
+            if (cand > bestTier2) bestTier2 = cand;
+          } else {
             const dist = Math.abs(cand - target);
-            const inBand = unitCents >= bandLowCents && unitCents <= bandHighCents;
-            if (inBand && dist < bestInBandDist) {
-              bestInBandDist = dist;
-              bestInBand = cand;
-            }
-            if (dist < bestAnyDist) {
-              bestAnyDist = dist;
-              bestAny = cand;
+            if (dist < bestTier3Dist) {
+              bestTier3Dist = dist;
+              bestTier3 = cand;
             }
           }
         }
       }
-      const chosenQty = bestInBand > 0 ? bestInBand : (bestAny > 0 ? bestAny : target);
-      const chosenInBand = bestInBand > 0;
+      let chosenQty;
+      let chosenInBand = false;
+      if (bestTier1 > 0)        { chosenQty = bestTier1; chosenInBand = true; }
+      else if (bestTier2 > 0)   { chosenQty = bestTier2; chosenInBand = false; }
+      else if (bestTier3 > 0)   { chosenQty = bestTier3; chosenInBand = false; }
+      else                      { chosenQty = target;   chosenInBand = false; }
       const unitPrice = chosenQty > 0 ? Math.round(cents / chosenQty) / 100 : 0;
       const recomposed = Math.round(chosenQty * unitPrice * 100) / 100;
 
@@ -1796,10 +1828,24 @@ function TaxClaimPanel({ summary, loading, period, onPeriodChange, onRefresh, op
                 const opt = frozenOpt || (liveOpt?.hasSuggestion ? liveOpt : null);
                 if (!opt) return null;
                 const isFrozen = !!frozenOpt;
-                const isStale = isFrozen && liveOpt?.hasSuggestion && (
-                  Number(frozenOpt.suggestedQty) !== Number(liveOpt.suggestedQty)
-                  || Number(frozenOpt.suggestedUnitPrice) !== Number(liveOpt.suggestedUnitPrice)
+                // Stale detection (#4 — 2026-05-12): trip the hint when
+                // EITHER the live suggestion drifts from the snapshot
+                // (qty / unit_price), OR the underlying purchase bank
+                // shifts in a way that invalidates the snapshot's audit
+                // anchor (band edges or available-qty changed beyond
+                // rounding noise). The second case catches an Annexure-A
+                // import in another tab — the visible qty hasn't moved
+                // but the band the operator is being shown is now stale.
+                const numericDrift = liveOpt?.hasSuggestion && (
+                  Number(frozenOpt?.suggestedQty) !== Number(liveOpt.suggestedQty)
+                  || Number(frozenOpt?.suggestedUnitPrice) !== Number(liveOpt.suggestedUnitPrice)
                 );
+                const bankDrift = liveOpt && frozenOpt && (
+                  Math.abs(Number(frozenOpt.realisticBandLow || 0)  - Number(liveOpt.realisticBandLow || 0))  > 0.01
+                  || Math.abs(Number(frozenOpt.realisticBandHigh || 0) - Number(liveOpt.realisticBandHigh || 0)) > 0.01
+                  || Math.abs(Number(frozenOpt.avgPurchaseUnitCost || 0) - Number(liveOpt.avgPurchaseUnitCost || 0)) > 0.01
+                );
+                const isStale = isFrozen && (numericDrift || bankDrift);
                 const applyRes = applyResultByHs[row.hsCode];
                 const whyOpen = !!whyOpenByHs[row.hsCode];
 
@@ -1899,7 +1945,9 @@ function TaxClaimPanel({ summary, loading, period, onPeriodChange, onRefresh, op
                     </button>
                     {isStale && (
                       <span style={styles.taxRowOptimizationStaleHint}>
-                        Underlying bill state changed — click Recalculate for a fresh anchor.
+                        {bankDrift
+                          ? "Purchase bank changed (likely an Annexure-A import) — click Recalculate for an up-to-date band."
+                          : "Underlying bill state changed — click Recalculate for a fresh anchor."}
                       </span>
                     )}
                   </div>

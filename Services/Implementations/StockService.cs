@@ -42,13 +42,13 @@ namespace MyApp.Api.Services.Implementations
             int companyId,
             int itemTypeId,
             StockMovementDirection direction,
-            int quantity,
+            decimal quantity,
             StockMovementSourceType sourceType,
             int? sourceId,
             DateTime movementDate,
             string? notes = null)
         {
-            if (quantity <= 0) return;
+            if (quantity <= 0m) return;
             if (!await IsTrackingEnabledAsync(companyId)) return;
 
             _context.StockMovements.Add(new StockMovement
@@ -80,19 +80,19 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
-        public async Task<int> GetOnHandAsync(int companyId, int itemTypeId, DateTime? asOfDate = null)
+        public async Task<decimal> GetOnHandAsync(int companyId, int itemTypeId, DateTime? asOfDate = null)
         {
             var dict = await GetOnHandBulkAsync(companyId, new[] { itemTypeId }, asOfDate);
-            return dict.TryGetValue(itemTypeId, out var qty) ? qty : 0;
+            return dict.TryGetValue(itemTypeId, out var qty) ? qty : 0m;
         }
 
-        public async Task<Dictionary<int, int>> GetOnHandBulkAsync(
+        public async Task<Dictionary<int, decimal>> GetOnHandBulkAsync(
             int companyId,
             IEnumerable<int> itemTypeIds,
             DateTime? asOfDate = null)
         {
             var ids = itemTypeIds?.Distinct().ToList() ?? new List<int>();
-            if (ids.Count == 0) return new Dictionary<int, int>();
+            if (ids.Count == 0) return new Dictionary<int, decimal>();
 
             // Opening balances bucketed by item type — these are unconditional,
             // they exist independent of tracking-enabled. The flag only gates
@@ -117,10 +117,10 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new { g.Key.ItemTypeId, g.Key.Direction, Qty = g.Sum(m => m.Quantity) })
                 .ToListAsync();
 
-            var result = new Dictionary<int, int>();
+            var result = new Dictionary<int, decimal>();
             foreach (var id in ids)
             {
-                int onHand = openings.TryGetValue(id, out var op) ? op : 0;
+                decimal onHand = openings.TryGetValue(id, out var op) ? op : 0m;
                 foreach (var m in moves.Where(x => x.ItemTypeId == id))
                 {
                     onHand += m.Direction == StockMovementDirection.In ? m.Qty : -m.Qty;
@@ -195,7 +195,10 @@ namespace MyApp.Api.Services.Implementations
                     CompanyId    = invoice.CompanyId,
                     ItemTypeId   = item.ItemTypeId.Value,
                     Direction    = StockMovementDirection.Out,
-                    Quantity     = (int)Math.Truncate(effectiveQty),
+                    // 2026-05-12: stored at full decimal(18,4) precision.
+                    // Previously truncated to int (lost fractional KG /
+                    // Liter / Carat sales).
+                    Quantity     = effectiveQty,
                     SourceType   = StockMovementSourceType.Invoice,
                     SourceId     = invoice.Id,
                     MovementDate = invoice.Date,
@@ -249,7 +252,7 @@ namespace MyApp.Api.Services.Implementations
             var shortages = new List<StockShortage>();
             foreach (var d in demand)
             {
-                var have = onHand.TryGetValue(d.ItemTypeId, out var q) ? q : 0;
+                var have = onHand.TryGetValue(d.ItemTypeId, out var q) ? q : 0m;
                 if (have < d.Quantity)
                 {
                     shortages.Add(new StockShortage(

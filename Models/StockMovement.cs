@@ -41,8 +41,14 @@ namespace MyApp.Api.Models
         /// <summary>
         /// Always positive. Signed math is done at query time using
         /// Direction (+ for In, − for Out).
+        ///
+        /// 2026-05-12: promoted from int to decimal(18,4) to match
+        /// InvoiceItem / DeliveryItem / PurchaseItem quantity precision.
+        /// Pre-2026-05-12 sales of fractional UOMs (KG, Liter, Carat)
+        /// were truncated at the boundary causing on-hand drift; this
+        /// promotion makes stock track exactly what was billed.
         /// </summary>
-        public int Quantity { get; set; }
+        public decimal Quantity { get; set; }
 
         public StockMovementSourceType SourceType { get; set; }
 

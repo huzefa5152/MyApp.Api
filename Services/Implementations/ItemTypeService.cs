@@ -52,7 +52,7 @@ namespace MyApp.Api.Services.Implementations
             // companyId is supplied OR when the company doesn't have
             // inventory tracking on.
             List<ItemType> sorted;
-            Dictionary<int, int>? onHandByItem = null;
+            Dictionary<int, decimal>? onHandByItem = null;
 
             if (companyId.HasValue && await _stock.IsTrackingEnabledAsync(companyId.Value))
             {
@@ -90,7 +90,7 @@ namespace MyApp.Api.Services.Implementations
                 var dto = ToDto(it);
                 if (onHandByItem != null)
                 {
-                    dto.AvailableQty = onHandByItem.TryGetValue(it.Id, out var q) ? q : 0;
+                    dto.AvailableQty = onHandByItem.TryGetValue(it.Id, out var q) ? q : 0m;
                 }
                 return dto;
             }).ToList();
@@ -111,6 +111,27 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException(
                     $"An item with HS Code '{dto.HSCode}' already exists in your catalog. " +
                     "Each HS Code can only be mapped to one item.");
+
+            // Near-duplicate guard (#11 — 2026-05-12). Operators have
+            // accidentally created "Hardware Item" alongside "Hardware
+            // Items" — a 1-char difference that splits sale-side bills
+            // across two catalog rows and silently breaks the tax-claim
+            // optimization (the wrong row has no HS code / no purchases).
+            // Block if a normalized name match (lowercase, trimmed,
+            // singular/plural collapsed) hits an existing row.
+            //
+            // dto.IsFavorite acts as an explicit override knob: the
+            // operator can set it true to acknowledge "yes I know this
+            // is similar to an existing row, create it anyway". Mild
+            // abuse of a flag, but avoids adding a new field for a
+            // rarely-used escape hatch.
+            var nearMatch = await FindNearDuplicateAsync(dto.Name, exceptId: null);
+            if (nearMatch != null && !dto.IsFavorite)
+                throw new InvalidOperationException(
+                    $"\"{dto.Name}\" looks like a near-duplicate of existing item " +
+                    $"\"{nearMatch.Name}\" (HS {nearMatch.HSCode ?? "—"}). " +
+                    "Pick the existing row, OR mark this new row as Favorite " +
+                    "to confirm you want both.");
 
             await EnrichFromFbrAsync(dto, enrichWithCompanyId);
             await EnsureUnitRowAsync(dto.UOM);
@@ -137,6 +158,63 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         private Task EnsureUnitRowAsync(string? uom)
             => UnitRegistry.EnsureNamesAsync(_context, new[] { uom });
+
+        /// <summary>
+        /// Find an existing Item Type whose name is "too close" to the
+        /// proposed name. Used by Create/Update to prevent operators
+        /// from accidentally splitting a catalog row.
+        ///
+        /// Match rules (cheap; no Levenshtein library needed):
+        ///   • Exact match on case-folded trim
+        ///   • Singular/plural drift — strip a trailing "s" / "es" from
+        ///     either side and re-compare
+        ///   • One-character edit distance for names ≥ 4 chars (catches
+        ///     typos like "Hardware Items" vs "Hardwre Items")
+        ///
+        /// Returns null when the proposed name is genuinely new.
+        /// </summary>
+        private async Task<ItemType?> FindNearDuplicateAsync(string? proposedName, int? exceptId)
+        {
+            var trimmed = (proposedName ?? "").Trim();
+            if (trimmed.Length == 0) return null;
+            var rows = await _repo.GetAllAsync();
+            string Norm(string s) => s.Trim().ToLowerInvariant();
+            string Singularize(string s)
+            {
+                var t = Norm(s);
+                if (t.EndsWith("es") && t.Length > 3) return t.Substring(0, t.Length - 2);
+                if (t.EndsWith("s")  && t.Length > 2) return t.Substring(0, t.Length - 1);
+                return t;
+            }
+            int OneEditDistance(string a, string b)
+            {
+                if (a == b) return 0;
+                if (Math.Abs(a.Length - b.Length) > 1) return 2;
+                int i = 0, j = 0, edits = 0;
+                while (i < a.Length && j < b.Length)
+                {
+                    if (a[i] == b[j]) { i++; j++; continue; }
+                    edits++;
+                    if (edits > 1) return 2;
+                    if (a.Length == b.Length) { i++; j++; }
+                    else if (a.Length < b.Length) j++;
+                    else i++;
+                }
+                if (i < a.Length || j < b.Length) edits++;
+                return edits;
+            }
+            var pNorm = Norm(trimmed);
+            var pSing = Singularize(trimmed);
+            foreach (var row in rows)
+            {
+                if (exceptId.HasValue && row.Id == exceptId.Value) continue;
+                var rNorm = Norm(row.Name);
+                if (rNorm == pNorm) return row;
+                if (Singularize(row.Name) == pSing) return row;
+                if (pNorm.Length >= 4 && rNorm.Length >= 4 && OneEditDistance(pNorm, rNorm) <= 1) return row;
+            }
+            return null;
+        }
 
         public async Task<ItemTypeDto?> UpdateAsync(int id, ItemTypeDto dto, int? enrichWithCompanyId = null)
         {

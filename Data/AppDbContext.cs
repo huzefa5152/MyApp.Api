@@ -889,6 +889,17 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<OpeningStockBalance>()
                 .HasIndex(osb => new { osb.CompanyId, osb.ItemTypeId })
                 .IsUnique();
+
+            // 2026-05-12: stock-quantity precision promotion. Both
+            // StockMovement.Quantity and OpeningStockBalance.Quantity
+            // were `int` originally — only worked for whole-unit
+            // inventory. Sales of fractional UOMs (KG, Liter, Carat)
+            // were truncated by SyncInvoiceStockMovementsAsync at the
+            // boundary, drifting on-hand upward over time. Now both
+            // mirror InvoiceItem / DeliveryItem / PurchaseItem at
+            // decimal(18,4).
+            modelBuilder.Entity<StockMovement>().Property(sm => sm.Quantity).HasPrecision(18, 4);
+            modelBuilder.Entity<OpeningStockBalance>().Property(osb => osb.Quantity).HasPrecision(18, 4);
         }
 
     }
