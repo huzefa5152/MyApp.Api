@@ -653,7 +653,8 @@ namespace MyApp.Api.Services.Implementations
                     // search window. O(√billCents) ≈ 30k iter — fast.
                     long cleanQty = 0;
                     long bestTier1Qty = 0;   // largest qty with unit_price in band
-                    long bestTier2Qty = long.MaxValue; // smallest qty above band (closest from above)
+                    long bestTier2Qty = 0;   // 2026-05-12: largest qty above band
+                                              // (= unit_price CLOSEST to ceiling from above)
                     long bestTier3Qty = 0;
                     decimal bestTier3Dist = decimal.MaxValue;
                     if (billCents > 0 && availableQtyLong >= 1)
@@ -675,10 +676,17 @@ namespace MyApp.Api.Services.Implementations
                                 }
                                 else if (unitCents > realisticHighCents)
                                 {
-                                    // Tier 2 — unit price above ceiling.
-                                    // Pick the smallest qty (= price closest to
-                                    // ceiling) so we stay reasonable.
-                                    if (cand < bestTier2Qty) bestTier2Qty = cand;
+                                    // Tier 2 — unit price above ceiling. We want the
+                                    // unit price CLOSEST to the ceiling (= smallest
+                                    // overshoot) — which is the LARGEST qty among
+                                    // Tier-2 divisors (since unit_price = billCents/d,
+                                    // larger d ⇒ smaller unit price).
+                                    // 2026-05-12: bug-fix. Pre-fix this picked the
+                                    // smallest qty (= LARGEST unit_price, e.g.
+                                    // qty=1 × Rs.40,168) which then shrank the
+                                    // claim and got suppressed by the "meaningful
+                                    // gain" threshold.
+                                    if (cand > bestTier2Qty) bestTier2Qty = cand;
                                 }
                                 else
                                 {
@@ -695,9 +703,9 @@ namespace MyApp.Api.Services.Implementations
                             }
                         }
 
-                        if (bestTier1Qty > 0)       cleanQty = bestTier1Qty;
-                        else if (bestTier2Qty != long.MaxValue) cleanQty = bestTier2Qty;
-                        else                        cleanQty = bestTier3Qty;
+                        if (bestTier1Qty > 0)      cleanQty = bestTier1Qty;
+                        else if (bestTier2Qty > 0) cleanQty = bestTier2Qty;
+                        else                       cleanQty = bestTier3Qty;
                     }
 
                     decimal suggestedQty;
