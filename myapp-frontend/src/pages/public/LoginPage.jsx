@@ -39,10 +39,19 @@ export default function LoginPage() {
       // Return-to URL preservation: if the operator was bounced off a
       // protected page by the 401 handler, send them back to it after a
       // successful re-login instead of always landing on /dashboard.
+      //
+      // 2026-05-12: reject "/" (the public landing page) as a valid
+      // return target. Pre-fix, a stale token in localStorage caused
+      // the AuthContext mount-time probe to 401 from the landing page;
+      // the interceptor saved postLoginReturnTo="/" and a successful
+      // login bounced the operator off the protected app entirely.
+      // (Root-cause fix is in httpClient + AuthContext; this is
+      // defense-in-depth so any historical sessionStorage value still
+      // present can't bite us.)
       let returnTo = "/dashboard";
       try {
         const stored = sessionStorage.getItem("postLoginReturnTo");
-        if (stored && stored.startsWith("/") && !stored.startsWith("/login")) {
+        if (stored && stored.startsWith("/") && stored !== "/" && !stored.startsWith("/login")) {
           returnTo = stored;
         }
         sessionStorage.removeItem("postLoginReturnTo");

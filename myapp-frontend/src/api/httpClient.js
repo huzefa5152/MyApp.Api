@@ -95,14 +95,30 @@ httpClient.interceptors.response.use(
     const status = error.response?.status;
     if (error.response?.data) ensureMessage(error.response.data);
 
-    if (status === 401 && window.location.pathname !== "/login") {
+    // `_skipAuthRedirect` opt-out — set by callers that want to handle
+    // 401 themselves without triggering the global session-expired flow
+    // (the AuthContext mount-time /auth/me probe is the canonical case;
+    // see authApi.getCurrentUser({silent:true})). Without this guard, a
+    // stale token in localStorage caused the probe to 401, the
+    // interceptor saved postLoginReturnTo=<current path> (often "/"),
+    // and after a successful re-login the operator was dropped on the
+    // public landing page instead of /dashboard.
+    const skipAuthRedirect = error.config?._skipAuthRedirect === true;
+    // Don't capture the public landing page or the login page as a
+    // valid return target — both would land the operator OFF the
+    // protected app after re-login. Defense-in-depth alongside the
+    // skipAuthRedirect flag above.
+    const isReturnSafe = (p) =>
+      typeof p === "string" && p.startsWith("/") && p !== "/" && !p.startsWith("/login");
+
+    if (status === 401 && window.location.pathname !== "/login" && !skipAuthRedirect) {
       // Preserve where the operator was so re-login lands them back
       // there instead of dropping to /dashboard. Captured via sessionStorage
       // (survives the hard reload) — query-string would work too but a
       // long bill-edit URL with #anchors is fragile in URL form.
       try {
         const here = window.location.pathname + window.location.search + window.location.hash;
-        if (here && !here.startsWith("/login")) {
+        if (isReturnSafe(here)) {
           sessionStorage.setItem("postLoginReturnTo", here);
         }
         // Distinct from the user typing a bad password — LoginPage uses
