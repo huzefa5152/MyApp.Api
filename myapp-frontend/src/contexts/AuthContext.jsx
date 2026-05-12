@@ -37,6 +37,21 @@ export function AuthProvider({ children }) {
         setUser(null);
         setToken(null);
         localStorage.removeItem("token");
+        // UX continuity: if the silent probe failed while the operator
+        // is parked on a PROTECTED route, hand off context to LoginPage
+        // so the "session expired" banner + return-to URL still work
+        // after ProtectedRoute soft-navigates them to /login. We
+        // intentionally skip the flags on public routes (`/`, `/login`,
+        // anything else not starting with `/`) — landing-page visitors
+        // with a stale token shouldn't see the banner or be redirected.
+        try {
+          const here = window.location.pathname + window.location.search + window.location.hash;
+          const isProtected = here.startsWith("/") && here !== "/" && !here.startsWith("/login");
+          if (isProtected) {
+            sessionStorage.setItem("postLoginReturnTo", here);
+            sessionStorage.setItem("loginReason", "expired");
+          }
+        } catch { /* private mode — non-fatal */ }
       })
       .finally(() => {
         setLoading(false);
