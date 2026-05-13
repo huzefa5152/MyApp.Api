@@ -552,14 +552,29 @@ using (var scope = app.Services.CreateScope())
     // hashes still authenticate. Subsequent logouts / password changes
     // rotate the value; the token validator compares the JWT's "stamp"
     // claim to this column on every request — mismatch = 401.
+    //
+    // Each statement runs in its own ExecuteSqlRaw call because SQL
+    // Server compiles the whole batch upfront — a single batch that
+    // both ADDs the column and UPDATEs it would fail to parse on the
+    // first start ("Invalid column name 'SecurityStamp'") even though
+    // execution order is guarded by IF NOT EXISTS. EXEC() wraps the
+    // post-add work in a child batch that's only parsed after the
+    // outer statement runs.
     db.Database.ExecuteSqlRaw(@"
         IF NOT EXISTS (SELECT 1 FROM sys.columns
                        WHERE object_id = OBJECT_ID('Users') AND name = 'SecurityStamp')
         BEGIN
             ALTER TABLE [Users] ADD [SecurityStamp] nvarchar(64) NULL;
-        END;
-        UPDATE [Users] SET [SecurityStamp] = REPLACE(CONVERT(varchar(36), NEWID()), '-', '')
-        WHERE [SecurityStamp] IS NULL;
+        END
+    ");
+    db.Database.ExecuteSqlRaw(@"
+        IF EXISTS (SELECT 1 FROM sys.columns
+                   WHERE object_id = OBJECT_ID('Users') AND name = 'SecurityStamp')
+        BEGIN
+            EXEC('UPDATE [Users] SET [SecurityStamp] = REPLACE(CONVERT(varchar(36), NEWID()), ''-'', '''') WHERE [SecurityStamp] IS NULL');
+        END
+    ");
+    db.Database.ExecuteSqlRaw(@"
         IF EXISTS (SELECT 1 FROM sys.columns
                    WHERE object_id = OBJECT_ID('Users') AND name = 'SecurityStamp' AND is_nullable = 1)
         BEGIN
