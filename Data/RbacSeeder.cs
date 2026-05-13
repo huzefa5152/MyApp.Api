@@ -35,9 +35,38 @@ namespace MyApp.Api.Data
         /// </summary>
         private static async Task BootstrapExistingAdminUsersAsync(AppDbContext db)
         {
+            // Audit M-3 (2026-05-13): the original gate was the AuditLogs
+            // marker alone. If an operator ever truncated AuditLogs the
+            // bootstrap re-ran and silently re-granted Administrator to
+            // every User.Role='Admin' row — including ones that had been
+            // explicitly demoted. Belt + suspenders: check the marker
+            // AND make sure there are no UserRoles assigned yet. If any
+            // UserRole exists, the bootstrap clearly already happened
+            // (either via marker or operator manual setup), so skip.
             var alreadyRan = await db.AuditLogs
                 .AnyAsync(a => a.ExceptionType == BootstrapMarker);
             if (alreadyRan) return;
+
+            var anyUserRoles = await db.UserRoles.AnyAsync();
+            if (anyUserRoles)
+            {
+                // Bootstrap clearly ran (or operator manually wired RBAC).
+                // Write the marker so we don't keep re-checking on every
+                // startup.
+                db.AuditLogs.Add(new AuditLog
+                {
+                    Timestamp = DateTime.UtcNow,
+                    Level = "Info",
+                    UserName = "system",
+                    HttpMethod = "SEED",
+                    RequestPath = "/rbac/bootstrap",
+                    StatusCode = 200,
+                    ExceptionType = BootstrapMarker,
+                    Message = "RBAC bootstrap skipped — UserRoles already populated (marker recreated for future starts)."
+                });
+                await db.SaveChangesAsync();
+                return;
+            }
 
             var adminRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == AdministratorRoleName);
             if (adminRole == null) return; // EnsureAdministratorRoleAsync should have just created it

@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.Middleware;
@@ -103,6 +104,7 @@ namespace MyApp.Api.Controllers
 
         [HttpPost("{invoiceId}/submit")]
         [HasPermission("invoices.fbr.submit")]
+        [EnableRateLimiting("fbrSubmit")]
         public async Task<IActionResult> SubmitInvoice(
             int invoiceId, [FromQuery] string? scenarioId = null)
         {
@@ -116,6 +118,7 @@ namespace MyApp.Api.Controllers
 
         [HttpPost("{invoiceId}/validate")]
         [HasPermission("invoices.fbr.validate")]
+        [EnableRateLimiting("fbrSubmit")]
         public async Task<IActionResult> ValidateInvoice(
             int invoiceId, [FromQuery] string? scenarioId = null)
         {
@@ -148,31 +151,37 @@ namespace MyApp.Api.Controllers
 
         [HttpGet("provinces/{companyId}")]
         [AuthorizeCompany]
+        [HasPermission("fbr.reference.read")]
         public async Task<IActionResult> GetProvinces(int companyId)
             => Ok(await _fbrService.GetProvincesAsync(companyId));
 
         [HttpGet("doctypes/{companyId}")]
         [AuthorizeCompany]
+        [HasPermission("fbr.reference.read")]
         public async Task<IActionResult> GetDocTypes(int companyId)
             => Ok(await _fbrService.GetDocTypesAsync(companyId));
 
         [HttpGet("hscodes/{companyId}")]
         [AuthorizeCompany]
+        [HasPermission("fbr.reference.read")]
         public async Task<IActionResult> GetHSCodes(int companyId, [FromQuery] string? search, [FromQuery] string? saleType)
             => Ok(await _fbrService.GetHSCodesAsync(companyId, search, saleType));
 
         [HttpGet("uom/{companyId}")]
         [AuthorizeCompany]
+        [HasPermission("fbr.reference.read")]
         public async Task<IActionResult> GetUOMs(int companyId)
             => Ok(await _fbrService.GetUOMsAsync(companyId));
 
         [HttpGet("transactiontypes/{companyId}")]
         [AuthorizeCompany]
+        [HasPermission("fbr.reference.read")]
         public async Task<IActionResult> GetTransactionTypes(int companyId)
             => Ok(await _fbrService.GetTransactionTypesAsync(companyId));
 
         [HttpGet("sroitemcodes/{companyId}")]
         [AuthorizeCompany]
+        [HasPermission("fbr.reference.read")]
         public async Task<IActionResult> GetSROItemCodes(int companyId)
             => Ok(await _fbrService.GetSROItemCodesAsync(companyId));
 

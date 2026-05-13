@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
@@ -77,6 +78,7 @@ namespace MyApp.Api.Controllers
         [HttpPost("parse-pdf")]
         [HasPermission("poformats.import.create")]
         [RequestSizeLimit(10 * 1024 * 1024)]
+        [EnableRateLimiting("import")]
         public async Task<IActionResult> ParsePdf(IFormFile file, [FromQuery] int? companyId)
         {
             if (file == null || file.Length == 0)

@@ -78,22 +78,39 @@ namespace MyApp.Api.Services.Implementations
                 if (log.FirstOccurrence == null) log.FirstOccurrence = log.Timestamp;
                 if (log.LastOccurrence == null) log.LastOccurrence = log.Timestamp;
 
-                // Try dedup: find a row with the same fingerprint within the window.
-                var since = log.Timestamp - DedupWindow;
-                var existing = await _db.AuditLogs
-                    .Where(a => a.Fingerprint == log.Fingerprint && a.LastOccurrence >= since)
-                    .OrderByDescending(a => a.Id)
-                    .FirstOrDefaultAsync();
-
-                if (existing != null)
+                // Audit M-4 (2026-05-13): wrap the find-then-update dedup
+                // path in a SERIALIZABLE transaction so two concurrent
+                // LogAsync calls with the same fingerprint don't both
+                // miss the existing row and insert duplicate parents. The
+                // window is tiny (one read + one write) so the SERIALIZABLE
+                // contention cost stays bounded.
+                await using var tx = await _db.Database.BeginTransactionAsync(
+                    System.Data.IsolationLevel.Serializable);
+                try
                 {
-                    existing.OccurrenceCount += 1;
-                    existing.LastOccurrence = log.Timestamp;
-                    await _db.SaveChangesAsync();
-                    return;
-                }
+                    var since = log.Timestamp - DedupWindow;
+                    var existing = await _db.AuditLogs
+                        .Where(a => a.Fingerprint == log.Fingerprint && a.LastOccurrence >= since)
+                        .OrderByDescending(a => a.Id)
+                        .FirstOrDefaultAsync();
 
-                await _repository.CreateAsync(log);
+                    if (existing != null)
+                    {
+                        existing.OccurrenceCount += 1;
+                        existing.LastOccurrence = log.Timestamp;
+                        await _db.SaveChangesAsync();
+                        await tx.CommitAsync();
+                        return;
+                    }
+
+                    await _repository.CreateAsync(log);
+                    await tx.CommitAsync();
+                }
+                catch
+                {
+                    await tx.RollbackAsync();
+                    throw;
+                }
             }
             catch (Exception ex)
             {

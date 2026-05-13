@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using MyApp.Api.DTOs;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
@@ -42,6 +43,7 @@ namespace MyApp.Api.Controllers
         // FBR exports for a busy month can run 5-15 MB. Capping at 25 MB
         // gives generous headroom without inviting abuse.
         [RequestSizeLimit(25 * 1024 * 1024)]
+        [EnableRateLimiting("import")]
         public async Task<IActionResult> Preview(
             [FromForm] IFormFile file,
             [FromForm] int companyId)
@@ -95,6 +97,7 @@ namespace MyApp.Api.Controllers
         [HttpPost("commit")]
         [HasPermission("fbrimport.purchase.commit")]
         [RequestSizeLimit(25 * 1024 * 1024)]
+        [EnableRateLimiting("import")]
         public async Task<IActionResult> Commit(
             [FromForm] IFormFile file,
             [FromForm] int companyId)

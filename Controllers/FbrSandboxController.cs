@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Tax;
 
@@ -57,6 +58,7 @@ namespace MyApp.Api.Controllers
         [HttpPost("{companyId}/validate-all")]
         [HasPermission("fbr.sandbox.run")]
         [AuthorizeCompany]
+        [EnableRateLimiting("fbrSubmit")]
         public async Task<IActionResult> ValidateAll(int companyId)
             => Ok(await _service.ValidateAllAsync(companyId));
 
@@ -64,6 +66,7 @@ namespace MyApp.Api.Controllers
         [HttpPost("{companyId}/submit-all")]
         [HasPermission("fbr.sandbox.run")]
         [AuthorizeCompany]
+        [EnableRateLimiting("fbrSubmit")]
         public async Task<IActionResult> SubmitAll(int companyId)
             => Ok(await _service.SubmitAllAsync(companyId));
 

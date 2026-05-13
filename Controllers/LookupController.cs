@@ -5,6 +5,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Middleware;
 using MyApp.Api.Models;
 
 namespace MyApp.Api.Controllers
@@ -58,7 +59,11 @@ namespace MyApp.Api.Controllers
         }
 
         // Toggle favorite flag on an item description (by id).
+        // Audit H-5 (2026-05-13): mutates global lookup state — gate
+        // behind the dedicated lookup-management permission so
+        // read-only roles can't reshuffle every tenant's favorites.
         [HttpPut("items/{id}/favorite")]
+        [HasPermission("config.itemdescriptions.manage")]
         public async Task<IActionResult> ToggleFavorite(int id, [FromBody] ToggleFavoriteDto dto)
         {
             var item = await _context.ItemDescriptions.FindAsync(id);
@@ -80,7 +85,9 @@ namespace MyApp.Api.Controllers
         }
 
         // Add new item description
+        // Audit H-5 (2026-05-13): global lookup mutation — gated.
         [HttpPost("items")]
+        [HasPermission("config.itemdescriptions.manage")]
         public async Task<IActionResult> AddItem([FromBody] CreateItemDto dto)
         {
             var item = new ItemDescription { Name = dto.Name };
@@ -100,7 +107,9 @@ namespace MyApp.Api.Controllers
 
         // Save/update FBR defaults for an item description (by name — upserts the row).
         // Called automatically when the user picks FBR fields for an item in the bill form.
+        // Audit H-5 (2026-05-13): global lookup mutation — gated.
         [HttpPost("items/fbr-defaults")]
+        [HasPermission("config.itemdescriptions.manage")]
         public async Task<IActionResult> SaveFbrDefaults([FromBody] SaveItemFbrDefaultsDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto.Name)) return BadRequest("Name is required.");
@@ -152,7 +161,9 @@ namespace MyApp.Api.Controllers
         }
 
         // Add new unit
+        // Audit H-5 (2026-05-13): global Units lookup — gated.
         [HttpPost("units")]
+        [HasPermission("config.units.manage")]
         public async Task<IActionResult> AddUnit([FromBody] CreateItemDto dto)
         {
             // Normalize input

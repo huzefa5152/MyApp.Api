@@ -1427,29 +1427,15 @@ namespace MyApp.Api.Services.Implementations
                     return _hsCodeCatalog;
                 }
 
-                // Requesting company has no token. Find any other company that
-                // does and try with its credentials. This is read-only against
-                // FBR's public catalog — no PII / financial data crosses company
-                // boundaries — so cross-company fetch is safe.
-                var donor = await _db.Companies
-                    .AsNoTracking()
-                    .Where(c => c.FbrToken != null && c.FbrToken != ""
-                                && c.Id != requestingCompanyId)
-                    .Select(c => c.Id)
-                    .FirstOrDefaultAsync();
-                if (donor > 0)
-                {
-                    var donorFetch = await GetReferenceData<FbrHSCodeDto>(
-                        donor, $"{RefBaseV1}/itemdesccode");
-                    if (donorFetch != null && donorFetch.Count > 0)
-                    {
-                        _hsCodeCatalog = donorFetch;
-                        return _hsCodeCatalog;
-                    }
-                }
-
-                // Neither path worked — leave cache empty so a later request
-                // can try again once a token is configured.
+                // Audit H-9 (2026-05-13): pre-fix, we used to "borrow" any
+                // other company's token to fetch the catalog. PRAL's
+                // audit trail then mis-attributed the call to the donor
+                // tenant and operators on the donor side saw mystery FBR
+                // calls in their monitor. Refuse the call instead — the
+                // operator must configure a real token for THIS company.
+                _logger.LogWarning(
+                    "FBR catalog fetch refused: company {CompanyId} has no FBR token configured (audit H-9, cross-tenant token bleed).",
+                    requestingCompanyId);
                 return new List<FbrHSCodeDto>();
             }
             finally

@@ -31,13 +31,18 @@ namespace MyApp.Api.Controllers
         };
 
         [HttpGet("company/{companyId}")]
+        [HasPermission("printtemplates.manage.view")]
         public async Task<IActionResult> GetByCompany(int companyId)
         {
+            // Audit M-6 (2026-05-13): templates contain operator-authored
+            // HTML — gate behind the print-template view perm so general
+            // tenant members don't pull script-containing template bodies.
             var templates = await _repo.GetByCompanyAsync(companyId);
             return Ok(templates.Select(ToDto));
         }
 
         [HttpGet("company/{companyId}/{templateType}")]
+        [HasPermission("printtemplates.manage.view")]
         public async Task<IActionResult> GetByCompanyAndType(int companyId, string templateType)
         {
             var t = await _repo.GetByCompanyAndTypeAsync(companyId, templateType);

@@ -168,12 +168,23 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// Rate limiter — applied selectively below to /api/auth/login. Other
+// Rate limiter — applied selectively to /api/auth/login + the
+// expensive endpoints flagged by audit H-6 (2026-05-13). Other
 // endpoints stay unrestricted to avoid breaking bulk operations the
 // operator runs (Validate All, Submit All, etc.).
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Helper: partition by user id when authenticated, else by IP.
+    // The login policy uses IP only (no user yet). Other policies
+    // partition by user id so a shared NAT doesn't starve everyone.
+    static string UserOrIp(HttpContext ctx) =>
+        ctx.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+        ?? ctx.User?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+        ?? ctx.Connection.RemoteIpAddress?.ToString()
+        ?? "unknown";
+
     options.AddPolicy("login", httpContext =>
     {
         var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -187,6 +198,40 @@ builder.Services.AddRateLimiter(options =>
             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
         });
     });
+
+    // Audit H-6: FBR submit / validate. Each call is one outbound PRAL
+    // round-trip — 30/min/user is generous for a busy operator running
+    // Validate All and tight enough to stop a buggy script burning
+    // through the company's daily quota.
+    options.AddPolicy("fbrSubmit", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(UserOrIp(httpContext), _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 30,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        }));
+
+    // Audit H-6: file imports (FBR purchase xls, PO PDF parser,
+    // challan Excel). Each call can do 25 MB I/O + CPU. 10/min/user
+    // is generous for a one-off upload pass, tight enough to stop a
+    // confused or malicious script.
+    options.AddPolicy("import", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(UserOrIp(httpContext), _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        }));
+
+    // Audit H-6: password change. BCrypt verify + hash = ~200 ms CPU
+    // each. 5/hour/user is plenty for legitimate change flows.
+    options.AddPolicy("passwordChange", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(UserOrIp(httpContext), _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromHours(1),
+            QueueLimit = 0,
+        }));
 });
 
 // Register Repositories
@@ -414,7 +459,20 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    db.Database.Migrate();
+    // Audit M-11 (2026-05-13): auto-migrate is convenient in dev / on
+    // every new feature deploy but it's also a foot-gun in prod — a
+    // half-shipped migration set will start applying on first boot
+    // without an operator looking. Gate behind config so production
+    // can flip it off once the schema is stable.
+    var autoMigrate = builder.Configuration.GetValue<bool>("Database:AutoMigrate", true);
+    if (autoMigrate)
+    {
+        db.Database.Migrate();
+    }
+    else
+    {
+        Log.Information("Database:AutoMigrate is false — skipping db.Database.Migrate(). Run `dotnet ef database update` manually.");
+    }
 
     // ── Unique indexes on (CompanyId, *Number) for Invoice / PurchaseBill /
     // GoodsReceipt — audit C-8 (2026-05-13). Pre-fix, two concurrent

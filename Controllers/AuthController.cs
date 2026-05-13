@@ -149,6 +149,7 @@ namespace MyApp.Api.Controllers
 
         [HttpPut("password")]
         [Authorize]
+        [EnableRateLimiting("passwordChange")]
         public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
         {
             var username = User.FindFirstValue(ClaimTypes.Name);
@@ -201,16 +202,15 @@ namespace MyApp.Api.Controllers
         [Authorize]
         public async Task<ActionResult> UploadAvatar(IFormFile file)
         {
-            if (file == null || file.Length == 0)
-                return BadRequest(new { message = "No file uploaded" });
+            // Audit M-7 (2026-05-13): magic-bytes + extension + size cap.
+            // Pre-fix extension-only check + 7 MB cap let polyglot images
+            // (e.g. .png with HTML appended) through; the helper now
+            // sniffs the first 12 bytes against known image signatures.
+            var validation = MyApp.Api.Helpers.ImageUploadValidator.Validate(file);
+            if (validation != null)
+                return BadRequest(new { message = validation });
 
-            if (file.Length > 7 * 1024 * 1024)
-                return BadRequest(new { message = "File size must be under 7 MB" });
-
-            var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp" };
-            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-            if (!allowed.Contains(ext))
-                return BadRequest(new { message = "Only JPG, PNG and WebP images are allowed" });
+            var ext = Path.GetExtension(Path.GetFileName(file.FileName ?? "")).ToLowerInvariant();
 
             var username = User.FindFirstValue(ClaimTypes.Name);
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
@@ -224,7 +224,7 @@ namespace MyApp.Api.Controllers
             var filePath = Path.Combine(avatarsDir, fileName);
 
             // Delete old avatar if different extension
-            foreach (var oldExt in allowed)
+            foreach (var oldExt in MyApp.Api.Helpers.ImageUploadValidator.AllowedExtensions)
             {
                 var oldPath = Path.Combine(avatarsDir, $"user-{user.Id}{oldExt}");
                 if (System.IO.File.Exists(oldPath)) System.IO.File.Delete(oldPath);
@@ -251,9 +251,8 @@ namespace MyApp.Api.Controllers
 
             if (!string.IsNullOrEmpty(user.AvatarPath))
             {
-                var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp" };
                 var avatarsDir = Path.Combine(Directory.GetCurrentDirectory(), "data", "images", "avatars");
-                foreach (var ext in allowed)
+                foreach (var ext in MyApp.Api.Helpers.ImageUploadValidator.AllowedExtensions)
                 {
                     var oldPath = Path.Combine(avatarsDir, $"user-{user.Id}{ext}");
                     if (System.IO.File.Exists(oldPath)) System.IO.File.Delete(oldPath);

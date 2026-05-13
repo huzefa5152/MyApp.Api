@@ -55,10 +55,14 @@ namespace MyApp.Api.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<CompanyDto>> GetCompany(int id)
         {
-            var company = await _companyService.GetByIdAsync(id);
-            if (company == null)
+            // Audit M-5 (2026-05-13): check access BEFORE the 404 so
+            // response timing / status doesn't distinguish "exists in
+            // another tenant" from "doesn't exist at all". Both paths
+            // now return 404 uniformly.
+            if (!await _access.HasAccessAsync(CurrentUserId, id))
                 return NotFound();
-            await _access.AssertAccessAsync(CurrentUserId, id);
+            var company = await _companyService.GetByIdAsync(id);
+            if (company == null) return NotFound();
             return Ok(company);
         }
 
@@ -161,8 +165,15 @@ namespace MyApp.Api.Controllers
         [HasPermission("companies.manage.update")]
         public async Task<ActionResult<CompanyDto>> UploadLogo(int id, IFormFile file)
         {
-            if (file == null || file.Length == 0)
-                return BadRequest(new { message = "No file uploaded." });
+            // Audit H-3 (2026-05-13): tenant guard + layered validation.
+            // Pre-fix this endpoint had no tenant guard and no size /
+            // extension / magic-bytes check at all.
+            await _access.AssertAccessAsync(CurrentUserId, id);
+
+            var validation = MyApp.Api.Helpers.ImageUploadValidator.Validate(
+                file, MyApp.Api.Helpers.ImageUploadValidator.LogoMaxBytes);
+            if (validation != null)
+                return BadRequest(new { message = validation });
 
             var company = await _companyService.GetByIdAsync(id);
             if (company == null) return NotFound();
@@ -170,7 +181,10 @@ namespace MyApp.Api.Controllers
             var uploadsDir = Path.Combine(_env.ContentRootPath, "data", "uploads", "logos");
             Directory.CreateDirectory(uploadsDir);
 
-            var ext = Path.GetExtension(file.FileName);
+            // Use Path.GetFileName to defend against path-traversal in
+            // FileName (e.g. "../../wwwroot/x.html") — extension was
+            // already validated above so the saved file is safe.
+            var ext = Path.GetExtension(Path.GetFileName(file.FileName ?? "")).ToLowerInvariant();
             var fileName = $"company_{id}{ext}";
             var filePath = Path.Combine(uploadsDir, fileName);
 

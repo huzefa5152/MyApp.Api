@@ -44,7 +44,11 @@ namespace MyApp.Api.Controllers
         /// carry-forward proxy. Informational — never blocks a save.
         /// </summary>
         [HttpPost("claim-summary")]
-        [HasPermission("invoices.list.update")]
+        // Audit M-1 (2026-05-13): the old key 'invoices.list.update' was
+        // never in PermissionCatalog so PermissionService treated it as
+        // deny — only seed admin could ever reach this endpoint. Use
+        // 'invoices.list.view' to match the rest of the Invoices tab.
+        [HasPermission("invoices.list.view")]
         public async Task<IActionResult> ClaimSummary([FromBody] TaxClaimSummaryRequest request)
         {
             if (request == null || request.CompanyId <= 0)
