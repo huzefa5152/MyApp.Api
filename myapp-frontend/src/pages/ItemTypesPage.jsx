@@ -1,13 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { MdCategory, MdAdd, MdEdit, MdDelete, MdSearch, MdStar, MdStarBorder, MdInfo, MdBusiness } from "react-icons/md";
-import { getItemTypes, createItemType, updateItemType, deleteItemType, getItemTypeFbrHints } from "../api/itemTypeApi";
-import { getFbrHsUom } from "../api/fbrApi";
-import { formStyles, modalSizes } from "../theme";
+import { getItemTypes, updateItemType, deleteItemType } from "../api/itemTypeApi";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
-import HsCodeAutocomplete from "../Components/HsCodeAutocomplete";
+import ItemTypeForm from "../Components/ItemTypeForm";
 
 const colors = {
   blue: "#0d47a1",
@@ -63,24 +61,6 @@ export default function ItemTypesPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const [form, setForm] = useState({
-    name: "",
-    hsCode: "",
-    uom: "",
-    fbrUOMId: null,
-    saleType: "Goods at standard rate (default)",
-    fbrDescription: "",
-    isFavorite: true,
-  });
-  const [formError, setFormError] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [loadingUom, setLoadingUom] = useState(false);
-  // FBR-driven suggestions for the currently-typed HS code. Populated by
-  // GET /api/itemtypes/fbr-hints — surfaces UOMs, suggested sale type,
-  // suggested rate %, and the live SaleTypeToRate options. Used as
-  // INFORMATION only (the form fields stay editable); pre-fills blanks.
-  const [hsHints, setHsHints] = useState(null);
-
   const fetchAll = async () => {
     setLoading(true);
     try {
@@ -97,147 +77,14 @@ export default function ItemTypesPage() {
 
   const openAdd = () => {
     setEditItem(null);
-    setForm({
-      name: "",
-      hsCode: "",
-      uom: "",
-      fbrUOMId: null,
-      saleType: "Goods at standard rate (default)",
-      fbrDescription: "",
-      isFavorite: true,
-    });
-    setHsHints(null);
-    setFormError("");
     setShowForm(true);
   };
 
   const openEdit = (it) => {
     setEditItem(it);
-    setForm({
-      name: it.name || "",
-      hsCode: it.hsCode || "",
-      uom: it.uom || "",
-      fbrUOMId: it.fbrUOMId || null,
-      saleType: it.saleType || "Goods at standard rate (default)",
-      fbrDescription: it.fbrDescription || "",
-      isFavorite: it.isFavorite ?? true,
-    });
-    setHsHints(null);
-    setFormError("");
     setShowForm(true);
-    // If the existing item already has an HS code, fetch FBR hints
-    // immediately so the operator can compare their saved Sale Type / UOM
-    // against the FBR recommendation without having to re-pick the HS code.
-    // We DON'T pre-fill the form here — those are saved values the operator
-    // explicitly chose. The hints panel surfaces them as info only.
-    if (it.hsCode && selectedCompany) {
-      void fetchHsHints(it.hsCode);
-    }
   };
 
-  // Fetch and stash the FBR hint bundle (valid UOMs, suggested sale type,
-  // suggested rate %, live SaleTypeToRate options) for an HS code. Does
-  // NOT mutate the form — that's the caller's job (handleHsCodeChange
-  // pre-fills blanks, openEdit leaves saved values alone).
-  const fetchHsHints = async (code) => {
-    if (!code || code.length < 6 || !selectedCompany) return null;
-    setLoadingUom(true);
-    try {
-      const { data } = await getItemTypeFbrHints(selectedCompany.id, code);
-      setHsHints(data);
-      return data;
-    } catch {
-      // Fallback: at least try to surface the valid UOMs so the operator
-      // sees something rather than a blank panel.
-      try {
-        const { data } = await getFbrHsUom(selectedCompany.id, code, 3);
-        if (Array.isArray(data) && data.length > 0) {
-          const synthetic = {
-            uoms: data,
-            defaultUom: data[0],
-            defaultSaleType: null,
-            saleTypeOptions: [],
-          };
-          setHsHints(synthetic);
-          return synthetic;
-        }
-      } catch { /* still nothing */ }
-      return null;
-    } finally {
-      setLoadingUom(false);
-    }
-  };
-
-  // When user picks an HS code, fetch hints and pre-fill ONLY blank fields
-  // — never clobber a value the operator already typed/saved.
-  const handleHsCodeChange = async (code) => {
-    setForm((f) => ({ ...f, hsCode: code }));
-    setHsHints(null);
-    const data = await fetchHsHints(code);
-    if (!data) return;
-    setForm((f) => ({
-      ...f,
-      uom: f.uom || data?.defaultUom?.description || "",
-      fbrUOMId: f.fbrUOMId || data?.defaultUom?.uoM_ID || null,
-      saleType:
-        (f.saleType && f.saleType !== "Goods at standard rate (default)")
-          ? f.saleType
-          : (data?.defaultSaleType || f.saleType || "Goods at standard rate (default)"),
-    }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setFormError("");
-    if (!form.name.trim()) return setFormError("Name is required.");
-    // HS code is OPTIONAL — operators can save a quick-entry item type
-    // with just a name. Bills built from HS-less items won't pass FBR
-    // validation until someone fills in the HS/UOM/SaleType later, but
-    // that's fine for non-FBR workflows and draft entries.
-
-    setSaving(true);
-    try {
-      const payload = {
-        name: form.name.trim(),
-        hsCode: form.hsCode?.trim() || null,
-        uom: form.uom?.trim() || null,
-        fbrUOMId: form.fbrUOMId || null,
-        saleType: form.saleType || null,
-        fbrDescription: form.fbrDescription?.trim() || null,
-        isFavorite: !!form.isFavorite,
-      };
-      // Pass companyId so the backend can back-fill any blanks via the FBR
-      // tax engine (HS_UOM lookup) using that company's token.
-      const enrichCompanyId = selectedCompany?.id;
-      if (editItem) {
-        const { data: saved } = await updateItemType(editItem.id, { ...payload, id: editItem.id }, enrichCompanyId);
-        // Surface propagation summary so the operator sees that bill /
-        // challan lines automatically picked up the new HSCode / UOM /
-        // SaleType and they don't need to re-edit each bill.
-        const p = saved?.propagation;
-        const billsLine = p?.invoiceItemsUpdated > 0
-          ? `${p.invoiceItemsUpdated} unposted bill line${p.invoiceItemsUpdated !== 1 ? "s" : ""} synced.`
-          : "";
-        const dcsLine = p?.deliveryItemsUpdated > 0
-          ? `${p.deliveryItemsUpdated} unposted challan line${p.deliveryItemsUpdated !== 1 ? "s" : ""} synced.`
-          : "";
-        const skippedLine = p?.submittedInvoiceLinesSkipped > 0
-          ? `${p.submittedInvoiceLinesSkipped} FBR-submitted line${p.submittedInvoiceLinesSkipped !== 1 ? "s" : ""} left unchanged (locked).`
-          : "";
-        const propLines = [billsLine, dcsLine, skippedLine].filter(Boolean).join(" ");
-        notify(`"${payload.name}" updated.${propLines ? "\n" + propLines : ""}`, "success");
-      } else {
-        await createItemType(payload, enrichCompanyId);
-        notify(`"${payload.name}" added.`, "success");
-      }
-      setShowForm(false);
-      fetchAll();
-    } catch (err) {
-      setFormError(err.response?.data?.message || "Failed to save.");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const toggleFavorite = async (it) => {
     try {
@@ -464,136 +311,36 @@ export default function ItemTypesPage() {
       )}
 
       {showForm && (
-        // Backdrop click is a no-op — explicit Cancel only.
-        <div style={formStyles.backdrop}>
-          <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-            <div style={formStyles.header}>
-              <h5 style={formStyles.title}>{editItem ? "Edit Item" : "New Item"}</h5>
-              <button style={formStyles.closeButton} onClick={() => setShowForm(false)}>&times;</button>
-            </div>
-            <form onSubmit={handleSubmit}>
-              <div style={formStyles.body}>
-                {formError && <div style={styles.errorAlert}>{formError}</div>}
-
-                <div style={styles.field}>
-                  <label style={styles.label}>Item Name *</label>
-                  <input
-                    type="text"
-                    value={form.name}
-                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                    style={styles.input}
-                    placeholder="e.g. Ball Valve 2 inch"
-                    autoFocus
-                  />
-                  <p style={styles.hint}>This is the short name shown in challan / bill dropdowns.</p>
-                </div>
-
-                <div style={styles.field}>
-                  <label style={styles.label}>
-                    HS Code <span style={styles.optTag}>Optional</span>
-                  </label>
-                  <HsCodeAutocomplete
-                    companyId={selectedCompany?.id}
-                    value={form.hsCode}
-                    onChange={handleHsCodeChange}
-                    style={styles.input}
-                    placeholder="Type 'valve', 'pipe', 'bolt'… to search FBR catalog"
-                    excludeHsCodes={
-                      // Hide HS codes already used by OTHER items (allow the current
-                      // edit target to keep its own code)
-                      itemTypes
-                        .filter((t) => t.hsCode && t.id !== editItem?.id)
-                        .map((t) => t.hsCode)
-                    }
-                  />
-                  <p style={styles.hint}>
-                    Must be picked from FBR's official catalog (no free-type).
-                    HS codes already saved in your catalog are hidden — each code maps to one item.
-                    UOM, Sale Type and a recommended rate auto-fill from the FBR HS_UOM + SaleTypeToRate lookups.
-                  </p>
-
-                  {hsHints && (
-                    <div style={styles.hintBox}>
-                      <div style={{ fontWeight: 700, color: colors.blue, marginBottom: "0.25rem" }}>
-                        FBR suggestions for this HS code
-                      </div>
-                      <div style={styles.hintRow}>
-                        <span style={styles.hintLabel}>Recommended rate:</span>
-                        <strong>{hsHints.defaultRate}%</strong>
-                        <span style={styles.hintLabel} title="Pre-fills the GST Rate when this item is added to a bill">
-                          (applied to bills automatically)
-                        </span>
-                      </div>
-                      <div style={styles.hintRow}>
-                        <span style={styles.hintLabel}>Suggested sale type:</span>
-                        <em>{hsHints.defaultSaleType}</em>
-                      </div>
-                      {hsHints.uoms?.length > 0 && (
-                        <div style={styles.hintRow}>
-                          <span style={styles.hintLabel}>Valid UOM(s):</span>
-                          <span>{hsHints.uoms.map((u) => u.description).join(", ")}</span>
-                        </div>
-                      )}
-                      {hsHints.rateOptions?.length > 0 && (
-                        <div style={styles.hintRow}>
-                          <span style={styles.hintLabel}>All FBR rate options today:</span>
-                          <span>{hsHints.rateOptions.map((r) => `${r.rateValue}%`).join(" · ")}</span>
-                        </div>
-                      )}
-                      {hsHints.notes?.length > 0 && (
-                        <ul style={styles.hintNotes}>
-                          {hsHints.notes.map((n, i) => <li key={i}>{n}</li>)}
-                        </ul>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div style={styles.row}>
-                  <div style={{ flex: 1 }}>
-                    <label style={styles.label}>
-                      UOM (FBR) {loadingUom && <span style={{ color: colors.textSecondary, fontSize: "0.75rem" }}>…loading</span>}
-                    </label>
-                    <input
-                      type="text"
-                      value={form.uom}
-                      onChange={(e) => setForm((f) => ({ ...f, uom: e.target.value }))}
-                      style={styles.input}
-                      placeholder="e.g. Numbers, pieces, units"
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={styles.label}>Sale Type</label>
-                    <select
-                      value={form.saleType}
-                      onChange={(e) => setForm((f) => ({ ...f, saleType: e.target.value }))}
-                      style={styles.input}
-                    >
-                      {SALE_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <div style={styles.field}>
-                  <label style={{ ...styles.label, display: "flex", alignItems: "center", gap: "0.35rem", cursor: "pointer" }}>
-                    <input
-                      type="checkbox"
-                      checked={form.isFavorite}
-                      onChange={(e) => setForm((f) => ({ ...f, isFavorite: e.target.checked }))}
-                    />
-                    Show in challan &amp; bill dropdowns (favorite)
-                  </label>
-                </div>
-              </div>
-              <div style={formStyles.footer}>
-                <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setShowForm(false)}>Cancel</button>
-                <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }} disabled={saving}>
-                  {saving ? "Saving…" : editItem ? "Update" : "Create"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <ItemTypeForm
+          editItem={editItem}
+          companyId={selectedCompany?.id}
+          showFavoriteToggle
+          showRichHints
+          existingHsCodes={itemTypes
+            .filter((t) => t.hsCode && t.id !== editItem?.id)
+            .map((t) => t.hsCode)}
+          onClose={() => setShowForm(false)}
+          onSaved={(saved) => {
+            // Edit responses carry the propagation summary so the
+            // operator sees auto-synced lines. Mirrors the inline
+            // notify() the page used to do.
+            if (editItem) {
+              const p = saved?.propagation;
+              const bills = p?.invoiceItemsUpdated > 0
+                ? `${p.invoiceItemsUpdated} unposted bill line${p.invoiceItemsUpdated !== 1 ? "s" : ""} synced.` : "";
+              const dcs = p?.deliveryItemsUpdated > 0
+                ? `${p.deliveryItemsUpdated} unposted challan line${p.deliveryItemsUpdated !== 1 ? "s" : ""} synced.` : "";
+              const skipped = p?.submittedInvoiceLinesSkipped > 0
+                ? `${p.submittedInvoiceLinesSkipped} FBR-submitted line${p.submittedInvoiceLinesSkipped !== 1 ? "s" : ""} left unchanged (locked).` : "";
+              const propLines = [bills, dcs, skipped].filter(Boolean).join(" ");
+              notify(`"${saved?.name || "Item"}" updated.${propLines ? "\n" + propLines : ""}`, "success");
+            } else {
+              notify(`"${saved?.name || "Item"}" added.`, "success");
+            }
+            setShowForm(false);
+            fetchAll();
+          }}
+        />
       )}
     </div>
   );

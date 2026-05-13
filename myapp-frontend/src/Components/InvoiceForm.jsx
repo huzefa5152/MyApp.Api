@@ -12,7 +12,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import ClientForm from "./ClientForm";
-import QuickItemTypeForm from "./QuickItemTypeForm";
+import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 // 2026-05-08: Same UOM autocomplete the ChallanForm uses, hooked up
 // to /lookup/units. Replaces the plain text input on each row's UOM
@@ -1398,11 +1398,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         />
       )}
 
-      {/* Inline Add Item Type modal — same QuickItemTypeForm the
-          standalone bill uses. Inherits the parent bill's scenario so
-          Sale Type is locked and the HS-code typeahead filters by it. */}
+      {/* Inline Add Item Type modal — shared ItemTypeForm used by every
+          create / edit entry point (Item Types page, bill forms,
+          invoice edit). Inherits the parent bill's scenario so Sale
+          Type is locked and the HS-code typeahead filters by it. */}
       {showAddItemType && (
-        <QuickItemTypeForm
+        <ItemTypeForm
           companyId={companyId}
           scenarioCode={chosenScenario?.code}
           scenarioSaleType={chosenScenario?.saleType}

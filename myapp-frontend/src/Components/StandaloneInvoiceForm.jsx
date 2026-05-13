@@ -10,7 +10,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import LookupAutocomplete from "./LookupAutocomplete";
 import ClientForm from "./ClientForm";
-import QuickItemTypeForm from "./QuickItemTypeForm";
+import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 
 // Bill-without-challan flow ("Standalone Bill"). Per FBR DI-API V1.12:
@@ -1079,10 +1079,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         />
       )}
 
-      {/* Inline Add Item Type modal — small dedicated form (the full
-          ItemTypesPage form is too heavy for an inline add). */}
+      {/* Inline Add Item Type modal — shared ItemTypeForm used by every
+          create / edit entry point. Slim props (no rich-hints panel, no
+          favorite toggle) keep the modal inline-friendly. */}
       {showAddItemType && (
-        <QuickItemTypeForm
+        <ItemTypeForm
           companyId={companyId}
           scenarioCode={chosenScenario?.code}
           scenarioSaleType={chosenScenario?.saleType}
@@ -1094,8 +1095,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   );
 }
 
-// QuickItemTypeForm + PermissionLackedHint live in their own files
-// (Components/QuickItemTypeForm.jsx, Components/PermissionLackedHint.jsx)
+// ItemTypeForm + PermissionLackedHint live in their own files
+// (Components/ItemTypeForm.jsx, Components/PermissionLackedHint.jsx)
 // so InvoiceForm (with-challan) can import the same pieces.
 
 const styles = {
@@ -1219,7 +1220,7 @@ const styles = {
   permHintInline: { display: "inline-flex", alignItems: "center", gap: "0.25rem", color: colors.warn, fontSize: "0.72rem", flexWrap: "wrap" },
   permCode: { fontFamily: "monospace", padding: "0 0.25rem", borderRadius: 3, backgroundColor: "#f5f5f5", fontWeight: 700, fontSize: "0.74rem" },
 
-  // ── HS code typeahead inside QuickItemTypeForm ────────────────────
+  // ── HS code typeahead inside ItemTypeForm ─────────────────────────
   scenarioPillSmall: { marginLeft: "0.5rem", padding: "0.1rem 0.4rem", borderRadius: 4, backgroundColor: "#e3f2fd", color: "#0d47a1", fontSize: "0.7rem", fontWeight: 800, fontFamily: "monospace" },
   hsDropdown: { position: "absolute", top: "100%", left: 0, right: 0, marginTop: "0.2rem", maxHeight: 260, overflowY: "auto", backgroundColor: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.08)", zIndex: 1200 },
   hsLoading: { padding: "0.6rem 0.85rem", fontSize: "0.82rem", color: colors.textSecondary },

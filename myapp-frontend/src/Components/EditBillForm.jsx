@@ -13,7 +13,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { useAuth } from "../contexts/AuthContext";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
-import QuickItemTypeForm from "./QuickItemTypeForm";
+import ItemTypeForm from "./ItemTypeForm";
 
 const colors = {
   blue: "#0d47a1",
@@ -143,7 +143,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const [scenarios, setScenarios] = useState([]);
   const [scenarioCode, setScenarioCode] = useState("");
   // ── Inline "+ New Item Type" + HS Stock panel state ────────────────
-  // showAddItemType: drives the QuickItemTypeForm modal.
+  // showAddItemType: drives the shared ItemTypeForm modal.
   // hsStockSummary:  cache of the latest /tax-claim/hs-stock-summary
   //                  payload, indexed by HS code for O(1) lookup.
   // hsStockLoading:  spinner flag while the panel re-fetches after
@@ -379,7 +379,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // Inline "+ New Item Type" handler — when the operator saves a new
   // catalog row, append it to the in-memory itemTypes list AND
   // refetch the canonical list so usage counters / FBR-derived fields
-  // stay current. The QuickItemTypeForm's onSaved hands back the
+  // stay current. The ItemTypeForm's onSaved hands back the
   // newly-created row.
   const onItemTypeCreated = (created) => {
     if (created) {
@@ -1438,13 +1438,13 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         </form>
       </div>
 
-      {/* Inline Add Item Type modal — same QuickItemTypeForm the
-          create-bill forms use. Inherits the bill's scenario so Sale
-          Type is locked and the HS-code typeahead filters by it. After
-          save, the new item type is appended to the dropdown so the
-          operator can immediately pick it for a row. */}
+      {/* Inline Add Item Type modal — shared ItemTypeForm. Inherits
+          the bill's scenario so Sale Type is locked and the HS-code
+          typeahead filters by it. After save, the new item type is
+          appended to the dropdown so the operator can immediately
+          pick it for a row. */}
       {showAddItemType && (
-        <QuickItemTypeForm
+        <ItemTypeForm
           companyId={invoice?.companyId}
           scenarioCode={chosenScenario?.code}
           scenarioSaleType={chosenScenario?.saleType}

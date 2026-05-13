@@ -222,22 +222,45 @@ namespace MyApp.Api.Services.Tax
         public async Task<HsCodeHints> GetHsCodeHintsAsync(int companyId, string hsCode)
         {
             var notes = new List<string>();
-            var uoms = await GetValidUomsForHsCodeAsync(companyId, hsCode);
+
+            // 2026-05-14 perf: the two PRAL round-trips (HS_UOM and
+            // SaleTypeToRate) are independent — fire them in parallel
+            // instead of serial. PRAL latency is ~1-2 s per call, so
+            // parallel ~cuts cold-cache hint resolution in half (from
+            // 2-4 s to 1-2 s). Both have in-memory caches already, so
+            // warm hits stay instantaneous; the win is exclusively on
+            // the first-time-this-process-saw-the-HS-code path.
+            var companyTask = _db.Companies.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == companyId);
+            var uomsTask = GetValidUomsForHsCodeAsync(companyId, hsCode);
+
+            await companyTask;
+            var company = companyTask.Result;
+
+            // The SaleTypeToRate call needs the company's province — but
+            // that's just a sub-second EF read; the PRAL call itself is
+            // what we want overlapping with the UOMs call. Kick it off
+            // as soon as we know the province.
+            Task<List<FbrSaleTypeRateDto>>? ratesTask = null;
+            if (company?.FbrProvinceCode != null)
+            {
+                ratesTask = GetSaleTypeRatesAsync(
+                    companyId, DateTime.UtcNow.Date, company.FbrProvinceCode);
+            }
+            else
+            {
+                notes.Add("Company has no FBR province set — cannot query SaleTypeToRate. Set Province on the Company form to get authoritative rate options.");
+            }
+
+            var uoms = await uomsTask;
             var defaultUom = uoms.FirstOrDefault();
 
-            var company = await _db.Companies.AsNoTracking()
-                .FirstOrDefaultAsync(c => c.Id == companyId);
-
-            // 1) SaleTypeToRate — live FBR rate options for goods sale today.
-            // Province defaults to seller's; if the company hasn't picked one,
-            // skip the lookup (it requires originationSupplier).
             var rateOptions = new List<RateOption>();
-            if (company?.FbrProvinceCode != null)
+            if (ratesTask != null)
             {
                 try
                 {
-                    var rates = await GetSaleTypeRatesAsync(
-                        companyId, DateTime.UtcNow.Date, company.FbrProvinceCode);
+                    var rates = await ratesTask;
                     rateOptions = rates
                         .Select(r => new RateOption(r.RATE_ID, r.RATE_DESC, r.RATE_VALUE))
                         .ToList();
@@ -248,10 +271,6 @@ namespace MyApp.Api.Services.Tax
                 {
                     notes.Add("Could not fetch live SaleTypeToRate (token / network) — falling back to company defaults.");
                 }
-            }
-            else
-            {
-                notes.Add("Company has no FBR province set — cannot query SaleTypeToRate. Set Province on the Company form to get authoritative rate options.");
             }
 
             // 2) HS-prefix heuristic — does this HS code fall into a
