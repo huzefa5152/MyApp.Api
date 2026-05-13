@@ -1623,74 +1623,60 @@ namespace MyApp.Api.Services.Implementations
                 FbrIRN = inv.FbrIRN,
                 FbrStatus = inv.FbrStatus,
                 FbrSubmittedAt = inv.FbrSubmittedAt,
-                // 2026-05-12: apply the InvoiceItemAdjustment overlay
-                // before grouping. The Tax Invoice is the document the
-                // buyer reconciles against Annexure-A on FBR's side, so
-                // it MUST mirror the FBR-submitted decomposition (qty +
-                // unit price + line total). Bill print (GetPrintBillAsync)
-                // continues to render real bill-row values for the
-                // customer-facing receipt. The overlay only touches
-                // numerical fields; item type / UOM / HS / sale type
-                // already live on InvoiceItem.
-                Items = BuildTaxInvoiceItems(inv),
+                // 2026-05-13: Tax Invoice print now renders REAL bill-row
+                // values (NOT the InvoiceItemAdjustment overlay) — same
+                // as the customer-facing Bill print. Per operator policy
+                // the printed Tax Invoice should match the bill they
+                // physically hand to the buyer; only the FBR digital
+                // payload submitted to PRAL (FbrService.cs) carries the
+                // overlay-adjusted decomposition for tax-claim
+                // optimization. This keeps both printed documents in
+                // agreement with each other.
+                Items = inv.Items.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName))
+                    ? inv.Items
+                        .GroupBy(ii => ii.ItemTypeName)
+                        .Select(g =>
+                        {
+                            var totalQty = g.Sum(ii => ii.Quantity);
+                            var totalValue = g.Sum(ii => ii.LineTotal);
+                            var gstAmt = Math.Round(totalValue * inv.GSTRate / 100, 2);
+                            return new PrintTaxItemDto
+                            {
+                                ItemTypeName = g.Key,
+                                Quantity = totalQty,
+                                UOM = g.First().UOM,
+                                Description = g.Key,
+                                ValueExclTax = totalValue,
+                                GSTRate = inv.GSTRate,
+                                GSTAmount = gstAmt,
+                                TotalInclTax = totalValue + gstAmt
+                            };
+                        }).ToList()
+                    : inv.Items.Select(ii =>
+                        {
+                            var gstAmt = Math.Round(ii.LineTotal * inv.GSTRate / 100, 2);
+                            return new PrintTaxItemDto
+                            {
+                                ItemTypeName = ii.ItemTypeName,
+                                Quantity = ii.Quantity,
+                                UOM = ii.UOM,
+                                Description = ii.Description,
+                                ValueExclTax = ii.LineTotal,
+                                GSTRate = inv.GSTRate,
+                                GSTAmount = gstAmt,
+                                TotalInclTax = ii.LineTotal + gstAmt
+                            };
+                        }).ToList()
             };
         }
 
         /// <summary>
-        /// Item-list builder for <see cref="GetPrintTaxInvoiceAsync"/>.
-        /// Projects each row through any attached overlay, then groups by
-        /// ItemTypeName when every line is classified (same fallback rule
-        /// as FBR submission and the existing print path).
-        /// </summary>
-        private static List<PrintTaxItemDto> BuildTaxInvoiceItems(Invoice inv)
-        {
-            var effective = inv.Items.Select(ApplyOverlayForPrint).ToList();
-            if (effective.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName)))
-            {
-                return effective
-                    .GroupBy(ii => ii.ItemTypeName)
-                    .Select(g =>
-                    {
-                        var totalQty = g.Sum(ii => ii.Quantity);
-                        var totalValue = g.Sum(ii => ii.LineTotal);
-                        var gstAmt = Math.Round(totalValue * inv.GSTRate / 100, 2);
-                        return new PrintTaxItemDto
-                        {
-                            ItemTypeName = g.Key,
-                            Quantity = totalQty,
-                            UOM = g.First().UOM,
-                            Description = g.Key,
-                            ValueExclTax = totalValue,
-                            GSTRate = inv.GSTRate,
-                            GSTAmount = gstAmt,
-                            TotalInclTax = totalValue + gstAmt
-                        };
-                    }).ToList();
-            }
-            return effective.Select(ii =>
-            {
-                var gstAmt = Math.Round(ii.LineTotal * inv.GSTRate / 100, 2);
-                return new PrintTaxItemDto
-                {
-                    ItemTypeName = ii.ItemTypeName,
-                    Quantity = ii.Quantity,
-                    UOM = ii.UOM,
-                    Description = ii.Description,
-                    ValueExclTax = ii.LineTotal,
-                    GSTRate = inv.GSTRate,
-                    GSTAmount = gstAmt,
-                    TotalInclTax = ii.LineTotal + gstAmt
-                };
-            }).ToList();
-        }
-
-        /// <summary>
-        /// Project an InvoiceItem through any attached overlay for
-        /// Tax-Invoice rendering. Mirrors FbrService.ApplyAdjustmentOverlay:
-        /// numerical fields come from the overlay when set, everything
-        /// else (item type / HS / UOM / sale type / description) from
-        /// the bill row. Returns a fresh instance — never mutates source.
-        /// 2026-05-12: added.
+        /// Legacy helper retained for any external caller — Tax Invoice
+        /// rendering as of 2026-05-13 no longer applies the overlay
+        /// (operator policy: printed docs always reflect real bill qty;
+        /// only the FBR digital payload sent to PRAL uses the
+        /// optimization overlay). Kept private so nothing else picks
+        /// it up.
         /// </summary>
         private static InvoiceItem ApplyOverlayForPrint(InvoiceItem ii)
         {

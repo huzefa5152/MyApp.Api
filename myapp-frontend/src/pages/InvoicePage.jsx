@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import StandaloneInvoiceForm from "../Components/StandaloneInvoiceForm";
 import EditBillForm from "../Components/EditBillForm";
 import BulkFbrResultsDialog from "../Components/BulkFbrResultsDialog";
 import FbrPreviewDialog from "../Components/FbrPreviewDialog";
+import BulkFbrPreviewDialog from "../Components/BulkFbrPreviewDialog";
 import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
@@ -78,6 +79,12 @@ export default function InvoicePage({ mode = "invoices" }) {
   const canFbrPreview = has("invoices.fbr.preview");
   // The bill currently shown in the FBR preview dialog (null when closed).
   const [fbrPreviewId, setFbrPreviewId] = useState(null);
+  // Bulk FBR preview dialog — open shows every bill currently ready
+  // for Validate All / Submit All as a collapsible list. Operators
+  // use it to scan the whole queue before launching a bulk action,
+  // without bouncing through each card's per-bill "View FBR" button.
+  // 2026-05-13: added.
+  const [showBulkFbrPreview, setShowBulkFbrPreview] = useState(false);
   const [clients, setClients] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -656,7 +663,22 @@ export default function InvoicePage({ mode = "invoices" }) {
                   </span>
                 )}
               </div>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                {/* Preview All — read-only inspector for the whole bulk
+                    queue. Gated on the same permission as the per-bill
+                    preview dialog so we don't unintentionally expose
+                    payload data to roles that lacked it before. Hidden
+                    on tabs without ready bills. 2026-05-13. */}
+                {canFbrPreview && unsubmittedInvoices.length > 0 && (
+                  <button
+                    style={{ ...styles.fbrBulkBtn, ...styles.fbrBulkPreviewBtn }}
+                    onClick={() => setShowBulkFbrPreview(true)}
+                    title="Preview the FBR payload for every bill that's ready to validate — collapsible rows, no network call to FBR."
+                  >
+                    <MdViewList size={15} />
+                    Preview All
+                  </button>
+                )}
                 {canFbrValidate && (
                   <button
                     style={{ ...styles.fbrBulkBtn, ...styles.fbrBulkValidateBtn }}
@@ -1104,6 +1126,15 @@ export default function InvoicePage({ mode = "invoices" }) {
           onClose={() => setFbrPreviewId(null)}
         />
       )}
+
+      {/* Bulk FBR preview — every Validate All / Submit All candidate as
+          a collapsible list, lazy-loading per-row payload on expand. */}
+      {showBulkFbrPreview && (
+        <BulkFbrPreviewDialog
+          invoices={unsubmittedInvoices}
+          onClose={() => setShowBulkFbrPreview(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1244,6 +1275,10 @@ const styles = {
     letterSpacing: "0.01em",
   },
   fbrBulkBtn: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 1rem", borderRadius: 8, border: "none", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", transition: "filter 0.2s" },
+  // 2026-05-13: neutral-blue outline for "Preview All" — distinct from
+  // the amber Validate All (action) and solid-blue Submit All (terminal
+  // action). Reads as an inspector button, not a workflow trigger.
+  fbrBulkPreviewBtn: { backgroundColor: "#fff", color: "#0d47a1", border: "1px solid #b7d4f0" },
   fbrBulkValidateBtn: { backgroundColor: "#fff3e0", color: "#e65100" },
   fbrBulkSubmitBtn: { backgroundColor: "#0d47a1", color: "#fff", boxShadow: "0 2px 8px rgba(13,71,161,0.2)" },
 };
