@@ -150,9 +150,19 @@ export default function ByCounterpartyCard({
                   fontSize: "0.83rem",
                   fontWeight: 600,
                   color: "#1a2332",
+                  // Bug 2026-05-13: nowrap + ellipsis collapsed names
+                  // like "MEKO FABRICS (Pvt) Ltd." and "MEKO DENIM MILLS
+                  // (Pvt) Ltd." to identical-looking "MEKO ..." on the
+                  // narrow list column, making distinct clients look
+                  // like duplicates. Allow up to 2 lines so the
+                  // disambiguating word stays visible without forcing
+                  // a wider layout.
                   overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  lineHeight: 1.25,
+                  wordBreak: "break-word",
                 }}>
                   <span style={{ color: "#5f6d7e", fontSize: "0.75rem", marginRight: "0.4rem" }}>#{idx + 1}</span>
                   {it.name || "(unknown)"}

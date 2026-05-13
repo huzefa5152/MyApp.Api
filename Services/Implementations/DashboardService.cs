@@ -306,12 +306,29 @@ namespace MyApp.Api.Services.Implementations
             var avg = count > 0 ? totalSales / count : 0m;
 
             // Top 5 clients within the period — by gross sales value.
+            //
+            // 2026-05-13: roll up by ClientGroupId so two Client rows
+            // representing the same legal entity (e.g. one per tenant
+            // in the Common Clients group) collapse into one dashboard
+            // row. Pre-fix, Roshan Traders' dashboard showed "MEKO
+            // DENIM MILLS (Pvt) Ltd." twice — once for ClientId=8
+            // (Roshan's own row) and once for ClientId=5 (Hakimi's row,
+            // reachable via a cross-tenant invoice link); both rows
+            // share ClientGroupId=8, so the group key is the right
+            // identity.
+            //
+            // Fallback: legacy rows still nullable on ClientGroupId use
+            // -ClientId as the partition key (negative space never
+            // collides with positive group ids).
             var topClients = await q
-                .GroupBy(i => new { i.ClientId, i.Client!.Name })
+                .GroupBy(i => i.Client!.ClientGroupId ?? -i.ClientId)
                 .Select(g => new DashboardTopEntity
                 {
-                    Id = g.Key.ClientId,
-                    Name = g.Key.Name ?? "(unknown)",
+                    Id = g.Min(x => x.ClientId),
+                    // Every row in a real ClientGroup carries the same
+                    // master Name (group sync keeps them aligned). Max
+                    // is just a deterministic picker.
+                    Name = g.Max(x => x.Client!.Name) ?? "(unknown)",
                     Value = g.Sum(i => i.GrandTotal),
                     Count = g.Count(),
                 })
@@ -396,12 +413,14 @@ namespace MyApp.Api.Services.Implementations
             var count = aggregate?.Count ?? 0;
             var avg = count > 0 ? totalPurchases / count : 0m;
 
+            // Same SupplierGroup roll-up as the Clients side above —
+            // see that comment for context.
             var topSuppliers = await q
-                .GroupBy(pb => new { pb.SupplierId, pb.Supplier!.Name })
+                .GroupBy(pb => pb.Supplier!.SupplierGroupId ?? -pb.SupplierId)
                 .Select(g => new DashboardTopEntity
                 {
-                    Id = g.Key.SupplierId,
-                    Name = g.Key.Name ?? "(unknown)",
+                    Id = g.Min(x => x.SupplierId),
+                    Name = g.Max(x => x.Supplier!.Name) ?? "(unknown)",
                     Value = g.Sum(pb => pb.GrandTotal),
                     Count = g.Count(),
                 })
