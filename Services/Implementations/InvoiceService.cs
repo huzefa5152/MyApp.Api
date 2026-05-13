@@ -6,6 +6,7 @@ using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Services.Interfaces;
+using MyApp.Api.Services.Tax;
 
 namespace MyApp.Api.Services.Implementations
 {
@@ -25,6 +26,12 @@ namespace MyApp.Api.Services.Implementations
         // (and the availability pre-flight kicks in) without waiting
         // for the operator to validate / submit.
         private readonly IStockService _stock;
+        // 2026-05-13: used by the standalone + update paths to auto-fill
+        // the FBR-recommended UOM when the operator picked an HSCode but
+        // left UOM blank. Also lets the server reject "no UOM AND no
+        // HSCode" combos with a clear message instead of silently
+        // falling back to the company default.
+        private readonly ITaxMappingEngine _taxEngine;
         private readonly ILogger<InvoiceService> _logger;
 
         public InvoiceService(
@@ -36,6 +43,7 @@ namespace MyApp.Api.Services.Implementations
             Microsoft.Extensions.Configuration.IConfiguration config,
             IAuditLogService auditLog,
             IStockService stock,
+            ITaxMappingEngine taxEngine,
             ILogger<InvoiceService> logger)
         {
             _invoiceRepo = invoiceRepo;
@@ -47,6 +55,63 @@ namespace MyApp.Api.Services.Implementations
             _logger = logger;
             _auditLog = auditLog;
             _stock = stock;
+            _taxEngine = taxEngine;
+        }
+
+        /// <summary>
+        /// UOM resolution policy applied to invoice / standalone-invoice
+        /// lines (2026-05-13).
+        ///
+        /// Rules:
+        ///   • If the operator typed a UOM, use it (after registering it
+        ///     in the Units table for the autocomplete to pick up).
+        ///   • If a linked ItemType carries a UOM, inherit it.
+        ///   • If an HSCode is provided but UOM is blank, ask the tax
+        ///     engine for the FBR-recommended UOM and use that (also
+        ///     register it in Units).
+        ///   • Otherwise — neither operator UOM, ItemType UOM, nor HSCode —
+        ///     throw. Pre-fix the silent fallback to a company default
+        ///     hid missing-UOM bugs that later failed FBR submission.
+        /// </summary>
+        private async Task<(string Uom, int? FbrUomId)> ResolveUomAsync(
+            int companyId,
+            string? operatorUom,
+            int? operatorFbrUomId,
+            ItemType? linkedItemType,
+            string? hsCode,
+            string itemDescription)
+        {
+            if (!string.IsNullOrWhiteSpace(operatorUom))
+            {
+                await UnitRegistry.EnsureNamesAsync(_context, new[] { operatorUom });
+                return (operatorUom!, operatorFbrUomId ?? linkedItemType?.FbrUOMId);
+            }
+            if (!string.IsNullOrWhiteSpace(linkedItemType?.UOM))
+                return (linkedItemType!.UOM!, operatorFbrUomId ?? linkedItemType.FbrUOMId);
+
+            if (!string.IsNullOrWhiteSpace(hsCode))
+            {
+                try
+                {
+                    var suggested = await _taxEngine.SuggestDefaultUomAsync(companyId, hsCode!);
+                    if (suggested != null && !string.IsNullOrWhiteSpace(suggested.Description))
+                    {
+                        await UnitRegistry.EnsureNamesAsync(_context, new[] { suggested.Description });
+                        return (suggested.Description, suggested.UOM_ID);
+                    }
+                }
+                catch
+                {
+                    // FBR token missing / network down — fall through to
+                    // the required-UOM error below. Operator can still
+                    // save by typing a UOM explicitly.
+                }
+            }
+
+            throw new InvalidOperationException(
+                $"UOM is required for item '{itemDescription}'. " +
+                "Pick a UOM from the autocomplete, OR pick an HS Code so " +
+                "the FBR-recommended UOM can be auto-filled.");
         }
 
         /// <summary>
@@ -632,17 +697,23 @@ namespace MyApp.Api.Services.Implementations
                 if (itemDto.ItemTypeId.HasValue)
                     typeMap.TryGetValue(itemDto.ItemTypeId.Value, out itemType);
 
-                // Same precedence as CreateAsync: explicit DTO field → ItemType
-                // catalog → company default → seed value.
-                var effectiveUOM = !string.IsNullOrWhiteSpace(itemDto.UOM)
-                    ? itemDto.UOM!
-                    : !string.IsNullOrWhiteSpace(itemType?.UOM)
-                        ? itemType!.UOM!
-                        : companyDefaultUOM;
                 var effectiveHSCode = !string.IsNullOrWhiteSpace(itemDto.HSCode)
                     ? itemDto.HSCode
                     : itemType?.HSCode;
-                var effectiveFbrUOMId = itemDto.FbrUOMId ?? itemType?.FbrUOMId;
+
+                // 2026-05-13: ResolveUomAsync enforces:
+                //   - typed UOM wins (and is registered in Units),
+                //   - else inherit from ItemType,
+                //   - else fetch FBR-recommended UOM for the HSCode,
+                //   - else throw "UOM required" (no silent fallback).
+                var (effectiveUOM, effectiveFbrUOMId) = await ResolveUomAsync(
+                    dto.CompanyId,
+                    itemDto.UOM,
+                    itemDto.FbrUOMId,
+                    itemType,
+                    effectiveHSCode,
+                    itemDto.Description ?? "(unnamed)");
+
                 var effectiveSaleType = !string.IsNullOrWhiteSpace(itemDto.SaleType)
                     ? itemDto.SaleType
                     : !string.IsNullOrWhiteSpace(itemType?.SaleType)
@@ -1003,11 +1074,23 @@ namespace MyApp.Api.Services.Implementations
                     }
                     else
                     {
-                        // No ItemType on the line → fall back to DTO-supplied FBR fields
+                        // No ItemType on the line → resolve UOM via the
+                        // same policy used on the standalone create path
+                        // (2026-05-13). Throws when neither UOM nor
+                        // HSCode is provided, auto-fills from FBR's
+                        // recommendation when HSCode is given but UOM
+                        // is blank.
+                        var (resolvedUom, resolvedFbrUomId) = await ResolveUomAsync(
+                            invoice.CompanyId,
+                            itemDto.UOM,
+                            itemDto.FbrUOMId,
+                            null,
+                            itemDto.HSCode,
+                            itemDto.Description ?? "(unnamed)");
                         existing.ItemTypeId = null;
-                        existing.UOM = itemDto.UOM;
+                        existing.UOM = resolvedUom;
                         existing.HSCode = itemDto.HSCode;
-                        existing.FbrUOMId = itemDto.FbrUOMId;
+                        existing.FbrUOMId = resolvedFbrUomId;
                         existing.SaleType = itemDto.SaleType;
                     }
                 }

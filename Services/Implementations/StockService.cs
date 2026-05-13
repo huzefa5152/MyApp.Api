@@ -26,6 +26,32 @@ namespace MyApp.Api.Services.Implementations
         }
 
         /// <summary>
+        /// True iff the ItemType has a non-empty HSCode. Un-classified
+        /// ItemTypes (no HSCode) are placeholders / drafts and live
+        /// **outside** the stock-tracking system on both the IN and OUT
+        /// side — buy or sell of an un-classified ItemType does NOT
+        /// move inventory.
+        ///
+        /// 2026-05-13: the gate was added symmetrically to prevent
+        /// "phantom inventory" where IN would record but OUT wouldn't
+        /// (or vice-versa), drifting on-hand away from physical reality.
+        /// Once the operator adds an HSCode to the ItemType, the next
+        /// invoice/purchase save starts moving inventory.
+        /// </summary>
+        public async Task<HashSet<int>> GetStockTrackedItemTypeIdsAsync(IEnumerable<int> itemTypeIds)
+        {
+            var ids = itemTypeIds?.Where(i => i > 0).Distinct().ToList() ?? new List<int>();
+            if (ids.Count == 0) return new HashSet<int>();
+            return (await _context.ItemTypes
+                .Where(it => ids.Contains(it.Id)
+                          && it.HSCode != null
+                          && it.HSCode != "")
+                .Select(it => it.Id)
+                .ToListAsync())
+                .ToHashSet();
+        }
+
+        /// <summary>
         /// Inserts a StockMovement row. Audit C-5 (2026-05-08): the inner
         /// SaveChangesAsync is intentional — it makes the row visible to
         /// the surrounding transaction immediately so subsequent reads
@@ -181,9 +207,17 @@ namespace MyApp.Api.Services.Implementations
                 .Where(a => a.InvoiceId == invoice.Id && a.AdjustedQuantity != null)
                 .ToDictionaryAsync(a => a.InvoiceItemId, a => a.AdjustedQuantity!.Value);
 
+            // 2026-05-13: gate stock OUT on the ItemType being classified
+            // (HSCode non-empty). Un-classified ItemTypes are drafts —
+            // saving a bill against one must not decrement inventory.
+            // See GetStockTrackedItemTypeIdsAsync for the policy.
+            var trackedItemTypeIds = await GetStockTrackedItemTypeIdsAsync(
+                invoice.Items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
+
             foreach (var item in invoice.Items)
             {
                 if (!item.ItemTypeId.HasValue) continue;
+                if (!trackedItemTypeIds.Contains(item.ItemTypeId.Value)) continue;
                 var effectiveQty = overlayQtyByItemId.TryGetValue(item.Id, out var adjQty)
                     ? adjQty
                     : item.Quantity;
@@ -245,6 +279,15 @@ namespace MyApp.Api.Services.Implementations
                     ItemName = g.First().ItemName ?? "",
                 })
                 .ToList();
+            if (demand.Count == 0) return new List<StockShortage>();
+
+            // 2026-05-13: skip un-classified ItemTypes (HSCode empty).
+            // Stock OUT will not be recorded for them either (see
+            // SyncInvoiceStockMovementsAsync), so it would be wrong to
+            // block the save on an availability check that the save
+            // itself won't honor.
+            var tracked = await GetStockTrackedItemTypeIdsAsync(demand.Select(d => d.ItemTypeId));
+            demand = demand.Where(d => tracked.Contains(d.ItemTypeId)).ToList();
             if (demand.Count == 0) return new List<StockShortage>();
 
             var onHand = await GetOnHandBulkAsync(companyId, demand.Select(d => d.ItemTypeId));

@@ -1361,6 +1361,40 @@ namespace MyApp.Api.Services.Implementations
         public async Task<List<FbrDocTypeDto>> GetDocTypesAsync(int companyId)
             => await GetReferenceData<FbrDocTypeDto>(companyId, $"{RefBaseV1}/doctypecode");
 
+        /// <summary>
+        /// FBR HS-code format: 4 digits, dot, 4 digits, with optional
+        /// <c>.NN</c> tail (e.g. <c>8481.8090</c> or <c>0710.30.10</c>).
+        /// Used as the format gate during a fresh-tenant fallback when the
+        /// catalog hasn't been loaded yet.
+        /// </summary>
+        private static readonly System.Text.RegularExpressions.Regex HsCodeFormat =
+            new(@"^\d{4}\.\d{4}(\.\d{2})?$",
+                System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        public async Task<bool> IsKnownHsCodeAsync(int companyId, string hsCode)
+        {
+            if (string.IsNullOrWhiteSpace(hsCode)) return false;
+            var normalised = hsCode.Trim();
+
+            // Catalog source of truth — strict, case-insensitive.
+            var catalog = await GetHsCodeCatalogAsync(companyId);
+            if (catalog.Count > 0)
+            {
+                return catalog.Any(h => string.Equals(
+                    h.HS_CODE?.Trim(), normalised, StringComparison.OrdinalIgnoreCase));
+            }
+
+            // Fresh-tenant fallback — no catalog loaded (no token anywhere
+            // yet). Accept format-valid codes with a warning so the
+            // onboarding flow isn't blocked. Once any company gets a
+            // token and the catalog caches, strict validation kicks in.
+            _logger.LogWarning(
+                "HS code '{HsCode}' for company {CompanyId} accepted by format-only fallback — "
+                + "FBR catalog not loaded. Configure a company FBR token to enable strict validation.",
+                normalised, companyId);
+            return HsCodeFormat.IsMatch(normalised);
+        }
+
         public async Task<List<FbrHSCodeDto>> GetHSCodesAsync(int companyId, string? search = null, string? saleType = null)
         {
             var all = await GetHsCodeCatalogAsync(companyId);

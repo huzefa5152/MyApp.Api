@@ -1011,7 +1011,13 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 button, the FBR-tip pill. Operators classify
                                 items on the Invoices tab; the Bills tab is
                                 financial entry only. */}
-                            {!billsMode && (canCreateItemType ? (
+                            {/* 2026-05-13: previously hidden when billsMode
+                                was true (Bills tab). Operators asked for
+                                the shortcut on every bill-creation flow,
+                                so it's now visible in both Bills and
+                                Invoices modes. Permission is still
+                                checked — no perm → PermissionLackedHint. */}
+                            {canCreateItemType ? (
                               <button
                                 type="button"
                                 style={styles.inlineAddBtn}
@@ -1022,7 +1028,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               </button>
                             ) : (
                               <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
-                            ))}
+                            )}
                             {!billsMode && (
                               <div style={styles.hintRow}>
                                 <span style={styles.hintPill}>Tip</span>

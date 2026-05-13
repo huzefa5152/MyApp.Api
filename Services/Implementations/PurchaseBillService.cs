@@ -329,9 +329,16 @@ namespace MyApp.Api.Services.Implementations
 
             // Emit Stock IN for every line that's bound to a catalog item.
             // No-op when Company.InventoryTrackingEnabled is false.
+            // 2026-05-13: skip lines whose ItemType has no HSCode —
+            // un-classified ItemTypes live outside the stock-tracking
+            // system. Symmetric with the OUT-side gate in
+            // StockService.SyncInvoiceStockMovementsAsync.
+            var trackedOnCreate = await _stock.GetStockTrackedItemTypeIdsAsync(
+                items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
             foreach (var it in items)
             {
                 if (!it.ItemTypeId.HasValue || it.Quantity <= 0) continue;
+                if (!trackedOnCreate.Contains(it.ItemTypeId.Value)) continue;
                 await _stock.RecordMovementAsync(
                     companyId: bill.CompanyId,
                     itemTypeId: it.ItemTypeId.Value,
@@ -399,10 +406,15 @@ namespace MyApp.Api.Services.Implementations
             // then re-emit using the new line set. Simpler than diff-by-line
             // and the StockMovement log preserves the audit trail (compensating
             // OUT entries are inserted, not the IN rows mutated).
+            // 2026-05-13: skip lines whose ItemType has no HSCode — they
+            // were never moved in (gate is symmetric on create).
             var oldItems = bill.Items.ToList();
+            var trackedOld = await _stock.GetStockTrackedItemTypeIdsAsync(
+                oldItems.Where(o => o.ItemTypeId.HasValue).Select(o => o.ItemTypeId!.Value));
             foreach (var oi in oldItems)
             {
                 if (!oi.ItemTypeId.HasValue || oi.Quantity <= 0) continue;
+                if (!trackedOld.Contains(oi.ItemTypeId.Value)) continue;
                 await _stock.RecordMovementAsync(
                     companyId: bill.CompanyId,
                     itemTypeId: oi.ItemTypeId.Value,
@@ -485,9 +497,14 @@ namespace MyApp.Api.Services.Implementations
             await _context.SaveChangesAsync();
 
             // Re-emit Stock IN for the new line set.
+            // 2026-05-13: symmetric gate on HSCode — un-classified
+            // ItemTypes don't move stock either direction.
+            var trackedNew = await _stock.GetStockTrackedItemTypeIdsAsync(
+                newItems.Where(n => n.ItemTypeId.HasValue).Select(n => n.ItemTypeId!.Value));
             foreach (var ni in newItems)
             {
                 if (!ni.ItemTypeId.HasValue || ni.Quantity <= 0) continue;
+                if (!trackedNew.Contains(ni.ItemTypeId.Value)) continue;
                 await _stock.RecordMovementAsync(
                     companyId: bill.CompanyId,
                     itemTypeId: ni.ItemTypeId.Value,
@@ -523,9 +540,14 @@ namespace MyApp.Api.Services.Implementations
             // Reverse Stock IN before deleting the bill rows. Compensating
             // OUT entries are written rather than the original IN rows
             // being deleted — keeps the movement log immutable.
+            // 2026-05-13: skip lines whose ItemType has no HSCode —
+            // gate is symmetric with create / update.
+            var trackedOnDelete = await _stock.GetStockTrackedItemTypeIdsAsync(
+                bill.Items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
             foreach (var it in bill.Items)
             {
                 if (!it.ItemTypeId.HasValue || it.Quantity <= 0) continue;
+                if (!trackedOnDelete.Contains(it.ItemTypeId.Value)) continue;
                 await _stock.RecordMovementAsync(
                     companyId: bill.CompanyId,
                     itemTypeId: it.ItemTypeId.Value,

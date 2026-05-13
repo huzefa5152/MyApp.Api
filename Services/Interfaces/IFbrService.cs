@@ -21,6 +21,24 @@ namespace MyApp.Api.Services.Interfaces
         // New-Item-Type modal so its typeahead only suggests codes that
         // are valid under the parent bill's locked scenario.
         Task<List<FbrHSCodeDto>> GetHSCodesAsync(int companyId, string? search = null, string? saleType = null);
+
+        /// <summary>
+        /// Validate an HS code against the cached FBR catalog. Returns
+        /// true iff the code is present (exact, case-insensitive match).
+        ///
+        /// Falls back to format-only validation (PCT pattern
+        /// <c>NNNN.NNNN</c> with optional <c>.NN</c> tail) when the
+        /// catalog cannot be loaded — typically during a fresh tenant
+        /// onboarding before any FBR token has been entered. Logs a
+        /// warning in that case so operators can audit.
+        ///
+        /// 2026-05-13: added so ItemType create/update can reject free-
+        /// text HS codes that don't exist in PRAL's master list. Pre-fix
+        /// an operator could type any string into the HS Code field and
+        /// the row would save, later causing FBR submission to fail with
+        /// a cryptic [0007] / [0052].
+        /// </summary>
+        Task<bool> IsKnownHsCodeAsync(int companyId, string hsCode);
         Task<List<FbrUOMDto>> GetUOMsAsync(int companyId);
         Task<List<FbrTransactionTypeDto>> GetTransactionTypesAsync(int companyId);
         Task<List<FbrSROItemDto>> GetSROItemCodesAsync(int companyId);

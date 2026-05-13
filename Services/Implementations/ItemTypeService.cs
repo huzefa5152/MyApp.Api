@@ -18,17 +18,24 @@ namespace MyApp.Api.Services.Implementations
         // to enrich each DTO with the company's current on-hand qty
         // (opening + Σ in − Σ out) so dropdowns can sort by availability.
         private readonly IStockService _stock;
+        // 2026-05-13: used by Create/Update to validate that a typed
+        // HSCode actually exists in PRAL's master catalog. Pre-fix the
+        // field was free-text and operators could save garbage that
+        // later failed FBR submission with cryptic codes.
+        private readonly IFbrService _fbr;
 
         public ItemTypeService(
             IItemTypeRepository repo,
             AppDbContext context,
             ITaxMappingEngine taxEngine,
-            IStockService stock)
+            IStockService stock,
+            IFbrService fbr)
         {
             _repo = repo;
             _context = context;
             _taxEngine = taxEngine;
             _stock = stock;
+            _fbr = fbr;
         }
 
         private static ItemTypeDto ToDto(ItemType it) => new()
@@ -106,6 +113,13 @@ namespace MyApp.Api.Services.Implementations
         {
             if (await _repo.ExistsByNameAsync(dto.Name))
                 throw new InvalidOperationException($"An item with name '{dto.Name}' already exists.");
+
+            // 2026-05-13: validate the HS code against PRAL's master
+            // catalog. Empty HSCode is allowed — the row is "draft" /
+            // un-classified and won't move stock or submit to FBR until
+            // a real code is added. A non-empty value MUST match the
+            // catalog (or pass the format gate on a fresh-tenant fallback).
+            await ValidateHsCodeOrThrowAsync(dto.HSCode, enrichWithCompanyId);
 
             if (!string.IsNullOrWhiteSpace(dto.HSCode) && await _repo.ExistsByHsCodeAsync(dto.HSCode))
                 throw new InvalidOperationException(
@@ -224,6 +238,13 @@ namespace MyApp.Api.Services.Implementations
             if (await _repo.ExistsByNameAsync(dto.Name, id))
                 throw new InvalidOperationException($"An item with name '{dto.Name}' already exists.");
 
+            // 2026-05-13: only validate the HS code if it actually changed —
+            // a re-save with the same code should never get blocked even if
+            // the catalog goes briefly empty. Empty HSCode is allowed
+            // (un-classified placeholder).
+            if (!StringEq(it.HSCode, dto.HSCode))
+                await ValidateHsCodeOrThrowAsync(dto.HSCode, enrichWithCompanyId);
+
             if (!string.IsNullOrWhiteSpace(dto.HSCode) && await _repo.ExistsByHsCodeAsync(dto.HSCode, id))
                 throw new InvalidOperationException(
                     $"Another item in your catalog already uses HS Code '{dto.HSCode}'. " +
@@ -327,6 +348,47 @@ namespace MyApp.Api.Services.Implementations
                 DeliveryItemsUpdated = challansUpdated,
                 SubmittedInvoiceLinesSkipped = submittedSkipped,
             };
+        }
+
+        /// <summary>
+        /// Throws when <paramref name="hsCode"/> is non-empty but not
+        /// present in PRAL's HS-code catalog. Null/empty HSCode is OK —
+        /// the row is treated as a draft / un-classified placeholder and
+        /// is intentionally excluded from stock tracking + FBR
+        /// submission until a real code is added later.
+        ///
+        /// Falls back to format-only validation when the catalog can't
+        /// be loaded (fresh tenant, no FBR token anywhere yet) — that
+        /// fallback path is logged by FbrService.IsKnownHsCodeAsync.
+        /// </summary>
+        private async Task ValidateHsCodeOrThrowAsync(string? hsCode, int? companyIdHint)
+        {
+            if (string.IsNullOrWhiteSpace(hsCode)) return;
+            // Use the supplied companyId when available; otherwise pick
+            // ANY existing company so the catalog-load path has SOME
+            // token to try. The FbrService donor-refusal guard (audit
+            // H-9) does NOT fire on read-only catalog fetches that are
+            // attributed to the same tenant the data is for — and the
+            // catalog is global, so the choice of company doesn't leak
+            // anything.
+            var companyId = companyIdHint;
+            if (companyId == null)
+            {
+                companyId = await _context.Companies
+                    .OrderBy(c => c.Id)
+                    .Select(c => (int?)c.Id)
+                    .FirstOrDefaultAsync();
+            }
+            if (companyId == null) return; // brand-new install with no companies — nothing to validate against
+
+            var ok = await _fbr.IsKnownHsCodeAsync(companyId.Value, hsCode!);
+            if (!ok)
+            {
+                throw new InvalidOperationException(
+                    $"HS Code '{hsCode}' is not in PRAL's master catalog. " +
+                    "Pick a code from the FBR autocomplete instead of typing it freehand — " +
+                    "an unrecognised code will be rejected by FBR with error code [0007] at submission time.");
+            }
         }
 
         // When the controller passes enrichWithCompanyId and the operator hasn't

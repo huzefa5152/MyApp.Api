@@ -23,6 +23,20 @@ namespace MyApp.Api.Services.Interfaces
         Task<bool> IsTrackingEnabledAsync(int companyId);
 
         /// <summary>
+        /// Of the supplied ItemType ids, returns the subset that are
+        /// **stock-tracked** — i.e. they have a non-empty HSCode and are
+        /// therefore real classified inventory items.
+        ///
+        /// 2026-05-13: un-classified ItemTypes (HSCode is null/empty) live
+        /// outside the stock-tracking system on BOTH the IN and OUT side.
+        /// A buy or sell of an un-classified ItemType does not move
+        /// inventory; once the operator adds an HSCode, the next save
+        /// starts moving stock. Used by Invoice / PurchaseBill /
+        /// CheckAvailability flows to skip un-classified items.
+        /// </summary>
+        Task<HashSet<int>> GetStockTrackedItemTypeIdsAsync(IEnumerable<int> itemTypeIds);
+
+        /// <summary>
         /// Append a movement to the log. No-op if tracking is disabled for
         /// the company OR if itemTypeId is null (we can't track lines that
         /// aren't bound to a catalog row). Quantity must be positive — the

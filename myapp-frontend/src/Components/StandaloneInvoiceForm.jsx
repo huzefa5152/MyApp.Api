@@ -762,10 +762,13 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       <div style={styles.itemsHeaderBar}>
                         <label style={{ ...styles.label, margin: 0 }}>Items ({rows.length})</label>
                         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                          {/* Bills mode hides the catalog "+ New Item Type"
-                              button — item-type management is the Invoices
-                              tab's responsibility. */}
-                          {!billsMode && (canCreateItemType ? (
+                          {/* 2026-05-13: previously hidden when billsMode
+                              was true. Operators asked for the New Item
+                              Type shortcut on every bill-creation flow
+                              (including New Bill / New Bill No Challan),
+                              so it's now visible regardless of tab.
+                              Permission still gates the button. */}
+                          {canCreateItemType ? (
                             <button
                               type="button"
                               style={styles.inlineAddBtn}
@@ -776,7 +779,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                             </button>
                           ) : (
                             <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
-                          ))}
+                          )}
                           <button type="button" style={styles.addRowBtn} onClick={addRow}>
                             <MdAdd size={14} /> Add Row
                           </button>
