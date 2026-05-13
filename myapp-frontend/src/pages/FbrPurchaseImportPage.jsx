@@ -218,6 +218,19 @@ export default function FbrPurchaseImportPage() {
   // CSV of skipped rows for offline triage. One of the acceptance
   // criteria — operators want to mine "why did this row not come
   // through?" without re-running the upload.
+  //
+  // Audit H-14 (2026-05-13): prefix any string starting with =, +, -, @,
+  // tab or carriage-return with a single quote so Excel doesn't
+  // interpret it as a formula (=WEBSERVICE → SSRF, =HYPERLINK → exfil).
+  const csvSafe = (raw) => {
+    const s = String(raw ?? "");
+    if (!s) return s;
+    const first = s[0];
+    if (first === "=" || first === "+" || first === "-" || first === "@" || first === "\t" || first === "\r") {
+      return "'" + s;
+    }
+    return s;
+  };
   const skippedCsvHref = useMemo(() => {
     if (!result?.invoices?.length) return null;
     const lines = [["Invoice", "Supplier NTN", "Supplier", "Date", "Row", "HS Code", "Description", "Quantity", "Decision"].join(",")];
@@ -225,7 +238,7 @@ export default function FbrPurchaseImportPage() {
       for (const ln of inv.lines) {
         if (ln.decision === "will-import" || ln.decision === "product-will-be-created") continue;
         const cells = [inv.invoiceNo, inv.supplierNtn, inv.supplierName, inv.invoiceDate || "", ln.sourceRowNumber, ln.hsCode, ln.description, ln.quantity, ln.decision]
-          .map((c) => `"${String(c ?? "").replaceAll('"', '""')}"`);
+          .map((c) => `"${csvSafe(c).replaceAll('"', '""')}"`);
         lines.push(cells.join(","));
       }
     }

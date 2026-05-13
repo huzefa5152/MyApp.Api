@@ -585,7 +585,27 @@ namespace MyApp.Api.Helpers
                 }
             }
 
-            cell.Value = newValue;
+            cell.Value = CsvSafe(newValue);
+        }
+
+        /// <summary>
+        /// Audit H-14 (2026-05-13): prefix a leading <c>=</c> / <c>+</c> /
+        /// <c>-</c> / <c>@</c> / <c>\t</c> / <c>\r</c> with a single
+        /// quote so a downstream Excel session does NOT interpret the
+        /// operator-controlled string as a formula
+        /// (=WEBSERVICE → SSRF, =HYPERLINK → exfil, =cmd|... → RCE).
+        ///
+        /// Numbers / dates / cells that already routed through the
+        /// numeric / date branches above never hit this path — we only
+        /// neutralise string values.
+        /// </summary>
+        private static string CsvSafe(string? s)
+        {
+            if (string.IsNullOrEmpty(s)) return s ?? "";
+            var first = s[0];
+            if (first == '=' || first == '+' || first == '-' || first == '@' || first == '\t' || first == '\r')
+                return "'" + s;
+            return s;
         }
 
         private static List<Dictionary<string, object?>> GetCollection(Dictionary<string, object?> data, string name)

@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -274,6 +275,11 @@ builder.Services.AddSingleton<ISensitiveDataRedactor, SensitiveDataRedactor>();
 // FBR communication log — dedicated trail for audit H-3.
 builder.Services.AddScoped<IFbrCommunicationLogService, FbrCommunicationLogService>();
 
+// Audit H-8 (2026-05-13): daily purge job. Soft-clears bodies on rows
+// past Fbr:LogSoftPurgeDays (default 180), hard-deletes past
+// Fbr:LogRetentionDays (default 365).
+builder.Services.AddHostedService<MyApp.Api.Services.HostedServices.FbrCommunicationLogPurgeService>();
+
 // HttpContextAccessor — needed by FbrService etc. so they can pull the
 // current request's CorrelationId without taking HttpContext directly.
 builder.Services.AddHttpContextAccessor();
@@ -325,6 +331,18 @@ builder.Services.AddHttpClient("FBR", client =>
     options.CircuitBreaker.FailureRatio = 0.5;
     options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(15);
 });
+
+// Audit C-1 (2026-05-13): ASP.NET Data Protection — keys persisted to
+// disk so the encrypted Company.FbrToken column survives restarts. On
+// MonsterASP the key ring lives under data/keys (must NOT be in
+// wwwroot — that would serve them). The application name is fixed so
+// staging keys don't accidentally decrypt prod payloads.
+var dataProtectionKeyDir = Path.Combine(AppContext.BaseDirectory, "data", "keys");
+Directory.CreateDirectory(dataProtectionKeyDir);
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyDir))
+    .SetApplicationName("MyApp.Api");
+builder.Services.AddSingleton<MyApp.Api.Helpers.IFbrTokenProtector, MyApp.Api.Helpers.FbrTokenProtector>();
 
 // RBAC: permission service needs an in-process cache for the per-user
 // permission-set TTL.

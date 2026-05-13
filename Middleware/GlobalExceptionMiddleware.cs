@@ -50,7 +50,10 @@ namespace MyApp.Api.Middleware
                     requestBody = await reader.ReadToEndAsync();
                     if (string.IsNullOrWhiteSpace(requestBody)) requestBody = null;
                     else if (requestBody.Length > 4000) requestBody = requestBody[..4000] + "...(truncated)";
-                    requestBody = redactor.Scrub(requestBody);
+                    // Audit C-10 / H-7 (2026-05-13): dispatch by content
+                    // type so form-encoded and multipart bodies are also
+                    // scrubbed (the JSON regex was a no-op for those).
+                    requestBody = redactor.ScrubByContentType(requestBody, context.Request.ContentType);
                 }
             }
             catch { /* ignore */ }
@@ -126,7 +129,10 @@ namespace MyApp.Api.Middleware
                     requestBody = await reader.ReadToEndAsync();
                     if (requestBody.Length > 4000)
                         requestBody = requestBody[..4000] + "...(truncated)";
-                    requestBody = redactor.Scrub(requestBody);
+                    // Audit C-10 / H-7 (2026-05-13): dispatch by content
+                    // type so form-encoded and multipart bodies are also
+                    // scrubbed (the JSON regex was a no-op for those).
+                    requestBody = redactor.ScrubByContentType(requestBody, context.Request.ContentType);
                 }
             }
             catch { /* ignore body read failures */ }

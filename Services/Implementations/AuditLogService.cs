@@ -29,7 +29,28 @@ namespace MyApp.Api.Services.Implementations
             _logger = logger;
         }
 
-        private static AuditLogDto ToDto(AuditLog a) => new()
+        // Audit C-10 (2026-05-13): default list-shape DTO STRIPS StackTrace.
+        // The operator UI doesn't need the full stack; surface it only via
+        // the per-row detail endpoint (which renders a separate UI tab and
+        // is gated by an extra permission below).
+        private static AuditLogDto ToListDto(AuditLog a) => new()
+        {
+            Id = a.Id,
+            Timestamp = a.Timestamp,
+            Level = a.Level,
+            UserName = a.UserName,
+            HttpMethod = a.HttpMethod,
+            RequestPath = a.RequestPath,
+            StatusCode = a.StatusCode,
+            ExceptionType = a.ExceptionType,
+            Message = a.Message,
+            StackTrace = null,
+            RequestBody = a.RequestBody,
+            QueryString = a.QueryString
+        };
+
+        // Detail-shape DTO keeps StackTrace for the per-row drill-through.
+        private static AuditLogDto ToDetailDto(AuditLog a) => new()
         {
             Id = a.Id,
             Timestamp = a.Timestamp,
@@ -101,7 +122,7 @@ namespace MyApp.Api.Services.Implementations
             var result = await _repository.GetPagedAsync(page, pageSize, level, search);
             return new PagedResult<AuditLogDto>
             {
-                Items = result.Items.Select(ToDto).ToList(),
+                Items = result.Items.Select(ToListDto).ToList(),
                 TotalCount = result.TotalCount,
                 Page = result.Page,
                 PageSize = result.PageSize
@@ -111,7 +132,7 @@ namespace MyApp.Api.Services.Implementations
         public async Task<AuditLogDto?> GetByIdAsync(int id)
         {
             var log = await _repository.GetByIdAsync(id);
-            return log == null ? null : ToDto(log);
+            return log == null ? null : ToDetailDto(log);
         }
 
         public async Task<AuditSummaryDto> GetSummaryAsync()

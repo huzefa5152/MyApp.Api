@@ -19,9 +19,17 @@ Handlebars.registerHelper("fmtDec", (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 );
 
-Handlebars.registerHelper("nl2br", (s) =>
-  new Handlebars.SafeString((s || "").replace(/\n/g, "<br>"))
-);
+// Audit H-13 (2026-05-13): pre-fix, nl2br only replaced \n with <br>
+// then wrapped the result in a SafeString. Operator-controlled fields
+// (clientAddress, companyAddress, supplierAddress) flow through this
+// helper; a stored "<script>" payload would have executed in the print
+// popup. HTML-escape the input FIRST so any markup becomes inert text,
+// THEN do the \n -> <br> replacement.
+Handlebars.registerHelper("nl2br", (s) => {
+  if (s == null) return "";
+  const escaped = Handlebars.Utils.escapeExpression(String(s));
+  return new Handlebars.SafeString(escaped.replace(/\n/g, "<br>"));
+});
 
 Handlebars.registerHelper("join", (arr, sep) =>
   (arr || []).join(typeof sep === "string" ? sep : ", ")

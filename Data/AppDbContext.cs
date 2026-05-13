@@ -1,11 +1,26 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 
 namespace MyApp.Api.Data
 {
     public class AppDbContext : DbContext
     {
+        private readonly IFbrTokenProtector? _fbrTokenProtector;
+
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
+        // Audit C-1 (2026-05-13): preferred constructor — when DI can
+        // supply IFbrTokenProtector, the Company.FbrToken column is
+        // transparently encrypted on write / decrypted on read via the
+        // value converter wired up in OnModelCreating. Falls back to the
+        // parameterless constructor (plaintext) when called from tooling
+        // (migrations / design-time) that doesn't have the protector.
+        public AppDbContext(DbContextOptions<AppDbContext> options, IFbrTokenProtector fbrTokenProtector)
+            : base(options)
+        {
+            _fbrTokenProtector = fbrTokenProtector;
+        }
 
         public DbSet<Company> Companies { get; set; }
         public DbSet<DeliveryChallan> DeliveryChallans { get; set; }
@@ -60,6 +75,21 @@ namespace MyApp.Api.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // Audit C-1 (2026-05-13): transparent encryption for the
+            // PRAL bearer token. Reads decrypt the stored payload,
+            // writes encrypt the operator-typed value. When DI didn't
+            // hand us a protector (design-time / migrations / tests)
+            // we skip the converter so EF can still inspect the model.
+            if (_fbrTokenProtector != null)
+            {
+                var protector = _fbrTokenProtector;
+                modelBuilder.Entity<Company>()
+                    .Property(c => c.FbrToken)
+                    .HasConversion(
+                        plain => protector.Protect(plain),
+                        stored => protector.Unprotect(stored));
+            }
+
             modelBuilder.Entity<AuditLog>()
                 .HasIndex(a => a.Timestamp);
 
