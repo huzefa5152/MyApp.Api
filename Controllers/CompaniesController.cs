@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 using MyApp.Api.DTOs;
+using MyApp.Api.Models;
 
 namespace MyApp.Api.Controllers
 {
@@ -15,12 +16,18 @@ namespace MyApp.Api.Controllers
     {
         private readonly ICompanyService _companyService;
         private readonly ICompanyAccessGuard _access;
+        private readonly IPermissionService _permissions;
         private readonly IWebHostEnvironment _env;
 
-        public CompaniesController(ICompanyService companyService, ICompanyAccessGuard access, IWebHostEnvironment env)
+        public CompaniesController(
+            ICompanyService companyService,
+            ICompanyAccessGuard access,
+            IPermissionService permissions,
+            IWebHostEnvironment env)
         {
             _companyService = companyService;
             _access = access;
+            _permissions = permissions;
             _env = env;
         }
 
@@ -84,6 +91,34 @@ namespace MyApp.Api.Controllers
                 return BadRequest(ModelState);
 
             await _access.AssertAccessAsync(CurrentUserId, id);
+
+            // Audit H-1 / H-16 (2026-05-13): privileged sub-fields on the
+            // company DTO need their own permission gates. If the caller
+            // doesn't hold the relevant permission, we silently strip the
+            // sensitive field from the incoming DTO so the rest of the
+            // edit still goes through. This matches the audit guidance to
+            // keep edit-the-rest UX intact while denying the privileged
+            // change.
+            var existing = await _companyService.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+
+            // Tenant-isolation flip — only the dedicated perm OR seed admin.
+            if (dto.IsTenantIsolated != existing.IsTenantIsolated
+                && !await _permissions.HasPermissionAsync(CurrentUserId, "tenantaccess.manage.update"))
+            {
+                dto.IsTenantIsolated = existing.IsTenantIsolated;
+            }
+
+            // FBR token — separate perm. dto.FbrToken == null means "no
+            // change"; "" means "clear". Only enforce on a real value.
+            // The view DTO exposes HasFbrToken, not the value, so we use
+            // that signal to detect "rotating an existing token".
+            if (!string.IsNullOrEmpty(dto.FbrToken)
+                && !await _permissions.HasPermissionAsync(CurrentUserId, "companies.manage.fbrtoken"))
+            {
+                dto.FbrToken = null;
+            }
+
             try
             {
                 var updatedCompany = await _companyService.UpdateAsync(id, dto);

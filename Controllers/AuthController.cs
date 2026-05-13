@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
@@ -17,13 +18,23 @@ namespace MyApp.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IMemoryCache _cache;
         private readonly int _seedAdminUserId;
         private readonly new ILogger<AuthController> _logger;
 
-        public AuthController(AppDbContext context, IConfiguration configuration, ILogger<AuthController> logger) : base(logger)
+        // Pre-computed bcrypt hash used ONLY to burn equivalent CPU on
+        // the unknown-username login path so timing doesn't leak whether
+        // an account exists. Generated once at type-load; the actual
+        // password value is irrelevant — only the hash matters.
+        // Audit M-12 (2026-05-13).
+        private static readonly string _dummyBcryptHash =
+            BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString("N"));
+
+        public AuthController(AppDbContext context, IConfiguration configuration, IMemoryCache cache, ILogger<AuthController> logger) : base(logger)
         {
             _context = context;
             _configuration = configuration;
+            _cache = cache;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
             _logger = logger;
         }
@@ -35,7 +46,18 @@ namespace MyApp.Api.Controllers
             var user = await _context.Users
                 .FirstOrDefaultAsync(u => u.Username == dto.Username);
 
-            if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+            if (user == null)
+            {
+                // Audit M-12 (2026-05-13): burn equivalent CPU so the
+                // response timing doesn't distinguish "user does not exist"
+                // from "wrong password". The result is discarded.
+                _ = BCrypt.Net.BCrypt.Verify(dto.Password ?? string.Empty, _dummyBcryptHash);
+                _logger.LogWarning("Failed login attempt for username={Username} from {Ip}",
+                    dto.Username, HttpContext.Connection.RemoteIpAddress);
+                return Unauthorized(new { message = "Invalid username or password" });
+            }
+
+            if (!BCrypt.Net.BCrypt.Verify(dto.Password ?? string.Empty, user.PasswordHash))
             {
                 _logger.LogWarning("Failed login attempt for username={Username} from {Ip}",
                     dto.Username, HttpContext.Connection.RemoteIpAddress);
@@ -136,13 +158,43 @@ namespace MyApp.Api.Controllers
             if (!BCrypt.Net.BCrypt.Verify(dto.CurrentPassword, user.PasswordHash))
                 return BadRequest(new { message = "Current password is incorrect" });
 
-            if (string.IsNullOrWhiteSpace(dto.NewPassword) || dto.NewPassword.Length < 6)
-                return BadRequest(new { message = "New password must be at least 6 characters" });
+            // Audit H-12 (2026-05-13): bump minimum to 8 chars and
+            // require at least one letter + one digit so the most-trivial
+            // passwords (12345678) are rejected.
+            var policyError = ValidatePasswordPolicy(dto.NewPassword);
+            if (policyError != null)
+                return BadRequest(new { message = policyError });
 
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            // Bump the security stamp so every JWT issued under the old
+            // password (including the one used to authenticate THIS
+            // request) stops working on the next request. Audit C-6.
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
             await _context.SaveChangesAsync();
+            _cache.Remove($"user-stamp:{user.Id}");
 
             return Ok(new { message = "Password changed successfully" });
+        }
+
+        /// <summary>
+        /// Shared password-policy check used by ChangePassword and the
+        /// admin user-management create/update endpoints. Returns null
+        /// when the password is acceptable; otherwise a user-facing error
+        /// message. Audit H-12 (2026-05-13).
+        /// </summary>
+        internal static string? ValidatePasswordPolicy(string? candidate)
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+                return "Password is required.";
+            if (candidate.Length < 8)
+                return "Password must be at least 8 characters.";
+            if (candidate.Length > 128)
+                return "Password must be 128 characters or fewer.";
+            if (!candidate.Any(char.IsLetter))
+                return "Password must contain at least one letter.";
+            if (!candidate.Any(char.IsDigit))
+                return "Password must contain at least one digit.";
+            return null;
         }
 
         [HttpPost("avatar")]
@@ -226,7 +278,9 @@ namespace MyApp.Api.Controllers
                 new Claim(ClaimTypes.Role, user.Role),
                 new Claim("fullName", user.FullName),
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                // Token-revocation marker. Audit C-6 (2026-05-13).
+                new Claim("stamp", user.SecurityStamp ?? "")
             };
 
             var token = new JwtSecurityToken(
@@ -239,6 +293,28 @@ namespace MyApp.Api.Controllers
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        /// <summary>
+        /// Server-side logout — bumps the SecurityStamp so every token
+        /// previously issued for this user (including the one used to
+        /// hit this endpoint) stops authenticating on the next request.
+        /// Audit C-6 (2026-05-13).
+        /// </summary>
+        [HttpPost("logout")]
+        [Authorize]
+        public async Task<IActionResult> Logout()
+        {
+            var username = User.FindFirstValue(ClaimTypes.Name);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+            if (user != null)
+            {
+                user.SecurityStamp = Guid.NewGuid().ToString("N");
+                await _context.SaveChangesAsync();
+                _cache.Remove($"user-stamp:{user.Id}");
+                _logger.LogInformation("User {UserId} signed out — security stamp rotated", user.Id);
+            }
+            return Ok(new { message = "Signed out" });
         }
     }
 }

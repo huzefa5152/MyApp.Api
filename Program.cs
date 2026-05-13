@@ -1,9 +1,12 @@
-﻿using System.Text;
+﻿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
 using MyApp.Api.Data;
 using MyApp.Api.Helpers;
@@ -99,7 +102,68 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = builder.Configuration["Jwt:Issuer"],
         ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+        // Audit H-10 (2026-05-13): default ClockSkew is 5 minutes,
+        // which silently extends every token's lifetime. Tight to 30s
+        // so a revoked / expired token can't keep authenticating.
+        ClockSkew = TimeSpan.FromSeconds(30),
+    };
+
+    // Audit C-6 (2026-05-13): server-side token revocation. On every
+    // validated token, compare the "stamp" claim to the user's current
+    // Users.SecurityStamp column. Mismatch = token was minted before
+    // the most recent logout / password change → reject. Cached for
+    // 60s per user so the per-request overhead is one in-memory hit.
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var principal = context.Principal;
+            if (principal == null)
+            {
+                context.Fail("Token has no principal");
+                return;
+            }
+
+            var sub = principal.FindFirstValue(JwtRegisteredClaimNames.Sub)
+                     ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
+            var stamp = principal.FindFirstValue("stamp");
+            if (string.IsNullOrEmpty(sub) || string.IsNullOrEmpty(stamp))
+            {
+                // Tokens minted before C-6 (no stamp claim) are
+                // tolerated for one rotation cycle — they still
+                // authenticate but cannot be revoked. Treat absent
+                // stamp as "stamp-less legacy token".
+                return;
+            }
+
+            if (!int.TryParse(sub, out var userId))
+            {
+                context.Fail("Invalid subject claim");
+                return;
+            }
+
+            var cache = context.HttpContext.RequestServices
+                .GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
+            var cacheKey = $"user-stamp:{userId}";
+            if (!cache.TryGetValue<string>(cacheKey, out var currentStamp))
+            {
+                var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+                currentStamp = await db.Users
+                    .Where(u => u.Id == userId)
+                    .Select(u => u.SecurityStamp)
+                    .FirstOrDefaultAsync();
+                if (currentStamp != null)
+                {
+                    cache.Set(cacheKey, currentStamp, TimeSpan.FromSeconds(60));
+                }
+            }
+
+            if (currentStamp != null && !string.Equals(currentStamp, stamp, StringComparison.Ordinal))
+            {
+                context.Fail("Token has been revoked");
+            }
+        }
     };
 });
 
@@ -315,6 +379,29 @@ using (var scope = app.Services.CreateScope())
     ");
 
     db.Database.Migrate();
+
+    // ── SecurityStamp column for token revocation ──────────────────────
+    // Audit C-6 (2026-05-13). Adds the Users.SecurityStamp column out-of-
+    // band (no formal EF migration) so we don't need to regenerate the
+    // snapshot/designer files. The column is idempotently created and
+    // every existing user is seeded with a fresh stamp so prior bcrypt
+    // hashes still authenticate. Subsequent logouts / password changes
+    // rotate the value; the token validator compares the JWT's "stamp"
+    // claim to this column on every request — mismatch = 401.
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM sys.columns
+                       WHERE object_id = OBJECT_ID('Users') AND name = 'SecurityStamp')
+        BEGIN
+            ALTER TABLE [Users] ADD [SecurityStamp] nvarchar(64) NULL;
+        END;
+        UPDATE [Users] SET [SecurityStamp] = REPLACE(CONVERT(varchar(36), NEWID()), '-', '')
+        WHERE [SecurityStamp] IS NULL;
+        IF EXISTS (SELECT 1 FROM sys.columns
+                   WHERE object_id = OBJECT_ID('Users') AND name = 'SecurityStamp' AND is_nullable = 1)
+        BEGIN
+            ALTER TABLE [Users] ALTER COLUMN [SecurityStamp] nvarchar(64) NOT NULL;
+        END
+    ");
 
     // One-time tagging: any pre-existing bills whose paymentTerms start
     // with "[SNxxx]" came from the legacy FBR Sandbox seed flow (or the
@@ -1345,15 +1432,45 @@ if (swaggerEnabled)
 }
 
 // Honour X-Forwarded-Proto / X-Forwarded-For from the reverse proxy
-// (Render, MonsterASP, etc.). Without this, app.Request.IsHttps is
-// always false behind a TLS-terminating proxy, which trips up HSTS
-// and any same-site cookie defaults. KnownNetworks/Proxies is left
-// at the framework default — populate via config if you need to
-// restrict which proxies can rewrite these headers.
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+// (Render, MonsterASP, etc.). Audit C-12 (2026-05-13): pre-fix
+// KnownProxies / KnownNetworks were at framework defaults (empty) so
+// behind a TLS-terminating proxy the rate-limit partition key was the
+// proxy's IP instead of the real client — every login attempt shared
+// one bucket = effectively no throttle. Now optionally populated via
+// config so the operator can restrict which proxies can rewrite these
+// headers.
+var fwdOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-});
+    // Allow more hops than the default 1 — MonsterASP, Cloudflare etc.
+    // can stack proxies before the request reaches us.
+    ForwardLimit = app.Configuration.GetValue<int?>("ForwardedHeaders:ForwardLimit") ?? 2,
+};
+var knownProxies = app.Configuration.GetSection("ForwardedHeaders:KnownProxies")
+    .Get<string[]>() ?? Array.Empty<string>();
+var knownNetworks = app.Configuration.GetSection("ForwardedHeaders:KnownNetworks")
+    .Get<string[]>() ?? Array.Empty<string>();
+if (knownProxies.Length > 0 || knownNetworks.Length > 0)
+{
+    fwdOptions.KnownProxies.Clear();
+    fwdOptions.KnownNetworks.Clear();
+    foreach (var p in knownProxies)
+    {
+        if (System.Net.IPAddress.TryParse(p, out var ip))
+            fwdOptions.KnownProxies.Add(ip);
+    }
+    foreach (var n in knownNetworks)
+    {
+        var parts = n.Split('/');
+        if (parts.Length == 2
+            && System.Net.IPAddress.TryParse(parts[0], out var prefix)
+            && int.TryParse(parts[1], out var prefixLen))
+        {
+            fwdOptions.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(prefix, prefixLen));
+        }
+    }
+}
+app.UseForwardedHeaders(fwdOptions);
 
 // HSTS in non-dev — tells browsers to never speak plaintext to this
 // host once they've seen one HTTPS response. Dev keeps using

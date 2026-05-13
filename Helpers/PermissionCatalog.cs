@@ -207,6 +207,24 @@ namespace MyApp.Api.Helpers
                 "View user → company tenant-access assignments"),
             new("tenantaccess.manage.assign", "Tenant Access", "Manage", "Assign",
                 "Grant or revoke a user's access to specific companies"),
+            // Audit H-1 (2026-05-13): flipping Company.IsTenantIsolated
+            // changes who passes the access guard for that company. Carve
+            // it out from generic companies.manage.update so a regular
+            // operator with company-edit rights cannot silently open up a
+            // company to every authenticated user.
+            new("tenantaccess.manage.update", "Tenant Access", "Manage", "Update",
+                "Toggle Company.IsTenantIsolated (changes who can see a company)"),
+            // Audit H-16 (2026-05-13): writing Company.FbrToken needs its
+            // own gate. Generic companies.manage.update should not be
+            // enough to install / rotate a tenant's PRAL bearer.
+            new("companies.manage.fbrtoken",  "Companies", "Manage", "Update FBR Token",
+                "Set or rotate the FBR/PRAL bearer token for a company"),
+            // Audit M-9 (2026-05-13): explicit gate for the public-ish
+            // FBR reference-data endpoints (HS codes, UOMs, provinces).
+            // Without this an idle tenant member could otherwise burn the
+            // company's PRAL daily quota.
+            new("fbr.reference.read",         "FBR", "Reference", "Read",
+                "Read FBR reference catalogs (HS codes, UOMs, provinces, sale types)"),
         };
     }
 }

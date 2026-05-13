@@ -2989,6 +2989,10 @@ namespace MyApp.Api.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
@@ -3008,6 +3012,7 @@ namespace MyApp.Api.Migrations
                             FullName = "Administrator",
                             PasswordHash = "$2a$11$ITxobMb6Kk7r4cjBAN3tF.U2x5q/PpaueP/1dvUSr6V0N5z724cuu",
                             Role = "Admin",
+                            SecurityStamp = "00000000000000000000000000000000",
                             Username = "admin"
                         });
                 });

@@ -95,6 +95,8 @@ namespace MyApp.Api.Data
 
             // Seed default admin user (password: admin123)
             // Pre-computed BCrypt hash to avoid dynamic value in HasData
+            // SecurityStamp is seeded to a deterministic zeroed value;
+            // first real login / password change rotates it.
             modelBuilder.Entity<User>().HasData(new User
             {
                 Id = 1,
@@ -102,8 +104,16 @@ namespace MyApp.Api.Data
                 PasswordHash = "$2a$11$ITxobMb6Kk7r4cjBAN3tF.U2x5q/PpaueP/1dvUSr6V0N5z724cuu",
                 FullName = "Administrator",
                 Role = "Admin",
-                CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                SecurityStamp = "00000000000000000000000000000000"
             });
+
+            // SecurityStamp column type — 64 char max (32-char compact
+            // hex stamp leaves headroom). Audit C-6 (2026-05-13).
+            modelBuilder.Entity<User>()
+                .Property(u => u.SecurityStamp)
+                .HasMaxLength(64)
+                .IsRequired();
 
             // Delete Items when a DeliveryChallan is deleted
             modelBuilder.Entity<DeliveryChallan>()

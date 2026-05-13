@@ -1,7 +1,9 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using MyApp.Api.Controllers;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Middleware;
@@ -21,6 +23,11 @@ namespace MyApp.Api.Controllers
             _context = context;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
         }
+
+        private int CurrentUserId =>
+            int.TryParse(
+                User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
+                out var id) ? id : 0;
 
         // GET /api/users
         [HttpGet]
@@ -73,11 +80,23 @@ namespace MyApp.Api.Controllers
             if (string.IsNullOrWhiteSpace(dto.Username) || string.IsNullOrWhiteSpace(dto.Password))
                 return BadRequest(new { message = "Username and password are required" });
 
-            if (dto.Password.Length < 6)
-                return BadRequest(new { message = "Password must be at least 6 characters" });
+            // Audit H-12 (2026-05-13): shared password policy.
+            var policyError = AuthController.ValidatePasswordPolicy(dto.Password);
+            if (policyError != null) return BadRequest(new { message = policyError });
 
             if (string.IsNullOrWhiteSpace(dto.FullName))
                 return BadRequest(new { message = "Full name is required" });
+
+            // Audit C-15 (2026-05-13): the legacy free-text Role column is
+            // still consumed by some JWT-claim consumers. Restrict the
+            // privileged value "Admin" to the seed admin only — anyone
+            // else picking it from the dropdown becomes a regular user.
+            var desiredRole = string.IsNullOrWhiteSpace(dto.Role) ? "User" : dto.Role.Trim();
+            if (string.Equals(desiredRole, "Admin", StringComparison.OrdinalIgnoreCase)
+                && CurrentUserId != _seedAdminUserId)
+            {
+                return Forbid();
+            }
 
             var exists = await _context.Users.AnyAsync(u => u.Username == dto.Username);
             if (exists)
@@ -94,7 +113,7 @@ namespace MyApp.Api.Controllers
                 Username = dto.Username,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
                 FullName = dto.FullName,
-                Role = string.IsNullOrWhiteSpace(dto.Role) ? "User" : dto.Role.Trim(),
+                Role = desiredRole,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -138,14 +157,28 @@ namespace MyApp.Api.Controllers
             // Edit modal calls assignUserRoles() right after this PUT to
             // keep the two in sync. Without this assignment the pill would
             // forever show whatever role the user was created with.
+            // Audit C-15: the privileged value "Admin" stays seed-admin
+            // only — same gate as Create.
             if (!string.IsNullOrWhiteSpace(dto.Role))
-                user.Role = dto.Role.Trim();
+            {
+                var desiredRole = dto.Role.Trim();
+                if (string.Equals(desiredRole, "Admin", StringComparison.OrdinalIgnoreCase)
+                    && CurrentUserId != _seedAdminUserId)
+                {
+                    return Forbid();
+                }
+                user.Role = desiredRole;
+            }
 
             if (!string.IsNullOrWhiteSpace(dto.Password))
             {
-                if (dto.Password.Length < 6)
-                    return BadRequest(new { message = "Password must be at least 6 characters" });
+                // Audit H-12 (2026-05-13).
+                var policyError = AuthController.ValidatePasswordPolicy(dto.Password);
+                if (policyError != null) return BadRequest(new { message = policyError });
                 user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+                // Bump the security stamp so the affected user's existing
+                // JWTs stop authenticating (audit C-6).
+                user.SecurityStamp = Guid.NewGuid().ToString("N");
             }
 
             await _context.SaveChangesAsync();
