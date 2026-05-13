@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -26,6 +28,7 @@ namespace MyApp.Api.Controllers
         private readonly IPOFormatFingerprintService _fingerprint;
         private readonly IPOParserService _rawParser;
         private readonly AppDbContext _db;
+        private readonly ICompanyAccessGuard _access;
 
         private static readonly JsonSerializerOptions JsonOpts = new()
         {
@@ -37,12 +40,35 @@ namespace MyApp.Api.Controllers
             IPOFormatRegistry registry,
             IPOFormatFingerprintService fingerprint,
             IPOParserService rawParser,
-            AppDbContext db)
+            AppDbContext db,
+            ICompanyAccessGuard access)
         {
             _registry = registry;
             _fingerprint = fingerprint;
             _rawParser = rawParser;
             _db = db;
+            _access = access;
+        }
+
+        private int CurrentUserId =>
+            int.TryParse(
+                User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
+                out var id) ? id : 0;
+
+        /// <summary>
+        /// Best-effort tenant guard for a Client referenced by a PO
+        /// format DTO. Looks up the client's CompanyId and asserts the
+        /// caller has access. Audit H-4 (2026-05-13).
+        /// </summary>
+        private async Task AssertClientAccessAsync(int? clientId)
+        {
+            if (!clientId.HasValue) return;
+            var companyId = await _db.Clients
+                .Where(c => c.Id == clientId.Value)
+                .Select(c => (int?)c.CompanyId)
+                .FirstOrDefaultAsync();
+            if (companyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
         }
 
         // List formats, optionally filtered by companyId and/or clientId.
@@ -123,6 +149,11 @@ namespace MyApp.Api.Controllers
             if (string.IsNullOrWhiteSpace(dto.Name))
                 return BadRequest(new { error = "name is required." });
 
+            // Tenant guard — audit H-4 (2026-05-13).
+            if (dto.CompanyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId.Value);
+            await AssertClientAccessAsync(dto.ClientId);
+
             var createdBy = User?.Identity?.Name;
             var format = await _registry.CreateAsync(dto, createdBy);
             return CreatedAtAction(nameof(Get), new { id = format.Id }, ToDto(format));
@@ -143,6 +174,11 @@ namespace MyApp.Api.Controllers
                 || string.IsNullOrWhiteSpace(dto.QuantityHeader)
                 || string.IsNullOrWhiteSpace(dto.UnitHeader))
                 return BadRequest(new { error = "descriptionHeader, quantityHeader and unitHeader are all required." });
+
+            // Tenant guard — audit H-4 (2026-05-13).
+            if (dto.CompanyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId.Value);
+            await AssertClientAccessAsync(dto.ClientId);
 
             // Dedup — one format per Common Client GROUP, not per
             // (company, client) pair. Common Clients machinery ensures
@@ -202,6 +238,14 @@ namespace MyApp.Api.Controllers
                 || string.IsNullOrWhiteSpace(dto.QuantityHeader)
                 || string.IsNullOrWhiteSpace(dto.UnitHeader))
                 return BadRequest(new { error = "descriptionHeader, quantityHeader and unitHeader are all required." });
+
+            // Tenant guard — audit H-4 (2026-05-13). Authorize against
+            // the existing row's company first (body fields can't smuggle
+            // the format into a tenant the caller doesn't own), then
+            // against the new client if it's being reassigned.
+            if (format.CompanyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId, format.CompanyId.Value);
+            await AssertClientAccessAsync(dto.ClientId);
 
             // Dedup on edit — same group-aware check as Create. If the
             // operator re-assigns this format to a client that already
@@ -286,6 +330,10 @@ namespace MyApp.Api.Controllers
         {
             var format = await _db.POFormats.FirstOrDefaultAsync(f => f.Id == id);
             if (format == null) return NotFound();
+
+            // Tenant guard — audit H-4 (2026-05-13).
+            if (format.CompanyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId, format.CompanyId.Value);
 
             _db.POFormats.Remove(format);
             await _db.SaveChangesAsync();

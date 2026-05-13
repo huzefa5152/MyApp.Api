@@ -16,6 +16,13 @@ namespace MyApp.Api.Services.Interfaces
         /// by a logging failure.</summary>
         Task LogAsync(FbrCommunicationLog row);
 
+        /// <summary>
+        /// Paged list. When <paramref name="accessibleCompanyIds"/> is
+        /// non-null AND <paramref name="companyId"/> is null, results are
+        /// narrowed to that set — used by the controller to enforce
+        /// tenant scope when the caller did not pick a single company.
+        /// Audit C-2 (2026-05-13).
+        /// </summary>
         Task<PagedResult<FbrCommunicationLogDto>> GetPagedAsync(
             int page, int pageSize,
             int? companyId = null,
@@ -23,13 +30,18 @@ namespace MyApp.Api.Services.Interfaces
             string? status = null,
             int? invoiceId = null,
             DateTime? since = null,
-            DateTime? until = null);
+            DateTime? until = null,
+            IReadOnlyCollection<int>? accessibleCompanyIds = null);
 
         Task<FbrCommunicationLogDto?> GetByIdAsync(long id);
 
         /// <summary>Aggregate counts for the monitor dashboard top strip.
         /// Buckets by Status (sent/acknowledged/submitted/rejected/failed).
+        /// Same tenant-scope contract as <see cref="GetPagedAsync"/>.
         /// </summary>
-        Task<FbrCommunicationSummaryDto> GetSummaryAsync(int? companyId, DateTime since);
+        Task<FbrCommunicationSummaryDto> GetSummaryAsync(
+            int? companyId,
+            DateTime since,
+            IReadOnlyCollection<int>? accessibleCompanyIds = null);
     }
 }

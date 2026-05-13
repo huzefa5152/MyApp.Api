@@ -24,6 +24,14 @@ namespace MyApp.Api.Services.Interfaces
         Task<bool> CancelAsync(int challanId);
         Task<bool> DeleteAsync(int challanId);
         Task<bool> DeleteItemAsync(int itemId);
+
+        /// <summary>
+        /// Returns the parent challan's CompanyId for a given item, or
+        /// null when the item doesn't exist. Used by the controller to
+        /// gate per-item endpoints with ICompanyAccessGuard (audit H-2,
+        /// 2026-05-13).
+        /// </summary>
+        Task<int?> GetCompanyForItemAsync(int itemId);
         Task<List<DeliveryChallanDto>> GetPendingChallansByCompanyAsync(int companyId);
         Task<PrintChallanDto?> GetPrintDataAsync(int challanId);
         Task<int> GetTotalCountAsync();

@@ -49,13 +49,23 @@ namespace MyApp.Api.Services.Implementations
             string? status = null,
             int? invoiceId = null,
             DateTime? since = null,
-            DateTime? until = null)
+            DateTime? until = null,
+            IReadOnlyCollection<int>? accessibleCompanyIds = null)
         {
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 1, 200);
 
             var q = _context.FbrCommunicationLogs.AsNoTracking().AsQueryable();
-            if (companyId.HasValue) q = q.Where(f => f.CompanyId == companyId.Value);
+            if (companyId.HasValue)
+            {
+                q = q.Where(f => f.CompanyId == companyId.Value);
+            }
+            else if (accessibleCompanyIds != null)
+            {
+                // Tenant scope on the no-companyId branch (audit C-2).
+                var ids = accessibleCompanyIds.ToList();
+                q = q.Where(f => ids.Contains(f.CompanyId));
+            }
             if (!string.IsNullOrWhiteSpace(action)) q = q.Where(f => f.Action == action);
             if (!string.IsNullOrWhiteSpace(status)) q = q.Where(f => f.Status == status);
             if (invoiceId.HasValue) q = q.Where(f => f.InvoiceId == invoiceId.Value);
@@ -86,11 +96,22 @@ namespace MyApp.Api.Services.Implementations
             return row == null ? null : ToDto(row);
         }
 
-        public async Task<FbrCommunicationSummaryDto> GetSummaryAsync(int? companyId, DateTime since)
+        public async Task<FbrCommunicationSummaryDto> GetSummaryAsync(
+            int? companyId,
+            DateTime since,
+            IReadOnlyCollection<int>? accessibleCompanyIds = null)
         {
             var q = _context.FbrCommunicationLogs.AsNoTracking()
                 .Where(f => f.Timestamp >= since);
-            if (companyId.HasValue) q = q.Where(f => f.CompanyId == companyId.Value);
+            if (companyId.HasValue)
+            {
+                q = q.Where(f => f.CompanyId == companyId.Value);
+            }
+            else if (accessibleCompanyIds != null)
+            {
+                var ids = accessibleCompanyIds.ToList();
+                q = q.Where(f => ids.Contains(f.CompanyId));
+            }
 
             // Aggregate in one trip via group-by status.
             var byStatus = await q

@@ -21,6 +21,11 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<PagedResult<AuditLog>> GetPagedAsync(int page, int pageSize, string? level = null, string? search = null)
         {
+            // Defence-in-depth clamp (audit C-11) — controller already
+            // clamps via PaginationHelper, but the repo is a public seam.
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 1, 200);
+
             var query = _context.AuditLogs.AsNoTracking().AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(level))

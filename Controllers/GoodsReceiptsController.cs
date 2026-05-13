@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 
@@ -42,8 +43,9 @@ namespace MyApp.Api.Controllers
             [FromQuery] DateTime? dateFrom = null,
             [FromQuery] DateTime? dateTo = null)
         {
-            var size = pageSize ?? _defaultPageSize;
-            var result = await _service.GetPagedByCompanyAsync(companyId, page, size, search, supplierId, status, dateFrom, dateTo);
+            var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
+            var clampedPage = PaginationHelper.ClampPage(page);
+            var result = await _service.GetPagedByCompanyAsync(companyId, clampedPage, size, search, supplierId, status, dateFrom, dateTo);
             return Ok(result);
         }
 

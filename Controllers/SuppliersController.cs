@@ -106,6 +106,10 @@ namespace MyApp.Api.Controllers
             if (dto.CompanyIds == null || dto.CompanyIds.Count == 0)
                 return BadRequest(new { message = "Select at least one company." });
 
+            // Per-id tenant access check — audit H-15 (2026-05-13).
+            foreach (var cid in dto.CompanyIds)
+                await _access.AssertAccessAsync(CurrentUserId, cid);
+
             try
             {
                 var result = await _service.CreateForCompaniesAsync(dto);

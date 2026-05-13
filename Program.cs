@@ -1331,9 +1331,18 @@ using (var scope = app.Services.CreateScope())
     ");
 }
 
-// Configure the HTTP request pipeline
-app.UseSwagger();
-app.UseSwaggerUI();
+// Configure the HTTP request pipeline.
+// Audit C-9 (2026-05-13): Swagger/OpenAPI used to render in every
+// environment, leaking the full route map, [HasPermission] keys, and
+// DTO shapes. Gate behind dev OR an explicit opt-in config flag so
+// staging can still expose it when needed.
+var swaggerEnabled = app.Environment.IsDevelopment()
+    || app.Configuration.GetValue<bool>("Swagger:Enabled", false);
+if (swaggerEnabled)
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 // Honour X-Forwarded-Proto / X-Forwarded-For from the reverse proxy
 // (Render, MonsterASP, etc.). Without this, app.Request.IsHttps is

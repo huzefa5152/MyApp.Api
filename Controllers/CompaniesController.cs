@@ -111,6 +111,12 @@ namespace MyApp.Api.Controllers
         [HasPermission("companies.manage.delete")]
         public async Task<IActionResult> DeleteCompany(int id)
         {
+            // Tenant guard — audit C-4 (2026-05-13): the cascade in
+            // CompanyService.DeleteAsync nukes invoices, challans, clients,
+            // items, templates for that company. Without this guard, a
+            // user with companies.manage.delete on tenant A could DELETE
+            // tenant B's company.
+            await _access.AssertAccessAsync(CurrentUserId, id);
             await _companyService.DeleteAsync(id);
             return NoContent();
         }

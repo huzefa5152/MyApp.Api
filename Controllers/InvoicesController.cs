@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 
@@ -69,9 +70,10 @@ namespace MyApp.Api.Controllers
             [FromQuery] DateTime? dateFrom = null,
             [FromQuery] DateTime? dateTo = null)
         {
-            var size = pageSize ?? _defaultPageSize;
+            var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
+            var clampedPage = PaginationHelper.ClampPage(page);
             var result = await _service.GetPagedByCompanyAsync(
-                companyId, page, size, search, clientId, dateFrom, dateTo);
+                companyId, clampedPage, size, search, clientId, dateFrom, dateTo);
             return Ok(result);
         }
 
@@ -106,9 +108,10 @@ namespace MyApp.Api.Controllers
             [FromQuery] DateTime? dateFrom = null,
             [FromQuery] DateTime? dateTo = null)
         {
-            var size = pageSize ?? _defaultPageSize;
+            var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
+            var clampedPage = PaginationHelper.ClampPage(page);
             var result = await _service.GetItemRateHistoryAsync(
-                companyId, page, size, itemTypeId, search, clientId, dateFrom, dateTo);
+                companyId, clampedPage, size, itemTypeId, search, clientId, dateFrom, dateTo);
             return Ok(result);
         }
 

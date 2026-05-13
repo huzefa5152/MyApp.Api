@@ -20,13 +20,16 @@ namespace MyApp.Api.Controllers
     public class FbrPurchaseImportController : ControllerBase
     {
         private readonly IFbrPurchaseImportService _import;
+        private readonly ICompanyAccessGuard _access;
         private readonly ILogger<FbrPurchaseImportController> _logger;
 
         public FbrPurchaseImportController(
             IFbrPurchaseImportService import,
+            ICompanyAccessGuard access,
             ILogger<FbrPurchaseImportController> logger)
         {
             _import = import;
+            _access = access;
             _logger = logger;
         }
 
@@ -48,6 +51,14 @@ namespace MyApp.Api.Controllers
 
             if (companyId <= 0)
                 return BadRequest(new { error = "companyId is required." });
+
+            // Tenant guard — audit C-3 (2026-05-13): the importer plants
+            // Suppliers, PurchaseBills, ItemTypes, and StockMovements into
+            // the target company. Pre-fix, any user with the perm could
+            // pass a competitor's companyId.
+            var userId = CurrentUserId();
+            if (userId == null) return Unauthorized();
+            await _access.AssertAccessAsync(userId.Value, companyId);
 
             // Accept both old .xls (HSSF) and new .xlsx (XSSF). FBR's
             // current export is .xls; they're moving to .xlsx in 2026.
@@ -93,6 +104,11 @@ namespace MyApp.Api.Controllers
             if (companyId <= 0)
                 return BadRequest(new { error = "companyId is required." });
 
+            // Tenant guard — see Preview for context (audit C-3).
+            var userId = CurrentUserId();
+            if (userId == null) return Unauthorized();
+            await _access.AssertAccessAsync(userId.Value, companyId);
+
             var name = (file.FileName ?? "").ToLowerInvariant();
             if (!name.EndsWith(".xls") && !name.EndsWith(".xlsx"))
                 return BadRequest(new { error = "Only .xls or .xlsx files are supported." });
@@ -100,7 +116,7 @@ namespace MyApp.Api.Controllers
             try
             {
                 using var stream = file.OpenReadStream();
-                var response = await _import.CommitAsync(stream, file.FileName!, companyId, CurrentUserId());
+                var response = await _import.CommitAsync(stream, file.FileName!, companyId, userId);
                 return Ok(response);
             }
             catch (Exception ex)

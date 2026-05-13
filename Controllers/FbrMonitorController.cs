@@ -1,6 +1,9 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 
@@ -20,18 +23,31 @@ namespace MyApp.Api.Controllers
     public class FbrMonitorController : ControllerBase
     {
         private readonly IFbrCommunicationLogService _service;
+        private readonly ICompanyAccessGuard _access;
         private readonly int _defaultPageSize;
 
-        public FbrMonitorController(IFbrCommunicationLogService service, IConfiguration configuration)
+        public FbrMonitorController(
+            IFbrCommunicationLogService service,
+            ICompanyAccessGuard access,
+            IConfiguration configuration)
         {
             _service = service;
+            _access = access;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 25);
         }
+
+        private int CurrentUserId =>
+            int.TryParse(
+                User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
+                out var id) ? id : 0;
 
         /// <summary>
         /// Paged list. Filters compose: companyId narrows to one tenant,
         /// status narrows to one bucket (failed / submitted / etc.),
         /// since/until bound the time window, invoiceId pins to a single bill.
+        /// Audit C-2 (2026-05-13): every call is now tenant-scoped — passing
+        /// companyId requires explicit access; omitting it falls back to
+        /// the caller's accessible-company set.
         /// </summary>
         [HttpGet]
         public async Task<ActionResult<PagedResult<FbrCommunicationLogDto>>> GetLogs(
@@ -43,14 +59,33 @@ namespace MyApp.Api.Controllers
             [FromQuery] int? invoiceId = null,
             [FromQuery] DateTime? since = null,
             [FromQuery] DateTime? until = null)
-            => Ok(await _service.GetPagedAsync(
-                page, pageSize ?? _defaultPageSize, companyId, action, status, invoiceId, since, until));
+        {
+            var clampedPage = PaginationHelper.ClampPage(page);
+            var clampedSize = PaginationHelper.Clamp(pageSize, _defaultPageSize, PaginationHelper.AuditMax);
+
+            if (companyId.HasValue)
+            {
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+                return Ok(await _service.GetPagedAsync(
+                    clampedPage, clampedSize, companyId, action, status, invoiceId, since, until));
+            }
+
+            // No companyId filter — scope to the caller's accessible set so
+            // a non-admin user with fbrmonitor.view cannot read another
+            // tenant's FBR submission bodies by omitting the filter.
+            var allowed = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            return Ok(await _service.GetPagedAsync(
+                clampedPage, clampedSize, null, action, status, invoiceId, since, until, allowed));
+        }
 
         [HttpGet("{id:long}")]
         public async Task<ActionResult<FbrCommunicationLogDto>> GetLog(long id)
         {
             var log = await _service.GetByIdAsync(id);
             if (log == null) return NotFound();
+            // Tenant scope — only allow read if the row belongs to a
+            // company the caller can reach.
+            await _access.AssertAccessAsync(CurrentUserId, log.CompanyId);
             return Ok(log);
         }
 
@@ -64,7 +99,15 @@ namespace MyApp.Api.Controllers
             [FromQuery] int hours = 24)
         {
             var since = DateTime.UtcNow.AddHours(-Math.Clamp(hours, 1, 24 * 30));
-            return Ok(await _service.GetSummaryAsync(companyId, since));
+
+            if (companyId.HasValue)
+            {
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+                return Ok(await _service.GetSummaryAsync(companyId, since));
+            }
+
+            var allowed = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            return Ok(await _service.GetSummaryAsync(null, since, allowed));
         }
     }
 }

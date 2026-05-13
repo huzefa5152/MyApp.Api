@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
@@ -127,7 +128,9 @@ namespace MyApp.Api.Controllers
             // fall back to Pagination:DefaultPageSize from appsettings — same
             // convention DeliveryChallans + InvoicesController follow so the
             // operator's tuned default value flows through here too.
-            var size = pageSize ?? _defaultPageSize;
+            // Audit C-11 (2026-05-13): clamp to a sane upper bound.
+            var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
+            var clampedPage = PaginationHelper.ClampPage(page);
 
             var q = _context.StockMovements
                 .Include(m => m.ItemType)
@@ -145,7 +148,7 @@ namespace MyApp.Api.Controllers
             var rows = await q
                 .OrderByDescending(m => m.MovementDate)
                 .ThenByDescending(m => m.Id)
-                .Skip((page - 1) * size)
+                .Skip((clampedPage - 1) * size)
                 .Take(size)
                 .Select(m => new StockMovementRowDto
                 {
@@ -164,7 +167,7 @@ namespace MyApp.Api.Controllers
             {
                 Items = rows,
                 TotalCount = total,
-                Page = page,
+                Page = clampedPage,
                 PageSize = size,
             });
         }

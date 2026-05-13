@@ -578,6 +578,17 @@ namespace MyApp.Api.Services.Implementations
             return true;
         }
 
+        public async Task<int?> GetCompanyForItemAsync(int itemId)
+        {
+            // Lightweight lookup used by the controller for tenant
+            // authorization before delete (audit H-2). Returns null when
+            // the item doesn't exist.
+            var item = await _repository.GetItemByIdAsync(itemId);
+            if (item == null) return null;
+            var dc = await _repository.GetByIdAsync(item.DeliveryChallanId);
+            return dc?.CompanyId;
+        }
+
         public async Task<bool> DeleteItemAsync(int itemId)
         {
             var item = await _repository.GetItemByIdAsync(itemId);

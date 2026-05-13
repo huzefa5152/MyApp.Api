@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 
@@ -72,9 +73,10 @@ namespace MyApp.Api.Controllers
             [FromQuery] DateTime? dateFrom = null,
             [FromQuery] DateTime? dateTo = null)
         {
-            var size = pageSize ?? _defaultPageSize;
+            var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
+            var clampedPage = PaginationHelper.ClampPage(page);
             var result = await _service.GetPagedByCompanyAsync(
-                companyId, page, size, search, status, clientId, dateFrom, dateTo);
+                companyId, clampedPage, size, search, status, clientId, dateFrom, dateTo);
             return Ok(result);
         }
 
@@ -291,6 +293,14 @@ namespace MyApp.Api.Controllers
         [HasPermission("challans.manage.update")]
         public async Task<IActionResult> DeleteItem(int itemId)
         {
+            // Tenant guard — audit H-2 (2026-05-13): pre-fix, any user
+            // with challans.manage.update could delete an item belonging
+            // to any tenant's challan. Resolve the item to its parent
+            // challan's CompanyId and gate access first.
+            var parent = await _service.GetCompanyForItemAsync(itemId);
+            if (parent == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, parent.Value);
+
             try
             {
                 var result = await _service.DeleteItemAsync(itemId);

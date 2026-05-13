@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 
@@ -26,7 +27,10 @@ namespace MyApp.Api.Controllers
             [FromQuery] int? pageSize = null,
             [FromQuery] string? level = null,
             [FromQuery] string? search = null)
-            => Ok(await _service.GetPagedAsync(page, pageSize ?? _defaultPageSize, level, search));
+            => Ok(await _service.GetPagedAsync(
+                PaginationHelper.ClampPage(page),
+                PaginationHelper.Clamp(pageSize, _defaultPageSize, PaginationHelper.AuditMax),
+                level, search));
 
         [HttpGet("{id}")]
         public async Task<ActionResult<AuditLogDto>> GetLog(int id)

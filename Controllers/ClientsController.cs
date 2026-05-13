@@ -39,6 +39,7 @@ namespace MyApp.Api.Controllers
         /// clients are excluded — they remain in the per-company list.
         /// </summary>
         [HttpGet("common")]
+        [HasPermission("clients.manage.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<CommonClientDto>>> GetCommon([FromQuery] int companyId)
             => Ok(await _groupService.GetCommonClientsAsync(companyId));
@@ -50,6 +51,7 @@ namespace MyApp.Api.Controllers
         /// so the UI can still hint "this client lives in N companies".
         /// </summary>
         [HttpGet("groups")]
+        [HasPermission("clients.manage.view")]
         public async Task<ActionResult<List<CommonClientDto>>> GetAllGroups()
             => Ok(await _groupService.GetAllGroupsAsync());
 
@@ -58,6 +60,7 @@ namespace MyApp.Api.Controllers
         /// per-company member list (sites stay per-company).
         /// </summary>
         [HttpGet("common/{groupId:int}")]
+        [HasPermission("clients.manage.view")]
         public async Task<ActionResult<CommonClientDetailDto>> GetCommonById(int groupId)
         {
             var detail = await _groupService.GetByIdAsync(groupId);
@@ -121,6 +124,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet]
+        [HasPermission("clients.manage.view")]
         public async Task<ActionResult<IEnumerable<ClientDto>>> GetClients()
         {
             // Tenant filter — return only clients of companies the caller
@@ -132,6 +136,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("count")]
+        [HasPermission("clients.manage.view")]
         public async Task<ActionResult<int>> GetCount([FromQuery] int? companyId)
         {
             if (companyId.HasValue)
@@ -146,11 +151,13 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("company/{companyId}")]
+        [HasPermission("clients.manage.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<IEnumerable<ClientDto>>> GetClientsByCompany(int companyId)
             => Ok(await _service.GetByCompanyAsync(companyId));
 
         [HttpGet("{id}")]
+        [HasPermission("clients.manage.view")]
         public async Task<ActionResult<ClientDto>> GetClient(int id)
         {
             var client = await _service.GetByIdAsync(id);
@@ -191,6 +198,12 @@ namespace MyApp.Api.Controllers
             if (!ModelState.IsValid) return BadRequest(ModelState);
             if (dto.CompanyIds == null || dto.CompanyIds.Count == 0)
                 return BadRequest(new { message = "Select at least one company." });
+
+            // Per-id tenant access check — audit H-15 (2026-05-13): a
+            // user with clients.manage.create on tenant A could otherwise
+            // plant clients into tenant B by passing both ids.
+            foreach (var cid in dto.CompanyIds)
+                await _access.AssertAccessAsync(CurrentUserId, cid);
 
             try
             {
