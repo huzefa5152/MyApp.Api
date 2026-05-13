@@ -404,95 +404,155 @@ namespace MyApp.Api.Services.Implementations
             var gstAmount = Math.Round(subtotal * dto.GSTRate / 100, 2);
             var grandTotal = subtotal + gstAmount;
 
+            // Audit C-14 (2026-05-13): pre-save stock availability check.
+            // Only blocks when Company.StockGuardHardBlock = true; with
+            // tracking disabled or hard-block off, CheckAvailabilityAsync
+            // is a no-op. Two concurrent bills consuming the last 10
+            // units now get one accepted + one rejected instead of both
+            // succeeding and driving on-hand negative.
+            if (company.InventoryTrackingEnabled && company.StockGuardHardBlock)
+            {
+                var requirements = invoiceItems
+                    .Where(i => i.ItemTypeId.HasValue)
+                    .Select(i => new StockRequirement(
+                        i.ItemTypeId!.Value,
+                        i.ItemTypeName ?? "",
+                        i.Quantity))
+                    .ToList();
+                if (requirements.Count > 0)
+                {
+                    var shortages = await _stock.CheckAvailabilityAsync(dto.CompanyId, requirements);
+                    if (shortages.Count > 0)
+                    {
+                        var names = string.Join(", ", shortages.Select(s =>
+                            $"{s.ItemName} (need {s.RequiredQuantity}, have {s.OnHandQuantity})"));
+                        throw new InvalidOperationException(
+                            "Insufficient stock to issue this bill: " + names);
+                    }
+                }
+            }
+
             // Generate next invoice number per company
             if (company.StartingInvoiceNumber == 0)
                 throw new InvalidOperationException("Starting invoice number has not been set for this company. Please set it first.");
 
-            // Use MAX(InvoiceNumber) so a deleted trailing number is reused on the next
-            // create (no gaps after deleting the last bill). Falls back to StartingInvoiceNumber
-            // when the company has no invoices yet. IsDemo bills live in their
-            // own 900000+ range and must not influence the regular sequence.
-            int maxExistingInvoice = await _context.Invoices
-                .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo)
-                .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
-
-            int nextInvoiceNumber = maxExistingInvoice > 0
-                ? maxExistingInvoice + 1
-                : company.StartingInvoiceNumber;
-            company.CurrentInvoiceNumber = nextInvoiceNumber;
-
-            var invoice = new Invoice
+            // Audit C-8 (2026-05-13): wrap the create in a retry loop so two
+            // concurrent saves can't both land the same InvoiceNumber. The
+            // new UNIQUE (CompanyId, InvoiceNumber) index now blocks the
+            // second writer with a SQL 2601/2627; the retry recomputes
+            // MAX(InvoiceNumber)+1 from a fresh read and tries again.
+            const int maxAttempts = NumberAllocationRetry.DefaultMaxAttempts;
+            DbUpdateException? lastConflict = null;
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                InvoiceNumber = nextInvoiceNumber,
-                Date = dto.Date,
-                CompanyId = dto.CompanyId,
-                ClientId = dto.ClientId,
-                Subtotal = subtotal,
-                GSTRate = dto.GSTRate,
-                GSTAmount = gstAmount,
-                GrandTotal = grandTotal,
-                AmountInWords = NumberToWordsConverter.Convert(grandTotal),
-                PaymentTerms = dto.PaymentTerms,
-                DocumentType = effectiveDocType,
-                PaymentMode = effectivePaymentMode,
-                FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
-                    ? nextInvoiceNumber.ToString()
-                    : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
-                Items = invoiceItems
-            };
+                // Use MAX(InvoiceNumber) so a deleted trailing number is reused on the next
+                // create (no gaps after deleting the last bill). Falls back to StartingInvoiceNumber
+                // when the company has no invoices yet. IsDemo bills live in their
+                // own 900000+ range and must not influence the regular sequence.
+                int maxExistingInvoice = await _context.Invoices
+                    .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo)
+                    .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
 
-            // Wrap invoice creation + challan transitions + company update in a single transaction
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-            try
-            {
-                var created = await _invoiceRepo.CreateAsync(invoice);
+                int nextInvoiceNumber = maxExistingInvoice > 0
+                    ? maxExistingInvoice + 1
+                    : company.StartingInvoiceNumber;
+                company.CurrentInvoiceNumber = nextInvoiceNumber;
 
-                // Transition challans to Invoiced + apply any PO date updates
-                foreach (var dc in challans)
+                var invoice = new Invoice
                 {
-                    if (dto.PoDateUpdates.TryGetValue(dc.Id, out var poDate))
-                        dc.PoDate = poDate;
-                    dc.Status = "Invoiced";
-                    dc.InvoiceId = created.Id;
-                    await _challanRepo.UpdateAsync(dc);
-                }
+                    InvoiceNumber = nextInvoiceNumber,
+                    Date = dto.Date,
+                    CompanyId = dto.CompanyId,
+                    ClientId = dto.ClientId,
+                    Subtotal = subtotal,
+                    GSTRate = dto.GSTRate,
+                    GSTAmount = gstAmount,
+                    GrandTotal = grandTotal,
+                    AmountInWords = NumberToWordsConverter.Convert(grandTotal),
+                    PaymentTerms = dto.PaymentTerms,
+                    DocumentType = effectiveDocType,
+                    PaymentMode = effectivePaymentMode,
+                    FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
+                        ? nextInvoiceNumber.ToString()
+                        : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
+                    Items = invoiceItems
+                };
 
-                // Update company invoice number
-                await _companyRepo.UpdateAsync(company);
-
-                // Auto-save new item descriptions for future use
-                var newDescs = dto.Items
-                    .Where(i => !string.IsNullOrWhiteSpace(i.Description))
-                    .Select(i => i.Description!)
-                    .Distinct()
-                    .ToList();
-                if (newDescs.Any())
+                // Wrap invoice creation + challan transitions + company update in a single transaction
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    var existing = await _context.ItemDescriptions
-                        .Where(d => newDescs.Contains(d.Name))
-                        .Select(d => d.Name)
-                        .ToListAsync();
-                    foreach (var desc in newDescs.Where(d => !existing.Contains(d)))
+                    var created = await _invoiceRepo.CreateAsync(invoice);
+
+                    // Transition challans to Invoiced + apply any PO date updates
+                    foreach (var dc in challans)
                     {
-                        _context.ItemDescriptions.Add(new ItemDescription { Name = desc });
+                        if (dto.PoDateUpdates.TryGetValue(dc.Id, out var poDate))
+                            dc.PoDate = poDate;
+                        dc.Status = "Invoiced";
+                        dc.InvoiceId = created.Id;
+                        await _challanRepo.UpdateAsync(dc);
                     }
-                    await _context.SaveChangesAsync();
+
+                    // Update company invoice number
+                    await _companyRepo.UpdateAsync(company);
+
+                    // Auto-save new item descriptions for future use
+                    var newDescs = dto.Items
+                        .Where(i => !string.IsNullOrWhiteSpace(i.Description))
+                        .Select(i => i.Description!)
+                        .Distinct()
+                        .ToList();
+                    if (newDescs.Any())
+                    {
+                        var existing = await _context.ItemDescriptions
+                            .Where(d => newDescs.Contains(d.Name))
+                            .Select(d => d.Name)
+                            .ToListAsync();
+                        foreach (var desc in newDescs.Where(d => !existing.Contains(d)))
+                        {
+                            _context.ItemDescriptions.Add(new ItemDescription { Name = desc });
+                        }
+                        await _context.SaveChangesAsync();
+                    }
+
+                    // 2026-05-12: stock-out on save (create path).
+                    await _stock.SyncInvoiceStockMovementsAsync(created);
+                    await transaction.CommitAsync();
+
+                    // Reload with includes
+                    var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
+                    return ToDto(loaded!);
                 }
-
-                // 2026-05-12: stock-out on save (create path).
-                await _stock.SyncInvoiceStockMovementsAsync(created);
-                await transaction.CommitAsync();
-
-                // Reload with includes
-                var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
-                return ToDto(loaded!);
+                catch (DbUpdateException dupEx) when (NumberAllocationRetry.IsUniqueViolation(dupEx))
+                {
+                    // Another concurrent create won the race for this
+                    // number. Roll back, detach tracked entities so the
+                    // next iteration starts clean, and retry.
+                    lastConflict = dupEx;
+                    _logger.LogWarning(
+                        "Invoice number {Number} for company {CompanyId} collided with a concurrent create; retrying (attempt {Attempt}).",
+                        nextInvoiceNumber, dto.CompanyId, attempt);
+                    await transaction.RollbackAsync();
+                    foreach (var entry in _context.ChangeTracker.Entries().ToList())
+                    {
+                        if (entry.State != EntityState.Unchanged)
+                            entry.State = EntityState.Detached;
+                    }
+                    if (attempt < maxAttempts)
+                        await Task.Delay(10 * attempt);
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "InvoiceService: transaction rolled back");
+                    await transaction.RollbackAsync();
+                    throw;
+                }
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "InvoiceService: transaction rolled back");
-                await transaction.RollbackAsync();
-                throw;
-            }
+            throw new InvalidOperationException(
+                "Could not allocate a unique invoice number after " + maxAttempts +
+                " attempts. Please retry the request.", lastConflict);
         }
 
         // ── Standalone bill creation (no linked delivery challan) ─────────
@@ -642,20 +702,32 @@ namespace MyApp.Api.Services.Implementations
             var gstAmount = Math.Round(subtotal * dto.GSTRate / 100, 2);
             var grandTotal = subtotal + gstAmount;
 
+            // Audit C-14 (2026-05-13): same pre-save availability check
+            // as the regular CreateAsync — only blocks under hard-block.
+            if (company.InventoryTrackingEnabled && company.StockGuardHardBlock)
+            {
+                var requirements = invoiceItems
+                    .Where(i => i.ItemTypeId.HasValue)
+                    .Select(i => new StockRequirement(
+                        i.ItemTypeId!.Value,
+                        i.ItemTypeName ?? "",
+                        i.Quantity))
+                    .ToList();
+                if (requirements.Count > 0)
+                {
+                    var shortages = await _stock.CheckAvailabilityAsync(dto.CompanyId, requirements);
+                    if (shortages.Count > 0)
+                    {
+                        var names = string.Join(", ", shortages.Select(s =>
+                            $"{s.ItemName} (need {s.RequiredQuantity}, have {s.OnHandQuantity})"));
+                        throw new InvalidOperationException(
+                            "Insufficient stock to issue this bill: " + names);
+                    }
+                }
+            }
+
             if (company.StartingInvoiceNumber == 0)
                 throw new InvalidOperationException("Starting invoice number has not been set for this company. Please set it first.");
-
-            // Share the regular numbering sequence — standalone bills are
-            // real bills, not demos. MAX(InvoiceNumber) excluding IsDemo
-            // matches CreateAsync.
-            int maxExistingInvoice = await _context.Invoices
-                .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo)
-                .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
-
-            int nextInvoiceNumber = maxExistingInvoice > 0
-                ? maxExistingInvoice + 1
-                : company.StartingInvoiceNumber;
-            company.CurrentInvoiceNumber = nextInvoiceNumber;
 
             // Auto-tag PaymentTerms with the scenario code so FbrService can
             // route Validate / Submit calls to the correct scenarioId without
@@ -673,63 +745,103 @@ namespace MyApp.Api.Services.Implementations
                     finalPaymentTerms = $"[{dto.ScenarioId.Trim()}] {finalPaymentTerms ?? ""}".Trim();
             }
 
-            var invoice = new Invoice
+            // Audit C-8 (2026-05-13): same retry-on-conflict shape as the
+            // regular CreateAsync above. The UNIQUE (CompanyId,
+            // InvoiceNumber) index now catches concurrent collisions; we
+            // recompute MAX(InvoiceNumber)+1 and retry up to 3 times.
+            const int maxAttempts = NumberAllocationRetry.DefaultMaxAttempts;
+            DbUpdateException? lastConflict = null;
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                InvoiceNumber = nextInvoiceNumber,
-                Date = dto.Date,
-                CompanyId = dto.CompanyId,
-                ClientId = dto.ClientId,
-                Subtotal = subtotal,
-                GSTRate = dto.GSTRate,
-                GSTAmount = gstAmount,
-                GrandTotal = grandTotal,
-                AmountInWords = NumberToWordsConverter.Convert(grandTotal),
-                PaymentTerms = finalPaymentTerms,
-                DocumentType = effectiveDocType,
-                PaymentMode = effectivePaymentMode,
-                FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
-                    ? nextInvoiceNumber.ToString()
-                    : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
-                Items = invoiceItems
-            };
+                // Share the regular numbering sequence — standalone bills are
+                // real bills, not demos. MAX(InvoiceNumber) excluding IsDemo
+                // matches CreateAsync.
+                int maxExistingInvoice = await _context.Invoices
+                    .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo)
+                    .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
 
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-            try
-            {
-                var created = await _invoiceRepo.CreateAsync(invoice);
-                await _companyRepo.UpdateAsync(company);
+                int nextInvoiceNumber = maxExistingInvoice > 0
+                    ? maxExistingInvoice + 1
+                    : company.StartingInvoiceNumber;
+                company.CurrentInvoiceNumber = nextInvoiceNumber;
 
-                // Auto-save typed item descriptions for future autocomplete —
-                // mirrors CreateAsync.
-                var newDescs = dto.Items
-                    .Where(i => !string.IsNullOrWhiteSpace(i.Description))
-                    .Select(i => i.Description!)
-                    .Distinct()
-                    .ToList();
-                if (newDescs.Count > 0)
+                var invoice = new Invoice
                 {
-                    var existing = await _context.ItemDescriptions
-                        .Where(d => newDescs.Contains(d.Name))
-                        .Select(d => d.Name)
-                        .ToListAsync();
-                    foreach (var desc in newDescs.Where(d => !existing.Contains(d)))
-                        _context.ItemDescriptions.Add(new ItemDescription { Name = desc });
-                    await _context.SaveChangesAsync();
+                    InvoiceNumber = nextInvoiceNumber,
+                    Date = dto.Date,
+                    CompanyId = dto.CompanyId,
+                    ClientId = dto.ClientId,
+                    Subtotal = subtotal,
+                    GSTRate = dto.GSTRate,
+                    GSTAmount = gstAmount,
+                    GrandTotal = grandTotal,
+                    AmountInWords = NumberToWordsConverter.Convert(grandTotal),
+                    PaymentTerms = finalPaymentTerms,
+                    DocumentType = effectiveDocType,
+                    PaymentMode = effectivePaymentMode,
+                    FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
+                        ? nextInvoiceNumber.ToString()
+                        : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
+                    Items = invoiceItems
+                };
+
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    var created = await _invoiceRepo.CreateAsync(invoice);
+                    await _companyRepo.UpdateAsync(company);
+
+                    // Auto-save typed item descriptions for future autocomplete —
+                    // mirrors CreateAsync.
+                    var newDescs = dto.Items
+                        .Where(i => !string.IsNullOrWhiteSpace(i.Description))
+                        .Select(i => i.Description!)
+                        .Distinct()
+                        .ToList();
+                    if (newDescs.Count > 0)
+                    {
+                        var existing = await _context.ItemDescriptions
+                            .Where(d => newDescs.Contains(d.Name))
+                            .Select(d => d.Name)
+                            .ToListAsync();
+                        foreach (var desc in newDescs.Where(d => !existing.Contains(d)))
+                            _context.ItemDescriptions.Add(new ItemDescription { Name = desc });
+                        await _context.SaveChangesAsync();
+                    }
+
+                    // 2026-05-12: stock-out on save (standalone create path).
+                    await _stock.SyncInvoiceStockMovementsAsync(created);
+                    await transaction.CommitAsync();
+
+                    var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
+                    return ToDto(loaded!);
                 }
-
-                // 2026-05-12: stock-out on save (standalone create path).
-                await _stock.SyncInvoiceStockMovementsAsync(created);
-                await transaction.CommitAsync();
-
-                var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
-                return ToDto(loaded!);
+                catch (DbUpdateException dupEx) when (NumberAllocationRetry.IsUniqueViolation(dupEx))
+                {
+                    lastConflict = dupEx;
+                    _logger.LogWarning(
+                        "Standalone invoice number {Number} for company {CompanyId} collided with a concurrent create; retrying (attempt {Attempt}).",
+                        nextInvoiceNumber, dto.CompanyId, attempt);
+                    await transaction.RollbackAsync();
+                    foreach (var entry in _context.ChangeTracker.Entries().ToList())
+                    {
+                        if (entry.State != EntityState.Unchanged)
+                            entry.State = EntityState.Detached;
+                    }
+                    if (attempt < maxAttempts)
+                        await Task.Delay(10 * attempt);
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "InvoiceService: transaction rolled back");
+                    await transaction.RollbackAsync();
+                    throw;
+                }
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "InvoiceService: transaction rolled back");
-                await transaction.RollbackAsync();
-                throw;
-            }
+            throw new InvalidOperationException(
+                "Could not allocate a unique invoice number after " + maxAttempts +
+                " attempts. Please retry the request.", lastConflict);
         }
 
         /// <summary>

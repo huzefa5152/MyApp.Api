@@ -299,6 +299,24 @@ builder.Services.AddHttpClient("FBR", client =>
     options.Retry.MaxRetryAttempts = 3;
     options.Retry.Delay = TimeSpan.FromSeconds(2);
     options.Retry.BackoffType = DelayBackoffType.Exponential;
+    // Audit C-13 (2026-05-13): NEVER retry POST. PRAL's submit endpoint
+    // is not strictly idempotent — a retried POST after a connection
+    // timeout but a successful FBR-side commit issues a second IRN that
+    // PersistStatus would then overwrite the first with. Keep retries on
+    // GET / catalog lookups; submit/validate stay one-shot. Operator can
+    // manually retry through the UI if needed (after checking the
+    // monitor for a successful first IRN).
+    options.Retry.ShouldHandle = args =>
+    {
+        if (args.Outcome.Result?.RequestMessage?.Method == HttpMethod.Post)
+            return ValueTask.FromResult(false);
+        // Default predicate (transient errors): 5xx / HttpRequestException
+        // / timeouts on non-POST methods.
+        if (args.Outcome.Exception is HttpRequestException) return ValueTask.FromResult(true);
+        if (args.Outcome.Exception is TaskCanceledException) return ValueTask.FromResult(true);
+        var status = (int?)args.Outcome.Result?.StatusCode ?? 0;
+        return ValueTask.FromResult(status >= 500 && status < 600);
+    };
     // Open circuit after 5 failures across a 30 s window; half-open
     // after 15 s. Tuned to FBR sandbox behaviour (occasional 30-60 s
     // outages during their nightly maintenance).
@@ -379,6 +397,76 @@ using (var scope = app.Services.CreateScope())
     ");
 
     db.Database.Migrate();
+
+    // ── Unique indexes on (CompanyId, *Number) for Invoice / PurchaseBill /
+    // GoodsReceipt — audit C-8 (2026-05-13). Pre-fix, two concurrent
+    // creates could both land MAX(*Number)+1 and silently duplicate.
+    // Idempotent: drops the prior NON-UNIQUE composite indexes if present
+    // and recreates them UNIQUE. DeliveryChallan stays non-unique by
+    // design (Duplicate Challan feature emits same-number rows).
+    //
+    // If duplicate rows already exist the CREATE UNIQUE INDEX would fail
+    // — we log a clear AuditLog row and leave the legacy non-unique
+    // index in place. Operators have to dedupe first; the system stays
+    // working in the meantime.
+    db.Database.ExecuteSqlRaw(@"
+        BEGIN TRY
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices') AND is_unique = 0)
+            BEGIN
+                DROP INDEX [IX_Invoices_CompanyId_InvoiceNumber] ON [Invoices];
+                CREATE UNIQUE INDEX [IX_Invoices_CompanyId_InvoiceNumber] ON [Invoices] ([CompanyId], [InvoiceNumber]);
+            END
+            ELSE IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices'))
+            BEGIN
+                CREATE UNIQUE INDEX [IX_Invoices_CompanyId_InvoiceNumber] ON [Invoices] ([CompanyId], [InvoiceNumber]);
+            END
+        END TRY
+        BEGIN CATCH
+            -- Duplicate data prevents the unique index. Leave the existing
+            -- index in place; the service-layer retry on save still helps,
+            -- but operators must dedupe before full protection lands.
+            INSERT INTO AuditLogs (Timestamp, Level, UserName, HttpMethod, RequestPath, StatusCode, ExceptionType, Message)
+            VALUES (SYSUTCDATETIME(), 'Warning', 'system', 'SEED', '/migrations/unique-invoice-number', 500,
+                    'INVOICE_UNIQUE_INDEX_BLOCKED',
+                    CONCAT('Could not enforce UNIQUE (CompanyId, InvoiceNumber): ', ERROR_MESSAGE()));
+        END CATCH;
+
+        BEGIN TRY
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_PurchaseBills_CompanyId_PurchaseBillNumber' AND object_id = OBJECT_ID('PurchaseBills') AND is_unique = 0)
+            BEGIN
+                DROP INDEX [IX_PurchaseBills_CompanyId_PurchaseBillNumber] ON [PurchaseBills];
+                CREATE UNIQUE INDEX [IX_PurchaseBills_CompanyId_PurchaseBillNumber] ON [PurchaseBills] ([CompanyId], [PurchaseBillNumber]);
+            END
+            ELSE IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_PurchaseBills_CompanyId_PurchaseBillNumber' AND object_id = OBJECT_ID('PurchaseBills'))
+            BEGIN
+                CREATE UNIQUE INDEX [IX_PurchaseBills_CompanyId_PurchaseBillNumber] ON [PurchaseBills] ([CompanyId], [PurchaseBillNumber]);
+            END
+        END TRY
+        BEGIN CATCH
+            INSERT INTO AuditLogs (Timestamp, Level, UserName, HttpMethod, RequestPath, StatusCode, ExceptionType, Message)
+            VALUES (SYSUTCDATETIME(), 'Warning', 'system', 'SEED', '/migrations/unique-purchasebill-number', 500,
+                    'PURCHASEBILL_UNIQUE_INDEX_BLOCKED',
+                    CONCAT('Could not enforce UNIQUE (CompanyId, PurchaseBillNumber): ', ERROR_MESSAGE()));
+        END CATCH;
+
+        BEGIN TRY
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_GoodsReceipts_CompanyId_GoodsReceiptNumber' AND object_id = OBJECT_ID('GoodsReceipts') AND is_unique = 0)
+            BEGIN
+                DROP INDEX [IX_GoodsReceipts_CompanyId_GoodsReceiptNumber] ON [GoodsReceipts];
+                CREATE UNIQUE INDEX [IX_GoodsReceipts_CompanyId_GoodsReceiptNumber] ON [GoodsReceipts] ([CompanyId], [GoodsReceiptNumber]);
+            END
+            ELSE IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_GoodsReceipts_CompanyId_GoodsReceiptNumber' AND object_id = OBJECT_ID('GoodsReceipts'))
+            BEGIN
+                CREATE UNIQUE INDEX [IX_GoodsReceipts_CompanyId_GoodsReceiptNumber] ON [GoodsReceipts] ([CompanyId], [GoodsReceiptNumber]);
+            END
+        END TRY
+        BEGIN CATCH
+            INSERT INTO AuditLogs (Timestamp, Level, UserName, HttpMethod, RequestPath, StatusCode, ExceptionType, Message)
+            VALUES (SYSUTCDATETIME(), 'Warning', 'system', 'SEED', '/migrations/unique-goodsreceipt-number', 500,
+                    'GOODSRECEIPT_UNIQUE_INDEX_BLOCKED',
+                    CONCAT('Could not enforce UNIQUE (CompanyId, GoodsReceiptNumber): ', ERROR_MESSAGE()));
+        END CATCH;
+    ");
 
     // ── SecurityStamp column for token revocation ──────────────────────
     // Audit C-6 (2026-05-13). Adds the Users.SecurityStamp column out-of-

@@ -241,9 +241,14 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Invoice>()
                 .HasIndex(i => i.CompanyId);
 
-            // Composite index for paged invoice queries (WHERE CompanyId = X ORDER BY InvoiceNumber DESC)
+            // Composite index for paged invoice queries (WHERE CompanyId = X ORDER BY InvoiceNumber DESC).
+            // Audit C-8 (2026-05-13): unique on (CompanyId, InvoiceNumber)
+            // so two concurrent creates can't both land MAX(InvoiceNumber)+1
+            // — the loser gets a SQL 2601 / 2627 which the service catches
+            // and retries (next number is re-read in the retry loop).
             modelBuilder.Entity<Invoice>()
-                .HasIndex(i => new { i.CompanyId, i.InvoiceNumber });
+                .HasIndex(i => new { i.CompanyId, i.InvoiceNumber })
+                .IsUnique();
 
             modelBuilder.Entity<DeliveryChallan>()
                 .HasIndex(dc => dc.ClientId);
@@ -758,8 +763,11 @@ namespace MyApp.Api.Data
                 .OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => pb.CompanyId);
+            // Audit C-8 (2026-05-13): unique (CompanyId, PurchaseBillNumber)
+            // so concurrent creates can't land the same number.
             modelBuilder.Entity<PurchaseBill>()
-                .HasIndex(pb => new { pb.CompanyId, pb.PurchaseBillNumber });
+                .HasIndex(pb => new { pb.CompanyId, pb.PurchaseBillNumber })
+                .IsUnique();
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => pb.SupplierId);
             modelBuilder.Entity<PurchaseBill>()
@@ -844,8 +852,10 @@ namespace MyApp.Api.Data
                 .OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<GoodsReceipt>()
                 .HasIndex(gr => gr.CompanyId);
+            // Audit C-8 (2026-05-13): unique (CompanyId, GoodsReceiptNumber).
             modelBuilder.Entity<GoodsReceipt>()
-                .HasIndex(gr => new { gr.CompanyId, gr.GoodsReceiptNumber });
+                .HasIndex(gr => new { gr.CompanyId, gr.GoodsReceiptNumber })
+                .IsUnique();
             modelBuilder.Entity<GoodsReceipt>()
                 .HasIndex(gr => gr.SupplierId);
             modelBuilder.Entity<GoodsReceipt>()

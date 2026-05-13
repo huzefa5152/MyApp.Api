@@ -966,14 +966,31 @@ namespace MyApp.Api.Services.Implementations
                     $"This challan is already a duplicate of #{source.ChallanNumber}. " +
                     "Open the original challan to create more copies.");
 
-            var clones = new List<DeliveryChallanDto>(count);
-            for (int i = 0; i < count; i++)
+            // Audit M-13 (2026-05-13): wrap the N-at-once duplicate loop
+            // in one transaction. Pre-fix, a mid-loop failure left some
+            // clones persisted and others not, leaving the operator with
+            // partial copies and no clean rollback.
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
             {
-                var clone = await _repository.DuplicateAsync(source);
-                var refreshed = await _repository.GetByIdAsync(clone.Id);
-                if (refreshed != null) clones.Add(ToDto(refreshed));
+                var clones = new List<DeliveryChallanDto>(count);
+                for (int i = 0; i < count; i++)
+                {
+                    var clone = await _repository.DuplicateAsync(source);
+                    var refreshed = await _repository.GetByIdAsync(clone.Id);
+                    if (refreshed != null) clones.Add(ToDto(refreshed));
+                }
+                await tx.CommitAsync();
+                return clones;
             }
-            return clones;
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "DuplicateAsync transaction rolled back for source challan {SourceId} (requested count {Count})",
+                    sourceId, count);
+                await tx.RollbackAsync();
+                throw;
+            }
         }
     }
 }

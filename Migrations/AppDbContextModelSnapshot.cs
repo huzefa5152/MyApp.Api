@@ -930,7 +930,8 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("SupplierId");
 
-                    b.HasIndex("CompanyId", "GoodsReceiptNumber");
+                    b.HasIndex("CompanyId", "GoodsReceiptNumber")
+                        .IsUnique();
 
                     b.ToTable("GoodsReceipts");
                 });
@@ -1048,7 +1049,8 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("CompanyId");
 
-                    b.HasIndex("CompanyId", "InvoiceNumber");
+                    b.HasIndex("CompanyId", "InvoiceNumber")
+                        .IsUnique();
 
                     b.ToTable("Invoices");
                 });
@@ -2639,7 +2641,8 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("SupplierId");
 
-                    b.HasIndex("CompanyId", "PurchaseBillNumber");
+                    b.HasIndex("CompanyId", "PurchaseBillNumber")
+                        .IsUnique();
 
                     b.ToTable("PurchaseBills");
                 });

@@ -139,6 +139,15 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<PurchaseBillDto> CreateAsync(CreatePurchaseBillDto dto)
         {
+            // Audit C-8 (2026-05-13): wrap the create in a retry loop so
+            // two concurrent saves can't both land the same
+            // PurchaseBillNumber. The UNIQUE (CompanyId,
+            // PurchaseBillNumber) index now catches concurrent collisions;
+            // we recompute MAX(*)+1 and retry up to 3 times.
+            const int maxAttempts = NumberAllocationRetry.DefaultMaxAttempts;
+            DbUpdateException? lastConflict = null;
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            {
             // Single transaction across number allocation, source-line
             // joins, sale-side back-fill and stock movements. The previous
             // version had three SaveChangesAsync calls — if the second
@@ -340,12 +349,32 @@ namespace MyApp.Api.Services.Implementations
             await tx.CommitAsync();
             return (await GetByIdAsync(bill.Id))!;
             }
+            catch (DbUpdateException dupEx) when (NumberAllocationRetry.IsUniqueViolation(dupEx))
+            {
+                lastConflict = dupEx;
+                _logger.LogWarning(
+                    "Purchase bill number collided with a concurrent create for company {CompanyId}; retrying (attempt {Attempt}).",
+                    dto.CompanyId, attempt);
+                await tx.RollbackAsync();
+                foreach (var entry in _context.ChangeTracker.Entries().ToList())
+                {
+                    if (entry.State != EntityState.Unchanged)
+                        entry.State = EntityState.Detached;
+                }
+                if (attempt < maxAttempts)
+                    await Task.Delay(10 * attempt);
+                continue;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "PurchaseBillService: transaction rolled back");
                 await tx.RollbackAsync();
                 throw;
             }
+            }
+            throw new InvalidOperationException(
+                "Could not allocate a unique purchase bill number after " + maxAttempts +
+                " attempts. Please retry the request.", lastConflict);
         }
 
         public async Task<PurchaseBillDto?> UpdateAsync(int id, UpdatePurchaseBillDto dto)
@@ -357,6 +386,14 @@ namespace MyApp.Api.Services.Implementations
                 .Include(p => p.Items)
                 .FirstOrDefaultAsync(p => p.Id == id);
             if (bill == null) return null;
+
+            // Audit M-2 (2026-05-13): capture the ORIGINAL bill.Date
+            // into a local before any mutation. The reversal OUT must
+            // carry the date the OUTs were originally posted on, not the
+            // post-edit date. Today the reversal happens before the
+            // mutation so the bug doesn't fire, but making the intent
+            // explicit prevents a refactor from silently breaking it.
+            var originalBillDate = bill.Date;
 
             // Reverse previously emitted Stock IN before applying changes,
             // then re-emit using the new line set. Simpler than diff-by-line
@@ -373,7 +410,7 @@ namespace MyApp.Api.Services.Implementations
                     quantity: oi.Quantity,
                     sourceType: StockMovementSourceType.PurchaseBill,
                     sourceId: bill.Id,
-                    movementDate: bill.Date,
+                    movementDate: originalBillDate,
                     notes: $"Reversal — Purchase Bill #{bill.PurchaseBillNumber} edited");
             }
 

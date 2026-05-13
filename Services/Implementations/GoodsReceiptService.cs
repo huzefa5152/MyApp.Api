@@ -105,6 +105,13 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<GoodsReceiptDto> CreateAsync(CreateGoodsReceiptDto dto)
         {
+            // Audit C-8 (2026-05-13): retry-on-conflict pattern. The new
+            // UNIQUE (CompanyId, GoodsReceiptNumber) index catches the
+            // losing concurrent create; we recompute MAX(*)+1 and retry.
+            const int maxAttempts = MyApp.Api.Helpers.NumberAllocationRetry.DefaultMaxAttempts;
+            Microsoft.EntityFrameworkCore.DbUpdateException? lastConflict = null;
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            {
             // Wrap number allocation + receipt insert in one transaction so
             // a concurrent create can't race the MAX(...)+1 lookup.
             await using var tx = await _context.Database.BeginTransactionAsync();
@@ -164,12 +171,33 @@ namespace MyApp.Api.Services.Implementations
                 await tx.CommitAsync();
                 return (await GetByIdAsync(receipt.Id))!;
             }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException dupEx)
+                when (MyApp.Api.Helpers.NumberAllocationRetry.IsUniqueViolation(dupEx))
+            {
+                lastConflict = dupEx;
+                _logger.LogWarning(
+                    "GoodsReceipt number collided with a concurrent create for company {CompanyId}; retrying (attempt {Attempt}).",
+                    dto.CompanyId, attempt);
+                await tx.RollbackAsync();
+                foreach (var entry in _context.ChangeTracker.Entries().ToList())
+                {
+                    if (entry.State != Microsoft.EntityFrameworkCore.EntityState.Unchanged)
+                        entry.State = Microsoft.EntityFrameworkCore.EntityState.Detached;
+                }
+                if (attempt < maxAttempts)
+                    await Task.Delay(10 * attempt);
+                continue;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "GoodsReceiptService: create transaction rolled back for company={CompanyId}", dto.CompanyId);
                 await tx.RollbackAsync();
                 throw;
             }
+            }
+            throw new InvalidOperationException(
+                "Could not allocate a unique goods receipt number after " + maxAttempts +
+                " attempts. Please retry the request.", lastConflict);
         }
 
         public async Task<GoodsReceiptDto?> UpdateAsync(int id, UpdateGoodsReceiptDto dto)
