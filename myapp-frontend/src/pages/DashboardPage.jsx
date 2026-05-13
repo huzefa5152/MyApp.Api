@@ -208,12 +208,16 @@ export default function DashboardPage() {
           {/* Section grid — sales / purchases side-by-side at desktop,
               stacked on mobile. The Top 5 lists were moved into the
               Sales/Purchases-by-Counterparty cards above; sections
-              below stick to recent items + drill-through links. */}
+              below stick to recent items + drill-through links.
+              Each section's "Open" header link is gated by the DESTINATION
+              screen's view permission (not the KPI perm) so a user who
+              can see sales numbers but can't open /invoices doesn't
+              see a button that 403s on click. */}
           <div className="dash-section-grid" style={styles.sectionGrid}>
-            {data.sales      && <SalesSection data={data.sales} />}
-            {data.purchases  && <PurchasesSection data={data.purchases} />}
-            {data.fbr        && <FbrSection data={data.fbr} />}
-            {data.inventory  && <InventorySection data={data.inventory} />}
+            {data.sales      && <SalesSection      data={data.sales}      canOpen={has?.("invoices.list.view") || has?.("bills.list.view")} />}
+            {data.purchases  && <PurchasesSection  data={data.purchases}  canOpen={has?.("purchasebills.list.view")} />}
+            {data.fbr        && <FbrSection        data={data.fbr} />}
+            {data.inventory  && <InventorySection  data={data.inventory}  canOpen={has?.("stock.dashboard.view")} />}
           </div>
         </>
       )}
@@ -448,14 +452,14 @@ function SectionCard({ title, accent, icon, children, headerExtra = null }) {
   );
 }
 
-function SalesSection({ data }) {
+function SalesSection({ data, canOpen = false }) {
   return (
     <SectionCard title="Sales" accent={accents.sales} icon={MdReceipt}
-      headerExtra={
+      headerExtra={canOpen ? (
         <Link to="/invoices" className="dash-section-card__open" style={styles.headerLink} title="Open Invoices page">
           <MdOpenInNew size={14} /> <span className="dash-section-card__open-label">Open</span>
         </Link>
-      }
+      ) : null}
     >
       <div className="dash-meta-row" style={styles.metaRow}>
         <Stat label="Invoices" value={data.invoiceCount} />
@@ -473,14 +477,14 @@ function SalesSection({ data }) {
   );
 }
 
-function PurchasesSection({ data }) {
+function PurchasesSection({ data, canOpen = false }) {
   return (
     <SectionCard title="Purchases" accent={accents.purchases} icon={MdShoppingCart}
-      headerExtra={
+      headerExtra={canOpen ? (
         <Link to="/purchase-bills" className="dash-section-card__open" style={{ ...styles.headerLink, color: accents.purchases, borderColor: accents.purchases }} title="Open Purchase Bills page">
           <MdOpenInNew size={14} /> <span className="dash-section-card__open-label">Open</span>
         </Link>
-      }
+      ) : null}
     >
       <div className="dash-meta-row" style={styles.metaRow}>
         <Stat label="Bills" value={data.billCount} />
@@ -529,14 +533,14 @@ function FbrSection({ data }) {
   );
 }
 
-function InventorySection({ data }) {
+function InventorySection({ data, canOpen = false }) {
   return (
     <SectionCard title="Inventory" accent={accents.inventory} icon={MdInventory}
-      headerExtra={
+      headerExtra={canOpen ? (
         <Link to="/stock" className="dash-section-card__open" style={{ ...styles.headerLink, color: accents.inventory, borderColor: accents.inventory }} title="Open Stock Dashboard">
           <MdOpenInNew size={14} /> <span className="dash-section-card__open-label">Open</span>
         </Link>
-      }
+      ) : null}
     >
       <div className="dash-meta-row" style={styles.metaRow}>
         <Stat label="Stock value" value={formatPkr(data.totalStockValue)} highlight />
