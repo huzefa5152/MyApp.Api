@@ -5,6 +5,7 @@ import { getClientsByCompany, getClientById } from "../api/clientApi";
 import { createDeliveryChallan } from "../api/challanApi";
 import { getAllUnits } from "../api/unitsApi";
 import { formStyles, modalSizes } from "../theme";
+import { todayYmd } from "../utils/dateInput";
 import LookupAutocomplete from "./LookupAutocomplete";
 import QuantityInput from "./QuantityInput";
 
@@ -36,7 +37,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
   const [poNumber, setPoNumber] = useState("");
   const [poDate, setPoDate] = useState("");
   const [indentNo, setIndentNo] = useState("");
-  const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split("T")[0]);
+  const [deliveryDate, setDeliveryDate] = useState(todayYmd());
   const [selectedClientId, setSelectedClientId] = useState("");
   const [site, setSite] = useState("");
   const [items, setItems] = useState([]);

@@ -6,6 +6,7 @@ import { getItemTypes } from "../api/itemTypeApi";
 import { getPurchaseTemplate } from "../api/invoiceApi";
 import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
+import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 
 const colors = {
@@ -24,7 +25,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [suppliers, setSuppliers] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
   const [supplierId, setSupplierId] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayYmd());
   const [supplierBillNumber, setSupplierBillNumber] = useState("");
   const [supplierIRN, setSupplierIRN] = useState("");
   const [gstRate, setGstRate] = useState(18);

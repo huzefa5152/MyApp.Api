@@ -7,6 +7,7 @@ import { getItemTypes } from "../api/itemTypeApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { formStyles, modalSizes } from "../theme";
+import { todayYmd } from "../utils/dateInput";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
@@ -98,7 +99,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [dcSearch, setDcSearch] = useState("");
   const [gstRate, setGstRate] = useState(18);
   const [paymentTerms, setPaymentTerms] = useState("");
-  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
+  // 2026-05-12: todayYmd() returns LOCAL "YYYY-MM-DD" — pre-fix the UTC
+  // slice rolled the calendar day back by one for PKT operators billing
+  // before 5am.
+  const [invoiceDate, setInvoiceDate] = useState(todayYmd());
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);

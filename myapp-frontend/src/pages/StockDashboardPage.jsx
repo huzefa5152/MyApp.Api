@@ -7,6 +7,7 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
+import { todayYmd } from "../utils/dateInput";
 
 const colors = {
   blue: "#0d47a1",
@@ -42,9 +43,9 @@ export default function StockDashboardPage() {
   const [loading, setLoading] = useState(false);
 
   const [showOpening, setShowOpening] = useState(false);
-  const [openingDraft, setOpeningDraft] = useState({ itemTypeId: "", quantity: 0, asOfDate: new Date().toISOString().slice(0, 10), notes: "" });
+  const [openingDraft, setOpeningDraft] = useState({ itemTypeId: "", quantity: 0, asOfDate: todayYmd(), notes: "" });
   const [showAdjust, setShowAdjust] = useState(false);
-  const [adjustDraft, setAdjustDraft] = useState({ itemTypeId: "", delta: 0, movementDate: new Date().toISOString().slice(0, 10), notes: "" });
+  const [adjustDraft, setAdjustDraft] = useState({ itemTypeId: "", delta: 0, movementDate: todayYmd(), notes: "" });
 
   const fetchAll = useCallback(async () => {
     if (!selectedCompany) return;
@@ -112,7 +113,7 @@ export default function StockDashboardPage() {
       });
       notify("Opening balance saved.", "success");
       setShowOpening(false);
-      setOpeningDraft({ itemTypeId: "", quantity: 0, asOfDate: new Date().toISOString().slice(0, 10), notes: "" });
+      setOpeningDraft({ itemTypeId: "", quantity: 0, asOfDate: todayYmd(), notes: "" });
       fetchAll();
     } catch (err) {
       notify(err.response?.data?.error || "Failed to save opening balance.", "error");
@@ -150,7 +151,7 @@ export default function StockDashboardPage() {
       });
       notify("Adjustment recorded.", "success");
       setShowAdjust(false);
-      setAdjustDraft({ itemTypeId: "", delta: 0, movementDate: new Date().toISOString().slice(0, 10), notes: "" });
+      setAdjustDraft({ itemTypeId: "", delta: 0, movementDate: todayYmd(), notes: "" });
       fetchAll();
     } catch (err) {
       notify(err.response?.data?.error || "Failed to record adjustment.", "error");

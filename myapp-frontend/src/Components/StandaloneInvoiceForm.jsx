@@ -5,6 +5,7 @@ import { getClientsByCompany } from "../api/clientApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { formStyles, modalSizes } from "../theme";
+import { todayYmd } from "../utils/dateInput";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import LookupAutocomplete from "./LookupAutocomplete";
@@ -119,7 +120,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [scenarios, setScenarios] = useState([]);
 
   const [selectedClientId, setSelectedClientId] = useState("");
-  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
+  const [invoiceDate, setInvoiceDate] = useState(todayYmd());
   const [gstRate, setGstRate] = useState(18);
   const [paymentTerms, setPaymentTerms] = useState("");
   // Document Type is locked to Sale Invoice (4) on the no-challan flow.

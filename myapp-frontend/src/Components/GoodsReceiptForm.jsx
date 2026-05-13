@@ -6,6 +6,7 @@ import { getItemTypes } from "../api/itemTypeApi";
 import { getPurchaseBillsByCompanyPaged } from "../api/purchaseBillApi";
 import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
+import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 
 export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSaved }) {
@@ -15,7 +16,9 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   const [itemTypes, setItemTypes] = useState([]);
   const [supplierId, setSupplierId] = useState("");
   const [purchaseBillId, setPurchaseBillId] = useState("");
-  const [receiptDate, setReceiptDate] = useState(new Date().toISOString().slice(0, 10));
+  // todayYmd() returns LOCAL "YYYY-MM-DD" so the date input doesn't pre-fill
+  // with yesterday for users running in non-UTC zones at midnight–05:00.
+  const [receiptDate, setReceiptDate] = useState(todayYmd());
   const [supplierChallanNumber, setSupplierChallanNumber] = useState("");
   const [site, setSite] = useState("");
   const [items, setItems] = useState([{ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }]);

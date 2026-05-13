@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { toLocalYmd, todayYmd } from "../utils/dateInput";
 import { MdInfo, MdAdd, MdCheckCircle, MdWarning, MdInventory2, MdLightbulb, MdRefresh, MdError, MdExpandMore, MdExpandLess, MdAutoAwesome } from "react-icons/md";
 import { getInvoiceById, updateInvoice, updateInvoiceItemTypes, updateInvoiceItemTypesAndQty } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
@@ -208,8 +209,14 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         setUnits(unitsRes.data || []);
         setClientId(data.clientId ? String(data.clientId) : "");
         setGstRate(data.gstRate ?? 18);
-        // Date arrives as ISO string; the <input type="date"> control wants YYYY-MM-DD.
-        setBillDate(data.date ? new Date(data.date).toISOString().slice(0, 10) : "");
+        // Date arrives as ISO string; the <input type="date"> control wants
+        // YYYY-MM-DD in LOCAL time. Pre-fix (.toISOString().slice(0,10))
+        // converted to UTC first, which rolled the calendar day forward in
+        // PKT (UTC+5) — the bill card showed "May 9" but the edit form
+        // showed "May 8" for the same row. Use the shared helper which
+        // takes the date prefix verbatim when the API string starts with
+        // YYYY-MM-DD (it always does).
+        setBillDate(toLocalYmd(data.date));
         const pt = data.paymentTerms ?? "";
         setPaymentTerms(pt);
         setPaymentMode(data.paymentMode ?? "");
@@ -1035,7 +1042,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                       style={{ ...styles.input, ...(lockNonItemType ? styles.readOnlyInput : {}) }}
                       value={billDate}
                       onChange={(e) => setBillDate(e.target.value)}
-                      max={new Date().toISOString().slice(0, 10)}
+                      max={todayYmd()}
                       readOnly={lockNonItemType}
                     />
                   </div>
