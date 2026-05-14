@@ -1644,7 +1644,10 @@ using (var scope = app.Services.CreateScope())
     ");
 
     // ── 2026-05-14: auto-grant the new clients.manage.copy and
-    //    suppliers.manage.copy permissions to the Administrator role.
+    //    suppliers.manage.copy permissions to the Administrator role
+    //    (the per-row "Copy to other companies" button on Clients /
+    //    Suppliers and the "Add to companies" action on the Common-
+    //    Client / Common-Supplier edit dialogs both require this perm).
     //    Idempotent via NOT EXISTS.
     db.Database.ExecuteSqlRaw(@"
         DECLARE @adminRoleId INT = (SELECT TOP 1 Id FROM Roles WHERE [Name] = 'Administrator');
