@@ -30,7 +30,7 @@ export default function PurchaseBillsPage() {
   const canCreate = has("purchasebills.manage.create");
   const canUpdate = has("purchasebills.manage.update");
   const canDelete = has("purchasebills.manage.delete");
-  const [viewMode, setViewMode] = useListViewMode("purchaseBills");
+  const [viewMode, setViewMode, isBigScreen] = useListViewMode("purchaseBills");
 
   const [bills, setBills] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -175,9 +175,11 @@ export default function PurchaseBillsPage() {
                 <input type="date" className="filter-date-input" value={dateTo} onChange={onFilterChange(setDateTo)} title="To" />
               </div>
               {hasFilters && <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>}
-              <div style={{ marginLeft: "auto" }}>
-                <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Purchase bills view mode" />
-              </div>
+              {isBigScreen && (
+                <div style={{ marginLeft: "auto" }}>
+                  <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Purchase bills view mode" />
+                </div>
+              )}
             </div>
           )}
 

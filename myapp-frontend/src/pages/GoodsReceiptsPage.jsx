@@ -28,7 +28,7 @@ export default function GoodsReceiptsPage() {
   const canCreate = has("goodsreceipts.manage.create");
   const canUpdate = has("goodsreceipts.manage.update");
   const canDelete = has("goodsreceipts.manage.delete");
-  const [viewMode, setViewMode] = useListViewMode("goodsReceipts");
+  const [viewMode, setViewMode, isBigScreen] = useListViewMode("goodsReceipts");
 
   const [receipts, setReceipts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -124,9 +124,11 @@ export default function GoodsReceiptsPage() {
                 <option value="">All Suppliers</option>
                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
-              <div style={{ marginLeft: "auto" }}>
-                <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Goods receipts view mode" />
-              </div>
+              {isBigScreen && (
+                <div style={{ marginLeft: "auto" }}>
+                  <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Goods receipts view mode" />
+                </div>
+              )}
             </div>
           )}
 

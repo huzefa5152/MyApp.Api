@@ -48,7 +48,7 @@ export default function ChallanPage() {
   const canUpdate = has("challans.manage.update");
   const canDelete = has("challans.manage.delete");
   const canPrint = has("challans.print.view");
-  const [viewMode, setViewMode] = useListViewMode("challans");
+  const [viewMode, setViewMode, isBigScreen] = useListViewMode("challans");
   const [clients, setClients] = useState([]);
   const [challans, setChallans] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -377,9 +377,11 @@ export default function ChallanPage() {
               {hasFilters && (
                 <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>
               )}
-              <div style={{ marginLeft: "auto" }}>
-                <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Delivery challan view mode" />
-              </div>
+              {isBigScreen && (
+                <div style={{ marginLeft: "auto" }}>
+                  <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Delivery challan view mode" />
+                </div>
+              )}
             </div>
           )}
         </>

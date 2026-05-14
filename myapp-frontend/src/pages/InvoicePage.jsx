@@ -43,7 +43,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   const isBillsMode = mode === "bills";
   // Persist view-mode per tab so Bills + Invoices can each remember their
   // own setting (e.g. operator wants cards on Bills but table on Invoices).
-  const [viewMode, setViewMode] = useListViewMode(isBillsMode ? "bills" : "invoices");
+  const [viewMode, setViewMode, isBigScreen] = useListViewMode(isBillsMode ? "bills" : "invoices");
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
   const confirm = useConfirm();
@@ -738,13 +738,15 @@ export default function InvoicePage({ mode = "invoices" }) {
               {hasFilters && (
                 <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>
               )}
-              <div style={{ marginLeft: "auto" }}>
-                <ViewModeToggle
-                  mode={viewMode}
-                  onChange={setViewMode}
-                  ariaLabel={isBillsMode ? "Bills view mode" : "Invoices view mode"}
-                />
-              </div>
+              {isBigScreen && (
+                <div style={{ marginLeft: "auto" }}>
+                  <ViewModeToggle
+                    mode={viewMode}
+                    onChange={setViewMode}
+                    ariaLabel={isBillsMode ? "Bills view mode" : "Invoices view mode"}
+                  />
+                </div>
+              )}
             </div>
           )}
         </>
