@@ -4,7 +4,9 @@ import SupplierList from "../Components/SupplierList";
 import SupplierForm from "../Components/SupplierForm";
 import CommonSuppliersPanel from "../Components/CommonSuppliersPanel";
 import CommonSupplierForm from "../Components/CommonSupplierForm";
-import { getSuppliersByCompany, getCommonSuppliers } from "../api/supplierApi";
+import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
+import { getSuppliersByCompany, getCommonSuppliers, copySupplierToCompanies } from "../api/supplierApi";
+import { notify } from "../utils/notify";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -32,6 +34,9 @@ export default function SuppliersPage() {
   // all different. commonRefreshKey lets the panel reload after a save.
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [commonRefreshKey, setCommonRefreshKey] = useState(0);
+
+  // Copy-to-companies dialog source.
+  const [copyingSupplier, setCopyingSupplier] = useState(null);
 
   // Multi-company group ids that show in the Common Suppliers panel —
   // used to filter them out of the per-company list below the dropdown
@@ -186,7 +191,36 @@ export default function SuppliersPage() {
         <SupplierList
           suppliers={filtered}
           onEdit={handleEdit}
+          onCopy={(s) => setCopyingSupplier(s)}
           fetchSuppliers={() => fetchSuppliers(selectedCompany?.id)}
+        />
+      )}
+
+      {copyingSupplier && (
+        <CopyToCompaniesDialog
+          open={true}
+          title="Copy supplier to other companies"
+          subjectLabel={copyingSupplier.name}
+          companies={companies}
+          excludeIds={[copyingSupplier.companyId]}
+          onCancel={() => setCopyingSupplier(null)}
+          onConfirm={async (companyIds) => {
+            const { data } = await copySupplierToCompanies(copyingSupplier.id, companyIds);
+            const createdCount = data?.created?.length ?? 0;
+            const skipped = data?.skippedReasons ?? [];
+            if (createdCount > 0) {
+              notify(
+                `Copied "${copyingSupplier.name}" into ${createdCount} ${createdCount === 1 ? "company" : "companies"}` +
+                (skipped.length > 0 ? ` (${skipped.length} skipped)` : "."),
+                "success"
+              );
+            } else if (skipped.length > 0) {
+              notify(`No copies made — ${skipped[0]}`, "warning");
+            }
+            setCopyingSupplier(null);
+            if (selectedCompany) fetchSuppliers(selectedCompany.id);
+            setCommonRefreshKey((k) => k + 1);
+          }}
         />
       )}
 
@@ -213,6 +247,13 @@ export default function SuppliersPage() {
           onClose={() => setEditingGroupId(null)}
           onSaved={() => {
             setEditingGroupId(null);
+            if (selectedCompany) fetchSuppliers(selectedCompany.id);
+            setCommonRefreshKey((k) => k + 1);
+          }}
+          onChange={() => {
+            // Fired after "Add to more companies" — the modal stays
+            // open so the operator can keep editing master fields, but
+            // the underlying group membership has changed.
             if (selectedCompany) fetchSuppliers(selectedCompany.id);
             setCommonRefreshKey((k) => k + 1);
           }}

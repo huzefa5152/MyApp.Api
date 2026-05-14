@@ -26,6 +26,83 @@ namespace MyApp.Api.Services.Implementations
             _context = context;
         }
 
+        /// <summary>
+        /// Pick the most likely data sheet on the uploaded workbook. The
+        /// template's <see cref="TemplateCellMap.SheetIndex"/> is correct for
+        /// single-sheet uploads, but multi-sheet workbooks (e.g. exports that
+        /// ship with a leading "Settings" / "Instructions" sheet) shift the
+        /// data sheet to a higher index. Pre-fix the importer always read the
+        /// template's index, so a multi-sheet upload looked empty and got
+        /// rejected as "wrong company" even when the brand text was clearly
+        /// present on the real data sheet.
+        ///
+        /// Resolution order:
+        ///   1. Sheet whose name matches the template's <see cref="TemplateCellMap.SheetName"/> (case-insensitive).
+        ///   2. The template's <see cref="TemplateCellMap.SheetIndex"/>, if in range.
+        ///   3. Whichever sheet maximises the number of non-empty cells at the
+        ///      template's header-field positions.
+        ///   4. Sheet 0 as a last resort.
+        /// </summary>
+        private static int ResolveSheetIndex(IImportedWorkbook wb, TemplateCellMap cellMap, int _companyId)
+        {
+            if (wb.WorksheetCount <= 0) return 0;
+
+            // 1. Name match
+            if (!string.IsNullOrWhiteSpace(cellMap.SheetName))
+            {
+                for (int i = 0; i < wb.WorksheetCount; i++)
+                {
+                    if (string.Equals(wb.GetSheetName(i), cellMap.SheetName,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        return i;
+                    }
+                }
+            }
+
+            // 2. Configured index if it produces non-empty header cells.
+            int configured = (cellMap.SheetIndex >= 0 && cellMap.SheetIndex < wb.WorksheetCount)
+                ? cellMap.SheetIndex
+                : 0;
+            int configuredScore = ScoreSheet(wb, configured, cellMap);
+            if (configuredScore > 0) return configured;
+
+            // 3. Pick the sheet with the most non-empty header cells. This
+            //    catches multi-sheet uploads where the data lives on a sheet
+            //    whose name doesn't match the template (e.g. template uses
+            //    "Sheet1", upload uses "Delivery Note 1").
+            int best = configured;
+            int bestScore = configuredScore;
+            for (int i = 0; i < wb.WorksheetCount; i++)
+            {
+                if (i == configured) continue;
+                int s = ScoreSheet(wb, i, cellMap);
+                if (s > bestScore)
+                {
+                    best = i;
+                    bestScore = s;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// Count how many of the template's header-field positions resolve to
+        /// non-empty cells on the given sheet. Higher = more likely to be the
+        /// data sheet.
+        /// </summary>
+        private static int ScoreSheet(IImportedWorkbook wb, int sheet, TemplateCellMap cellMap)
+        {
+            if (cellMap.HeaderFields.Count == 0) return 0;
+            int score = 0;
+            foreach (var (_, pos) in cellMap.HeaderFields)
+            {
+                var v = wb.GetString(sheet, pos.Row, pos.Col);
+                if (!string.IsNullOrWhiteSpace(v)) score++;
+            }
+            return score;
+        }
+
         public async Task<ChallanImportPreviewDto> ExtractPreviewAsync(
             IFormFile file,
             TemplateCellMap cellMap,
@@ -45,8 +122,7 @@ namespace MyApp.Api.Services.Implementations
             ms.Position = 0;
 
             using var wb = WorkbookReaderFactory.Open(ms, ext);
-            int sheet = cellMap.SheetIndex;
-            if (sheet >= wb.WorksheetCount) sheet = 0;
+            int sheet = ResolveSheetIndex(wb, cellMap, companyId);
 
             // ── Header fields ──────────────────────────────────────────────
             preview.ChallanNumber = ReadChallanNumber(wb, sheet, cellMap, file.FileName, preview);

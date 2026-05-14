@@ -292,7 +292,26 @@ namespace MyApp.Api.Services.Implementations
             // edit the challan and re-pick each item from the catalog before
             // the items show up. Existing ItemDescription rows are left
             // untouched (we don't want to clobber saved FBR defaults).
-            await EnsureItemDescriptionsAsync(dto.Items.Select(i => i.Description));
+            //
+            // CRITICAL: this MUST be non-fatal. The repository above has
+            // already committed the challan in its own inner transaction.
+            // If a unique-index race on ItemDescriptions.Name throws here,
+            // the exception would bubble to the controller, which would
+            // return 500 "Could not create the challan" — but the challan
+            // is already in the database. The operator sees an error and
+            // clicks Save again → another challan row gets created with
+            // the next number → duplicates. Swallow + log; autocomplete
+            // staleness is recoverable, duplicate challans are not.
+            try
+            {
+                await EnsureItemDescriptionsAsync(dto.Items.Select(i => i.Description));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Challan #{ChallanNumber} (company {CompanyId}) created OK but item-description upsert failed; autocomplete may miss new names until the next save.",
+                    created.ChallanNumber, created.CompanyId);
+            }
 
             return ToDto(created);
         }
@@ -563,16 +582,31 @@ namespace MyApp.Api.Services.Implementations
             // so the operator can re-seed challan numbering. Same rationale as
             // the equivalent invoice-delete reset — keeps the "Starting number"
             // UI field semantically honest once unlocked.
-            var anyChallansLeft = await _context.DeliveryChallans.AnyAsync(x => x.CompanyId == companyId);
-            if (!anyChallansLeft)
+            //
+            // CRITICAL: must be non-fatal. The repo delete above has already
+            // committed; if this counter reset throws (transient DB error,
+            // concurrent challan create racing the AnyAsync) the controller's
+            // generic catch returns 500 but the challan is already gone.
+            // Operator sees a misleading error. Swallow + log.
+            try
             {
-                var company = await _context.Companies.FindAsync(companyId);
-                if (company != null && company.CurrentChallanNumber != 0)
+                var anyChallansLeft = await _context.DeliveryChallans.AnyAsync(x => x.CompanyId == companyId);
+                if (!anyChallansLeft)
                 {
-                    company.CurrentChallanNumber = 0;
-                    _context.Companies.Update(company);
-                    await _context.SaveChangesAsync();
+                    var company = await _context.Companies.FindAsync(companyId);
+                    if (company != null && company.CurrentChallanNumber != 0)
+                    {
+                        company.CurrentChallanNumber = 0;
+                        _context.Companies.Update(company);
+                        await _context.SaveChangesAsync();
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Challan {ChallanId} (company {CompanyId}) deleted OK but CurrentChallanNumber counter reset failed; will self-correct on next delete or company edit.",
+                    challanId, companyId);
             }
 
             return true;

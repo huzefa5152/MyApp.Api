@@ -51,7 +51,7 @@ namespace MyApp.Api.Controllers
         [RequestSizeLimit(MaxFilesPerRequest * MaxFileBytes)]
         [AuthorizeCompany]
         [EnableRateLimiting("import")]
-        public async Task<IActionResult> Preview(int companyId, [FromForm] List<IFormFile> files)
+        public async Task<IActionResult> Preview(int companyId, [FromForm] List<IFormFile> files, [FromForm] string? sheetName = null)
         {
             if (files == null || files.Count == 0)
                 return BadRequest(new { error = "No files uploaded." });
@@ -78,6 +78,27 @@ namespace MyApp.Api.Controllers
             {
                 _logger.LogError(ex, "Challan import: template parse failed for company {CompanyId} ({Path})", companyId, templatePath);
                 return BadRequest(new { error = "Could not read the challan template. Please re-upload it on the Print Templates page." });
+            }
+
+            // Sheet-name override resolution (highest priority first):
+            //   1. Per-request `sheetName` form field — lets the operator
+            //      pick a sheet just for this import batch without touching
+            //      the template's persistent pin. Useful when one batch of
+            //      legacy files lives on a different sheet than the rest.
+            //   2. Template's persistent ExcelSheetName pin — set on the
+            //      Print Templates page, applies to every import.
+            //   3. Template's auto-detected sheet (already populated by the
+            //      reverse mapper into cellMap.SheetName).
+            // After this, ChallanExcelImporter.ResolveSheetIndex still
+            // falls back to score-based detection if the resolved name
+            // isn't present in the uploaded file.
+            if (!string.IsNullOrWhiteSpace(sheetName))
+            {
+                cellMap.SheetName = sheetName;
+            }
+            else if (!string.IsNullOrWhiteSpace(template.ExcelSheetName))
+            {
+                cellMap.SheetName = template.ExcelSheetName;
             }
 
             var previews = new List<ChallanImportPreviewDto>();

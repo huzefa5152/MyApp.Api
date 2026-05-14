@@ -216,6 +216,53 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Copy an existing client into one or more other companies. The
+        /// new rows share the source's identifying fields (NTN, name,
+        /// etc.), which auto-links them to the source's Common Client
+        /// group on save. Tenant-scoped on both ends: caller must have
+        /// access to the source's company AND every target company.
+        /// </summary>
+        [HttpPost("{id}/copy")]
+        [HasPermission("clients.manage.copy")]
+        public async Task<ActionResult<CreateClientBatchResultDto>> CopyClient(int id, [FromBody] CopyClientToCompaniesDto dto)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (dto?.CompanyIds == null || dto.CompanyIds.Count == 0)
+                return BadRequest(new { message = "Select at least one target company." });
+
+            // Authorize on the source's company first — a 403 here matches
+            // the existing "can't touch this client" semantics on the edit
+            // and delete endpoints (line 229 / 247 in this file).
+            var source = await _service.GetByIdAsync(id);
+            if (source == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, source.CompanyId);
+
+            // Per-target tenant check — same belt-and-braces approach the
+            // batch-create endpoint uses (line 205-206 above).
+            foreach (var cid in dto.CompanyIds)
+                await _access.AssertAccessAsync(CurrentUserId, cid);
+
+            try
+            {
+                var result = await _service.CopyToCompaniesAsync(id, dto.CompanyIds);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
+        }
+
+        public class CopyClientToCompaniesDto
+        {
+            public List<int> CompanyIds { get; set; } = new();
+        }
+
         [HttpPut("{id}")]
         [HasPermission("clients.manage.update")]
         public async Task<ActionResult<ClientDto>> UpdateClient(int id, [FromBody] ClientDto dto)

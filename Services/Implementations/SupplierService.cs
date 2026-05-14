@@ -172,6 +172,43 @@ namespace MyApp.Api.Services.Implementations
             return result;
         }
 
+        public async Task<CreateSupplierBatchResultDto> CopyToCompaniesAsync(int sourceSupplierId, List<int> targetCompanyIds)
+        {
+            if (targetCompanyIds == null || targetCompanyIds.Count == 0)
+                throw new InvalidOperationException("At least one target company must be selected.");
+
+            var source = await _repo.GetByIdAsync(sourceSupplierId)
+                ?? throw new KeyNotFoundException("Source supplier not found.");
+
+            var cleanTargets = targetCompanyIds
+                .Where(id => id != source.CompanyId)
+                .Distinct()
+                .ToList();
+
+            if (cleanTargets.Count == 0)
+                throw new InvalidOperationException("No valid target companies to copy into (cannot copy a supplier into its own company).");
+
+            // Same delegation pattern as ClientService.CopyToCompaniesAsync:
+            // CreateForCompaniesAsync already handles transactions, name
+            // collisions, and EnsureGroupForSupplierAsync auto-linking, so
+            // every new row lands on the same SupplierGroup as the source.
+            var batch = new CreateSupplierBatchDto
+            {
+                Name = source.Name,
+                Address = source.Address,
+                Phone = source.Phone,
+                Email = source.Email,
+                NTN = source.NTN,
+                STRN = source.STRN,
+                Site = source.Site,
+                RegistrationType = source.RegistrationType,
+                CNIC = source.CNIC,
+                FbrProvinceCode = source.FbrProvinceCode,
+                CompanyIds = cleanTargets,
+            };
+            return await CreateForCompaniesAsync(batch);
+        }
+
         public async Task<SupplierDto> UpdateAsync(SupplierDto dto)
         {
             if (dto.Id == null) throw new ArgumentException("Supplier ID is required for update.");

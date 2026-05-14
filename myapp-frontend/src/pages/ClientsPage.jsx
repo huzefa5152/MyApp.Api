@@ -4,7 +4,9 @@ import ClientList from "../Components/ClientList";
 import ClientForm from "../Components/ClientForm";
 import CommonClientsPanel from "../Components/CommonClientsPanel";
 import CommonClientForm from "../Components/CommonClientForm";
-import { getClientsByCompany, getCommonClients } from "../api/clientApi";
+import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
+import { getClientsByCompany, getCommonClients, copyClientToCompanies } from "../api/clientApi";
+import { notify } from "../utils/notify";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -33,6 +35,9 @@ export default function ClientsPage() {
   // names / membership might have shifted).
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [commonRefreshKey, setCommonRefreshKey] = useState(0);
+
+  // Copy-to-companies dialog: holds the source client when open, null when closed.
+  const [copyingClient, setCopyingClient] = useState(null);
 
   // The set of multi-company group IDs visible right now — used to
   // hide those clients from the per-company list below the dropdown.
@@ -201,7 +206,44 @@ export default function ClientsPage() {
         <ClientList
           clients={filtered}
           onEdit={handleEdit}
+          onCopy={(client) => setCopyingClient(client)}
           fetchClients={() => fetchClients(selectedCompany?.id)}
+        />
+      )}
+
+      {/* Copy client into other companies — shared dialog used by both
+          the per-company list (this screen) and the Common Client edit
+          modal. Excludes the source's own company from the picker so
+          the operator can't accidentally try to copy a client onto
+          itself (the backend also defends against this). */}
+      {copyingClient && (
+        <CopyToCompaniesDialog
+          open={true}
+          title="Copy client to other companies"
+          subjectLabel={copyingClient.name}
+          companies={companies}
+          excludeIds={[copyingClient.companyId]}
+          onCancel={() => setCopyingClient(null)}
+          onConfirm={async (companyIds) => {
+            const { data } = await copyClientToCompanies(copyingClient.id, companyIds);
+            const createdCount = data?.created?.length ?? 0;
+            const skipped = data?.skippedReasons ?? [];
+            if (createdCount > 0) {
+              notify(
+                `Copied "${copyingClient.name}" into ${createdCount} ${createdCount === 1 ? "company" : "companies"}` +
+                (skipped.length > 0 ? ` (${skipped.length} skipped)` : "."),
+                "success"
+              );
+            } else if (skipped.length > 0) {
+              notify(`No copies made — ${skipped[0]}`, "warning");
+            }
+            setCopyingClient(null);
+            // Fresh data: the source company's per-row count didn't change
+            // but the Common Clients panel almost certainly did (the source
+            // and new copies should now share a group).
+            if (selectedCompany) fetchClients(selectedCompany.id);
+            setCommonRefreshKey((k) => k + 1);
+          }}
         />
       )}
 

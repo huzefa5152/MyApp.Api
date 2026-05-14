@@ -34,6 +34,7 @@ import {
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { Can, usePermissions } from "../contexts/PermissionsContext";
+import { getAvatarUrl } from "../utils/avatarUrl";
 import "./DashboardLayout.css";
 
 /* ------------------------------------------------------------------ */
@@ -127,7 +128,7 @@ function getDisplayName(user) {
 /*  DashboardLayout                                                     */
 /* ------------------------------------------------------------------ */
 export default function DashboardLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout, avatarVersion } = useAuth();
   const { hasAny, has } = usePermissions();
   const location = useLocation();
   const navigate = useNavigate();
@@ -232,8 +233,9 @@ export default function DashboardLayout() {
 
   const displayName = getDisplayName(user);
   const initials = getInitials(user);
-  const avatarUrl = user?.avatarPath
-    ? `${window.location.origin}${user.avatarPath}`
+  const avatarRelative = getAvatarUrl(user, avatarVersion);
+  const avatarUrl = avatarRelative
+    ? `${window.location.origin}${avatarRelative}`
     : null;
 
   return (

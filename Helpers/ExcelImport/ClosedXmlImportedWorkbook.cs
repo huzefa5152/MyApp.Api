@@ -19,6 +19,12 @@ namespace MyApp.Api.Helpers.ExcelImport
 
         public int WorksheetCount => _sheets.Count;
 
+        public string GetSheetName(int sheetIndex)
+        {
+            if (sheetIndex < 0 || sheetIndex >= _sheets.Count) return "";
+            return _sheets[sheetIndex].Name ?? "";
+        }
+
         public int GetLastRow(int sheetIndex)
         {
             if (sheetIndex < 0 || sheetIndex >= _sheets.Count) return 0;

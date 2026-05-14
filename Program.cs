@@ -1577,6 +1577,39 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
+    // ── Idempotent backfill: orphaned companies → all Administrator users ──
+    //
+    // 2026-05-14: CompanyService.CreateAsync did not historically create a
+    // UserCompanies row for the creator. Combined with the fail-closed
+    // CompanyAccessGuard, that meant any non-seed-admin who created a
+    // company was instantly locked out of it: print-template uploads,
+    // imports, FBR setup, every companyId-scoped endpoint returned 403.
+    //
+    // The controller now auto-grants the creator on each new POST
+    // /api/companies (see CompaniesController.CreateCompany). This backfill
+    // handles companies that were already created before that fix:
+    // any company with ZERO UserCompanies rows gets grants for every
+    // user currently in the Administrator role.
+    //
+    // Re-runs every boot (intentionally — newly-orphaned companies after
+    // a UserCompanies cleanup will be re-granted on next start). The NOT
+    // EXISTS guards make each individual INSERT idempotent.
+    db.Database.ExecuteSqlRaw(@"
+        DECLARE @adminRoleId INT = (SELECT TOP 1 Id FROM Roles WHERE [Name] = 'Administrator');
+        IF @adminRoleId IS NOT NULL
+        BEGIN
+            INSERT INTO UserCompanies (UserId, CompanyId, AssignedAt, AssignedByUserId)
+            SELECT ur.UserId, c.Id, SYSUTCDATETIME(), " + seedAdminUserId + @"
+              FROM Companies c
+              CROSS JOIN UserRoles ur
+             WHERE ur.RoleId = @adminRoleId
+               AND NOT EXISTS (SELECT 1 FROM UserCompanies u WHERE u.CompanyId = c.Id)
+               AND NOT EXISTS (
+                   SELECT 1 FROM UserCompanies x
+                    WHERE x.UserId = ur.UserId AND x.CompanyId = c.Id);
+        END
+    ");
+
     // ── One-time perm grant: tenantaccess.manage.* → Administrator role ──
     // The new keys are inserted by RbacSeeder (it walks PermissionCatalog),
     // but RolePermissions is empty for them by default. Grant them to the
@@ -1593,6 +1626,36 @@ using (var scope = app.Services.CreateScope())
                 INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (@adminRoleId, @viewId);
             IF @assignId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM RolePermissions WHERE RoleId = @adminRoleId AND PermissionId = @assignId)
                 INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (@adminRoleId, @assignId);
+        END
+    ");
+
+    // ── 2026-05-14: auto-grant the new printtemplates.manage.sheetpin
+    //    permission to the Administrator role so the new Data-sheet
+    //    dropdown on the Print Templates page works for admins out of
+    //    the box. Idempotent via NOT EXISTS.
+    db.Database.ExecuteSqlRaw(@"
+        DECLARE @adminRoleId INT = (SELECT TOP 1 Id FROM Roles WHERE [Name] = 'Administrator');
+        IF @adminRoleId IS NOT NULL
+        BEGIN
+            DECLARE @sheetPinId INT = (SELECT Id FROM Permissions WHERE [Key] = 'printtemplates.manage.sheetpin');
+            IF @sheetPinId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM RolePermissions WHERE RoleId = @adminRoleId AND PermissionId = @sheetPinId)
+                INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (@adminRoleId, @sheetPinId);
+        END
+    ");
+
+    // ── 2026-05-14: auto-grant the new clients.manage.copy and
+    //    suppliers.manage.copy permissions to the Administrator role.
+    //    Idempotent via NOT EXISTS.
+    db.Database.ExecuteSqlRaw(@"
+        DECLARE @adminRoleId INT = (SELECT TOP 1 Id FROM Roles WHERE [Name] = 'Administrator');
+        IF @adminRoleId IS NOT NULL
+        BEGIN
+            DECLARE @clientCopyId   INT = (SELECT Id FROM Permissions WHERE [Key] = 'clients.manage.copy');
+            DECLARE @supplierCopyId INT = (SELECT Id FROM Permissions WHERE [Key] = 'suppliers.manage.copy');
+            IF @clientCopyId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM RolePermissions WHERE RoleId = @adminRoleId AND PermissionId = @clientCopyId)
+                INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (@adminRoleId, @clientCopyId);
+            IF @supplierCopyId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM RolePermissions WHERE RoleId = @adminRoleId AND PermissionId = @supplierCopyId)
+                INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (@adminRoleId, @supplierCopyId);
         END
     ");
 }

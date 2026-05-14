@@ -9,7 +9,10 @@ namespace MyApp.Api.Services.Implementations
     public class ExcelTemplateReverseMapper : IExcelTemplateReverseMapper
     {
         // Mirrors ExcelTemplateEngine so forward/reverse stay in sync.
-        private static readonly Regex FieldRegex = new(@"\{\{([^}]+)\}\}", RegexOptions.Compiled);
+        // Mirrors ExcelTemplateEngine.FieldRegex — 2 OR 3 braces on each side
+        // so a Handlebars-style {{{foo}}} in a print template doesn't break
+        // the cell-map build for the importer.
+        private static readonly Regex FieldRegex = new(@"\{\{\{?([^}]+)\}\}\}?", RegexOptions.Compiled);
         private static readonly Regex EachStartRegex = new(@"\{\{\s*#each\s+(\w+)", RegexOptions.Compiled);
         private static readonly Regex EachEndRegex = new(@"\{\{\s*/each\s*\}\}", RegexOptions.Compiled);
 
@@ -77,7 +80,11 @@ namespace MyApp.Api.Services.Implementations
             }
             target ??= wb.Worksheets.First();
 
-            var map = new TemplateCellMap { SheetIndex = sheetIndex };
+            var map = new TemplateCellMap
+            {
+                SheetIndex = sheetIndex,
+                SheetName = target.Name,
+            };
 
             int lastRow = target.LastRowUsed()?.RowNumber() ?? 0;
             int lastCol = target.LastColumnUsed()?.ColumnNumber() ?? 0;

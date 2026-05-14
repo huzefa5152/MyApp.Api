@@ -11,6 +11,15 @@ namespace MyApp.Api.Helpers.ExcelImport
         int WorksheetCount { get; }
 
         /// <summary>
+        /// Sheet name at the given index, or empty string if out of range.
+        /// Used by the challan importer to match the template's sheet name
+        /// against the uploaded file — multi-sheet workbooks (e.g. with a
+        /// leading "Settings" sheet) can shift the data sheet's index, so
+        /// matching by name avoids false "wrong company" rejections.
+        /// </summary>
+        string GetSheetName(int sheetIndex);
+
+        /// <summary>
         /// Last row that contains any data on the given sheet (1-indexed).
         /// Returns 0 if the sheet is empty.
         /// </summary>

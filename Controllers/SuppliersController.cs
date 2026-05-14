@@ -121,6 +121,45 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Copy an existing supplier into one or more other companies.
+        /// Mirror of <c>POST /api/clients/{id}/copy</c>.
+        /// </summary>
+        [HttpPost("{id}/copy")]
+        [HasPermission("suppliers.manage.copy")]
+        public async Task<ActionResult<CreateSupplierBatchResultDto>> CopySupplier(int id, [FromBody] CopySupplierToCompaniesDto dto)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (dto?.CompanyIds == null || dto.CompanyIds.Count == 0)
+                return BadRequest(new { message = "Select at least one target company." });
+
+            var source = await _service.GetByIdAsync(id);
+            if (source == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, source.CompanyId);
+
+            foreach (var cid in dto.CompanyIds)
+                await _access.AssertAccessAsync(CurrentUserId, cid);
+
+            try
+            {
+                var result = await _service.CopyToCompaniesAsync(id, dto.CompanyIds);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
+        }
+
+        public class CopySupplierToCompaniesDto
+        {
+            public List<int> CompanyIds { get; set; } = new();
+        }
+
         [HttpGet]
         [HasPermission("suppliers.manage.view")]
         public async Task<ActionResult<IEnumerable<SupplierDto>>> GetSuppliers()

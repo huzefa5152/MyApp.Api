@@ -1,15 +1,16 @@
-import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete } from "react-icons/md";
+import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete, MdContentCopy } from "react-icons/md";
 import { deleteClient } from "../api/clientApi";
 import { cardStyles, cardHover } from "../theme";
 import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 
-export default function ClientList({ clients, onEdit, fetchClients }) {
+export default function ClientList({ clients, onEdit, onCopy, fetchClients }) {
   const confirm = useConfirm();
   const { has } = usePermissions();
   const canUpdate = has("clients.manage.update");
   const canDelete = has("clients.manage.delete");
+  const canCopy = has("clients.manage.copy");
 
   const handleDelete = async (id) => {
     const ok = await confirm({ title: "Delete Client?", message: "Are you sure you want to delete this client? This action cannot be undone.", variant: "danger", confirmText: "Delete" });
@@ -70,7 +71,7 @@ export default function ClientList({ clients, onEdit, fetchClients }) {
                 </p>
               )}
             </div>
-            {(canUpdate || canDelete) && (
+            {(canUpdate || canDelete || canCopy) && (
               <div style={cardStyles.buttonGroup}>
                 {canUpdate && (
                   <button
@@ -80,6 +81,17 @@ export default function ClientList({ clients, onEdit, fetchClients }) {
                     onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
                   >
                     <MdEdit /> Edit
+                  </button>
+                )}
+                {canCopy && onCopy && (
+                  <button
+                    style={{ ...cardStyles.button, backgroundColor: "#ede7f6", color: "#4527a0", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+                    onClick={() => onCopy(client)}
+                    onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(0.97)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
+                    title="Copy this client into another company"
+                  >
+                    <MdContentCopy /> Copy
                   </button>
                 )}
                 {canDelete && (

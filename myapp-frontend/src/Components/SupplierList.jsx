@@ -1,15 +1,16 @@
-import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete } from "react-icons/md";
+import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete, MdContentCopy } from "react-icons/md";
 import { deleteSupplier } from "../api/supplierApi";
 import { cardStyles, cardHover } from "../theme";
 import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 
-export default function SupplierList({ suppliers, onEdit, fetchSuppliers }) {
+export default function SupplierList({ suppliers, onEdit, onCopy, fetchSuppliers }) {
   const confirm = useConfirm();
   const { has } = usePermissions();
   const canUpdate = has("suppliers.manage.update");
   const canDelete = has("suppliers.manage.delete");
+  const canCopy = has("suppliers.manage.copy");
 
   const handleDelete = async (s) => {
     if (s.hasPurchaseBills) {
@@ -84,7 +85,7 @@ export default function SupplierList({ suppliers, onEdit, fetchSuppliers }) {
                 </p>
               )}
             </div>
-            {(canUpdate || canDelete) && (
+            {(canUpdate || canDelete || canCopy) && (
               <div style={cardStyles.buttonGroup}>
                 {canUpdate && (
                   <button
@@ -92,6 +93,15 @@ export default function SupplierList({ suppliers, onEdit, fetchSuppliers }) {
                     onClick={() => onEdit(supplier)}
                   >
                     <MdEdit /> Edit
+                  </button>
+                )}
+                {canCopy && onCopy && (
+                  <button
+                    style={{ ...cardStyles.button, backgroundColor: "#ede7f6", color: "#4527a0", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+                    onClick={() => onCopy(supplier)}
+                    title="Copy this supplier into another company"
+                  >
+                    <MdContentCopy /> Copy
                   </button>
                 )}
                 {canDelete && (

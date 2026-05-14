@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
-import { MdClose, MdInfo, MdBusiness, MdCheckCircle, MdDelete } from "react-icons/md";
-import { getCommonClientById, updateCommonClient, deleteCommonClient, deleteClient } from "../api/clientApi";
+import { MdClose, MdInfo, MdBusiness, MdCheckCircle, MdDelete, MdAdd } from "react-icons/md";
+import { getCommonClientById, updateCommonClient, deleteCommonClient, deleteClient, copyClientToCompanies } from "../api/clientApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { usePermissions } from "../contexts/PermissionsContext";
+import { useCompany } from "../contexts/CompanyContext";
 import { useConfirm } from "./ConfirmDialog";
 import { formStyles, modalSizes } from "../theme";
+import CopyToCompaniesDialog from "./CopyToCompaniesDialog";
+import { notify } from "../utils/notify";
 
 /**
  * Edit form for a "Common Client" (a ClientGroup row + its sibling
@@ -20,7 +23,11 @@ import { formStyles, modalSizes } from "../theme";
 export default function CommonClientForm({ groupId, onClose, onSaved, onChange }) {
   const { has } = usePermissions();
   const confirm = useConfirm();
+  const { companies } = useCompany();
   const canDelete = has("clients.manage.delete");
+  const canCopy = has("clients.manage.copy");
+  // "Add to more companies" dialog visibility.
+  const [addingToCompanies, setAddingToCompanies] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -494,6 +501,23 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                       <span style={{ color: "#5f6d7e", fontSize: "0.78rem" }}>
                         Sites stay per-company — edit each from the per-company form
                       </span>
+                      {canCopy && (() => {
+                        const memberCompanyIds = new Set((detail.members || []).map((m) => m.companyId));
+                        const remainingCount = companies.filter((c) => !memberCompanyIds.has(c.id)).length;
+                        if (remainingCount === 0) return null;
+                        return (
+                          <button
+                            type="button"
+                            style={s.addCompanyBtn}
+                            onClick={() => setAddingToCompanies(true)}
+                            disabled={saving || deleting || deletingMemberId !== null}
+                            title="Add this common client to other companies that don't have it yet"
+                          >
+                            <MdAdd size={14} />
+                            Add to {remainingCount === 1 ? "1 more company" : `${remainingCount} more companies`}
+                          </button>
+                        );
+                      })()}
                     </div>
                     <div style={s.membersTable}>
                       {detail.members.map((m) => {
@@ -579,6 +603,48 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
           </div>
         </form>
       </div>
+
+      {/* "Add to more companies" dialog — uses ANY existing member's
+          client id as the source (they all share NTN / group, so the
+          backend lands every new copy on the same ClientGroup). Excludes
+          companies already in the group from the picker. */}
+      {addingToCompanies && detail && (
+        <CopyToCompaniesDialog
+          open={true}
+          title="Add this client to more companies"
+          subjectLabel={detail.displayName}
+          companies={companies}
+          excludeIds={(detail.members || []).map((m) => m.companyId)}
+          onCancel={() => setAddingToCompanies(false)}
+          onConfirm={async (companyIds) => {
+            const sourceClientId = detail.members?.[0]?.clientId;
+            if (!sourceClientId) {
+              throw new Error("This group has no source member to copy from.");
+            }
+            const { data } = await copyClientToCompanies(sourceClientId, companyIds);
+            const createdCount = data?.created?.length ?? 0;
+            const skipped = data?.skippedReasons ?? [];
+            if (createdCount > 0) {
+              notify(
+                `Added "${detail.displayName}" to ${createdCount} ${createdCount === 1 ? "company" : "companies"}` +
+                (skipped.length > 0 ? ` (${skipped.length} skipped)` : "."),
+                "success"
+              );
+            } else if (skipped.length > 0) {
+              notify(`No copies made — ${skipped[0]}`, "warning");
+            }
+            setAddingToCompanies(false);
+            // Refetch this group's detail so the new members appear
+            // in the members table immediately. Also bubble onChange so
+            // the parent page re-pulls the Common Clients panel.
+            try {
+              const { data: fresh } = await getCommonClientById(groupId);
+              setDetail(fresh);
+            } catch { /* non-fatal */ }
+            onChange?.();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -667,5 +733,20 @@ const s = {
     color: "#dc3545",
     border: "1px solid rgba(220,53,69,0.2)",
     boxShadow: "none",
+  },
+  addCompanyBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    marginLeft: "auto",
+    padding: "0.3rem 0.65rem",
+    borderRadius: 6,
+    border: "1px solid rgba(13,71,161,0.25)",
+    background: "#e3f2fd",
+    color: "#0d47a1",
+    fontSize: "0.76rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
   },
 };

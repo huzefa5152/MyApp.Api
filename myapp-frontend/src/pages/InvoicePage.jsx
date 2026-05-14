@@ -7,6 +7,9 @@ import EditBillForm from "../Components/EditBillForm";
 import BulkFbrResultsDialog from "../Components/BulkFbrResultsDialog";
 import FbrPreviewDialog from "../Components/FbrPreviewDialog";
 import BulkFbrPreviewDialog from "../Components/BulkFbrPreviewDialog";
+import InvoiceTable from "../Components/InvoiceTable";
+import ViewModeToggle from "../components/ViewModeToggle";
+import { useListViewMode } from "../hooks/useListViewMode";
 import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
@@ -38,6 +41,9 @@ export default function InvoicePage({ mode = "invoices" }) {
   // status badge still renders in both modes so the operator can see at
   // a glance which rows are locked. `invoices` mode keeps everything.
   const isBillsMode = mode === "bills";
+  // Persist view-mode per tab so Bills + Invoices can each remember their
+  // own setting (e.g. operator wants cards on Bills but table on Invoices).
+  const [viewMode, setViewMode] = useListViewMode(isBillsMode ? "bills" : "invoices");
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
   const confirm = useConfirm();
@@ -732,6 +738,13 @@ export default function InvoicePage({ mode = "invoices" }) {
               {hasFilters && (
                 <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>
               )}
+              <div style={{ marginLeft: "auto" }}>
+                <ViewModeToggle
+                  mode={viewMode}
+                  onChange={setViewMode}
+                  ariaLabel={isBillsMode ? "Bills view mode" : "Invoices view mode"}
+                />
+              </div>
             </div>
           )}
         </>
@@ -750,6 +763,41 @@ export default function InvoicePage({ mode = "invoices" }) {
         </div>
       ) : (
         <>
+          {viewMode === "table" ? (
+            <InvoiceTable
+              invoices={invoices}
+              isBillsMode={isBillsMode}
+              perms={{
+                canPrint,
+                canFbrPreview,
+                canFbrAny,
+                canFbrValidate,
+                canFbrSubmit,
+                canOpenEdit,
+                canFbrExclude,
+                canDelete,
+              }}
+              hasExcelBill={hasExcelBill}
+              hasExcelTax={hasExcelTax}
+              selectedCompanyHasFbrToken={!!selectedCompany?.hasFbrToken}
+              fbrValidated={fbrValidated}
+              fbrLoading={fbrLoading}
+              exportingId={exportingId}
+              onView={(inv) => setViewingId(inv.id)}
+              onPrintBill={handlePrintBill}
+              onPrintTax={handlePrintTax}
+              onExportBillPdf={handleExportBillPdf}
+              onExportBillExcel={handleExportBillExcel}
+              onExportTaxPdf={handleExportTaxPdf}
+              onExportTaxExcel={handleExportTaxExcel}
+              onFbrPreview={(inv) => setFbrPreviewId(inv.id)}
+              onFbrValidate={handleFbrValidate}
+              onFbrSubmit={handleFbrSubmit}
+              onEdit={(inv) => setEditingId(inv.id)}
+              onToggleFbrExcluded={handleToggleFbrExcluded}
+              onDelete={handleDeleteInvoice}
+            />
+          ) : (
           <div className="card-grid">
             {invoices.map((inv) => (
               <div
@@ -1027,6 +1075,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               </div>
             ))}
           </div>
+          )}
           {/* Pagination */}
           {totalPages > 1 && (
             <div style={styles.pagination}>

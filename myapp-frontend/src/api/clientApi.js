@@ -10,6 +10,13 @@ export const createClient = (payload) => http.post("/clients", payload);
 // Payload shape: { ...clientFields, companyIds: [1, 2] }
 // Response shape: { created: [Client...], skippedReasons: ["..."], clientGroupId }
 export const createClientBatch = (payload) => http.post("/clients/batch", payload);
+// Copy an existing client into one or more target companies. The server
+// reuses the source's identifying fields so the new rows auto-link to
+// the source's Common Client group (NTN / normalised-name match).
+// Payload: { companyIds: [2, 3, ...] }
+// Response shape mirrors createClientBatch.
+export const copyClientToCompanies = (id, companyIds) =>
+  http.post(`/clients/${id}/copy`, { companyIds });
 export const updateClient = (id, payload) => http.put(`/clients/${id}`, payload);
 export const deleteClient = (id) => http.delete(`/clients/${id}`);
 export const getClientsCount = (companyId) =>

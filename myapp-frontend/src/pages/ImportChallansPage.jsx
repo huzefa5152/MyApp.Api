@@ -3,7 +3,7 @@ import { MdFileUpload, MdCheckCircle, MdError, MdDelete, MdArrowBack, MdDownload
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getClientsByCompany } from "../api/clientApi";
-import { hasExcelTemplate } from "../api/printTemplateApi";
+import { hasExcelTemplate, getTemplate } from "../api/printTemplateApi";
 import { previewChallanImport, commitChallanImport } from "../api/challanImportApi";
 import { notify } from "../utils/notify";
 
@@ -65,6 +65,16 @@ export default function ImportChallansPage() {
   const [clients, setClients] = useState([]);
   const [templateReady, setTemplateReady] = useState(null); // null = checking
   const [loading, setLoading] = useState(false);
+  // Sheet-pin info pulled from the company's Challan template — drives the
+  // per-import sheet picker. `templateSheetNames` is every sheet in the
+  // uploaded template (used as the dropdown's option list). `pinnedSheet`
+  // is what the template page has saved as the default (null = auto-detect).
+  // `overrideSheet` is the operator's per-batch choice for THIS import;
+  // empty string means "use the template's default".
+  const [templateSheetNames, setTemplateSheetNames] = useState([]);
+  const [pinnedSheet, setPinnedSheet] = useState(null);
+  const [overrideSheet, setOverrideSheet] = useState("");
+  const canSheetPin = has("printtemplates.manage.sheetpin");
 
   // Keep targetCompany in sync the first time companies load; after that
   // the user is in charge.
@@ -77,9 +87,21 @@ export default function ImportChallansPage() {
   useEffect(() => {
     if (!targetCompany) return;
     setTemplateReady(null);
+    setOverrideSheet("");
+    setTemplateSheetNames([]);
+    setPinnedSheet(null);
     hasExcelTemplate(targetCompany.id, "Challan")
       .then(({ data }) => setTemplateReady(!!data.hasExcelTemplate))
       .catch(() => setTemplateReady(false));
+    // Pull the template detail so we can pre-fill the sheet picker. Non-
+    // fatal — if this fails the picker just shows the "Use template default"
+    // option and operators can still import via the existing fallbacks.
+    getTemplate(targetCompany.id, "Challan")
+      .then(({ data }) => {
+        setTemplateSheetNames(Array.isArray(data?.excelSheetNames) ? data.excelSheetNames : []);
+        setPinnedSheet(data?.excelSheetName || null);
+      })
+      .catch(() => { /* leave picker in default state */ });
     getClientsByCompany(targetCompany.id)
       .then(({ data }) => setClients(data || []))
       .catch(() => setClients([]));
@@ -101,7 +123,7 @@ export default function ImportChallansPage() {
     }
     setLoading(true);
     try {
-      const { data } = await previewChallanImport(targetCompany.id, files);
+      const { data } = await previewChallanImport(targetCompany.id, files, overrideSheet || null);
       // Cross-check: does the parsed challan number from the cell match the
       // number in the filename? If the filename is DC-patterned and the
       // numbers diverge, surface it so the operator can investigate.
@@ -224,6 +246,11 @@ export default function ImportChallansPage() {
           onNext={handleUpload}
           disabled={loading || templateReady !== true || !targetCompany}
           loading={loading}
+          templateSheetNames={templateSheetNames}
+          pinnedSheet={pinnedSheet}
+          overrideSheet={overrideSheet}
+          setOverrideSheet={setOverrideSheet}
+          canSheetPin={canSheetPin}
         />
       )}
 
@@ -300,6 +327,11 @@ function UploadStep({
   onNext,
   disabled,
   loading,
+  templateSheetNames = [],
+  pinnedSheet,
+  overrideSheet,
+  setOverrideSheet,
+  canSheetPin,
 }) {
   const onDrop = (e) => {
     e.preventDefault();
@@ -372,6 +404,31 @@ function UploadStep({
           )}
         </small>
       </div>
+
+      {canSheetPin && templateReady === true && (
+        <div style={styles.sheetPickerRow}>
+          <label htmlFor="import-sheet-picker" style={styles.sheetPickerLabel}>
+            Data sheet (override for this batch):
+          </label>
+          <select
+            id="import-sheet-picker"
+            value={overrideSheet}
+            onChange={(e) => setOverrideSheet(e.target.value)}
+            style={{ ...styles.input, maxWidth: 260 }}
+            title="Pick which sheet the importer reads from each uploaded file. Only applies to this import batch — to persist, set the pin on the Print Templates page."
+          >
+            <option value="">
+              Use template default{pinnedSheet ? ` (${pinnedSheet})` : " (auto-detect)"}
+            </option>
+            {templateSheetNames.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+          <small style={styles.sheetPickerHint}>
+            Only this batch — to persist, change it on <i>Print Templates → Challan</i>.
+          </small>
+        </div>
+      )}
 
       <div
         style={{
@@ -911,6 +968,20 @@ const styles = {
   },
   companyPickerHint: {
     fontSize: "0.8rem", color: colors.textSecondary,
+  },
+  sheetPickerRow: {
+    display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap",
+    padding: "0.65rem 0.85rem",
+    background: "#f5f8fc", borderRadius: 10,
+    border: `1px solid ${colors.cardBorder}`,
+    marginBottom: "1rem",
+  },
+  sheetPickerLabel: {
+    fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary,
+  },
+  sheetPickerHint: {
+    fontSize: "0.78rem", color: colors.textSecondary,
+    marginLeft: "auto",
   },
   dropzone: {
     border: `2px dashed ${colors.inputBorder}`,

@@ -17,6 +17,12 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<CreateSupplierBatchResultDto> CreateForCompaniesAsync(CreateSupplierBatchDto dto);
 
+        /// <summary>
+        /// Copy an existing supplier into one or more target companies.
+        /// Mirror of <see cref="IClientService.CopyToCompaniesAsync"/>.
+        /// </summary>
+        Task<CreateSupplierBatchResultDto> CopyToCompaniesAsync(int sourceSupplierId, List<int> targetCompanyIds);
+
         Task<SupplierDto> UpdateAsync(SupplierDto dto);
         Task DeleteAsync(int id);
     }

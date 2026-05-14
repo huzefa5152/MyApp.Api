@@ -155,7 +155,9 @@ for username, fullname in [("alice", "Alice Tester"), ("bob", "Bob Tester"), ("c
 
     status, u = request("POST", "/api/users", token=admin, body={
         "username": username,
-        "password": "test123",
+        # Password policy requires 8+ chars (tightened after this test was
+        # first written). Keep this in sync with the live rule.
+        "password": "test1234",
         "fullName": fullname,
         "role": "Administrator",
     })
@@ -182,9 +184,9 @@ for uid, (cids, label) in mappings.items():
 # ── Verification ─────────────────────────────────────────────
 print("\n=== Logging in as test users + verifying tenant filter ===")
 tokens = {
-    "alice": login("alice", "test123"),
-    "bob":   login("bob",   "test123"),
-    "carol": login("carol", "test123"),
+    "alice": login("alice", "test1234"),
+    "bob":   login("bob",   "test1234"),
+    "carol": login("carol", "test1234"),
     "admin": admin,
 }
 
@@ -266,9 +268,16 @@ for username, forbidden in forbidden_for.items():
         for cid in forbidden:
             path = path_tpl.replace("{cid}", str(cid))
             status, _ = request(method, path, token=tok)
-            suite = f"403 on forbidden isolated company"
-            check(suite, f"[{username}] {method} {path}", status == 403,
-                  f"expected 403, got {status}")
+            suite = f"403/404 on forbidden isolated company"
+            # GET /api/companies/{id} returns 404 (not 403) by design — see
+            # audit M-5 (2026-05-13): the response status / timing must not
+            # leak "this company exists in another tenant". Every other
+            # tenant-scoped endpoint still returns 403 via [AuthorizeCompany].
+            is_company_get = (method == "GET" and path_tpl.startswith("/api/companies/{cid}"))
+            expected_ok = (status == 404) if is_company_get else (status == 403)
+            expected_text = "404" if is_company_get else "403"
+            check(suite, f"[{username}] {method} {path}", expected_ok,
+                  f"expected {expected_text}, got {status}")
 
 # Suite 3: tenant-scoped endpoints — 200 on allowed companies
 print("\n  Suite 3 — 200 on allowed companies (lightweight)")

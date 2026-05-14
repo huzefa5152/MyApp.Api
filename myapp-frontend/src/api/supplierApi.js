@@ -25,3 +25,7 @@ export const deleteCommonSupplier = (groupId) =>
 // Multi-company create: { ...supplierFields, companyIds: [1, 2] }
 export const createSupplierBatch = (payload) =>
   http.post("/suppliers/batch", payload);
+// Copy an existing supplier into one or more target companies. Mirror
+// of copyClientToCompanies — see clientApi.js for the response shape.
+export const copySupplierToCompanies = (id, companyIds) =>
+  http.post(`/suppliers/${id}/copy`, { companyIds });

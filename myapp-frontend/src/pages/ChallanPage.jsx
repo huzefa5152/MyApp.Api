@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { MdDescription, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
+import ChallanTable from "../Components/ChallanTable";
 import ChallanForm from "../Components/ChallanForm";
 import ChallanEditForm from "../Components/ChallanEditForm";
 import POImportForm from "../Components/POImportForm";
 import InvoiceForm from "../Components/InvoiceForm";
+import ViewModeToggle from "../components/ViewModeToggle";
+import { useListViewMode } from "../hooks/useListViewMode";
 import {
   getPagedChallansByCompany,
   createDeliveryChallan,
@@ -45,6 +48,7 @@ export default function ChallanPage() {
   const canUpdate = has("challans.manage.update");
   const canDelete = has("challans.manage.delete");
   const canPrint = has("challans.print.view");
+  const [viewMode, setViewMode] = useListViewMode("challans");
   const [clients, setClients] = useState([]);
   const [challans, setChallans] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -339,7 +343,7 @@ export default function ChallanPage() {
             </select>
           </div>
 
-          {/* Filters */}
+          {/* Filters + view-mode toggle */}
           {selectedCompany && (
             <div className="filters-row">
               <div className="filter-search-wrap">
@@ -373,6 +377,9 @@ export default function ChallanPage() {
               {hasFilters && (
                 <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>
               )}
+              <div style={{ marginLeft: "auto" }}>
+                <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Delivery challan view mode" />
+              </div>
             </div>
           )}
         </>
@@ -397,19 +404,35 @@ export default function ChallanPage() {
         </div>
       ) : (
         <>
-          <ChallanList
-            challans={challans}
-            onCancel={handleCancel}
-            onDelete={handleDelete}
-            onPrint={handlePrint}
-            onEditItems={handleEditItems}
-            onExportPdf={handleExportPdf}
-            onExportExcel={hasExcelTpl ? handleExportExcel : null}
-            onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
-            onDuplicate={handleDuplicate}
-            exportingId={exportingId}
-            duplicatingId={duplicatingId}
-          />
+          {viewMode === "table" ? (
+            <ChallanTable
+              challans={challans}
+              onCancel={handleCancel}
+              onDelete={handleDelete}
+              onPrint={handlePrint}
+              onEditItems={handleEditItems}
+              onExportPdf={handleExportPdf}
+              onExportExcel={hasExcelTpl ? handleExportExcel : null}
+              onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
+              onDuplicate={handleDuplicate}
+              exportingId={exportingId}
+              duplicatingId={duplicatingId}
+            />
+          ) : (
+            <ChallanList
+              challans={challans}
+              onCancel={handleCancel}
+              onDelete={handleDelete}
+              onPrint={handlePrint}
+              onEditItems={handleEditItems}
+              onExportPdf={handleExportPdf}
+              onExportExcel={hasExcelTpl ? handleExportExcel : null}
+              onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
+              onDuplicate={handleDuplicate}
+              exportingId={exportingId}
+              duplicatingId={duplicatingId}
+            />
+          )}
           {/* Pagination */}
           {totalPages > 1 && (
             <div style={styles.pagination}>

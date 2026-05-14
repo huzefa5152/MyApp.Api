@@ -6,7 +6,7 @@ import {
 } from "react-icons/md";
 import {
   getTemplate, upsertTemplate, getMergeFields,
-  uploadExcelTemplate, deleteExcelTemplate,
+  uploadExcelTemplate, deleteExcelTemplate, setExcelSheetName as setExcelSheetNameApi,
 } from "../api/printTemplateApi";
 import { useCompany } from "../contexts/CompanyContext";
 import { mergeTemplate } from "../utils/templateEngine";
@@ -119,6 +119,7 @@ export default function TemplateEditorPage() {
   const confirm = useConfirm();
   const { has } = usePermissions();
   const canManage = has("printtemplates.manage.update");
+  const canSheetPin = has("printtemplates.manage.sheetpin");
   const { companies, selectedCompany, setSelectedCompany, loading } = useCompany();
   const [templateType, setTemplateType] = useState("Challan");
   const [htmlContent, setHtmlContent] = useState("");
@@ -134,6 +135,14 @@ export default function TemplateEditorPage() {
   const [fields, setFields] = useState([]);
   const [hasExcel, setHasExcel] = useState(false);
   const [excelUploading, setExcelUploading] = useState(false);
+  // Sheet pinned by operator on the uploaded Excel template (null = auto-detect).
+  // Drives the dropdown next to the Excel template badge.
+  const [excelSheetName, setExcelSheetName] = useState(null);
+  // All sheets present in the uploaded workbook (for the picker dropdown).
+  const [excelSheetNames, setExcelSheetNames] = useState([]);
+  // Set while a POST to save the sheet pin is in flight — disables the
+  // dropdown to prevent double-submits.
+  const [sheetSaving, setSheetSaving] = useState(false);
   const excelInputRef = useRef(null);
   const htmlImportRef = useRef(null);
   const codeEditorRef = useRef(null);
@@ -172,6 +181,8 @@ export default function TemplateEditorPage() {
         setOriginalJson(data.templateJson || null);
         setEditorMode(data.editorMode || "code");
         setHasExcel(data.hasExcelTemplate || false);
+        setExcelSheetName(data.excelSheetName || null);
+        setExcelSheetNames(data.excelSheetNames || []);
         setActiveTab("editor");
       } catch {
         const def = DEFAULT_TEMPLATES[templateType] || "";
@@ -261,19 +272,49 @@ export default function TemplateEditorPage() {
     showToast(`Loaded "${template.name}" template`);
   };
 
+  // Upload the file as-is, no sheet pin. The vast majority of historical
+  // challan exports are single-sheet, so forcing the operator to pick at
+  // upload time would be friction for zero benefit. If the workbook has
+  // multiple sheets, the post-upload dropdown on the Excel Template Bar
+  // lets the operator pin a specific sheet — the importer's smart
+  // resolver (sheet-name match → score-based → sheet 0) already handles
+  // the common multi-sheet case automatically.
   const handleExcelUpload = async (e) => {
     const file = e.target.files?.[0];
+    if (excelInputRef.current) excelInputRef.current.value = "";
     if (!file || !selectedCompany) return;
     setExcelUploading(true);
     try {
-      await uploadExcelTemplate(selectedCompany.id, templateType, file);
+      const { data } = await uploadExcelTemplate(selectedCompany.id, templateType, file, null);
       setHasExcel(true);
-      showToast("Excel template uploaded!");
+      setExcelSheetName(data.excelSheetName || null);
+      setExcelSheetNames(data.excelSheetNames || []);
+      const sheetCount = (data.excelSheetNames || []).length;
+      if (sheetCount > 1) {
+        showToast(`Excel template uploaded — ${sheetCount} sheets detected, pin one in the Data sheet dropdown if needed.`);
+      } else {
+        showToast("Excel template uploaded!");
+      }
     } catch {
       showToast("Failed to upload Excel template", "error");
     } finally {
       setExcelUploading(false);
-      if (excelInputRef.current) excelInputRef.current.value = "";
+    }
+  };
+
+  // Save a new sheet pin against an already-uploaded template.
+  const handleSheetChange = async (next) => {
+    if (!selectedCompany) return;
+    const value = next || null;
+    setSheetSaving(true);
+    try {
+      await setExcelSheetNameApi(selectedCompany.id, templateType, value);
+      setExcelSheetName(value);
+      showToast(value ? `Pinned sheet "${value}".` : "Sheet pin cleared — auto-detect on.");
+    } catch (err) {
+      showToast(err.response?.data?.error || "Failed to update sheet name.", "error");
+    } finally {
+      setSheetSaving(false);
     }
   };
 
@@ -534,6 +575,27 @@ export default function TemplateEditorPage() {
           {hasExcel ? (
             <>
               <span style={styles.excelBadge}>Uploaded</span>
+              {canSheetPin && excelSheetNames && excelSheetNames.length > 0 && (
+                <label style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "0.78rem", color: "#5f6d7e" }}>
+                  Data sheet:
+                  <select
+                    style={{ ...dropdownStyles.base, padding: "0.3rem 0.55rem", fontSize: "0.78rem", minWidth: 160 }}
+                    value={excelSheetName || ""}
+                    disabled={sheetSaving}
+                    onChange={(e) => handleSheetChange(e.target.value)}
+                    title={excelSheetNames.length === 1
+                      ? "Single-sheet template — Auto-detect handles this case. You can still pin the sheet name if your import files use a different layout."
+                      : "Pin the sheet that holds the data on every uploaded file. Leave 'Auto-detect' to let the importer choose."}
+                  >
+                    <option value="">
+                      Auto-detect{excelSheetNames.length === 1 ? ` (${excelSheetNames[0]})` : ""}
+                    </option>
+                    {excelSheetNames.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <button style={{ ...styles.btn, ...styles.btnDanger, padding: "0.3rem 0.6rem", fontSize: "0.78rem" }} onClick={handleExcelDelete}>
                 <MdDelete size={14} /> Remove
               </button>
@@ -652,6 +714,7 @@ export default function TemplateEditorPage() {
           </>
         )}
       </div>
+
     </div>
   );
 }

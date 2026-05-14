@@ -52,6 +52,13 @@ namespace MyApp.Api.Helpers
             new("clients.manage.create",   "Clients", "Manage", "Create", "Create a new client"),
             new("clients.manage.update",   "Clients", "Manage", "Update", "Edit client details"),
             new("clients.manage.delete",   "Clients", "Manage", "Delete", "Delete a client"),
+            // Copy an existing client into one or more other companies. The
+            // copy is auto-linked to the same Common Client group via NTN /
+            // normalised-name matching, so subsequent Common Client edits
+            // cascade across all members. Kept separate from .create so a
+            // role can be allowed to populate new tenants from existing
+            // clients without bare create-from-scratch rights.
+            new("clients.manage.copy",     "Clients", "Manage", "Copy",   "Copy an existing client into another company"),
 
             // ── Delivery Challans ───────────────────────────────────────────
             new("challans.list.view",      "Challans", "List",   "View",   "View the delivery-challan list"),
@@ -133,8 +140,13 @@ namespace MyApp.Api.Helpers
             new("fbrimport.purchase.commit",  "FBR Import", "Purchase", "Commit",  "Commit an FBR Annexure-A import — auto-creates Suppliers, Purchase Bills, Item Types, and Stock Movements"),
 
             // ── Print Templates ─────────────────────────────────────────────
-            new("printtemplates.manage.view",   "PrintTemplates", "Manage", "View",   "View print/merge templates"),
-            new("printtemplates.manage.update", "PrintTemplates", "Manage", "Update", "Edit a print template"),
+            new("printtemplates.manage.view",     "PrintTemplates", "Manage", "View",          "View print/merge templates"),
+            new("printtemplates.manage.update",   "PrintTemplates", "Manage", "Update",        "Edit a print template"),
+            // Pin the Excel data sheet for import — separate from the broader
+            // template-edit perm so a role can be allowed to fix the sheet
+            // pin (a low-risk, recoverable change) without also gaining
+            // rights to re-upload or edit template bodies.
+            new("printtemplates.manage.sheetpin", "PrintTemplates", "Manage", "Pin Data Sheet","Pin which Excel sheet the importer reads from a multi-sheet template"),
 
             // ── FBR Configuration ───────────────────────────────────────────
             new("fbr.config.view",         "FBR", "Config", "View",   "View FBR configuration and credentials"),
@@ -165,6 +177,8 @@ namespace MyApp.Api.Helpers
             new("suppliers.manage.create", "Suppliers", "Manage", "Create", "Create a new supplier"),
             new("suppliers.manage.update", "Suppliers", "Manage", "Update", "Edit supplier details"),
             new("suppliers.manage.delete", "Suppliers", "Manage", "Delete", "Delete a supplier"),
+            // Mirror of clients.manage.copy — same rationale.
+            new("suppliers.manage.copy",   "Suppliers", "Manage", "Copy",   "Copy an existing supplier into another company"),
 
             // ── Purchase Bills ──────────────────────────────────────────────
             new("purchasebills.list.view",     "PurchaseBills", "List",   "View",   "View the purchase-bills list"),

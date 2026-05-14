@@ -11,6 +11,15 @@ namespace MyApp.Api.Helpers.ExcelImport
         public int SheetIndex { get; set; }
 
         /// <summary>
+        /// Sheet name from the print template (e.g. "Delivery Note 1"). The
+        /// importer prefers matching by name over index — multi-sheet upload
+        /// files (e.g. one with a leading "Settings" tab) shift the data
+        /// sheet to a higher index, so a name match avoids false
+        /// "wrong company" rejections in that common case.
+        /// </summary>
+        public string? SheetName { get; set; }
+
+        /// <summary>
         /// Plain header fields outside the {{#each items}} block.
         /// Key = placeholder name (e.g. "challanNumber", "clientName", "deliveryDate");
         /// Value = (row, col) in the template.

@@ -9,6 +9,11 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(() => localStorage.getItem("token"));
   const [loading, setLoading] = useState(true);
+  // Bumps on every refreshUser() / login / explicit invalidate. Consumers
+  // append it as ?v=<n> to user.avatarPath so the browser refetches the
+  // image after an upload — the server keeps a stable filename
+  // (user-{id}.{ext}), so without this the cached copy is shown forever.
+  const [avatarVersion, setAvatarVersion] = useState(() => Date.now());
   const navigate = useNavigate();
 
   // On mount: validate existing token via /auth/me.
@@ -32,6 +37,7 @@ export function AuthProvider({ children }) {
       .then((res) => {
         setUser(res.data);
         setToken(storedToken);
+        setAvatarVersion(Date.now());
       })
       .catch(() => {
         setUser(null);
@@ -71,6 +77,7 @@ export function AuthProvider({ children }) {
     try {
       const meRes = await getCurrentUser();
       setUser(meRes.data);
+      setAvatarVersion(Date.now());
     } catch {
       /* non-fatal — /me will be retried on next mount */
     }
@@ -86,6 +93,10 @@ export function AuthProvider({ children }) {
   const refreshUser = useCallback(async () => {
     const res = await getCurrentUser();
     setUser(res.data);
+    // Bump unconditionally — the server reuses the avatar filename, so the
+    // path is stable between uploads. Without this bump, the browser keeps
+    // serving the cached image even after a successful upload/remove.
+    setAvatarVersion(Date.now());
   }, []);
 
   const value = {
@@ -95,6 +106,7 @@ export function AuthProvider({ children }) {
     login,
     logout,
     refreshUser,
+    avatarVersion,
     isAuthenticated: !!token && !!user,
     loading,
   };

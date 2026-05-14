@@ -8,6 +8,9 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import GoodsReceiptForm from "../Components/GoodsReceiptForm";
+import GoodsReceiptTable from "../Components/GoodsReceiptTable";
+import ViewModeToggle from "../components/ViewModeToggle";
+import { useListViewMode } from "../hooks/useListViewMode";
 
 const colors = {
   blue: "#0d47a1",
@@ -25,6 +28,7 @@ export default function GoodsReceiptsPage() {
   const canCreate = has("goodsreceipts.manage.create");
   const canUpdate = has("goodsreceipts.manage.update");
   const canDelete = has("goodsreceipts.manage.delete");
+  const [viewMode, setViewMode] = useListViewMode("goodsReceipts");
 
   const [receipts, setReceipts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -120,6 +124,9 @@ export default function GoodsReceiptsPage() {
                 <option value="">All Suppliers</option>
                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
+              <div style={{ marginLeft: "auto" }}>
+                <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Goods receipts view mode" />
+              </div>
             </div>
           )}
 
@@ -132,6 +139,15 @@ export default function GoodsReceiptsPage() {
             </div>
           ) : (
             <>
+              {viewMode === "table" ? (
+                <GoodsReceiptTable
+                  receipts={receipts}
+                  perms={{ canUpdate, canDelete }}
+                  onView={(g) => { setEditingId(g.id); setShowForm(true); }}
+                  onEdit={(g) => { setEditingId(g.id); setShowForm(true); }}
+                  onDelete={handleDelete}
+                />
+              ) : (
               <div className="card-grid">
                 {receipts.map(gr => (
                   <div key={gr.id} style={cardStyles.card}
@@ -158,6 +174,7 @@ export default function GoodsReceiptsPage() {
                   </div>
                 ))}
               </div>
+              )}
               {totalPages > 1 && (
                 <div style={styles.pagination}>
                   <button style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}><MdChevronLeft size={20} /> Prev</button>

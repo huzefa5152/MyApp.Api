@@ -10,7 +10,14 @@ namespace MyApp.Api.Helpers
     /// </summary>
     public static class ExcelTemplateEngine
     {
-        private static readonly Regex FieldRegex = new(@"\{\{([^}#/]+)\}\}", RegexOptions.Compiled);
+        // Match 2 OR 3 braces on each side so operators who copied a
+        // Handlebars-style template ({{{nl2br foo}}} for unescaped output)
+        // don't end up with a stray `}` in the rendered cell. The triple-
+        // brace HTML-escape concept has no meaning in an Excel cell, so we
+        // collapse both forms to the same lookup. Real-world trigger:
+        // a Bill template on production rendered "}" in the buyer-address
+        // cell because the regex left the 3rd '}' untouched.
+        private static readonly Regex FieldRegex = new(@"\{\{\{?([^}#/]+)\}\}\}?", RegexOptions.Compiled);
         private static readonly Regex EachStartRegex = new(@"\{\{#each\s+(\w+)(?:\s+(\d+))?\}\}", RegexOptions.Compiled);
         private static readonly Regex EachEndRegex = new(@"\{\{/each\}\}", RegexOptions.Compiled);
 
@@ -44,6 +51,18 @@ namespace MyApp.Api.Helpers
 
             foreach (var ws in workbook.Worksheets)
             {
+                // Defang cell-level "formulas" that are really just
+                // mis-formatted template placeholders (e.g. an operator
+                // typed "={{companyLogoPath}}" into a cell and Excel
+                // tagged it HasFormula=true). The placeholder engine
+                // below skips HasFormula cells on purpose — but those
+                // formulas then crash ClosedXML's parser at SaveAs time
+                // with "Error at char 0 of '': Unexpected token
+                // EofSymbolId". Re-write them as plain text BEFORE the
+                // merge runs so the regular replacement pipeline can
+                // turn them into proper data.
+                NeutralizePlaceholderFormulas(ws);
+
                 ProcessEachBlocks(ws, data);
                 // Resolve cross-cell {{#if}}/{{/if}} blocks BEFORE field
                 // replacement. Excel users routinely split a conditional
@@ -52,6 +71,55 @@ namespace MyApp.Api.Helpers
                 // alone would miss that.
                 ApplyCrossCellConditionals(ws, data);
                 ReplaceSimpleFields(ws, data);
+            }
+        }
+
+        /// <summary>
+        /// Convert any cell whose Excel formula contains "{{" into a plain
+        /// text value carrying the same content. This lets the regular
+        /// placeholder pipeline replace the merge fields and stops
+        /// ClosedXML.Parser from blowing up at SaveAs time on the
+        /// not-really-a-formula content.
+        /// </summary>
+        private static void NeutralizePlaceholderFormulas(IXLWorksheet ws)
+        {
+            int lastRow = ws.LastRowUsed()?.RowNumber() ?? 0;
+            int lastCol = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
+            for (int r = 1; r <= lastRow; r++)
+            {
+                for (int c = 1; c <= lastCol; c++)
+                {
+                    IXLCell cell;
+                    try { cell = ws.Cell(r, c); }
+                    catch { continue; }
+                    if (!cell.HasFormula) continue;
+
+                    string? rawFormula = null;
+                    try { rawFormula = cell.FormulaA1; } catch { /* unreadable */ }
+                    if (string.IsNullOrEmpty(rawFormula)) continue;
+
+                    // Only touch formulas that smell like operator-typed
+                    // template fragments. Real Excel formulas (=SUM(...),
+                    // =IF(...)) are untouched.
+                    if (!rawFormula.Contains("{{")) continue;
+
+                    try
+                    {
+                        // Reconstruct the literal text the operator typed.
+                        // ClosedXML strips the leading '=' from FormulaA1,
+                        // so put it back so downstream merge sees what
+                        // the user actually wrote.
+                        var asText = "=" + rawFormula;
+                        cell.FormulaA1 = "";       // clear the formula
+                        cell.SetValue(asText);     // re-write as plain text
+                    }
+                    catch
+                    {
+                        // Last resort — if we can't even rewrite, clear
+                        // the cell so SaveAs has nothing to choke on.
+                        try { cell.Clear(); } catch { /* best effort */ }
+                    }
+                }
             }
         }
 
@@ -110,8 +178,44 @@ namespace MyApp.Api.Helpers
             if (trimmed == "#REF!" || trimmed.Contains("#REF!")) return true;
             if (trimmed.StartsWith("#") && trimmed.EndsWith("!")) return true;  // generic #ERROR!
 
+            // External-workbook references — Excel's "[N]Sheet"!Range syntax,
+            // where N is the externalLink index in xl/externalLinks/. When
+            // the source workbook isn't bundled (and for a template it almost
+            // never is), ClosedXML.Parser blows up trying to resolve the link
+            // at SaveAs time:
+            //     "Error at char 0 of '': Unexpected token EofSymbolId"
+            // Real-world trigger: operator exported the template from a
+            // workbook that had cross-workbook lookups, like
+            //     'code' -> "'[1]Products List'!$A:$A"
+            // The defined name is dead weight in template-fill anyway, so
+            // dropping it is a no-op for the rendered output.
+            if (ExternalWorkbookRefRegex.IsMatch(trimmed)) return true;
+
+            // Pure literal defined names (e.g. "valuevx" -> "42.314159") —
+            // ClosedXML's row shifter sometimes mishandles these during
+            // #each expansion and re-invokes the parser with an empty
+            // string, producing the same EofSymbolId crash as external
+            // refs. A genuine cell-referencing defined name MUST contain
+            // at least one of:
+            //   '!' — sheet bang (e.g. 'Sheet1'!$A$1)
+            //   '$' — cell anchor (e.g. $A$1)
+            //   '(' — function call (e.g. =OFFSET(...))
+            // Names without any of these are pure literals (numbers like
+            // 42.314159 or strings like "Yes"). They're never useful for
+            // template fill — drop them to keep ClosedXML out of trouble.
+            if (!trimmed.Contains('!') && !trimmed.Contains('$') && !trimmed.Contains('('))
+                return true;
+
             return false;
         }
+
+        // Matches "[1]" / "[12]" anywhere in the formula. Excel uses this
+        // bracketed-integer notation for external workbook references in
+        // RefersTo expressions. Real cell addresses use $A$1 / $A:$A style,
+        // never bracketed integers — so this pattern is unique to external
+        // links and safe to use as a hard signal.
+        private static readonly Regex ExternalWorkbookRefRegex = new(
+            @"\[\d+\]", RegexOptions.Compiled);
 
         private static void ProcessEachBlocks(IXLWorksheet ws, Dictionary<string, object?> data)
         {

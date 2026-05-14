@@ -201,6 +201,49 @@ namespace MyApp.Api.Services.Implementations
             return result;
         }
 
+        public async Task<CreateClientBatchResultDto> CopyToCompaniesAsync(int sourceClientId, List<int> targetCompanyIds)
+        {
+            if (targetCompanyIds == null || targetCompanyIds.Count == 0)
+                throw new InvalidOperationException("At least one target company must be selected.");
+
+            var source = await _repo.GetByIdAsync(sourceClientId)
+                ?? throw new KeyNotFoundException("Source client not found.");
+
+            // Strip the source's own company from the target set defensively —
+            // copying into the same company would either collide on the unique
+            // (Name, CompanyId) constraint or no-op via the SkippedReasons
+            // branch. Either way it's noise.
+            var cleanTargets = targetCompanyIds
+                .Where(id => id != source.CompanyId)
+                .Distinct()
+                .ToList();
+
+            if (cleanTargets.Count == 0)
+                throw new InvalidOperationException("No valid target companies to copy into (cannot copy a client into its own company).");
+
+            // Hand off to the existing multi-company create — it already
+            // handles the per-company name-collision skip, the
+            // EnsureGroupForClientAsync auto-link, and the single-
+            // transaction commit/rollback. By feeding it the source's
+            // identifying fields (especially NTN), every newly-created
+            // row lands on the SAME ClientGroup as the source.
+            var batch = new CreateClientBatchDto
+            {
+                Name = source.Name,
+                Address = source.Address,
+                Phone = source.Phone,
+                Email = source.Email,
+                NTN = source.NTN,
+                STRN = source.STRN,
+                Site = source.Site,
+                RegistrationType = source.RegistrationType,
+                CNIC = source.CNIC,
+                FbrProvinceCode = source.FbrProvinceCode,
+                CompanyIds = cleanTargets,
+            };
+            return await CreateForCompaniesAsync(batch);
+        }
+
         public async Task<ClientDto> UpdateAsync(ClientDto dto)
         {
             if (dto.Id == null) throw new ArgumentException("Client ID is required for update.");
@@ -236,8 +279,23 @@ namespace MyApp.Api.Services.Implementations
             }
             catch { /* see CreateAsync */ }
 
-            // Re-evaluate "Setup Required" challans for this client
-            await _challanService.ReEvaluateSetupRequiredAsync(client.CompanyId, client.Id);
+            // Re-evaluate "Setup Required" challans for this client. Non-fatal:
+            // the client update has already committed at this point — if the
+            // re-eval fails (transient DB error, row concurrency mid-loop)
+            // the controller would otherwise return 500 to the client with
+            // the name change actually persisted. Idempotent: any leftover
+            // "Setup Required" rows will self-correct on the next page load
+            // (ChallanService.GetPagedByCompanyAsync re-runs the same pass).
+            try
+            {
+                await _challanService.ReEvaluateSetupRequiredAsync(client.CompanyId, client.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Client {ClientId} (company {CompanyId}) updated OK but Setup-Required re-evaluation failed; will self-correct on next list reload.",
+                    client.Id, client.CompanyId);
+            }
 
             return ToDto(client, hasInvoices);
         }

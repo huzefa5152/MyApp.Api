@@ -11,9 +11,11 @@ import {
   MdCheckCircle,
   MdShield,
   MdDelete,
+  MdCloudUpload,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { updateProfile, changePassword, uploadAvatar, removeAvatar } from "../api/authApi";
+import { getAvatarUrl } from "../utils/avatarUrl";
 
 const colors = {
   blue: "#0d47a1",
@@ -32,8 +34,27 @@ const colors = {
   successLight: "#eafbef",
 };
 
+// Client-side mirror of the server validation (Helpers/ImageUploadValidator.cs):
+// extension allowlist + 7 MB cap. The server is the source of truth — these
+// guards just save the user a round-trip on the easy rejections.
+const ALLOWED_EXTS = [".jpg", ".jpeg", ".png", ".webp"];
+const MAX_BYTES = 7 * 1024 * 1024;
+
+function validateImage(file) {
+  if (!file) return "No file selected.";
+  const name = (file.name || "").toLowerCase();
+  const ext = name.slice(name.lastIndexOf("."));
+  if (!ALLOWED_EXTS.includes(ext)) {
+    return `Unsupported format. Use ${ALLOWED_EXTS.join(", ")}.`;
+  }
+  if (file.size > MAX_BYTES) {
+    return `Image is ${(file.size / 1024 / 1024).toFixed(1)} MB. Max allowed is 7 MB.`;
+  }
+  return null;
+}
+
 export default function ProfilePage() {
-  const { user, refreshUser, setToken } = useAuth();
+  const { user, refreshUser, setToken, avatarVersion } = useAuth();
   const fileRef = useRef(null);
 
   // Edit profile state
@@ -58,16 +79,30 @@ export default function ProfilePage() {
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [avatarMsg, setAvatarMsg] = useState(null);
   const avatarMsgTimer = useRef(null);
+  // Preview-before-save: when the user picks (or drops) a file we hold the
+  // File + an object-URL preview. Upload only fires when the user clicks
+  // Save — Cancel discards. This matches "modern SaaS" behaviour and lets
+  // operators sanity-check the framing before committing.
+  const [pendingFile, setPendingFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+
   const showAvatarMsg = useCallback((msg) => {
     clearTimeout(avatarMsgTimer.current);
     setAvatarMsg(msg);
     avatarMsgTimer.current = setTimeout(() => setAvatarMsg(null), 5000);
   }, []);
 
-  // Cleanup timer on unmount
   useEffect(() => {
     return () => clearTimeout(avatarMsgTimer.current);
   }, []);
+
+  // Release the object URL whenever the preview changes or unmounts.
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const handleEditToggle = () => {
     if (editing) {
@@ -90,7 +125,6 @@ export default function ProfilePage() {
     setProfileMsg(null);
     try {
       const res = await updateProfile(profileForm);
-      // Update token if username changed
       if (res.data.token) {
         localStorage.setItem("token", res.data.token);
         setToken(res.data.token);
@@ -141,15 +175,61 @@ export default function ProfilePage() {
     }
   };
 
-  const handleAvatarClick = () => fileRef.current?.click();
+  const handlePickClick = () => fileRef.current?.click();
 
-  const handleFileChange = async (e) => {
+  const stageFile = useCallback((file) => {
+    const err = validateImage(file);
+    if (err) {
+      showAvatarMsg({ type: "error", text: err });
+      return;
+    }
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPendingFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    setAvatarMsg(null);
+  }, [previewUrl, showAvatarMsg]);
+
+  const handleFileChange = (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    e.target.value = "";
+    if (file) stageFile(file);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) stageFile(file);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    if (!dragOver) setDragOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+  };
+
+  const handleCancelPreview = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setPendingFile(null);
+    setAvatarMsg(null);
+  };
+
+  const handleSaveAvatar = async () => {
+    if (!pendingFile) return;
     setAvatarLoading(true);
     setAvatarMsg(null);
     try {
-      await uploadAvatar(file);
+      await uploadAvatar(pendingFile);
+      // Clear preview *before* refresh so the rendered avatar flips back to
+      // the server URL (now cache-busted via avatarVersion) on the same tick.
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+      setPendingFile(null);
       await refreshUser();
       showAvatarMsg({ type: "success", text: "Avatar updated" });
     } catch (err) {
@@ -159,7 +239,6 @@ export default function ProfilePage() {
       });
     } finally {
       setAvatarLoading(false);
-      e.target.value = "";
     }
   };
 
@@ -168,6 +247,9 @@ export default function ProfilePage() {
     setAvatarMsg(null);
     try {
       await removeAvatar();
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+      setPendingFile(null);
       await refreshUser();
       showAvatarMsg({ type: "success", text: "Avatar removed" });
     } catch {
@@ -186,6 +268,15 @@ export default function ProfilePage() {
     .slice(0, 2)
     .join("");
 
+  // Source of truth for what to render in the avatar circle:
+  //   1. live preview (user just picked/dropped a file but hasn't saved)
+  //   2. server avatar with cache-buster
+  //   3. initials fallback
+  const serverAvatarSrc = getAvatarUrl(user, avatarVersion);
+  const displayedSrc = previewUrl || serverAvatarSrc;
+  const showInitials = !displayedSrc;
+  const hasServerAvatar = !!user?.avatarPath && !previewUrl;
+
   return (
     <div style={{ maxWidth: 800, margin: "0 auto" }}>
       {/* Page header */}
@@ -201,54 +292,59 @@ export default function ProfilePage() {
 
       {/* Avatar + Info Card */}
       <div style={styles.profileCard}>
-        {/* Gradient banner */}
         <div style={styles.profileBanner} />
 
-        {/* Avatar */}
+        {/* Avatar with drag-and-drop zone wrapping the circle */}
         <div style={styles.avatarRow}>
           <div
-            style={styles.avatarWrapper}
+            style={{
+              ...styles.avatarWrapper,
+              outline: dragOver ? `3px dashed ${colors.cyan}` : "none",
+              outlineOffset: dragOver ? 4 : 0,
+            }}
             onMouseEnter={() => setAvatarHover(true)}
             onMouseLeave={() => setAvatarHover(false)}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            title="Click, or drag an image here"
           >
-            {user?.avatarPath ? (
-              <img
-                src={user.avatarPath}
-                alt="Avatar"
-                style={styles.avatarImg}
-              />
-            ) : (
+            {showInitials ? (
               <div style={styles.avatarFallback}>{initials}</div>
+            ) : (
+              <img src={displayedSrc} alt="Avatar" style={styles.avatarImg} />
             )}
-            {/* Hover overlay — shows change + remove when avatar exists, just change icon otherwise */}
-            <div style={{ ...styles.avatarOverlay, opacity: avatarHover ? 1 : 0 }}>
-              {user?.avatarPath ? (
-                <div style={styles.avatarOverlayActions}>
-                  <button
-                    onClick={handleAvatarClick}
-                    style={styles.avatarOverlayBtn}
-                    title="Change photo"
-                  >
-                    <MdCameraAlt size={18} />
-                    <span style={styles.avatarOverlayLabel}>Change</span>
-                  </button>
-                  <div style={styles.avatarOverlayDivider} />
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleRemoveAvatar(); }}
-                    disabled={avatarLoading}
-                    style={styles.avatarOverlayBtn}
-                    title="Remove photo"
-                  >
-                    <MdDelete size={18} />
-                    <span style={styles.avatarOverlayLabel}>Remove</span>
-                  </button>
-                </div>
-              ) : (
-                <div onClick={handleAvatarClick} style={{ cursor: "pointer", textAlign: "center" }}>
-                  <MdCameraAlt size={24} color="#fff" />
-                </div>
-              )}
-            </div>
+            {/* Hover overlay — hidden while uploading or when a preview is staged */}
+            {!avatarLoading && !previewUrl && (
+              <div style={{ ...styles.avatarOverlay, opacity: avatarHover ? 1 : 0 }}>
+                {hasServerAvatar ? (
+                  <div style={styles.avatarOverlayActions}>
+                    <button
+                      onClick={handlePickClick}
+                      style={styles.avatarOverlayBtn}
+                      title="Change photo"
+                    >
+                      <MdCameraAlt size={18} />
+                      <span style={styles.avatarOverlayLabel}>Change</span>
+                    </button>
+                    <div style={styles.avatarOverlayDivider} />
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleRemoveAvatar(); }}
+                      disabled={avatarLoading}
+                      style={styles.avatarOverlayBtn}
+                      title="Remove photo"
+                    >
+                      <MdDelete size={18} />
+                      <span style={styles.avatarOverlayLabel}>Remove</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div onClick={handlePickClick} style={{ cursor: "pointer", textAlign: "center" }}>
+                    <MdCameraAlt size={24} color="#fff" />
+                  </div>
+                )}
+              </div>
+            )}
             {avatarLoading && <div style={styles.avatarSpinner} />}
           </div>
           <input
@@ -260,14 +356,9 @@ export default function ProfilePage() {
           />
         </div>
 
-        {/* User info */}
         <div style={styles.profileInfo}>
-          <h3 style={styles.profileName}>
-            {user?.fullName || "User"}
-          </h3>
-          <p style={styles.profileUsername}>
-            @{user?.username}
-          </p>
+          <h3 style={styles.profileName}>{user?.fullName || "User"}</h3>
+          <p style={styles.profileUsername}>@{user?.username}</p>
           <span style={styles.roleBadge}>
             <MdShield size={13} style={{ marginRight: 4 }} />
             {user?.role || "User"}
@@ -275,20 +366,42 @@ export default function ProfilePage() {
         </div>
 
         {avatarMsg && (
-          <div style={{ padding: "0 1.5rem", ...( avatarMsg.type === "success" ? styles.successMsg : styles.errorMsg ) }}>
+          <div style={{ padding: "0 1.5rem", marginTop: "0.75rem", ...(avatarMsg.type === "success" ? styles.successMsg : styles.errorMsg) }}>
             {avatarMsg.text}
           </div>
         )}
 
-        {/* Avatar actions */}
+        {/* Avatar actions: preview-staged → Save / Cancel; otherwise → Upload */}
         <div style={styles.avatarActions}>
-          <button onClick={handleAvatarClick} style={styles.uploadBtn}>
-            <MdCameraAlt size={15} />
-            Upload Photo
-          </button>
+          {previewUrl ? (
+            <>
+              <button
+                onClick={handleSaveAvatar}
+                style={styles.uploadBtn}
+                disabled={avatarLoading}
+              >
+                {avatarLoading ? <span className="btn-spinner" /> : <MdCloudUpload size={16} />}
+                {avatarLoading ? "Uploading..." : "Save Photo"}
+              </button>
+              <button
+                onClick={handleCancelPreview}
+                style={styles.cancelBtnSecondary}
+                disabled={avatarLoading}
+              >
+                <MdClose size={16} /> Cancel
+              </button>
+            </>
+          ) : (
+            <button onClick={handlePickClick} style={styles.uploadBtn} disabled={avatarLoading}>
+              <MdCameraAlt size={15} />
+              {hasServerAvatar ? "Change Photo" : "Upload Photo"}
+            </button>
+          )}
         </div>
         <p style={styles.avatarHint}>
-          JPG, PNG or WebP. Max 7 MB.
+          {previewUrl
+            ? "Preview shown above. Click Save Photo to upload, or Cancel to discard."
+            : "JPG, PNG or WebP. Max 7 MB. You can also drag an image onto the avatar."}
         </p>
       </div>
 
@@ -594,6 +707,19 @@ const styles = {
     padding: "0.45rem 1rem",
     background: `linear-gradient(135deg, ${colors.blue}, ${colors.blueLight})`,
     color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  cancelBtnSecondary: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.35rem",
+    padding: "0.45rem 1rem",
+    backgroundColor: "#e9ecf1",
+    color: colors.textSecondary,
     border: "none",
     borderRadius: 8,
     fontSize: "0.82rem",

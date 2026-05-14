@@ -9,6 +9,9 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import PurchaseBillForm from "../Components/PurchaseBillForm";
+import PurchaseBillTable from "../Components/PurchaseBillTable";
+import ViewModeToggle from "../components/ViewModeToggle";
+import { useListViewMode } from "../hooks/useListViewMode";
 
 const colors = {
   blue: "#0d47a1",
@@ -27,6 +30,7 @@ export default function PurchaseBillsPage() {
   const canCreate = has("purchasebills.manage.create");
   const canUpdate = has("purchasebills.manage.update");
   const canDelete = has("purchasebills.manage.delete");
+  const [viewMode, setViewMode] = useListViewMode("purchaseBills");
 
   const [bills, setBills] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -171,6 +175,9 @@ export default function PurchaseBillsPage() {
                 <input type="date" className="filter-date-input" value={dateTo} onChange={onFilterChange(setDateTo)} title="To" />
               </div>
               {hasFilters && <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>}
+              <div style={{ marginLeft: "auto" }}>
+                <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Purchase bills view mode" />
+              </div>
             </div>
           )}
 
@@ -185,6 +192,15 @@ export default function PurchaseBillsPage() {
             </div>
           ) : (
             <>
+              {viewMode === "table" ? (
+                <PurchaseBillTable
+                  bills={bills}
+                  perms={{ canUpdate, canDelete }}
+                  onView={(b) => { setEditingId(b.id); setShowForm(true); }}
+                  onEdit={(b) => { setEditingId(b.id); setShowForm(true); }}
+                  onDelete={handleDelete}
+                />
+              ) : (
               <div className="card-grid">
                 {bills.map(b => (
                   <div key={b.id} style={cardStyles.card}
@@ -227,6 +243,7 @@ export default function PurchaseBillsPage() {
                   </div>
                 ))}
               </div>
+              )}
               {totalPages > 1 && (
                 <div style={styles.pagination}>
                   <button style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}>

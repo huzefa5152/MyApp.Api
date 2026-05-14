@@ -54,7 +54,7 @@ namespace MyApp.Api.Repositories.Implementations
             return existing;
         }
 
-        public async Task<PrintTemplate> UpsertExcelPathAsync(int companyId, string templateType, string excelPath)
+        public async Task<PrintTemplate> UpsertExcelPathAsync(int companyId, string templateType, string excelPath, string? sheetName = null)
         {
             var existing = await _ctx.PrintTemplates
                 .FirstOrDefaultAsync(pt => pt.CompanyId == companyId && pt.TemplateType == templateType);
@@ -62,6 +62,7 @@ namespace MyApp.Api.Repositories.Implementations
             if (existing != null)
             {
                 existing.ExcelTemplatePath = excelPath;
+                if (sheetName != null) existing.ExcelSheetName = sheetName;
                 existing.UpdatedAt = DateTime.UtcNow;
             }
             else
@@ -72,6 +73,7 @@ namespace MyApp.Api.Repositories.Implementations
                     TemplateType = templateType,
                     HtmlContent = "",
                     ExcelTemplatePath = excelPath,
+                    ExcelSheetName = sheetName,
                     UpdatedAt = DateTime.UtcNow
                 };
                 _ctx.PrintTemplates.Add(existing);

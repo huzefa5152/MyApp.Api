@@ -2,6 +2,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using MyApp.Api.Data;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 using MyApp.Api.DTOs;
@@ -18,17 +20,23 @@ namespace MyApp.Api.Controllers
         private readonly ICompanyAccessGuard _access;
         private readonly IPermissionService _permissions;
         private readonly IWebHostEnvironment _env;
+        private readonly AppDbContext _context;
+        private readonly IConfiguration _configuration;
 
         public CompaniesController(
             ICompanyService companyService,
             ICompanyAccessGuard access,
             IPermissionService permissions,
-            IWebHostEnvironment env)
+            IWebHostEnvironment env,
+            AppDbContext context,
+            IConfiguration configuration)
         {
             _companyService = companyService;
             _access = access;
             _permissions = permissions;
             _env = env;
+            _context = context;
+            _configuration = configuration;
         }
 
         private int CurrentUserId =>
@@ -77,6 +85,35 @@ namespace MyApp.Api.Controllers
             try
             {
                 var createdCompany = await _companyService.CreateAsync(dto);
+
+                // Auto-grant the creator access to the company they just made.
+                // Without this, a non-seed-admin user creates a company and is
+                // immediately locked out by the fail-closed CompanyAccessGuard
+                // (no UserCompanies row → every companyId-scoped endpoint 403s).
+                // Seed admin gets implicit access via CompanyAccessGuard, so we
+                // skip the row for them — keeps the table free of redundant rows.
+                var seedAdminUserId = _configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
+                if (CurrentUserId > 0 && CurrentUserId != seedAdminUserId)
+                {
+                    var already = await _context.UserCompanies
+                        .AnyAsync(uc => uc.UserId == CurrentUserId && uc.CompanyId == createdCompany.Id);
+                    if (!already)
+                    {
+                        _context.UserCompanies.Add(new UserCompany
+                        {
+                            UserId = CurrentUserId,
+                            CompanyId = createdCompany.Id,
+                            AssignedAt = DateTime.UtcNow,
+                            AssignedByUserId = CurrentUserId,
+                        });
+                        await _context.SaveChangesAsync();
+                        // Drop this user's cached accessible-set so the next
+                        // request sees the new grant immediately instead of
+                        // waiting out the 60s sliding TTL.
+                        _access.InvalidateUser(CurrentUserId);
+                    }
+                }
+
                 return CreatedAtAction(nameof(GetCompany), new { id = createdCompany.Id }, createdCompany);
             }
             catch (InvalidOperationException ex)

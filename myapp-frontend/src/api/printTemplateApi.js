@@ -18,15 +18,22 @@ export const getMergeFields = (templateType) =>
 
 // ── Excel Template APIs ──
 
-export const uploadExcelTemplate = (companyId, templateType, file) => {
+export const uploadExcelTemplate = (companyId, templateType, file, sheetName) => {
   const form = new FormData();
   form.append("file", file);
+  if (sheetName) form.append("sheetName", sheetName);
   return httpClient.post(
     `/printtemplates/company/${companyId}/${templateType}/excel-template`,
     form,
     { headers: { "Content-Type": "multipart/form-data" } }
   );
 };
+
+export const setExcelSheetName = (companyId, templateType, sheetName) =>
+  httpClient.put(
+    `/printtemplates/company/${companyId}/${templateType}/excel-template/sheet-name`,
+    { sheetName: sheetName || null }
+  );
 
 export const deleteExcelTemplate = (companyId, templateType) =>
   httpClient.delete(`/printtemplates/company/${companyId}/${templateType}/excel-template`);

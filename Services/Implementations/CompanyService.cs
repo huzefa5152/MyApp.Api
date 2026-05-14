@@ -5,6 +5,9 @@ using MyApp.Api.DTOs;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Services.Interfaces;
+// Local alias so the cascade rewrite below can call _access.InvalidateAll()
+// after a successful delete (drops cached UserCompanies grants pointing at
+// the now-dead company).
 
 namespace MyApp.Api.Services.Implementations
 {
@@ -16,8 +19,16 @@ namespace MyApp.Api.Services.Implementations
         private readonly IDeliveryChallanService _challanService;
         private readonly AppDbContext _context;
         private readonly ILogger<CompanyService> _logger;
+        private readonly ICompanyAccessGuard _access;
 
-        public CompanyService(ICompanyRepository repository, IDeliveryChallanRepository challanRepo, IInvoiceRepository invoiceRepo, IDeliveryChallanService challanService, AppDbContext context, ILogger<CompanyService> logger)
+        public CompanyService(
+            ICompanyRepository repository,
+            IDeliveryChallanRepository challanRepo,
+            IInvoiceRepository invoiceRepo,
+            IDeliveryChallanService challanService,
+            AppDbContext context,
+            ILogger<CompanyService> logger,
+            ICompanyAccessGuard access)
         {
             _repository = repository;
             _challanRepo = challanRepo;
@@ -25,6 +36,7 @@ namespace MyApp.Api.Services.Implementations
             _challanService = challanService;
             _context = context;
             _logger = logger;
+            _access = access;
         }
 
         private static CompanyDto ToDto(Company c, bool hasChallans = false, bool hasInvoices = false) => new()
@@ -207,8 +219,20 @@ namespace MyApp.Api.Services.Implementations
 
             var updated = await _repository.UpdateAsync(company);
 
-            // Re-evaluate "Setup Required" challans in case FBR fields are now complete
-            await _challanService.ReEvaluateSetupRequiredAsync(id);
+            // Re-evaluate "Setup Required" challans in case FBR fields are now complete.
+            // Non-fatal: the company row has already committed; any failure here
+            // would otherwise return 500 to a successful update. Idempotent —
+            // the next list-challans call re-runs the same pass.
+            try
+            {
+                await _challanService.ReEvaluateSetupRequiredAsync(id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Company {CompanyId} updated OK but Setup-Required re-evaluation failed; will self-correct on next challan list load.",
+                    id);
+            }
 
             return ToDto(updated, hasChallans, hasInvoices);
         }
@@ -249,8 +273,63 @@ namespace MyApp.Api.Services.Implementations
                 // 5. Delete print templates
                 await _context.PrintTemplates.Where(pt => pt.CompanyId == id).ExecuteDeleteAsync();
 
-                // 6. Delete the company
+                // 6. Purchase module: stock movements / opening balances /
+                //    goods-receipt items + receipts / purchase-bill items +
+                //    bills / suppliers — all FK back to Company directly or
+                //    indirectly. Pre-2026-05-14 these tables didn't exist
+                //    so the cascade ignored them, but a real-world delete
+                //    on a company that ever bought stock used to fail.
+                //
+                //    Order matters: children first.
+                var purchaseBillIds = await _context.PurchaseBills
+                    .Where(pb => pb.CompanyId == id).Select(pb => pb.Id).ToListAsync();
+                var goodsReceiptIds = await _context.GoodsReceipts
+                    .Where(gr => gr.CompanyId == id).Select(gr => gr.Id).ToListAsync();
+
+                await _context.StockMovements.Where(sm => sm.CompanyId == id).ExecuteDeleteAsync();
+                await _context.OpeningStockBalances.Where(o => o.CompanyId == id).ExecuteDeleteAsync();
+
+                if (goodsReceiptIds.Count > 0)
+                {
+                    await _context.GoodsReceiptItems
+                        .Where(gri => goodsReceiptIds.Contains(gri.GoodsReceiptId)).ExecuteDeleteAsync();
+                    await _context.GoodsReceipts.Where(gr => gr.CompanyId == id).ExecuteDeleteAsync();
+                }
+                if (purchaseBillIds.Count > 0)
+                {
+                    // PurchaseItem -> PurchaseBill (FK), and
+                    // PurchaseItemSourceLine -> PurchaseItem (FK). Children first.
+                    var purchaseItemIds = await _context.PurchaseItems
+                        .Where(pi => purchaseBillIds.Contains(pi.PurchaseBillId))
+                        .Select(pi => pi.Id).ToListAsync();
+                    if (purchaseItemIds.Count > 0)
+                    {
+                        await _context.PurchaseItemSourceLines
+                            .Where(sl => purchaseItemIds.Contains(sl.PurchaseItemId)).ExecuteDeleteAsync();
+                    }
+                    await _context.PurchaseItems
+                        .Where(pi => purchaseBillIds.Contains(pi.PurchaseBillId)).ExecuteDeleteAsync();
+                    await _context.PurchaseBills.Where(pb => pb.CompanyId == id).ExecuteDeleteAsync();
+                }
+                await _context.Suppliers.Where(s => s.CompanyId == id).ExecuteDeleteAsync();
+
+                // 7. FBR communication log + tenant-access grants. The
+                //    UserCompanies cascade was the immediate trigger for this
+                //    rewrite: CompaniesController.CreateCompany now writes a
+                //    row here on every create (auto-granting the creator), so
+                //    without this cleanup every freshly-created company
+                //    becomes undeleteable.
+                await _context.FbrCommunicationLogs.Where(l => l.CompanyId == id).ExecuteDeleteAsync();
+                await _context.UserCompanies.Where(uc => uc.CompanyId == id).ExecuteDeleteAsync();
+
+                // 8. Delete the company
                 await _repository.DeleteAsync(company);
+
+                // After the row is gone, invalidate the cached accessible-set
+                // for every user — anyone who had a UserCompanies row for this
+                // company would otherwise keep "seeing" the dead id until the
+                // 60-s TTL expires.
+                _access.InvalidateAll();
 
                 await transaction.CommitAsync();
             }
