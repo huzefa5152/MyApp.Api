@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { MdVisibility, MdEdit, MdPrint, MdPictureAsPdf, MdGridOn, MdRequestQuote, MdContentCopy, MdCancel, MdDelete, MdWarning } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
-import DataTable from "../components/DataTable";
-import StatusBadge, { toneForStatus } from "../components/StatusBadge";
+import DataTable from "./DataTable";
+import StatusBadge, { toneForStatus } from "./StatusBadge";
 import ChallanModal from "./ChallanModal";
 
 // Mirror of ChallanList's eligibility checks so the table view enforces the

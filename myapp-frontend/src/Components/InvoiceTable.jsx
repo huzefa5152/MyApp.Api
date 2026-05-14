@@ -4,8 +4,8 @@ import {
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
   MdEdit, MdDelete, MdOpenInNew,
 } from "react-icons/md";
-import DataTable from "../components/DataTable";
-import StatusBadge from "../components/StatusBadge";
+import DataTable from "./DataTable";
+import StatusBadge from "./StatusBadge";
 
 // Renders the FBR-status pill in compact form for the table.
 function fbrStatusBadge(inv, isBillsMode) {

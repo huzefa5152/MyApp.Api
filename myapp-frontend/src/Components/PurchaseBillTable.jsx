@@ -1,6 +1,6 @@
 import { MdVisibility, MdEdit, MdDelete } from "react-icons/md";
-import DataTable from "../components/DataTable";
-import StatusBadge from "../components/StatusBadge";
+import DataTable from "./DataTable";
+import StatusBadge from "./StatusBadge";
 
 export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete }) {
   const columns = [

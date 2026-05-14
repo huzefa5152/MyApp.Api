@@ -10,7 +10,7 @@ import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import PurchaseBillForm from "../Components/PurchaseBillForm";
 import PurchaseBillTable from "../Components/PurchaseBillTable";
-import ViewModeToggle from "../components/ViewModeToggle";
+import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
 
 const colors = {

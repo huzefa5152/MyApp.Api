@@ -6,7 +6,7 @@ import ChallanForm from "../Components/ChallanForm";
 import ChallanEditForm from "../Components/ChallanEditForm";
 import POImportForm from "../Components/POImportForm";
 import InvoiceForm from "../Components/InvoiceForm";
-import ViewModeToggle from "../components/ViewModeToggle";
+import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
 import {
   getPagedChallansByCompany,
