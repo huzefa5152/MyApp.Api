@@ -16,6 +16,13 @@ appsettings.*.local.json
 # document scans. Each year/month subdirectory is created on demand.
 Data/uploads/
 
+# Local-only secrets for operator scripts (FTP/API creds for the daily
+# PO-import audit etc.). NEVER commit. The .example files act as templates.
+.env
+.env.local
+scripts/.env
+scripts/.env.local
+
 # User-specific files
 *.rsuser
 *.suo
