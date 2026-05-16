@@ -26,7 +26,8 @@ namespace MyApp.Api.Middleware
 
                 // Also log non-exception error responses (4xx/5xx returned by controllers)
                 if (context.Response.StatusCode >= 400
-                    && context.Request.Path.StartsWithSegments("/api"))
+                    && context.Request.Path.StartsWithSegments("/api")
+                    && !IsBenign401(context))
                 {
                     await LogResponseErrorAsync(context);
                 }
@@ -35,6 +36,25 @@ namespace MyApp.Api.Middleware
             {
                 await HandleExceptionAsync(context, ex);
             }
+        }
+
+        /// <summary>
+        /// 401s from anything OTHER than the login endpoint are noise — every
+        /// SPA bootstrap fires `/api/auth/me` / `/api/permissions/me` to probe
+        /// the session, an anonymous tab gets one 401 per probe, and a logged-
+        /// out user with the tab still open generates a steady stream. They
+        /// don't represent an exception worth investigating; the frontend
+        /// already redirects to login on 401.
+        ///
+        /// 401 from `POST /api/auth/login` IS kept — that's a failed login
+        /// attempt and is genuinely interesting for brute-force detection.
+        /// </summary>
+        private static bool IsBenign401(HttpContext context)
+        {
+            if (context.Response.StatusCode != 401) return false;
+            if (context.Request.Method == HttpMethods.Post
+                && context.Request.Path.StartsWithSegments("/api/auth/login")) return false;
+            return true;
         }
 
         private static async Task LogResponseErrorAsync(HttpContext context)
