@@ -223,44 +223,30 @@ namespace MyApp.Api.Services.Tax
         {
             var notes = new List<string>();
 
-            // 2026-05-14 perf: the two PRAL round-trips (HS_UOM and
-            // SaleTypeToRate) are independent — fire them in parallel
-            // instead of serial. PRAL latency is ~1-2 s per call, so
-            // parallel ~cuts cold-cache hint resolution in half (from
-            // 2-4 s to 1-2 s). Both have in-memory caches already, so
-            // warm hits stay instantaneous; the win is exclusively on
-            // the first-time-this-process-saw-the-HS-code path.
-            var companyTask = _db.Companies.AsNoTracking()
+            // Sequential by necessity: AppDbContext is not thread-safe
+            // and every downstream call (GetValidUomsForHsCodeAsync,
+            // GetSaleTypeRatesAsync) re-loads the company through the
+            // same scoped _db via _companyRepo.GetByIdAsync to fetch the
+            // FBR token. Running them in parallel triggers "A second
+            // operation was started on this context instance" on any
+            // cold-cache request. A prior attempt to parallelise here
+            // (2026-05-14) caused 500s on /api/itemtypes/fbr-hints; if
+            // we want the parallel-PRAL win, plumb the resolved company
+            // / token through FbrService first so the inner DB reads
+            // disappear, then it's safe to overlap.
+            var company = await _db.Companies.AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == companyId);
-            var uomsTask = GetValidUomsForHsCodeAsync(companyId, hsCode);
 
-            await companyTask;
-            var company = companyTask.Result;
-
-            // The SaleTypeToRate call needs the company's province — but
-            // that's just a sub-second EF read; the PRAL call itself is
-            // what we want overlapping with the UOMs call. Kick it off
-            // as soon as we know the province.
-            Task<List<FbrSaleTypeRateDto>>? ratesTask = null;
-            if (company?.FbrProvinceCode != null)
-            {
-                ratesTask = GetSaleTypeRatesAsync(
-                    companyId, DateTime.UtcNow.Date, company.FbrProvinceCode);
-            }
-            else
-            {
-                notes.Add("Company has no FBR province set — cannot query SaleTypeToRate. Set Province on the Company form to get authoritative rate options.");
-            }
-
-            var uoms = await uomsTask;
+            var uoms = await GetValidUomsForHsCodeAsync(companyId, hsCode);
             var defaultUom = uoms.FirstOrDefault();
 
             var rateOptions = new List<RateOption>();
-            if (ratesTask != null)
+            if (company?.FbrProvinceCode != null)
             {
                 try
                 {
-                    var rates = await ratesTask;
+                    var rates = await GetSaleTypeRatesAsync(
+                        companyId, DateTime.UtcNow.Date, company.FbrProvinceCode);
                     rateOptions = rates
                         .Select(r => new RateOption(r.RATE_ID, r.RATE_DESC, r.RATE_VALUE))
                         .ToList();
@@ -271,6 +257,10 @@ namespace MyApp.Api.Services.Tax
                 {
                     notes.Add("Could not fetch live SaleTypeToRate (token / network) — falling back to company defaults.");
                 }
+            }
+            else
+            {
+                notes.Add("Company has no FBR province set — cannot query SaleTypeToRate. Set Province on the Company form to get authoritative rate options.");
             }
 
             // 2) HS-prefix heuristic — does this HS code fall into a
