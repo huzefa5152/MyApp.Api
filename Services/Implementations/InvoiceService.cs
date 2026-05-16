@@ -1828,6 +1828,12 @@ namespace MyApp.Api.Services.Implementations
                 FbrIRN = inv.FbrIRN,
                 FbrStatus = inv.FbrStatus,
                 FbrSubmittedAt = inv.FbrSubmittedAt,
+                // Pre-render the verify-URL QR as a base64 PNG. Inlined into
+                // the template via {{{fbrQrPngDataUrl}}} so the printed PDF
+                // doesn't depend on external image fetches (previous template
+                // pulled https://quickchart.io which broke under strict CSP /
+                // air-gapped networks and leaked the IRN to a third party).
+                FbrQrPngDataUrl = FbrQrCodeGenerator.BuildVerifyQrDataUrl(inv.FbrIRN),
                 // 2026-05-13: Tax Invoice print now renders REAL bill-row
                 // values (NOT the InvoiceItemAdjustment overlay) — same
                 // as the customer-facing Bill print. Per operator policy

@@ -197,5 +197,10 @@ export const MERGE_FIELDS = {
     { field: "{{fbrIRN}}", label: "FBR Invoice Reference Number (IRN)" },
     { field: "{{fbrStatus}}", label: "FBR Status (Submitted/Failed)" },
     { field: "{{fmtDate fbrSubmittedAt}}", label: "FBR Submission Date" },
+    // Triple braces — emits a raw "data:image/png;base64,..." URI without
+    // HTML-escaping. Embed in the FBR block via:
+    //   <img src="{{{fbrQrPngDataUrl}}}" />
+    { field: "{{{fbrQrPngDataUrl}}}", label: "FBR QR Code (base64 PNG)" },
+    { field: "{{fbrLogoUrl}}", label: "FBR Logo URL" },
   ],
 };

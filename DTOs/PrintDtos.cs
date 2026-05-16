@@ -97,6 +97,21 @@ namespace MyApp.Api.DTOs
         public string? FbrIRN { get; set; }
         public string? FbrStatus { get; set; }
         public DateTime? FbrSubmittedAt { get; set; }
+        /// <summary>
+        /// Pre-rendered QR PNG encoded as a `data:image/png;base64,...` URI.
+        /// Populated by InvoiceService when FbrIRN is set so the print
+        /// template can embed the QR inline (no external HTTP, works in
+        /// PDF + offline, no IRN leak to a third-party renderer).
+        /// Merge field: {{{fbrQrPngDataUrl}}} (triple braces to avoid HTML
+        /// escaping the data URI).
+        /// </summary>
+        public string? FbrQrPngDataUrl { get; set; }
+        /// <summary>
+        /// Path to the deployed FBR logo asset. Stable URL served by
+        /// app.UseStaticFiles() from wwwroot/ — does not depend on the
+        /// gitignored runtime data/ folder. Merge field: {{fbrLogoUrl}}.
+        /// </summary>
+        public string FbrLogoUrl { get; set; } = "/images/fbr-logo.png";
 
         public List<PrintTaxItemDto> Items { get; set; } = new();
     }

@@ -498,7 +498,12 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
 </div>
 
 {{#if fbrIRN}}
-<!-- FBR Digital Invoicing Section -->
+<!-- FBR Digital Invoicing Section.
+     QR and logo are now self-contained: the QR is a base64 PNG rendered
+     server-side ({{{fbrQrPngDataUrl}}} — triple braces so Handlebars
+     doesn't HTML-escape the data URI), and the FBR logo is served from
+     wwwroot/images so it deploys with the bundle. Replaces the earlier
+     dependency on external image hosts. -->
 <div style="margin-top:14px;padding:8px 12px;border:1.5px solid #1a5276;border-radius:4px;display:flex;justify-content:space-between;align-items:center;gap:16px">
   <div style="flex:1">
     <div style="font-size:9pt;font-weight:bold;color:#1a5276;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">FBR Digital Invoice</div>
@@ -506,9 +511,12 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
     <div style="font-size:8pt;color:#555;margin-top:2px">Submitted: {{fmtDate fbrSubmittedAt}}</div>
     <div style="font-size:7pt;color:#888;margin-top:2px">This invoice is registered with the Federal Board of Revenue (FBR) Digital Invoicing System</div>
   </div>
-  <div style="text-align:center">
-    <img src="https://api.qrserver.com/v1/create-qr-code/?size=96x96&data={{fbrIRN}}" style="width:96px;height:96px" />
-    <div style="font-size:7pt;color:#555;margin-top:2px">Scan to verify</div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <div style="text-align:center">
+      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+      <div style="font-size:7pt;color:#555;margin-top:2px">Scan to verify</div>
+    </div>
+    <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
   </div>
 </div>
 {{/if}}
