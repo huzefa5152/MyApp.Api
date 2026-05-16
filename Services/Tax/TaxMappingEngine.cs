@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Services.Interfaces;
@@ -15,6 +16,7 @@ namespace MyApp.Api.Services.Tax
     {
         private readonly IFbrService _fbr;
         private readonly AppDbContext _db;
+        private readonly ILogger<TaxMappingEngine>? _logger;
 
         // Cache keys are scoped per company because the FBR token is
         // per-company and PRAL bills the call. TTL is process lifetime —
@@ -28,15 +30,26 @@ namespace MyApp.Api.Services.Tax
         // would use 5/7 but we don't sell those today.
         private const int DefaultAnnexureId = 3;
 
+        // PRAL's HS_UOM endpoint intermittently returns an empty array on the
+        // first call for an otherwise-valid HS code (operators reported the
+        // "no UOM found" warning for 8311.3000 clearing on the 2nd or 3rd
+        // re-pick). Retry locally with a small backoff so the first
+        // user-visible response is consistent. HS_UOM is an idempotent GET,
+        // so retry is safe — the CLAUDE.md "no POST retries" rule only
+        // covers /submit and /validate which can issue duplicate IRNs.
+        private const int HsUomMaxAttempts = 3;
+        private static readonly int[] HsUomBackoffMs = new[] { 0, 250, 600 };
+
         // FBR's SaleTypeToRate endpoint requires a transaction-type id.
         // 18 = "Goods sale" (the only one Hakimi uses). Reserved for future
         // override when other sectors come online (services, exports).
         private const int DefaultTransactionTypeId = 18;
 
-        public TaxMappingEngine(IFbrService fbr, AppDbContext db)
+        public TaxMappingEngine(IFbrService fbr, AppDbContext db, ILogger<TaxMappingEngine>? logger = null)
         {
             _fbr = fbr;
             _db = db;
+            _logger = logger;
         }
 
         // ─── HS_UOM ────────────────────────────────────────────────
@@ -45,12 +58,32 @@ namespace MyApp.Api.Services.Tax
         {
             if (string.IsNullOrWhiteSpace(hsCode)) return new();
 
-            var key = $"{companyId}:{hsCode.Trim()}";
+            var trimmed = hsCode.Trim();
+            var key = $"{companyId}:{trimmed}";
             if (_hsUomCache.TryGetValue(key, out var cached)) return cached;
 
-            var fresh = await _fbr.GetHSCodeUOMAsync(companyId, hsCode.Trim(), DefaultAnnexureId);
-            if (fresh != null && fresh.Count > 0)
-                _hsUomCache.TryAdd(key, fresh);
+            // Retry-on-empty: PRAL occasionally returns an empty array on the
+            // first call for a real HS code (operator-reported, see comment
+            // on HsUomMaxAttempts). Second attempt almost always succeeds.
+            // We only retry the empty case — a 4xx / 5xx surfaces as an
+            // exception through Polly's HttpClient pipeline and never reaches
+            // here, so this loop won't paper over real network failures.
+            List<FbrUOMDto>? fresh = null;
+            for (var attempt = 0; attempt < HsUomMaxAttempts; attempt++)
+            {
+                if (HsUomBackoffMs[attempt] > 0)
+                    await Task.Delay(HsUomBackoffMs[attempt]);
+                fresh = await _fbr.GetHSCodeUOMAsync(companyId, trimmed, DefaultAnnexureId);
+                if (fresh != null && fresh.Count > 0)
+                {
+                    if (attempt > 0)
+                        _logger?.LogWarning(
+                            "PRAL HS_UOM returned empty on attempt 1 for HS {HsCode} (company {CompanyId}); recovered on attempt {Attempt}.",
+                            trimmed, companyId, attempt + 1);
+                    _hsUomCache.TryAdd(key, fresh);
+                    return fresh;
+                }
+            }
             return fresh ?? new();
         }
 
