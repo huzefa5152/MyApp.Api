@@ -15,10 +15,16 @@ namespace MyApp.Api.Repositories.Implementations
         }
 
         public async Task<List<ItemType>> GetAllAsync()
-            => await _context.ItemTypes.OrderBy(it => it.Name).ToListAsync();
+            => await _context.ItemTypes
+                .Where(it => !it.IsDeleted)
+                .OrderBy(it => it.Name)
+                .ToListAsync();
 
+        // FindByIdAsync still resolves soft-deleted rows so that propagation
+        // / edit-by-id flows see them when needed. The service decides
+        // whether to expose the row to the caller.
         public async Task<ItemType?> GetByIdAsync(int id)
-            => await _context.ItemTypes.FindAsync(id);
+            => await _context.ItemTypes.FirstOrDefaultAsync(it => it.Id == id);
 
         public async Task<ItemType> CreateAsync(ItemType itemType)
         {
@@ -36,31 +42,30 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task DeleteAsync(ItemType itemType)
         {
-            _context.ItemTypes.Remove(itemType);
+            // Soft delete only — Restrict FK on InvoiceItems / PurchaseItems /
+            // StockMovements would block a hard delete the moment the item
+            // has been used anywhere. Service-level guard already enforces
+            // "no pending FBR submissions" before we get here.
+            itemType.IsDeleted = true;
+            _context.ItemTypes.Update(itemType);
             await _context.SaveChangesAsync();
         }
 
-        public async Task<bool> ExistsByNameAsync(string name, int? excludeId = null)
+        public async Task<bool> ExistsByNameAndHsCodeAsync(string name, string? hsCode, int? excludeId = null)
         {
+            var normalizedHs = string.IsNullOrWhiteSpace(hsCode) ? null : hsCode.Trim();
+            var loweredName = (name ?? "").Trim().ToLower();
             return await _context.ItemTypes
-                .AnyAsync(it => it.Name.ToLower() == name.ToLower() &&
-                               (!excludeId.HasValue || it.Id != excludeId.Value));
-        }
-
-        public async Task<bool> ExistsByHsCodeAsync(string hsCode, int? excludeId = null)
-        {
-            var normalized = (hsCode ?? "").Trim();
-            if (string.IsNullOrEmpty(normalized)) return false;
-            return await _context.ItemTypes
-                .AnyAsync(it => it.HSCode != null &&
-                                it.HSCode == normalized &&
-                                (!excludeId.HasValue || it.Id != excludeId.Value));
+                .AnyAsync(it => !it.IsDeleted
+                              && it.Name.ToLower() == loweredName
+                              && it.HSCode == normalizedHs
+                              && (!excludeId.HasValue || it.Id != excludeId.Value));
         }
 
         public async Task<List<string>> GetSavedHsCodesAsync()
         {
             return await _context.ItemTypes
-                .Where(it => it.HSCode != null && it.HSCode != "")
+                .Where(it => !it.IsDeleted && it.HSCode != null && it.HSCode != "")
                 .Select(it => it.HSCode!)
                 .Distinct()
                 .ToListAsync();

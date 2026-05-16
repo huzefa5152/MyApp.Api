@@ -325,6 +325,63 @@ status, _ = request("GET", "/api/usercompanies", token=tokens["alice"])
 check("Tenant Access RBAC", "alice (Administrator) GET /api/usercompanies",
       status == 200, f"expected 200, got {status}")
 
+# Suite 6: cross-tenant ClientId forge — operator with legit access to
+# their own tenant cannot smuggle in a Client from another tenant on a
+# challan / invoice create call. Added 2026-05-16 after discovering the
+# challan + invoice create paths only checked the *tenant* guard on
+# companyId, not the cross-tenant link on dto.ClientId.
+print("\n  Suite 6 — cross-tenant ClientId forge guard")
+# Seed a Beta-side Client as admin (alice doesn't have direct access to Beta).
+beta_client_payload = {
+    "companyId": beta["id"],
+    "name": "Beta-Forge-Bait",
+    "phone": "+92-00-0000000",
+    "site": "Karachi",
+    "ntn": "0000001",
+    "cnic": "0000001000001",
+    "strn": "0000001000001",
+    "registrationType": "Registered",
+}
+status, beta_client = request("POST", "/api/clients", token=admin, body=beta_client_payload)
+assert status in (200, 201), f"seed beta client: {status} {beta_client}"
+
+# alice belongs to Alpha. She tries to create a challan in Alpha
+# referencing the Beta client by id — must 400 (InvalidOperationException
+# bubbles up as "Client does not belong to this company").
+forged_challan = {
+    "companyId": alpha["id"],
+    "clientId": beta_client["id"],
+    "site": "Karachi",
+    "poNumber": "PO/FORGE",
+    "deliveryDate": "2026-05-16",
+    "items": [
+        {"description": "Bogus", "quantity": 1, "unit": "Numbers, pieces, units"}
+    ],
+}
+status, _ = request("POST", "/api/deliverychallans", token=tokens["alice"], body=forged_challan)
+check("Cross-tenant ClientId guard",
+      "alice -> POST /api/deliverychallans (companyId=alpha, clientId=beta-owned)",
+      status == 400, f"expected 400, got {status}")
+
+# Standalone bill path already had this check; we re-verify it still
+# fires from the same forgery vector for completeness.
+forged_bill = {
+    "companyId": alpha["id"],
+    "clientId": beta_client["id"],
+    "date": "2026-05-16",
+    "gstRate": 18,
+    "items": [
+        {"description": "Bogus", "quantity": 1, "uom": "Numbers, pieces, units", "unitPrice": 100}
+    ],
+}
+status, _ = request("POST", "/api/invoices/standalone", token=tokens["alice"], body=forged_bill)
+check("Cross-tenant ClientId guard",
+      "alice -> POST /api/invoices/standalone (companyId=alpha, clientId=beta-owned)",
+      status == 400, f"expected 400, got {status}")
+
+# Cleanup the seed Beta client
+request("DELETE", f"/api/clients/{beta_client['id']}", token=admin)
+
 
 # ── Cleanup (test fails → keep rows for inspection) ──────────
 print("\n=== Results ===")

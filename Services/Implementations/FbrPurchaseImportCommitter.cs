@@ -321,37 +321,32 @@ namespace MyApp.Api.Services.Implementations
             {
                 var hs = grp.Key.Trim();
                 var first = grp.First();
+                // The committer's identity for an item is (Name, HSCode)
+                // since the unique-index move on 2026-05-16. An existing
+                // "Hardware Items" with NULL HSCode in the catalog must
+                // NOT capture an FBR-import "Hardware Items" line with
+                // a real HS code — those are intentionally two separate
+                // rows now (the no-HS-code row stays as the operator's
+                // un-classified draft).
+                var fallbackName = string.IsNullOrWhiteSpace(first.Description)
+                    ? $"HS {hs}"
+                    : first.Description;
 
                 // Re-check existence inside the tx — the preview's
                 // matcher ran against a snapshot; another commit in
                 // flight may have created the same row already.
                 int? itemTypeId = await _context.ItemTypes
-                    .Where(it => it.HSCode == hs)
+                    .Where(it => !it.IsDeleted
+                              && it.HSCode == hs
+                              && it.Name == fallbackName)
                     .Select(it => (int?)it.Id)
                     .FirstOrDefaultAsync();
 
                 if (!itemTypeId.HasValue)
                 {
-                    // Description fallback — rare given the FBR rows mostly
-                    // have descriptions, but keeps the matcher's secondary
-                    // index honoured here too.
-                    if (!string.IsNullOrWhiteSpace(first.Description))
-                    {
-                        itemTypeId = await _context.ItemTypes
-                            .Where(it => it.Name == first.Description)
-                            .Select(it => (int?)it.Id)
-                            .FirstOrDefaultAsync();
-                    }
-                }
-
-                if (!itemTypeId.HasValue)
-                {
                     // Auto-create. 4-digit HS codes get IsHsCodePartial=true
                     // so the operator's sales pickers can hide them until
-                    // the full PCT is set. Description blank → use "HS XXXX".
-                    var fallbackName = string.IsNullOrWhiteSpace(first.Description)
-                        ? $"HS {hs}"
-                        : first.Description;
+                    // the full PCT is set.
                     var isPartial = !hs.Contains('.');
                     var itemType = new ItemType
                     {

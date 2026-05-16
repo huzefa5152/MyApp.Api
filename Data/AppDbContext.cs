@@ -367,9 +367,20 @@ namespace MyApp.Api.Data
                 .HasIndex(u => u.Name)
                 .IsUnique();
 
+            // Composite uniqueness on (Name, HSCode) — operators legitimately
+            // want "Hardware Items" with HS X and "Hardware Items" with HS Y
+            // as two separate catalog rows (each maps to a different FBR
+            // line on bills). SQL Server treats NULL as equal-to-NULL for
+            // unique purposes, so (Hardware Items, NULL) is still
+            // single-instance — two rows with no HS code and the same name
+            // remain blocked, matching the operator's expectation.
+            //
+            // Filtered to IsDeleted = 0 so a soft-deleted ItemType never
+            // blocks re-creating the same (Name, HSCode) pair later.
             modelBuilder.Entity<ItemType>()
-                .HasIndex(it => it.Name)
-                .IsUnique();
+                .HasIndex(it => new { it.Name, it.HSCode })
+                .IsUnique()
+                .HasFilter("[IsDeleted] = 0");
 
             // PrintTemplate: unique per (CompanyId, TemplateType)
             modelBuilder.Entity<PrintTemplate>()

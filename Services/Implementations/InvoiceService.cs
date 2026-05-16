@@ -318,6 +318,16 @@ namespace MyApp.Api.Services.Implementations
             var company = await _companyRepo.GetByIdAsync(dto.CompanyId);
             if (company == null) throw new KeyNotFoundException("Company not found.");
 
+            // Cross-tenant link guard: the buyer must belong to the same company
+            // as the bill. Without this, a forged dto.ClientId from CompanyB
+            // could be saved on a CompanyA invoice (CLAUDE.md "data integrity"
+            // — cross-tenant entity links). The standalone-bill path and the
+            // update path already do this; the challan-based create did not.
+            var buyer = await _context.Clients.FindAsync(dto.ClientId);
+            if (buyer == null) throw new KeyNotFoundException("Client not found.");
+            if (buyer.CompanyId != dto.CompanyId)
+                throw new InvalidOperationException("Client does not belong to this company.");
+
             // Load and validate all challans
             var challans = new List<DeliveryChallan>();
             foreach (var challanId in dto.ChallanIds)
@@ -454,8 +464,8 @@ namespace MyApp.Api.Services.Implementations
             string? effectivePaymentMode = dto.PaymentMode;
             if (string.IsNullOrWhiteSpace(effectivePaymentMode))
             {
-                var buyer = await _context.Clients.FindAsync(dto.ClientId);
-                var isRegistered = buyer?.RegistrationType == "Registered";
+                // buyer was loaded + tenant-checked at the top of CreateAsync.
+                var isRegistered = buyer.RegistrationType == "Registered";
                 effectivePaymentMode = isRegistered
                     ? (!string.IsNullOrWhiteSpace(company.FbrDefaultPaymentModeRegistered)
                         ? company.FbrDefaultPaymentModeRegistered

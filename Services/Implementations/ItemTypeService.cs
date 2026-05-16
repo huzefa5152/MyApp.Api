@@ -111,8 +111,19 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<ItemTypeDto> CreateAsync(ItemTypeDto dto, int? enrichWithCompanyId = null)
         {
-            if (await _repo.ExistsByNameAsync(dto.Name))
-                throw new InvalidOperationException($"An item with name '{dto.Name}' already exists.");
+            // Composite (Name, HSCode) uniqueness (2026-05-16). Operators
+            // legitimately want "Hardware Items" with HS X AND "Hardware
+            // Items" with HS Y as two separate catalog rows, AND "Hardware
+            // Items" with no HS code as a draft row alongside both. The DB
+            // unique index on (Name, HSCode) is filtered to IsDeleted=0;
+            // we mirror its semantics here so the operator gets a clean
+            // 400 instead of a SQL 2627 surface error.
+            var normalizedHs = string.IsNullOrWhiteSpace(dto.HSCode) ? null : dto.HSCode!.Trim();
+            if (await _repo.ExistsByNameAndHsCodeAsync(dto.Name, normalizedHs))
+                throw new InvalidOperationException(
+                    normalizedHs == null
+                        ? $"An item named \"{dto.Name}\" without an HS code already exists. Either edit the existing row, or add an HS code to differentiate this one."
+                        : $"An item named \"{dto.Name}\" with HS code {normalizedHs} already exists.");
 
             // 2026-05-13: validate the HS code against PRAL's master
             // catalog. Empty HSCode is allowed — the row is "draft" /
@@ -121,25 +132,13 @@ namespace MyApp.Api.Services.Implementations
             // catalog (or pass the format gate on a fresh-tenant fallback).
             await ValidateHsCodeOrThrowAsync(dto.HSCode, enrichWithCompanyId);
 
-            if (!string.IsNullOrWhiteSpace(dto.HSCode) && await _repo.ExistsByHsCodeAsync(dto.HSCode))
-                throw new InvalidOperationException(
-                    $"An item with HS Code '{dto.HSCode}' already exists in your catalog. " +
-                    "Each HS Code can only be mapped to one item.");
-
-            // Near-duplicate guard (#11 — 2026-05-12). Operators have
-            // accidentally created "Hardware Item" alongside "Hardware
-            // Items" — a 1-char difference that splits sale-side bills
-            // across two catalog rows and silently breaks the tax-claim
-            // optimization (the wrong row has no HS code / no purchases).
-            // Block if a normalized name match (lowercase, trimmed,
-            // singular/plural collapsed) hits an existing row.
-            //
-            // dto.IsFavorite acts as an explicit override knob: the
-            // operator can set it true to acknowledge "yes I know this
-            // is similar to an existing row, create it anyway". Mild
-            // abuse of a flag, but avoids adding a new field for a
-            // rarely-used escape hatch.
-            var nearMatch = await FindNearDuplicateAsync(dto.Name, exceptId: null);
+            // Near-duplicate (mis-spelled) name guard. Now scoped to
+            // matching-HSCode pairs only — "Hardware Items" + HS X and
+            // "Hardware Item" + HS Y are intentional separate rows, but
+            // "Hardware Items" + HS X and "Hardware Item" + HS X is the
+            // typo-splits-the-catalog scenario the original guard caught.
+            // dto.IsFavorite still acts as the explicit override knob.
+            var nearMatch = await FindNearDuplicateAsync(dto.Name, normalizedHs, exceptId: null);
             if (nearMatch != null && !dto.IsFavorite)
                 throw new InvalidOperationException(
                     $"\"{dto.Name}\" looks like a near-duplicate of existing item " +
@@ -153,7 +152,7 @@ namespace MyApp.Api.Services.Implementations
             var created = await _repo.CreateAsync(new ItemType
             {
                 Name = dto.Name,
-                HSCode = dto.HSCode,
+                HSCode = normalizedHs,
                 UOM = dto.UOM,
                 FbrUOMId = dto.FbrUOMId,
                 SaleType = dto.SaleType,
@@ -187,7 +186,7 @@ namespace MyApp.Api.Services.Implementations
         ///
         /// Returns null when the proposed name is genuinely new.
         /// </summary>
-        private async Task<ItemType?> FindNearDuplicateAsync(string? proposedName, int? exceptId)
+        private async Task<ItemType?> FindNearDuplicateAsync(string? proposedName, string? proposedHsCode, int? exceptId)
         {
             var trimmed = (proposedName ?? "").Trim();
             if (trimmed.Length == 0) return null;
@@ -217,11 +216,20 @@ namespace MyApp.Api.Services.Implementations
                 if (i < a.Length || j < b.Length) edits++;
                 return edits;
             }
+            // HSCode is now part of the catalog identity, so the near-dup
+            // guard must compare on it too — "Hardware Items" + HS X is
+            // intentionally different from "Hardware Item" + HS Y (the
+            // operator is splitting the catalog along the HS axis). Only
+            // flag near-matches when both rows would share the same HS
+            // (including both being NULL).
             var pNorm = Norm(trimmed);
             var pSing = Singularize(trimmed);
+            var pHs = string.IsNullOrWhiteSpace(proposedHsCode) ? null : proposedHsCode.Trim();
             foreach (var row in rows)
             {
                 if (exceptId.HasValue && row.Id == exceptId.Value) continue;
+                var rHs = string.IsNullOrWhiteSpace(row.HSCode) ? null : row.HSCode!.Trim();
+                if (!string.Equals(rHs, pHs, StringComparison.OrdinalIgnoreCase)) continue;
                 var rNorm = Norm(row.Name);
                 if (rNorm == pNorm) return row;
                 if (Singularize(row.Name) == pSing) return row;
@@ -234,21 +242,22 @@ namespace MyApp.Api.Services.Implementations
         {
             var it = await _repo.GetByIdAsync(id);
             if (it == null) return null;
+            if (it.IsDeleted)
+                throw new InvalidOperationException($"\"{it.Name}\" is deleted — restore it first before editing.");
 
-            if (await _repo.ExistsByNameAsync(dto.Name, id))
-                throw new InvalidOperationException($"An item with name '{dto.Name}' already exists.");
+            var normalizedHs = string.IsNullOrWhiteSpace(dto.HSCode) ? null : dto.HSCode!.Trim();
+            if (await _repo.ExistsByNameAndHsCodeAsync(dto.Name, normalizedHs, id))
+                throw new InvalidOperationException(
+                    normalizedHs == null
+                        ? $"Another item named \"{dto.Name}\" without an HS code already exists."
+                        : $"Another item named \"{dto.Name}\" with HS code {normalizedHs} already exists.");
 
             // 2026-05-13: only validate the HS code if it actually changed —
             // a re-save with the same code should never get blocked even if
             // the catalog goes briefly empty. Empty HSCode is allowed
             // (un-classified placeholder).
-            if (!StringEq(it.HSCode, dto.HSCode))
-                await ValidateHsCodeOrThrowAsync(dto.HSCode, enrichWithCompanyId);
-
-            if (!string.IsNullOrWhiteSpace(dto.HSCode) && await _repo.ExistsByHsCodeAsync(dto.HSCode, id))
-                throw new InvalidOperationException(
-                    $"Another item in your catalog already uses HS Code '{dto.HSCode}'. " +
-                    "Each HS Code can only be mapped to one item.");
+            if (!StringEq(it.HSCode, normalizedHs))
+                await ValidateHsCodeOrThrowAsync(normalizedHs, enrichWithCompanyId);
 
             await EnrichFromFbrAsync(dto, enrichWithCompanyId);
             await EnsureUnitRowAsync(dto.UOM);
@@ -266,7 +275,7 @@ namespace MyApp.Api.Services.Implementations
             };
 
             it.Name = dto.Name;
-            it.HSCode = dto.HSCode;
+            it.HSCode = normalizedHs;
             it.UOM = dto.UOM;
             it.FbrUOMId = dto.FbrUOMId;
             it.SaleType = dto.SaleType;
@@ -430,10 +439,37 @@ namespace MyApp.Api.Services.Implementations
         {
             var it = await _repo.GetByIdAsync(id);
             if (it == null) throw new KeyNotFoundException("Item type not found.");
+            if (it.IsDeleted) return; // idempotent — already gone from the catalog
 
-            var inUse = await _context.DeliveryItems.AnyAsync(di => di.ItemTypeId == id);
-            if (inUse)
-                throw new InvalidOperationException($"Cannot delete \"{it.Name}\" — it is used in existing challans.");
+            // Delete rule (2026-05-16): block ONLY when there's still
+            // pending work that depends on the row. Anything already
+            // FBR-submitted is locked-and-historical — the InvoiceItem
+            // / PurchaseItem rows carry their own HSCode + UOM + SaleType
+            // snapshot fields, so the bill print + tax claim still show
+            // correct data after the catalog row goes away.
+            //
+            //   Block if:
+            //     • Any InvoiceItem points at this ItemType AND its Invoice
+            //       is not yet FBR-Submitted (operator still owes FBR a
+            //       submission for that bill — deleting the catalog row
+            //       would orphan the bill's HSCode source for that flow).
+            //     • Any DeliveryItem points at this ItemType AND the
+            //       challan is still open (Invoice == null) OR its bill
+            //       is unsubmitted.
+            //   PurchaseItem / StockMovement do not block — purchase
+            //   bills are inbound (no FBR submission of our own), and
+            //   StockMovements carry the qty data we need regardless.
+            var hasPendingInvoiceLine = await _context.InvoiceItems
+                .AnyAsync(ii => ii.ItemTypeId == id && ii.Invoice.FbrStatus != "Submitted");
+            var hasPendingChallanLine = await _context.DeliveryItems
+                .AnyAsync(di => di.ItemTypeId == id
+                              && di.DeliveryChallan.Status != "Cancelled"
+                              && (di.DeliveryChallan.Invoice == null
+                                  || di.DeliveryChallan.Invoice.FbrStatus != "Submitted"));
+            if (hasPendingInvoiceLine || hasPendingChallanLine)
+                throw new InvalidOperationException(
+                    $"Cannot delete \"{it.Name}\" — it's referenced by a bill or challan that hasn't been submitted to FBR yet. " +
+                    "Submit or cancel those documents first, then try again.");
 
             await _repo.DeleteAsync(it);
         }

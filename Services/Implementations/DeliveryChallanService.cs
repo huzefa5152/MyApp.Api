@@ -255,7 +255,14 @@ namespace MyApp.Api.Services.Implementations
             // Determine status based on FBR readiness
             var company = await _context.Companies.FindAsync(companyId);
             var client = await _context.Clients.FindAsync(dto.ClientId);
-            var fbrReady = company != null && client != null && IsFbrReady(company, client);
+            // Cross-tenant link guard — without this a forged dto.ClientId
+            // from another tenant could be persisted on this challan
+            // (CLAUDE.md "data integrity" — cross-tenant entity links).
+            if (client == null)
+                throw new KeyNotFoundException("Client not found.");
+            if (client.CompanyId != companyId)
+                throw new InvalidOperationException("Client does not belong to this company.");
+            var fbrReady = company != null && IsFbrReady(company, client);
 
             string status;
             if (!fbrReady)

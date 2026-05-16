@@ -42,5 +42,17 @@ namespace MyApp.Api.Models
         /// always entered with a real catalog code.
         /// </summary>
         public bool IsHsCodePartial { get; set; }
+
+        /// <summary>
+        /// Soft-delete flag. The InvoiceItems/PurchaseItems/StockMovements
+        /// FKs are all Restrict, so we can't hard-delete a row once it's
+        /// been used on a bill or moved stock. Setting IsDeleted=true
+        /// hides the row from every catalog list/picker while preserving
+        /// the historical references on already-submitted FBR invoices
+        /// and the inventory ledger. The (Name, HSCode) unique index is
+        /// filtered to IsDeleted=0 so a soft-deleted row never blocks
+        /// re-creating the same item.
+        /// </summary>
+        public bool IsDeleted { get; set; }
     }
 }

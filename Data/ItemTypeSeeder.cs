@@ -96,26 +96,31 @@ namespace MyApp.Api.Data
             //    inside CleanupAsync makes this no-op on subsequent boots.
             await CleanupLegacySeedsAsync(ctx);
 
-            // Build a set of HS codes already present so we don't duplicate them
-            var existingHs = new HashSet<string>(
+            // Composite (Name, HSCode) is now the catalog identity (2026-05-16).
+            // Skip seed only when an existing non-deleted row already has the
+            // exact same pair — otherwise re-seeding "Hardware Items" with HS
+            // code X is fine even when the operator has their own "Hardware
+            // Items" with HS Y. Soft-deleted rows are excluded so a seed
+            // re-create after a delete is permitted (the filtered unique
+            // index already allows that path).
+            var existingPairs = new HashSet<(string Name, string Hs)>(
                 await ctx.ItemTypes
-                    .Where(it => it.HSCode != null)
-                    .Select(it => it.HSCode!)
-                    .ToListAsync(),
-                StringComparer.OrdinalIgnoreCase);
-
-            // Also skip by name match so a renamed user item doesn't get duplicated
-            var existingNames = new HashSet<string>(
-                await ctx.ItemTypes.Select(it => it.Name).ToListAsync(),
-                StringComparer.OrdinalIgnoreCase);
+                    .Where(it => !it.IsDeleted)
+                    .Select(it => new { it.Name, it.HSCode })
+                    .ToListAsync()
+                    .ContinueWith(t => t.Result.Select(x => (
+                        Name: (x.Name ?? "").Trim().ToLowerInvariant(),
+                        Hs: (x.HSCode ?? "").Trim().ToLowerInvariant())))
+            );
 
             var toAdd = new List<ItemType>();
             foreach (var d in Defaults)
             {
-                if (existingHs.Contains(d.HSCode) || existingNames.Contains(d.Name)) continue;
+                var key = ((d.Name ?? "").Trim().ToLowerInvariant(), (d.HSCode ?? "").Trim().ToLowerInvariant());
+                if (existingPairs.Contains(key)) continue;
                 toAdd.Add(new ItemType
                 {
-                    Name = d.Name,
+                    Name = d.Name ?? "",
                     HSCode = d.HSCode,
                     UOM = d.UOM,
                     FbrUOMId = d.FbrUOMId,

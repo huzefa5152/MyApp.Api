@@ -20,6 +20,16 @@ const colors = {
   favorite: "#f59f00",
 };
 
+// Trim trailing zeros so 12.000 → "12" and 1.50 → "1.5". Keeps the
+// On-hand column readable for the common integer-qty case while still
+// honouring fractional UOMs (kg, litre, m²).
+const formatQty = (n) => {
+  if (n == null || Number.isNaN(Number(n))) return "—";
+  const num = Number(n);
+  if (Number.isInteger(num)) return num.toLocaleString();
+  return num.toLocaleString(undefined, { maximumFractionDigits: 3 });
+};
+
 const SALE_TYPES = [
   "Goods at standard rate (default)",
   "Goods at Reduced Rate",
@@ -64,7 +74,10 @@ export default function ItemTypesPage() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const { data } = await getItemTypes();
+      // Pass companyId so the backend joins per-company on-hand stock
+      // (opening + Σ purchases − Σ sales) onto each row. Empty when the
+      // selected company has stock tracking disabled — list still renders.
+      const { data } = await getItemTypes(selectedCompany?.id);
       setItemTypes(data);
     } catch {
       notify("Failed to load item types.", "error");
@@ -73,7 +86,7 @@ export default function ItemTypesPage() {
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { fetchAll(); }, [selectedCompany?.id]);
 
   const openAdd = () => {
     setEditItem(null);
@@ -194,7 +207,8 @@ export default function ItemTypesPage() {
                 <span style={{ flex: 2 }}>Name</span>
                 <span style={{ flex: 1.1 }}>HS Code</span>
                 <span style={{ flex: 1.5 }}>UOM</span>
-                <span style={{ flex: 1.8 }}>Sale Type</span>
+                <span style={{ flex: 1.6 }}>Sale Type</span>
+                <span style={{ flex: 0.9, textAlign: "right" }}>On hand</span>
                 <span style={{ flex: 0.7, textAlign: "center" }}>Used</span>
                 <span style={{ width: 90, textAlign: "right" }}></span>
               </div>
@@ -223,8 +237,20 @@ export default function ItemTypesPage() {
                   <span style={{ flex: 1.5, fontSize: "0.82rem", color: colors.textPrimary }}>
                     {it.uom || "—"}
                   </span>
-                  <span style={{ flex: 1.8, fontSize: "0.78rem", color: colors.textSecondary }}>
+                  <span style={{ flex: 1.6, fontSize: "0.78rem", color: colors.textSecondary }}>
                     {it.saleType || "—"}
+                  </span>
+                  <span style={{
+                    flex: 0.9,
+                    textAlign: "right",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    fontFamily: "monospace",
+                    color: it.availableQty == null
+                      ? colors.textSecondary
+                      : it.availableQty > 0 ? colors.teal : colors.danger,
+                  }}>
+                    {it.availableQty == null ? "—" : formatQty(it.availableQty)}
                   </span>
                   <span style={{ flex: 0.7, textAlign: "center", fontSize: "0.82rem", color: colors.textSecondary }}>
                     {it.usageCount > 0 ? `${it.usageCount}×` : "—"}
@@ -281,6 +307,21 @@ export default function ItemTypesPage() {
                   <div className="it-card__field it-card__field--full">
                     <span className="it-card__field-label">Sale Type</span>
                     <span className="it-card__field-value">{it.saleType || "—"}</span>
+                  </div>
+                  <div className="it-card__field">
+                    <span className="it-card__field-label">On hand</span>
+                    <span
+                      className="it-card__field-value"
+                      style={{
+                        fontFamily: "monospace",
+                        fontWeight: 600,
+                        color: it.availableQty == null
+                          ? colors.textSecondary
+                          : it.availableQty > 0 ? colors.teal : colors.danger,
+                      }}
+                    >
+                      {it.availableQty == null ? "—" : formatQty(it.availableQty)}
+                    </span>
                   </div>
                   <div className="it-card__field">
                     <span className="it-card__field-label">Used</span>
