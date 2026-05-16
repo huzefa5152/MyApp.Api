@@ -27,6 +27,14 @@ namespace MyApp.Api.Data
         // pre-curation seed rows. Subsequent restarts skip cleanup.
         private const string ReseedMarkerKey = "ITEM_TYPE_RESEED_V2_18PCT_ONLY";
 
+        // 2026-05-16 — one-shot marker for the auto-seed itself. Operators
+        // complained that deleting a seed row meant it came back on the next
+        // deploy. We now seed once per database (first boot ever) and write
+        // this marker; future boots skip seeding entirely. Soft-deleted seed
+        // rows are also respected by the existence check below as defence-
+        // in-depth for the boot that writes the marker.
+        private const string SeedDoneMarkerKey = "ITEM_TYPE_AUTO_SEED_DONE_V1";
+
         // Names + HS codes that came from any earlier version of this
         // seeder (v1 had Soap, Detergent, Light Bulbs, Batteries, Face
         // Masks — items that PRAL classifies under 3rd Schedule, which
@@ -96,16 +104,24 @@ namespace MyApp.Api.Data
             //    inside CleanupAsync makes this no-op on subsequent boots.
             await CleanupLegacySeedsAsync(ctx);
 
-            // Composite (Name, HSCode) is now the catalog identity (2026-05-16).
-            // Skip seed only when an existing non-deleted row already has the
-            // exact same pair — otherwise re-seeding "Hardware Items" with HS
-            // code X is fine even when the operator has their own "Hardware
-            // Items" with HS Y. Soft-deleted rows are excluded so a seed
-            // re-create after a delete is permitted (the filtered unique
-            // index already allows that path).
+            // 1) One-shot auto-seed guard. Once we've seeded the catalog on
+            //    a given database, never re-seed — even if the operator has
+            //    since deleted some of the seed rows. The marker is an
+            //    audit-log row keyed by SeedDoneMarkerKey, same trick the
+            //    legacy-cleanup pass uses above.
+            var alreadySeeded = await ctx.AuditLogs
+                .AsNoTracking()
+                .AnyAsync(a => a.ExceptionType == SeedDoneMarkerKey);
+            if (alreadySeeded) return;
+
+            // Composite (Name, HSCode) is the catalog identity (2026-05-16).
+            // Skip seed only when an existing row already has the exact same
+            // pair. INCLUDES soft-deleted rows: an operator who soft-deleted
+            // a seed entry doesn't want it back on the next deploy. Without
+            // this filter, the seeder would treat soft-deleted rows as
+            // "missing" and re-insert them, fighting the operator's intent.
             var existingPairs = new HashSet<(string Name, string Hs)>(
                 await ctx.ItemTypes
-                    .Where(it => !it.IsDeleted)
                     .Select(it => new { it.Name, it.HSCode })
                     .ToListAsync()
                     .ContinueWith(t => t.Result.Select(x => (
@@ -135,6 +151,21 @@ namespace MyApp.Api.Data
                 ctx.ItemTypes.AddRange(toAdd);
                 await ctx.SaveChangesAsync();
             }
+
+            // Write the marker even when toAdd is empty — the operator may
+            // have hand-curated the catalog already, in which case we still
+            // want future boots to skip the auto-seed.
+            ctx.AuditLogs.Add(new Models.AuditLog
+            {
+                Level = "Info",
+                ExceptionType = SeedDoneMarkerKey,
+                Message = $"ItemType auto-seed complete. Inserted={toAdd.Count}, " +
+                          $"skipped(already-existed-or-soft-deleted)={Defaults.Length - toAdd.Count}.",
+                HttpMethod = "STARTUP",
+                RequestPath = "/seed/itemtypes",
+                StatusCode = 200,
+            });
+            await ctx.SaveChangesAsync();
         }
 
         // One-shot cleanup that drops legacy seed rows known to misclassify

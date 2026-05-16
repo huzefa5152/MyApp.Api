@@ -46,9 +46,19 @@ import LookupAutocomplete from "./LookupAutocomplete";
 // Keyed by both companyId AND hsCode because the FBR call is
 // authenticated with the company's PRAL token and the master list,
 // while in practice global, can technically differ per tenant.
+//
+// 2026-05-16 fix: only cache responses that include a non-empty UOM
+// list. Empty / partial responses (from a failed fbr-hints call that
+// fell through to the synthetic fallback) used to poison the cache —
+// the operator would re-pick the same HS code and get the cached
+// empty list forever, with the UOM field locked-empty. Re-fetching on
+// every keystroke isn't free, but UOM-less hint entries are useless
+// so it's the better trade-off.
 const hsHintCache = new Map();
 const hsHintCacheKey = (companyId, hsCode) =>
   `${companyId}:${String(hsCode).trim().toLowerCase()}`;
+const isCacheable = (data) =>
+  Array.isArray(data?.uoms) && data.uoms.length > 0;
 
 const SALE_TYPES = [
   "Goods at standard rate (default)",
@@ -166,7 +176,11 @@ export default function ItemTypeForm({
     try {
       const { data } = await getItemTypeFbrHints(companyId, code);
       if (!aliveRef.current || myVersion !== lookupSeqRef.current) return null;
-      if (data) hsHintCache.set(cacheKey, data);
+      // Only cache responses that actually carry UOM data — otherwise
+      // re-picking the same HS code would forever return the cached
+      // UOM-less entry and the operator would never see a recovered
+      // UOM mapping after a transient PRAL outage.
+      if (isCacheable(data)) hsHintCache.set(cacheKey, data);
       setHsHints(data);
       return data;
     } catch {
@@ -175,8 +189,6 @@ export default function ItemTypeForm({
         if (!aliveRef.current || myVersion !== lookupSeqRef.current) return null;
         if (Array.isArray(data) && data.length > 0) {
           const synthetic = { uoms: data, defaultUom: data[0], defaultSaleType: null, saleTypeOptions: [] };
-          // Cache the synthetic fallback too — better than re-paying
-          // for an endpoint that's already failed once.
           hsHintCache.set(cacheKey, synthetic);
           setHsHints(synthetic);
           return synthetic;
@@ -274,11 +286,18 @@ export default function ItemTypeForm({
   };
 
   const uomMissing = !uom.trim();
-  // 2026-05-14: once an HS code is picked, the FBR-recommended UOM is
-  // authoritative — lock the input so the operator can't drift the row
-  // away from what FBR will accept. Clearing the HS code releases the
-  // lock. See onHsChange above for how the override is applied.
-  const uomLocked = !!hsCode.trim();
+  // 2026-05-14: once an HS code is picked AND FBR returned a UOM for it,
+  // the recommended UOM is authoritative — lock the input so the operator
+  // can't drift the row away from what FBR will accept.
+  // 2026-05-16: ALSO release the lock when FBR returned no UOMs for the
+  // code (rare but real — some HS codes have no UOM mapping in PRAL's
+  // master). Previously the field stayed locked-empty and the operator
+  // couldn't save the row at all. While the hint fetch is still in
+  // flight the lock stays on so the field doesn't briefly become editable
+  // and then snap shut once the response arrives.
+  const hasFbrUom = !!hsHints?.defaultUom?.description;
+  const fbrHasNoUomForThisCode = !!hsHints && !hasFbrUom;
+  const uomLocked = !!hsCode.trim() && (hintLoading || hasFbrUom);
   const blockReason = hintLoading
     ? "Waiting for FBR's recommended UOM…"
     : uomMissing
@@ -374,10 +393,15 @@ export default function ItemTypeForm({
                       <em>{hsHints.defaultSaleType}</em>
                     </div>
                   )}
-                  {hsHints.uoms?.length > 0 && (
+                  {hsHints.uoms?.length > 0 ? (
                     <div style={styles.hintRow}>
                       <span style={styles.hintLabel}>Valid UOM(s):</span>
                       <span>{hsHints.uoms.map((u) => u.description).join(", ")}</span>
+                    </div>
+                  ) : (
+                    <div style={styles.hintRow}>
+                      <span style={styles.hintLabel}>Valid UOM(s):</span>
+                      <span><em>FBR has no UOM mapping for this code — pick one from your Units catalog.</em></span>
                     </div>
                   )}
                   {hsHints.rateOptions?.length > 0 && (
