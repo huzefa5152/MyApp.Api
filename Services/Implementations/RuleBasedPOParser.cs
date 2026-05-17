@@ -471,14 +471,21 @@ namespace MyApp.Api.Services.Implementations
 
         // Row value-pair, qty-then-unit direction (description  …  QTY  UNIT  rate…).
         // Quantity can be decimal or comma-grouped; unit must be 1-12 letters.
+        // The `\.?` AFTER the capture allows a trailing abbreviation dot
+        // ("KGS.", "PCS.", "BTL.") without including the period in the
+        // captured token — NormaliseUnit already strips trailing dots, so
+        // every downstream lookup (IsRecognisedUnit, NonUnitTokens, etc.)
+        // sees the same letters-only value it always has. Added 2026-05-16
+        // after a real Meko Fabric PO had "SURF (BONUS) KGS. 20" silently
+        // dropped because the period blocked the unit/qty match.
         private static readonly Regex SimpleQtyThenUnitRegex = new(
-            @"(?<qty>[\d,]+(?:\.\d+)?)\s+(?<unit>[A-Za-z]{1,12})\b",
+            @"(?<qty>[\d,]+(?:\.\d+)?)\s+(?<unit>[A-Za-z]{1,12})\.?\b",
             RegexOptions.Compiled);
 
         // Row value-pair, unit-then-qty direction (description  …  UNIT  QTY  rate…).
         // Same shape, reversed. Used when the header line puts Unit before Quantity.
         private static readonly Regex SimpleUnitThenQtyRegex = new(
-            @"\b(?<unit>[A-Za-z]{1,12})\s+(?<qty>[\d,]+(?:\.\d+)?)\b",
+            @"\b(?<unit>[A-Za-z]{1,12})\.?\s+(?<qty>[\d,]+(?:\.\d+)?)\b",
             RegexOptions.Compiled);
 
         // Generic date token — dd/MM/yyyy, dd-MMM-yy etc. Used to locate
@@ -778,7 +785,15 @@ namespace MyApp.Api.Services.Implementations
             desc = DateTokenRegex.Replace(desc, " ");
             // Collapse multiple spaces, strip edge punctuation noise.
             desc = Regex.Replace(desc, @"\s{2,}", " ").Trim();
-            desc = Regex.Replace(desc, @"^[\(\)\s,\.\-:;]+|[\(\)\s,\.\-:;]+$", "").Trim();
+            // 2026-05-16 — was previously `[\(\)\s,\.\-:;]+` which silently
+            // ate a trailing `)` off any description that ended with a
+            // balanced parenthesised spec — "ELFY LARGE SIZE (20GRAM)" →
+            // "ELFY LARGE SIZE (20GRAM". The operator-facing display then
+            // looked broken. We now only strip whitespace and commas at
+            // the edges; everything else (parens, dots, hyphens, colons)
+            // is virtually always meaningful in operator-typed descriptions
+            // ("600gm", "W.D 40", "Bolt 1/2-13", etc.) and survives.
+            desc = Regex.Replace(desc, @"^[\s,]+|[\s,]+$", "").Trim();
             return desc;
         }
 
