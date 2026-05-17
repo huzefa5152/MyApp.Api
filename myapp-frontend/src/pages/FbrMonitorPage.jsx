@@ -308,7 +308,7 @@ function RowsList({ rows, loading, onClickRow }) {
             <span className="fbr-mon-row__http" style={{ width: 70, textAlign: "right", fontSize: "0.82rem", fontFamily: "ui-monospace, monospace" }}>
               {r.httpStatusCode ?? "—"}
             </span>
-            <span className="fbr-mon-row__err" style={{ flex: 1, minWidth: 0, fontSize: "0.82rem", color: r.fbrErrorMessage ? "#b71c1c" : "#1a2332", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span className="fbr-mon-row__err" style={{ flex: 1, minWidth: 0, fontSize: "0.82rem", color: r.fbrErrorMessage ? "#b71c1c" : "#1a2332", whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4 }}>
               {r.fbrErrorCode ? <strong>[{r.fbrErrorCode}] </strong> : null}
               {r.fbrErrorMessage || "—"}
             </span>
@@ -473,7 +473,11 @@ const S = {
     background: "#f4f7fb", borderBottom: "1px solid #e8edf3",
   },
   row: {
-    display: "flex", alignItems: "center", gap: "0.5rem",
+    // alignItems: flex-start so a wrapped multi-line error doesn't
+    // visually drift the other columns to the vertical middle. With
+    // an 0.55rem top padding the first line lines up with the column
+    // header guide above.
+    display: "flex", alignItems: "flex-start", gap: "0.5rem",
     padding: "0.55rem 0.85rem",
     background: "#fff", border: "none",
     borderBottom: "1px solid #f0f3f8",
