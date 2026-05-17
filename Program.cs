@@ -631,6 +631,20 @@ using (var scope = app.Services.CreateScope())
     // any HS code / name already present, so it's safe to run on every boot)
     await MyApp.Api.Data.ItemTypeSeeder.SeedAsync(db);
 
+    // Demo-environment data seeder. Runs ONLY when ASPNETCORE_ENVIRONMENT
+    // is "Demo" (set by scripts/run-demo.ps1 which also points the
+    // connection string at the DeliveryChallanDemo database). Lays down
+    // a realistic ~6-month dataset — one demo company, a handful of
+    // clients and suppliers, dozens of challans and bills — so customer
+    // walkthroughs / training sessions can navigate every screen with
+    // believable numbers. Idempotent: writes an audit-log marker on
+    // success so subsequent boots are no-ops. Dev / Production never
+    // call this path; their DBs stay untouched.
+    if (string.Equals(app.Environment.EnvironmentName, "Demo", StringComparison.OrdinalIgnoreCase))
+    {
+        await MyApp.Api.Data.DemoDataSeeder.SeedAsync(db);
+    }
+
     // ── Units backfill ──────────────────────────────────────────────────
     // The Units table is the canonical store for the AllowsDecimalQuantity
     // flag. Every UOM string that the operator might ever pick — both from
