@@ -763,23 +763,32 @@ namespace MyApp.Api.Services.Implementations
                     // continuation line and gets appended to the previous
                     // item's description.
                     //
-                    // Reported case: Innovative Aqua single-item PO produced
-                    // "AC GAS R 410 (HONEYWELL) 58000 18 10,440 58,000 68,440"
-                    // because the row " 58000 18 10,440 58,000 68,440 " landed
-                    // as a separate line.
+                    // Reported case: Innovative Aqua single-item PO. The
+                    // first leak fix (2026-05-19, commit 95790c1) caught the
+                    // wide form — " 58000 18 10,440 58,000 68,440 " — by
+                    // requiring MULTIPLE whitespace-separated numeric tokens.
+                    // But pdfPig actually emits individual column values on
+                    // their own lines too — the second-pass output for the
+                    // same PDF was:
+                    //     040613 AC GAS R 410 (HONEYWELL)  PCS  1  ... 68,440
+                    //     10,440        <-- this single-token line still leaked
+                    //     Sales Tax Amount
+                    //     Total  58,000
+                    //     Grand Total  68,440
+                    // so the description ended up as "AC GAS R 410
+                    // (HONEYWELL) 10,440" on production.
                     //
-                    // Conservative discriminator: the line must (a) carry no
-                    // alphabetic content at all AND (b) contain MULTIPLE
-                    // whitespace-separated numeric tokens — the unmistakable
-                    // column-leak shape. A single bare number ("10000") or a
-                    // parenthesised value ("(50)") could plausibly be a real
-                    // description wrap on a future format, so we leave those
-                    // alone; the working Lotte / Soorty / Meko Denim / Meko
-                    // Fabric samples all wrap with alphabetic words anyway,
-                    // so this is non-regressing.
+                    // Tighter discriminator: any continuation line that
+                    // carries NO alphabetic content AND contains a digit is a
+                    // column-leak orphan. Real description wraps across all
+                    // current production formats (Lotte, Soorty, Meko Fabric,
+                    // Meko Denim, Innovative Aqua) include alphabetic text —
+                    // brand words, sizing tags ("20GRAM", "16X160MM"), unit
+                    // hints, etc. — so anything purely numeric / numeric +
+                    // punctuation is a leak, not a real wrap.
                     bool hasLetters = Regex.IsMatch(line, @"[A-Za-z]");
-                    bool hasMultiNumeric = Regex.IsMatch(line, @"\d[\d,.]*\s+\d[\d,.]*");
-                    if (!hasLetters && hasMultiNumeric)
+                    bool hasDigit = Regex.IsMatch(line, @"\d");
+                    if (!hasLetters && hasDigit)
                         continue;
 
                     var clean = Regex.Replace(line.Trim(), @"^[\(\)\s,]+|[\(\)\s,]+$", "").Trim();

@@ -257,9 +257,31 @@ def main() -> int:
             elif len(local_items) < prod_count:
                 verdict = "REGRESSION"
                 notes.append(f"prod parsed {prod_count} items, local parsed only {len(local_items)}")
-            elif local_fmt != prod_fmt and prod_fmt is not None:
-                verdict = "OK (format-id drift)"
-                notes.append(f"prod fmt {prod_fmt} vs local fmt {local_fmt} (counts identical)")
+            else:
+                # Count matches but the description could still be polluted.
+                # 2026-05-19: the Innovative Aqua bug had count=1 (correct)
+                # but description "AC GAS R 410 (HONEYWELL) 10,440" with the
+                # trailing numeric column leaking in. Pure-count check passed
+                # that bad fix to prod. This per-description orphan-tail
+                # check catches that class of regression directly.
+                #
+                # Pattern: description ends with a comma-grouped number
+                # (e.g. "10,440", "58,000") — that is the unambiguous shape
+                # of a rupee/tax column value leaking into the description.
+                # Real part numbers ("6205", "R-410", "1/2"") and SKUs
+                # ("6.3559.0") don't carry that comma-grouping, so this
+                # heuristic doesn't false-positive on them.
+                import re as _re
+                _orphan = _re.compile(r"\s\d{1,3}(?:,\d{3})+(?:\.\d+)?\s*$")
+                leaked = [it for it in local_items
+                          if _orphan.search(it.get("description") or "")]
+                if leaked:
+                    verdict = "REGRESSION (orphan-numeric description tail)"
+                    bad = [(it.get("description") or "")[:80] for it in leaked]
+                    notes.append("descriptions look polluted: " + " | ".join(bad))
+                elif local_fmt != prod_fmt and prod_fmt is not None:
+                    verdict = "OK (format-id drift)"
+                    notes.append(f"prod fmt {prod_fmt} vs local fmt {local_fmt} (counts identical)")
 
         results.append({
             "id": aid, "file": fname, "fmt": prod_fmt,
@@ -275,6 +297,8 @@ def main() -> int:
     skips = 0
     improvements = 0
     NON_FAILING = ("OK", "OK (format-id drift)", "SKIP-NO-LOCAL-FORMAT", "IMPROVEMENT")
+    # any verdict starting with "REGRESSION" is a fail, including the new
+    # orphan-numeric description-tail verdict
     for r in results:
         v = r["verdict"]
         if v == "SKIP-NO-LOCAL-FORMAT":
