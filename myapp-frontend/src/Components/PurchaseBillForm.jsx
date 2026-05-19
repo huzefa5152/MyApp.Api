@@ -318,7 +318,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                     <tr style={{ backgroundColor: "#f5f8fc" }}>
                       <th style={th}>Item Type (FBR catalog)</th>
                       <th style={th}>Description *</th>
-                      <th style={{ ...th, textAlign: "right", width: 70 }}>Qty *</th>
+                      <th style={{ ...th, textAlign: "right", width: 120, minWidth: 120 }}>Qty *</th>
                       <th style={{ ...th, textAlign: "right", width: 100 }}>Unit Price *</th>
                       <th style={{ ...th, width: 100 }}>UOM</th>
                       <th style={{ ...th, textAlign: "right", width: 110 }}>Line Total</th>
