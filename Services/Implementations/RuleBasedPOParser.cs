@@ -755,6 +755,33 @@ namespace MyApp.Api.Services.Implementations
                 }
                 else if (current != null)
                 {
+                    // Skip orphan numeric-tail lines. pdfPig occasionally
+                    // splits a wide visual data row at the large gap between
+                    // the description+qty+unit cluster and the right-side
+                    // numeric columns (Rate, ST Rate, S/Tax Amount, Excl-Tax,
+                    // Total Amount). The orphan tail then lands here as a
+                    // continuation line and gets appended to the previous
+                    // item's description.
+                    //
+                    // Reported case: Innovative Aqua single-item PO produced
+                    // "AC GAS R 410 (HONEYWELL) 58000 18 10,440 58,000 68,440"
+                    // because the row " 58000 18 10,440 58,000 68,440 " landed
+                    // as a separate line.
+                    //
+                    // Conservative discriminator: the line must (a) carry no
+                    // alphabetic content at all AND (b) contain MULTIPLE
+                    // whitespace-separated numeric tokens — the unmistakable
+                    // column-leak shape. A single bare number ("10000") or a
+                    // parenthesised value ("(50)") could plausibly be a real
+                    // description wrap on a future format, so we leave those
+                    // alone; the working Lotte / Soorty / Meko Denim / Meko
+                    // Fabric samples all wrap with alphabetic words anyway,
+                    // so this is non-regressing.
+                    bool hasLetters = Regex.IsMatch(line, @"[A-Za-z]");
+                    bool hasMultiNumeric = Regex.IsMatch(line, @"\d[\d,.]*\s+\d[\d,.]*");
+                    if (!hasLetters && hasMultiNumeric)
+                        continue;
+
                     var clean = Regex.Replace(line.Trim(), @"^[\(\)\s,]+|[\(\)\s,]+$", "").Trim();
                     clean = SanitiseDescription(clean);
                     if (clean.Length > 0)
