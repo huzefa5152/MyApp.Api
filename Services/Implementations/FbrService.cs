@@ -1080,6 +1080,13 @@ namespace MyApp.Api.Services.Implementations
                     var msg = !string.IsNullOrWhiteSpace(itemMsg) ? itemMsg
                             : !string.IsNullOrWhiteSpace(headerMsg) ? headerMsg
                             : "FBR validation failed with unspecified errors.";
+                    // Operator hints for the most-confusing PRAL error codes —
+                    // particularly 0205 ("scenario not valid for unregistered
+                    // user"), which trips up every demo / first-time user who
+                    // hasn't yet realised PRAL silently runs STATL on every
+                    // buyer NTN. Adds context without altering FBR's verbatim
+                    // text (which stays at the head for support traceability).
+                    msg = EnrichFbrErrorHint(validation.ErrorCode, msg, invoice);
 
                     await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, msg);
                     if (isSubmit) await PersistStatus(invoice, "Failed", null, msg);
@@ -1101,6 +1108,11 @@ namespace MyApp.Api.Services.Implementations
                     var msg = errorItems?.Count > 0
                         ? string.Join("; ", errorItems.Select(e => $"Item {e.ItemSNo}: [{e.ErrorCode}] {e.Error}"))
                         : validation.Error ?? "FBR validation failed with unspecified item errors.";
+                    // Surface the same operator-friendly NTN-context hint if
+                    // any line error code matches a known STATL / scenario
+                    // confusion case.
+                    var firstCode = errorItems?.FirstOrDefault()?.ErrorCode ?? validation.ErrorCode;
+                    msg = EnrichFbrErrorHint(firstCode, msg, invoice);
 
                     await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, msg);
                     if (isSubmit) await PersistStatus(invoice, "Failed", null, msg);
@@ -1198,6 +1210,61 @@ namespace MyApp.Api.Services.Implementations
             invoice.FbrErrorMessage = errorMessage;
             invoice.FbrSubmittedAt = DateTime.UtcNow;
             await _invoiceRepo.UpdateAsync(invoice);
+        }
+
+        /// <summary>
+        /// Append an operator-friendly hint to a verbatim FBR error message
+        /// when the error code is one of the well-known confusion cases. The
+        /// raw FBR text stays at the head of the string so support / audit
+        /// trails still see exactly what PRAL said; the hint just adds the
+        /// "what does this actually mean and what should I do" follow-up the
+        /// raw text never carries.
+        ///
+        /// Most common offender on demo / first-real-bill: 0205 ("Provided
+        /// scenario not valid for unregistered user"). PRAL silently runs
+        /// STATL on every buyer NTN; an NTN that isn't in PRAL's active
+        /// taxpayer list is treated as Unregistered, so SN001 (registered
+        /// scenario) is rejected even when the client row in the local DB
+        /// says RegistrationType=Registered. The hint tells the operator
+        /// exactly what to check.
+        /// </summary>
+        private static string EnrichFbrErrorHint(string? errorCode, string verbatim, Invoice invoice)
+        {
+            if (string.IsNullOrWhiteSpace(errorCode) || string.IsNullOrWhiteSpace(verbatim))
+                return verbatim;
+
+            // The buyer NTN/CNIC we sent — operator needs to see exactly
+            // which identifier PRAL is judging.
+            var buyerId = !string.IsNullOrWhiteSpace(invoice.Client?.NTN)
+                ? $"NTN '{invoice.Client.NTN}'"
+                : !string.IsNullOrWhiteSpace(invoice.Client?.CNIC)
+                    ? $"CNIC '{invoice.Client.CNIC}'"
+                    : "buyer identifier";
+
+            string? hint = errorCode switch
+            {
+                "0205" =>
+                    $"What this means: PRAL's STATL lookup returns Unregistered for the buyer's {buyerId}, but the bill is using a scenario meant for a Registered buyer (e.g. SN001). " +
+                    "Two ways to fix: (a) verify the buyer's NTN is correct and that they're active on IRIS Active Taxpayer List — common cause is a fake / typo'd NTN or a real NTN that's been de-listed; OR " +
+                    "(b) switch the bill's scenario to one for Unregistered buyers (SN002, SN026, SN027, or SN028) on Bill Edit → FBR Scenario.",
+
+                "0053" =>
+                    $"What this means: PRAL's STATL lookup returns Registered for the buyer's {buyerId}, but the bill is using a scenario meant for an Unregistered buyer (e.g. SN002 / SN026-028). " +
+                    "Two ways to fix: (a) confirm the buyer really IS unregistered — if their NTN is on IRIS Active list they're Registered for FBR purposes; OR " +
+                    "(b) switch the bill's scenario to a Registered-buyer scenario (SN001 etc.) on Bill Edit → FBR Scenario.",
+
+                "0401" =>
+                    "What this means: PRAL accepted the request but the FBR token isn't authorised for this seller NTN. " +
+                    "Verify on IRIS portal that Digital Invoicing is enabled for the seller NTN AND that the token currently on Company Settings is the active one (tokens can be rotated server-side without notice).",
+
+                "0007" =>
+                    $"What this means: PRAL rejected one of the HS Codes on this bill — it's either not in PRAL's master HS catalogue, or the partial 4-digit form was sent where a full 8-digit PCT is required. " +
+                    "Open the bill → fix the offending line's HS Code by picking from the FBR autocomplete (not typed freehand).",
+
+                _ => null,
+            };
+
+            return hint == null ? verbatim : $"{verbatim}\n\n— {hint}";
         }
 
         private static FbrSubmissionResult Fail(string message)

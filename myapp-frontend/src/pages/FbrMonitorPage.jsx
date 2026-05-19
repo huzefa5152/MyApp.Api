@@ -308,7 +308,7 @@ function RowsList({ rows, loading, onClickRow }) {
             <span className="fbr-mon-row__http" style={{ width: 70, textAlign: "right", fontSize: "0.82rem", fontFamily: "ui-monospace, monospace" }}>
               {r.httpStatusCode ?? "—"}
             </span>
-            <span className="fbr-mon-row__err" style={{ flex: 1, minWidth: 0, fontSize: "0.82rem", color: r.fbrErrorMessage ? "#b71c1c" : "#1a2332", whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4 }}>
+            <span className="fbr-mon-row__err" style={{ flex: 1, minWidth: 0, fontSize: "0.82rem", color: r.fbrErrorMessage ? "#b71c1c" : "#1a2332", whiteSpace: "pre-line", wordBreak: "break-word", lineHeight: 1.4 }}>
               {r.fbrErrorCode ? <strong>[{r.fbrErrorCode}] </strong> : null}
               {r.fbrErrorMessage || "—"}
             </span>
@@ -356,7 +356,7 @@ function Drawer({ row, onClose }) {
           <KeyValue label="Correlation ID" value={row.correlationId ? <code style={S.code}>{row.correlationId}</code> : "—"} />
           <KeyValue label="Endpoint" value={<code style={S.code}>{row.endpoint}</code>} />
           {row.fbrErrorCode && <KeyValue label="FBR error code" value={<strong style={{ color: "#b71c1c" }}>{row.fbrErrorCode}</strong>} />}
-          {row.fbrErrorMessage && <KeyValue label="FBR message" value={<span style={{ color: "#b71c1c" }}>{row.fbrErrorMessage}</span>} />}
+          {row.fbrErrorMessage && <KeyValue label="FBR message" value={<span style={{ color: "#b71c1c", whiteSpace: "pre-line" }}>{row.fbrErrorMessage}</span>} />}
 
           <div style={{ marginTop: "1rem" }}>
             <strong style={{ fontSize: "0.85rem", color: "#1a2332" }}>Request body (NTN/CNIC masked)</strong>

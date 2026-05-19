@@ -110,8 +110,14 @@ namespace MyApp.Api.Data
                 BrandName = "DEMO TRADING",
                 FullAddress = "Plot 14, Sector 7-B, Korangi Industrial Area\nKarachi 74900, Pakistan",
                 Phone = "+92-21-35067788",
-                NTN = "9999999-9",
-                STRN = "1234567890123",
+                // Hakimi's sandbox-registered seller NTN. PRAL's sandbox
+                // FBR token (set via Company Settings → FBR Token) is bound
+                // to this NTN, so a synthetic NTN like "9999999-9" would
+                // trip auth (0401). Display name still reads "Demo Trading
+                // Co." everywhere — only the regulatory identifier matches
+                // the working sandbox tenant.
+                NTN = "4228937-8",
+                STRN = "3277876175852",
                 CNIC = null,
                 StartingChallanNumber = 1000,
                 CurrentChallanNumber = 1000,
@@ -122,9 +128,16 @@ namespace MyApp.Api.Data
                 CurrentPurchaseBillNumber = 500,
                 StartingGoodsReceiptNumber = 100,
                 CurrentGoodsReceiptNumber = 100,
-                FbrProvinceCode = 7,                                 // Sindh
-                FbrBusinessActivity = "Wholesale",
-                FbrSector = "Industrial Supplies",
+                FbrProvinceCode = 8,                                 // Sindh — per FBR /api/fbr/provinces
+                // Activity + Sector MUST be exact tokens from
+                // Services/Tax/TaxScenarios.cs (the constants ActWholesaler /
+                // SecWholesale). Free-text like "Wholesale" / "Industrial
+                // Supplies" doesn't match the (Activity × Sector) matrix
+                // and every bill's scenario picker comes up empty —
+                // operators then can't validate or submit on the demo.
+                // Matches Hakimi's production setup verbatim.
+                FbrBusinessActivity = "Wholesaler",
+                FbrSector = "Wholesale / Retails",
                 FbrEnvironment = "sandbox",
                 FbrDefaultSaleType = "Goods at Standard Rate (default)",
                 FbrDefaultUOM = "Numbers, pieces, units",
@@ -140,18 +153,27 @@ namespace MyApp.Api.Data
         }
 
         // ─── Clients ─────────────────────────────────────────────────
-        private record ClientSeed(string Name, string Address, string Phone, string? Ntn, string? Strn, string RegistrationType);
+        private record ClientSeed(string Name, string Address, string Phone, string? Ntn, string? Strn, string? Cnic, string RegistrationType);
 
+        // NTNs / STRNs are real PRAL-sandbox-registered identifiers from the
+        // operator's verified list (scripts/seed_fbr_scenarios.py). Display
+        // names are intentionally fake/generic so the demo doesn't reveal
+        // real customer relationships, but PRAL's STATL lookup needs an NTN
+        // that's actually in its database — fake NTNs like "1234567-8"
+        // would always fail [0205] / [0007] regardless of scenario.
         private static readonly ClientSeed[] ClientCatalog = new[]
         {
-            new ClientSeed("ALPHA TEXTILES (Pvt) Ltd.",        "Plot 2-A, Site, Karachi",                "+92-21-32569878", "1234567-8", "0717650007890", "Registered"),
-            new ClientSeed("BETA POLYMERS Industries",         "Plot 11, North Karachi Industrial Area", "+92-21-36901234", "2345678-9", "1234567890011", "Registered"),
-            new ClientSeed("CITY ENGINEERING Works",           "Shop 4, Korangi Road",                   "+92-300-2200345", null,         null,            "Unregistered"),
-            new ClientSeed("EAGLE PACKAGING Co.",              "S.I.T.E. Phase II Extension",            "+92-21-32567845", "3456789-0", "2345678901122", "Registered"),
-            new ClientSeed("FALCON GARMENTS Ltd.",             "Korangi Creek Industrial Park",          "+92-21-35067123", "4567890-1", "3456789012233", "Registered"),
-            new ClientSeed("ZENITH AUTO Parts",                "M.A. Jinnah Road",                       "+92-301-4445566", null,         null,            "Unregistered"),
-            new ClientSeed("PIONEER STEEL Mills",              "Port Qasim Authority",                   "+92-21-34782211", "5678901-2", "4567890123344", "Registered"),
-            new ClientSeed("ROYAL CONSTRUCTION Co.",           "Defence Phase 6, Karachi",               "+92-302-7778899", "6789012-3", "5678901234455", "Registered"),
+            // Registered buyers — map to verified NTNs from seed_fbr_scenarios.py
+            new ClientSeed("ALPHA TEXTILES (Pvt) Ltd.",  "Plot 2-A, Site, Karachi",                 "+92-21-32569878", "0710818-04",      "02-03-2100-001-82", null,            "Registered"),
+            new ClientSeed("BETA POLYMERS Industries",   "Plot 11, North Karachi Industrial Area",  "+92-21-36901234", "13-02-0676470-3", "02-16-6114-001-55", null,            "Registered"),
+            new ClientSeed("EAGLE PACKAGING Co.",        "S.I.T.E. Phase II Extension",             "+92-21-32567845", "8655568-8",       "3277876354879",     null,            "Registered"),
+            new ClientSeed("FALCON GARMENTS Ltd.",       "Korangi Creek Industrial Park",           "+92-21-35067123", "0676893-8",       "11-00-6001-010-73", null,            "Registered"),
+            new ClientSeed("PIONEER STEEL Mills",        "Port Qasim Authority",                    "+92-21-34782211", "8826050-2",       "327787622231-3",    null,            "Registered"),
+            new ClientSeed("ROYAL CONSTRUCTION Co.",     "Defence Phase 6, Karachi",                "+92-302-7778899", "36066672",        "1700360666711",     null,            "Registered"),
+            // Unregistered buyers — for SN002 / SN026-028 (Unregistered scenarios
+            // require buyerRegistrationType=Unregistered AND a buyer-side CNIC).
+            new ClientSeed("CITY ENGINEERING Works",     "Shop 4, Korangi Road",                    "+92-300-2200345", "9999999-1",        null,                "4220199999991", "Unregistered"),
+            new ClientSeed("ZENITH AUTO Parts",          "M.A. Jinnah Road",                        "+92-301-4445566", "8888888-1",        null,                "4220188888881", "Unregistered"),
         };
 
         private static async Task<List<Client>> SeedClientsAsync(AppDbContext ctx, int companyId)
@@ -172,8 +194,9 @@ namespace MyApp.Api.Data
                     Phone = seed.Phone,
                     NTN = seed.Ntn,
                     STRN = seed.Strn,
+                    CNIC = seed.Cnic,                                 // required for SN002 / SN026-028 buyers
                     RegistrationType = seed.RegistrationType,
-                    FbrProvinceCode = 7,                              // Sindh
+                    FbrProvinceCode = 8,                              // Sindh (matches FBR /api/fbr/provinces)
                 });
             }
             if (toAdd.Count > 0)
