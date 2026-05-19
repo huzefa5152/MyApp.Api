@@ -74,10 +74,14 @@ export default function ItemTypesPage() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      // Pass companyId so the backend joins per-company on-hand stock
-      // (opening + Σ purchases − Σ sales) onto each row. Empty when the
-      // selected company has stock tracking disabled — list still renders.
-      const { data } = await getItemTypes(selectedCompany?.id);
+      // Item Types are common across the operator's tenants — the catalog
+      // is one shared list, not one-per-company. Skip the companyId arg
+      // so the backend AGGREGATES on-hand stock across every company the
+      // caller can reach (filtered to tracking-enabled). Without this,
+      // selecting "Roshan" in the header would zero out stock that lives
+      // under "Hakimi" for the same item, even though the operator owns
+      // both.
+      const { data } = await getItemTypes();
       setItemTypes(data);
     } catch {
       notify("Failed to load item types.", "error");
@@ -86,7 +90,9 @@ export default function ItemTypesPage() {
     }
   };
 
-  useEffect(() => { fetchAll(); }, [selectedCompany?.id]);
+  // Catalog is global — don't reload on global-company change. Refresh
+  // only happens after a create / update / favorite / delete action.
+  useEffect(() => { fetchAll(); }, []);
 
   const openAdd = () => {
     setEditItem(null);

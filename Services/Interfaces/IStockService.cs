@@ -75,6 +75,20 @@ namespace MyApp.Api.Services.Interfaces
             DateTime? asOfDate = null);
 
         /// <summary>
+        /// Cross-company on-hand aggregate. Sums opening balance + Σ In −
+        /// Σ Out across every company in <paramref name="companyIds"/> that
+        /// has inventory tracking enabled, returning one number per item.
+        /// Companies without tracking enabled contribute 0 (they're
+        /// silently skipped). Used by the Item Catalog page so the
+        /// operator sees a single global on-hand per item regardless of
+        /// which company filter is active in the header.
+        /// </summary>
+        Task<Dictionary<int, decimal>> GetOnHandBulkAcrossCompaniesAsync(
+            IEnumerable<int> companyIds,
+            IEnumerable<int> itemTypeIds,
+            DateTime? asOfDate = null);
+
+        /// <summary>
         /// Pre-flight check used by FBR submission: do we have enough stock
         /// to cover every line on this invoice? Lines without an
         /// ItemTypeId are skipped (we can't track them, so we don't block

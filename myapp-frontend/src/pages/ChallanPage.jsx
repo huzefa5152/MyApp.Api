@@ -48,6 +48,11 @@ export default function ChallanPage() {
   const canUpdate = has("challans.manage.update");
   const canDelete = has("challans.manage.delete");
   const canPrint = has("challans.print.view");
+  // Client-filter dropdown calls GET /api/clients/company/{id} which is
+  // gated by clients.manage.view. View-only roles (e.g. tax consultant
+  // with just challans.list.view) would 403 on that call AND see an
+  // empty non-functional dropdown — skip both the fetch and the UI.
+  const canViewClients = has("clients.manage.view");
   const [viewMode, setViewMode, isBigScreen] = useListViewMode("challans");
   const [clients, setClients] = useState([]);
   const [challans, setChallans] = useState([]);
@@ -83,6 +88,9 @@ export default function ChallanPage() {
   const [duplicateSource, setDuplicateSource] = useState(null);
 
   const fetchClients = async (companyId) => {
+    // Skip the call entirely for roles without clients.manage.view —
+    // avoids a guaranteed 403 in the network log. Dropdown is hidden.
+    if (!canViewClients) { setClients([]); return; }
     try {
       const { data } = await getClientsByCompany(companyId);
       setClients(data);
@@ -365,10 +373,12 @@ export default function ChallanPage() {
                 <option value="Invoiced">Billed</option>
                 <option value="Cancelled">Cancelled</option>
               </select>
-              <select className="filter-select" value={clientFilter} onChange={handleFilterChange(setClientFilter)}>
-                <option value="">All Clients</option>
-                {clients.map((cl) => <option key={cl.id} value={cl.id}>{cl.name}</option>)}
-              </select>
+              {canViewClients && (
+                <select className="filter-select" value={clientFilter} onChange={handleFilterChange(setClientFilter)}>
+                  <option value="">All Clients</option>
+                  {clients.map((cl) => <option key={cl.id} value={cl.id}>{cl.name}</option>)}
+                </select>
+              )}
               <div className="filter-date-group">
                 <input type="date" className="filter-date-input" value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" />
                 <span className="filter-date-sep">–</span>

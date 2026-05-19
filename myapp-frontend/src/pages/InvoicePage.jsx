@@ -83,6 +83,12 @@ export default function InvoicePage({ mode = "invoices" }) {
   // without being trusted to actually call FBR. Administrator gets it
   // automatically via RbacSeeder.
   const canFbrPreview = has("invoices.fbr.preview");
+  // Client-filter dropdown needs `clients.manage.view` because it calls
+  // GET /api/clients/company/{id}. A read-only role (e.g. tax consultant
+  // with invoices.list.view only) would 403 on that call AND see a
+  // non-functional empty dropdown. Gate both the fetch and the UI on
+  // this permission — list still works without the filter.
+  const canViewClients = has("clients.manage.view");
   // The bill currently shown in the FBR preview dialog (null when closed).
   const [fbrPreviewId, setFbrPreviewId] = useState(null);
   // Bulk FBR preview dialog — open shows every bill currently ready
@@ -142,6 +148,10 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [exportingId, setExportingId] = useState(null);
 
   const fetchClients = async (companyId) => {
+    // Skip the call entirely if the role can't view clients — avoids a
+    // guaranteed 403 in the network log for view-only roles like tax
+    // consultant. The client filter dropdown is hidden in that case.
+    if (!canViewClients) { setClients([]); return; }
     try {
       const { data } = await getClientsByCompany(companyId);
       setClients(data);
@@ -726,10 +736,12 @@ export default function InvoicePage({ mode = "invoices" }) {
                   onChange={handleFilterChange(setSearch)}
                 />
               </div>
-              <select className="filter-select" value={clientFilter} onChange={handleFilterChange(setClientFilter)}>
-                <option value="">All Clients</option>
-                {clients.map((cl) => <option key={cl.id} value={cl.id}>{cl.name}</option>)}
-              </select>
+              {canViewClients && (
+                <select className="filter-select" value={clientFilter} onChange={handleFilterChange(setClientFilter)}>
+                  <option value="">All Clients</option>
+                  {clients.map((cl) => <option key={cl.id} value={cl.id}>{cl.name}</option>)}
+                </select>
+              )}
               <div className="filter-date-group">
                 <input type="date" className="filter-date-input" value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" />
                 <span className="filter-date-sep">–</span>

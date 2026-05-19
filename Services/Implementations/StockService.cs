@@ -112,6 +112,60 @@ namespace MyApp.Api.Services.Implementations
             return dict.TryGetValue(itemTypeId, out var qty) ? qty : 0m;
         }
 
+        public async Task<Dictionary<int, decimal>> GetOnHandBulkAcrossCompaniesAsync(
+            IEnumerable<int> companyIds,
+            IEnumerable<int> itemTypeIds,
+            DateTime? asOfDate = null)
+        {
+            var cids = companyIds?.Distinct().ToList() ?? new List<int>();
+            var iids = itemTypeIds?.Distinct().ToList() ?? new List<int>();
+            if (cids.Count == 0 || iids.Count == 0) return new Dictionary<int, decimal>();
+
+            // Filter to tracking-enabled companies up front. Companies with
+            // tracking off contribute nothing (no opening balances or
+            // movements are authored when the flag is off; reads still
+            // exist for any data already in those tables, but operationally
+            // an admin-toggled-off company has zero meaningful inventory
+            // state to report).
+            var trackedCids = await _context.Companies
+                .Where(c => cids.Contains(c.Id) && c.InventoryTrackingEnabled)
+                .Select(c => c.Id)
+                .ToListAsync();
+            if (trackedCids.Count == 0) return new Dictionary<int, decimal>();
+
+            // Single SQL trip each for opening balances and movements,
+            // grouped by ItemTypeId across the tracked-company subset.
+            var openingQ = _context.OpeningStockBalances
+                .Where(o => trackedCids.Contains(o.CompanyId) && iids.Contains(o.ItemTypeId));
+            if (asOfDate.HasValue)
+                openingQ = openingQ.Where(o => o.AsOfDate <= asOfDate.Value);
+            var openings = await openingQ
+                .GroupBy(o => o.ItemTypeId)
+                .Select(g => new { ItemTypeId = g.Key, Qty = g.Sum(o => o.Quantity) })
+                .ToDictionaryAsync(x => x.ItemTypeId, x => x.Qty);
+
+            var movQ = _context.StockMovements
+                .Where(m => trackedCids.Contains(m.CompanyId) && iids.Contains(m.ItemTypeId));
+            if (asOfDate.HasValue)
+                movQ = movQ.Where(m => m.MovementDate <= asOfDate.Value);
+            var moves = await movQ
+                .GroupBy(m => new { m.ItemTypeId, m.Direction })
+                .Select(g => new { g.Key.ItemTypeId, g.Key.Direction, Qty = g.Sum(m => m.Quantity) })
+                .ToListAsync();
+
+            var result = new Dictionary<int, decimal>();
+            foreach (var id in iids)
+            {
+                decimal onHand = openings.TryGetValue(id, out var op) ? op : 0m;
+                foreach (var m in moves.Where(x => x.ItemTypeId == id))
+                {
+                    onHand += m.Direction == StockMovementDirection.In ? m.Qty : -m.Qty;
+                }
+                result[id] = onHand;
+            }
+            return result;
+        }
+
         public async Task<Dictionary<int, decimal>> GetOnHandBulkAsync(
             int companyId,
             IEnumerable<int> itemTypeIds,

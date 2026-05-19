@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
@@ -17,12 +19,22 @@ namespace MyApp.Api.Controllers
     {
         private readonly IItemTypeService _service;
         private readonly ITaxMappingEngine _taxEngine;
+        private readonly ICompanyAccessGuard _access;
 
-        public ItemTypesController(IItemTypeService service, ITaxMappingEngine taxEngine)
+        public ItemTypesController(
+            IItemTypeService service,
+            ITaxMappingEngine taxEngine,
+            ICompanyAccessGuard access)
         {
             _service = service;
             _taxEngine = taxEngine;
+            _access = access;
         }
+
+        private int CurrentUserId =>
+            int.TryParse(
+                User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
+                out var id) ? id : 0;
 
         /// <summary>
         /// Returns the FBR-published valid UOMs for a given HS Code, going
@@ -68,9 +80,27 @@ namespace MyApp.Api.Controllers
             // company has inventory tracking enabled, each DTO carries
             // an AvailableQty and the list is sorted by available stock
             // descending. Sales-side dropdowns (EditBillForm, etc.)
-            // pass it so operators see "what can I sell" up top; admin
-            // pages call without it for the legacy alpha sort.
-            var items = await _service.GetAllAsync(companyId);
+            // pass it so operators see "what can I sell" up top.
+            //
+            // Without companyId (2026-05-20): the Item Catalog admin page
+            // wants ONE on-hand number per item summed across every
+            // company the caller can reach — items are common across all
+            // tenants of the user, so a per-company filter would zero out
+            // legitimate stock that lives under a different company. We
+            // aggregate across the caller's accessible-company set
+            // (filtered to tracking-enabled by the stock service).
+            List<ItemTypeDto> items;
+            if (companyId.HasValue)
+            {
+                items = await _service.GetAllAsync(companyId);
+            }
+            else
+            {
+                var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+                items = await _service.GetAllAsync(
+                    companyId: null,
+                    aggregateAcrossCompanyIds: accessible);
+            }
             return Ok(items);
         }
 

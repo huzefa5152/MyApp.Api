@@ -6,6 +6,7 @@ import { getClientsByCompany } from "../api/clientApi";
 import EditBillForm from "../Components/EditBillForm";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 const colors = {
   blue: "#0d47a1",
@@ -21,6 +22,11 @@ const colors = {
 
 export default function ItemRateHistoryPage() {
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const { has } = usePermissions();
+  // Client-filter dropdown calls /api/clients/company/{id}. View-only
+  // roles that lack clients.manage.view would 403 — skip both the fetch
+  // and the dropdown for them; rate-history list still works.
+  const canViewClients = has("clients.manage.view");
   const [itemTypes, setItemTypes] = useState([]);
   const [clients, setClients] = useState([]);
   const [rows, setRows] = useState([]);
@@ -54,14 +60,14 @@ export default function ItemRateHistoryPage() {
   }, []);
 
   useEffect(() => {
-    if (selectedCompany) {
+    if (selectedCompany && canViewClients) {
       getClientsByCompany(selectedCompany.id)
         .then((r) => setClients(r.data || []))
         .catch(() => setClients([]));
     } else {
       setClients([]);
     }
-  }, [selectedCompany]);
+  }, [selectedCompany, canViewClients]);
 
   const fetchRows = useCallback(async () => {
     if (!selectedCompany) return;
@@ -207,18 +213,20 @@ export default function ItemRateHistoryPage() {
                   </option>
                 ))}
               </select>
-              <select
-                className="filter-select"
-                value={clientId}
-                onChange={handleFilterChange(setClientId)}
-              >
-                <option value="">All Clients</option>
-                {clients.map((cl) => (
-                  <option key={cl.id} value={cl.id}>
-                    {cl.name}
-                  </option>
-                ))}
-              </select>
+              {canViewClients && (
+                <select
+                  className="filter-select"
+                  value={clientId}
+                  onChange={handleFilterChange(setClientId)}
+                >
+                  <option value="">All Clients</option>
+                  {clients.map((cl) => (
+                    <option key={cl.id} value={cl.id}>
+                      {cl.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               <div className="filter-date-group">
                 <input
                   type="date"

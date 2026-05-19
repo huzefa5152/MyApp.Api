@@ -51,17 +51,29 @@ namespace MyApp.Api.Services.Implementations
             UsageCount = it.UsageCount,
         };
 
-        public async Task<List<ItemTypeDto>> GetAllAsync(int? companyId = null)
+        public async Task<List<ItemTypeDto>> GetAllAsync(
+            int? companyId = null,
+            IEnumerable<int>? aggregateAcrossCompanyIds = null)
         {
             var items = await _repo.GetAllAsync();
 
             // Legacy sort (favorite / usage / alpha) — used when no
-            // companyId is supplied OR when the company doesn't have
-            // inventory tracking on.
+            // companyId / aggregate set is supplied OR when the company
+            // doesn't have inventory tracking on.
             List<ItemType> sorted;
             Dictionary<int, decimal>? onHandByItem = null;
 
-            if (companyId.HasValue && await _stock.IsTrackingEnabledAsync(companyId.Value))
+            // Aggregation mode wins when supplied — the Item Catalog page
+            // passes the caller's accessible company set so on-hand is a
+            // global number rather than per-company. Empty set → no
+            // aggregation, fall through to the per-company / legacy paths.
+            var aggregateIds = aggregateAcrossCompanyIds?.Distinct().ToList();
+            if (aggregateIds != null && aggregateIds.Count > 0)
+            {
+                var ids = items.Select(i => i.Id).ToList();
+                onHandByItem = await _stock.GetOnHandBulkAcrossCompaniesAsync(aggregateIds, ids);
+            }
+            else if (companyId.HasValue && await _stock.IsTrackingEnabledAsync(companyId.Value))
             {
                 // Pull on-hand for every catalog row in one bulk query
                 // — same numbers the Stock Dashboard shows. Items with
@@ -69,7 +81,10 @@ namespace MyApp.Api.Services.Implementations
                 // (no row in the dictionary).
                 var ids = items.Select(i => i.Id).ToList();
                 onHandByItem = await _stock.GetOnHandBulkAsync(companyId.Value, ids);
+            }
 
+            if (onHandByItem != null)
+            {
                 sorted = items
                     // Bucket 1: items with available stock — sorted by qty desc
                     //            (most-available surfaces first).
