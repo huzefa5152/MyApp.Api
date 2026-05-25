@@ -24,10 +24,15 @@ namespace MyApp.Api.Middleware
             {
                 await _next(context);
 
-                // Also log non-exception error responses (4xx/5xx returned by controllers)
-                if (context.Response.StatusCode >= 400
-                    && context.Request.Path.StartsWithSegments("/api")
-                    && !IsBenign401(context))
+                // Only audit GENUINE server errors (5xx) — 4xx are client
+                // behaviour (bad input, missing permission, wrong route)
+                // and would otherwise fill the audit table with routine
+                // 403/404/422 noise. The catch block below still picks up
+                // any thrown exception regardless of status code, so a
+                // 500 returned without a throw is the only thing this
+                // branch needs to cover.
+                if (context.Response.StatusCode >= 500
+                    && context.Request.Path.StartsWithSegments("/api"))
                 {
                     await LogResponseErrorAsync(context);
                 }
@@ -95,9 +100,27 @@ namespace MyApp.Api.Middleware
                 CompanyId = ResolveCompanyId(context),
             };
 
+            await WriteAuditAsync(context, auditLog);
+        }
+
+        /// <summary>
+        /// Writes the audit row using a FRESH service scope (and therefore a
+        /// fresh <see cref="MyApp.Api.Data.AppDbContext"/>) rather than the
+        /// request scope. Discovered 2026-05-25: when a request fails inside
+        /// EF SaveChanges, the request-scoped DbContext's change tracker
+        /// keeps the dirty entities. Any subsequent SaveChanges on the same
+        /// context (including the audit-log insert) re-flushes those entities
+        /// and re-throws the same exception, which the audit service then
+        /// swallows — leaving no audit trail of the original 500. A clean
+        /// scope sidesteps the poisoned tracker entirely.
+        /// </summary>
+        private static async Task WriteAuditAsync(HttpContext context, AuditLog auditLog)
+        {
             try
             {
-                var auditService = context.RequestServices.GetRequiredService<IAuditLogService>();
+                var scopeFactory = context.RequestServices.GetRequiredService<IServiceScopeFactory>();
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var auditService = scope.ServiceProvider.GetRequiredService<IAuditLogService>();
                 await auditService.LogAsync(auditLog);
             }
             catch { /* logging must never crash the pipeline */ }
@@ -200,10 +223,15 @@ namespace MyApp.Api.Middleware
                 CompanyId = ResolveCompanyId(context),
             };
 
-            // Persist to database via scoped service
+            // Persist to database via a FRESH service scope — see
+            // WriteAuditAsync rationale. Using context.RequestServices here
+            // (the request scope) is what previously caused 500s caused by
+            // EF SaveChanges failures to vanish from the AuditLog table.
             try
             {
-                var auditService = context.RequestServices.GetRequiredService<IAuditLogService>();
+                var scopeFactory = context.RequestServices.GetRequiredService<IServiceScopeFactory>();
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var auditService = scope.ServiceProvider.GetRequiredService<IAuditLogService>();
                 await auditService.LogAsync(auditLog);
             }
             catch (Exception logEx)

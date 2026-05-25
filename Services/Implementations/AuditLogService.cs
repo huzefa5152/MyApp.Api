@@ -18,9 +18,18 @@ namespace MyApp.Api.Services.Implementations
 
         // Audit H-8 (2026-05-08): same fingerprint within this window
         // increments OccurrenceCount on the existing row instead of
-        // inserting a fresh one. Keeps the audit table sane during
-        // FBR brownouts that produce hundreds of identical errors.
-        private static readonly TimeSpan DedupWindow = TimeSpan.FromMinutes(5);
+        // inserting a fresh one.
+        //
+        // 2026-05-25: extended from 5 min → 24 h. The original 5-min
+        // window only collapsed tight bursts (FBR brownouts); a chronic
+        // recurring error punched a fresh row every ~6 minutes (e.g. the
+        // 403s on /api/deliverychallans/count that filled the table in
+        // April). Because LastOccurrence is bumped on every hit, a 24-h
+        // window means a continuously-firing error lives in ONE row that
+        // just keeps incrementing OccurrenceCount, and a genuinely new
+        // outbreak still gets its own row once 24 h of silence has
+        // passed. Operators get signal-not-noise.
+        private static readonly TimeSpan DedupWindow = TimeSpan.FromHours(24);
 
         public AuditLogService(IAuditLogRepository repository, AppDbContext db, ILogger<AuditLogService> logger)
         {

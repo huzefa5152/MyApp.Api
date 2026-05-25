@@ -332,17 +332,57 @@ namespace MyApp.Api.Services.Implementations
                 .ToList();
             if (names.Count == 0) return;
 
-            var existing = await _context.ItemDescriptions
+            // Trim the projection result. SQL Server uses ANSI PadSpace
+            // semantics on (n)varchar, so 'X' = 'X ' is TRUE and the unique
+            // index on ItemDescriptions.Name treats them as the same key.
+            // Without the Trim() here, a stored "X " comes back un-trimmed,
+            // the HashSet (Ordinal+IgnoreCase but space-sensitive) misses
+            // the candidate "X", we try to INSERT "X", and SQL Server fires
+            // a duplicate-key violation against the padded row. Discovered
+            // 2026-05-25 editing challan #1101 — ItemDescriptions row for
+            // "WATER POSTER MARKING COLOUR 500ML" was stored with a trailing
+            // space, silently blocking every challan edit through this path.
+            var existing = (await _context.ItemDescriptions
                 .Where(it => names.Contains(it.Name))
                 .Select(it => it.Name)
-                .ToListAsync();
+                .ToListAsync())
+                .Select(n => (n ?? "").Trim());
             var existingSet = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
             var toAdd = names.Where(n => !existingSet.Contains(n))
                              .Select(n => new ItemDescription { Name = n })
                              .ToList();
             if (toAdd.Count == 0) return;
+
             _context.ItemDescriptions.AddRange(toAdd);
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // Lost the race with a concurrent insert OR PadSpace
+                // equality matched a row our in-memory check didn't.
+                // Same recovery pattern UnitRegistry.EnsureNamesAsync uses:
+                // detach the batch, fall back to per-row inserts so the
+                // genuinely-new names still land. Catalog staleness is
+                // recoverable; crashing the caller's edit is not.
+                foreach (var d in toAdd)
+                    _context.Entry(d).State = EntityState.Detached;
+
+                foreach (var d in toAdd)
+                {
+                    if (await _context.ItemDescriptions.AnyAsync(x => x.Name == d.Name)) continue;
+                    _context.ItemDescriptions.Add(d);
+                    try
+                    {
+                        await _context.SaveChangesAsync();
+                    }
+                    catch (DbUpdateException)
+                    {
+                        _context.Entry(d).State = EntityState.Detached;
+                    }
+                }
+            }
         }
 
         public async Task<DeliveryChallanDto?> UpdateItemsAsync(int challanId, List<DeliveryItemDto> items)
@@ -364,14 +404,7 @@ namespace MyApp.Api.Services.Implementations
                 await ApplyItemsDiffAsync(dc, items);
                 await _repository.UpdateAsync(dc);
 
-                // Same upsert as on create — newly added item descriptions
-                // surface in the bill autocomplete without a manual round-trip.
-                await EnsureItemDescriptionsAsync(items.Select(i => i.Description));
-
                 await transaction.CommitAsync();
-
-                var reloaded = await _repository.GetByIdAsync(challanId);
-                return reloaded == null ? null : ToDto(reloaded);
             }
             catch (Exception ex)
             {
@@ -379,6 +412,23 @@ namespace MyApp.Api.Services.Implementations
                 await transaction.RollbackAsync();
                 throw;
             }
+
+            // Catalog upsert AFTER commit so a catalog hiccup can't roll
+            // back the operator's item edits. Same pattern as the create
+            // flow and UpdateChallanAsync.
+            try
+            {
+                await EnsureItemDescriptionsAsync(items.Select(i => i.Description));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Challan {ChallanId} items updated OK but item-description upsert failed; autocomplete may miss new names until the next save.",
+                    challanId);
+            }
+
+            var reloaded = await _repository.GetByIdAsync(challanId);
+            return reloaded == null ? null : ToDto(reloaded);
         }
 
         /// <summary>
@@ -765,12 +815,8 @@ namespace MyApp.Api.Services.Implementations
                 }
 
                 await _repository.UpdateAsync(dc);
-                await EnsureItemDescriptionsAsync(dto.Items?.Select(i => i.Description) ?? Enumerable.Empty<string?>());
 
                 await transaction.CommitAsync();
-
-                var reloaded = await _repository.GetByIdAsync(challanId);
-                return reloaded == null ? null : ToDto(reloaded);
             }
             catch (Exception ex)
             {
@@ -778,6 +824,26 @@ namespace MyApp.Api.Services.Implementations
                 await transaction.RollbackAsync();
                 throw;
             }
+
+            // Catalog upsert runs AFTER the commit — same rationale as
+            // CreateDeliveryChallanAsync. The operator's edit is durably
+            // saved at this point; a hiccup adding new names to the
+            // ItemDescriptions catalog (PadSpace match, unique-index race,
+            // anything else) must not roll back the edit. Autocomplete
+            // staleness is recoverable; a lost edit is not.
+            try
+            {
+                await EnsureItemDescriptionsAsync(dto.Items?.Select(i => i.Description) ?? Enumerable.Empty<string?>());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Challan {ChallanId} updated OK but item-description upsert failed; autocomplete may miss new names until the next save.",
+                    challanId);
+            }
+
+            var reloaded = await _repository.GetByIdAsync(challanId);
+            return reloaded == null ? null : ToDto(reloaded);
         }
 
         public async Task<DeliveryChallanDto?> UpdatePoAsync(int challanId, string poNumber, DateTime? poDate)
