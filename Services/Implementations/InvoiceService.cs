@@ -1834,22 +1834,41 @@ namespace MyApp.Api.Services.Implementations
                 // pulled https://quickchart.io which broke under strict CSP /
                 // air-gapped networks and leaked the IRN to a third party).
                 FbrQrPngDataUrl = FbrQrCodeGenerator.BuildVerifyQrDataUrl(inv.FbrIRN),
-                // 2026-05-13: Tax Invoice print now renders REAL bill-row
-                // values (NOT the InvoiceItemAdjustment overlay) — same
-                // as the customer-facing Bill print. Per operator policy
-                // the printed Tax Invoice should match the bill they
-                // physically hand to the buyer; only the FBR digital
-                // payload submitted to PRAL (FbrService.cs) carries the
-                // overlay-adjusted decomposition for tax-claim
-                // optimization. This keeps both printed documents in
-                // agreement with each other.
+                // 2026-05-29: Tax Invoice print reads the
+                // InvoiceItemAdjustment overlay for Quantity / UnitPrice /
+                // LineTotal — same fallback shape FbrService uses when it
+                // builds the PRAL submit payload (Adjusted* ?? real). The
+                // Tax Invoice is the FBR-aligned document (carries the IRN
+                // + QR) so it MUST show the same decomposition that was
+                // filed: if the operator filed "54 units × Rs. 298.15"
+                // for tax-claim optimization, the printed Tax Invoice
+                // shows 54 units, not the printed-bill's 5.
+                //
+                // The customer-facing Bill print (GetPrintBillAsync above)
+                // still uses real bill values — that's the delivery
+                // document the buyer signs for goods received, so it
+                // matches what physically shipped.
+                //
+                // Reverses the 2026-05-13 decision (which kept Tax
+                // Invoice on real values). The earlier reasoning — "both
+                // printed documents in agreement with each other" — was
+                // wrong: the two documents have different audiences (the
+                // Tax Invoice is for FBR + buyer's Annexure-A, the Bill
+                // is for the warehouse + delivery), and they SHOULD
+                // diverge when the operator runs the §8B optimization.
+                //
+                // Description / UOM / ItemTypeName / HSCode continue to
+                // come from InvoiceItem — same narrowing the FbrService
+                // applies (overlay only ever carries numerical fields).
                 Items = inv.Items.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName))
                     ? inv.Items
                         .GroupBy(ii => ii.ItemTypeName)
                         .Select(g =>
                         {
-                            var totalQty = g.Sum(ii => ii.Quantity);
-                            var totalValue = g.Sum(ii => ii.LineTotal);
+                            var totalQty = g.Sum(ii =>
+                                ii.Adjustment?.AdjustedQuantity ?? ii.Quantity);
+                            var totalValue = g.Sum(ii =>
+                                ii.Adjustment?.AdjustedLineTotal ?? ii.LineTotal);
                             var gstAmt = Math.Round(totalValue * inv.GSTRate / 100, 2);
                             return new PrintTaxItemDto
                             {
@@ -1872,17 +1891,19 @@ namespace MyApp.Api.Services.Implementations
                         }).ToList()
                     : inv.Items.Select(ii =>
                         {
-                            var gstAmt = Math.Round(ii.LineTotal * inv.GSTRate / 100, 2);
+                            var lineTotal = ii.Adjustment?.AdjustedLineTotal ?? ii.LineTotal;
+                            var qty       = ii.Adjustment?.AdjustedQuantity  ?? ii.Quantity;
+                            var gstAmt = Math.Round(lineTotal * inv.GSTRate / 100, 2);
                             return new PrintTaxItemDto
                             {
                                 ItemTypeName = ii.ItemTypeName,
-                                Quantity = ii.Quantity,
+                                Quantity = qty,
                                 UOM = ii.UOM,
                                 Description = ii.Description,
-                                ValueExclTax = ii.LineTotal,
+                                ValueExclTax = lineTotal,
                                 GSTRate = inv.GSTRate,
                                 GSTAmount = gstAmt,
-                                TotalInclTax = ii.LineTotal + gstAmt,
+                                TotalInclTax = lineTotal + gstAmt,
                                 HSCode = ii.HSCode
                             };
                         }).ToList()
