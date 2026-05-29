@@ -126,5 +126,16 @@ namespace MyApp.Api.DTOs
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal TotalInclTax { get; set; }
+        /// <summary>
+        /// HS Code copied from the InvoiceItem (which inherits it from
+        /// the ItemType picked on the line). Null/empty when the row is
+        /// against an un-classified item type. Surfaced in tax-invoice
+        /// templates as {{this.hsCode}} so the template can render
+        /// "&lt;hsCode&gt; - &lt;description&gt;" when present, falling
+        /// back to plain "&lt;description&gt;" when the line has no HS
+        /// Code (typical guard: {{#if this.hsCode}}{{this.hsCode}} -
+        /// {{this.description}}{{else}}{{this.description}}{{/if}}).
+        /// </summary>
+        public string? HSCode { get; set; }
     }
 }

@@ -1860,7 +1860,14 @@ namespace MyApp.Api.Services.Implementations
                                 ValueExclTax = totalValue,
                                 GSTRate = inv.GSTRate,
                                 GSTAmount = gstAmt,
-                                TotalInclTax = totalValue + gstAmt
+                                TotalInclTax = totalValue + gstAmt,
+                                // All rows in a group share an ItemTypeName,
+                                // which drives the HSCode at write-time, so
+                                // they should all carry the same code. Pick
+                                // the first non-empty value defensively in
+                                // case a legacy row was saved blank.
+                                HSCode = g.Select(x => x.HSCode)
+                                          .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
                             };
                         }).ToList()
                     : inv.Items.Select(ii =>
@@ -1875,7 +1882,8 @@ namespace MyApp.Api.Services.Implementations
                                 ValueExclTax = ii.LineTotal,
                                 GSTRate = inv.GSTRate,
                                 GSTAmount = gstAmt,
-                                TotalInclTax = ii.LineTotal + gstAmt
+                                TotalInclTax = ii.LineTotal + gstAmt,
+                                HSCode = ii.HSCode
                             };
                         }).ToList()
             };

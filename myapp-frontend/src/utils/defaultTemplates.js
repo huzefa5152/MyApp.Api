@@ -467,7 +467,7 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
     <tr>
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
-      <td class="cell">{{this.description}}</td>
+      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
       <td class="cell r">{{fmtDec this.valueExclTax}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
