@@ -2,12 +2,14 @@ import { useState, useEffect, useCallback } from "react";
 import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz } from "react-icons/md";
 import { getStockOnHand, getStockMovements, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock } from "../api/stockApi";
 import { getItemTypes } from "../api/itemTypeApi";
+import { getAllUnits } from "../api/unitsApi";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
+import { isDecimalUnit } from "../utils/formatQuantity";
 
 const colors = {
   blue: "#0d47a1",
@@ -39,6 +41,7 @@ export default function StockDashboardPage() {
   const [movPageSize, setMovPageSize] = useState(0);
   const [openings, setOpenings] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
+  const [units, setUnits] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -94,6 +97,14 @@ export default function StockDashboardPage() {
 
   useEffect(() => { if (selectedCompany) fetchAll(); }, [selectedCompany]);
   useEffect(() => { if (tab === "movements") fetchMovements(movPage); }, [tab, selectedCompany, movPage]);
+
+  // Units list (carries the AllowsDecimalQuantity flag) drives whether the
+  // opening-balance / adjustment quantity inputs accept decimals — the same
+  // per-Unit rule the bill / challan forms use. Units are global (not
+  // company-scoped), so fetch once on mount.
+  useEffect(() => {
+    getAllUnits().then(r => setUnits(r.data || [])).catch(() => setUnits([]));
+  }, []);
 
   const filteredOnhand = onhand.filter(r =>
     !search || r.itemTypeName.toLowerCase().includes(search.toLowerCase()) ||
@@ -157,6 +168,17 @@ export default function StockDashboardPage() {
       notify(err.response?.data?.error || "Failed to record adjustment.", "error");
     }
   };
+
+  // UOM-driven decimal rule for the modal quantity inputs. Each ItemType
+  // carries a UOM string; whether that unit allows fractional quantities is
+  // configured per-Unit (AllowsDecimalQuantity) on the Units page. Unknown
+  // UOMs fall back to whole-numbers-only, same as the bill / challan forms.
+  const openingItem = itemTypes.find(it => String(it.id) === String(openingDraft.itemTypeId));
+  const openingUom = openingItem?.uom || "";
+  const openingAllowsDecimal = isDecimalUnit(openingUom, units);
+  const adjustItem = itemTypes.find(it => String(it.id) === String(adjustDraft.itemTypeId));
+  const adjustUom = adjustItem?.uom || "";
+  const adjustAllowsDecimal = isDecimalUnit(adjustUom, units);
 
   return (
     <div className="stock-page">
@@ -475,7 +497,12 @@ export default function StockDashboardPage() {
             <option value="">Pick an item...</option>
             {itemTypes.map(it => <option key={it.id} value={it.id}>{it.name}{it.hsCode ? ` (${it.hsCode})` : ""}</option>)}
           </select></Field>
-          <Field label="Quantity"><input type="number" min={0} step="0.1" required style={mInput} value={openingDraft.quantity} onChange={e => setOpeningDraft({ ...openingDraft, quantity: e.target.value })} /></Field>
+          <Field label="Quantity">
+            <input type="number" min={0} step={openingAllowsDecimal ? "0.0001" : "1"} required style={mInput} value={openingDraft.quantity} onChange={e => setOpeningDraft({ ...openingDraft, quantity: e.target.value })} />
+            {openingItem && (
+              <div style={qtyHint}>UOM: <strong>{openingUom || "—"}</strong> · {openingAllowsDecimal ? "decimals allowed" : "whole numbers only"}</div>
+            )}
+          </Field>
           <Field label="As Of"><input type="date" required style={mInput} value={openingDraft.asOfDate} onChange={e => setOpeningDraft({ ...openingDraft, asOfDate: e.target.value })} /></Field>
           <Field label="Notes"><input type="text" style={mInput} value={openingDraft.notes} onChange={e => setOpeningDraft({ ...openingDraft, notes: e.target.value })} placeholder="optional" /></Field>
         </SmallModal>
@@ -487,7 +514,12 @@ export default function StockDashboardPage() {
             <option value="">Pick an item...</option>
             {itemTypes.map(it => <option key={it.id} value={it.id}>{it.name}{it.hsCode ? ` (${it.hsCode})` : ""}</option>)}
           </select></Field>
-          <Field label="Delta (positive = up, negative = down)"><input type="number" step="0.1" required style={mInput} value={adjustDraft.delta} onChange={e => setAdjustDraft({ ...adjustDraft, delta: e.target.value })} /></Field>
+          <Field label="Delta (positive = up, negative = down)">
+            <input type="number" step={adjustAllowsDecimal ? "0.0001" : "1"} required style={mInput} value={adjustDraft.delta} onChange={e => setAdjustDraft({ ...adjustDraft, delta: e.target.value })} />
+            {adjustItem && (
+              <div style={qtyHint}>UOM: <strong>{adjustUom || "—"}</strong> · {adjustAllowsDecimal ? "decimals allowed" : "whole numbers only"}</div>
+            )}
+          </Field>
           <Field label="Date"><input type="date" required style={mInput} value={adjustDraft.movementDate} onChange={e => setAdjustDraft({ ...adjustDraft, movementDate: e.target.value })} /></Field>
           <Field label="Notes"><input type="text" style={mInput} value={adjustDraft.notes} onChange={e => setAdjustDraft({ ...adjustDraft, notes: e.target.value })} placeholder="e.g. count correction, breakage" /></Field>
         </SmallModal>
@@ -536,6 +568,7 @@ function Field({ label, children }) {
 }
 
 const mInput = { width: "100%", padding: "0.45rem 0.65rem", border: "1px solid #d0d7e2", borderRadius: 8, fontSize: "0.85rem", backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none" };
+const qtyHint = { fontSize: "0.72rem", color: "#5f6d7e", marginTop: "0.35rem" };
 
 const styles = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" },

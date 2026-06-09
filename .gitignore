@@ -409,3 +409,9 @@ scripts/*.txt
 # Local-only runtime log from claude-driven dotnet runs (Bash background)
 .claude_run.log
 .claude_run.log.err
+
+# Local-only agent/editor scaffolding and operator helper scripts — not
+# project code, kept out of the repo per maintainer preference.
+.codex/
+AGENTS.md
+scripts/*.ps1

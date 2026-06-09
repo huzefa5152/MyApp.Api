@@ -61,7 +61,18 @@ export default function InvoicePage({ mode = "invoices" }) {
   // Slightly broader narrow permission — Item Type AND Quantity. Same
   // Edit button entry point, EditBillForm enforces field-level lock.
   const canEditItemTypeAndQty = has("invoices.manage.update.itemtype.qty");
-  const canOpenEdit = canUpdate || canEditItemTypeAndQty || canEditItemType;
+  // Edit entry point is gated PER TAB to match the backend authorization:
+  //   • Bills tab    → full bill PUT (InvoicesController.Update) → requires
+  //     bills.manage.update.
+  //   • Invoices tab → item-type(+qty) PATCH → requires the narrow
+  //     invoices.manage.update.itemtype[.qty] perms.
+  // A user holding ONLY the narrow item-type perms must NOT get an Edit
+  // button on the Bills tab (the full PUT would 403); the item-type/qty
+  // perms drive the Invoices tab only. A bills.manage.update user edits on
+  // the Bills tab, not the item-type classification flow.
+  const canEditInThisMode = isBillsMode
+    ? canUpdate
+    : (canEditItemType || canEditItemTypeAndQty);
   const canDelete = has("bills.manage.delete");
   // Print is split now: bills.print.view → Bill print/PDF/XLS,
   // invoices.print.view → Tax-Invoice print/PDF/XLS. Bills tab uses
@@ -787,7 +798,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                 canFbrAny,
                 canFbrValidate,
                 canFbrSubmit,
-                canOpenEdit,
+                canOpenEdit: canEditInThisMode,
                 canFbrExclude,
                 canDelete,
               }}
@@ -1030,7 +1041,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         column is hidden so classification only happens on
                         the Invoices tab. Hidden once FBR-submitted (locks
                         edits permanently). */}
-                    {isBillsMode && canOpenEdit && inv.fbrStatus !== "Submitted" && (
+                    {isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
@@ -1045,7 +1056,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         Type for each line. Everything else (items, prices,
                         qty, dates) is read-only and reflects whatever was
                         last saved on the Bills tab. Hidden once submitted. */}
-                    {!isBillsMode && canOpenEdit && inv.fbrStatus !== "Submitted" && (
+                    {!isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
