@@ -19,7 +19,7 @@ const colors = {
   inputBorder: "#d0d7e2",
 };
 
-export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null }) {
+export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, readOnly = false }) {
   const isEdit = !!billId;
   const isAgainstSale = !!prefillFromInvoiceId;
   const [suppliers, setSuppliers] = useState([]);
@@ -176,6 +176,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (readOnly) return;
     setError("");
     if (!supplierId) return setError("Select a supplier.");
     if (items.length === 0) return setError("Add at least one item.");
@@ -230,10 +231,11 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     <div style={formStyles.backdrop}>
       <div style={{ ...formStyles.modal, maxWidth: 1200, width: "96vw" }}>
         <div style={formStyles.header}>
-          <h5 style={formStyles.title}>{isEdit ? "Edit Purchase Bill" : "New Purchase Bill"}</h5>
+          <h5 style={formStyles.title}>{readOnly ? "View Purchase Bill" : (isEdit ? "Edit Purchase Bill" : "New Purchase Bill")}</h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
+          <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
             {error && <div style={formStyles.error}>{error}</div>}
 
@@ -389,11 +391,14 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               <strong style={{ fontSize: "1.05rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
             </div>
           </div>
+          </fieldset>
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" disabled={saving} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
-              {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
-            </button>
+            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>{readOnly ? "Close" : "Cancel"}</button>
+            {!readOnly && (
+              <button type="submit" disabled={saving} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
+                {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
+              </button>
+            )}
           </div>
         </form>
       </div>

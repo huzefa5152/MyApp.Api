@@ -44,6 +44,7 @@ export default function PurchaseBillsPage() {
   const [dateTo, setDateTo] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [viewOnly, setViewOnly] = useState(false);
   // "Purchase Against Sale Bill" picker
   const [showSalePicker, setShowSalePicker] = useState(false);
   const [awaitingBills, setAwaitingBills] = useState([]);
@@ -139,7 +140,7 @@ export default function PurchaseBillsPage() {
             >
               <MdReceipt size={16} /> Purchase Against Sale Bill
             </button>
-            <button style={styles.addBtn} onClick={() => { setEditingId(null); setPrefillFromInvoiceId(null); setShowForm(true); }}>
+            <button style={styles.addBtn} onClick={() => { setEditingId(null); setPrefillFromInvoiceId(null); setViewOnly(false); setShowForm(true); }}>
               <MdAdd size={18} /> New Purchase Bill
             </button>
           </div>
@@ -198,8 +199,8 @@ export default function PurchaseBillsPage() {
                 <PurchaseBillTable
                   bills={bills}
                   perms={{ canUpdate, canDelete }}
-                  onView={(b) => { setEditingId(b.id); setShowForm(true); }}
-                  onEdit={(b) => { setEditingId(b.id); setShowForm(true); }}
+                  onView={(b) => { setEditingId(b.id); setViewOnly(true); setShowForm(true); }}
+                  onEdit={(b) => { setEditingId(b.id); setViewOnly(false); setShowForm(true); }}
                   onDelete={handleDelete}
                 />
               ) : (
@@ -227,11 +228,11 @@ export default function PurchaseBillsPage() {
                         </p>
                       </div>
                       <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
-                        <button style={btnView} onClick={() => { setEditingId(b.id); setShowForm(true); }}>
+                        <button style={btnView} onClick={() => { setEditingId(b.id); setViewOnly(true); setShowForm(true); }}>
                           <MdVisibility size={14} /> View
                         </button>
                         {canUpdate && (
-                          <button style={btnEdit} onClick={() => { setEditingId(b.id); setShowForm(true); }}>
+                          <button style={btnEdit} onClick={() => { setEditingId(b.id); setViewOnly(false); setShowForm(true); }}>
                             <MdEdit size={14} /> Edit
                           </button>
                         )}
@@ -266,9 +267,10 @@ export default function PurchaseBillsPage() {
         <PurchaseBillForm
           companyId={selectedCompany.id}
           billId={editingId}
+          readOnly={viewOnly}
           prefillFromInvoiceId={prefillFromInvoiceId}
-          onClose={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); }}
-          onSaved={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); fetchBills(page); }}
+          onClose={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); setViewOnly(false); }}
+          onSaved={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); setViewOnly(false); fetchBills(page); }}
         />
       )}
 
@@ -335,6 +337,7 @@ export default function PurchaseBillsPage() {
                               setShowSalePicker(false);
                               setEditingId(null);
                               setPrefillFromInvoiceId(b.invoiceId);
+                              setViewOnly(false);
                               setShowForm(true);
                             }}>
                               Pick

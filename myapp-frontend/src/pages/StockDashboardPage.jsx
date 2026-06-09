@@ -107,7 +107,7 @@ export default function StockDashboardPage() {
       await upsertOpeningBalance({
         companyId: selectedCompany.id,
         itemTypeId: parseInt(openingDraft.itemTypeId),
-        quantity: parseInt(openingDraft.quantity) || 0,
+        quantity: parseFloat(openingDraft.quantity) || 0,
         asOfDate: openingDraft.asOfDate,
         notes: openingDraft.notes || null,
       });
@@ -145,7 +145,7 @@ export default function StockDashboardPage() {
       await adjustStock({
         companyId: selectedCompany.id,
         itemTypeId: parseInt(adjustDraft.itemTypeId),
-        delta: parseInt(adjustDraft.delta),
+        delta: parseFloat(adjustDraft.delta),
         movementDate: adjustDraft.movementDate,
         notes: adjustDraft.notes || null,
       });
@@ -475,7 +475,7 @@ export default function StockDashboardPage() {
             <option value="">Pick an item...</option>
             {itemTypes.map(it => <option key={it.id} value={it.id}>{it.name}{it.hsCode ? ` (${it.hsCode})` : ""}</option>)}
           </select></Field>
-          <Field label="Quantity"><input type="number" min={0} required style={mInput} value={openingDraft.quantity} onChange={e => setOpeningDraft({ ...openingDraft, quantity: e.target.value })} /></Field>
+          <Field label="Quantity"><input type="number" min={0} step="0.1" required style={mInput} value={openingDraft.quantity} onChange={e => setOpeningDraft({ ...openingDraft, quantity: e.target.value })} /></Field>
           <Field label="As Of"><input type="date" required style={mInput} value={openingDraft.asOfDate} onChange={e => setOpeningDraft({ ...openingDraft, asOfDate: e.target.value })} /></Field>
           <Field label="Notes"><input type="text" style={mInput} value={openingDraft.notes} onChange={e => setOpeningDraft({ ...openingDraft, notes: e.target.value })} placeholder="optional" /></Field>
         </SmallModal>
@@ -487,7 +487,7 @@ export default function StockDashboardPage() {
             <option value="">Pick an item...</option>
             {itemTypes.map(it => <option key={it.id} value={it.id}>{it.name}{it.hsCode ? ` (${it.hsCode})` : ""}</option>)}
           </select></Field>
-          <Field label="Delta (positive = up, negative = down)"><input type="number" required style={mInput} value={adjustDraft.delta} onChange={e => setAdjustDraft({ ...adjustDraft, delta: e.target.value })} /></Field>
+          <Field label="Delta (positive = up, negative = down)"><input type="number" step="0.1" required style={mInput} value={adjustDraft.delta} onChange={e => setAdjustDraft({ ...adjustDraft, delta: e.target.value })} /></Field>
           <Field label="Date"><input type="date" required style={mInput} value={adjustDraft.movementDate} onChange={e => setAdjustDraft({ ...adjustDraft, movementDate: e.target.value })} /></Field>
           <Field label="Notes"><input type="text" style={mInput} value={adjustDraft.notes} onChange={e => setAdjustDraft({ ...adjustDraft, notes: e.target.value })} placeholder="e.g. count correction, breakage" /></Field>
         </SmallModal>
