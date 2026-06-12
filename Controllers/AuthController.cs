@@ -30,6 +30,13 @@ namespace MyApp.Api.Controllers
         private static readonly string _dummyBcryptHash =
             BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString("N"));
 
+        // Account lockout policy: 5 consecutive failures → 2-hour lock.
+        // State is persisted on the Users row (never cached) so a manual
+        // SQL unlock (FailedLoginAttempts = 0, LockoutUntil = NULL) takes
+        // effect on the very next attempt.
+        private const int MaxFailedLoginAttempts = 5;
+        private static readonly TimeSpan LockoutDuration = TimeSpan.FromHours(2);
+
         public AuthController(AppDbContext context, IConfiguration configuration, IMemoryCache cache, ILogger<AuthController> logger) : base(logger)
         {
             _context = context;
@@ -57,11 +64,55 @@ namespace MyApp.Api.Controllers
                 return Unauthorized(new { message = "Invalid username or password" });
             }
 
+            var now = DateTime.UtcNow;
+
+            // Locked account — reject before verifying the password. The
+            // check reads LockoutUntil straight off the row, so an expired
+            // lock (or a manual SQL unlock) is honoured immediately.
+            if (user.LockoutUntil.HasValue && user.LockoutUntil.Value > now)
+            {
+                // Burn the same CPU as a real verify (M-12) so the locked
+                // path doesn't stand out by timing.
+                _ = BCrypt.Net.BCrypt.Verify(dto.Password ?? string.Empty, _dummyBcryptHash);
+                _logger.LogWarning("Login attempt for locked account UserId={UserId} from {Ip} (locked until {LockoutUntil:u})",
+                    user.Id, HttpContext.Connection.RemoteIpAddress, user.LockoutUntil.Value);
+                return Unauthorized(new { message = "Account temporarily locked due to multiple failed sign-in attempts. Please try again later." });
+            }
+
             if (!BCrypt.Net.BCrypt.Verify(dto.Password ?? string.Empty, user.PasswordHash))
             {
+                // An expired lock starts a fresh counting window — without
+                // this, the first failure after expiry would re-lock at once.
+                if (user.LockoutUntil.HasValue)
+                {
+                    user.FailedLoginAttempts = 0;
+                    user.LockoutUntil = null;
+                }
+
+                user.FailedLoginAttempts++;
+                user.LastFailedLogin = now;
+
+                if (user.FailedLoginAttempts >= MaxFailedLoginAttempts)
+                {
+                    user.LockoutUntil = now.Add(LockoutDuration);
+                    _logger.LogWarning("Account locked after {Attempts} consecutive failed logins: UserId={UserId} until {LockoutUntil:u}",
+                        user.FailedLoginAttempts, user.Id, user.LockoutUntil.Value);
+                }
+
+                await _context.SaveChangesAsync();
+
                 _logger.LogWarning("Failed login attempt for username={Username} from {Ip}",
                     dto.Username, HttpContext.Connection.RemoteIpAddress);
                 return Unauthorized(new { message = "Invalid username or password" });
+            }
+
+            // Successful authentication — clear any failure state.
+            if (user.FailedLoginAttempts != 0 || user.LockoutUntil.HasValue || user.LastFailedLogin.HasValue)
+            {
+                user.FailedLoginAttempts = 0;
+                user.LockoutUntil = null;
+                user.LastFailedLogin = null;
+                await _context.SaveChangesAsync();
             }
 
             var token = GenerateJwtToken(user);

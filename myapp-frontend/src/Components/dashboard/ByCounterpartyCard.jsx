@@ -45,17 +45,19 @@ export default function ByCounterpartyCard({
     return list.map((_, i) => i < topN ? DONUT_PALETTE[i % DONUT_PALETTE.length] : DONUT_OTHERS_COLOR);
   }, [list, topN]);
 
+  const shell = {
+    background: "#ffffff",
+    border: "1px solid #e6ecf4",
+    borderRadius: 16,
+    boxShadow: "0 1px 2px rgba(12, 24, 48, 0.04), 0 10px 28px -18px rgba(12, 24, 48, 0.18)",
+    overflow: "hidden",
+  };
+
   if (list.length === 0) {
     return (
-      <section style={{
-        background: "#fff",
-        border: "1px solid #e8edf3",
-        borderRadius: 14,
-        padding: "0.85rem 1rem",
-        boxShadow: "0 1px 2px rgba(13, 71, 161, 0.04)",
-      }}>
+      <section className="dash-card" style={{ ...shell, "--acc": accent }}>
         <Header title={title} subtitle={subtitle} accent={accent} />
-        <div style={{ fontSize: "0.85rem", color: "#5f6d7e", fontStyle: "italic", padding: "1rem 0", textAlign: "center" }}>
+        <div style={{ fontSize: "0.85rem", color: "#69788f", fontStyle: "italic", padding: "1.25rem 0", textAlign: "center" }}>
           {emptyText}
         </div>
       </section>
@@ -63,14 +65,7 @@ export default function ByCounterpartyCard({
   }
 
   return (
-    <section style={{
-      background: "#fff",
-      border: "1px solid #e8edf3",
-      borderRadius: 14,
-      padding: 0,
-      boxShadow: "0 1px 2px rgba(13, 71, 161, 0.04)",
-      overflow: "hidden",
-    }}>
+    <section className="dash-card" style={{ ...shell, "--acc": accent, padding: 0 }}>
       <Header title={title} subtitle={subtitle} accent={accent} />
 
       <div className="dash-cp-grid" style={{
@@ -168,9 +163,10 @@ export default function ByCounterpartyCard({
                   {it.name || "(unknown)"}
                 </span>
                 <span className="dash-cp-row__pct" style={{
-                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                  fontSize: "0.78rem",
-                  color: "#5f6d7e",
+                  fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+                  fontVariantNumeric: "tabular-nums",
+                  fontSize: "0.76rem",
+                  color: "#69788f",
                   flexShrink: 0,
                   width: 48,
                   textAlign: "right",
@@ -178,10 +174,11 @@ export default function ByCounterpartyCard({
                   {pct.toFixed(1)}%
                 </span>
                 <span className="dash-cp-row__value" style={{
-                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+                  fontVariantNumeric: "tabular-nums",
                   fontSize: "0.82rem",
-                  fontWeight: 700,
-                  color: "#1a2332",
+                  fontWeight: 600,
+                  color: "#0c1830",
                   flexShrink: 0,
                 }}>
                   {formatPkr(it.value)}
@@ -198,20 +195,23 @@ export default function ByCounterpartyCard({
 function Header({ title, subtitle, accent }) {
   return (
     <header style={{
-      padding: "0.7rem 1rem",
-      borderBottom: "1px solid #eef2f7",
-      background: `linear-gradient(95deg, ${accent}1f 0%, ${accent}0a 55%, transparent 100%)`,
+      padding: "0.85rem 1.15rem",
+      borderBottom: "1px solid #eef2f8",
     }}>
-      <h2 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#1a2332" }}>
+      <h2 style={{
+        margin: 0, fontSize: "1rem", fontWeight: 700, color: "#0c1830",
+        letterSpacing: "-0.01em", display: "flex", alignItems: "center", gap: "0.55rem",
+        fontFamily: '"Space Grotesk", "Inter", system-ui, sans-serif',
+      }}>
         <span style={{
-          display: "inline-block", width: 4, height: 14, borderRadius: 2,
-          background: `linear-gradient(180deg, ${accent} 0%, ${accent}aa 100%)`,
-          marginRight: "0.5rem", verticalAlign: "middle",
-        }} />
+          display: "inline-flex", width: 10, height: 10, borderRadius: 3,
+          background: accent, boxShadow: `0 0 0 4px ${accent}1a`,
+          flexShrink: 0,
+        }} aria-hidden="true" />
         {title}
       </h2>
       {subtitle && (
-        <div style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.15rem", marginLeft: "0.65rem" }}>
+        <div style={{ fontSize: "0.74rem", color: "#69788f", marginTop: "0.3rem", marginLeft: "1.45rem" }}>
           {subtitle}
         </div>
       )}

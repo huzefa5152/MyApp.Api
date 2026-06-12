@@ -16,5 +16,13 @@ namespace MyApp.Api.Models
         // "stamp" claim to this column; mismatch → 401. Bump on logout,
         // password change, and role change.
         public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");
+
+        // Account lockout (5 consecutive failures → 2h lock). State lives
+        // ONLY in these columns — never cached — so an admin can unlock
+        // directly via SQL: UPDATE Users SET FailedLoginAttempts = 0,
+        // LockoutUntil = NULL WHERE Id = @UserId.
+        public int FailedLoginAttempts { get; set; }
+        public DateTime? LockoutUntil { get; set; }
+        public DateTime? LastFailedLogin { get; set; }
     }
 }
