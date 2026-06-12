@@ -2,6 +2,98 @@
    Inline styles can't do media queries, so the JSX tags key elements
    with classNames and we override here at the mobile/tablet breakpoints. */
 
+/* ---------- Motion + interaction layer ----------
+   Inline styles can't express :hover/:focus or keyframes, so the
+   presentational JSX tags cards with .dash-kpi-card / .dash-card and
+   this block adds the premium touches: a soft entrance, a gentle
+   hover lift, and proper focus states for the hero pickers. */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes dashRise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dash-hero {
+  animation: dashRise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.dash-kpi-card,
+.dash-card {
+  animation: dashRise 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition:
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Stagger the hero KPI row (max 4 cards) */
+.dash-hero-grid .dash-kpi-card:nth-child(1) { animation-delay: 0.04s; }
+.dash-hero-grid .dash-kpi-card:nth-child(2) { animation-delay: 0.1s; }
+.dash-hero-grid .dash-kpi-card:nth-child(3) { animation-delay: 0.16s; }
+.dash-hero-grid .dash-kpi-card:nth-child(4) { animation-delay: 0.22s; }
+
+.dash-section-grid > .dash-card:nth-child(1) { animation-delay: 0.08s; }
+.dash-section-grid > .dash-card:nth-child(2) { animation-delay: 0.16s; }
+.dash-section-grid > .dash-card:nth-child(3) { animation-delay: 0.24s; }
+.dash-section-grid > .dash-card:nth-child(4) { animation-delay: 0.32s; }
+
+@media (hover: hover) {
+  .dash-kpi-card:hover {
+    transform: translateY(-3px);
+    border-color: #d8e2f2;
+    box-shadow:
+      0 2px 4px rgba(12, 24, 48, 0.05),
+      0 18px 40px -18px rgba(12, 24, 48, 0.26);
+  }
+}
+
+/* Hero pickers — glass pills; the dropdown panel itself is rendered by
+   the OS in white, so options must flip back to dark text. */
+.dash-hero__select:focus-visible {
+  outline: 2px solid rgba(158, 242, 255, 0.9);
+  outline-offset: 2px;
+}
+
+.dash-hero__select option {
+  color: #0c1830;
+  background: #fff;
+  font-weight: 500;
+}
+
+/* Section-card "Open" ghost button */
+.dash-section-card__open {
+  transition: background-color 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
+}
+
+.dash-section-card__open:hover {
+  background-color: #f4f8fd !important;
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-hero,
+  .dash-kpi-card,
+  .dash-card {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .dash-kpi-card:hover {
+    transform: none;
+  }
+}
+
 /* ---------- Hero banner ---------- */
 @media (max-width: 599.98px) {
   .dash-hero {

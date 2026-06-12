@@ -33,22 +33,22 @@ export default function TopList({
       {list.map((it, idx) => {
         const widthPct = (Number(it.value) / max) * 100;
         return (
-          <div key={`${it.id}-${idx}`} style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+          <div key={`${it.id}-${idx}`} style={{ display: "flex", flexDirection: "column", gap: "0.28rem" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
-              <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#1a2332", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                <span style={{ color: "#5f6d7e", fontSize: "0.78rem", marginRight: "0.4rem" }}>#{idx + 1}</span>
+              <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#0c1830", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', color: "#8593ab", fontSize: "0.72rem", marginRight: "0.45rem" }}>{String(idx + 1).padStart(2, "0")}</span>
                 {it.name || "(unknown)"}
               </span>
-              <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "0.82rem", fontWeight: 700, color: "#1a2332", flexShrink: 0 }}>
+              <span style={{ fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace', fontVariantNumeric: "tabular-nums", fontSize: "0.82rem", fontWeight: 600, color: "#0c1830", flexShrink: 0 }}>
                 {formatNumber(it.value, valueMode)}
               </span>
             </div>
             {/* progress bar — proportion of #1's value */}
-            <div style={{ height: 4, borderRadius: 99, backgroundColor: "#eef2f7", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${widthPct}%`, backgroundColor: accent, opacity: 0.55, borderRadius: 99 }} />
+            <div style={{ height: 5, borderRadius: 99, backgroundColor: "#edf2f9", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${widthPct}%`, background: `linear-gradient(90deg, ${accent} 0%, ${accent}99 100%)`, borderRadius: 99 }} />
             </div>
             {secondary(it) && (
-              <span style={{ fontSize: "0.74rem", color: "#5f6d7e" }}>{secondary(it)}</span>
+              <span style={{ fontSize: "0.73rem", color: "#69788f" }}>{secondary(it)}</span>
             )}
           </div>
         );
