@@ -10,6 +10,7 @@ import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import { isDecimalUnit } from "../utils/formatQuantity";
+import SearchableItemTypeSelect from "../Components/SearchableItemTypeSelect";
 
 const colors = {
   blue: "#0d47a1",
@@ -49,6 +50,10 @@ export default function StockDashboardPage() {
   const [openingDraft, setOpeningDraft] = useState({ itemTypeId: "", quantity: 0, asOfDate: todayYmd(), notes: "" });
   const [showAdjust, setShowAdjust] = useState(false);
   const [adjustDraft, setAdjustDraft] = useState({ itemTypeId: "", delta: 0, movementDate: todayYmd(), notes: "" });
+  // Set when the Adjustment modal is launched from a grid row — the item
+  // is fixed (read-only display) so the operator just types the delta.
+  // Null when opened from the header button (free pick).
+  const [adjustLockedItem, setAdjustLockedItem] = useState(null);
 
   const fetchAll = useCallback(async () => {
     if (!selectedCompany) return;
@@ -149,6 +154,21 @@ export default function StockDashboardPage() {
     }
   };
 
+  const closeAdjust = () => {
+    setShowAdjust(false);
+    setAdjustLockedItem(null);
+    setAdjustDraft({ itemTypeId: "", delta: 0, movementDate: todayYmd(), notes: "" });
+  };
+
+  // Per-row "Adjust" action on the on-hand grid: open the Adjustment modal
+  // with the row's item pre-picked and locked — operator just enters the
+  // delta. Header "Adjustment" button keeps the free item pick.
+  const openAdjustForRow = (r) => {
+    setAdjustLockedItem({ id: r.itemTypeId, name: r.itemTypeName, hsCode: r.hsCode, uom: r.uom });
+    setAdjustDraft({ itemTypeId: String(r.itemTypeId), delta: 0, movementDate: todayYmd(), notes: "" });
+    setShowAdjust(true);
+  };
+
   const submitAdjust = async (e) => {
     e.preventDefault();
     if (!adjustDraft.itemTypeId || !adjustDraft.delta) return notify("Pick an item and a non-zero delta.", "error");
@@ -161,8 +181,7 @@ export default function StockDashboardPage() {
         notes: adjustDraft.notes || null,
       });
       notify("Adjustment recorded.", "success");
-      setShowAdjust(false);
-      setAdjustDraft({ itemTypeId: "", delta: 0, movementDate: todayYmd(), notes: "" });
+      closeAdjust();
       fetchAll();
     } catch (err) {
       notify(err.response?.data?.error || "Failed to record adjustment.", "error");
@@ -176,9 +195,20 @@ export default function StockDashboardPage() {
   const openingItem = itemTypes.find(it => String(it.id) === String(openingDraft.itemTypeId));
   const openingUom = openingItem?.uom || "";
   const openingAllowsDecimal = isDecimalUnit(openingUom, units);
-  const adjustItem = itemTypes.find(it => String(it.id) === String(adjustDraft.itemTypeId));
+  // Fall back to the locked row's UOM when the catalog lookup misses
+  // (e.g. soft-deleted item type still present in the grid).
+  const adjustItem = itemTypes.find(it => String(it.id) === String(adjustDraft.itemTypeId)) || adjustLockedItem;
   const adjustUom = adjustItem?.uom || "";
   const adjustAllowsDecimal = isDecimalUnit(adjustUom, units);
+
+  // Modal pickers list only HS-coded catalog items — stock tracking is
+  // FBR-classified inventory; quick no-HS entries are bill drafts, not
+  // stockable goods. Opening Balance additionally hides items already on
+  // the on-hand grid: those are corrected via the per-row Adjust action,
+  // not by seeding a second opening.
+  const hsCodedItemTypes = itemTypes.filter(it => it.hsCode && it.hsCode.trim());
+  const onhandIds = new Set(onhand.map(r => r.itemTypeId));
+  const openingPickerItems = hsCodedItemTypes.filter(it => !onhandIds.has(it.id));
 
   return (
     <div className="stock-page">
@@ -201,7 +231,7 @@ export default function StockDashboardPage() {
             </button>
           )}
           {canAdjust && (
-            <button style={styles.altBtn} onClick={() => setShowAdjust(true)}>
+            <button style={styles.altBtn} onClick={() => { setAdjustLockedItem(null); setShowAdjust(true); }}>
               <MdSwapHoriz size={16} /> Adjustment
             </button>
           )}
@@ -237,10 +267,18 @@ export default function StockDashboardPage() {
 
           {tab === "onhand" && (
             <>
-              {filteredOnhand.length > 0 && (
+              {/* Search renders whenever there is ANY stock data — gating it
+                  on the FILTERED list meant a no-match search unmounted the
+                  box itself and the operator had no way to clear it. */}
+              {onhand.length > 0 && (
                 <div style={styles.searchWrap}>
                   <MdSearch style={styles.searchIcon} />
                   <input type="text" placeholder="Search item or HS code..." value={search} onChange={e => setSearch(e.target.value)} style={styles.searchInput} />
+                  {search && (
+                    <button type="button" style={styles.searchClear} onClick={() => setSearch("")} title="Clear search">
+                      <MdClose size={16} />
+                    </button>
+                  )}
                 </div>
               )}
               {loading ? (
@@ -248,9 +286,20 @@ export default function StockDashboardPage() {
               ) : filteredOnhand.length === 0 ? (
                 <div style={styles.empty}>
                   <MdInventory size={40} color={colors.cardBorder} />
-                  <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
-                    No stock data yet. Set opening balances or post a Purchase Bill / FBR-submitted invoice to start tracking.
-                  </p>
+                  {search ? (
+                    <>
+                      <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
+                        No items match "{search}".
+                      </p>
+                      <button type="button" style={styles.clearSearchBtn} onClick={() => setSearch("")}>
+                        Clear search
+                      </button>
+                    </>
+                  ) : (
+                    <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
+                      No stock data yet. Set opening balances or post a Purchase Bill / FBR-submitted invoice to start tracking.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <>
@@ -267,6 +316,7 @@ export default function StockDashboardPage() {
                           <th style={{ ...styles.th, textAlign: "right" }}>Total OUT</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>On-Hand</th>
                           <th style={styles.th}>Last Movement</th>
+                          {canAdjust && <th style={{ ...styles.th, width: 92 }} aria-label="Actions"></th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -282,6 +332,13 @@ export default function StockDashboardPage() {
                             <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>
                               {r.lastMovementAt ? new Date(r.lastMovementAt).toLocaleDateString() : "—"}
                             </td>
+                            {canAdjust && (
+                              <td style={styles.td}>
+                                <button type="button" style={rowAdjustBtn} onClick={() => openAdjustForRow(r)} title={`Record a stock adjustment for ${r.itemTypeName}`}>
+                                  <MdSwapHoriz size={13} /> Adjust
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -330,6 +387,11 @@ export default function StockDashboardPage() {
                             </span>
                           </div>
                         </div>
+                        {canAdjust && (
+                          <button type="button" style={cardAdjustBtn} onClick={() => openAdjustForRow(r)}>
+                            <MdSwapHoriz size={15} /> Adjustment
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -493,10 +555,19 @@ export default function StockDashboardPage() {
 
       {showOpening && (
         <SmallModal title="Set Opening Balance" onClose={() => setShowOpening(false)} onSubmit={submitOpening}>
-          <Field label="Item"><select required style={mInput} value={openingDraft.itemTypeId} onChange={e => setOpeningDraft({ ...openingDraft, itemTypeId: e.target.value })}>
-            <option value="">Pick an item...</option>
-            {itemTypes.map(it => <option key={it.id} value={it.id}>{it.name}{it.hsCode ? ` (${it.hsCode})` : ""}</option>)}
-          </select></Field>
+          <Field label="Item">
+            <SearchableItemTypeSelect
+              items={openingPickerItems}
+              value={openingDraft.itemTypeId}
+              onChange={(newId) => setOpeningDraft({ ...openingDraft, itemTypeId: newId ? String(newId) : "" })}
+              placeholder="Search & pick an item…"
+              style={mInput}
+            />
+            <div style={qtyHint}>
+              Items without an HS Code, or already on the stock grid, are hidden —
+              use the grid's Adjust action for tracked items.
+            </div>
+          </Field>
           <Field label="Quantity">
             <input type="number" min={0} step={openingAllowsDecimal ? "0.0001" : "1"} required style={mInput} value={openingDraft.quantity} onChange={e => setOpeningDraft({ ...openingDraft, quantity: e.target.value })} />
             {openingItem && (
@@ -509,11 +580,29 @@ export default function StockDashboardPage() {
       )}
 
       {showAdjust && (
-        <SmallModal title="Stock Adjustment" onClose={() => setShowAdjust(false)} onSubmit={submitAdjust}>
-          <Field label="Item"><select required style={mInput} value={adjustDraft.itemTypeId} onChange={e => setAdjustDraft({ ...adjustDraft, itemTypeId: e.target.value })}>
-            <option value="">Pick an item...</option>
-            {itemTypes.map(it => <option key={it.id} value={it.id}>{it.name}{it.hsCode ? ` (${it.hsCode})` : ""}</option>)}
-          </select></Field>
+        <SmallModal title="Stock Adjustment" onClose={closeAdjust} onSubmit={submitAdjust}>
+          <Field label="Item">
+            {adjustLockedItem ? (
+              <input
+                type="text"
+                readOnly
+                value={`${adjustLockedItem.name}${adjustLockedItem.hsCode ? ` (${adjustLockedItem.hsCode})` : ""}`}
+                style={{ ...mInput, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+                title="Opened from the stock grid — item is fixed. Use the header Adjustment button to pick a different item."
+              />
+            ) : (
+              <>
+                <SearchableItemTypeSelect
+                  items={hsCodedItemTypes}
+                  value={adjustDraft.itemTypeId}
+                  onChange={(newId) => setAdjustDraft({ ...adjustDraft, itemTypeId: newId ? String(newId) : "" })}
+                  placeholder="Search & pick an item…"
+                  style={mInput}
+                />
+                <div style={qtyHint}>Items without an HS Code are hidden.</div>
+              </>
+            )}
+          </Field>
           <Field label="Delta (positive = up, negative = down)">
             <input type="number" step={adjustAllowsDecimal ? "0.0001" : "1"} required style={mInput} value={adjustDraft.delta} onChange={e => setAdjustDraft({ ...adjustDraft, delta: e.target.value })} />
             {adjustItem && (
@@ -569,6 +658,8 @@ function Field({ label, children }) {
 
 const mInput = { width: "100%", padding: "0.45rem 0.65rem", border: "1px solid #d0d7e2", borderRadius: 8, fontSize: "0.85rem", backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none" };
 const qtyHint = { fontSize: "0.72rem", color: "#5f6d7e", marginTop: "0.35rem" };
+const rowAdjustBtn = { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "1px solid #90caf9", backgroundColor: "#e3f2fd", color: "#0d47a1", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", boxShadow: "none", whiteSpace: "nowrap" };
+const cardAdjustBtn = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", width: "100%", minHeight: 44, marginTop: "0.6rem", padding: "0.5rem 0.75rem", borderRadius: 8, border: "1px solid #90caf9", backgroundColor: "#e3f2fd", color: "#0d47a1", fontSize: "0.84rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" };
 
 const styles = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" },
@@ -583,7 +674,9 @@ const styles = {
   tabs: { display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" },
   searchWrap: { position: "relative", marginBottom: "1rem", maxWidth: 360 },
   searchIcon: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" },
-  searchInput: { width: "100%", padding: "0.55rem 0.75rem 0.55rem 2.3rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 10, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none" },
+  searchInput: { width: "100%", padding: "0.55rem 2.4rem 0.55rem 2.3rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 10, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none" },
+  searchClear: { position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "none", background: "none", color: "#94a3b8", cursor: "pointer", padding: 0, boxShadow: "none" },
+  clearSearchBtn: { marginTop: "0.75rem", padding: "0.45rem 1rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.84rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
   tableWrap: { overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, backgroundColor: "#fff" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" },
   th: { textAlign: "left", padding: "0.6rem 0.85rem", backgroundColor: "#f5f8fc", borderBottom: `1px solid ${colors.cardBorder}`, fontSize: "0.76rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em" },
