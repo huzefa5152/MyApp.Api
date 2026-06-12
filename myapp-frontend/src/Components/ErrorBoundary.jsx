@@ -82,7 +82,7 @@ export default class ErrorBoundary extends React.Component {
               <button
                 onClick={() => {
                   this.handleReset();
-                  window.location.href = "/dashboard";
+                  window.location.href = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "") + "/dashboard";
                 }}
                 style={{
                   padding: "10px 24px",

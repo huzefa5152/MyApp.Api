@@ -32,6 +32,7 @@ jobs:
           filters: |
             frontend:
               - 'myapp-frontend/**'
+              - 'landing/**'
             backend:
               - '**/*.cs'
               - '**/*.csproj'
@@ -58,13 +59,20 @@ jobs:
           npm ci
           npm run build
 
+      # Site shape: landing page at "/", ERP app under "/admin/"
+      - name: Stage site root (landing at /, app under /admin)
+        run: |
+          mkdir -p site-stage/admin
+          cp landing/index.html site-stage/index.html
+          cp -r myapp-frontend/dist/* site-stage/admin/
+
       - name: Deploy frontend via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER_OTHER }}
           username: ${{ secrets.FTP_USERNAME_OTHER }}
           password: ${{ secrets.FTP_PASSWORD_OTHER }}
-          local-dir: ./myapp-frontend/dist/
+          local-dir: ./site-stage/
           server-dir: /wwwroot/wwwroot/
           state-name: .frontend-deploy-sync-state.json
           dangerous-clean-slate: false
@@ -94,10 +102,14 @@ jobs:
           npm ci
           npm run build
 
-      - name: Copy frontend build to wwwroot
+      # Rebuild wwwroot from scratch so stale repo-tracked layouts never
+      # leak into the artifact: landing page at "/", ERP app under "/admin/".
+      - name: Stage wwwroot (landing at /, app under /admin)
         run: |
-          mkdir -p wwwroot
-          cp -r myapp-frontend/dist/* wwwroot/
+          rm -rf wwwroot
+          mkdir -p wwwroot/admin
+          cp landing/index.html wwwroot/index.html
+          cp -r myapp-frontend/dist/* wwwroot/admin/
 
       - name: Publish .NET API
         run: dotnet publish MyApp.Api.csproj -c Release -o ./publish
