@@ -142,6 +142,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // from the existing paymentTerms ("[SNxxx] ...") on load.
   const [scenarios, setScenarios] = useState([]);
   const [scenarioCode, setScenarioCode] = useState("");
+  // True once we've found an explicit [SNxxx] tag on load — suppresses the
+  // buyer-inferred default below so we never override an operator's choice.
+  const hadScenarioTagRef = useRef(false);
   // ── Inline "+ New Item Type" + HS Stock panel state ────────────────
   // showAddItemType: drives the shared ItemTypeForm modal.
   // hsStockSummary:  cache of the latest /tax-claim/hs-stock-summary
@@ -224,7 +227,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
 
         // Auto-detect scenario from paymentTerms tag.
         const tag = pt.match(/\[\s*(SN\d{3})\s*\]/i);
-        if (tag) setScenarioCode(tag[1].toUpperCase());
+        if (tag) { hadScenarioTagRef.current = true; setScenarioCode(tag[1].toUpperCase()); }
 
         // Lazy-load applicable scenarios for the bill's company.
         if (data.companyId) {
@@ -253,6 +256,26 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
     };
     load();
   }, [invoiceId]);
+
+  // Bug fix: bills with NO [SNxxx] tag (created before scenario tagging, or
+  // seeded data) used to leave the picker on "auto-detect", which the
+  // backend resolves to SN001 (registered) regardless of buyer — mis-routing
+  // unregistered / walk-in retail sales. Once scenarios + clients are loaded,
+  // infer a sensible default from the buyer's registration type. This only
+  // pre-selects the dropdown (visible + overridable); it isn't persisted
+  // until the operator saves.
+  useEffect(() => {
+    if (hadScenarioTagRef.current || scenarioCode) return;
+    if (scenarios.length === 0 || clients.length === 0 || !clientId) return;
+    const client = clients.find((c) => String(c.id) === String(clientId));
+    if (!client) return;
+    const isRegistered = (client.registrationType || "").toLowerCase() === "registered";
+    const preferred = isRegistered ? "SN001" : "SN002";
+    const wantBuyer = isRegistered ? "registered" : "unregistered";
+    const pick = scenarios.find((s) => s.code === preferred)
+      || scenarios.find((s) => (s.buyerRegistrationType || "").toLowerCase() === wantBuyer);
+    if (pick) setScenarioCode(pick.code);
+  }, [scenarios, clients, clientId, scenarioCode]);
 
   // The chosen scenario record drives both the item-type filter and the
   // bill-level GST rate when it differs from the canonical scenario rate.
@@ -991,13 +1014,16 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                         <option value="">— auto-detect from items —</option>
                         {scenarios.map((s) => (
                           <option key={s.code} value={s.code}>
-                            {s.code} · {s.saleType} · {s.defaultRate}%
+                            {s.code} — {s.description || s.saleType}
+                            {s.buyerRegistrationType ? ` · ${s.buyerRegistrationType} buyer` : ""}
+                            {` · ${s.defaultRate}%`}
                           </option>
                         ))}
                       </select>
                       {chosenScenario && (
                         <div style={{ fontSize: "0.7rem", color: colors.textSecondary, marginTop: "0.25rem" }}>
-                          Showing only item types with sale type "{chosenScenario.saleType}".
+                          <b>{chosenScenario.code}</b> — {chosenScenario.description || chosenScenario.saleType}.
+                          {" "}Showing only item types with sale type "{chosenScenario.saleType}".
                         </div>
                       )}
                     </div>

@@ -80,8 +80,12 @@ jobs:
           npm ci
           npm run build
 
+      # wwwroot is built fresh from source here — it is not tracked in git,
+      # so nothing from another branch's site shape can ever leak into this
+      # deploy. This branch ships the ERP app at the site root.
       - name: Copy frontend build to wwwroot
         run: |
+          rm -rf wwwroot
           mkdir -p wwwroot
           cp -r myapp-frontend/dist/* wwwroot/
 
