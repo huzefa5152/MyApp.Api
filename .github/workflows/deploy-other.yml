@@ -1,0 +1,149 @@
+# Deploys the `customize-solution-for-other` branch to its OWN MonsterASP
+# site — a separate hosting account from the master → site61833 pipeline.
+#
+# This file exists ONLY on the customization branch; master's deploy.yml is
+# inert here (it triggers on master only), so the two pipelines never fire
+# for the same push and master → branch merges stay conflict-free.
+#
+# Required repository secrets (set before the first push):
+#   FTP_SERVER_OTHER     e.g. siteNNNNN.siteasp.net
+#   FTP_USERNAME_OTHER   the new account's FTP user
+#   FTP_PASSWORD_OTHER   the new account's FTP password
+#
+# Like master, appsettings.Production.json (DB connection string + JWT key)
+# is maintained directly on the host and is excluded from every sync below.
+name: Deploy to MonsterASP.NET (Other)
+
+on:
+  push:
+    branches: [customize-solution-for-other]
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'myapp-frontend/**'
+            backend:
+              - '**/*.cs'
+              - '**/*.csproj'
+              - 'appsettings*.json'
+              - 'web.config'
+              - '.github/workflows/**'
+
+  # Fast path: only frontend changed — no .NET build, no app restart
+  deploy-frontend-only:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true' && needs.detect-changes.outputs.backend == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build React Frontend
+        working-directory: myapp-frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy frontend via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER_OTHER }}
+          username: ${{ secrets.FTP_USERNAME_OTHER }}
+          password: ${{ secrets.FTP_PASSWORD_OTHER }}
+          local-dir: ./myapp-frontend/dist/
+          server-dir: /wwwroot/wwwroot/
+          state-name: .frontend-deploy-sync-state.json
+          dangerous-clean-slate: false
+
+  # Full path: backend changed — build everything, restart app
+  # FTP sync only uploads changed files automatically
+  deploy-full:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build React Frontend
+        working-directory: myapp-frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy frontend build to wwwroot
+        run: |
+          mkdir -p wwwroot
+          cp -r myapp-frontend/dist/* wwwroot/
+
+      - name: Publish .NET API
+        run: dotnet publish MyApp.Api.csproj -c Release -o ./publish
+
+      - name: Copy frontend wwwroot into publish
+        run: |
+          mkdir -p ./publish/wwwroot
+          cp -r wwwroot/* ./publish/wwwroot/
+
+      - name: Stop app (upload app_offline.htm)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER_OTHER }}
+          username: ${{ secrets.FTP_USERNAME_OTHER }}
+          password: ${{ secrets.FTP_PASSWORD_OTHER }}
+          local-dir: ./.github/offline/
+          server-dir: /wwwroot/
+          dangerous-clean-slate: false
+
+      - name: Wait for app to stop
+        run: sleep 5
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER_OTHER }}
+          username: ${{ secrets.FTP_USERNAME_OTHER }}
+          password: ${{ secrets.FTP_PASSWORD_OTHER }}
+          local-dir: ./publish/
+          server-dir: /wwwroot/
+          # dangerous-clean-slate=false → the action never deletes remote
+          # files that aren't in the local upload. Combined with the
+          # excludes below, this means the server's appsettings.Production.json
+          # (maintained manually on the host) is never overwritten and never
+          # deleted by a deploy.
+          dangerous-clean-slate: false
+          exclude: |
+            **/.pdb
+            **/runtimes/linux-*/**
+            **/runtimes/osx-*/**
+            # Environment-specific config — managed directly on the server.
+            # appsettings.Production.json carries the real DB connection
+            # string and JWT signing key; appsettings.Development.json is
+            # local-only. Never let either travel through this pipeline.
+            **/appsettings.Development.json
+            **/appsettings.Production.json
+            # .example templates are dev-side documentation — no business
+            # being on the prod server.
+            **/appsettings.*.example.json
