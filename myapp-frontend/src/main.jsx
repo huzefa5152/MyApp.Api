@@ -23,7 +23,9 @@ const root = createRoot(container);
 root.render(
   <React.StrictMode>
     <ErrorBoundary>
-      <BrowserRouter>
+      {/* basename follows Vite's base ("/admin/" in this build) so the
+          whole app — routes, links, navigate() — is /admin-rooted. */}
+      <BrowserRouter basename={(import.meta.env.BASE_URL || "/").replace(/\/+$/, "") || "/"}>
         <NotificationProvider>
           <ConfirmProvider>
             <AuthProvider>

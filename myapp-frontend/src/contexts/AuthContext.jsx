@@ -51,7 +51,12 @@ export function AuthProvider({ children }) {
         // anything else not starting with `/`) — landing-page visitors
         // with a stale token shouldn't see the banner or be redirected.
         try {
-          const here = window.location.pathname + window.location.search + window.location.hash;
+          // Store ROUTER-relative paths (strip the /admin base) so
+          // navigate(returnTo) works under the router basename —
+          // mirrors the same logic in httpClient's 401 interceptor.
+          const appBase = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "");
+          let here = window.location.pathname + window.location.search + window.location.hash;
+          if (appBase && here.startsWith(appBase)) here = here.slice(appBase.length) || "/";
           const isProtected = here.startsWith("/") && here !== "/" && !here.startsWith("/login");
           if (isProtected) {
             sessionStorage.setItem("postLoginReturnTo", here);
