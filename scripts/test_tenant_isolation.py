@@ -348,8 +348,10 @@ assert status in (200, 201), f"seed beta client: {status} {beta_client}"
 # alice belongs to Alpha. She tries to create a challan in Alpha
 # referencing the Beta client by id — must 400 (InvalidOperationException
 # bubbles up as "Client does not belong to this company").
+# NOTE: challan creation is route-scoped (POST /api/deliverychallans/
+# company/{companyId}); the old bare-collection POST 405s, so the
+# forgery vector is the clientId in the body, not companyId.
 forged_challan = {
-    "companyId": alpha["id"],
     "clientId": beta_client["id"],
     "site": "Karachi",
     "poNumber": "PO/FORGE",
@@ -358,9 +360,10 @@ forged_challan = {
         {"description": "Bogus", "quantity": 1, "unit": "Numbers, pieces, units"}
     ],
 }
-status, _ = request("POST", "/api/deliverychallans", token=tokens["alice"], body=forged_challan)
+status, _ = request("POST", f"/api/deliverychallans/company/{alpha['id']}",
+                    token=tokens["alice"], body=forged_challan)
 check("Cross-tenant ClientId guard",
-      "alice -> POST /api/deliverychallans (companyId=alpha, clientId=beta-owned)",
+      "alice -> POST /api/deliverychallans/company/{alpha} (clientId=beta-owned)",
       status == 400, f"expected 400, got {status}")
 
 # Standalone bill path already had this check; we re-verify it still

@@ -4,6 +4,11 @@
 // Mobile-first: card is full-width on small screens; the parent grid
 // handles the multi-column layout at md breakpoint via
 // minmax(min-content, 1fr) auto-fit. No media queries here.
+//
+// Presentation: calm white surface with a thin accent strip + tinted
+// icon chip carrying the section identity (sales/purchases/fbr/inv).
+// Hover lift + entrance animation live in DashboardPage.css via the
+// .dash-kpi-card class; the accent reaches CSS through `--acc`.
 import { MdTrendingUp, MdTrendingDown, MdTrendingFlat } from "react-icons/md";
 import Sparkline from "./Sparkline";
 
@@ -46,14 +51,17 @@ export default function KpiCard({
 
   // Pick the colour + icon based on direction × goodness.
   let deltaColor = "#5f6d7e";
+  let deltaBg = "rgba(95, 109, 126, 0.10)";
   let deltaIcon = MdTrendingFlat;
   if (deltaPct != null && deltaPct !== 0 && deltaPct !== Infinity) {
     const positive = deltaPct > 0;
     const good = higherIsBetter ? positive : !positive;
-    deltaColor = good ? "#2e7d32" : "#c62828";
+    deltaColor = good ? "#15803d" : "#c62828";
+    deltaBg = good ? "rgba(21, 128, 61, 0.10)" : "rgba(198, 40, 40, 0.09)";
     deltaIcon = positive ? MdTrendingUp : MdTrendingDown;
   } else if (deltaPct === Infinity) {
-    deltaColor = "#2e7d32";
+    deltaColor = "#15803d";
+    deltaBg = "rgba(21, 128, 61, 0.10)";
     deltaIcon = MdTrendingUp;
   }
   const DeltaIconComp = deltaIcon;
@@ -62,53 +70,80 @@ export default function KpiCard({
     <div
       className="dash-kpi-card"
       style={{
+        "--acc": accent,
         position: "relative",
-        background: `
-          radial-gradient(circle at 100% 0%, ${accent}14 0%, transparent 55%),
-          linear-gradient(160deg, #ffffff 0%, ${accent}06 100%)
-        `,
-        border: `1px solid ${accent}26`,
-        borderRadius: 14,
-        padding: "0.95rem 1.05rem 0.85rem",
+        background: "#ffffff",
+        border: "1px solid #e6ecf4",
+        borderRadius: 16,
+        padding: "1rem 1.1rem 0.9rem",
         display: "flex",
         flexDirection: "column",
-        gap: "0.5rem",
+        gap: "0.55rem",
         overflow: "hidden",
-        minHeight: 132,
-        boxShadow: `0 4px 14px -6px ${accent}40, 0 1px 2px rgba(13, 71, 161, 0.04)`,
+        minHeight: 136,
+        boxShadow: "0 1px 2px rgba(12, 24, 48, 0.04), 0 10px 28px -18px rgba(12, 24, 48, 0.18)",
       }}
       title={title}
     >
-      {/* Top accent strip — keeps section identity readable at a glance,
+      {/* Thin accent strip — keeps section identity readable at a glance,
           even when the card is collapsed under its peers on mobile. */}
       <div style={{
-        position: "absolute", inset: "0 0 auto 0", height: 4,
-        background: `linear-gradient(90deg, ${accent} 0%, ${accent}cc 50%, ${accent}66 100%)`,
+        position: "absolute", inset: "0 auto auto 0", width: "100%", height: 3,
+        background: `linear-gradient(90deg, ${accent} 0%, ${accent}99 45%, transparent 100%)`,
       }} />
 
-      <div className="dash-kpi-card__label" style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "#5f6d7e", fontSize: "0.74rem", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+      <div className="dash-kpi-card__label" style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "0.55rem",
+        color: "#69788f",
+        fontSize: "0.7rem",
+        fontWeight: 600,
+        letterSpacing: "0.12em",
+        textTransform: "uppercase",
+        fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+      }}>
         {icon && (
           <span className="dash-kpi-card__icon" style={{
             display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: 24, height: 24, borderRadius: 7,
-            background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`,
-            color: "#fff",
-            boxShadow: `0 3px 8px -2px ${accent}55`,
+            width: 26, height: 26, borderRadius: 8,
+            background: `${accent}14`,
+            border: `1px solid ${accent}2e`,
+            color: accent,
             flexShrink: 0,
           }}>{icon}</span>
         )}
         <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
       </div>
 
-      <div className="dash-kpi-card__value" style={{ fontSize: "clamp(1.25rem, 4.2vw, 1.85rem)", fontWeight: 800, color: "#0f1724", lineHeight: 1.1, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+      <div className="dash-kpi-card__value" style={{
+        fontSize: "clamp(1.3rem, 4.2vw, 1.8rem)",
+        fontWeight: 600,
+        color: "#0c1830",
+        lineHeight: 1.1,
+        letterSpacing: "-0.01em",
+        fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontVariantNumeric: "tabular-nums",
+      }}>
         {format(value)}
       </div>
 
       {(deltaPct != null) && (
-        <div className="dash-kpi-card__delta" style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", color: deltaColor, fontSize: "0.78rem", fontWeight: 600 }}>
-          <DeltaIconComp size={14} />
+        <div className="dash-kpi-card__delta" style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.25rem",
+          alignSelf: "flex-start",
+          color: deltaColor,
+          backgroundColor: deltaBg,
+          borderRadius: 999,
+          padding: "0.14rem 0.55rem 0.14rem 0.4rem",
+          fontSize: "0.74rem",
+          fontWeight: 700,
+        }}>
+          <DeltaIconComp size={13} />
           {deltaPct === Infinity ? "new" : formatPct(deltaPct)}
-          <span className="dash-kpi-card__delta-suffix" style={{ color: "#5f6d7e", fontWeight: 400 }}> vs prev</span>
+          <span className="dash-kpi-card__delta-suffix" style={{ color: "#69788f", fontWeight: 500 }}>vs prev</span>
         </div>
       )}
 

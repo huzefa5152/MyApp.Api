@@ -245,9 +245,10 @@ function Header({ displayName, companies, selectedCompanyId, onCompanyChange, pe
   const showCompanyPicker = (companies?.length ?? 0) > 1;
   return (
     <header className="dash-hero" style={styles.heroBanner}>
-      <div className="dash-hero__title-block" style={{ flex: 1, minWidth: 0 }}>
+      <div className="dash-hero__title-block" style={{ flex: 1, minWidth: 0, position: "relative" }}>
+        <p style={styles.heroEyebrow}>Overview</p>
         <h1 className="dash-hero__heading" style={styles.heroHeading}>
-          Hello, <span style={{ color: "#fff" }}>{displayName}</span> 👋
+          Welcome back, <span style={{ color: "#9ef2ff" }}>{displayName}</span>
         </h1>
         <p className="dash-hero__subtitle" style={styles.heroSubtitle}>
           {selectedCompany?.name ? <><strong>{selectedCompany.name}</strong> · </> : null}
@@ -289,12 +290,19 @@ function Header({ displayName, companies, selectedCompanyId, onCompanyChange, pe
 
 function WelcomeOnlyBanner({ displayName }) {
   return (
-    <div style={{ ...styles.card, padding: "2rem 1.5rem", textAlign: "center" }}>
-      <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>👋</div>
-      <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700, color: "#1a2332" }}>
+    <div className="dash-card" style={{ ...styles.card, padding: "2.5rem 1.5rem", textAlign: "center" }}>
+      <span style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 52, height: 52, borderRadius: 16, marginBottom: "0.8rem",
+        background: "rgba(13, 71, 161, 0.08)", border: "1px solid rgba(13, 71, 161, 0.18)",
+        color: "#0d47a1",
+      }}>
+        <MdInfo size={26} />
+      </span>
+      <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700, color: "#0c1830", fontFamily: '"Space Grotesk", "Inter", system-ui, sans-serif' }}>
         Welcome back, {displayName}
       </h2>
-      <p style={{ margin: "0.4rem auto 0", maxWidth: 480, fontSize: "0.9rem", color: "#5f6d7e", lineHeight: 1.5 }}>
+      <p style={{ margin: "0.4rem auto 0", maxWidth: 480, fontSize: "0.9rem", color: "#5b6b86", lineHeight: 1.55 }}>
         Your role doesn't include any dashboard KPI permissions yet. Ask an admin to grant Sales,
         Purchases, FBR, or Inventory KPI access to see metrics here.
       </p>
@@ -419,33 +427,41 @@ function HeroBand({ data }) {
 function SectionCard({ title, accent, icon, children, headerExtra = null }) {
   const Icon = icon;
   return (
-    <section style={{ ...styles.card, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column", borderTop: `3px solid ${accent}` }}>
+    <section className="dash-card" style={{ ...styles.card, "--acc": accent, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
       <header className="dash-section-card__header" style={{
         display: "flex",
         alignItems: "center",
-        gap: "0.55rem",
-        padding: "0.7rem 1rem",
-        borderBottom: "1px solid #eef2f7",
-        background: `linear-gradient(95deg, ${accent}1f 0%, ${accent}0a 55%, transparent 100%)`,
+        gap: "0.65rem",
+        padding: "0.85rem 1.15rem",
+        borderBottom: "1px solid #eef2f8",
       }}>
         <span className="dash-section-card__header-icon" style={{
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
-          width: 30,
-          height: 30,
-          borderRadius: 9,
-          background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`,
-          color: "#fff",
-          boxShadow: `0 4px 10px -2px ${accent}66`,
+          width: 32,
+          height: 32,
+          borderRadius: 10,
+          background: `${accent}12`,
+          border: `1px solid ${accent}2e`,
+          color: accent,
           flexShrink: 0,
         }}>
-          <Icon size={16} />
+          <Icon size={17} />
         </span>
-        <h2 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#1a2332", flex: 1, letterSpacing: "0.01em", minWidth: 0 }}>{title}</h2>
+        <h2 style={{
+          margin: 0,
+          fontSize: "1rem",
+          fontWeight: 700,
+          color: "#0c1830",
+          flex: 1,
+          letterSpacing: "-0.01em",
+          minWidth: 0,
+          fontFamily: '"Space Grotesk", "Inter", system-ui, sans-serif',
+        }}>{title}</h2>
         {headerExtra}
       </header>
-      <div className="dash-section-card__body" style={{ padding: "0.8rem 1rem", display: "flex", flexDirection: "column", gap: "0.8rem" }}>
+      <div className="dash-section-card__body" style={{ padding: "0.95rem 1.15rem 1.05rem", display: "flex", flexDirection: "column", gap: "0.9rem" }}>
         {children}
       </div>
     </section>
@@ -561,15 +577,19 @@ function InventorySection({ data, canOpen = false }) {
         {(data.recentMovements || []).length === 0
           ? <EmptyLine>No recent stock movements.</EmptyLine>
           : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
               {data.recentMovements.map((m, i) => (
-                <div key={`${m.id}-${i}`} className="dash-mov-row" style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.83rem" }}>
-                  <span style={{ ...styles.miniChip, color: m.direction === "In" ? "#2e7d32" : "#c62828", backgroundColor: m.direction === "In" ? "#e8f5e9" : "#ffebee", border: `1px solid ${m.direction === "In" ? "#a5d6a7" : "#ef9a9a"}` }}>
+                <div key={`${m.id}-${i}`} className="dash-mov-row" style={{
+                  display: "flex", alignItems: "center", gap: "0.55rem", fontSize: "0.83rem",
+                  padding: "0.45rem 0.6rem", background: "#f8fafd",
+                  border: "1px solid #eef2f8", borderRadius: 10,
+                }}>
+                  <span style={{ ...styles.miniChip, color: m.direction === "In" ? "#15803d" : "#c62828", backgroundColor: m.direction === "In" ? "rgba(21,128,61,0.10)" : "rgba(198,40,40,0.09)" }}>
                     {m.direction}
                   </span>
-                  <span className="dash-mov-row__name" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#1a2332" }}>{m.itemTypeName}</span>
-                  <span className="dash-mov-row__qty" style={{ fontFamily: "ui-monospace, monospace", fontWeight: 600, color: "#1a2332" }}>{m.quantity}</span>
-                  <span style={{ color: "#5f6d7e", fontSize: "0.75rem" }}>{formatDate(m.date)}</span>
+                  <span className="dash-mov-row__name" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600, color: "#0c1830" }}>{m.itemTypeName}</span>
+                  <span className="dash-mov-row__qty" style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', fontVariantNumeric: "tabular-nums", fontWeight: 600, color: "#0c1830" }}>{m.quantity}</span>
+                  <span style={{ color: "#69788f", fontSize: "0.73rem" }}>{formatDate(m.date)}</span>
                 </div>
               ))}
             </div>
@@ -587,8 +607,8 @@ function Stat({ label, value, highlight = false, warn = false }) {
       <div className="dash-stat-label" style={styles.statLabel}>{label}</div>
       <div className="dash-stat-value" style={{
         ...styles.statValue,
-        color: warn ? "#c62828" : highlight ? "#1a2332" : "#37474f",
-        fontWeight: highlight ? 800 : 600,
+        color: warn ? "#c62828" : highlight ? "#0c1830" : "#3b4a63",
+        fontWeight: highlight ? 700 : 500,
       }}>{value ?? "—"}</div>
     </div>
   );
@@ -599,18 +619,25 @@ function Funnel({ label, value, color, icon }) {
   return (
     <div className="dash-funnel-card" style={{
       ...styles.funnelCard,
-      borderColor: `${color}40`,
-      background: `linear-gradient(160deg, ${color}10 0%, ${color}05 60%, #fff 100%)`,
+      borderColor: `${color}33`,
     }}>
       <div style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: 26, height: 26, borderRadius: 7,
-        background: `${color}1a`, color,
+        width: 28, height: 28, borderRadius: 8,
+        background: `${color}12`, border: `1px solid ${color}2e`, color,
       }}>
-        <Icon size={16} />
+        <Icon size={15} />
       </div>
-      <div style={{ fontSize: "0.72rem", color: "#5f6d7e", textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 600 }}>{label}</div>
-      <div className="dash-funnel-card__value" style={{ fontFamily: "ui-monospace, monospace", fontSize: "1.3rem", fontWeight: 800, color }}>
+      <div style={{
+        fontSize: "0.64rem", color: "#69788f", textTransform: "uppercase",
+        letterSpacing: "0.1em", fontWeight: 600,
+        fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
+      }}>{label}</div>
+      <div className="dash-funnel-card__value" style={{
+        fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
+        fontVariantNumeric: "tabular-nums",
+        fontSize: "1.35rem", fontWeight: 600, color,
+      }}>
         {value || 0}
       </div>
     </div>
@@ -619,22 +646,26 @@ function Funnel({ label, value, color, icon }) {
 
 function ReconChip({ label, value, color }) {
   return (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.7rem", borderRadius: 99, border: `1px solid ${color}55`, backgroundColor: `${color}10` }}>
-      <span style={{ fontSize: "0.75rem", color: "#37474f", fontWeight: 600 }}>{label}</span>
-      <span style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.85rem", fontWeight: 800, color }}>{value || 0}</span>
+    <div style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", padding: "0.3rem 0.75rem", borderRadius: 999, border: `1px solid ${color}40`, backgroundColor: `${color}0d` }}>
+      <span style={{ fontSize: "0.74rem", color: "#3b4a63", fontWeight: 600 }}>{label}</span>
+      <span style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', fontVariantNumeric: "tabular-nums", fontSize: "0.85rem", fontWeight: 600, color }}>{value || 0}</span>
     </div>
   );
 }
 
 function RecentList({ rows }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
       {rows.map((r, i) => (
-        <div key={`${r.id}-${i}`} className="dash-recent-row" style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.83rem", flexWrap: "wrap" }}>
-          <span className="dash-recent-row__number" style={{ fontFamily: "ui-monospace, monospace", color: "#5f6d7e", flexShrink: 0 }}>#{r.number}</span>
-          <span className="dash-recent-row__name" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#1a2332" }}>{r.counterpartyName || "(unknown)"}</span>
-          <span className="dash-recent-row__date" style={{ color: "#5f6d7e", fontSize: "0.75rem", flexShrink: 0 }}>{formatDate(r.date)}</span>
-          <span className="dash-recent-row__amount" style={{ fontFamily: "ui-monospace, monospace", fontWeight: 700, color: "#1a2332", flexShrink: 0 }}>{formatPkr(r.grandTotal)}</span>
+        <div key={`${r.id}-${i}`} className="dash-recent-row" style={{
+          display: "flex", alignItems: "center", gap: "0.55rem", fontSize: "0.83rem",
+          flexWrap: "wrap", padding: "0.45rem 0.6rem", background: "#f8fafd",
+          border: "1px solid #eef2f8", borderRadius: 10,
+        }}>
+          <span className="dash-recent-row__number" style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', fontSize: "0.75rem", color: "#69788f", flexShrink: 0 }}>#{r.number}</span>
+          <span className="dash-recent-row__name" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600, color: "#0c1830" }}>{r.counterpartyName || "(unknown)"}</span>
+          <span className="dash-recent-row__date" style={{ color: "#69788f", fontSize: "0.73rem", flexShrink: 0 }}>{formatDate(r.date)}</span>
+          <span className="dash-recent-row__amount" style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', fontVariantNumeric: "tabular-nums", fontWeight: 600, color: "#0c1830", flexShrink: 0 }}>{formatPkr(r.grandTotal)}</span>
         </div>
       ))}
     </div>
@@ -654,34 +685,50 @@ function EmptyLine({ children }) {
 const styles = {
   heroBanner: {
     position: "relative",
-    background: "linear-gradient(135deg, #0d47a1 0%, #1565c0 35%, #00897b 100%)",
-    backgroundImage: `
-      radial-gradient(circle at 100% 0%, rgba(255,255,255,0.18) 0%, transparent 38%),
-      radial-gradient(circle at 0% 100%, rgba(255,255,255,0.10) 0%, transparent 45%),
-      linear-gradient(135deg, #0d47a1 0%, #1565c0 35%, #00897b 100%)
+    // Layer order: cyan glow (top-right) → teal glow (bottom-left) →
+    // blueprint grid lines → brand gradient base. Same visual language
+    // as the public landing/login, so the product feels like one piece.
+    background: `
+      radial-gradient(80% 160% at 100% 0%, rgba(34, 224, 255, 0.16) 0%, transparent 55%),
+      radial-gradient(60% 140% at 0% 100%, rgba(0, 137, 123, 0.30) 0%, transparent 60%),
+      linear-gradient(to right, rgba(160, 195, 255, 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(160, 195, 255, 0.07) 1px, transparent 1px),
+      linear-gradient(135deg, #0a2d66 0%, #0d47a1 48%, #0b6e62 100%)
     `,
-    borderRadius: 16,
-    padding: "0.95rem 1.15rem",
+    backgroundSize: "auto, auto, 44px 44px, 44px 44px, auto",
+    borderRadius: 18,
+    padding: "1.15rem 1.3rem",
     color: "#fff",
     display: "flex",
     flexWrap: "wrap",
     alignItems: "center",
     gap: "0.85rem",
-    marginBottom: "0.75rem",
-    boxShadow: "0 10px 24px -8px rgba(13, 71, 161, 0.45), 0 4px 10px rgba(0, 137, 123, 0.18)",
+    marginBottom: "0.85rem",
+    boxShadow: "0 18px 40px -18px rgba(8, 34, 84, 0.55)",
     overflow: "hidden",
+  },
+  heroEyebrow: {
+    margin: "0 0 0.25rem",
+    fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
+    fontSize: "0.62rem",
+    fontWeight: 600,
+    letterSpacing: "0.24em",
+    textTransform: "uppercase",
+    color: "rgba(158, 242, 255, 0.85)",
   },
   heroHeading: {
     margin: 0,
-    fontSize: "clamp(1.05rem, 3.5vw, 1.4rem)",
-    fontWeight: 800,
-    color: "rgba(255,255,255,0.95)",
+    fontSize: "clamp(1.15rem, 3.5vw, 1.5rem)",
+    fontWeight: 700,
+    color: "#fff",
     lineHeight: 1.2,
+    letterSpacing: "-0.01em",
+    fontFamily: '"Space Grotesk", "Inter", system-ui, sans-serif',
   },
   heroSubtitle: {
-    margin: "0.25rem 0 0",
-    fontSize: "0.85rem",
-    color: "rgba(255,255,255,0.85)",
+    margin: "0.3rem 0 0",
+    fontSize: "0.84rem",
+    color: "rgba(222, 235, 255, 0.78)",
   },
   // Picker bar in the hero. The hero banner itself is flex-wrap, so
   // this block sits inline next to the greeting on desktop and wraps
@@ -694,10 +741,12 @@ const styles = {
     flex: "1 1 240px",
     minWidth: 0,
   },
+  // Glass pills on the gradient — option list colors are fixed in
+  // DashboardPage.css (white dropdown panel needs dark text).
   heroSelect: {
-    background: "rgba(255,255,255,0.96)",
-    color: "#1a2332",
-    border: "none",
+    background: "rgba(255, 255, 255, 0.12)",
+    color: "#fff",
+    border: "1px solid rgba(255, 255, 255, 0.28)",
     borderRadius: 10,
     padding: "0.5rem 0.85rem",
     fontSize: "0.85rem",
@@ -709,66 +758,73 @@ const styles = {
     // Cap on big screens — without this the company picker stretches
     // to absorb all available width.
     maxWidth: 260,
+    backdropFilter: "blur(6px)",
+    WebkitBackdropFilter: "blur(6px)",
   },
   heroGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
-    gap: "0.7rem",
-    marginBottom: "0.75rem",
+    gap: "0.85rem",
+    marginBottom: "0.85rem",
   },
   sectionGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))",
-    gap: "0.75rem",
-    marginTop: "0.75rem",
+    gap: "0.85rem",
+    marginTop: "0.85rem",
   },
   card: {
-    background: "#fff",
-    border: "1px solid #e8edf3",
-    borderRadius: 14,
-    padding: "0.85rem 1rem",
-    boxShadow: "0 2px 6px rgba(13, 71, 161, 0.06)",
+    background: "#ffffff",
+    border: "1px solid #e6ecf4",
+    borderRadius: 16,
+    padding: "1rem 1.15rem",
+    boxShadow: "0 1px 2px rgba(12, 24, 48, 0.04), 0 10px 28px -18px rgba(12, 24, 48, 0.18)",
   },
   metaRow: {
     display: "flex",
     flexWrap: "wrap",
     gap: "0.85rem",
-    paddingBottom: "0.25rem",
-    borderBottom: "1px dashed #eef2f7",
+    paddingBottom: "0.6rem",
+    borderBottom: "1px dashed #e6ecf4",
   },
   statLabel: {
-    fontSize: "0.7rem",
-    color: "#5f6d7e",
+    fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
+    fontSize: "0.62rem",
+    color: "#69788f",
     textTransform: "uppercase",
-    letterSpacing: "0.04em",
+    letterSpacing: "0.12em",
     fontWeight: 600,
-    marginBottom: "0.15rem",
+    marginBottom: "0.2rem",
   },
   statValue: {
-    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+    fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontVariantNumeric: "tabular-nums",
     fontSize: "0.95rem",
   },
   subHeading: {
-    fontSize: "0.78rem",
-    color: "#5f6d7e",
-    fontWeight: 700,
+    fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
+    fontSize: "0.66rem",
+    color: "#8593ab",
+    fontWeight: 600,
     textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    marginBottom: "0.5rem",
+    letterSpacing: "0.16em",
+    marginBottom: "0.55rem",
   },
   fbrGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
-    gap: "0.5rem",
+    // 94px min fits all four funnel stages on one row inside a
+    // half-width section card at desktop; still wraps 2×2 on phones.
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(94px, 100%), 1fr))",
+    gap: "0.55rem",
   },
   funnelCard: {
-    background: "#fafbfd",
+    background: "#fafcff",
     border: "1px solid",
-    borderRadius: 10,
-    padding: "0.7rem 0.55rem",
+    borderRadius: 12,
+    padding: "0.7rem 0.6rem",
     display: "flex",
     flexDirection: "column",
-    gap: "0.25rem",
+    gap: "0.3rem",
     alignItems: "flex-start",
   },
   reconRow: {
@@ -779,8 +835,8 @@ const styles = {
   miniChip: {
     display: "inline-flex",
     alignItems: "center",
-    padding: "0.1rem 0.45rem",
-    borderRadius: 6,
+    padding: "0.12rem 0.5rem",
+    borderRadius: 999,
     fontSize: "0.7rem",
     fontWeight: 700,
     flexShrink: 0,
@@ -788,10 +844,10 @@ const styles = {
   headerLink: {
     display: "inline-flex",
     alignItems: "center",
-    gap: "0.2rem",
-    padding: "0.25rem 0.5rem",
-    borderRadius: 8,
-    border: "1px solid #0d47a1",
+    gap: "0.25rem",
+    padding: "0.3rem 0.6rem",
+    borderRadius: 9,
+    border: "1px solid #dbe4f0",
     color: "#0d47a1",
     backgroundColor: "#fff",
     fontSize: "0.75rem",
