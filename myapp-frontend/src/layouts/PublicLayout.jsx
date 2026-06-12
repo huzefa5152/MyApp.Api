@@ -1,4 +1,6 @@
 // src/layouts/PublicLayout.jsx
+// Public site shell: fixed glass navbar (with scroll progress + section
+// spy), full-screen mobile drawer, footer with email CTA, back-to-top FAB.
 import { useState, useEffect, useRef } from "react";
 import { Outlet, Link } from "react-router-dom";
 import {
@@ -8,7 +10,10 @@ import {
   FiPhone,
   FiMapPin,
   FiLogIn,
+  FiArrowUp,
+  FiArrowUpRight,
 } from "react-icons/fi";
+import BrandMark from "../Components/BrandMark";
 import "./PublicLayout.css";
 
 const NAV_LINKS = [
@@ -23,7 +28,19 @@ const NAV_LINKS = [
 export default function PublicLayout() {
   const [scrolled, setScrolled] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [active, setActive] = useState("#home");
+  const [showTop, setShowTop] = useState(false);
   const sentinelRef = useRef(null);
+
+  // Page title + description for the public site only (admin keeps its own)
+  useEffect(() => {
+    const prevTitle = document.title;
+    document.title =
+      "Hakimi Traders — Pneumatic, Hydraulic & Industrial Equipment | Karachi";
+    return () => {
+      document.title = prevTitle;
+    };
+  }, []);
 
   // IntersectionObserver: navbar becomes solid when sentinel leaves viewport
   useEffect(() => {
@@ -38,6 +55,46 @@ export default function PublicLayout() {
     return () => observer.disconnect();
   }, []);
 
+  // Scroll progress (--sp drives the navbar hairline + FAB ring)
+  useEffect(() => {
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const doc = document.documentElement;
+        const max = doc.scrollHeight - window.innerHeight;
+        const p = max > 0 ? Math.min(1, window.scrollY / max) : 0;
+        doc.style.setProperty("--sp", p.toFixed(4));
+        setShowTop(window.scrollY > 520);
+      });
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  // Section spy — highlights the nav link for the section in view
+  useEffect(() => {
+    const els = NAV_LINKS
+      .map((l) => document.getElementById(l.href.slice(1)))
+      .filter(Boolean);
+    if (!els.length) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((en) => {
+          if (en.isIntersecting) setActive(`#${en.target.id}`);
+        });
+      },
+      { rootMargin: "-40% 0px -55% 0px", threshold: 0 }
+    );
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, []);
+
   // Close drawer on resize to desktop
   useEffect(() => {
     const onResize = () => {
@@ -50,7 +107,9 @@ export default function PublicLayout() {
   // Prevent body scroll when drawer open
   useEffect(() => {
     document.body.style.overflow = drawerOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [drawerOpen]);
 
   const handleNavClick = (e, href) => {
@@ -79,8 +138,10 @@ export default function PublicLayout() {
             onClick={(e) => handleNavClick(e, "#home")}
             aria-label="Hakimi Traders - Home"
           >
-            <span className="pl-navbar__logo-icon" aria-hidden="true">⚙</span>
-            <span className="pl-navbar__logo-text">HAKIMI TRADERS</span>
+            <BrandMark size={30} className="pl-navbar__logo-mark" />
+            <span className="pl-navbar__logo-text">
+              HAKIMI<em>TRADERS</em>
+            </span>
           </a>
 
           {/* Desktop nav */}
@@ -89,7 +150,7 @@ export default function PublicLayout() {
               <a
                 key={link.href}
                 href={link.href}
-                className="pl-navbar__link"
+                className={`pl-navbar__link${active === link.href ? " pl-navbar__link--active" : ""}`}
                 onClick={(e) => handleNavClick(e, link.href)}
               >
                 {link.label}
@@ -116,6 +177,9 @@ export default function PublicLayout() {
             </button>
           </div>
         </div>
+
+        {/* Reading progress hairline */}
+        <span className="pl-navbar__progress" aria-hidden="true" />
       </header>
 
       {/* ================================================================ */}
@@ -132,8 +196,12 @@ export default function PublicLayout() {
         aria-label="Mobile navigation"
         aria-hidden={!drawerOpen}
       >
+        <div className="pl-drawer__bg" aria-hidden="true" />
         <div className="pl-drawer__header">
-          <span className="pl-drawer__logo">HAKIMI TRADERS</span>
+          <span className="pl-drawer__logo">
+            <BrandMark size={26} />
+            HAKIMI TRADERS
+          </span>
           <button
             type="button"
             className="pl-drawer__close"
@@ -145,13 +213,16 @@ export default function PublicLayout() {
           </button>
         </div>
         <div className="pl-drawer__links">
-          {NAV_LINKS.map((link) => (
+          {NAV_LINKS.map((link, i) => (
             <a
               key={link.href}
               href={link.href}
               className="pl-drawer__link"
               onClick={(e) => handleNavClick(e, link.href)}
             >
+              <span className="pl-drawer__link-num" aria-hidden="true">
+                {String(i + 1).padStart(2, "0")}
+              </span>
               {link.label}
             </a>
           ))}
@@ -177,24 +248,34 @@ export default function PublicLayout() {
       {/*  FOOTER                                                          */}
       {/* ================================================================ */}
       <footer className="pl-footer" role="contentinfo">
+        {/* Email CTA band */}
+        <div className="pl-footer__cta">
+          <p className="pl-footer__cta-eyebrow">Start a conversation</p>
+          <a className="pl-footer__cta-mail" href="mailto:hakimitraders111@gmail.com">
+            hakimitraders111@gmail.com
+            <FiArrowUpRight aria-hidden="true" />
+          </a>
+        </div>
+
         <div className="pl-footer__inner">
           {/* Column 1 — Company info */}
           <div className="pl-footer__col">
             <div className="pl-footer__brand">
-              <span className="pl-footer__brand-icon" aria-hidden="true">⚙</span>
+              <BrandMark size={34} />
               <span className="pl-footer__brand-name">HAKIMI TRADERS</span>
             </div>
             <p className="pl-footer__tagline">
-              Specialist of Pneumatics Fitting, Equipments &amp; General Order Suppliers
+              Specialist of Pneumatics Fitting, Equipments &amp; General Order
+              Suppliers — serving Pakistan&apos;s industry since 2009.
             </p>
             <p className="pl-footer__reg">
-              <strong>NTN:</strong> 4228937-8 &nbsp;|&nbsp; <strong>STRN:</strong> 3277876175852
+              NTN 4228937-8&ensp;·&ensp;STRN 3277876175852
             </p>
           </div>
 
           {/* Column 2 — Quick links */}
           <div className="pl-footer__col">
-            <h3 className="pl-footer__heading">Quick Links</h3>
+            <h3 className="pl-footer__heading">Quick links</h3>
             <ul className="pl-footer__links" role="list">
               {NAV_LINKS.map((link) => (
                 <li key={link.href}>
@@ -212,7 +293,7 @@ export default function PublicLayout() {
 
           {/* Column 3 — Contact */}
           <div className="pl-footer__col">
-            <h3 className="pl-footer__heading">Contact Us</h3>
+            <h3 className="pl-footer__heading">Contact</h3>
             <ul className="pl-footer__contact-list" role="list">
               <li>
                 <FiMail className="pl-footer__contact-icon" aria-hidden="true" />
@@ -246,14 +327,23 @@ export default function PublicLayout() {
 
         {/* Copyright bar */}
         <div className="pl-footer__bottom">
-          <p>
-            &copy; {new Date().getFullYear()} Hakimi Traders. All rights reserved.
-          </p>
+          <p>&copy; {new Date().getFullYear()} Hakimi Traders. All rights reserved.</p>
           <p className="pl-footer__bottom-tagline">
             Pneumatics &bull; Hydraulics &bull; Industrial Equipment
           </p>
         </div>
       </footer>
+
+      {/* Back-to-top FAB with scroll-progress ring */}
+      <button
+        type="button"
+        className={`pl-top${showTop ? " pl-top--show" : ""}`}
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        aria-label="Back to top"
+        tabIndex={showTop ? 0 : -1}
+      >
+        <FiArrowUp aria-hidden="true" />
+      </button>
     </div>
   );
 }

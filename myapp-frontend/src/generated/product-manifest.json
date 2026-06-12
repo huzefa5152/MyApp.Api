@@ -1,0 +1,85 @@
+{
+  "brass-fittings": [
+    "/images/products/brass-fittings/page14_img13.jpeg",
+    "/images/products/brass-fittings/page14_img14.jpeg",
+    "/images/products/brass-fittings/page14_img8.jpeg"
+  ],
+  "cylinders": [
+    "/images/products/cylinders/cylinder_compact_double_acting.webp",
+    "/images/products/cylinders/cylinder_compact_type2.webp",
+    "/images/products/cylinders/cylinder_standard_double_acting.webp",
+    "/images/products/cylinders/cylinder_standard_type2.webp",
+    "/images/products/cylinders/page6_img9.jpeg"
+  ],
+  "frl": [
+    "/images/products/frl/page5_img11.jpeg"
+  ],
+  "hydraulics": [
+    "/images/products/hydraulics/page8_img10.jpeg",
+    "/images/products/hydraulics/page8_img11.jpeg",
+    "/images/products/hydraulics/page8_img12.jpeg",
+    "/images/products/hydraulics/page8_img13.jpeg",
+    "/images/products/hydraulics/page8_img9.jpeg"
+  ],
+  "industrial-valves": [
+    "/images/products/industrial-valves/page9_img7.jpeg",
+    "/images/products/industrial-valves/page9_img8.jpeg",
+    "/images/products/industrial-valves/page9_img9.jpeg"
+  ],
+  "ms-fittings": [
+    "/images/products/ms-fittings/page15_img11.jpeg",
+    "/images/products/ms-fittings/page15_img8.jpeg",
+    "/images/products/ms-fittings/page15_img9.jpeg"
+  ],
+  "pneumatic": [
+    "/images/products/pneumatic/page4_img10.jpeg",
+    "/images/products/pneumatic/page4_img11.jpeg",
+    "/images/products/pneumatic/page4_img12.jpeg",
+    "/images/products/pneumatic/page4_img14.jpeg",
+    "/images/products/pneumatic/page4_img16.jpeg",
+    "/images/products/pneumatic/page4_img9.jpeg"
+  ],
+  "pressure-instruments": [
+    "/images/products/pressure-instruments/page10_img10.jpeg",
+    "/images/products/pressure-instruments/page10_img11.jpeg",
+    "/images/products/pressure-instruments/page10_img12.png",
+    "/images/products/pressure-instruments/page10_img8.jpeg",
+    "/images/products/pressure-instruments/page10_img9.jpeg"
+  ],
+  "repair-kits": [
+    "/images/products/repair-kits/page16_img10.jpeg",
+    "/images/products/repair-kits/page16_img11.jpeg",
+    "/images/products/repair-kits/page16_img8.jpeg",
+    "/images/products/repair-kits/page16_img9.jpeg"
+  ],
+  "ss-fittings": [
+    "/images/products/ss-fittings/page13_img10.jpeg",
+    "/images/products/ss-fittings/page13_img11.jpeg",
+    "/images/products/ss-fittings/page13_img12.jpeg",
+    "/images/products/ss-fittings/page13_img13.jpeg",
+    "/images/products/ss-fittings/page13_img8.jpeg",
+    "/images/products/ss-fittings/page13_img9.jpeg"
+  ],
+  "temperature-instruments": [
+    "/images/products/temperature-instruments/page11_img10.jpeg",
+    "/images/products/temperature-instruments/page11_img11.jpeg",
+    "/images/products/temperature-instruments/page11_img12.jpeg",
+    "/images/products/temperature-instruments/page11_img14.jpeg",
+    "/images/products/temperature-instruments/page11_img17.jpeg",
+    "/images/products/temperature-instruments/page11_img7.jpeg",
+    "/images/products/temperature-instruments/page11_img8.jpeg",
+    "/images/products/temperature-instruments/page12_img10.jpeg",
+    "/images/products/temperature-instruments/page12_img11.jpeg",
+    "/images/products/temperature-instruments/page12_img12.jpeg",
+    "/images/products/temperature-instruments/page12_img14.png",
+    "/images/products/temperature-instruments/page12_img7.jpeg",
+    "/images/products/temperature-instruments/page12_img8.jpeg"
+  ],
+  "valves": [
+    "/images/products/valves/page7_img11.jpeg",
+    "/images/products/valves/page7_img12.jpeg",
+    "/images/products/valves/page7_img13.jpeg",
+    "/images/products/valves/page7_img15.jpeg",
+    "/images/products/valves/page7_img16.jpeg"
+  ]
+}
