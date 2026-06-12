@@ -360,7 +360,10 @@ export default function ItemTypesPage() {
       {showForm && (
         <ItemTypeForm
           editItem={editItem}
-          companyId={selectedCompany?.id}
+          /* The catalog is global; fall back to any accessible company so
+             HS-code UOM / sale-type lookups still work when the operator
+             hasn't picked a company in the header. */
+          companyId={selectedCompany?.id || companies?.[0]?.id}
           showFavoriteToggle
           showRichHints
           existingHsCodes={itemTypes

@@ -111,22 +111,32 @@ httpClient.interceptors.response.use(
     const isReturnSafe = (p) =>
       typeof p === "string" && p.startsWith("/") && p !== "/" && !p.startsWith("/login");
 
-    if (status === 401 && window.location.pathname !== "/login" && !skipAuthRedirect) {
+    // The app is served under Vite's BASE_URL ("/admin/" in this build).
+    // Stored return-paths stay ROUTER-relative ("/bills", not "/admin/bills")
+    // so navigate(returnTo) works under the router basename; only the hard
+    // window.location redirect below needs the real /admin-prefixed URL.
+    const appBase = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "");
+    const routerHere = (() => {
+      let p = window.location.pathname + window.location.search + window.location.hash;
+      if (appBase && p.startsWith(appBase)) p = p.slice(appBase.length) || "/";
+      return p;
+    })();
+
+    if (status === 401 && !routerHere.startsWith("/login") && !skipAuthRedirect) {
       // Preserve where the operator was so re-login lands them back
       // there instead of dropping to /dashboard. Captured via sessionStorage
       // (survives the hard reload) — query-string would work too but a
       // long bill-edit URL with #anchors is fragile in URL form.
       try {
-        const here = window.location.pathname + window.location.search + window.location.hash;
-        if (isReturnSafe(here)) {
-          sessionStorage.setItem("postLoginReturnTo", here);
+        if (isReturnSafe(routerHere)) {
+          sessionStorage.setItem("postLoginReturnTo", routerHere);
         }
         // Distinct from the user typing a bad password — LoginPage uses
         // this to render a "session expired" banner.
         sessionStorage.setItem("loginReason", "expired");
       } catch { /* sessionStorage may be disabled (private mode) — non-fatal */ }
       localStorage.removeItem("token");
-      window.location.href = "/login";
+      window.location.href = appBase + "/login";
     } else if (status === 403) {
       // Surface the API's reason if it gave one (e.g. "Access denied:
       // you are not authorized for company N.") instead of the generic

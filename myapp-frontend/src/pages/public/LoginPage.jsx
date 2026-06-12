@@ -277,7 +277,13 @@ export default function LoginPage() {
           </form>
 
           <div className="ht-form-footer">
-            <Link to="/" className="ht-back-link">
+            {/* Plain anchor to the SITE root, not a router Link: each
+                deployment's landing page lives at the real "/" — master's
+                in-app landing via the SPA fallback, customize's static
+                landing page outside the router. A router Link would resolve
+                under the /admin basename and (on customize) bounce straight
+                back to /login. */}
+            <a href="/" className="ht-back-link">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="13"
@@ -291,7 +297,7 @@ export default function LoginPage() {
                 />
               </svg>
               Back to Website
-            </Link>
+            </a>
           </div>
         </div>
       </main>

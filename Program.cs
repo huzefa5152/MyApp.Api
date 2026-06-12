@@ -1812,7 +1812,14 @@ app.UseStaticFiles(new StaticFileOptions
 
 app.MapControllers(); // 👈 maps your controllers (like CompaniesController)
 
-// SPA fallback: serve index.html for any non-API, non-file routes
+// The ERP SPA lives under /admin (Vite base "/admin/", router basename
+// "/admin"). Deep links like /admin/bills/42 fall back to the app shell.
+// The :nonfile constraint is LOAD-BEARING: without it this endpoint also
+// matches /admin/assets/*.js, and StaticFileMiddleware skips any request
+// that already matched an endpoint — serving HTML for every asset.
+app.MapFallbackToFile("admin/{*path:nonfile}", "admin/index.html");
+
+// Everything else — including "/" — serves the public landing page.
 app.MapFallbackToFile("index.html");
 
 Log.Information("MyApp.Api starting up — environment={Env}", app.Environment.EnvironmentName);

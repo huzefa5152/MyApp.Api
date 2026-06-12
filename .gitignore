@@ -415,3 +415,7 @@ scripts/*.txt
 .codex/
 AGENTS.md
 scripts/*.ps1
+
+# Built frontend output — CI builds wwwroot from source on every deploy;
+# each branch stages its own site shape. Never commit build artifacts.
+wwwroot/
