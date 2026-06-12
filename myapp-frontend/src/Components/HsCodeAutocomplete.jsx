@@ -2,6 +2,11 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { getFbrHSCodes } from "../api/fbrApi";
 
+// PCT/HS format: NNNN.NNNN with an optional .NN tail. Used to tell a
+// complete, already-valid code (e.g. an item's SAVED code on edit) apart
+// from a partial product keyword the operator is typing.
+const HS_FORMAT = /^\d{4}\.\d{4}(\.\d{2})?$/;
+
 /**
  * Autocomplete that searches FBR's official HS Code catalog (V1.12 §5.3).
  * Calls GET /api/fbr/hscodes/{companyId}?search=query which proxies to
@@ -151,7 +156,20 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
           <ul style={styles.dropdown(triggerRect)}>
             {loading && <li style={styles.loading}>Searching FBR catalog…</li>}
             {!loading && suggestions.length === 0 && query && (
-              <li style={styles.empty}>No HS codes match "{query}". Try a different keyword.</li>
+              HS_FORMAT.test(query.trim()) ? (
+                // The field already holds a complete, valid HS code — almost
+                // always the item's SAVED code on edit. Don't alarm the
+                // operator with "no match" (the live catalog may also be
+                // unavailable if this company has no FBR token yet); confirm
+                // the code and invite a keyword search only if they want to
+                // change it.
+                <li style={styles.confirm}>
+                  <span style={styles.confirmTick}>✓</span>
+                  <span><b>{query.trim()}</b> — current HS code. Type a product keyword (e.g. “valve”, “pipe”) to pick a different one.</span>
+                </li>
+              ) : (
+                <li style={styles.empty}>No HS codes match “{query}”. Try a product keyword like “valve” or “steel pipe”.</li>
+              )
             )}
             {suggestions.map((s, idx) => (
               <li
@@ -224,4 +242,6 @@ const styles = {
   },
   loading: { padding: "0.6rem 0.75rem", color: "#5f6d7e", fontSize: "0.82rem", fontStyle: "italic" },
   empty: { padding: "0.6rem 0.75rem", color: "#5f6d7e", fontSize: "0.82rem" },
+  confirm: { display: "flex", gap: "0.5rem", alignItems: "flex-start", padding: "0.6rem 0.75rem", color: "#1b5e20", fontSize: "0.82rem", backgroundColor: "#f1f8f2" },
+  confirmTick: { flex: "none", color: "#2e7d32", fontWeight: 700 },
 };

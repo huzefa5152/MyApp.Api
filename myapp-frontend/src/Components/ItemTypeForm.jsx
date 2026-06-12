@@ -138,12 +138,17 @@ export default function ItemTypeForm({
   // values are sacred in edit mode; we don't apply the override here.
   // The silent flag suppresses the hintLoading toggle so the UOM
   // label keeps showing the persistent "🔒 HS-locked" state.
+  // Re-run when editItem OR companyId becomes available — not just once on
+  // mount. The Item Catalog is a global page where selectedCompany can
+  // resolve a tick AFTER this form mounts; a mount-only ([]) effect captured
+  // companyId=undefined and never retried, so editing a saved item showed
+  // its HS code but never fetched the UOM / sale-type suggestion. (Bug fix.)
   useEffect(() => {
     if (editItem?.hsCode && companyId) {
       void fetchHsHints(editItem.hsCode, { silent: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [editItem?.hsCode, companyId]);
 
   // Race-safe + alive-safe FBR-hint fetcher. Returns the data when the
   // caller's version is still current; returns null when the call was
@@ -401,7 +406,16 @@ export default function ItemTypeForm({
                   ) : (
                     <div style={styles.hintRow}>
                       <span style={styles.hintLabel}>Valid UOM(s):</span>
-                      <span><em>FBR has no UOM mapping for this code — pick one from your Units catalog.</em></span>
+                      {/* Empty uoms means two very different things — branch on
+                          whether the HS_UOM lookup actually reached PRAL
+                          (uomLookupRan, set by the backend when a token
+                          exists). Many valid codes (e.g. 8482.1090) simply
+                          carry no UOM restriction; that's not an error. */}
+                      <span><em>
+                        {hsHints.uomLookupRan
+                          ? "FBR places no UOM restriction on this HS code — any unit from your Units catalog is accepted."
+                          : "FBR's UOM list couldn't be loaded (this company has no FBR token set). Your selected UOM below is what gets used."}
+                      </em></span>
                     </div>
                   )}
                   {hsHints.rateOptions?.length > 0 && (

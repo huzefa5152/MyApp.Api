@@ -342,7 +342,12 @@ namespace MyApp.Api.Services.Tax
                 RateOptions: rateOptions,
                 DefaultRate: defaultRate,
                 DefaultSaleType: defaultSaleType,
-                Notes: notes
+                Notes: notes,
+                // The HS_UOM lookup only reaches PRAL when the company has a
+                // token; an empty list then means FBR genuinely has no UOM
+                // restriction for this code (common for many codes), NOT a
+                // failure. Without a token the lookup never ran.
+                UomLookupRan: !string.IsNullOrEmpty(company?.FbrToken)
             );
         }
     }
