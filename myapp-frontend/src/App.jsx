@@ -1,5 +1,5 @@
 // App.jsx
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import DashboardLayout from "./layouts/DashboardLayout";
 import PublicLayout from "./layouts/PublicLayout";
 import DashboardPage from "./pages/DashboardPage";
@@ -34,10 +34,21 @@ import "./App.css";
 export default function App() {
   return (
     <Routes>
-      {/* Public website – wrapped in PublicLayout (sticky nav + footer) */}
-      <Route element={<PublicLayout />}>
-        <Route path="/" element={<LandingPage />} />
-      </Route>
+      {/* Public website – wrapped in PublicLayout (sticky nav + footer).
+          Only rendered when the app owns the site root (base "/", i.e. the
+          master deployment). When the app is mounted under /admin (customize
+          build), a separate static landing page owns "/" — the in-app
+          marketing page (and its product images) is unused there, so "/"
+          routes straight to login. BASE_URL is replaced at build time, so
+          the unused branch (and LandingPage itself) is dead-code-eliminated
+          from the /admin bundle. */}
+      {import.meta.env.BASE_URL === "/" ? (
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<LandingPage />} />
+        </Route>
+      ) : (
+        <Route path="/" element={<Navigate to="/login" replace />} />
+      )}
 
       {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
