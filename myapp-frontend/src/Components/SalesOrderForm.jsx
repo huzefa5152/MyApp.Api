@@ -34,6 +34,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   const [saving, setSaving] = useState(false);
   const [salesQuoteId, setSalesQuoteId] = useState(order?.salesQuoteId ? String(order.salesQuoteId) : "");
   const [quotes, setQuotes] = useState([]);
+  const [quoteLoadedMsg, setQuoteLoadedMsg] = useState("");
 
   useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
   useEffect(() => {
@@ -49,6 +50,23 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   const QUOTE_LINKABLE = ["Draft", "Sent", "Accepted"];
   const clientQuotes = quotes.filter((q) => client && q.clientId === client.id
     && (QUOTE_LINKABLE.includes(q.status) || String(q.id) === salesQuoteId));
+
+  // Picking a quote on a NEW order pulls its client + line items in (quantity
+  // only — prices are dropped, re-entered at bill time); the lines stay fully
+  // editable. On EDIT we only re-link, never replacing items that may already
+  // have deliveries against them.
+  const handleQuoteSelect = (value) => {
+    setSalesQuoteId(value);
+    setQuoteLoadedMsg("");
+    if (!value || isEdit) return;
+    const q = quotes.find((x) => String(x.id) === String(value));
+    if (!q) return;
+    if (q.clientId && (!client || client.id !== q.clientId)) setClient({ id: q.clientId, label: q.clientName });
+    if (q.items?.length) {
+      setItems(q.items.map((i) => ({ id: 0, itemTypeId: i.itemTypeId || null, description: i.description, quantity: i.quantity, unit: i.unit })));
+      setQuoteLoadedMsg(`Loaded ${q.items.length} item${q.items.length !== 1 ? "s" : ""} from Quote #${q.quoteNumber} — edit as needed.`);
+    }
+  };
 
   const setItem = (idx, patch) => setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   const addItem = () => {
@@ -125,10 +143,11 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
               </div>
               <div style={{ flex: 1, minWidth: 160 }}>
                 <label style={s.label}>Sales Quote <span style={s.opt}>(optional)</span></label>
-                <select style={s.input} value={salesQuoteId} onChange={(e) => setSalesQuoteId(e.target.value)} disabled={!client}>
+                <select style={s.input} value={salesQuoteId} onChange={(e) => handleQuoteSelect(e.target.value)} disabled={!client}>
                   <option value="">{client ? "— not linked —" : "Pick a client first"}</option>
                   {clientQuotes.map((q) => <option key={q.id} value={q.id}>Quote #{q.quoteNumber}{q.status ? ` · ${q.status}` : ""}</option>)}
                 </select>
+                {quoteLoadedMsg && <div style={{ fontSize: "0.72rem", color: colors.teal, marginTop: 4, fontWeight: 600 }}>{quoteLoadedMsg}</div>}
               </div>
             </div>
             <div style={s.row}>
