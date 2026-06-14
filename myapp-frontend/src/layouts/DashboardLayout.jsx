@@ -24,6 +24,8 @@ import {
   MdFileUpload,
   MdAdminPanelSettings,
   MdHistory,
+  MdRequestQuote,
+  MdAssignment,
   MdLocalShipping,
   MdShoppingCart,
   MdInventory,
@@ -154,8 +156,11 @@ export default function DashboardLayout() {
     "fbr.sandbox.view",
   ];
   const salesKeys = [
-    // Sales tab visible if the user has any of: see-bills (Bills + Invoices
-    // tabs), see-challans, import-challans, item-rate-history.
+    // Sales tab visible if the user has any of: sales quotes, sales orders,
+    // see-bills (Bills + Invoices tabs), see-challans, import-challans,
+    // item-rate-history.
+    "salesquotes.list.view",
+    "salesorders.list.view",
     "bills.list.view",
     "invoices.list.view",
     "itemratehistory.view",
@@ -193,7 +198,7 @@ export default function DashboardLayout() {
   // recomputing on every render.
   const activeSection = useMemo(() => {
     const p = location.pathname.toLowerCase();
-    if (p.startsWith("/challans") || p === "/bills" || p === "/invoices" || p === "/item-rate-history") return "sales";
+    if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p === "/bills" || p === "/invoices" || p === "/item-rate-history") return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
@@ -290,6 +295,18 @@ export default function DashboardLayout() {
               defaultOpen={activeSection === "sales"}
               isChildActive={activeSection === "sales"}
             >
+              <Can permission="salesquotes.list.view">
+                <NavLink to="/sales-quotes" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdRequestQuote className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Sales Quotes</span>
+                </NavLink>
+              </Can>
+              <Can permission="salesorders.list.view">
+                <NavLink to="/sales-orders" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdAssignment className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Sales Orders</span>
+                </NavLink>
+              </Can>
               <Can permission="challans.import.create">
                 <NavLink to="/challans/import" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdFileUpload className="dl-subitem__icon" aria-hidden="true" />

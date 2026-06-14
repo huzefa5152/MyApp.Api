@@ -26,6 +26,7 @@ namespace MyApp.Api.Repositories.Implementations
                                  .Include(dc => dc.Company)
                                  .Include(dc => dc.Invoice)
                                  .Include(dc => dc.DuplicatedFrom)
+                                 .Include(dc => dc.SalesOrder)
                                  .Where(dc => dc.CompanyId == companyId && !dc.IsDemo)
                                  .OrderBy(dc => dc.ChallanNumber)
                                  .ToListAsync();
@@ -42,6 +43,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(dc => dc.Company)
                 .Include(dc => dc.Invoice)
                 .Include(dc => dc.DuplicatedFrom)
+                .Include(dc => dc.SalesOrder)
                 .Where(dc => dc.CompanyId == companyId && !dc.IsDemo);
 
             if (!string.IsNullOrWhiteSpace(status))
@@ -87,6 +89,7 @@ namespace MyApp.Api.Repositories.Implementations
                                  .Include(dc => dc.Invoice)
                                      .ThenInclude(inv => inv!.Items)
                                  .Include(dc => dc.DuplicatedFrom)
+                                 .Include(dc => dc.SalesOrder)
                                  .FirstOrDefaultAsync(dc => dc.Id == id);
         }
 
@@ -174,6 +177,9 @@ namespace MyApp.Api.Repositories.Implementations
         {
             // Both "Pending" (natively-created) and "Imported" (historical back-fill)
             // are billable — the bill-creation picker shows both populations.
+            // "No PO" / "Setup Required" are intentionally NOT billable (the
+            // InvoiceService create path rejects them): a challan needs a PO
+            // (→ "Pending") before it can go on a bill.
             return await _context.DeliveryChallans
                                  .Include(dc => dc.Items)
                                      .ThenInclude(i => i.ItemType)

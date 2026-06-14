@@ -23,8 +23,15 @@ namespace MyApp.Api.Data
         }
 
         public DbSet<Company> Companies { get; set; }
+        public DbSet<Division> Divisions { get; set; }
         public DbSet<DeliveryChallan> DeliveryChallans { get; set; }
         public DbSet<DeliveryItem> DeliveryItems { get; set; }
+
+        // ── Sales Quote + Sales Order module (additive, pre-sale documents) ──
+        public DbSet<SalesQuote> SalesQuotes { get; set; }
+        public DbSet<SalesQuoteItem> SalesQuoteItems { get; set; }
+        public DbSet<SalesOrder> SalesOrders { get; set; }
+        public DbSet<SalesOrderItem> SalesOrderItems { get; set; }
 
         public DbSet<Client> Clients { get; set; } // ✅ add this
         public DbSet<ClientGroup> ClientGroups { get; set; }
@@ -382,16 +389,41 @@ namespace MyApp.Api.Data
                 .IsUnique()
                 .HasFilter("[IsDeleted] = 0");
 
-            // PrintTemplate: unique per (CompanyId, TemplateType)
+            // PrintTemplate: multiple templates per (CompanyId, TemplateType), each
+            // scoped to the company (DivisionId == null) or a division. Non-unique
+            // lookup index drives scope-filtered reads.
             modelBuilder.Entity<PrintTemplate>()
-                .HasIndex(pt => new { pt.CompanyId, pt.TemplateType })
-                .IsUnique();
+                .HasIndex(pt => new { pt.CompanyId, pt.TemplateType, pt.DivisionId });
+
+            // Exactly one default per (CompanyId, DivisionId, TemplateType) scope.
+            // Filtered to IsDefault = 1. SQL Server treats NULL as equal-to-NULL for
+            // unique purposes, so the company-level (DivisionId == null) scope is also
+            // held to a single default — same pattern as the ItemType (Name, HSCode)
+            // index above.
+            modelBuilder.Entity<PrintTemplate>()
+                .HasIndex(pt => new { pt.CompanyId, pt.DivisionId, pt.TemplateType })
+                .IsUnique()
+                .HasFilter("[IsDefault] = 1")
+                .HasDatabaseName("UX_PrintTemplates_DefaultPerScope");
 
             modelBuilder.Entity<PrintTemplate>()
                 .HasOne(pt => pt.Company)
                 .WithMany()
                 .HasForeignKey(pt => pt.CompanyId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Division scope FK. NoAction (not Cascade) is mandatory: Company->PrintTemplate
+            // (Cascade) + Company->Division (Cascade) + a cascading Division->PrintTemplate
+            // would be multiple cascade paths to PrintTemplates (SQL Server error 1785).
+            // DivisionService.DeleteAsync removes a division's templates in app code instead.
+            modelBuilder.Entity<PrintTemplate>()
+                .HasOne(pt => pt.Division)
+                .WithMany()
+                .HasForeignKey(pt => pt.DivisionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<PrintTemplate>().Property(pt => pt.Name).HasMaxLength(200);
 
             // DeliveryItem -> ItemType (optional, restrict)
             modelBuilder.Entity<DeliveryItem>()
@@ -400,6 +432,103 @@ namespace MyApp.Api.Data
                 .HasForeignKey(di => di.ItemTypeId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // ── Sales Quote + Sales Order module (additive) ──────────────────
+            // Pre-sale documents. Quote is priced; Order is quantity-only.
+            // Neither is an FBR document. Numbering is per-company (unique
+            // index below) mirroring Invoice's (CompanyId, *Number) contract.
+
+            // SalesQuote -> Company / Client (restrict — no cascade from masters)
+            modelBuilder.Entity<SalesQuote>()
+                .HasOne(q => q.Company).WithMany(c => c.SalesQuotes)
+                .HasForeignKey(q => q.CompanyId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SalesQuote>()
+                .HasOne(q => q.Client).WithMany()
+                .HasForeignKey(q => q.ClientId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SalesQuoteItem>()
+                .HasOne(i => i.SalesQuote).WithMany(q => q.Items)
+                .HasForeignKey(i => i.SalesQuoteId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<SalesQuoteItem>()
+                .HasOne(i => i.ItemType).WithMany()
+                .HasForeignKey(i => i.ItemTypeId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+
+            // SalesOrder -> Company / Client (restrict)
+            modelBuilder.Entity<SalesOrder>()
+                .HasOne(o => o.Company).WithMany(c => c.SalesOrders)
+                .HasForeignKey(o => o.CompanyId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SalesOrder>()
+                .HasOne(o => o.Client).WithMany()
+                .HasForeignKey(o => o.ClientId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SalesOrderItem>()
+                .HasOne(i => i.SalesOrder).WithMany(o => o.Items)
+                .HasForeignKey(i => i.SalesOrderId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<SalesOrderItem>()
+                .HasOne(i => i.ItemType).WithMany()
+                .HasForeignKey(i => i.ItemTypeId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+
+            // Quote <-> Order cross-links: two independent nullable FKs between
+            // the same pair of tables. Both NoAction to avoid a SET NULL /
+            // cascade cycle (SQL Server error 1785). The service clears these
+            // pointers before deleting either side.
+            modelBuilder.Entity<SalesOrder>()
+                .HasOne(o => o.SalesQuote).WithMany()
+                .HasForeignKey(o => o.SalesQuoteId)
+                .OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SalesQuote>()
+                .HasOne(q => q.ConvertedToSalesOrder).WithMany()
+                .HasForeignKey(q => q.ConvertedToSalesOrderId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            // DeliveryChallan -> SalesOrder (optional; restrict so an order with
+            // challans can't be deleted out from under them — the service guards
+            // this explicitly with a clear message).
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasOne(dc => dc.SalesOrder).WithMany(o => o.DeliveryChallans)
+                .HasForeignKey(dc => dc.SalesOrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // DeliveryItem -> SalesOrderItem (optional; restrict — a delivered
+            // ordered line can't be removed while challan lines reference it).
+            modelBuilder.Entity<DeliveryItem>()
+                .HasOne(di => di.SalesOrderItem).WithMany(soi => soi.DeliveryItems)
+                .HasForeignKey(di => di.SalesOrderItemId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Status defaults mirror DeliveryChallan's pattern.
+            modelBuilder.Entity<SalesQuote>().Property(q => q.Status).HasDefaultValue("Draft");
+            modelBuilder.Entity<SalesOrder>().Property(o => o.Status).HasDefaultValue("Open");
+
+            // Decimal precision — money (18,2), GST rate (5,2), quantity (18,4).
+            modelBuilder.Entity<SalesQuote>().Property(q => q.Subtotal).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuote>().Property(q => q.GSTRate).HasPrecision(5, 2);
+            modelBuilder.Entity<SalesQuote>().Property(q => q.GSTAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuote>().Property(q => q.GrandTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.Quantity).HasPrecision(18, 4);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.UnitPrice).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.LineTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesOrderItem>().Property(i => i.Quantity).HasPrecision(18, 4);
+
+            // Unique per-company numbering (mirror Invoice's (CompanyId, Number)
+            // so two concurrent creates can't both land MAX+1 — loser retries).
+            modelBuilder.Entity<SalesQuote>()
+                .HasIndex(q => new { q.CompanyId, q.QuoteNumber }).IsUnique();
+            modelBuilder.Entity<SalesQuote>().HasIndex(q => q.ClientId);
+            modelBuilder.Entity<SalesOrder>()
+                .HasIndex(o => new { o.CompanyId, o.SalesOrderNumber }).IsUnique();
+            modelBuilder.Entity<SalesOrder>().HasIndex(o => o.ClientId);
+            modelBuilder.Entity<DeliveryChallan>().HasIndex(dc => dc.SalesOrderId);
+            modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.SalesOrderItemId);
+
+            // ── Company Divisions ──────────────────────────────────────────
+            // Per-company named list (sub-brand / department). Cascade on
+            // company delete; names unique within a company.
+            modelBuilder.Entity<Division>()
+                .HasOne(d => d.Company).WithMany()
+                .HasForeignKey(d => d.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<Division>().Property(d => d.Name).HasMaxLength(200);
+            modelBuilder.Entity<Division>()
+                .HasIndex(d => new { d.CompanyId, d.Name }).IsUnique();
 
             // MergeField: unique per (TemplateType, FieldExpression)
             modelBuilder.Entity<MergeField>()
@@ -618,6 +747,11 @@ namespace MyApp.Api.Data
                 new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{#if buyerNTN}}", Label = "If: Has Buyer NTN", Category = "Conditionals", SortOrder = 57 },
                 new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{else}}", Label = "Else", Category = "Conditionals", SortOrder = 58 },
                 new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{/if}}", Label = "End If", Category = "Conditionals", SortOrder = 59 }
+                // NOTE: SalesQuote / SalesOrder merge fields are seeded at
+                // RUNTIME (idempotent, keyed by TemplateType+FieldExpression)
+                // by SalesMergeFieldSeeder — NOT via HasData. Hard-coded HasData
+                // ids collide with operator-added merge-field rows on databases
+                // where the identity counter has advanced past the seed range.
             );
 
             // Seed FBR Lookup values

@@ -7,6 +7,14 @@
         public DeliveryChallan DeliveryChallan { get; set; }
 
         public int? ItemTypeId { get; set; }
+
+        // Optional link to the Sales Order line this challan line fulfils.
+        // Set only when the challan was created from a Sales Order; null for
+        // every other challan (additive — existing rows stay null). The
+        // ordered line's delivered quantity is SUM(Quantity) over all
+        // DeliveryItems pointing at it.
+        public int? SalesOrderItemId { get; set; }
+
         public string Description { get; set; } = "";
         /// <summary>
         /// Stored as decimal(18,4) so fractional UOMs (KG, Liter, Carat, etc.)
@@ -19,5 +27,6 @@
 
         // Navigation
         public ItemType? ItemType { get; set; }
+        public SalesOrderItem? SalesOrderItem { get; set; }
     }
 }

@@ -385,6 +385,47 @@ check("Cross-tenant ClientId guard",
 # Cleanup the seed Beta client
 request("DELETE", f"/api/clients/{beta_client['id']}", token=admin)
 
+# Suite 7: id-based print-template endpoints — a user cannot touch another
+# tenant's template by id. [AuthorizeCompany] only guards the {companyId}
+# routes; the {id} routes load the row and assert via ICompanyAccessGuard,
+# which throws -> 403. Also covers the cross-tenant DivisionId link guard.
+# Added 2026-06-14 with the multiple-templates-per-company/division feature.
+print("\n  Suite 7 — id-based print-template tenant guard")
+suite = "id-based print-template guard"
+# admin seeds a Beta-scoped (company-level) Challan template
+status, beta_tpl = request("POST", f"/api/printtemplates/company/{beta['id']}", token=admin, body={
+    "templateType": "Challan",
+    "name": "Beta DC",
+    "htmlContent": "<p>{{challanNumber}}</p>",
+    "isDefault": True,
+})
+assert status in (200, 201), f"seed beta template: {status} {beta_tpl}"
+btid = beta_tpl["id"]
+# alice (Alpha only) is blocked on every id-based verb against Beta's template
+s, _ = request("GET", f"/api/printtemplates/{btid}", token=tokens["alice"])
+status_check(suite, "alice GET /printtemplates/{betaId}", s, 403)
+s, _ = request("PUT", f"/api/printtemplates/{btid}", token=tokens["alice"], body={"name": "hacked", "htmlContent": "x"})
+status_check(suite, "alice PUT /printtemplates/{betaId}", s, 403)
+s, _ = request("PUT", f"/api/printtemplates/{btid}/default", token=tokens["alice"])
+status_check(suite, "alice PUT /printtemplates/{betaId}/default", s, 403)
+s, _ = request("DELETE", f"/api/printtemplates/{btid}", token=tokens["alice"])
+status_check(suite, "alice DELETE /printtemplates/{betaId}", s, 403)
+
+# Cross-tenant DivisionId link guard: alice (Alpha) tries to create a template
+# under Alpha but scoped to a Beta-owned division -> 400.
+status, beta_div = request("POST", f"/api/divisions/company/{beta['id']}", token=admin, body={"name": "Beta Div"})
+assert status in (200, 201), f"seed beta division: {status} {beta_div}"
+s, _ = request("POST", f"/api/printtemplates/company/{alpha['id']}", token=tokens["alice"], body={
+    "templateType": "Challan",
+    "divisionId": beta_div["id"],
+    "name": "cross-tenant",
+    "htmlContent": "<p>x</p>",
+})
+status_check(suite, "alice POST /printtemplates (alpha + beta-owned division)", s, 400)
+
+# Seed template is cascade-cleaned when Beta is deleted, but remove it now too.
+request("DELETE", f"/api/printtemplates/{btid}", token=admin)
+
 
 # ── Cleanup (test fails → keep rows for inspection) ──────────
 print("\n=== Results ===")

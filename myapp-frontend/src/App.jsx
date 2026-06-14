@@ -6,6 +6,8 @@ import DashboardPage from "./pages/DashboardPage";
 import CompanyPage from "./pages/CompanyPage";
 import ChallansPage from "./pages/ChallanPage";
 import ImportChallansPage from "./pages/ImportChallansPage";
+import SalesQuotePage from "./pages/SalesQuotePage";
+import SalesOrderPage from "./pages/SalesOrderPage";
 import InvoicePage from "./pages/InvoicePage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
 import PurchaseBillsPage from "./pages/PurchaseBillsPage";
@@ -76,6 +78,10 @@ export default function App() {
           {/* Invoices tab — FBR classification & submission. Item-type
               editing + Validate All / Submit All bulk actions live here. */}
           <Route path="/invoices" element={<InvoicePage key="invoices" mode="invoices" />} />
+          {/* Sales Quote (priced quotation) + Sales Order (qty-only, drives
+              challan fulfilment). Pre-sale documents; not FBR. */}
+          <Route path="/sales-quotes" element={<SalesQuotePage />} />
+          <Route path="/sales-orders" element={<SalesOrderPage />} />
           <Route path="/item-rate-history" element={<ItemRateHistoryPage />} />
           <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
           <Route path="/goods-receipts" element={<GoodsReceiptsPage />} />

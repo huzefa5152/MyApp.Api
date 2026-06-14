@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { MdUploadFile, MdTextSnippet, MdAdd, MdDelete, MdWarning, MdCheckCircle, MdArrowBack, MdArrowForward, MdVerified, MdErrorOutline } from "react-icons/md";
 import { parsePdf, parseText, ensureLookups } from "../api/poImportApi";
 import { getClientsByCompany, getClientById } from "../api/clientApi";
-import { createDeliveryChallan } from "../api/challanApi";
+import { createSalesOrder } from "../api/salesOrderApi";
+import { getPagedSalesQuotesByCompany } from "../api/salesQuoteApi";
 import { getAllUnits } from "../api/unitsApi";
 import { formStyles, modalSizes } from "../theme";
 import { todayYmd } from "../utils/dateInput";
@@ -40,6 +41,8 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
   const [deliveryDate, setDeliveryDate] = useState(todayYmd());
   const [selectedClientId, setSelectedClientId] = useState("");
   const [site, setSite] = useState("");
+  const [salesQuoteId, setSalesQuoteId] = useState("");
+  const [quotes, setQuotes] = useState([]);
   const [items, setItems] = useState([]);
   const [rawText, setRawText] = useState("");
 
@@ -65,12 +68,14 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const [clientRes, unitsRes] = await Promise.all([
+        const [clientRes, unitsRes, quoteRes] = await Promise.all([
           getClientsByCompany(companyId),
           getAllUnits().catch(() => ({ data: [] })),
+          getPagedSalesQuotesByCompany(companyId, { pageSize: 200 }).catch(() => ({ data: { items: [] } })),
         ]);
         setClients(clientRes.data);
         setUnits(unitsRes.data || []);
+        setQuotes(quoteRes.data?.items || []);
       } catch { /* ignore */ }
     };
     load();
@@ -171,6 +176,9 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
 
   const selectedClient = clients.find((c) => c.id === parseInt(selectedClientId));
   const clientSites = selectedClient?.site ? selectedClient.site.split(";").map((s) => s.trim()).filter(Boolean) : [];
+  // Only Draft / Sent / Accepted quotes are candidates for linking an imported PO.
+  const clientQuotes = quotes.filter((q) => String(q.clientId) === String(selectedClientId)
+    && (q.status === "Draft" || q.status === "Sent" || q.status === "Accepted"));
 
   const canSubmit = selectedClientId && deliveryDate && items.length > 0 &&
     items.every((i) => i.description.trim() && i.quantity > 0);
@@ -183,33 +191,34 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
     try {
       // Auto-create missing lookup entries
       const descriptions = items.map((i) => i.description.trim()).filter(Boolean);
-      const units = items.map((i) => i.unit.trim()).filter(Boolean);
-      await ensureLookups(descriptions, units);
+      const unitNames = items.map((i) => i.unit.trim()).filter(Boolean);
+      await ensureLookups(descriptions, unitNames);
 
-      // Create the delivery challan
+      // Create a Sales Order from the parsed PO (quantity-only). The customer's
+      // PO number/date carry onto the order; delivery challans are raised
+      // against this order afterwards to track fulfilment.
       const payload = {
         clientId: parseInt(selectedClientId),
-        clientName: selectedClient?.name || "",
+        salesQuoteId: salesQuoteId ? parseInt(salesQuoteId) : null,
+        customerPoNumber: poNumber.trim() || null,
+        customerPoDate: poDate ? new Date(poDate).toISOString() : null,
+        orderDate: new Date(deliveryDate).toISOString(),
         site: site || null,
-        poNumber: poNumber.trim(),
-        poDate: poDate ? new Date(poDate).toISOString() : null,
-        indentNo: indentNo.trim() || null,
-        deliveryDate: new Date(deliveryDate).toISOString(),
+        isImported: true,
         items: items.map((i) => ({
           description: i.description.trim(),
-          quantity: parseInt(i.quantity),
+          // Preserve fractional quantities (KG, Litre) — Sales Order lines
+          // carry the same decimal contract as challan/invoice lines.
+          quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
           unit: i.unit.trim() || "Pcs",
-          // Item Type lives on the Invoices tab now — challans don't capture
-          // it. Operators classify each line by Item Type when preparing
-          // the bill for FBR submission.
           itemTypeId: null,
         })),
       };
 
-      await createDeliveryChallan(companyId, payload);
+      await createSalesOrder(companyId, payload);
       onSaved();
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to create challan.");
+      setError(err.response?.data?.error || "Failed to create sales order.");
     } finally {
       setSaving(false);
     }
@@ -222,7 +231,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
       <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>
-            {step === 1 ? "Import Purchase Order" : "Review & Create Challan"}
+            {step === 1 ? "Import Purchase Order" : "Review & Create Sales Order"}
           </h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
@@ -320,7 +329,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
               <div style={styles.row}>
                 <div style={{ flex: 2, minWidth: 220 }}>
                   <label style={styles.label}>Client *</label>
-                  <select style={styles.select} value={selectedClientId} onChange={(e) => { setSelectedClientId(e.target.value); setSite(""); }}>
+                  <select style={styles.select} value={selectedClientId} onChange={(e) => { setSelectedClientId(e.target.value); setSite(""); setSalesQuoteId(""); }}>
                     <option value="">— Select Client —</option>
                     {clients.map((cl) => (
                       <option key={cl.id} value={cl.id}>{cl.name}</option>
@@ -348,7 +357,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                   )}
                 </div>
                 <div style={{ flex: 1, minWidth: 150 }}>
-                  <label style={styles.label}>Delivery Date *</label>
+                  <label style={styles.label}>Order Date *</label>
                   <input type="date" style={styles.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
                 </div>
               </div>
@@ -365,10 +374,11 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                   <input type="date" style={styles.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
                 </div>
                 <div style={{ flex: 1, minWidth: 180 }}>
-                  <label style={styles.label}>
-                    Indent No <span style={{ color: "#5f6d7e", fontWeight: 400 }}>(optional)</span>
-                  </label>
-                  <input style={styles.input} value={indentNo} onChange={(e) => setIndentNo(e.target.value)} placeholder="Leave blank if not used" />
+                  <label style={styles.label}>Sales Quote (optional)</label>
+                  <select style={styles.select} value={salesQuoteId} onChange={(e) => setSalesQuoteId(e.target.value)} disabled={!selectedClientId}>
+                    <option value="">{selectedClientId ? "— not linked —" : "Pick a client first"}</option>
+                    {clientQuotes.map((q) => <option key={q.id} value={q.id}>Quote #{q.quoteNumber}{q.status ? ` · ${q.status}` : ""}</option>)}
+                  </select>
                 </div>
               </div>
 
@@ -500,7 +510,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
               disabled={!canSubmit || saving}
               onClick={handleSubmit}
             >
-              {saving ? "Creating..." : "Create Challan"}
+              {saving ? "Creating..." : "Create Sales Order"}
             </button>
           )}
         </div>

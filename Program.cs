@@ -237,6 +237,9 @@ builder.Services.AddRateLimiter(options =>
 // Register Repositories
 builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<IDeliveryChallanRepository, DeliveryChallanRepository>();
+builder.Services.AddScoped<ISalesQuoteRepository, SalesQuoteRepository>();
+builder.Services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
+builder.Services.AddScoped<IDivisionRepository, DivisionRepository>();
 builder.Services.AddScoped<IClientRepository, ClientRepository>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
@@ -248,6 +251,12 @@ builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 // Register Services
 builder.Services.AddScoped<ICompanyService, CompanyService>();
 builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
+// Sales Quote (priced) + Sales Order (quantity-only). SalesQuoteService
+// depends on ISalesOrderService (quote→order conversion); SalesOrderService
+// depends on IDeliveryChallanService (create-challan-from-order). No cycle.
+builder.Services.AddScoped<ISalesQuoteService, SalesQuoteService>();
+builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
+builder.Services.AddScoped<IDivisionService, DivisionService>();
 builder.Services.AddScoped<IClientService, ClientService>();
 // "Common Clients" grouping — the same legal entity (matched by NTN, then
 // fallback to normalised name) shared across multiple companies. Sits
@@ -630,6 +639,11 @@ using (var scope = app.Services.CreateScope())
     // Seed the starter catalog of FBR-mapped item types (idempotent — skips
     // any HS code / name already present, so it's safe to run on every boot)
     await MyApp.Api.Data.ItemTypeSeeder.SeedAsync(db);
+
+    // Sales Quote / Sales Order template merge fields — idempotent runtime
+    // seed (keyed by TemplateType+FieldExpression). Not HasData: hard-coded
+    // seed ids collide with operator-added merge fields on drifted databases.
+    await MyApp.Api.Data.SalesMergeFieldSeeder.SeedAsync(db);
 
     // Demo-environment data seeder. Runs ONLY when ASPNETCORE_ENVIRONMENT
     // is "Demo" (set by scripts/run-demo.ps1 which also points the

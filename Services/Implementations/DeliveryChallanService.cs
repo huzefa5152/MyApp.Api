@@ -68,6 +68,12 @@ namespace MyApp.Api.Services.Implementations
         /// <summary>Check if company+client have all required FBR fields filled.</summary>
         private static bool IsFbrReady(Company company, Client client)
         {
+            // FBR disabled for this company → nothing to set up. Treat as
+            // "ready" so challans settle at Pending / No PO instead of the
+            // FBR-gated "Setup Required" state. (company FbrEnabled is the
+            // master switch — see Company.FbrEnabled.)
+            if (!company.FbrEnabled) return true;
+
             // Company fields
             if (string.IsNullOrWhiteSpace(company.NTN)) return false;
             if (string.IsNullOrWhiteSpace(company.STRN)) return false;
@@ -110,6 +116,8 @@ namespace MyApp.Api.Services.Implementations
                 IsImported = dc.IsImported,
                 DuplicatedFromId = dc.DuplicatedFromId,
                 DuplicatedFromChallanNumber = dc.DuplicatedFrom?.ChallanNumber,
+                SalesOrderId = dc.SalesOrderId,
+                SalesOrderNumber = dc.SalesOrder?.SalesOrderNumber,
                 Items = dc.Items.Select(i => new DeliveryItemDto
                 {
                     Id = i.Id,
@@ -117,14 +125,17 @@ namespace MyApp.Api.Services.Implementations
                     ItemTypeName = i.ItemType?.Name ?? "",
                     Description = i.Description,
                     Quantity = i.Quantity,
-                    Unit = i.Unit
+                    Unit = i.Unit,
+                    SalesOrderItemId = i.SalesOrderItemId
                 }).ToList()
             };
 
-            // Compute warnings for missing FBR fields
+            // Compute warnings for missing FBR fields — only when FBR is
+            // enabled for the company. A non-FBR company shouldn't be nagged
+            // about missing NTN/STRN/token it will never use.
             var company = dc.Company;
             var client = dc.Client;
-            if (company != null)
+            if (company != null && company.FbrEnabled)
             {
                 if (string.IsNullOrWhiteSpace(company.NTN)) dto.Warnings.Add("Company NTN missing");
                 if (string.IsNullOrWhiteSpace(company.STRN)) dto.Warnings.Add("Company STRN missing");
@@ -134,7 +145,7 @@ namespace MyApp.Api.Services.Implementations
                 if (string.IsNullOrWhiteSpace(company.FbrToken)) dto.Warnings.Add("Company FBR Token missing");
                 if (string.IsNullOrWhiteSpace(company.FbrEnvironment)) dto.Warnings.Add("Company FBR Environment missing");
             }
-            if (client != null)
+            if (client != null && company != null && company.FbrEnabled)
             {
                 if (string.IsNullOrWhiteSpace(client.NTN)) dto.Warnings.Add("Client NTN missing");
                 if (string.IsNullOrWhiteSpace(client.STRN)) dto.Warnings.Add("Client STRN missing");
@@ -282,12 +293,16 @@ namespace MyApp.Api.Services.Implementations
                 IndentNo = string.IsNullOrWhiteSpace(dto.IndentNo) ? null : dto.IndentNo.Trim(),
                 DeliveryDate = dto.DeliveryDate,
                 Status = status,
+                // Optional Sales Order link (set only by the "Create Challan
+                // from Sales Order" flow; null for every standalone challan).
+                SalesOrderId = dto.SalesOrderId,
                 Items = dto.Items.Select(i => new DeliveryItem
                 {
                     ItemTypeId = i.ItemTypeId,
                     Description = i.Description,
                     Quantity = i.Quantity,
-                    Unit = i.Unit
+                    Unit = i.Unit,
+                    SalesOrderItemId = i.SalesOrderItemId
                 }).ToList()
             };
 

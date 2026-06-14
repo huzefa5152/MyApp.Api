@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyApp.Api.Data;
 
@@ -11,9 +12,11 @@ using MyApp.Api.Data;
 namespace MyApp.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260614114203_AddSalesQuoteAndSalesOrderModule")]
+    partial class AddSalesQuoteAndSalesOrderModule
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -244,9 +247,6 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("FbrDefaultUOM")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("FbrEnabled")
-                        .HasColumnType("bit");
-
                     b.Property<string>("FbrEnvironment")
                         .HasColumnType("nvarchar(max)");
 
@@ -283,9 +283,6 @@ namespace MyApp.Api.Migrations
 
                     b.Property<string>("Phone")
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("RequireSalesOrderForBilling")
-                        .HasColumnType("bit");
 
                     b.Property<string>("STRN")
                         .HasColumnType("nvarchar(max)");
@@ -425,33 +422,6 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("SalesOrderItemId");
 
                     b.ToTable("DeliveryItems");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.Division", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CompanyId", "Name")
-                        .IsUnique();
-
-                    b.ToTable("Divisions");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.FbrCommunicationLog", b =>
@@ -2593,9 +2563,6 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("DivisionId")
-                        .HasColumnType("int");
-
                     b.Property<string>("EditorMode")
                         .HasColumnType("nvarchar(max)");
 
@@ -2609,14 +2576,6 @@ namespace MyApp.Api.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
                     b.Property<string>("TemplateJson")
                         .HasColumnType("nvarchar(max)");
 
@@ -2629,14 +2588,8 @@ namespace MyApp.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DivisionId");
-
-                    b.HasIndex("CompanyId", "DivisionId", "TemplateType")
-                        .IsUnique()
-                        .HasDatabaseName("UX_PrintTemplates_DefaultPerScope")
-                        .HasFilter("[IsDefault] = 1");
-
-                    b.HasIndex("CompanyId", "TemplateType", "DivisionId");
+                    b.HasIndex("CompanyId", "TemplateType")
+                        .IsUnique();
 
                     b.ToTable("PrintTemplates");
                 });
@@ -3451,17 +3404,6 @@ namespace MyApp.Api.Migrations
                     b.Navigation("SalesOrderItem");
                 });
 
-            modelBuilder.Entity("MyApp.Api.Models.Division", b =>
-                {
-                    b.HasOne("MyApp.Api.Models.Company", "Company")
-                        .WithMany()
-                        .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Company");
-                });
-
             modelBuilder.Entity("MyApp.Api.Models.GoodsReceipt", b =>
                 {
                     b.HasOne("MyApp.Api.Models.Company", "Company")
@@ -3633,14 +3575,7 @@ namespace MyApp.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("MyApp.Api.Models.Division", "Division")
-                        .WithMany()
-                        .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.Navigation("Company");
-
-                    b.Navigation("Division");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.PurchaseBill", b =>

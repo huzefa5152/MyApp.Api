@@ -138,4 +138,77 @@ namespace MyApp.Api.DTOs
         /// </summary>
         public string? HSCode { get; set; }
     }
+
+    // Data for printing a Sales Quote (priced — mirrors PrintBillDto)
+    public class PrintQuoteDto
+    {
+        public string CompanyBrandName { get; set; } = "";
+        public string? CompanyLogoPath { get; set; }
+        public string? CompanyAddress { get; set; }
+        public string? CompanyPhone { get; set; }
+        public string? CompanyNTN { get; set; }
+        public string? CompanySTRN { get; set; }
+        public int QuoteNumber { get; set; }
+        public DateTime Date { get; set; }
+        public DateTime? ValidUntil { get; set; }
+        public string? CustomerEnquiryRef { get; set; }
+        public DateTime? EnquiryDate { get; set; }
+        public string ClientName { get; set; } = "";
+        public string? ClientAddress { get; set; }
+        public string? ClientNTN { get; set; }
+        public string? ClientSTRN { get; set; }
+        public decimal Subtotal { get; set; }
+        public decimal GSTRate { get; set; }
+        public decimal GSTAmount { get; set; }
+        public decimal GrandTotal { get; set; }
+        public string AmountInWords { get; set; } = "";
+        public string? Notes { get; set; }
+        public List<PrintQuoteItemDto> Items { get; set; } = new();
+    }
+
+    public class PrintQuoteItemDto
+    {
+        public int SNo { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        public string Description { get; set; } = "";
+        public decimal Quantity { get; set; }
+        // Named "Uom" (not "UOM") so the default camelCase JSON key is a clean
+        // "uom" — matching the {{this.uom}} merge token in the templates.
+        public string Uom { get; set; } = "";
+        public decimal UnitPrice { get; set; }
+        public decimal LineTotal { get; set; }
+    }
+
+    // Data for printing a Sales Order (quantity-only — mirrors PrintChallanDto
+    // plus the delivered/remaining fulfilment columns)
+    public class PrintOrderDto
+    {
+        public string CompanyBrandName { get; set; } = "";
+        public string? CompanyLogoPath { get; set; }
+        public string? CompanyAddress { get; set; }
+        public string? CompanyPhone { get; set; }
+        public int SalesOrderNumber { get; set; }
+        public DateTime OrderDate { get; set; }
+        public DateTime? RequiredDate { get; set; }
+        public string? CustomerPoNumber { get; set; }
+        public DateTime? CustomerPoDate { get; set; }
+        /// <summary>Fulfilment roll-up shown on the printed order ({{status}}).</summary>
+        public string Status { get; set; } = "";
+        public string ClientName { get; set; } = "";
+        public string? ClientAddress { get; set; }
+        public string? Site { get; set; }
+        public List<PrintOrderItemDto> Items { get; set; } = new();
+    }
+
+    public class PrintOrderItemDto
+    {
+        public int SNo { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        public string Description { get; set; } = "";
+        public decimal Quantity { get; set; }
+        // See PrintQuoteItemDto.Uom — clean camelCase "uom" key.
+        public string Uom { get; set; } = "";
+        public decimal DeliveredQuantity { get; set; }
+        public decimal RemainingQuantity { get; set; }
+    }
 }

@@ -21,6 +21,14 @@
         public string Status { get; set; } = "Pending";
         public int? InvoiceId { get; set; }
 
+        // Optional link to the Sales Order this challan fulfils. Null for
+        // standalone challans, imported/legacy challans, and any challan
+        // created before the Sales Order module — so this is purely additive
+        // and never disturbs the existing challan flow. When set, the
+        // challan's delivered quantities roll up against the order's ordered
+        // quantities for fulfilment tracking.
+        public int? SalesOrderId { get; set; }
+
         // Flag for challans created via the historical Excel import flow.
         // Informational only — MUST NOT gate billing or any core flow; imported
         // challans participate in Bill/Invoice creation just like native ones.
@@ -44,6 +52,7 @@
         public Company Company { get; set; } = null!;
         public Client Client { get; set; } = null!;
         public Invoice? Invoice { get; set; }
+        public SalesOrder? SalesOrder { get; set; }
         public DeliveryChallan? DuplicatedFrom { get; set; }
         public ICollection<DeliveryItem> Items { get; set; } = new List<DeliveryItem>();
     }
