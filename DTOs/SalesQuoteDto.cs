@@ -14,6 +14,8 @@ namespace MyApp.Api.DTOs
         public int CompanyId { get; set; }
         public int ClientId { get; set; }
         public string ClientName { get; set; } = "";
+        public int? DivisionId { get; set; }
+        public string? DivisionName { get; set; }
         public DateTime Date { get; set; }
         public DateTime? ValidUntil { get; set; }
         public string? CustomerEnquiryRef { get; set; }

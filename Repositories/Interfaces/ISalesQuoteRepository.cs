@@ -8,7 +8,8 @@ namespace MyApp.Api.Repositories.Interfaces
         Task<(List<SalesQuote> Items, int TotalCount)> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
-            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null);
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? divisionId = null);
         Task<SalesQuote?> GetByIdAsync(int id);
         Task<SalesQuote> UpdateAsync(SalesQuote quote);
         Task DeleteAsync(SalesQuote quote);

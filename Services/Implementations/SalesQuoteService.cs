@@ -43,6 +43,8 @@ namespace MyApp.Api.Services.Implementations
                 CompanyId = q.CompanyId,
                 ClientId = q.ClientId,
                 ClientName = q.Client?.Name ?? "",
+                DivisionId = q.DivisionId,
+                DivisionName = q.Division?.Name,
                 Date = q.Date,
                 ValidUntil = q.ValidUntil,
                 CustomerEnquiryRef = q.CustomerEnquiryRef,
@@ -97,11 +99,12 @@ namespace MyApp.Api.Services.Implementations
         public async Task<PagedResult<SalesQuoteDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
-            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null)
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? divisionId = null)
         {
             var max = await _repository.GetMaxNumberAsync(companyId);
             var (items, totalCount) = await _repository.GetPagedByCompanyAsync(
-                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo);
+                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, divisionId);
             return new PagedResult<SalesQuoteDto>
             {
                 Items = items.Select(q => ToDto(q, max)).ToList(),
@@ -133,6 +136,8 @@ namespace MyApp.Api.Services.Implementations
                 ?? throw new KeyNotFoundException("Client not found.");
             if (client.CompanyId != companyId)
                 throw new InvalidOperationException("Client does not belong to this company.");
+            if (dto.DivisionId.HasValue && !await _context.Divisions.AnyAsync(d => d.Id == dto.DivisionId.Value && d.CompanyId == companyId))
+                throw new InvalidOperationException("Division does not belong to this company.");
 
             await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.Unit));
 
@@ -147,6 +152,7 @@ namespace MyApp.Api.Services.Implementations
                     CompanyId = companyId,
                     QuoteNumber = next,
                     ClientId = dto.ClientId,
+                    DivisionId = dto.DivisionId,
                     Date = dto.Date == default ? DateTime.UtcNow.Date : dto.Date,
                     ValidUntil = dto.ValidUntil,
                     CustomerEnquiryRef = string.IsNullOrWhiteSpace(dto.CustomerEnquiryRef) ? null : dto.CustomerEnquiryRef.Trim(),
@@ -199,6 +205,9 @@ namespace MyApp.Api.Services.Implementations
                     throw new InvalidOperationException("Client does not belong to this company.");
                 quote.ClientId = dto.ClientId;
             }
+            if (dto.DivisionId.HasValue && !await _context.Divisions.AnyAsync(d => d.Id == dto.DivisionId.Value && d.CompanyId == quote.CompanyId))
+                throw new InvalidOperationException("Division does not belong to this company.");
+            quote.DivisionId = dto.DivisionId;
 
             quote.Date = dto.Date == default ? quote.Date : dto.Date;
             quote.ValidUntil = dto.ValidUntil;

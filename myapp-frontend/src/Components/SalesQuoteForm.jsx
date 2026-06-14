@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SelectDropdown from "./SelectDropdown";
+import DivisionSelect from "./DivisionSelect";
 import QuantityInput from "./QuantityInput";
 import { getAllUnits } from "../api/unitsApi";
 import { getQuoteItemRate } from "../api/salesQuoteApi";
@@ -15,9 +16,13 @@ const colors = {
 const blankItem = () => ({ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "", unitPrice: 0, rateHint: "" });
 
 // Create + edit a Sales Quote. Pass `quote` to edit; omit to create.
-export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
+export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, defaultDivisionId }) {
   const isEdit = !!quote;
   const [client, setClient] = useState(quote ? { id: quote.clientId, label: quote.clientName } : null);
+  // New quotes default to the division currently being filtered (so "filter to
+  // a division → New Quote" lands in that division); edits keep their own.
+  const [divisionId, setDivisionId] = useState(
+    quote?.divisionId ? String(quote.divisionId) : (defaultDivisionId ? String(defaultDivisionId) : ""));
   const [date, setDate] = useState(quote?.date ? quote.date.slice(0, 10) : new Date().toISOString().slice(0, 10));
   const [validUntil, setValidUntil] = useState(quote?.validUntil ? quote.validUntil.slice(0, 10) : "");
   const [enquiryRef, setEnquiryRef] = useState(quote?.customerEnquiryRef || "");
@@ -91,6 +96,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
     try {
       await onSaved({
         clientId: client.id,
+        divisionId: divisionId ? parseInt(divisionId) : null,
         date: date ? new Date(date).toISOString() : null,
         validUntil: validUntil ? new Date(validUntil).toISOString() : null,
         customerEnquiryRef: enquiryRef.trim() || null,
@@ -130,6 +136,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
               <div style={{ flex: 2, minWidth: 220 }}>
                 <SelectDropdown label="Client" endpoint={`/clients/company/${companyId}`} value={client} onChange={setClient} placeholder="Choose client" />
               </div>
+              <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={s.opt}>(optional)</span></>} labelStyle={s.label} style={s.input} wrapStyle={{ flex: 1, minWidth: 150 }} />
               <div style={{ flex: 1, minWidth: 140 }}>
                 <label style={s.label}>Quote Date</label>
                 <input type="date" style={s.input} value={date} onChange={(e) => setDate(e.target.value)} />

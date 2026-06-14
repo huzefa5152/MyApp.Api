@@ -6,9 +6,11 @@ import {
   deleteSalesQuote, setSalesQuoteStatus, convertQuoteToOrder, getSalesQuotePrintData,
 } from "../api/salesQuoteApi";
 import { getTemplate } from "../api/printTemplateApi";
+import { getClientsByCompany } from "../api/clientApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { defaultQuoteTemplate } from "../utils/salesDocTemplates";
 import { dropdownStyles } from "../theme";
+import DivisionSelect from "../Components/DivisionSelect";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
@@ -40,6 +42,9 @@ export default function SalesQuotePage() {
   const [totalPages, setTotalPages] = useState(0);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [divisionFilter, setDivisionFilter] = useState("");
+  const [clientFilter, setClientFilter] = useState("");
+  const [clients, setClients] = useState([]);
 
   const fetchQuotes = useCallback(async (companyId, pg) => {
     if (!companyId) return;
@@ -48,19 +53,29 @@ export default function SalesQuotePage() {
       const params = { page: pg || page };
       if (search) params.search = search;
       if (statusFilter) params.status = statusFilter;
+      if (divisionFilter) params.divisionId = divisionFilter;
+      if (clientFilter) params.clientId = clientFilter;
       const { data } = await getPagedSalesQuotesByCompany(companyId, params);
       setQuotes(data.items);
       setTotalCount(data.totalCount);
       setTotalPages(data.totalPages);
     } catch { setQuotes([]); setTotalCount(0); setTotalPages(0); }
     finally { setLoading(false); }
-  }, [page, search, statusFilter]);
+  }, [page, search, statusFilter, divisionFilter, clientFilter]);
 
+  // Reset paging + filters and load the client list when the company changes.
   useEffect(() => {
-    if (selectedCompany) { setPage(1); fetchQuotes(selectedCompany.id, 1); }
-    else setQuotes([]);
+    setPage(1); setSearch(""); setStatusFilter(""); setDivisionFilter(""); setClientFilter("");
+    if (selectedCompany) {
+      getClientsByCompany(selectedCompany.id).then(({ data }) => setClients(data || [])).catch(() => setClients([]));
+    } else { setClients([]); setQuotes([]); }
   }, [selectedCompany]);
-  useEffect(() => { if (selectedCompany) fetchQuotes(selectedCompany.id, page); }, [page, search, statusFilter]);
+
+  // Fetch whenever the company, page, or any filter changes.
+  useEffect(() => {
+    if (selectedCompany) fetchQuotes(selectedCompany.id, page);
+    else setQuotes([]);
+  }, [selectedCompany, page, search, statusFilter, divisionFilter, clientFilter]);
 
   const reload = () => selectedCompany && fetchQuotes(selectedCompany.id, page);
 
@@ -127,11 +142,12 @@ export default function SalesQuotePage() {
 
       {loadingCompanies ? <Spinner label="Loading companies..." /> : companies.length > 0 ? (
         <>
-          <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
             <MdBusiness size={20} color={colors.blue} />
             <select style={dropdownStyles.base} value={selectedCompany?.id || ""} onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}>
               {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
             </select>
+            <DivisionSelect companyId={selectedCompany?.id} value={divisionFilter} onChange={(v) => { setDivisionFilter(v); setPage(1); }} style={dropdownStyles.base} />
           </div>
           {selectedCompany && (
             <div className="filters-row">
@@ -142,6 +158,10 @@ export default function SalesQuotePage() {
               <select className="filter-select" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
                 <option value="">All Status</option>
                 {["Draft", "Sent", "Accepted", "Rejected", "Expired", "Converted"].map((x) => <option key={x} value={x}>{x}</option>)}
+              </select>
+              <select className="filter-select" value={clientFilter} onChange={(e) => { setClientFilter(e.target.value); setPage(1); }}>
+                <option value="">All Clients</option>
+                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
           )}
@@ -161,8 +181,11 @@ export default function SalesQuotePage() {
                 </div>
                 <div style={st.client}>{q.clientName}</div>
                 <div style={st.metaRow}><span>{fmtDate(q.date)}</span><span>{q.items?.length || 0} item{(q.items?.length || 0) !== 1 ? "s" : ""}</span></div>
+                {q.divisionName && <span style={st.divisionChip}>{q.divisionName}</span>}
                 {q.customerEnquiryRef && <div style={st.meta}>Enquiry: {q.customerEnquiryRef}</div>}
+                {q.validUntil && <div style={st.meta}>Valid until: {fmtDate(q.validUntil)}</div>}
                 <div style={st.total}>Rs {Number(q.grandTotal).toLocaleString()}</div>
+                <div style={st.subMeta}>Subtotal Rs {Number(q.subtotal).toLocaleString()} · GST {q.gstRate}% (Rs {Number(q.gstAmount).toLocaleString()})</div>
                 {q.convertedToSalesOrderNumber && <div style={st.converted}>→ Sales Order #{q.convertedToSalesOrderNumber}</div>}
                 <div style={st.actions}>
                   {canUpdate && q.isEditable && <button style={st.actBtn} onClick={() => { setEditQuote(q); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
@@ -189,7 +212,7 @@ export default function SalesQuotePage() {
       )}
 
       {showForm && selectedCompany && (
-        <SalesQuoteForm companyId={selectedCompany.id} quote={editQuote} onClose={() => { setShowForm(false); setEditQuote(null); }} onSaved={handleSave} />
+        <SalesQuoteForm companyId={selectedCompany.id} quote={editQuote} defaultDivisionId={editQuote ? null : divisionFilter} onClose={() => { setShowForm(false); setEditQuote(null); }} onSaved={handleSave} />
       )}
     </div>
   );
@@ -213,7 +236,9 @@ const st = {
   client: { marginTop: "0.5rem", fontWeight: 600, color: colors.textPrimary, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
   metaRow: { display: "flex", justifyContent: "space-between", marginTop: "0.35rem", fontSize: "0.8rem", color: colors.textSecondary },
   meta: { marginTop: "0.2rem", fontSize: "0.78rem", color: colors.textSecondary },
+  divisionChip: { display: "inline-block", marginTop: "0.35rem", fontSize: "0.72rem", fontWeight: 700, color: colors.blue, background: "#e3f0ff", padding: "0.12rem 0.55rem", borderRadius: 6 },
   total: { marginTop: "0.5rem", fontWeight: 800, fontSize: "1.1rem", color: colors.textPrimary },
+  subMeta: { marginTop: "0.1rem", fontSize: "0.74rem", color: colors.textSecondary },
   converted: { marginTop: "0.3rem", fontSize: "0.78rem", color: colors.teal, fontWeight: 600 },
   actions: { display: "flex", gap: "0.4rem", marginTop: "0.75rem", flexWrap: "wrap", alignItems: "center" },
   // grid + placeItems centres the icon WITHOUT the flexbox quirk that

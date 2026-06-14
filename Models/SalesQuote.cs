@@ -20,6 +20,12 @@ namespace MyApp.Api.Models
         public int QuoteNumber { get; set; }
         public int ClientId { get; set; }
 
+        /// <summary>
+        /// Optional sub-brand / department this quote belongs to (a
+        /// <see cref="Division"/> of the same company). Null = company-level.
+        /// </summary>
+        public int? DivisionId { get; set; }
+
         public DateTime Date { get; set; }
         /// <summary>Optional quote validity / expiry date shown on the print.</summary>
         public DateTime? ValidUntil { get; set; }
@@ -56,6 +62,7 @@ namespace MyApp.Api.Models
         // Navigation
         public Company Company { get; set; } = null!;
         public Client Client { get; set; } = null!;
+        public Division? Division { get; set; }
         public SalesOrder? ConvertedToSalesOrder { get; set; }
         public ICollection<SalesQuoteItem> Items { get; set; } = new List<SalesQuoteItem>();
     }

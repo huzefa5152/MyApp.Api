@@ -445,6 +445,15 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<SalesQuote>()
                 .HasOne(q => q.Client).WithMany()
                 .HasForeignKey(q => q.ClientId).OnDelete(DeleteBehavior.Restrict);
+            // Optional Division tag. SetNull is safe here (unlike PrintTemplate)
+            // because SalesQuote->Company is Restrict, so there's no second
+            // cascade path to SalesQuotes — deleting a division just un-tags
+            // its quotes (DivisionId -> null) rather than deleting them.
+            modelBuilder.Entity<SalesQuote>()
+                .HasOne(q => q.Division).WithMany()
+                .HasForeignKey(q => q.DivisionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
             modelBuilder.Entity<SalesQuoteItem>()
                 .HasOne(i => i.SalesQuote).WithMany(q => q.Items)
                 .HasForeignKey(i => i.SalesQuoteId).OnDelete(DeleteBehavior.Cascade);
