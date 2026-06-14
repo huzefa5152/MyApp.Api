@@ -16,6 +16,17 @@
         public int StartingInvoiceNumber { get; set; }
         public int CurrentInvoiceNumber { get; set; }
         public string? InvoiceNumberPrefix { get; set; }
+        // Sales Quote + Sales Order numbering (pre-sale documents). HasSalesQuotes /
+        // HasSalesOrders let the UI lock the Starting* field once a document of
+        // that type exists — same rule as challans / invoices.
+        public int StartingSalesQuoteNumber { get; set; }
+        public int CurrentSalesQuoteNumber { get; set; }
+        public int StartingSalesOrderNumber { get; set; }
+        public int CurrentSalesOrderNumber { get; set; }
+        public bool HasSalesQuotes { get; set; }
+        public bool HasSalesOrders { get; set; }
+        public bool FbrEnabled { get; set; } = true;
+        public bool RequireSalesOrderForBilling { get; set; } = false;
         public int? FbrProvinceCode { get; set; }
         public string? FbrBusinessActivity { get; set; }
         public string? FbrSector { get; set; }

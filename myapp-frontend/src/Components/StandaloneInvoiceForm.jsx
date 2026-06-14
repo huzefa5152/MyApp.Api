@@ -1074,6 +1074,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           client={null}
           companyId={companyId}
           companies={[]}
+          fbrEnabled={company?.fbrEnabled !== false}
           onClose={() => setShowAddClient(false)}
           onSaved={(created) => onClientSaved(created)}
         />

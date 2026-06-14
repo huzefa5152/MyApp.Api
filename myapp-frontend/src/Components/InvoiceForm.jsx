@@ -72,7 +72,7 @@ const SCENARIO_META = {
   SN028: { buyerKind: "walk-in" },
 };
 
-export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId, billsMode = false }) {
+export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId, prefillChallanIds, billsMode = false }) {
   // billsMode: true when this form is mounted from the Bills tab. Hides
   // every FBR-classification control — Item Type column + picker, "+ New
   // Item Type" button, bulk-apply toolbar, HS Code column, Sale Type
@@ -220,7 +220,13 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           getItemTypes().catch(() => ({ data: [] })),
           getFbrApplicableScenarios(companyId).catch(() => ({ data: { scenarios: [] } })),
         ]);
-        setAllChallans(challanRes.data);
+        // SO-mandatory billing (company flag): only offer challans linked to a
+        // Sales Order. The backend rejects billing an unlinked challan anyway,
+        // so this keeps the picker honest.
+        const billableChallans = company?.requireSalesOrderForBilling
+          ? (challanRes.data || []).filter((c) => c.salesOrderId != null)
+          : challanRes.data;
+        setAllChallans(billableChallans);
         setClients(clientRes.data);
         setItemTypes(typesRes.data || []);
         setScenarios(scenarioRes.data?.scenarios || []);
@@ -233,11 +239,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         // Bills > New Bill flow when the operator ticks a challan manually.
         // If the challan is no longer in the pending list (someone else
         // billed it in between) we fall back to the empty state silently.
-        if (prefillChallanId) {
-          const dc = challanRes.data.find((c) => c.id === prefillChallanId);
-          if (dc) {
-            setSelectedClientId(String(dc.clientId));
-            setSelectedIds([dc.id]);
+        // One challan (Generate Bill on the Challans page) OR many (Generate
+        // Bill on a Sales Order — all its unbilled challans at once). Only
+        // pre-ticks challans still in the pending/unbilled list; the client is
+        // taken from the first match. If none match (billed since), fall back
+        // to the empty state silently.
+        const prefillIds = (prefillChallanIds && prefillChallanIds.length)
+          ? prefillChallanIds
+          : (prefillChallanId ? [prefillChallanId] : []);
+        if (prefillIds.length) {
+          const matched = billableChallans.filter((c) => prefillIds.includes(c.id));
+          if (matched.length) {
+            setSelectedClientId(String(matched[0].clientId));
+            setSelectedIds(matched.map((c) => c.id));
           }
         }
       } catch {
@@ -247,7 +261,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       }
     };
     load();
-  }, [companyId, prefillChallanId]);
+  }, [companyId, prefillChallanId, prefillChallanIds]);
 
   // Whenever a challan gets newly ticked (either via the Generate-Bill
   // prefill or a manual click in the Bills > New Bill flow), fetch the
@@ -1393,6 +1407,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           client={null}
           companyId={companyId}
           companies={[]}
+          fbrEnabled={company?.fbrEnabled !== false}
           onClose={() => setShowAddClient(false)}
           onSaved={(created) => onClientCreated(created)}
         />

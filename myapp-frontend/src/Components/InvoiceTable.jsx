@@ -8,7 +8,7 @@ import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 
 // Renders the FBR-status pill in compact form for the table.
-function fbrStatusBadge(inv, isBillsMode) {
+function fbrStatusBadge(inv, isBillsMode, fbrEnabled = true) {
   if (inv.fbrStatus === "Submitted") {
     return (
       <StatusBadge tone="submitted" title={inv.fbrIRN ? `IRN: ${inv.fbrIRN}` : undefined}>
@@ -16,6 +16,9 @@ function fbrStatusBadge(inv, isBillsMode) {
       </StatusBadge>
     );
   }
+  // FBR disabled for this company → no FBR status badge on unsubmitted bills
+  // (already-submitted bills above still show their status for accuracy).
+  if (!fbrEnabled) return null;
   if (isBillsMode) {
     return <StatusBadge tone="warning">Pending FBR</StatusBadge>;
   }
@@ -39,6 +42,7 @@ export default function InvoiceTable({
   hasExcelBill,
   hasExcelTax,
   selectedCompanyHasFbrToken,
+  fbrEnabled = true,
   fbrValidated,
   fbrLoading,
   exportingId,
@@ -121,7 +125,7 @@ export default function InvoiceTable({
       header: isBillsMode ? "FBR" : "FBR Status",
       width: 140,
       accessor: (i) => i.fbrStatus || "",
-      render: (i) => fbrStatusBadge(i, isBillsMode),
+      render: (i) => fbrStatusBadge(i, isBillsMode, fbrEnabled),
     },
   ];
 

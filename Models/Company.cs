@@ -18,6 +18,13 @@
         public string? InvoiceNumberPrefix { get; set; }
 
         // FBR Digital Invoicing
+        // Master switch for the whole FBR flow on this company. When false,
+        // the Validate/Submit-to-FBR buttons are hidden, challans don't get
+        // gated into "Setup Required" for FBR reasons, and the company+client
+        // FBR-details readiness check is skipped. Defaults TRUE so existing
+        // tenants (Hakimi/Roshan) keep working exactly as before; operators
+        // turn it OFF for non-FBR companies.
+        public bool FbrEnabled { get; set; } = true;
         public int? FbrProvinceCode { get; set; }
         public string? FbrBusinessActivity { get; set; }
         public string? FbrSector { get; set; }
@@ -69,6 +76,15 @@
         public int StartingGoodsReceiptNumber { get; set; }
         public int CurrentGoodsReceiptNumber { get; set; }
 
+        // Sales Quote + Sales Order counters — same per-company numbering
+        // pattern as challans / invoices / purchase bills. Additive: default
+        // 0 for existing companies, so the first document of each type seeds
+        // from the matching Starting* value.
+        public int StartingSalesQuoteNumber { get; set; }
+        public int CurrentSalesQuoteNumber { get; set; }
+        public int StartingSalesOrderNumber { get; set; }
+        public int CurrentSalesOrderNumber { get; set; }
+
         // ── Tenant isolation ──
         // When false (default), any authenticated user with the right
         // RBAC permission can access this company's data — preserves
@@ -78,11 +94,19 @@
         // ICompanyAccessGuard.
         public bool IsTenantIsolated { get; set; }
 
+        // When true, every bill must trace to a Sales Order: all bill-creation
+        // paths require SO-linked challans and standalone bills are blocked.
+        // Default false so existing tenants (Hakimi/Roshan) keep billing from
+        // challans / standalone exactly as before — strictly opt-in per company.
+        public bool RequireSalesOrderForBilling { get; set; } = false;
+
         public List<DeliveryChallan> DeliveryChallans { get; set; } = new();
         public List<Client> Clients { get; set; } = new();
         public List<Supplier> Suppliers { get; set; } = new();
         public List<Invoice> Invoices { get; set; } = new();
         public List<PurchaseBill> PurchaseBills { get; set; } = new();
         public List<GoodsReceipt> GoodsReceipts { get; set; } = new();
+        public List<SalesQuote> SalesQuotes { get; set; } = new();
+        public List<SalesOrder> SalesOrders { get; set; } = new();
     }
 }

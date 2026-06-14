@@ -39,7 +39,8 @@ namespace MyApp.Api.Services.Implementations
             _access = access;
         }
 
-        private static CompanyDto ToDto(Company c, bool hasChallans = false, bool hasInvoices = false) => new()
+        private static CompanyDto ToDto(Company c, bool hasChallans = false, bool hasInvoices = false,
+            bool hasSalesQuotes = false, bool hasSalesOrders = false) => new()
         {
             Id = c.Id,
             Name = c.Name,
@@ -55,6 +56,14 @@ namespace MyApp.Api.Services.Implementations
             StartingInvoiceNumber = c.StartingInvoiceNumber,
             CurrentInvoiceNumber = c.CurrentInvoiceNumber,
             InvoiceNumberPrefix = c.InvoiceNumberPrefix,
+            StartingSalesQuoteNumber = c.StartingSalesQuoteNumber,
+            CurrentSalesQuoteNumber = c.CurrentSalesQuoteNumber,
+            StartingSalesOrderNumber = c.StartingSalesOrderNumber,
+            CurrentSalesOrderNumber = c.CurrentSalesOrderNumber,
+            HasSalesQuotes = hasSalesQuotes,
+            HasSalesOrders = hasSalesOrders,
+            FbrEnabled = c.FbrEnabled,
+            RequireSalesOrderForBilling = c.RequireSalesOrderForBilling,
             FbrProvinceCode = c.FbrProvinceCode,
             FbrBusinessActivity = c.FbrBusinessActivity,
             FbrSector = c.FbrSector,
@@ -92,10 +101,20 @@ namespace MyApp.Api.Services.Implementations
                 .Distinct()
                 .ToListAsync();
 
+            var companiesWithQuotes = await _context.SalesQuotes
+                .Where(q => companyIds.Contains(q.CompanyId))
+                .Select(q => q.CompanyId).Distinct().ToListAsync();
+            var companiesWithOrders = await _context.SalesOrders
+                .Where(o => companyIds.Contains(o.CompanyId))
+                .Select(o => o.CompanyId).Distinct().ToListAsync();
+
             var challanSet = new HashSet<int>(companiesWithChallans);
             var invoiceSet = new HashSet<int>(companiesWithInvoices);
+            var quoteSet = new HashSet<int>(companiesWithQuotes);
+            var orderSet = new HashSet<int>(companiesWithOrders);
 
-            return companies.Select(c => ToDto(c, challanSet.Contains(c.Id), invoiceSet.Contains(c.Id))).ToList();
+            return companies.Select(c => ToDto(c, challanSet.Contains(c.Id), invoiceSet.Contains(c.Id),
+                quoteSet.Contains(c.Id), orderSet.Contains(c.Id))).ToList();
         }
 
         public async Task<CompanyDto?> GetByIdAsync(int id)
@@ -104,7 +123,9 @@ namespace MyApp.Api.Services.Implementations
             if (company == null) return null;
             var hasChallans = await _challanRepo.HasChallansForCompanyAsync(company.Id);
             var hasInvoices = await _invoiceRepo.HasInvoicesForCompanyAsync(company.Id);
-            return ToDto(company, hasChallans, hasInvoices);
+            var hasSalesQuotes = await _context.SalesQuotes.AnyAsync(q => q.CompanyId == company.Id);
+            var hasSalesOrders = await _context.SalesOrders.AnyAsync(o => o.CompanyId == company.Id);
+            return ToDto(company, hasChallans, hasInvoices, hasSalesQuotes, hasSalesOrders);
         }
 
         public async Task<CompanyDto> CreateAsync(CreateCompanyDto dto)
@@ -125,7 +146,13 @@ namespace MyApp.Api.Services.Implementations
                 CurrentChallanNumber = 0,
                 StartingInvoiceNumber = dto.StartingInvoiceNumber,
                 CurrentInvoiceNumber = 0,
+                StartingSalesQuoteNumber = dto.StartingSalesQuoteNumber,
+                CurrentSalesQuoteNumber = 0,
+                StartingSalesOrderNumber = dto.StartingSalesOrderNumber,
+                CurrentSalesOrderNumber = 0,
                 InvoiceNumberPrefix = dto.InvoiceNumberPrefix,
+                FbrEnabled = dto.FbrEnabled,
+                RequireSalesOrderForBilling = dto.RequireSalesOrderForBilling,
                 FbrProvinceCode = dto.FbrProvinceCode,
                 FbrBusinessActivity = dto.FbrBusinessActivity,
                 FbrSector = dto.FbrSector,
@@ -166,6 +193,8 @@ namespace MyApp.Api.Services.Implementations
             if (dto.LogoPath != null) company.LogoPath = dto.LogoPath;
 
             // FBR fields (always updatable)
+            company.FbrEnabled = dto.FbrEnabled;
+            company.RequireSalesOrderForBilling = dto.RequireSalesOrderForBilling;
             company.InvoiceNumberPrefix = dto.InvoiceNumberPrefix;
             company.FbrProvinceCode = dto.FbrProvinceCode;
             company.FbrBusinessActivity = dto.FbrBusinessActivity;
@@ -215,6 +244,21 @@ namespace MyApp.Api.Services.Implementations
             {
                 company.StartingInvoiceNumber = dto.StartingInvoiceNumber;
                 company.CurrentInvoiceNumber = 0;
+            }
+
+            // Starting Sales Quote / Sales Order numbers — same rule: only
+            // settable while no document of that type exists yet.
+            var hasSalesQuotes = await _context.SalesQuotes.AnyAsync(q => q.CompanyId == id);
+            if (!hasSalesQuotes)
+            {
+                company.StartingSalesQuoteNumber = dto.StartingSalesQuoteNumber;
+                company.CurrentSalesQuoteNumber = 0;
+            }
+            var hasSalesOrders = await _context.SalesOrders.AnyAsync(o => o.CompanyId == id);
+            if (!hasSalesOrders)
+            {
+                company.StartingSalesOrderNumber = dto.StartingSalesOrderNumber;
+                company.CurrentSalesOrderNumber = 0;
             }
 
             var updated = await _repository.UpdateAsync(company);

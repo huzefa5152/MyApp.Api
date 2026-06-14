@@ -11,7 +11,11 @@
         public string? STRN { get; set; }
         public int StartingChallanNumber { get; set; }
         public int StartingInvoiceNumber { get; set; }
+        public int StartingSalesQuoteNumber { get; set; }
+        public int StartingSalesOrderNumber { get; set; }
         public string? InvoiceNumberPrefix { get; set; }
+        public bool FbrEnabled { get; set; } = true;
+        public bool RequireSalesOrderForBilling { get; set; } = false;
         public int? FbrProvinceCode { get; set; }
         public string? FbrBusinessActivity { get; set; }
         public string? FbrSector { get; set; }

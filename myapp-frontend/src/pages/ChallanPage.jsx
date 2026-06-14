@@ -4,7 +4,6 @@ import ChallanList from "../Components/ChallanList";
 import ChallanTable from "../Components/ChallanTable";
 import ChallanForm from "../Components/ChallanForm";
 import ChallanEditForm from "../Components/ChallanEditForm";
-import POImportForm from "../Components/POImportForm";
 import InvoiceForm from "../Components/InvoiceForm";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
@@ -57,7 +56,6 @@ export default function ChallanPage() {
   const [clients, setClients] = useState([]);
   const [challans, setChallans] = useState([]);
   const [showModal, setShowModal] = useState(false);
-  const [showImport, setShowImport] = useState(false);
   const [editChallan, setEditChallan] = useState(null);
   const [loadingChallans, setLoadingChallans] = useState(false);
   // Generate-Bill shortcut: holds the challanId to prefill into InvoiceForm
@@ -320,11 +318,6 @@ export default function ChallanPage() {
                 <MdAdd size={18} /> New Challan
               </button>
             )}
-            {canCreate && has("poformats.import.create") && (
-              <button style={{ ...styles.addBtn, backgroundColor: "#00897b" }} onClick={() => selectedCompany && setShowImport(true)}>
-                <MdUploadFile size={18} /> Import PO
-              </button>
-            )}
           </div>
         )}
       </div>
@@ -475,14 +468,6 @@ export default function ChallanPage() {
           companyId={selectedCompany.id}
           onClose={() => setShowModal(false)}
           onSaved={handleSaveChallan}
-        />
-      )}
-
-      {showImport && selectedCompany && (
-        <POImportForm
-          companyId={selectedCompany.id}
-          onClose={() => setShowImport(false)}
-          onSaved={() => { setShowImport(false); fetchChallans(selectedCompany.id, page); }}
         />
       )}
 

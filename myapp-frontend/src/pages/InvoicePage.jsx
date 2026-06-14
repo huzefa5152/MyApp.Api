@@ -82,18 +82,26 @@ export default function InvoicePage({ mode = "invoices" }) {
   const canPrint = isBillsMode ? canPrintBill : canPrintTax;
   // Two granular FBR perms — operator can be allowed to dry-run without
   // being trusted to commit. canFbrAny is just for showing the bulk bar.
-  const canFbrValidate = has("invoices.fbr.validate");
-  const canFbrSubmit = has("invoices.fbr.submit");
+  // FBR actions are gated by the company-level master switch IN ADDITION to
+  // RBAC: a company with FBR disabled never shows Validate / Submit / Preview,
+  // regardless of permission. (undefined → treated as enabled for back-compat
+  // before the company list refreshes with the new field.)
+  const fbrEnabled = selectedCompany?.fbrEnabled !== false;
+  // When ON, every bill must come from a Sales Order: standalone bills are
+  // disabled and the New-Bill challan picker shows only SO-linked challans.
+  const requireSO = !!selectedCompany?.requireSalesOrderForBilling;
+  const canFbrValidate = has("invoices.fbr.validate") && fbrEnabled;
+  const canFbrSubmit = has("invoices.fbr.submit") && fbrEnabled;
   const canFbrAny = canFbrValidate || canFbrSubmit;
   // Dedicated permission for the per-bill Exclude / Include FBR toggle —
   // separated from invoices.manage.update so a role can be granted ONLY
   // the toggle without also gaining edit rights on the bill itself.
-  const canFbrExclude = has("invoices.fbr.exclude");
+  const canFbrExclude = has("invoices.fbr.exclude") && fbrEnabled;
   // Dedicated permission for the FBR preview dialog — operator can sanity-
   // check the grouped items / totals before clicking Validate or Submit
   // without being trusted to actually call FBR. Administrator gets it
   // automatically via RbacSeeder.
-  const canFbrPreview = has("invoices.fbr.preview");
+  const canFbrPreview = has("invoices.fbr.preview") && fbrEnabled;
   // Client-filter dropdown needs `clients.manage.view` because it calls
   // GET /api/clients/company/{id}. A read-only role (e.g. tax consultant
   // with invoices.list.view only) would 403 on that call AND see a
@@ -643,7 +651,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                 <MdAdd size={18} /> New Bill
               </button>
             )}
-            {canCreateStandalone && (
+            {canCreateStandalone && !requireSO && (
               <button
                 style={styles.addBtnSecondary}
                 onClick={() => setShowStandaloneForm(true)}
@@ -805,6 +813,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               hasExcelBill={hasExcelBill}
               hasExcelTax={hasExcelTax}
               selectedCompanyHasFbrToken={!!selectedCompany?.hasFbrToken}
+              fbrEnabled={fbrEnabled}
               fbrValidated={fbrValidated}
               fbrLoading={fbrLoading}
               exportingId={exportingId}
@@ -866,7 +875,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         {inv.fbrIRN && <span style={styles.fbrPillIrn}>IRN {inv.fbrIRN}</span>}
                       </div>
                     )}
-                    {isBillsMode && inv.fbrStatus !== "Submitted" && (
+                    {isBillsMode && fbrEnabled && inv.fbrStatus !== "Submitted" && (
                       <div style={styles.fbrPillPending} title="This bill hasn't been submitted to FBR yet. Open the Invoices tab to validate and submit.">
                         <MdHourglassEmpty size={14} color="#b26a00" />
                         <span>Pending FBR submission</span>
@@ -883,7 +892,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         {inv.fbrErrorMessage}
                       </p>
                     )}
-                    {!isBillsMode && inv.fbrStatus !== "Submitted" && !inv.fbrReady && (
+                    {!isBillsMode && fbrEnabled && inv.fbrStatus !== "Submitted" && !inv.fbrReady && (
                       <div
                         style={styles.fbrPillIncomplete}
                         title={inv.fbrMissing?.length ? `Missing:\n• ${inv.fbrMissing.join("\n• ")}` : ""}
@@ -900,7 +909,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         </div>
                       </div>
                     )}
-                    {!isBillsMode && inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded && (
+                    {!isBillsMode && fbrEnabled && inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded && (
                       <div style={styles.fbrPillReady} title="All FBR fields are set. Click Validate to dry-run, or Submit to issue the IRN.">
                         <MdCheckCircle size={14} color="#0d47a1" />
                         <span>Ready to Validate</span>

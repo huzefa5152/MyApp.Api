@@ -343,6 +343,18 @@ namespace MyApp.Api.Services.Implementations
                 challans.Add(dc);
             }
 
+            // SO-mandatory billing (opt-in per company): every bill must trace
+            // to a Sales Order — so each billed challan must be linked to one,
+            // and a challan-less bill isn't allowed on this path.
+            if (company.RequireSalesOrderForBilling)
+            {
+                if (challans.Count == 0)
+                    throw new InvalidOperationException("This company requires every bill to be created from a Sales Order.");
+                var orphan = challans.FirstOrDefault(c => c.SalesOrderId == null);
+                if (orphan != null)
+                    throw new InvalidOperationException($"Challan {orphan.ChallanNumber} isn't linked to a Sales Order — this company requires every bill to come from one.");
+            }
+
             // Build invoice items from delivery items + user-provided unit prices
             var invoiceItems = new List<InvoiceItem>();
             foreach (var itemDto in dto.Items)
@@ -652,6 +664,11 @@ namespace MyApp.Api.Services.Implementations
         {
             var company = await _companyRepo.GetByIdAsync(dto.CompanyId);
             if (company == null) throw new KeyNotFoundException("Company not found.");
+
+            // SO-mandatory billing (opt-in per company): a standalone bill has no
+            // challan and so can't trace to a Sales Order — disallow it outright.
+            if (company.RequireSalesOrderForBilling)
+                throw new InvalidOperationException("This company requires every bill to be created from a Sales Order, so standalone bills are disabled.");
 
             var client = await _context.Clients.FindAsync(dto.ClientId);
             if (client == null) throw new KeyNotFoundException("Client not found.");
