@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MdClose, MdDescription, MdReceipt, MdLocalShipping } from "react-icons/md";
+import { MdClose, MdDescription, MdReceipt, MdLocalShipping, MdRequestQuote, MdAssignment } from "react-icons/md";
 import { STARTER_TEMPLATES } from "../../utils/starterTemplates";
 // Pulled from shared formStyles so this picker matches every other popup —
 // blurred backdrop, fixed centered modal, non-movable, standard z-index.
@@ -9,12 +9,16 @@ const TYPE_ICONS = {
   Challan: MdLocalShipping,
   Bill: MdReceipt,
   TaxInvoice: MdDescription,
+  SalesQuote: MdRequestQuote,
+  SalesOrder: MdAssignment,
 };
 
 const TYPE_COLORS = {
   Challan: "#1565c0",
   Bill: "#7b1fa2",
   TaxInvoice: "#2e7d32",
+  SalesQuote: "#e65100",
+  SalesOrder: "#00838f",
 };
 
 export default function StarterTemplatePicker({ templateType, onSelect, onClose }) {

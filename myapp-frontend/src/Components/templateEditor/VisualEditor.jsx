@@ -365,7 +365,7 @@ const vs = {
   },
   panelTabActive: {
     color: "#fff",
-    borderBottomColor: "#0d47a1",
+    borderBottom: "2px solid #0d47a1",
   },
   panelScroll: {
     flex: 1,

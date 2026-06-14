@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using ClosedXML.Excel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -6,17 +8,36 @@ using MyApp.Api.Helpers;
 using MyApp.Api.Helpers.ExcelImport;
 using MyApp.Api.Middleware;
 using MyApp.Api.Repositories.Interfaces;
+using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
-    [AuthorizeCompany]
+    // NOTE: [AuthorizeCompany] is applied PER-ACTION (not on the class) because the
+    // id-based management endpoints ({id}) have no companyId route param — the class
+    // filter would 400 them with "Missing required 'companyId'". Company-scoped actions
+    // carry [AuthorizeCompany]; id-based actions load the row and assert access manually.
     public class PrintTemplatesController : ControllerBase
     {
+        private static readonly string[] ValidTypes = { "Challan", "Bill", "TaxInvoice", "SalesQuote", "SalesOrder" };
+
         private readonly IPrintTemplateRepository _repo;
-        public PrintTemplatesController(IPrintTemplateRepository repo) => _repo = repo;
+        private readonly ICompanyAccessGuard _access;
+        private readonly IDivisionService _divisions;
+
+        public PrintTemplatesController(IPrintTemplateRepository repo, ICompanyAccessGuard access, IDivisionService divisions)
+        {
+            _repo = repo;
+            _access = access;
+            _divisions = divisions;
+        }
+
+        private int CurrentUserId =>
+            int.TryParse(
+                User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
+                out var id) ? id : 0;
 
         private static PrintTemplateDto ToDto(Models.PrintTemplate t)
         {
@@ -42,7 +63,11 @@ namespace MyApp.Api.Controllers
             {
                 Id = t.Id,
                 CompanyId = t.CompanyId,
+                DivisionId = t.DivisionId,
+                DivisionName = t.Division?.Name,
                 TemplateType = t.TemplateType,
+                Name = t.Name,
+                IsDefault = t.IsDefault,
                 HtmlContent = t.HtmlContent,
                 TemplateJson = t.TemplateJson,
                 EditorMode = t.EditorMode,
@@ -55,6 +80,7 @@ namespace MyApp.Api.Controllers
 
         [HttpGet("company/{companyId}")]
         [HasPermission("printtemplates.manage.view")]
+        [AuthorizeCompany]
         public async Task<IActionResult> GetByCompany(int companyId)
         {
             // Audit M-6 (2026-05-13): templates contain operator-authored
@@ -66,8 +92,10 @@ namespace MyApp.Api.Controllers
 
         [HttpGet("company/{companyId}/{templateType}")]
         [HasPermission("printtemplates.manage.view")]
+        [AuthorizeCompany]
         public async Task<IActionResult> GetByCompanyAndType(int companyId, string templateType)
         {
+            // Resolves the company-level default for the type (print/editor entry point).
             var t = await _repo.GetByCompanyAndTypeAsync(companyId, templateType);
             if (t == null) return NotFound();
             return Ok(ToDto(t));
@@ -75,24 +103,250 @@ namespace MyApp.Api.Controllers
 
         [HttpPut("company/{companyId}/{templateType}")]
         [HasPermission("printtemplates.manage.update")]
+        [AuthorizeCompany]
         public async Task<IActionResult> Upsert(int companyId, string templateType, [FromBody] UpsertPrintTemplateDto dto)
         {
-            var validTypes = new[] { "Challan", "Bill", "TaxInvoice" };
-            if (!validTypes.Contains(templateType))
-                return BadRequest(new { error = "Invalid template type. Use: Challan, Bill, or TaxInvoice" });
+            if (!ValidTypes.Contains(templateType))
+                return BadRequest(new { error = "Invalid template type. Use: Challan, Bill, TaxInvoice, SalesQuote, or SalesOrder" });
 
+            // Legacy single-template save path — upserts the company-level default.
             var t = await _repo.UpsertAsync(companyId, templateType, dto.HtmlContent, dto.TemplateJson, dto.EditorMode);
             return Ok(ToDto(t));
         }
 
-        // ───────── Excel Template Upload / Download / Delete ─────────
+        // ───────── Multi-template management (id-based) ─────────
+
+        [HttpGet("{id:int}")]
+        [HasPermission("printtemplates.manage.view")]
+        public async Task<IActionResult> GetById(int id)
+        {
+            var t = await _repo.GetByIdAsync(id);
+            if (t == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, t.CompanyId);
+            return Ok(ToDto(t));
+        }
+
+        [HttpPost("company/{companyId}")]
+        [HasPermission("printtemplates.manage.update")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> Create(int companyId, [FromBody] CreatePrintTemplateDto dto)
+        {
+            if (!ValidTypes.Contains(dto.TemplateType))
+                return BadRequest(new { error = "Invalid template type." });
+
+            // Cross-tenant link guard (CLAUDE.md §4): a division-scoped template's
+            // division must belong to the same company we're creating under.
+            if (dto.DivisionId.HasValue)
+            {
+                var div = await _divisions.GetByIdAsync(dto.DivisionId.Value);
+                if (div == null || div.CompanyId != companyId)
+                    return BadRequest(new { error = "Invalid division for this company." });
+            }
+
+            var name = string.IsNullOrWhiteSpace(dto.Name) ? "Untitled" : dto.Name.Trim();
+            var t = await _repo.CreateAsync(companyId, dto.DivisionId, dto.TemplateType, name,
+                dto.HtmlContent, dto.TemplateJson, dto.EditorMode, dto.IsDefault);
+            return Ok(ToDto(t));
+        }
+
+        [HttpPut("{id:int}")]
+        [HasPermission("printtemplates.manage.update")]
+        public async Task<IActionResult> Update(int id, [FromBody] UpdatePrintTemplateDto dto)
+        {
+            var existing = await _repo.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+
+            var updated = await _repo.UpdateContentAsync(id, dto.Name, dto.HtmlContent, dto.TemplateJson, dto.EditorMode);
+            return updated == null ? NotFound() : Ok(ToDto(updated));
+        }
+
+        [HttpPut("{id:int}/default")]
+        [HasPermission("printtemplates.manage.update")]
+        public async Task<IActionResult> SetDefault(int id)
+        {
+            var existing = await _repo.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+
+            await _repo.SetDefaultAsync(id);
+            return Ok(new { id, isDefault = true });
+        }
+
+        [HttpDelete("{id:int}")]
+        [HasPermission("printtemplates.manage.delete")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var existing = await _repo.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+
+            var excelPath = await _repo.DeleteAsync(id);
+            if (!string.IsNullOrEmpty(excelPath))
+            {
+                var full = Path.Combine(Directory.GetCurrentDirectory(), excelPath.TrimStart('/'));
+                if (System.IO.File.Exists(full)) System.IO.File.Delete(full);
+            }
+            return NoContent();
+        }
+
+        // ───────── Excel Template Upload / Download / Delete (id-based) ─────────
+
+        [HttpPost("{id:int}/excel-template")]
+        [HasPermission("printtemplates.manage.update")]
+        public async Task<IActionResult> UploadExcelTemplateById(int id, IFormFile file, [FromForm] string? sheetName = null)
+        {
+            var template = await _repo.GetByIdAsync(id);
+            if (template == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, template.CompanyId);
+
+            if (file == null || file.Length == 0)
+                return BadRequest(new { error = "No file uploaded" });
+            if (file.Length > 10 * 1024 * 1024)
+                return BadRequest(new { error = "File size must be under 10 MB" });
+
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            var allowed = new[] { ".xlsx", ".xlsm" };
+            if (!allowed.Contains(ext))
+                return BadRequest(new { error = "Only .xlsx and .xlsm files are allowed. Please save .xls files as .xlsx first." });
+
+            var targetDir = Path.Combine(Directory.GetCurrentDirectory(), "data", "uploads", "excel-templates");
+            Directory.CreateDirectory(targetDir);
+
+            // Remove this template's previous file (whatever its stored path/ext), plus
+            // any stale id-named files of either extension.
+            if (!string.IsNullOrEmpty(template.ExcelTemplatePath))
+            {
+                var prev = Path.Combine(Directory.GetCurrentDirectory(), template.ExcelTemplatePath.TrimStart('/'));
+                if (System.IO.File.Exists(prev)) System.IO.File.Delete(prev);
+            }
+            foreach (var oldExt in allowed)
+            {
+                var oldPath = Path.Combine(targetDir, $"template_{id}{oldExt}");
+                if (System.IO.File.Exists(oldPath)) System.IO.File.Delete(oldPath);
+            }
+
+            // Filename keyed on the template id (multiple templates of one type now
+            // exist, so the legacy company_{id}_{type} name would collide).
+            var fileName = $"template_{id}{ext}";
+            var filePath = Path.Combine(targetDir, fileName);
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            var relativePath = $"/data/uploads/excel-templates/{fileName}";
+
+            string? validatedSheetName = null;
+            List<string> availableSheets = new();
+            try
+            {
+                using var wb = new XLWorkbook(filePath);
+                availableSheets = wb.Worksheets.Select(ws => ws.Name).ToList();
+                if (!string.IsNullOrWhiteSpace(sheetName))
+                {
+                    validatedSheetName = availableSheets.FirstOrDefault(s =>
+                        string.Equals(s, sheetName, StringComparison.OrdinalIgnoreCase));
+                }
+            }
+            catch
+            {
+                // Workbook unreadable here would have failed the reverse-mapper path
+                // later too — leave the pin null and let auto-detection handle it.
+            }
+
+            template.ExcelTemplatePath = relativePath;
+            template.ExcelSheetName = validatedSheetName;
+            template.UpdatedAt = DateTime.UtcNow;
+            await _repo.SaveAsync();
+
+            return Ok(new
+            {
+                excelTemplatePath = relativePath,
+                hasExcelTemplate = true,
+                excelSheetName = validatedSheetName,
+                excelSheetNames = availableSheets,
+            });
+        }
+
+        [HttpPut("{id:int}/excel-template/sheet-name")]
+        [HasPermission("printtemplates.manage.sheetpin")]
+        public async Task<IActionResult> SetExcelSheetNameById(int id, [FromBody] SetSheetNameDto dto)
+        {
+            var template = await _repo.GetByIdAsync(id);
+            if (template == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, template.CompanyId);
+            if (string.IsNullOrEmpty(template.ExcelTemplatePath))
+                return NotFound(new { error = "No Excel template found for this template." });
+
+            string? validated = null;
+            if (!string.IsNullOrWhiteSpace(dto?.SheetName))
+            {
+                try
+                {
+                    var fullPath = Path.Combine(Directory.GetCurrentDirectory(), template.ExcelTemplatePath.TrimStart('/'));
+                    using var wb = new XLWorkbook(fullPath);
+                    validated = wb.Worksheets
+                        .Select(ws => ws.Name)
+                        .FirstOrDefault(n => string.Equals(n, dto.SheetName, StringComparison.OrdinalIgnoreCase));
+                    if (validated == null)
+                        return BadRequest(new { error = $"Sheet '{dto.SheetName}' not found in the uploaded template." });
+                }
+                catch
+                {
+                    return BadRequest(new { error = "Could not read the uploaded template." });
+                }
+            }
+            template.ExcelSheetName = validated;
+            template.UpdatedAt = DateTime.UtcNow;
+            await _repo.SaveAsync();
+            return Ok(new { excelSheetName = template.ExcelSheetName });
+        }
+
+        public class SetSheetNameDto
+        {
+            public string? SheetName { get; set; }
+        }
+
+        [HttpDelete("{id:int}/excel-template")]
+        [HasPermission("printtemplates.manage.update")]
+        public async Task<IActionResult> DeleteExcelTemplateById(int id)
+        {
+            var template = await _repo.GetByIdAsync(id);
+            if (template == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, template.CompanyId);
+            if (string.IsNullOrEmpty(template.ExcelTemplatePath))
+                return NotFound(new { error = "No Excel template found" });
+
+            var filePath = Path.Combine(Directory.GetCurrentDirectory(), template.ExcelTemplatePath.TrimStart('/'));
+            if (System.IO.File.Exists(filePath)) System.IO.File.Delete(filePath);
+
+            template.ExcelTemplatePath = null;
+            template.UpdatedAt = DateTime.UtcNow;
+            await _repo.SaveAsync();
+
+            return Ok(new { hasExcelTemplate = false });
+        }
+
+        [HttpGet("{id:int}/has-excel-template")]
+        public async Task<IActionResult> HasExcelTemplateById(int id)
+        {
+            var template = await _repo.GetByIdAsync(id);
+            if (template == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, template.CompanyId);
+            bool has = !string.IsNullOrEmpty(template.ExcelTemplatePath)
+                && System.IO.File.Exists(Path.Combine(Directory.GetCurrentDirectory(), template.ExcelTemplatePath.TrimStart('/')));
+            return Ok(new { hasExcelTemplate = has });
+        }
+
+        // ───────── Excel Template Upload / Download / Delete (legacy, company-default) ─────────
 
         [HttpPost("company/{companyId}/{templateType}/excel-template")]
         [HasPermission("printtemplates.manage.update")]
+        [AuthorizeCompany]
         public async Task<IActionResult> UploadExcelTemplate(int companyId, string templateType, IFormFile file, [FromForm] string? sheetName = null)
         {
-            var validTypes = new[] { "Challan", "Bill", "TaxInvoice" };
-            if (!validTypes.Contains(templateType))
+            if (!ValidTypes.Contains(templateType))
                 return BadRequest(new { error = "Invalid template type" });
 
             if (file == null || file.Length == 0)
@@ -167,6 +421,7 @@ namespace MyApp.Api.Controllers
         // or edit the template body.
         [HttpPut("company/{companyId}/{templateType}/excel-template/sheet-name")]
         [HasPermission("printtemplates.manage.sheetpin")]
+        [AuthorizeCompany]
         public async Task<IActionResult> SetExcelSheetName(int companyId, string templateType, [FromBody] SetSheetNameDto dto)
         {
             var template = await _repo.GetByCompanyAndTypeAsync(companyId, templateType);
@@ -200,13 +455,9 @@ namespace MyApp.Api.Controllers
             return Ok(new { excelSheetName = template.ExcelSheetName });
         }
 
-        public class SetSheetNameDto
-        {
-            public string? SheetName { get; set; }
-        }
-
         [HttpDelete("company/{companyId}/{templateType}/excel-template")]
         [HasPermission("printtemplates.manage.update")]
+        [AuthorizeCompany]
         public async Task<IActionResult> DeleteExcelTemplate(int companyId, string templateType)
         {
             var template = await _repo.GetByCompanyAndTypeAsync(companyId, templateType);
@@ -224,6 +475,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("company/{companyId}/{templateType}/has-excel-template")]
+        [AuthorizeCompany]
         public async Task<IActionResult> HasExcelTemplate(int companyId, string templateType)
         {
             var template = await _repo.GetByCompanyAndTypeAsync(companyId, templateType);
@@ -235,6 +487,7 @@ namespace MyApp.Api.Controllers
         // ───────── Excel Export (fill template with data) ─────────
 
         [HttpPost("company/{companyId}/Challan/export-excel")]
+        [AuthorizeCompany]
         public async Task<IActionResult> ExportChallanExcel(int companyId, [FromBody] PrintChallanDto dto)
         {
             return await ProcessExcelExport(companyId, "Challan", ExcelTemplateEngine.ChallanToDict(dto),
@@ -242,6 +495,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPost("company/{companyId}/Bill/export-excel")]
+        [AuthorizeCompany]
         public async Task<IActionResult> ExportBillExcel(int companyId, [FromBody] PrintBillDto dto)
         {
             return await ProcessExcelExport(companyId, "Bill", ExcelTemplateEngine.BillToDict(dto),
@@ -249,6 +503,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPost("company/{companyId}/TaxInvoice/export-excel")]
+        [AuthorizeCompany]
         public async Task<IActionResult> ExportTaxInvoiceExcel(int companyId, [FromBody] PrintTaxInvoiceDto dto)
         {
             // Uppercase INVOICE prefix — matches operator convention for tax invoices
