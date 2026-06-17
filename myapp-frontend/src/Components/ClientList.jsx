@@ -1,5 +1,5 @@
 import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete, MdContentCopy } from "react-icons/md";
-import { deleteClient } from "../api/clientApi";
+import { deleteClient, getClientDeleteImpact } from "../api/clientApi";
 import { cardStyles, cardHover } from "../theme";
 import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -12,14 +12,41 @@ export default function ClientList({ clients, onEdit, onCopy, fetchClients }) {
   const canDelete = has("clients.manage.delete");
   const canCopy = has("clients.manage.copy");
 
-  const handleDelete = async (id) => {
-    const ok = await confirm({ title: "Delete Client?", message: "Are you sure you want to delete this client? This action cannot be undone.", variant: "danger", confirmText: "Delete" });
+  const handleDelete = async (client) => {
+    // Look up what the wipe will cascade-delete (best-effort; falls back to a
+    // plain confirm if the impact call isn't available).
+    let impact = null;
+    try { ({ data: impact } = await getClientDeleteImpact(client.id)); } catch { /* plain confirm */ }
+
+    // FBR-submitted bills block the delete (compliance).
+    if (impact && impact.fbrSubmittedInvoices > 0) {
+      await confirm({
+        title: "Can't delete this client",
+        message: `"${client.name}" has ${impact.fbrSubmittedInvoices} FBR-submitted bill${impact.fbrSubmittedInvoices !== 1 ? "s" : ""}, which can't be deleted for compliance. Handle those in the Invoices tab first.`,
+        variant: "warning", confirmText: "OK", cancelText: "Close",
+      });
+      return;
+    }
+
+    const parts = [];
+    if (impact) {
+      if (impact.invoices) parts.push(`${impact.invoices} bill/invoice${impact.invoices !== 1 ? "s" : ""}`);
+      if (impact.deliveryChallans) parts.push(`${impact.deliveryChallans} delivery challan${impact.deliveryChallans !== 1 ? "s" : ""}`);
+      if (impact.salesOrders) parts.push(`${impact.salesOrders} sales order${impact.salesOrders !== 1 ? "s" : ""}`);
+      if (impact.salesQuotes) parts.push(`${impact.salesQuotes} sales quote${impact.salesQuotes !== 1 ? "s" : ""}`);
+    }
+    const message = parts.length
+      ? `Deleting "${client.name}" will also permanently delete ${parts.join(", ")} (and their attachments). This cannot be undone.`
+      : `Delete "${client.name}"? This cannot be undone.`;
+
+    const ok = await confirm({ title: "Delete Client?", message, variant: "danger", confirmText: parts.length ? "Delete client + documents" : "Delete" });
     if (!ok) return;
     try {
-      await deleteClient(id);
+      await deleteClient(client.id);
       fetchClients();
+      notify("Client deleted.", "success");
     } catch (err) {
-      notify("Failed to delete client.", "error");
+      notify(err.response?.data?.error || err.response?.data?.message || "Failed to delete client.", "error");
     }
   };
 
@@ -97,7 +124,7 @@ export default function ClientList({ clients, onEdit, onCopy, fetchClients }) {
                 {canDelete && (
                   <button
                     style={{ ...cardStyles.button, ...cardStyles.delete, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                    onClick={() => handleDelete(client.id)}
+                    onClick={() => handleDelete(client)}
                     onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(0.95)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
                   >

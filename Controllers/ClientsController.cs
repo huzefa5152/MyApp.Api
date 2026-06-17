@@ -291,6 +291,18 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        // Counts of what a client wipe will cascade-delete — drives the confirm
+        // dialog. FbrSubmittedInvoices > 0 means the delete will be blocked.
+        [HttpGet("{id}/delete-impact")]
+        [HasPermission("clients.manage.delete")]
+        public async Task<ActionResult<ClientDeleteImpactDto>> GetDeleteImpact(int id)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            return Ok(await _service.GetDeleteImpactAsync(id));
+        }
+
         [HttpDelete("{id}")]
         [HasPermission("clients.manage.delete")]
         public async Task<IActionResult> DeleteClient(int id)
@@ -298,8 +310,17 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
-            await _service.DeleteAsync(id);
-            return NoContent();
+            try
+            {
+                await _service.DeleteAsync(id);
+                return NoContent();
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (Exception)
+            {
+                // The service already logged the rolled-back transaction.
+                return StatusCode(500, new { error = "Could not delete the client. Please try again." });
+            }
         }
     }
 }
