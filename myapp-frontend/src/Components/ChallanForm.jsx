@@ -252,6 +252,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                         endpoint="/lookup/items"
                         value={item.description}
                         onChange={(val) => handleItemChange(idx, "description", val)}
+                        multiline
                       />
                     </div>
 

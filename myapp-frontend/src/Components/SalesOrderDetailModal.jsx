@@ -3,6 +3,7 @@ import {
   MdClose, MdPrint, MdLocalShipping, MdEdit, MdInventory2, MdReceiptLong,
 } from "react-icons/md";
 import { getSalesOrderChallans } from "../api/salesOrderApi";
+import RichText from "./RichText";
 
 const colors = {
   blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e",
@@ -97,7 +98,7 @@ export default function SalesOrderDetailModal({ order, onClose, onPrint, onEdit,
                   <tr key={i.id ?? idx}>
                     <td style={st.td}>{idx + 1}</td>
                     <td style={st.td}>
-                      <div style={st.itemDesc}>{i.description}</div>
+                      <div style={st.itemDesc}><RichText text={i.description} /></div>
                       {i.itemTypeName && <div style={st.itemType}>{i.itemTypeName}</div>}
                     </td>
                     <td style={{ ...st.td, ...st.num }}>{fmtQty(i.quantity)} {i.unit}</td>
@@ -149,7 +150,7 @@ export default function SalesOrderDetailModal({ order, onClose, onPrint, onEdit,
                     <div style={st.challanLines}>
                       {(c.lines || []).map((l, li) => (
                         <div key={li} style={st.challanLine}>
-                          <span style={st.clDesc}>{l.description}</span>
+                          <span style={st.clDesc}><RichText text={l.description} /></span>
                           <span style={st.clQty}>{fmtQty(l.quantity)} {l.unit}</span>
                         </div>
                       ))}

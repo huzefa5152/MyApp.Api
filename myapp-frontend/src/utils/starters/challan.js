@@ -1,5 +1,5 @@
 /**
- * Delivery Challan starter templates — 15 distinct visual archetypes.
+ * Delivery Challan starter templates â€” 15 distinct visual archetypes.
  * All templates are A4 print-ready, Handlebars-powered, quantity-only (no prices).
  * Use only registered helpers: fmtDate, fmt, fmtDec, nl2br, join, joinDates,
  * emptyRows, math, inc, eq, gt, or, #each, #if.
@@ -7,7 +7,7 @@
 
 export const challanStarters = [
 
-  // ─── 1. Classic Serif (double-border header) ──────────────────────────────
+  // â”€â”€â”€ 1. Classic Serif (double-border header) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "challan-classic-serif",
     name: "Classic Serif",
@@ -65,7 +65,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
 <table>
   <thead><tr><th class="n">S#</th><th class="c">Qty</th><th>Description of Goods</th><th class="c">Unit</th></tr></thead>
   <tbody>
-    {{#each items}}<tr><td class="cell n">{{inc @index}}</td><td class="cell c">{{this.quantity}}</td><td class="cell">{{this.description}}</td><td class="cell c">{{this.unit}}</td></tr>{{/each}}
+    {{#each items}}<tr><td class="cell n">{{inc @index}}</td><td class="cell c">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.unit}}</td></tr>{{/each}}
     {{emptyRows (math 15 "-" items.length) 4}}
   </tbody>
 </table>
@@ -78,7 +78,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
 </body></html>`,
   },
 
-  // ─── 2. Modern Minimal (accent rule) ──────────────────────────────────────
+  // â”€â”€â”€ 2. Modern Minimal (accent rule) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "challan-modern-minimal",
     name: "Modern Minimal",
@@ -137,7 +137,7 @@ td.c { text-align: center; }
 <table>
   <thead><tr><th class="c n">#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
   <tbody>
-    {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{this.description}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
+    {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
     {{emptyRows (math 15 "-" items.length) 4}}
   </tbody>
 </table>
@@ -149,7 +149,7 @@ td.c { text-align: center; }
 </body></html>`,
   },
 
-  // ─── 3. Corporate Navy Header Band ────────────────────────────────────────
+  // â”€â”€â”€ 3. Corporate Navy Header Band â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "challan-corporate-navy",
     name: "Corporate Navy",
@@ -215,7 +215,7 @@ tbody tr:nth-child(even) td { background: #eef2f9 !important; }
   <table>
     <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
     <tbody>
-      {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{this.description}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
+      {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
       {{emptyRows (math 15 "-" items.length) 4}}
     </tbody>
   </table>
@@ -228,7 +228,7 @@ tbody tr:nth-child(even) td { background: #eef2f9 !important; }
 </body></html>`,
   },
 
-  // ─── 4. Bold Colored Banner ───────────────────────────────────────────────
+  // â”€â”€â”€ 4. Bold Colored Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "challan-bold-banner",
     name: "Bold Colored Banner",
@@ -300,7 +300,7 @@ tbody tr:nth-child(even) td { background: #e0f2f1 !important; }
   <table>
     <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
     <tbody>
-      {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{this.description}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
+      {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
       {{emptyRows (math 15 "-" items.length) 4}}
     </tbody>
   </table>
@@ -313,7 +313,7 @@ tbody tr:nth-child(even) td { background: #e0f2f1 !important; }
 </body></html>`,
   },
 
-  // ─── 5. Monochrome Ink-Saver ──────────────────────────────────────────────
+  // â”€â”€â”€ 5. Monochrome Ink-Saver â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "challan-monochrome-ink-saver",
     name: "Monochrome Ink-Saver",
@@ -371,7 +371,7 @@ td.c { text-align: center; }
 <table>
   <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
   <tbody>
-    {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{this.description}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
+    {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
     {{emptyRows (math 15 "-" items.length) 4}}
   </tbody>
 </table>
@@ -383,7 +383,7 @@ td.c { text-align: center; }
 </body></html>`,
   },
 
-  // ─── 6. Elegant Premium (charcoal + gold) ─────────────────────────────────
+  // â”€â”€â”€ 6. Elegant Premium (charcoal + gold) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "challan-elegant-premium",
     name: "Elegant Premium",
@@ -450,7 +450,7 @@ tbody tr:nth-child(even) td { background: #fdf8ee !important; }
 <table>
   <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
   <tbody>
-    {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{this.description}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
+    {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
     {{emptyRows (math 15 "-" items.length) 4}}
   </tbody>
 </table>
@@ -463,7 +463,7 @@ tbody tr:nth-child(even) td { background: #fdf8ee !important; }
 </body></html>`,
   },
 
-  // ─── 7. Compact Dense ─────────────────────────────────────────────────────
+  // â”€â”€â”€ 7. Compact Dense â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "challan-compact-dense",
     name: "Compact Dense",
@@ -522,7 +522,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
 <table>
   <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description</th><th class="c unit">Unit</th></tr></thead>
   <tbody>
-    {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{this.description}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
+    {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
     {{emptyRows (math 20 "-" items.length) 4}}
   </tbody>
 </table>
@@ -534,7 +534,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
 </body></html>`,
   },
 
-  // ─── 8. Left Sidebar Color Strip ──────────────────────────────────────────
+  // â”€â”€â”€ 8. Left Sidebar Color Strip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "challan-left-sidebar",
     name: "Left Sidebar Strip",
@@ -598,7 +598,7 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
   <table>
     <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
     <tbody>
-      {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{this.description}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
+      {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
       {{emptyRows (math 15 "-" items.length) 4}}
     </tbody>
   </table>
@@ -611,7 +611,7 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
 </body></html>`,
   },
 
-  // ─── 9. Boxed Traditional (heavy boxed sections) ──────────────────────────
+  // â”€â”€â”€ 9. Boxed Traditional (heavy boxed sections) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "challan-boxed-traditional",
     name: "Boxed Traditional",
@@ -675,7 +675,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
   <table>
     <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
     <tbody>
-      {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{this.description}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
+      {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
       {{emptyRows (math 15 "-" items.length) 4}}
     </tbody>
   </table>
@@ -688,7 +688,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
 </body></html>`,
   },
 
-  // ─── 10. Bismillah Header ────────────────────────────────────────────────
+  // â”€â”€â”€ 10. Bismillah Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "challan-bismillah",
     name: "Bismillah Header",
@@ -749,7 +749,7 @@ tbody tr:nth-child(even) td { background: #fbe9e7 !important; }
 <table>
   <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
   <tbody>
-    {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{this.description}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
+    {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
     {{emptyRows (math 15 "-" items.length) 4}}
   </tbody>
 </table>
@@ -761,12 +761,12 @@ tbody tr:nth-child(even) td { background: #fbe9e7 !important; }
 </body></html>`,
   },
 
-  // ─── 11. Green & Gold ────────────────────────────────────────────────────
+  // â”€â”€â”€ 11. Green & Gold â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "challan-green-gold",
     name: "Green & Gold",
     type: "Challan",
-    description: "Pakistani national colors — forest green header with gold accent lines and olive tints",
+    description: "Pakistani national colors â€” forest green header with gold accent lines and olive tints",
     html: `<!DOCTYPE html><html><head><style>
 @media print { @page { size: A4; margin: 0; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -830,7 +830,7 @@ tbody tr:nth-child(odd) td { background: #fff !important; }
   <table>
     <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
     <tbody>
-      {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{this.description}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
+      {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
       {{emptyRows (math 15 "-" items.length) 4}}
     </tbody>
   </table>
@@ -843,12 +843,12 @@ tbody tr:nth-child(odd) td { background: #fff !important; }
 </body></html>`,
   },
 
-  // ─── 12. Teal / Slate Two-Tone ────────────────────────────────────────────
+  // â”€â”€â”€ 12. Teal / Slate Two-Tone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "challan-teal-slate",
     name: "Teal & Slate Two-Tone",
     type: "Challan",
-    description: "Split two-tone header — teal company panel left, slate DC panel right",
+    description: "Split two-tone header â€” teal company panel left, slate DC panel right",
     html: `<!DOCTYPE html><html><head><style>
 @media print { @page { size: A4; margin: 0; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -909,7 +909,7 @@ tbody tr:nth-child(even) td { background: #eceff1 !important; }
   <table>
     <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
     <tbody>
-      {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{this.description}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
+      {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
       {{emptyRows (math 15 "-" items.length) 4}}
     </tbody>
   </table>
@@ -922,7 +922,7 @@ tbody tr:nth-child(even) td { background: #eceff1 !important; }
 </body></html>`,
   },
 
-  // ─── 13. Big Letterhead ───────────────────────────────────────────────────
+  // â”€â”€â”€ 13. Big Letterhead â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "challan-big-letterhead",
     name: "Big Letterhead",
@@ -989,7 +989,7 @@ tbody tr:nth-child(even) td { background: #e8edf5 !important; }
 <table>
   <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
   <tbody>
-    {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{this.description}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
+    {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
     {{emptyRows (math 15 "-" items.length) 4}}
   </tbody>
 </table>
@@ -1001,7 +1001,7 @@ tbody tr:nth-child(even) td { background: #e8edf5 !important; }
 </body></html>`,
   },
 
-  // ─── 14. Centered Title / Faint Watermark ────────────────────────────────
+  // â”€â”€â”€ 14. Centered Title / Faint Watermark â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "challan-watermark",
     name: "Centered Title & Watermark",
@@ -1064,7 +1064,7 @@ tbody tr:nth-child(even) td { background: #f5f7f9 !important; }
   <table>
     <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
     <tbody>
-      {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{this.description}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
+      {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
       {{emptyRows (math 15 "-" items.length) 4}}
     </tbody>
   </table>
@@ -1077,7 +1077,7 @@ tbody tr:nth-child(even) td { background: #f5f7f9 !important; }
 </body></html>`,
   },
 
-  // ─── 15. Government-Form Grid (heavy bordered cells) ──────────────────────
+  // â”€â”€â”€ 15. Government-Form Grid (heavy bordered cells) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "challan-government-form",
     name: "Government Form Grid",
@@ -1145,7 +1145,7 @@ table.items td.c { text-align: center; }
   <table class="items">
     <thead><tr><th class="c n">S.No.</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
     <tbody>
-      {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{this.description}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
+      {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
       {{emptyRows (math 15 "-" items.length) 4}}
     </tbody>
   </table>

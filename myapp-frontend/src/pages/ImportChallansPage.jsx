@@ -733,10 +733,11 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                     {(row.items || []).map((it, itemIdx) => (
                       <tr key={itemIdx}>
                         <td>
-                          <input
+                          <textarea
+                            rows={2}
                             value={it.description}
                             onChange={(e) => updateItem(rowIdx, itemIdx, { description: e.target.value })}
-                            style={styles.cellInput}
+                            style={{ ...styles.cellInput, resize: "vertical", minHeight: 38, lineHeight: 1.4 }}
                           />
                         </td>
                         <td>
@@ -787,10 +788,12 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                     <div key={itemIdx} className="imp-item-card">
                       <div className="imp-item-card__row">
                         <label className="imp-item-card__label">Description</label>
-                        <input
+                        <textarea
+                          rows={2}
                           value={it.description}
                           onChange={(e) => updateItem(rowIdx, itemIdx, { description: e.target.value })}
                           className="imp-item-card__input"
+                          style={{ resize: "vertical", minHeight: 38, lineHeight: 1.4 }}
                         />
                       </div>
                       <div className="imp-item-card__row imp-item-card__row--two">

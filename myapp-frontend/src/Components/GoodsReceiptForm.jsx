@@ -176,7 +176,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                           style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                         />
                       </td>
-                      <td style={td}><input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} /></td>
+                      <td style={td}><textarea rows={2} style={{ ...cellInput, resize: "vertical", minHeight: 38, lineHeight: 1.4 }} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} /></td>
                       <td style={td}><input type="number" min={1} style={{ ...cellInput, textAlign: "right" }} value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} /></td>
                       <td style={td}><input type="text" style={cellInput} value={it.unit} onChange={e => updateItem(idx, "unit", e.target.value)} /></td>
                       <td style={td}>

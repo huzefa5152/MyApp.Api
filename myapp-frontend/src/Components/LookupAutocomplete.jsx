@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import httpClient from "../api/httpClient";
 
-export default function LookupAutocomplete({ label, endpoint, value, onChange, inputClassName, inputStyle }) {
+export default function LookupAutocomplete({ label, endpoint, value, onChange, inputClassName, inputStyle, multiline = false }) {
     const [suggestions, setSuggestions] = useState([]);
     const [showDropdown, setShowDropdown] = useState(false);
     const [inputValue, setInputValue] = useState(value || "");
@@ -127,6 +127,9 @@ export default function LookupAutocomplete({ label, endpoint, value, onChange, i
                 prev <= 0 ? suggestions.length - 1 : prev - 1
             );
         } else if (e.key === "Enter") {
+            // In multi-line mode Enter must insert a newline — pick a suggestion
+            // by clicking it (or arrow-keys then click) instead.
+            if (multiline) return;
             e.preventDefault();
             if (highlightIndex >= 0) {
                 handleSelect(suggestions[highlightIndex].name);
@@ -140,18 +143,33 @@ export default function LookupAutocomplete({ label, endpoint, value, onChange, i
 
     return (
         <div className="position-relative" ref={wrapperRef}>
-            <input
-                type="text"
-                className={inputClassName !== undefined ? inputClassName : "form-control"}
-                style={inputStyle}
-                placeholder={label}
-                value={inputValue}
-                onChange={handleInputChange}
-                onFocus={() => { if (inputValue) { setShowDropdown(true); fetchSuggestions(inputValue); } }}
-                onBlur={handleBlur}
-                onKeyDown={handleKeyDown}   // 👈 added
-                autoComplete="off"
-            />
+            {multiline ? (
+                <textarea
+                    className={inputClassName !== undefined ? inputClassName : "form-control"}
+                    style={{ resize: "vertical", minHeight: 58, lineHeight: 1.4, ...inputStyle }}
+                    placeholder={label}
+                    value={inputValue}
+                    rows={2}
+                    onChange={handleInputChange}
+                    onFocus={() => { if (inputValue) { setShowDropdown(true); fetchSuggestions(inputValue); } }}
+                    onBlur={handleBlur}
+                    onKeyDown={handleKeyDown}
+                    autoComplete="off"
+                />
+            ) : (
+                <input
+                    type="text"
+                    className={inputClassName !== undefined ? inputClassName : "form-control"}
+                    style={inputStyle}
+                    placeholder={label}
+                    value={inputValue}
+                    onChange={handleInputChange}
+                    onFocus={() => { if (inputValue) { setShowDropdown(true); fetchSuggestions(inputValue); } }}
+                    onBlur={handleBlur}
+                    onKeyDown={handleKeyDown}   // 👈 added
+                    autoComplete="off"
+                />
+            )}
 
             {showDropdown && (() => {
                 // position:fixed in viewport coords so the dropdown stays

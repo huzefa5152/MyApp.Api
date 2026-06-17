@@ -188,7 +188,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
                       <tr key={idx}>
                         <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
                         <td style={s.td}>
-                          <LookupAutocomplete label="Item description" endpoint="/lookup/items" value={item.description} onChange={(v) => setItem(idx, { description: v })} inputStyle={s.cellInput} />
+                          <LookupAutocomplete label="Item description" endpoint="/lookup/items" value={item.description} onChange={(v) => setItem(idx, { description: v })} inputStyle={s.cellInput} multiline />
                           {locked && <div style={s.hint}>{item.delivered} already delivered — qty can't go below that</div>}
                         </td>
                         <td style={s.td}>

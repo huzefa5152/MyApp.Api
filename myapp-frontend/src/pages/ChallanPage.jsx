@@ -19,6 +19,7 @@ import { getClientsByCompany } from "../api/clientApi";
 import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { defaultChallanTemplate } from "../utils/defaultTemplates";
+import { renderRichTextHtml } from "../utils/richText";
 import { exportToPdf } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { dropdownStyles } from "../theme";
@@ -530,7 +531,7 @@ function buildChallanPrintHtml(data) {
   let itemRows = data.items.map((item) =>
     `<tr>
       <td class="cell qty">${item.quantity}</td>
-      <td class="cell item">${item.description}</td>
+      <td class="cell item">${renderRichTextHtml(item.description)}</td>
     </tr>`
   ).join("");
 

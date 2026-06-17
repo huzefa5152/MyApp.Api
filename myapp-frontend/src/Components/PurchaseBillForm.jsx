@@ -352,7 +352,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                             )}
                           </td>
                           <td style={td}>
-                            <input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
+                            <textarea rows={2} style={{ ...cellInput, resize: "vertical", minHeight: 38, lineHeight: 1.4 }} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
                           </td>
                           <td style={td}>
                             <input type="number" min={1} style={{ ...cellInput, textAlign: "right" }} value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} />

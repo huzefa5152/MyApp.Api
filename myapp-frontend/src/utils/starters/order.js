@@ -1,15 +1,15 @@
 // Starter templates for Sales Order (quantity-only, fulfilment-tracking) documents.
-// Rendered via Handlebars — see utils/templateEngine.js for registered helpers.
+// Rendered via Handlebars â€” see utils/templateEngine.js for registered helpers.
 // type: "SalesOrder" for all entries.
 
 export const orderStarters = [
 
-  /* ─── 1. Classic Serif ─────────────────────────────────────────────────── */
+  /* â”€â”€â”€ 1. Classic Serif â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   {
     id: "order-classic-serif",
     name: "Classic Serif",
     type: "SalesOrder",
-    description: "Traditional serif typeface with ruled dividers — formal and timeless",
+    description: "Traditional serif typeface with ruled dividers â€” formal and timeless",
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Order #{{salesOrderNumber}}</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -90,7 +90,7 @@ tfoot td { font-style:italic; font-size:11px; color:#555; padding-top:4px; }
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>
-        <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#777;">{{this.itemTypeName}} &mdash; </span>{{/if}}{{this.description}}</td>
+        <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#777;">{{this.itemTypeName}} &mdash; </span>{{/if}}{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="c">{{this.deliveredQuantity}}</td>
@@ -109,7 +109,7 @@ tfoot td { font-style:italic; font-size:11px; color:#555; padding-top:4px; }
 </body></html>`,
   },
 
-  /* ─── 2. Modern Minimal ─────────────────────────────────────────────────── */
+  /* â”€â”€â”€ 2. Modern Minimal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   {
     id: "order-modern-minimal",
     name: "Modern Minimal",
@@ -192,7 +192,7 @@ td { padding:8px; font-size:12px; border-bottom:1px solid #f0f0f0; color:#333; }
     {{#each items}}
       <tr>
         <td class="c" style="color:#aaa">{{this.sNo}}</td>
-        <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#bbb;text-transform:uppercase;letter-spacing:.5px;">{{this.itemTypeName}} </span><br>{{/if}}{{this.description}}</td>
+        <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#bbb;text-transform:uppercase;letter-spacing:.5px;">{{this.itemTypeName}} </span><br>{{/if}}{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c" style="color:#888">{{this.uom}}</td>
         <td class="c">{{this.deliveredQuantity}}</td>
@@ -209,12 +209,12 @@ td { padding:8px; font-size:12px; border-bottom:1px solid #f0f0f0; color:#333; }
 </body></html>`,
   },
 
-  /* ─── 3. Corporate Navy Band ─────────────────────────────────────────────── */
+  /* â”€â”€â”€ 3. Corporate Navy Band â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   {
     id: "order-corporate-navy",
     name: "Corporate Navy Band",
     type: "SalesOrder",
-    description: "Navy header band with white-on-dark title — professional corporate style",
+    description: "Navy header band with white-on-dark title â€” professional corporate style",
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Order #{{salesOrderNumber}}</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -296,7 +296,7 @@ td.rem { font-weight:800; color:#0d3b72; }
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>
-          <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#888;">{{this.itemTypeName}}</span><br>{{/if}}{{this.description}}</td>
+          <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#888;">{{this.itemTypeName}}</span><br>{{/if}}{{{richText this.description}}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="c">{{this.deliveredQuantity}}</td>
@@ -315,7 +315,7 @@ td.rem { font-weight:800; color:#0d3b72; }
 </body></html>`,
   },
 
-  /* ─── 4. Bold Colored Banner ─────────────────────────────────────────────── */
+  /* â”€â”€â”€ 4. Bold Colored Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   {
     id: "order-bold-banner",
     name: "Bold Colored Banner",
@@ -405,7 +405,7 @@ tbody tr:nth-child(even) .rem-td { background:#00695c !important; color:#fff !im
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>
-          <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#00897b;font-weight:700;">{{this.itemTypeName}}</span><br>{{/if}}{{this.description}}</td>
+          <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#00897b;font-weight:700;">{{this.itemTypeName}}</span><br>{{/if}}{{{richText this.description}}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="c">{{this.deliveredQuantity}}</td>
@@ -424,12 +424,12 @@ tbody tr:nth-child(even) .rem-td { background:#00695c !important; color:#fff !im
 </body></html>`,
   },
 
-  /* ─── 5. Monochrome Ink-Saver ────────────────────────────────────────────── */
+  /* â”€â”€â”€ 5. Monochrome Ink-Saver â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   {
     id: "order-monochrome",
     name: "Monochrome Ink-Saver",
     type: "SalesOrder",
-    description: "Black and white only — minimal ink usage, crisp plain borders, zero backgrounds",
+    description: "Black and white only â€” minimal ink usage, crisp plain borders, zero backgrounds",
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Order #{{salesOrderNumber}}</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -507,7 +507,7 @@ td.rem { font-weight:900; border:1.5px solid #000; }
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>
-        <td>{{#if this.itemTypeName}}({{this.itemTypeName}}) {{/if}}{{this.description}}</td>
+        <td>{{#if this.itemTypeName}}({{this.itemTypeName}}) {{/if}}{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="c">{{this.deliveredQuantity}}</td>
@@ -529,12 +529,12 @@ td.rem { font-weight:900; border:1.5px solid #000; }
 </body></html>`,
   },
 
-  /* ─── 6. Elegant Premium (Charcoal + Gold) ───────────────────────────────── */
+  /* â”€â”€â”€ 6. Elegant Premium (Charcoal + Gold) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   {
     id: "order-elegant-premium",
     name: "Elegant Premium",
     type: "SalesOrder",
-    description: "Charcoal and gold luxury feel — ideal for high-value clients",
+    description: "Charcoal and gold luxury feel â€” ideal for high-value clients",
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Order #{{salesOrderNumber}}</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -620,7 +620,7 @@ tbody tr:nth-child(even) td.rem { background:#fef9e7 !important; }
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>
-        <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#c8a951;">{{this.itemTypeName}} &mdash; </span>{{/if}}{{this.description}}</td>
+        <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#c8a951;">{{this.itemTypeName}} &mdash; </span>{{/if}}{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="c">{{this.deliveredQuantity}}</td>
@@ -639,12 +639,12 @@ tbody tr:nth-child(even) td.rem { background:#fef9e7 !important; }
 </body></html>`,
   },
 
-  /* ─── 7. Compact Dense ───────────────────────────────────────────────────── */
+  /* â”€â”€â”€ 7. Compact Dense â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   {
     id: "order-compact-dense",
     name: "Compact Dense",
     type: "SalesOrder",
-    description: "Very small font and tight rows — fits maximum lines on one A4 page",
+    description: "Very small font and tight rows â€” fits maximum lines on one A4 page",
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Order #{{salesOrderNumber}}</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -720,7 +720,7 @@ tbody tr:nth-child(even) td.rem { background:#e8f0fe !important; }
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>
-        <td>{{this.description}}</td>
+        <td>{{{richText this.description}}}</td>
         <td class="c" style="font-size:9px;color:#777;">{{this.itemTypeName}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
@@ -738,12 +738,12 @@ tbody tr:nth-child(even) td.rem { background:#e8f0fe !important; }
 </body></html>`,
   },
 
-  /* ─── 8. Left Sidebar Strip ──────────────────────────────────────────────── */
+  /* â”€â”€â”€ 8. Left Sidebar Strip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   {
     id: "order-left-sidebar",
     name: "Left Sidebar Strip",
     type: "SalesOrder",
-    description: "Vertical colored sidebar on the left carries company details — distinctive layout",
+    description: "Vertical colored sidebar on the left carries company details â€” distinctive layout",
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Order #{{salesOrderNumber}}</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -825,7 +825,7 @@ tbody tr:nth-child(even) td.rem { background:#e8e8f0 !important; }
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>
-          <td>{{#if this.itemTypeName}}<span style="font-size:9px;color:#8892b0;">{{this.itemTypeName}}</span><br>{{/if}}{{this.description}}</td>
+          <td>{{#if this.itemTypeName}}<span style="font-size:9px;color:#8892b0;">{{this.itemTypeName}}</span><br>{{/if}}{{{richText this.description}}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="c">{{this.deliveredQuantity}}</td>
@@ -843,12 +843,12 @@ tbody tr:nth-child(even) td.rem { background:#e8e8f0 !important; }
 </body></html>`,
   },
 
-  /* ─── 9. Boxed Traditional ───────────────────────────────────────────────── */
+  /* â”€â”€â”€ 9. Boxed Traditional â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   {
     id: "order-boxed-traditional",
     name: "Boxed Traditional",
     type: "SalesOrder",
-    description: "Every section in a bordered box — structured traditional accounting style",
+    description: "Every section in a bordered box â€” structured traditional accounting style",
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Order #{{salesOrderNumber}}</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -937,7 +937,7 @@ tbody tr:nth-child(even) td.rem { background:#eaf1fb !important; }
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>
-        <td>{{#if this.itemTypeName}}<span style="font-size:9.5px;color:#777;">{{this.itemTypeName}} &mdash; </span>{{/if}}{{this.description}}</td>
+        <td>{{#if this.itemTypeName}}<span style="font-size:9.5px;color:#777;">{{this.itemTypeName}} &mdash; </span>{{/if}}{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="c">{{this.deliveredQuantity}}</td>
@@ -956,12 +956,12 @@ tbody tr:nth-child(even) td.rem { background:#eaf1fb !important; }
 </body></html>`,
   },
 
-  /* ─── 10. Bismillah Header ────────────────────────────────────────────────── */
+  /* â”€â”€â”€ 10. Bismillah Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   {
     id: "order-bismillah",
     name: "Bismillah Header",
     type: "SalesOrder",
-    description: "Opens with Bismillah in Arabic script — traditional Islamic business etiquette",
+    description: "Opens with Bismillah in Arabic script â€” traditional Islamic business etiquette",
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Order #{{salesOrderNumber}}</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -997,7 +997,7 @@ tbody tr:nth-child(even) td.rem { background:#d4f0dc !important; }
 .delivery-note { margin-top:12px; font-size:11px; color:#444; border:1px dashed #1a6e3a; padding:7px 10px; border-radius:2px; }
 @media print { @page { size:A4; margin:11mm; } }
 </style></head><body>
-  <div class="bismillah">بسم اللہ الرحمٰن الرحیم</div>
+  <div class="bismillah">Ø¨Ø³Ù… Ø§Ù„Ù„Û Ø§Ù„Ø±Ø­Ù…Ù°Ù† Ø§Ù„Ø±Ø­ÛŒÙ…</div>
 
   <div class="hdr">
     <div class="brand">
@@ -1045,7 +1045,7 @@ tbody tr:nth-child(even) td.rem { background:#d4f0dc !important; }
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>
-        <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#1a6e3a;font-weight:600;">{{this.itemTypeName}} &mdash; </span>{{/if}}{{this.description}}</td>
+        <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#1a6e3a;font-weight:600;">{{this.itemTypeName}} &mdash; </span>{{/if}}{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="c">{{this.deliveredQuantity}}</td>
@@ -1065,12 +1065,12 @@ tbody tr:nth-child(even) td.rem { background:#d4f0dc !important; }
 </body></html>`,
   },
 
-  /* ─── 11. Green & Gold ────────────────────────────────────────────────────── */
+  /* â”€â”€â”€ 11. Green & Gold â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   {
     id: "order-green-gold",
     name: "Green & Gold",
     type: "SalesOrder",
-    description: "Forest green and gold colour scheme — popular in Pakistani trade stationery",
+    description: "Forest green and gold colour scheme â€” popular in Pakistani trade stationery",
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Order #{{salesOrderNumber}}</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -1154,7 +1154,7 @@ tbody tr:nth-child(even) td.rem { background:#fffbe6 !important; }
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>
-          <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#1e4d2b;font-weight:700;">{{this.itemTypeName}}</span><br>{{/if}}{{this.description}}</td>
+          <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#1e4d2b;font-weight:700;">{{this.itemTypeName}}</span><br>{{/if}}{{{richText this.description}}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="c">{{this.deliveredQuantity}}</td>
@@ -1175,12 +1175,12 @@ tbody tr:nth-child(even) td.rem { background:#fffbe6 !important; }
 </body></html>`,
   },
 
-  /* ─── 12. Teal / Slate ────────────────────────────────────────────────────── */
+  /* â”€â”€â”€ 12. Teal / Slate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   {
     id: "order-teal-slate",
     name: "Teal / Slate",
     type: "SalesOrder",
-    description: "Teal accent on slate grey body — modern business-casual feel",
+    description: "Teal accent on slate grey body â€” modern business-casual feel",
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Order #{{salesOrderNumber}}</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -1261,7 +1261,7 @@ tbody tr:nth-child(even) td.rem { background:#d1fafa !important; }
     {{#each items}}
       <tr>
         <td class="c" style="color:#a0aec0">{{this.sNo}}</td>
-        <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#2b9aa0;font-weight:600;">{{this.itemTypeName}}</span><br>{{/if}}{{this.description}}</td>
+        <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#2b9aa0;font-weight:600;">{{this.itemTypeName}}</span><br>{{/if}}{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c" style="color:#718096">{{this.uom}}</td>
         <td class="c">{{this.deliveredQuantity}}</td>
@@ -1279,12 +1279,12 @@ tbody tr:nth-child(even) td.rem { background:#d1fafa !important; }
 </body></html>`,
   },
 
-  /* ─── 13. Big Letterhead ──────────────────────────────────────────────────── */
+  /* â”€â”€â”€ 13. Big Letterhead â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   {
     id: "order-big-letterhead",
     name: "Big Letterhead",
     type: "SalesOrder",
-    description: "Full-width prominent letterhead with large logo area — looks like official stationery",
+    description: "Full-width prominent letterhead with large logo area â€” looks like official stationery",
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Order #{{salesOrderNumber}}</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -1364,7 +1364,7 @@ tbody tr:nth-child(even) td.rem { background:#ffe0d8 !important; }
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>
-          <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#c0392b;">{{this.itemTypeName}}</span><br>{{/if}}{{this.description}}</td>
+          <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#c0392b;">{{this.itemTypeName}}</span><br>{{/if}}{{{richText this.description}}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="c">{{this.deliveredQuantity}}</td>
@@ -1383,7 +1383,7 @@ tbody tr:nth-child(even) td.rem { background:#ffe0d8 !important; }
 </body></html>`,
   },
 
-  /* ─── 14. Centered / Watermark Title ─────────────────────────────────────── */
+  /* â”€â”€â”€ 14. Centered / Watermark Title â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   {
     id: "order-centered-watermark",
     name: "Centered / Watermark Title",
@@ -1478,7 +1478,7 @@ tbody tr:nth-child(even) td.rem { background:#e8ecf5 !important; }
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>
-        <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#3558a8;">{{this.itemTypeName}} &mdash; </span>{{/if}}{{this.description}}</td>
+        <td>{{#if this.itemTypeName}}<span style="font-size:10px;color:#3558a8;">{{this.itemTypeName}} &mdash; </span>{{/if}}{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="c">{{this.deliveredQuantity}}</td>
@@ -1496,12 +1496,12 @@ tbody tr:nth-child(even) td.rem { background:#e8ecf5 !important; }
 </body></html>`,
   },
 
-  /* ─── 15. Government-Form Grid ────────────────────────────────────────────── */
+  /* â”€â”€â”€ 15. Government-Form Grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   {
     id: "order-govt-grid",
     name: "Government-Form Grid",
     type: "SalesOrder",
-    description: "Government-ledger style with bordered header cells and grid everywhere — formal procurement look",
+    description: "Government-ledger style with bordered header cells and grid everywhere â€” formal procurement look",
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Order #{{salesOrderNumber}}</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -1596,7 +1596,7 @@ tbody tr:nth-child(even) td.rem { background:#fffbe0 !important; }
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>
-        <td>{{#if this.itemTypeName}}<strong>{{this.itemTypeName}}:</strong> {{/if}}{{this.description}}</td>
+        <td>{{#if this.itemTypeName}}<strong>{{this.itemTypeName}}:</strong> {{/if}}{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="c">{{this.deliveredQuantity}}</td>

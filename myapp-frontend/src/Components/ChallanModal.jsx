@@ -1,5 +1,6 @@
 import { MdPerson, MdReceipt, MdCalendarToday, MdLocationOn, MdAssignmentTurnedIn, MdEventNote } from "react-icons/md";
 import { formStyles, modalSizes } from "../theme";
+import RichText from "./RichText";
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "—");
 
@@ -119,7 +120,7 @@ export default function ChallanModal({ challan, onClose }) {
                     <tr key={idx}>
                       <td style={{ ...styles.td, textAlign: "center", color: colors.textSecondary }}>{idx + 1}</td>
                       <td style={styles.td}>{item.itemTypeName || "—"}</td>
-                      <td style={styles.td}>{item.description}</td>
+                      <td style={styles.td}><RichText text={item.description} /></td>
                       <td style={{ ...styles.td, textAlign: "center", fontWeight: 600 }}>{item.quantity}</td>
                       <td style={{ ...styles.td, textAlign: "center" }}>{item.unit}</td>
                     </tr>

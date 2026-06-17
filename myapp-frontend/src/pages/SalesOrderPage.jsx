@@ -12,6 +12,7 @@ import {
 import { getTemplate } from "../api/printTemplateApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { defaultOrderTemplate } from "../utils/salesDocTemplates";
+import { richTextToPlain } from "../utils/richText";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -209,7 +210,7 @@ export default function SalesOrderPage() {
                   <div style={st.fulfilBar}>
                     {(o.items || []).slice(0, 4).map((i) => (
                       <div key={i.id} style={st.fulfilRow}>
-                        <span style={st.fItem}>{i.description}</span>
+                        <span style={st.fItem} title={richTextToPlain(i.description)}>{richTextToPlain(i.description)}</span>
                         <span style={st.fQty}>{i.deliveredQuantity}/{i.quantity} {i.unit}</span>
                       </div>
                     ))}

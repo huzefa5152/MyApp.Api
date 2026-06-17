@@ -83,7 +83,7 @@ tbody tr:nth-child(even) td{background:#f5f5f5 !important;}
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>
-        <td>{{this.description}}</td>
+        <td>{{{richText this.description}}}</td>
         <td class="c">{{this.itemTypeName}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
@@ -112,7 +112,7 @@ tbody tr:nth-child(even) td{background:#f5f5f5 !important;}
     id: "quote-modern-minimal",
     name: "Modern Minimal",
     type: "SalesQuote",
-    description: "Clean white space, light grey accents, sans-serif — contemporary minimal look.",
+    description: "Clean white space, light grey accents, sans-serif â€” contemporary minimal look.",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation #{{quoteNumber}}</title><style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 body{font-family:"Segoe UI",Arial,sans-serif;font-size:12px;color:#222;padding:4px;}
@@ -188,7 +188,7 @@ td{border-bottom:1px solid #f0f0f0;padding:7px 8px;font-size:12px;color:#222;}
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>
-        <td>{{this.description}}</td>
+        <td>{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -286,7 +286,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>
-          <td>{{this.description}}</td>
+          <td>{{{richText this.description}}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -388,7 +388,7 @@ tbody tr:nth-child(even) td{background:#f8fbff !important;}
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>
-          <td>{{this.description}}</td>
+          <td>{{{richText this.description}}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -488,7 +488,7 @@ td{border-bottom:1px dotted #999;padding:6px 8px;font-size:11.5px;}
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>
-        <td>{{this.description}}</td>
+        <td>{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -595,7 +595,7 @@ tbody tr:nth-child(even) td{background:#faf7f0 !important;}
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>
-          <td>{{this.description}}</td>
+          <td>{{{richText this.description}}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -690,7 +690,7 @@ tbody tr:nth-child(even) td{background:#f5f8fc !important;}
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>
-        <td>{{this.description}}</td>
+        <td>{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -802,7 +802,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
         {{#each items}}
           <tr>
             <td class="c">{{this.sNo}}</td>
-            <td>{{this.description}}</td>
+            <td>{{{richText this.description}}}</td>
             <td class="c">{{this.quantity}}</td>
             <td class="c">{{this.uom}}</td>
             <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -911,7 +911,7 @@ table.items td:last-child{border-right:none;}
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>
-          <td>{{this.description}}</td>
+          <td>{{{richText this.description}}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -974,7 +974,7 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
 .sig .b{text-align:center;}.sig .line{width:160px;border-top:1.5px solid #1a5c2a;margin:0 auto;}.sig .l{font-size:10.5px;color:#555;margin-top:3px;}
 @media print{@page{size:A4;margin:11mm;}}
 </style></head><body>
-  <div class="bismillah">بِسْمِ اللہِ الرَّحْمٰنِ الرَّحِيْم</div>
+  <div class="bismillah">Ø¨ÙØ³Ù’Ù…Ù Ø§Ù„Ù„ÛÙ Ø§Ù„Ø±ÙŽÙ‘Ø­Ù’Ù…Ù°Ù†Ù Ø§Ù„Ø±ÙŽÙ‘Ø­ÙÙŠÙ’Ù…</div>
   <div class="hdr">
     <div>
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:58px">{{/if}}
@@ -1020,7 +1020,7 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>
-        <td>{{this.description}}</td>
+        <td>{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -1126,7 +1126,7 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>
-          <td>{{this.description}}</td>
+          <td>{{{richText this.description}}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -1228,7 +1228,7 @@ tbody tr:nth-child(even) td{background:#f5f7f8 !important;}
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>
-          <td>{{this.description}}</td>
+          <td>{{{richText this.description}}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -1327,7 +1327,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>
-        <td>{{this.description}}</td>
+        <td>{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -1427,7 +1427,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>
-          <td>{{this.description}}</td>
+          <td>{{{richText this.description}}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -1546,7 +1546,7 @@ table.items tbody tr:nth-child(even) td{background:#f8f8f8 !important;}
       {{#each items}}
         <tr>
           <td class="c cell">{{this.sNo}}</td>
-          <td class="cell">{{this.description}}</td>
+          <td class="cell">{{{richText this.description}}}</td>
           <td class="c cell">{{this.quantity}}</td>
           <td class="c cell">{{this.uom}}</td>
           <td class="r cell">Rs {{fmt this.unitPrice}}</td>

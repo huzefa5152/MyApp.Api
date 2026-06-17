@@ -94,7 +94,7 @@ export const defaultQuoteTemplate = `<!DOCTYPE html><html><head><title>Quotation
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>
-        <td>{{this.description}}</td>
+        <td>{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">{{fmt this.unitPrice}}</td>
@@ -164,7 +164,7 @@ export const defaultOrderTemplate = `<!DOCTYPE html><html><head><title>Sales Ord
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>
-        <td>{{this.description}}</td>
+        <td>{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="c">{{this.deliveredQuantity}}</td>

@@ -1,5 +1,5 @@
 /**
- * Starter templates for Sales Tax Invoice — FBR digital-invoicing compliance documents.
+ * Starter templates for Sales Tax Invoice â€” FBR digital-invoicing compliance documents.
  * Pakistani wholesale ERP, A4 print-ready, Handlebars merge fields.
  * Registered helpers: fmtDate, fmt, fmtDec, nl2br, join, joinDates, emptyRows, math, inc, eq, gt, or
  * TaxInvoice merge fields: supplierName, supplierLogoPath, supplierAddress, supplierPhone, supplierNTN,
@@ -12,7 +12,7 @@
 
 export const taxInvoiceStarters = [
 
-  // ─── 1. Classic Serif ────────────────────────────────────────
+  // â”€â”€â”€ 1. Classic Serif â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "taxinvoice-classic-serif",
     name: "Classic Serif",
@@ -99,7 +99,7 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
     {{#each items}}<tr>
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
-      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
+      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
       <td class="cell r">{{fmtDec this.valueExclTax}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
@@ -131,7 +131,7 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
 </body></html>`,
   },
 
-  // ─── 2. Modern Minimal ───────────────────────────────────────
+  // â”€â”€â”€ 2. Modern Minimal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "taxinvoice-modern-minimal",
     name: "Modern Minimal",
@@ -227,7 +227,7 @@ table.items thead th.left { text-align: left; }
     {{#each items}}<tr>
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
-      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
+      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
       <td class="cell r">{{fmtDec this.valueExclTax}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
@@ -261,7 +261,7 @@ table.items thead th.left { text-align: left; }
 </body></html>`,
   },
 
-  // ─── 3. Corporate Navy Band ──────────────────────────────────
+  // â”€â”€â”€ 3. Corporate Navy Band â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "taxinvoice-corporate-navy",
     name: "Corporate Navy Band",
@@ -352,7 +352,7 @@ tbody tr:nth-child(even) td { background: #edf2fb !important; }
     {{#each items}}<tr>
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
-      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
+      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
       <td class="cell r">{{fmtDec this.valueExclTax}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
@@ -384,7 +384,7 @@ tbody tr:nth-child(even) td { background: #edf2fb !important; }
 </body></html>`,
   },
 
-  // ─── 4. Bold Colored Banner ──────────────────────────────────
+  // â”€â”€â”€ 4. Bold Colored Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "taxinvoice-bold-banner",
     name: "Bold Colored Banner",
@@ -479,7 +479,7 @@ tbody tr:nth-child(even) td { background: #e8f5e9 !important; }
     {{#each items}}<tr>
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
-      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
+      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
       <td class="cell r">{{fmtDec this.valueExclTax}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
@@ -510,12 +510,12 @@ tbody tr:nth-child(even) td { background: #e8f5e9 !important; }
 </body></html>`,
   },
 
-  // ─── 5. Monochrome Ink-Saver ─────────────────────────────────
+  // â”€â”€â”€ 5. Monochrome Ink-Saver â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "taxinvoice-monochrome-ink",
     name: "Monochrome Ink-Saver",
     type: "TaxInvoice",
-    description: "Black-and-white only, no fills, hairline borders — minimal toner use",
+    description: "Black-and-white only, no fills, hairline borders â€” minimal toner use",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } .footer { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -592,7 +592,7 @@ table.items th.left { text-align: left; }
     {{#each items}}<tr>
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
-      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
+      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
       <td class="cell r">{{fmtDec this.valueExclTax}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
@@ -614,7 +614,7 @@ table.items th.left { text-align: left; }
   },
 
 
-  // ─── 6. Elegant Premium (Charcoal + Gold) ────────────────────
+  // â”€â”€â”€ 6. Elegant Premium (Charcoal + Gold) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "taxinvoice-elegant-premium",
     name: "Elegant Premium",
@@ -714,7 +714,7 @@ tbody tr:nth-child(even) td { background: #faf7ef !important; }
     {{#each items}}<tr>
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
-      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
+      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
       <td class="cell r">{{fmtDec this.valueExclTax}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
@@ -749,7 +749,7 @@ tbody tr:nth-child(even) td { background: #faf7ef !important; }
 </body></html>`,
   },
 
-  // ─── 7. Compact Dense ────────────────────────────────────────
+  // â”€â”€â”€ 7. Compact Dense â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "taxinvoice-compact-dense",
     name: "Compact Dense",
@@ -835,7 +835,7 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
     {{#each items}}<tr>
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
-      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
+      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
       <td class="cell r">{{fmtDec this.valueExclTax}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
@@ -867,7 +867,7 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
 </body></html>`,
   },
 
-  // ─── 8. Left Sidebar Strip ───────────────────────────────────
+  // â”€â”€â”€ 8. Left Sidebar Strip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "taxinvoice-left-sidebar",
     name: "Left Sidebar Strip",
@@ -963,7 +963,7 @@ tbody tr:nth-child(even) td { background: #edf2fb !important; }
     {{#each items}}<tr>
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
-      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
+      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
       <td class="cell r">{{fmtDec this.valueExclTax}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
@@ -985,7 +985,7 @@ tbody tr:nth-child(even) td { background: #edf2fb !important; }
 </body></html>`,
   },
 
-  // ─── 9. Boxed Traditional ────────────────────────────────────
+  // â”€â”€â”€ 9. Boxed Traditional â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "taxinvoice-boxed-traditional",
     name: "Boxed Traditional",
@@ -1083,7 +1083,7 @@ table.items th.left { text-align: left; }
       {{#each items}}<tr>
         <td class="cell c">{{this.quantity}}</td>
         <td class="cell c">{{this.uom}}</td>
-        <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
+        <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
         <td class="cell r">{{fmtDec this.valueExclTax}}</td>
         <td class="cell c">{{this.gstRate}}%</td>
         <td class="cell r">{{fmtDec this.gstAmount}}</td>
@@ -1116,7 +1116,7 @@ table.items th.left { text-align: left; }
 </body></html>`,
   },
 
-  // ─── 10. Bismillah Header ────────────────────────────────────
+  // â”€â”€â”€ 10. Bismillah Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "taxinvoice-bismillah",
     name: "Bismillah Header",
@@ -1170,7 +1170,7 @@ tbody tr:nth-child(even) td { background: #fdf6e3 !important; }
 .sig .label { font-size: 9pt; font-weight: 700; text-transform: uppercase; color: #4a2a00; }
 </style></head><body>
 <div class="main">
-<div class="bismillah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
+<div class="bismillah">Ø¨ÙØ³Ù’Ù…Ù Ø§Ù„Ù„ÙŽÙ‘Ù‡Ù Ø§Ù„Ø±ÙŽÙ‘Ø­Ù’Ù…ÙŽÙ°Ù†Ù Ø§Ù„Ø±ÙŽÙ‘Ø­ÙÙŠÙ…Ù</div>
 <div class="outer">
   <div class="title-band"><h1>Sales Tax Invoice</h1></div>
   <div class="sup-row">
@@ -1217,7 +1217,7 @@ tbody tr:nth-child(even) td { background: #fdf6e3 !important; }
       {{#each items}}<tr>
         <td class="cell c">{{this.quantity}}</td>
         <td class="cell c">{{this.uom}}</td>
-        <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
+        <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
         <td class="cell r">{{fmtDec this.valueExclTax}}</td>
         <td class="cell c">{{this.gstRate}}%</td>
         <td class="cell r">{{fmtDec this.gstAmount}}</td>
@@ -1251,7 +1251,7 @@ tbody tr:nth-child(even) td { background: #fdf6e3 !important; }
   },
 
 
-  // ─── 11. Green & Gold ────────────────────────────────────────
+  // â”€â”€â”€ 11. Green & Gold â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "taxinvoice-green-gold",
     name: "Green & Gold",
@@ -1349,7 +1349,7 @@ tbody tr:nth-child(even) td { background: #f1f8e9 !important; }
     {{#each items}}<tr>
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
-      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
+      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
       <td class="cell r">{{fmtDec this.valueExclTax}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
@@ -1388,7 +1388,7 @@ tbody tr:nth-child(even) td { background: #f1f8e9 !important; }
 </body></html>`,
   },
 
-  // ─── 12. Teal / Slate ────────────────────────────────────────
+  // â”€â”€â”€ 12. Teal / Slate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "taxinvoice-teal-slate",
     name: "Teal / Slate",
@@ -1485,7 +1485,7 @@ tbody tr:nth-child(even) td { background: #e0f2f1 !important; }
     {{#each items}}<tr>
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
-      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
+      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
       <td class="cell r">{{fmtDec this.valueExclTax}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
@@ -1518,7 +1518,7 @@ tbody tr:nth-child(even) td { background: #e0f2f1 !important; }
 </body></html>`,
   },
 
-  // ─── 13. Big Letterhead ──────────────────────────────────────
+  // â”€â”€â”€ 13. Big Letterhead â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "taxinvoice-big-letterhead",
     name: "Big Letterhead",
@@ -1626,7 +1626,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
     {{#each items}}<tr>
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
-      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
+      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
       <td class="cell r">{{fmtDec this.valueExclTax}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
@@ -1658,7 +1658,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
 </body></html>`,
   },
 
-  // ─── 14. Centered / Watermark Title ─────────────────────────
+  // â”€â”€â”€ 14. Centered / Watermark Title â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "taxinvoice-centered-watermark",
     name: "Centered / Watermark Title",
@@ -1756,7 +1756,7 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
     {{#each items}}<tr>
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
-      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
+      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
       <td class="cell r">{{fmtDec this.valueExclTax}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
@@ -1789,7 +1789,7 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
 </body></html>`,
   },
 
-  // ─── 15. Government-Form Grid (most FBR-official-looking) ────
+  // â”€â”€â”€ 15. Government-Form Grid (most FBR-official-looking) â”€â”€â”€â”€
   {
     id: "taxinvoice-government-grid",
     name: "Government-Form Grid",
@@ -1917,7 +1917,7 @@ tbody tr:nth-child(even) td { background: #f7f7f7 !important; }
       {{#each items}}<tr>
         <td class="cell c">{{this.quantity}}</td>
         <td class="cell c">{{this.uom}}</td>
-        <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
+        <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
         <td class="cell r">{{fmtDec this.valueExclTax}}</td>
         <td class="cell c">{{this.gstRate}}%</td>
         <td class="cell r">{{fmtDec this.gstAmount}}</td>
@@ -1933,7 +1933,7 @@ tbody tr:nth-child(even) td { background: #f7f7f7 !important; }
     <div class="fbr-main">
       <div class="fbr-hdr">
         <img src="{{fbrLogoUrl}}" style="height:42px">
-        <div class="fbr-title">Federal Board of Revenue — Verified Invoice</div>
+        <div class="fbr-title">Federal Board of Revenue â€” Verified Invoice</div>
       </div>
       <div class="fbr-fields">
         <div class="fbr-irn">FBR Invoice Reference No (IRN): {{fbrIRN}}</div>

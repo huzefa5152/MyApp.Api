@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createChallanFromOrder } from "../api/salesOrderApi";
 import { formStyles, modalSizes } from "../theme";
+import RichText from "./RichText";
 
 const colors = {
   textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
@@ -75,7 +76,7 @@ export default function CreateChallanFromOrderModal({ order, onClose, onCreated 
           {(order.items || []).map((i) => (
             <div key={i.id} style={s.tableRow}>
               <div style={{ flex: 2, minWidth: 0 }}>
-                <div style={s.desc}>{i.description}</div>
+                <div style={s.desc}><RichText text={i.description} /></div>
                 <div style={s.unit}>{i.unit}</div>
               </div>
               <div style={s.col}>{i.quantity}</div>

@@ -424,6 +424,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                             onChange={(val) => handleItemChange(idx, "description", val)}
                             inputClassName=""
                             inputStyle={{ ...styles.input, padding: "0.35rem 0.5rem", fontSize: "0.85rem" }}
+                            multiline
                           />
                         </div>
                         {/* Wider so 4-place decimals (0.0004, 1234.5678)

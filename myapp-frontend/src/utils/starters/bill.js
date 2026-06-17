@@ -1,11 +1,11 @@
 /**
- * Bill / Invoice starter templates — 15 archetypes for Pakistani FBR-compliant wholesale ERP.
+ * Bill / Invoice starter templates â€” 15 archetypes for Pakistani FBR-compliant wholesale ERP.
  * Renders via Handlebars, prints to A4.
  * ONLY registered helpers used: fmtDate, fmt, fmtDec, nl2br, join, joinDates, emptyRows, math, gt, eq, or, inc
  */
 
 export const billStarters = [
-  // ── 1. Classic Serif ─────────────────────────────────────────────────────
+  // â”€â”€ 1. Classic Serif â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "bill-classic-serif",
     name: "Classic Serif",
@@ -84,7 +84,7 @@ table.items tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
 <table class="items">
   <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:50px">Qty</th><th style="width:45px">UoM</th><th style="width:90px">Unit Price</th><th style="width:95px">Amount</th></tr></thead>
   <tbody>
-    {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.description}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
+    {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
     {{emptyRows (math 20 "-" items.length) 6}}
   </tbody>
 </table>
@@ -109,7 +109,7 @@ table.items tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
 </body></html>`,
   },
 
-  // ── 2. Modern Minimal ────────────────────────────────────────────────────
+  // â”€â”€ 2. Modern Minimal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "bill-modern-minimal",
     name: "Modern Minimal",
@@ -193,7 +193,7 @@ table.items th.c { text-align: center; }
 <table class="items">
   <thead><tr><th style="width:32px">S#</th><th>Description</th><th class="c" style="width:50px">Qty</th><th class="c" style="width:45px">UoM</th><th class="r" style="width:88px">Unit Price</th><th class="r" style="width:92px">Amount</th></tr></thead>
   <tbody>
-    {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.description}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
+    {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
     {{emptyRows (math 20 "-" items.length) 6}}
   </tbody>
 </table>
@@ -218,7 +218,7 @@ table.items th.c { text-align: center; }
 </body></html>`,
   },
 
-  // ── 3. Corporate Navy Band ────────────────────────────────────────────────
+  // â”€â”€ 3. Corporate Navy Band â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "bill-corporate-navy",
     name: "Corporate Navy Band",
@@ -289,7 +289,7 @@ table.items tbody tr:nth-child(even) td { background: #f0f4f8 !important; }
   <table class="items">
     <thead><tr><th style="width:32px">S#</th><th class="l">Description</th><th style="width:50px">Qty</th><th style="width:45px">UoM</th><th style="width:88px">Unit Price</th><th style="width:94px">Total</th></tr></thead>
     <tbody>
-      {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.description}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
+      {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
       {{emptyRows (math 20 "-" items.length) 6}}
     </tbody>
   </table>
@@ -314,7 +314,7 @@ table.items tbody tr:nth-child(even) td { background: #f0f4f8 !important; }
 </body></html>`,
   },
 
-  // ── 4. Bold Colored Banner ────────────────────────────────────────────────
+  // â”€â”€ 4. Bold Colored Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "bill-bold-banner",
     name: "Bold Colored Banner",
@@ -385,7 +385,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
   <table class="items">
     <thead><tr><th style="width:32px">S#</th><th class="l">Description</th><th style="width:50px">Qty</th><th style="width:45px">UoM</th><th style="width:88px">Unit Price</th><th style="width:94px">Total</th></tr></thead>
     <tbody>
-      {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.description}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
+      {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
       {{emptyRows (math 20 "-" items.length) 6}}
     </tbody>
   </table>
@@ -410,12 +410,12 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
 </body></html>`,
   },
 
-  // ── 5. Monochrome Ink-Saver ───────────────────────────────────────────────
+  // â”€â”€ 5. Monochrome Ink-Saver â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "bill-monochrome-ink",
     name: "Monochrome Ink-Saver",
     type: "Bill",
-    description: "Pure black and white, no background fills — optimized for laser printing on plain paper",
+    description: "Pure black and white, no background fills â€” optimized for laser printing on plain paper",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 10mm 12mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -485,7 +485,7 @@ table.items th.l { text-align: left; }
 <table class="items">
   <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:50px">Qty</th><th style="width:45px">UoM</th><th style="width:90px">Unit Price</th><th style="width:95px">Total</th></tr></thead>
   <tbody>
-    {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.description}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
+    {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
     {{emptyRows (math 20 "-" items.length) 6}}
   </tbody>
 </table>
@@ -510,7 +510,7 @@ table.items th.l { text-align: left; }
 </body></html>`,
   },
 
-  // ── 6. Elegant Premium (Charcoal + Gold) ─────────────────────────────────
+  // â”€â”€ 6. Elegant Premium (Charcoal + Gold) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "bill-elegant-premium",
     name: "Elegant Premium",
@@ -598,7 +598,7 @@ table.items tbody tr:nth-child(even) td { background: #f9f6ef !important; }
 <table class="items">
   <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:50px">Qty</th><th style="width:45px">UoM</th><th style="width:90px">Unit Price</th><th style="width:95px">Total</th></tr></thead>
   <tbody>
-    {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.description}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
+    {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
     {{emptyRows (math 20 "-" items.length) 6}}
   </tbody>
 </table>
@@ -623,7 +623,7 @@ table.items tbody tr:nth-child(even) td { background: #f9f6ef !important; }
 </body></html>`,
   },
 
-  // ── 7. Compact Dense ─────────────────────────────────────────────────────
+  // â”€â”€ 7. Compact Dense â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "bill-compact-dense",
     name: "Compact Dense",
@@ -688,7 +688,7 @@ table.items tbody tr:nth-child(even) td { background: #eef2fa !important; }
 <table class="items">
   <thead><tr><th style="width:26px">S#</th><th class="l">Description</th><th style="width:42px">Qty</th><th style="width:40px">UoM</th><th style="width:82px">Unit Price</th><th style="width:88px">Total</th></tr></thead>
   <tbody>
-    {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.description}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
+    {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
     {{emptyRows (math 26 "-" items.length) 6}}
   </tbody>
 </table>
@@ -712,7 +712,7 @@ table.items tbody tr:nth-child(even) td { background: #eef2fa !important; }
 </body></html>`,
   },
 
-  // ── 8. Left Sidebar Strip ────────────────────────────────────────────────
+  // â”€â”€ 8. Left Sidebar Strip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "bill-left-sidebar",
     name: "Left Sidebar Strip",
@@ -798,7 +798,7 @@ table.items tbody tr:nth-child(even) td { background: #edf1f7 !important; }
     <table class="items">
       <thead><tr><th style="width:28px">S#</th><th class="l">Description</th><th style="width:44px">Qty</th><th style="width:42px">UoM</th><th style="width:84px">Unit Price</th><th style="width:90px">Total</th></tr></thead>
       <tbody>
-        {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.description}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
+        {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
         {{emptyRows (math 20 "-" items.length) 6}}
       </tbody>
     </table>
@@ -823,12 +823,12 @@ table.items tbody tr:nth-child(even) td { background: #edf1f7 !important; }
 </body></html>`,
   },
 
-  // ── 9. Boxed Traditional ─────────────────────────────────────────────────
+  // â”€â”€ 9. Boxed Traditional â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "bill-boxed-traditional",
     name: "Boxed Traditional",
     type: "Bill",
-    description: "Every section enclosed in a ruled box — classic Pakistani wholesale invoice look",
+    description: "Every section enclosed in a ruled box â€” classic Pakistani wholesale invoice look",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -909,7 +909,7 @@ table.items tbody tr:nth-child(even) td { background: #f4f4f4 !important; }
   <table class="items">
     <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:48px">Qty</th><th style="width:44px">UoM</th><th style="width:88px">Unit Price</th><th style="width:92px">Total</th></tr></thead>
     <tbody>
-      {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.description}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
+      {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
       {{emptyRows (math 20 "-" items.length) 6}}
     </tbody>
   </table>
@@ -932,12 +932,12 @@ table.items tbody tr:nth-child(even) td { background: #f4f4f4 !important; }
 </body></html>`,
   },
 
-  // ── 10. Bismillah Header ─────────────────────────────────────────────────
+  // â”€â”€ 10. Bismillah Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "bill-bismillah",
     name: "Bismillah Header",
     type: "Bill",
-    description: "Opens with centered Arabic Bismillah calligraphy above the company header — traditional Islamic business stationery",
+    description: "Opens with centered Arabic Bismillah calligraphy above the company header â€” traditional Islamic business stationery",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -984,7 +984,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
 .bot-rule { border-top: 2px solid #14532d; margin-top: 8px; }
 </style></head><body>
 <div class="main">
-<div class="bismillah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
+<div class="bismillah">Ø¨ÙØ³Ù’Ù…Ù Ø§Ù„Ù„ÙŽÙ‘Ù‡Ù Ø§Ù„Ø±ÙŽÙ‘Ø­Ù’Ù…ÙŽÙ°Ù†Ù Ø§Ù„Ø±ÙŽÙ‘Ø­ÙÙŠÙ…Ù</div>
 <div class="top-rule"></div>
 <div class="hdr">
   <div>
@@ -1016,7 +1016,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
 <table class="items">
   <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:48px">Qty</th><th style="width:44px">UoM</th><th style="width:88px">Unit Price</th><th style="width:94px">Total</th></tr></thead>
   <tbody>
-    {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.description}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
+    {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
     {{emptyRows (math 20 "-" items.length) 6}}
   </tbody>
 </table>
@@ -1042,12 +1042,12 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
 </body></html>`,
   },
 
-  // ── 11. Green & Gold ─────────────────────────────────────────────────────
+  // â”€â”€ 11. Green & Gold â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "bill-green-gold",
     name: "Green & Gold",
     type: "Bill",
-    description: "Forest green header with gold accents — popular palette for Pakistani textile traders",
+    description: "Forest green header with gold accents â€” popular palette for Pakistani textile traders",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 0; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1117,7 +1117,7 @@ table.items tbody tr:nth-child(even) td { background: #f7f7e8 !important; }
   <table class="items">
     <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:48px">Qty</th><th style="width:44px">UoM</th><th style="width:88px">Unit Price</th><th style="width:94px">Total</th></tr></thead>
     <tbody>
-      {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.description}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
+      {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
       {{emptyRows (math 20 "-" items.length) 6}}
     </tbody>
   </table>
@@ -1148,7 +1148,7 @@ table.items tbody tr:nth-child(even) td { background: #f7f7e8 !important; }
 </body></html>`,
   },
 
-  // ── 12. Teal / Slate ──────────────────────────────────────────────────────
+  // â”€â”€ 12. Teal / Slate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "bill-teal-slate",
     name: "Teal / Slate",
@@ -1235,7 +1235,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdfa !important; }
   <table class="items">
     <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:48px">Qty</th><th style="width:44px">UoM</th><th style="width:88px">Unit Price</th><th style="width:94px">Total</th></tr></thead>
     <tbody>
-      {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.description}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
+      {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
       {{emptyRows (math 20 "-" items.length) 6}}
     </tbody>
   </table>
@@ -1260,12 +1260,12 @@ table.items tbody tr:nth-child(even) td { background: #f0fdfa !important; }
 </body></html>`,
   },
 
-  // ── 13. Big Letterhead ────────────────────────────────────────────────────
+  // â”€â”€ 13. Big Letterhead â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "bill-big-letterhead",
     name: "Big Letterhead",
     type: "Bill",
-    description: "Large centred logo + company name letterhead at top, then bill content below — for branded stationery",
+    description: "Large centred logo + company name letterhead at top, then bill content below â€” for branded stationery",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1334,7 +1334,7 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
 <table class="items">
   <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:48px">Qty</th><th style="width:44px">UoM</th><th style="width:88px">Unit Price</th><th style="width:94px">Total</th></tr></thead>
   <tbody>
-    {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.description}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
+    {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
     {{emptyRows (math 20 "-" items.length) 6}}
   </tbody>
 </table>
@@ -1360,7 +1360,7 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
 </body></html>`,
   },
 
-  // ── 14. Centered / Watermark Title ───────────────────────────────────────
+  // â”€â”€ 14. Centered / Watermark Title â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "bill-centered-watermark",
     name: "Centered / Watermark Title",
@@ -1435,7 +1435,7 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
 <table class="items">
   <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:48px">Qty</th><th style="width:44px">UoM</th><th style="width:88px">Unit Price</th><th style="width:94px">Total</th></tr></thead>
   <tbody>
-    {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.description}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
+    {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
     {{emptyRows (math 20 "-" items.length) 6}}
   </tbody>
 </table>
@@ -1460,7 +1460,7 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
 </body></html>`,
   },
 
-  // ── 15. Government-Form Grid ──────────────────────────────────────────────
+  // â”€â”€ 15. Government-Form Grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   {
     id: "bill-govt-form-grid",
     name: "Government-Form Grid",
@@ -1542,7 +1542,7 @@ table.items tbody tr:nth-child(even) td { background: #f2f2f2 !important; }
   <table class="items">
     <thead><tr><th style="width:28px">S#</th><th class="l">Item Type</th><th class="l">Description</th><th style="width:44px">Qty</th><th style="width:40px">UoM</th><th style="width:84px">Unit Price</th><th style="width:90px">Total</th></tr></thead>
     <tbody>
-      {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.itemTypeName}}</td><td class="cell">{{this.description}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
+      {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.itemTypeName}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
       {{emptyRows (math 18 "-" items.length) 7}}
     </tbody>
   </table>

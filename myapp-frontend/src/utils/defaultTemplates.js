@@ -84,7 +84,7 @@ export const defaultChallanTemplate = `<!DOCTYPE html><html><head><title>DC #{{c
     {{#each items}}
     <tr>
       <td class="cell qty">{{this.quantity}}</td>
-      <td class="cell item">{{this.description}}</td>
+      <td class="cell item">{{{richText this.description}}}</td>
     </tr>
     {{/each}}
     {{emptyRows (math 15 "-" items.length) 2}}
@@ -257,7 +257,7 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
     <tr>
       <td class="cell c">{{this.sNo}}</td>
       <td class="cell c">{{this.quantity}}</td>
-      <td class="cell">{{this.description}}</td>
+      <td class="cell">{{{richText this.description}}}</td>
       <td class="cell r">Rs{{fmt this.unitPrice}}</td>
       <td class="cell r">Rs &nbsp; {{fmt this.lineTotal}}</td>
     </tr>
@@ -428,7 +428,7 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
   </div>
 </div>
 
-<!-- Conditional PO number for Lotte Kolson — sits just below the buyer
+<!-- Conditional PO number for Lotte Kolson â€” sits just below the buyer
      box, right-aligned, so the operator sees it next to the client it
      applies to rather than on the Term Of Sale line. -->
 {{#if (eq buyerName "LOTTE Kolson (Pvt.) Limited")}}{{#if poNumber}}
@@ -467,7 +467,7 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
     <tr>
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
-      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{this.description}}{{else}}{{this.description}}{{/if}}</td>
+      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
       <td class="cell r">{{fmtDec this.valueExclTax}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
@@ -500,7 +500,7 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
 {{#if fbrIRN}}
 <!-- FBR Digital Invoicing Section.
      QR and logo are now self-contained: the QR is a base64 PNG rendered
-     server-side ({{{fbrQrPngDataUrl}}} — triple braces so Handlebars
+     server-side ({{{fbrQrPngDataUrl}}} â€” triple braces so Handlebars
      doesn't HTML-escape the data URI), and the FBR logo is served from
      wwwroot/images so it deploys with the bundle. Replaces the earlier
      dependency on external image hosts. -->
