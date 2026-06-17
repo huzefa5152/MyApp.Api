@@ -239,6 +239,8 @@ builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<IDeliveryChallanRepository, DeliveryChallanRepository>();
 builder.Services.AddScoped<ISalesQuoteRepository, SalesQuoteRepository>();
 builder.Services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
+builder.Services.AddScoped<IFolderRepository, FolderRepository>();
+builder.Services.AddScoped<IAttachmentRepository, AttachmentRepository>();
 builder.Services.AddScoped<IDivisionRepository, DivisionRepository>();
 builder.Services.AddScoped<IClientRepository, ClientRepository>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
@@ -256,6 +258,11 @@ builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
 // depends on IDeliveryChallanService (create-challan-from-order). No cycle.
 builder.Services.AddScoped<ISalesQuoteService, SalesQuoteService>();
 builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
+// Unified attachments + document folders. AttachmentStorage is stateless
+// (just the disk root) so it's a singleton; the services are scoped.
+builder.Services.AddScoped<IFolderService, FolderService>();
+builder.Services.AddScoped<IAttachmentService, AttachmentService>();
+builder.Services.AddSingleton<MyApp.Api.Helpers.AttachmentStorage>();
 builder.Services.AddScoped<IDivisionService, DivisionService>();
 builder.Services.AddScoped<IClientService, ClientService>();
 // "Common Clients" grouping — the same legal entity (matched by NTN, then
@@ -1689,6 +1696,57 @@ using (var scope = app.Services.CreateScope())
                 INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (@adminRoleId, @supplierCopyId);
         END
     ");
+
+    // ── 2026-06-17: flatten attachment on-disk layout ─────────────────────
+    // Earlier builds stored files under {companyId}/{yyyy}/{MM}/. The layout is
+    // now flat by folder name (or "Uncategorized") to mirror what the operator
+    // sees. Re-home any rows still on the old layout, update their StoragePath,
+    // then prune the emptied legacy directories. Idempotent: gated by an
+    // AuditLog marker, and each row moves only when its path doesn't already
+    // match the target. No-op in prod (no attachments exist yet).
+    if (!db.AuditLogs.Any(a => a.ExceptionType == "ATTACHMENT_STORAGE_FLATTEN_V1"))
+    {
+        try
+        {
+            var storage = scope.ServiceProvider.GetRequiredService<MyApp.Api.Helpers.AttachmentStorage>();
+            var moved = 0;
+            foreach (var att in db.Attachments.Include(a => a.Folder).ToList())
+            {
+                var targetDir = MyApp.Api.Helpers.AttachmentStorage.DirName(att.Folder?.Name);
+                var targetPath = $"{targetDir}/{att.StoredFileName}";
+                if (string.Equals(att.StoragePath, targetPath, StringComparison.OrdinalIgnoreCase)) continue;
+
+                var oldAbs = Path.Combine(storage.Root, att.StoragePath.Replace('/', Path.DirectorySeparatorChar));
+                var newAbs = Path.Combine(storage.Root, targetDir, att.StoredFileName);
+                Directory.CreateDirectory(Path.GetDirectoryName(newAbs)!);
+                if (System.IO.File.Exists(oldAbs) && !System.IO.File.Exists(newAbs))
+                    System.IO.File.Move(oldAbs, newAbs);
+                att.StoragePath = targetPath;
+                moved++;
+            }
+            if (moved > 0) db.SaveChanges();
+
+            // Prune now-empty legacy directories (deepest first) under the root.
+            if (Directory.Exists(storage.Root))
+            {
+                foreach (var dir in Directory.GetDirectories(storage.Root, "*", System.IO.SearchOption.AllDirectories)
+                                             .OrderByDescending(d => d.Length))
+                {
+                    try { if (!Directory.EnumerateFileSystemEntries(dir).Any()) Directory.Delete(dir); }
+                    catch { /* ignore — best-effort cleanup */ }
+                }
+            }
+
+            db.Database.ExecuteSqlRaw(
+                "INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp]) " +
+                "VALUES ('Info', 'ATTACHMENT_STORAGE_FLATTEN_V1', {0}, 'STARTUP', '/seed/attachments/flatten', 200, SYSUTCDATETIME())",
+                $"Attachment storage flattened: {moved} file(s) re-homed to the folder-name layout.");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Attachment storage flatten backfill failed (non-fatal).");
+        }
+    }
 }
 
 // Configure the HTTP request pipeline.
@@ -1818,6 +1876,24 @@ app.UseStaticFiles();
 // Serve user-uploaded files (logos, avatars) from persistent data/ folder
 var dataPath = Path.Combine(app.Environment.ContentRootPath, "data");
 Directory.CreateDirectory(dataPath);
+// Attachment bytes live under data/attachments (created up-front so the very
+// first upload doesn't race the directory into existence).
+Directory.CreateDirectory(Path.Combine(dataPath, "attachments"));
+
+// SECURITY: attachments are tenant-isolated business documents and must NOT be
+// reachable via the public /data static provider (logos/avatars are fine —
+// low-sensitivity). 404 any direct /data/attachments/* hit here, BEFORE the
+// static middleware below; downloads go through the authenticated
+// /api/attachments/{id}/download endpoint, which asserts company access.
+app.Use(async (ctx, next) =>
+{
+    if (ctx.Request.Path.StartsWithSegments("/data/attachments", StringComparison.OrdinalIgnoreCase))
+    {
+        ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+    await next();
+});
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(dataPath),

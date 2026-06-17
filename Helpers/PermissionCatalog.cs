@@ -96,6 +96,21 @@ namespace MyApp.Api.Helpers
             new("salesorders.manage.delete", "SalesOrders", "Manage", "Delete", "Delete a sales order"),
             new("salesorders.print.view",    "SalesOrders", "Print",  "View",   "Print or download a sales order"),
 
+            // ── Folders + Attachments (unified document management) ─────────
+            // One shared system powers the Configuration → Folders library AND
+            // the reusable attachment component on transaction modules. Folders
+            // are per-company; an attachment may sit in a folder and/or be
+            // linked to a business document (SalesQuote, Invoice, …). Download
+            // is gated by attachments.list.view — if you can list it, you can
+            // download it.
+            new("folders.list.view",          "Folders",     "List",   "View",   "View folders and their contents"),
+            new("folders.manage.create",      "Folders",     "Manage", "Create", "Create a folder"),
+            new("folders.manage.update",      "Folders",     "Manage", "Update", "Rename a folder"),
+            new("folders.manage.delete",      "Folders",     "Manage", "Delete", "Delete a folder (folder-only documents are removed)"),
+            new("attachments.list.view",      "Attachments", "List",   "View",   "View and download attachments"),
+            new("attachments.manage.upload",  "Attachments", "Manage", "Upload", "Upload an attachment"),
+            new("attachments.manage.delete",  "Attachments", "Manage", "Delete", "Delete an attachment"),
+
             // ── Bills (data entry — no FBR concerns) ────────────────────────
             // Sales is split across two screens that view the same underlying
             // bill data:

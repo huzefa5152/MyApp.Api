@@ -33,6 +33,14 @@ namespace MyApp.Api.Data
         public DbSet<SalesOrder> SalesOrders { get; set; }
         public DbSet<SalesOrderItem> SalesOrderItems { get; set; }
 
+        // ── Unified attachments + document folders (additive) ──
+        // One Attachment row per uploaded file (bytes on disk). A Folder is a
+        // per-company named container; an attachment may also/instead be linked
+        // to a business document via (EntityType, EntityId). Used by both the
+        // Configuration → Folders library and the reusable attachment component.
+        public DbSet<Folder> Folders { get; set; }
+        public DbSet<Attachment> Attachments { get; set; }
+
         public DbSet<Client> Clients { get; set; } // ✅ add this
         public DbSet<ClientGroup> ClientGroups { get; set; }
 
@@ -527,6 +535,65 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<SalesOrder>().HasIndex(o => o.ClientId);
             modelBuilder.Entity<DeliveryChallan>().HasIndex(dc => dc.SalesOrderId);
             modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.SalesOrderItemId);
+
+            // ── Unified attachments + document folders ──────────────────────
+            // A Folder is a per-company named container. An Attachment is one
+            // uploaded file (bytes on disk); it may belong to a folder and/or
+            // be linked to a business document via (EntityType, EntityId).
+
+            // Folder -> Company (cascade: a company's folders die with it).
+            modelBuilder.Entity<Folder>()
+                .HasOne(f => f.Company).WithMany()
+                .HasForeignKey(f => f.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Folder -> CreatedByUser (optional; NoAction so deleting a user
+            // doesn't cascade-delete their folders).
+            modelBuilder.Entity<Folder>()
+                .HasOne(f => f.CreatedByUser).WithMany()
+                .HasForeignKey(f => f.CreatedByUserId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Folder>().Property(f => f.Name).HasMaxLength(200);
+            modelBuilder.Entity<Folder>().Property(f => f.Description).HasMaxLength(1000);
+            // Folder names unique within a company (case-insensitive via the
+            // default SQL Server collation). Mirrors Division's (CompanyId, Name).
+            modelBuilder.Entity<Folder>()
+                .HasIndex(f => new { f.CompanyId, f.Name }).IsUnique();
+
+            // Attachment -> Company (restrict — never cascade business files
+            // away on a company delete; there's no other cascade path here so
+            // this also keeps SQL Server clear of multiple-cascade-path errors).
+            modelBuilder.Entity<Attachment>()
+                .HasOne(a => a.Company).WithMany()
+                .HasForeignKey(a => a.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Attachment -> Folder (optional; RESTRICT so FolderService.Delete
+            // decides each file's fate — entity-linked ones are un-linked,
+            // folder-only ones are deleted — rather than a blind DB cascade).
+            modelBuilder.Entity<Attachment>()
+                .HasOne(a => a.Folder).WithMany(f => f.Attachments)
+                .HasForeignKey(a => a.FolderId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Attachment -> UploadedByUser (optional; NoAction).
+            modelBuilder.Entity<Attachment>()
+                .HasOne(a => a.UploadedByUser).WithMany()
+                .HasForeignKey(a => a.UploadedByUserId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<Attachment>().Property(a => a.FileName).HasMaxLength(255);
+            modelBuilder.Entity<Attachment>().Property(a => a.StoredFileName).HasMaxLength(100);
+            modelBuilder.Entity<Attachment>().Property(a => a.StoragePath).HasMaxLength(500);
+            modelBuilder.Entity<Attachment>().Property(a => a.ContentType).HasMaxLength(150);
+            modelBuilder.Entity<Attachment>().Property(a => a.FileExtension).HasMaxLength(20);
+            modelBuilder.Entity<Attachment>().Property(a => a.ContentSha256).HasMaxLength(64);
+            modelBuilder.Entity<Attachment>().Property(a => a.EntityType).HasMaxLength(40);
+
+            // Lookup paths: "all attachments in folder X" (tenant-scoped) and
+            // "all attachments on SalesQuote 42".
+            modelBuilder.Entity<Attachment>().HasIndex(a => new { a.CompanyId, a.FolderId });
+            modelBuilder.Entity<Attachment>().HasIndex(a => new { a.EntityType, a.EntityId });
 
             // ── Company Divisions ──────────────────────────────────────────
             // Per-company named list (sub-brand / department). Cascade on

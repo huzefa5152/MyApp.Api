@@ -28,6 +28,7 @@ import AuditLogsPage from "./pages/AuditLogsPage";
 import FbrSettingsPage from "./pages/FbrSettingsPage";
 import FbrSandboxPage from "./pages/FbrSandboxPage";
 import FbrMonitorPage from "./pages/FbrMonitorPage";
+import NavigationMenuPage from "./pages/NavigationMenuPage";
 import LoginPage from "./pages/public/LoginPage";
 import LandingPage from "./pages/public/LandingPage";
 import ProtectedRoute from "./Components/ProtectedRoute";
@@ -96,6 +97,7 @@ export default function App() {
           <Route path="/fbr-settings" element={<FbrSettingsPage />} />
           <Route path="/fbr-sandbox" element={<FbrSandboxPage />} />
           <Route path="/fbr-monitor" element={<FbrMonitorPage />} />
+          <Route path="/configuration/navigation-menu" element={<NavigationMenuPage />} />
           <Route path="/audit-logs" element={<AuditLogsPage />} />
         </Route>
       </Route>

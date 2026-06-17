@@ -21,6 +21,7 @@ import {
   MdScience,
   MdMonitorHeart,
   MdStraighten,
+  MdFolder,
   MdFileUpload,
   MdAdminPanelSettings,
   MdHistory,
@@ -152,6 +153,7 @@ export default function DashboardLayout() {
     "config.units.manage",
     "poformats.manage.view",
     "printtemplates.manage.update",
+    "folders.list.view",
     "fbr.config.update",
     "fbr.sandbox.view",
   ];
@@ -447,6 +449,12 @@ export default function DashboardLayout() {
                 <NavLink to="/fbr-monitor" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdMonitorHeart className="dl-subitem__icon" aria-hidden="true" />
                   <span>FBR Monitor</span>
+                </NavLink>
+              </Can>
+              <Can permission="folders.list.view">
+                <NavLink to="/configuration/navigation-menu" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdFolder className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Navigation Menu</span>
                 </NavLink>
               </Can>
             </NavGroup>
