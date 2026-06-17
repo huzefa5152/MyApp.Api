@@ -328,6 +328,12 @@ namespace MyApp.Api.Services.Implementations
             if (buyer.CompanyId != dto.CompanyId)
                 throw new InvalidOperationException("Client does not belong to this company.");
 
+            // FBR [0043] rejects future-dated bills. Same PKT date-only guard as
+            // the standalone + update paths — the from-challan bill form lets the
+            // operator override the bill date, so it needs the check too.
+            if (PakistanClock.IsFutureInvoiceDate(dto.Date))
+                throw new InvalidOperationException("Bill date cannot be in the future. [FBR 0043]");
+
             // Load and validate all challans
             var challans = new List<DeliveryChallan>();
             foreach (var challanId in dto.ChallanIds)
@@ -684,9 +690,11 @@ namespace MyApp.Api.Services.Implementations
             if (dto.GSTRate < 0 || dto.GSTRate > 100)
                 throw new InvalidOperationException("GST rate must be between 0 and 100.");
 
-            // Cap bill date at end-of-today UTC — same FBR [0043] guard as UpdateAsync.
-            var maxDate = DateTime.UtcNow.Date.AddDays(1).AddTicks(-1);
-            if (dto.Date > maxDate)
+            // FBR [0043] rejects future-dated bills. Evaluate "future" against
+            // today's date in Pakistan (PKT, UTC+5), comparing date-only — a
+            // server still on the previous UTC day must not block a PKT operator
+            // billing "today". Same guard as UpdateAsync / CreateAsync.
+            if (PakistanClock.IsFutureInvoiceDate(dto.Date))
                 throw new InvalidOperationException("Bill date cannot be in the future. [FBR 0043]");
 
             // Register any newly-typed UOM names + reject fractional qty
@@ -1016,14 +1024,13 @@ namespace MyApp.Api.Services.Implementations
                 // Update invoice-level fields
                 if (dto.Date.HasValue)
                 {
-                    // FBR rejects future dates with [0043]. Cap at end-of-today
-                    // (UTC) so the operator can pick "today" in any time zone
-                    // without tripping the gate.
-                    var newDate = dto.Date.Value;
-                    var maxDate = DateTime.UtcNow.Date.AddDays(1).AddTicks(-1);
-                    if (newDate > maxDate)
+                    // FBR rejects future dates with [0043]. Evaluate "future"
+                    // against today's date in Pakistan (PKT, UTC+5), date-only,
+                    // so the operator can pick "today" without tripping the gate
+                    // even while the server is still on the previous UTC day.
+                    if (PakistanClock.IsFutureInvoiceDate(dto.Date.Value))
                         throw new InvalidOperationException("Bill date cannot be in the future. [FBR 0043]");
-                    invoice.Date = newDate;
+                    invoice.Date = dto.Date.Value;
                 }
                 invoice.GSTRate = dto.GSTRate;
                 invoice.PaymentTerms = dto.PaymentTerms;

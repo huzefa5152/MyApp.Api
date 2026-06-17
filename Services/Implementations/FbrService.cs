@@ -256,6 +256,11 @@ namespace MyApp.Api.Services.Implementations
         private static string SanitizeForFbr(string? value)
         {
             if (string.IsNullOrWhiteSpace(value)) return "";
+            // Strip the limited rich-text tags (<b>/<i>/<u>, any case) the UI lets
+            // operators embed in item descriptions — FBR must receive plain text.
+            // Newlines are already collapsed to spaces in the loop below.
+            value = System.Text.RegularExpressions.Regex.Replace(
+                value, "</?[biu]>", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             var cleaned = new System.Text.StringBuilder(value.Length);
             foreach (var c in value)
             {
@@ -507,7 +512,11 @@ namespace MyApp.Api.Services.Implementations
             if (invoice.FbrStatus == "Submitted" && !string.IsNullOrEmpty(invoice.FbrIRN))
                 errors.Add($"Invoice already submitted to FBR. IRN: {invoice.FbrIRN}");
 
-            if (invoice.Date > DateTime.UtcNow.AddDays(1))
+            // Future check in Pakistan time (PKT, date-only) — same rule the
+            // create/update paths enforce, so a bill accepted at create can't be
+            // flagged future here just because the server crossed into a new UTC
+            // day. PKT is UTC+5, well inside FBR's own day boundary.
+            if (PakistanClock.IsFutureInvoiceDate(invoice.Date))
                 errors.Add("Invoice date cannot be in the future. [FBR 0043]");
 
             // ─ Items ─

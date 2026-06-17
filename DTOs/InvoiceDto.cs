@@ -213,8 +213,9 @@ namespace MyApp.Api.DTOs
     {
         /// <summary>
         /// Optional new bill date. When null, the existing date is preserved.
-        /// FBR rejects future dates with [0043], so the service caps this at
-        /// today (UTC) before persisting.
+        /// FBR rejects future dates with [0043]; the service rejects any date
+        /// after today in Pakistan time (PKT, date-only) — see
+        /// <see cref="MyApp.Api.Helpers.PakistanClock"/>.
         /// </summary>
         public DateTime? Date { get; set; }
         public decimal GSTRate { get; set; }
