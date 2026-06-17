@@ -1165,6 +1165,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         <EditBillForm
           invoiceId={editingId}
           billsMode={isBillsMode}
+          fbrEnabled={fbrEnabled}
           // Invoices-tab edit lets the FBR officer set Item Type AND Qty —
           // descriptions, prices, dates, payment terms etc. stay read-only
           // and reflect whatever was last saved on the Bills tab. Set on
@@ -1189,6 +1190,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         <EditBillForm
           invoiceId={viewingId}
           readOnly
+          fbrEnabled={fbrEnabled}
           onClose={() => setViewingId(null)}
           onSaved={() => setViewingId(null)}
         />

@@ -84,6 +84,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const { has } = usePermissions();
   const canCreateClient   = has("clients.manage.create");
   const canCreateItemType = has("itemtypes.manage.create");
+  // FBR integration toggle (company-level). When off, the bill is a plain
+  // non-FBR bill: no scenario step, editable GST, no scenario saved.
+  const fbrEnabled = company?.fbrEnabled !== false;
 
   const [clients, setClients] = useState([]);
   // Inline create modals — same affordances StandaloneInvoiceForm has
@@ -218,7 +221,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           getPendingChallansByCompany(companyId),
           getClientsByCompany(companyId),
           getItemTypes().catch(() => ({ data: [] })),
-          getFbrApplicableScenarios(companyId).catch(() => ({ data: { scenarios: [] } })),
+          fbrEnabled
+            ? getFbrApplicableScenarios(companyId).catch(() => ({ data: { scenarios: [] } }))
+            : Promise.resolve({ data: { scenarios: [] } }),
         ]);
         // SO-mandatory billing (company flag): only offer challans linked to a
         // Sales Order. The backend rejects billing an unlinked challan anyway,
@@ -647,6 +652,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     scenario and can expand to switch. Auto-collapses on
                     pick so the form scrolls back into Buyer / Items.
                     Same UX as StandaloneInvoiceForm. */}
+                {fbrEnabled && (
                 <div style={{ marginBottom: "1rem" }}>
                   <button
                     type="button"
@@ -728,11 +734,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Step 2 — Pick a client. Collapsible — expanded by
                     default. Filtered by scenario.buyerKind + "has at least
                     one pending challan". Inline "+ New Buyer" button. */}
-                {chosenScenario && (() => {
+                {(chosenScenario || !fbrEnabled) && (() => {
                   const selectedBuyer = clientsForScenario.find((c) => String(c.id) === String(selectedClientId));
                   const pendingCount = selectedBuyer ? allChallans.filter((ch) => ch.clientId === selectedBuyer.id).length : 0;
                   return (
@@ -744,7 +751,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                       >
                         <span style={styles.stepNum}>2</span>
                         <span style={styles.scenarioCollapseTitle}>
-                          {chosenScenario.meta.buyerKind === "walk-in" ? "Walk-in Buyer" : "Buyer"}
+                          {chosenScenario?.meta.buyerKind === "walk-in" ? "Walk-in Buyer" : "Buyer"}
                         </span>
                         {selectedBuyer ? (
                           <span style={styles.scenarioCollapseSummary}>
@@ -771,9 +778,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               <div style={{ ...styles.warnAlert, flex: 1 }}>
                                 <MdInfo size={16} />
                                 No matching{" "}
-                                {chosenScenario.meta.buyerKind === "b2b-registered" ? "Registered"
-                                  : chosenScenario.meta.buyerKind === "b2b-unregistered" ? "Unregistered"
-                                  : chosenScenario.meta.buyerKind === "walk-in" ? "Unregistered (Walk-in)" : ""}{" "}
+                                {chosenScenario?.meta.buyerKind === "b2b-registered" ? "Registered"
+                                  : chosenScenario?.meta.buyerKind === "b2b-unregistered" ? "Unregistered"
+                                  : chosenScenario?.meta.buyerKind === "walk-in" ? "Unregistered (Walk-in)" : ""}{" "}
                                 clients with pending challans.
                                 {canCreateClient ? " Add a buyer below." : " Switch scenarios or ask an admin to add one."}
                               </div>
@@ -827,7 +834,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     DC selection + items. Same UX as StandaloneInvoiceForm:
                     the inputs row is collapsible (default open) so the
                     operator can free vertical space for the items grid. */}
-                {chosenScenario && selectedClientId && company?.startingInvoiceNumber > 0 && (
+                {(chosenScenario || !fbrEnabled) && selectedClientId && company?.startingInvoiceNumber > 0 && (
                   <>
                     <div style={{ marginBottom: "0.75rem" }}>
                       <button
@@ -1228,6 +1235,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                           onPick={(picked) => handleItemPick(item.id, picked)}
                                           style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                           placeholder="Search or type item…"
+                                          multiline
                                         />
                                       )}
                                     </td>

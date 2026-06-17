@@ -114,6 +114,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const { has } = usePermissions();
   const canCreateClient   = has("clients.manage.create");
   const canCreateItemType = has("itemtypes.manage.create");
+  // FBR integration toggle (company-level). When off, this is a plain
+  // non-FBR bill: no scenario step, editable GST, no scenario saved.
+  const fbrEnabled = company?.fbrEnabled !== false;
 
   const [clients, setClients] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -172,7 +175,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         const [, , scenarioRes] = await Promise.all([
           refreshClients(),
           refreshItemTypes(),
-          getFbrApplicableScenarios(companyId).catch(() => ({ data: { scenarios: [] } })),
+          fbrEnabled
+            ? getFbrApplicableScenarios(companyId).catch(() => ({ data: { scenarios: [] } }))
+            : Promise.resolve({ data: { scenarios: [] } }),
         ]);
         setScenarios(scenarioRes.data?.scenarios || []);
       } catch {
@@ -390,7 +395,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (!selectedClientId) return setError("Select a buyer first.");
     if (!company || company.startingInvoiceNumber === 0)
       return setError("Starting bill number not set for this company. Configure it on the Companies page first.");
-    if (!chosenScenario) return setError("Pick an FBR scenario first.");
+    if (fbrEnabled && !chosenScenario) return setError("Pick an FBR scenario first.");
     if (!allRowsValid) {
       const missing = rows.flatMap(rowErrors);
       return setError(`Fill all required fields. Missing: ${[...new Set(missing)].join(", ")}.`);
@@ -426,11 +431,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           // matches what FBR expects; the per-unit MRP itself is a UI
           // affordance only and isn't persisted separately.
           fixedNotifiedValueOrRetailPrice:
-            chosenScenario.meta.needsMRP && r.mrp && r.quantity
+            chosenScenario?.meta.needsMRP && r.mrp && r.quantity
               ? Math.round(parseFloat(r.mrp) * parseFloat(r.quantity) * 100) / 100
               : null,
-          sroScheduleNo: chosenScenario.meta.needsSRO ? r.sroScheduleNo?.trim() || null : null,
-          sroItemSerialNo: chosenScenario.meta.needsSRO ? r.sroItemSerialNo?.trim() || null : null,
+          sroScheduleNo: chosenScenario?.meta.needsSRO ? r.sroScheduleNo?.trim() || null : null,
+          sroItemSerialNo: chosenScenario?.meta.needsSRO ? r.sroItemSerialNo?.trim() || null : null,
         })),
       });
       onSaved();
@@ -485,6 +490,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     of the auto-defaulted scenario and can expand to change
                     it. Auto-collapses again when a card is picked so the
                     flow keeps moving down to Buyer / Bill Details. */}
+                {fbrEnabled && (
                 <div style={{ marginBottom: "1rem" }}>
                   <button
                     type="button"
@@ -576,13 +582,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* ── Step 2: Buyer ───────────────
                     Collapsible — same shape as Step 1 but expanded by
                     default because the operator must pick a buyer. The
                     summary bar shows the selected buyer name when collapsed
                     so the screen stays tidy on subsequent steps. */}
-                {chosenScenario && (() => {
+                {(chosenScenario || !fbrEnabled) && (() => {
                   const selectedBuyer = filteredClients.find((c) => String(c.id) === String(selectedClientId));
                   return (
                     <div style={{ marginBottom: "1rem" }}>
@@ -676,7 +683,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     Invoice"), so the operator can hide the row to free
                     vertical space for the items grid. The items, totals
                     and Sale-Type-locked banner stay outside the collapse. */}
-                {chosenScenario && selectedClientId && (
+                {(chosenScenario || !fbrEnabled) && selectedClientId && (
                   <>
                     <div style={{ marginBottom: "0.75rem" }}>
                       <button
@@ -711,14 +718,15 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                             </div>
                             <div style={{ flex: 1, minWidth: 100 }}>
                               <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
-                                GST Rate (%) <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}><MdLock size={10} /> locked</span>
+                                GST Rate (%) {chosenScenario && <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}><MdLock size={10} /> locked</span>}
                               </label>
                               <input
                                 type="number"
-                                style={{ ...styles.input, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+                                style={{ ...styles.input, backgroundColor: chosenScenario ? "#eef5ff" : undefined, cursor: chosenScenario ? "not-allowed" : "text" }}
                                 value={gstRate}
-                                readOnly
-                                title={`Locked by ${chosenScenario.code}. Switch scenario to change.`}
+                                onChange={(e) => setGstRate(e.target.value)}
+                                readOnly={!!chosenScenario}
+                                title={chosenScenario ? `Locked by ${chosenScenario.code}. Switch scenario to change.` : "Set the GST rate for this bill"}
                               />
                             </div>
                             <div style={{ flex: 1, minWidth: 140 }}>
@@ -751,11 +759,13 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       )}
                     </div>
 
-                    <div style={styles.lockedSaleType}>
-                      <MdLock size={14} color={colors.teal} />
-                      <span><b>Sale Type locked:</b> {chosenScenario.saleType}</span>
-                      <span style={styles.lockedSaleTypeHint}>(every line uses this — required by {chosenScenario.code})</span>
-                    </div>
+                    {chosenScenario && (
+                      <div style={styles.lockedSaleType}>
+                        <MdLock size={14} color={colors.teal} />
+                        <span><b>Sale Type locked:</b> {chosenScenario.saleType}</span>
+                        <span style={styles.lockedSaleTypeHint}>(every line uses this — required by {chosenScenario.code})</span>
+                      </div>
+                    )}
 
                     {/* Items table */}
                     <div>
@@ -886,6 +896,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         value={r.description || ""}
                                         onChange={(val) => updateRow(r.localId, { description: val })}
                                         inputStyle={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                        multiline
                                       />
                                     </td>
                                   ) : (
@@ -1056,9 +1067,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
               type="submit"
               style={{
                 ...formStyles.button, ...formStyles.submit,
-                opacity: saving || !chosenScenario || !selectedClientId || !allRowsValid ? 0.6 : 1,
+                opacity: saving || !(chosenScenario || !fbrEnabled) || !selectedClientId || !allRowsValid ? 0.6 : 1,
               }}
-              disabled={saving || !chosenScenario || !selectedClientId || !allRowsValid}
+              disabled={saving || !(chosenScenario || !fbrEnabled) || !selectedClientId || !allRowsValid}
             >
               {saving ? "Creating…" : `Create Bill${chosenScenario ? ` · ${chosenScenario.code}` : ""}`}
             </button>
