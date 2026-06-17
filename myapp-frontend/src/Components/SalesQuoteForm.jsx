@@ -7,6 +7,7 @@ import QuantityInput from "./QuantityInput";
 import { getAllUnits } from "../api/unitsApi";
 import { getQuoteItemRate } from "../api/salesQuoteApi";
 import { formStyles, modalSizes } from "../theme";
+import AttachmentManager from "./AttachmentManager";
 
 const colors = {
   textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
@@ -24,7 +25,16 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
   const [divisionId, setDivisionId] = useState(
     quote?.divisionId ? String(quote.divisionId) : (defaultDivisionId ? String(defaultDivisionId) : ""));
   const [date, setDate] = useState(quote?.date ? quote.date.slice(0, 10) : new Date().toISOString().slice(0, 10));
-  const [validUntil, setValidUntil] = useState(quote?.validUntil ? quote.validUntil.slice(0, 10) : "");
+  // "Valid for N days" drives expiry: ValidUntil = issue date + N days. Blank =
+  // no expiry (quote stays Active until accepted). On edit, derive the day count
+  // back from the stored dates.
+  const [validForDays, setValidForDays] = useState(() => {
+    if (quote?.validUntil && quote?.date) {
+      const d = Math.round((new Date(quote.validUntil) - new Date(quote.date)) / 86400000);
+      return d > 0 ? String(d) : "";
+    }
+    return "";
+  });
   const [enquiryRef, setEnquiryRef] = useState(quote?.customerEnquiryRef || "");
   const [enquiryDate, setEnquiryDate] = useState(quote?.enquiryDate ? quote.enquiryDate.slice(0, 10) : "");
   const [gstRate, setGstRate] = useState(quote?.gstRate ?? 18);
@@ -38,6 +48,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const rateTimers = useRef({});
+  const attachmentRef = useRef(null);
 
   useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
 
@@ -94,11 +105,11 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
 
     setSaving(true);
     try {
-      await onSaved({
+      const saved = await onSaved({
         clientId: client.id,
         divisionId: divisionId ? parseInt(divisionId) : null,
         date: date ? new Date(date).toISOString() : null,
-        validUntil: validUntil ? new Date(validUntil).toISOString() : null,
+        validUntil: validForDays && date ? new Date(new Date(date).getTime() + Number(validForDays) * 86400000).toISOString() : null,
         customerEnquiryRef: enquiryRef.trim() || null,
         enquiryDate: enquiryDate ? new Date(enquiryDate).toISOString() : null,
         gstRate: Number(gstRate) || 0,
@@ -112,6 +123,12 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
           unitPrice: Number(i.unitPrice) || 0,
         })),
       });
+      // Upload any attachments staged before the quote had an id. No-op in
+      // edit mode (there they upload immediately) and when nothing's staged.
+      try {
+        const savedId = saved?.id ?? quote?.id;
+        if (savedId) await attachmentRef.current?.flush(savedId);
+      } catch { /* attachments are best-effort — the quote is already saved */ }
       onClose();
     } catch (err) {
       const msg = err.response?.data?.error || err.response?.data?.message;
@@ -138,12 +155,12 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
               </div>
               <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={s.opt}>(optional)</span></>} labelStyle={s.label} style={s.input} wrapStyle={{ flex: 1, minWidth: 150 }} />
               <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={s.label}>Quote Date</label>
+                <label style={s.label}>Issue Date</label>
                 <input type="date" style={s.input} value={date} onChange={(e) => setDate(e.target.value)} />
               </div>
               <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={s.label}>Valid Until <span style={s.opt}>(optional)</span></label>
-                <input type="date" style={s.input} value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+                <label style={s.label}>Valid for (days) <span style={s.opt}>(optional)</span></label>
+                <input type="number" min={1} step={1} style={s.input} value={validForDays} onChange={(e) => setValidForDays(e.target.value)} placeholder="blank = no expiry" />
               </div>
             </div>
             <div style={s.row}>
@@ -161,7 +178,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
               </div>
             </div>
 
-            <label style={{ ...s.label, marginBottom: "0.5rem" }}>Items</label>
+            <label style={{ ...s.label, marginBottom: "0.5rem" }}>Items <span style={{ fontWeight: 400, fontSize: "0.72rem", color: colors.textSecondary }}>— descriptions allow line breaks and {"<b>"}bold{"</b>"} / {"<i>"}italic{"</i>"}</span></label>
             <div style={s.tableWrap}>
               <table style={s.table}>
                 <thead>
@@ -180,7 +197,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
                     <tr key={idx}>
                       <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
                       <td style={s.td}>
-                        <LookupAutocomplete label="Item description" endpoint="/lookup/items" value={item.description} onChange={(v) => handleDescChange(idx, v)} inputStyle={s.cellInput} />
+                        <LookupAutocomplete label="Item description" endpoint="/lookup/items" value={item.description} onChange={(v) => handleDescChange(idx, v)} inputStyle={s.cellInput} multiline />
                         {item.rateHint && <div style={s.hint}>{item.rateHint}</div>}
                       </td>
                       <td style={s.td}>
@@ -208,6 +225,14 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
               <div style={s.tRow}><span>GST @ {gstRate || 0}%</span><span>Rs {gstAmount.toLocaleString()}</span></div>
               <div style={{ ...s.tRow, ...s.grand }}><span>Grand Total</span><span>Rs {grandTotal.toLocaleString()}</span></div>
             </div>
+
+            <AttachmentManager
+              ref={attachmentRef}
+              companyId={companyId}
+              entityType="SalesQuote"
+              entityId={quote?.id ?? null}
+              mode="edit"
+            />
           </div>
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>

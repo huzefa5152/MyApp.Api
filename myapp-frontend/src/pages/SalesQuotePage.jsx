@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdEdit, MdDelete, MdSwapHoriz } from "react-icons/md";
+import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdEdit, MdDelete, MdSwapHoriz, MdAttachFile, MdVisibility } from "react-icons/md";
 import SalesQuoteForm from "../Components/SalesQuoteForm";
+import SalesQuoteDetailModal from "../Components/SalesQuoteDetailModal";
 import {
   getPagedSalesQuotesByCompany, createSalesQuote, updateSalesQuote,
-  deleteSalesQuote, setSalesQuoteStatus, convertQuoteToOrder, getSalesQuotePrintData,
+  deleteSalesQuote, convertQuoteToOrder, getSalesQuotePrintData,
 } from "../api/salesQuoteApi";
-import { getTemplate } from "../api/printTemplateApi";
+import { getEntityAttachmentCounts } from "../api/attachmentApi";
+import { getTemplatesByCompany } from "../api/printTemplateApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { defaultQuoteTemplate } from "../utils/salesDocTemplates";
@@ -18,10 +20,10 @@ import { useConfirm } from "../Components/ConfirmDialog";
 
 const colors = { blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBorder: "#d0d7e2" };
 
+// Status is derived server-side (never operator-set): Active / Expired / Accepted.
 const STATUS_COLORS = {
-  Draft: "#5f6d7e", Sent: "#1565c0", Accepted: "#28a745", Rejected: "#dc3545", Expired: "#f57c00", Converted: "#00897b",
+  Active: "#1565c0", Expired: "#f57c00", Accepted: "#28a745",
 };
-const STATUS_OPTIONS = ["Draft", "Sent", "Accepted", "Rejected", "Expired"];
 
 export default function SalesQuotePage() {
   const confirm = useConfirm();
@@ -32,8 +34,14 @@ export default function SalesQuotePage() {
   const canDelete = has("salesquotes.manage.delete");
   const canPrint = has("salesquotes.print.view");
   const canConvert = has("salesorders.manage.create");
+  const canSeeAttachments = has("attachments.list.view");
+  const canViewTemplates = has("printtemplates.manage.view");
 
   const [quotes, setQuotes] = useState([]);
+  const [attachCounts, setAttachCounts] = useState({}); // { quoteId: attachmentCount }
+  const [quoteTemplates, setQuoteTemplates] = useState([]); // SalesQuote print templates for the company
+  const [templatesLoaded, setTemplatesLoaded] = useState(false);
+  const [viewQuote, setViewQuote] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editQuote, setEditQuote] = useState(null);
@@ -59,17 +67,34 @@ export default function SalesQuotePage() {
       setQuotes(data.items);
       setTotalCount(data.totalCount);
       setTotalPages(data.totalPages);
+      // One batched call for the whole page's attachment counts (card badges).
+      if (canSeeAttachments && data.items?.length) {
+        getEntityAttachmentCounts(companyId, "SalesQuote", data.items.map((q) => q.id))
+          .then(({ data: c }) => setAttachCounts(c || {}))
+          .catch(() => { /* no attachment-view perm / unavailable — skip badges */ });
+      } else {
+        setAttachCounts({});
+      }
     } catch { setQuotes([]); setTotalCount(0); setTotalPages(0); }
     finally { setLoading(false); }
-  }, [page, search, statusFilter, divisionFilter, clientFilter]);
+  }, [page, search, statusFilter, divisionFilter, clientFilter, canSeeAttachments]);
 
   // Reset paging + filters and load the client list when the company changes.
   useEffect(() => {
     setPage(1); setSearch(""); setStatusFilter(""); setDivisionFilter(""); setClientFilter("");
     if (selectedCompany) {
       getClientsByCompany(selectedCompany.id).then(({ data }) => setClients(data || [])).catch(() => setClients([]));
-    } else { setClients([]); setQuotes([]); }
-  }, [selectedCompany]);
+      // Load SalesQuote print templates (with division + default) so printing can
+      // pick the division's default — and so we can hide Print for a division
+      // quote that has no template. Needs printtemplates.manage.view; without it
+      // we fall back to legacy behavior (built-in default, Print always shown).
+      if (canViewTemplates) {
+        getTemplatesByCompany(selectedCompany.id)
+          .then(({ data }) => { setQuoteTemplates((data || []).filter((t) => t.templateType === "SalesQuote")); setTemplatesLoaded(true); })
+          .catch(() => { setQuoteTemplates([]); setTemplatesLoaded(false); });
+      } else { setQuoteTemplates([]); setTemplatesLoaded(false); }
+    } else { setClients([]); setQuotes([]); setQuoteTemplates([]); setTemplatesLoaded(false); }
+  }, [selectedCompany]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch whenever the company, page, or any filter changes.
   useEffect(() => {
@@ -79,19 +104,41 @@ export default function SalesQuotePage() {
 
   const reload = () => selectedCompany && fetchQuotes(selectedCompany.id, page);
 
-  const handleSave = async (payload) => {
-    if (editQuote) await updateSalesQuote(editQuote.id, payload);
-    else await createSalesQuote(selectedCompany.id, payload);
-    reload();
-    setShowForm(false);
-    setEditQuote(null);
-    notify(editQuote ? "Quote updated." : "Quote created.", "success");
+  // Resolve the print template for a quote: a division quote uses its division's
+  // default; a company-level quote uses the company default. Returns null when a
+  // division quote has no template for its division.
+  const resolveQuoteTemplate = (q) => {
+    if (q.divisionId) {
+      const inDiv = quoteTemplates.filter((t) => t.divisionId === q.divisionId);
+      if (inDiv.length === 0) return null;
+      return inDiv.find((t) => t.isDefault) || inDiv[0];
+    }
+    const companyLevel = quoteTemplates.filter((t) => !t.divisionId);
+    return companyLevel.find((t) => t.isDefault) || companyLevel[0] || null;
   };
 
-  const handleStatus = async (q, status) => {
-    try { await setSalesQuoteStatus(q.id, status); reload(); }
-    catch (err) { notify(err.response?.data?.error || "Failed to update status.", "error"); }
+  // Show Print only when it can produce something: division quotes need a
+  // division template; company-level quotes always can (built-in default
+  // fallback). If templates couldn't load (no perm), keep legacy behavior.
+  const canPrintQuote = (q) => {
+    if (!canPrint) return false;
+    if (!templatesLoaded) return true;
+    if (q.divisionId) return !!resolveQuoteTemplate(q);
+    return true;
   };
+
+  const handleSave = async (payload) => {
+    // Return the saved quote so the form can flush staged attachments against
+    // the new id. The form closes itself (after the flush) via onClose.
+    const res = editQuote
+      ? await updateSalesQuote(editQuote.id, payload)
+      : await createSalesQuote(selectedCompany.id, payload);
+    reload();
+    notify(editQuote ? "Quote updated." : "Quote created.", "success");
+    return res.data;
+  };
+
+  // Quote status is derived server-side (Active / Expired / Accepted) — no manual set.
 
   const handleConvert = async (q) => {
     const ok = await confirm({ title: "Convert to Sales Order?", message: `Create a Sales Order from Quote #${q.quoteNumber}? The order tracks delivery; pricing is set later at bill time.`, confirmText: "Convert" });
@@ -111,13 +158,19 @@ export default function SalesQuotePage() {
   };
 
   const handlePrint = async (q) => {
+    // A division quote with no division template can't print (button is hidden;
+    // guard here too).
+    if (templatesLoaded && q.divisionId && !resolveQuoteTemplate(q)) {
+      notify("No print template is set for this division.", "warning");
+      return;
+    }
     const w = window.open("", "_blank");
     if (!w) { notify("Popup blocked. Allow popups for this site.", "warning"); return; }
     w.document.write("<p>Loading quote...</p>");
     try {
       const { data } = await getSalesQuotePrintData(q.id);
-      let template = defaultQuoteTemplate;
-      try { const res = await getTemplate(selectedCompany.id, "SalesQuote"); if (res.data?.htmlContent) template = res.data.htmlContent; } catch { /* default */ }
+      const tpl = resolveQuoteTemplate(q);
+      const template = tpl?.htmlContent || defaultQuoteTemplate;
       const html = mergeTemplate(template, data);
       w.document.open(); w.document.write(html); w.document.close(); w.focus();
       w.onafterprint = () => w.close();
@@ -157,7 +210,7 @@ export default function SalesQuotePage() {
               </div>
               <select className="filter-select" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
                 <option value="">All Status</option>
-                {["Draft", "Sent", "Accepted", "Rejected", "Expired", "Converted"].map((x) => <option key={x} value={x}>{x}</option>)}
+                {["Active", "Expired", "Accepted"].map((x) => <option key={x} value={x}>{x}</option>)}
               </select>
               <select className="filter-select" value={clientFilter} onChange={(e) => { setClientFilter(e.target.value); setPage(1); }}>
                 <option value="">All Clients</option>
@@ -182,21 +235,20 @@ export default function SalesQuotePage() {
                 <div style={st.client}>{q.clientName}</div>
                 <div style={st.metaRow}><span>{fmtDate(q.date)}</span><span>{q.items?.length || 0} item{(q.items?.length || 0) !== 1 ? "s" : ""}</span></div>
                 {q.divisionName && <span style={st.divisionChip}>{q.divisionName}</span>}
+                {attachCounts[q.id] > 0 && (
+                  <span style={st.attachChip}><MdAttachFile size={12} /> {attachCounts[q.id]} attachment{attachCounts[q.id] !== 1 ? "s" : ""}</span>
+                )}
                 {q.customerEnquiryRef && <div style={st.meta}>Enquiry: {q.customerEnquiryRef}</div>}
                 {q.validUntil && <div style={st.meta}>Valid until: {fmtDate(q.validUntil)}</div>}
                 <div style={st.total}>Rs {Number(q.grandTotal).toLocaleString()}</div>
                 <div style={st.subMeta}>Subtotal Rs {Number(q.subtotal).toLocaleString()} · GST {q.gstRate}% (Rs {Number(q.gstAmount).toLocaleString()})</div>
                 {q.convertedToSalesOrderNumber && <div style={st.converted}>→ Sales Order #{q.convertedToSalesOrderNumber}</div>}
                 <div style={st.actions}>
+                  <button style={st.actBtn} onClick={() => setViewQuote(q)} title="View"><MdVisibility size={16} /></button>
                   {canUpdate && q.isEditable && <button style={st.actBtn} onClick={() => { setEditQuote(q); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
-                  {canPrint && <button style={st.actBtn} onClick={() => handlePrint(q)} title="Print"><MdPrint size={16} /></button>}
-                  {canConvert && q.status !== "Converted" && <button style={{ ...st.actBtn, color: colors.teal }} onClick={() => handleConvert(q)} title="Convert to Sales Order"><MdSwapHoriz size={16} /></button>}
-                  {canUpdate && q.status !== "Converted" && (
-                    <select style={st.statusSelect} value={q.status} onChange={(e) => handleStatus(q, e.target.value)} title="Set status">
-                      {STATUS_OPTIONS.map((x) => <option key={x} value={x}>{x}</option>)}
-                    </select>
-                  )}
-                  {canDelete && q.isLatest && q.status !== "Converted" && <button style={{ ...st.actBtn, color: "#dc3545" }} onClick={() => handleDelete(q)} title="Delete"><MdDelete size={16} /></button>}
+                  {canPrintQuote(q) && <button style={st.actBtn} onClick={() => handlePrint(q)} title="Print"><MdPrint size={16} /></button>}
+                  {canConvert && q.status !== "Accepted" && <button style={{ ...st.actBtn, color: colors.teal }} onClick={() => handleConvert(q)} title="Convert to Sales Order"><MdSwapHoriz size={16} /></button>}
+                  {canDelete && q.isLatest && q.status !== "Accepted" && <button style={{ ...st.actBtn, color: "#dc3545" }} onClick={() => handleDelete(q)} title="Delete"><MdDelete size={16} /></button>}
                 </div>
               </div>
             ))}
@@ -213,6 +265,16 @@ export default function SalesQuotePage() {
 
       {showForm && selectedCompany && (
         <SalesQuoteForm companyId={selectedCompany.id} quote={editQuote} defaultDivisionId={editQuote ? null : divisionFilter} onClose={() => { setShowForm(false); setEditQuote(null); }} onSaved={handleSave} />
+      )}
+
+      {viewQuote && selectedCompany && (
+        <SalesQuoteDetailModal
+          companyId={selectedCompany.id}
+          quote={viewQuote}
+          canPrint={canPrintQuote(viewQuote)}
+          onPrint={(q) => { setViewQuote(null); handlePrint(q); }}
+          onClose={() => setViewQuote(null)}
+        />
       )}
     </div>
   );
@@ -237,6 +299,7 @@ const st = {
   metaRow: { display: "flex", justifyContent: "space-between", marginTop: "0.35rem", fontSize: "0.8rem", color: colors.textSecondary },
   meta: { marginTop: "0.2rem", fontSize: "0.78rem", color: colors.textSecondary },
   divisionChip: { display: "inline-block", marginTop: "0.35rem", fontSize: "0.72rem", fontWeight: 700, color: colors.blue, background: "#e3f0ff", padding: "0.12rem 0.55rem", borderRadius: 6 },
+  attachChip: { display: "inline-flex", alignItems: "center", gap: 4, marginTop: "0.35rem", marginLeft: 6, fontSize: "0.72rem", fontWeight: 700, color: colors.teal, background: "#e0f2f1", padding: "0.12rem 0.55rem", borderRadius: 6 },
   total: { marginTop: "0.5rem", fontWeight: 800, fontSize: "1.1rem", color: colors.textPrimary },
   subMeta: { marginTop: "0.1rem", fontSize: "0.74rem", color: colors.textSecondary },
   converted: { marginTop: "0.3rem", fontSize: "0.78rem", color: colors.teal, fontWeight: 600 },

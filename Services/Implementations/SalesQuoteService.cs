@@ -33,9 +33,9 @@ namespace MyApp.Api.Services.Implementations
             _logger = logger;
         }
 
-        private static SalesQuoteDto ToDto(SalesQuote q, int maxNumber)
+        private static SalesQuoteDto ToDto(SalesQuote q, int maxNumber, bool hasLinkedOrder)
         {
-            var sNo = 0;
+            var accepted = hasLinkedOrder || q.ConvertedToSalesOrderId != null;
             return new SalesQuoteDto
             {
                 Id = q.Id,
@@ -55,10 +55,10 @@ namespace MyApp.Api.Services.Implementations
                 GSTAmount = q.GSTAmount,
                 GrandTotal = q.GrandTotal,
                 AmountInWords = q.AmountInWords,
-                Status = q.Status,
+                Status = DeriveStatus(q, accepted),
                 ConvertedToSalesOrderId = q.ConvertedToSalesOrderId,
                 ConvertedToSalesOrderNumber = q.ConvertedToSalesOrder?.SalesOrderNumber,
-                IsEditable = q.Status != "Converted",
+                IsEditable = !accepted,
                 IsLatest = q.QuoteNumber == maxNumber,
                 CreatedAt = q.CreatedAt,
                 Items = q.Items.Select(i => new SalesQuoteItemDto
@@ -73,6 +73,29 @@ namespace MyApp.Api.Services.Implementations
                     LineTotal = i.LineTotal
                 }).ToList()
             };
+        }
+
+        // Status is DERIVED, never operator-set: Accepted once a Sales Order
+        // references the quote; Expired once past ValidUntil and not accepted;
+        // Active otherwise (including no expiry set).
+        private static string DeriveStatus(SalesQuote q, bool accepted)
+        {
+            if (accepted) return "Accepted";
+            if (q.ValidUntil.HasValue && q.ValidUntil.Value.Date < DateTime.UtcNow.Date) return "Expired";
+            return "Active";
+        }
+
+        // Quote IDs (within the set) referenced by any Sales Order — via the
+        // convert-to-order flow or an order created selecting the quote.
+        private async Task<HashSet<int>> GetLinkedQuoteIdsAsync(int companyId, List<int> quoteIds)
+        {
+            if (quoteIds.Count == 0) return new HashSet<int>();
+            var ids = await _context.SalesOrders
+                .Where(so => so.CompanyId == companyId && so.SalesQuoteId != null && quoteIds.Contains(so.SalesQuoteId.Value))
+                .Select(so => so.SalesQuoteId!.Value)
+                .Distinct()
+                .ToListAsync();
+            return ids.ToHashSet();
         }
 
         /// <summary>Recompute line totals + header totals + amount-in-words.</summary>
@@ -93,7 +116,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var max = await _repository.GetMaxNumberAsync(companyId);
             var quotes = await _repository.GetByCompanyAsync(companyId);
-            return quotes.Select(q => ToDto(q, max)).ToList();
+            var linked = await GetLinkedQuoteIdsAsync(companyId, quotes.Select(q => q.Id).ToList());
+            return quotes.Select(q => ToDto(q, max, linked.Contains(q.Id))).ToList();
         }
 
         public async Task<PagedResult<SalesQuoteDto>> GetPagedByCompanyAsync(
@@ -105,9 +129,10 @@ namespace MyApp.Api.Services.Implementations
             var max = await _repository.GetMaxNumberAsync(companyId);
             var (items, totalCount) = await _repository.GetPagedByCompanyAsync(
                 companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, divisionId);
+            var linked = await GetLinkedQuoteIdsAsync(companyId, items.Select(q => q.Id).ToList());
             return new PagedResult<SalesQuoteDto>
             {
-                Items = items.Select(q => ToDto(q, max)).ToList(),
+                Items = items.Select(q => ToDto(q, max, linked.Contains(q.Id))).ToList(),
                 TotalCount = totalCount,
                 Page = page,
                 PageSize = pageSize
@@ -119,7 +144,8 @@ namespace MyApp.Api.Services.Implementations
             var q = await _repository.GetByIdAsync(id);
             if (q == null) return null;
             var max = await _repository.GetMaxNumberAsync(q.CompanyId);
-            return ToDto(q, max);
+            var hasLinkedOrder = await _context.SalesOrders.AnyAsync(so => so.SalesQuoteId == id);
+            return ToDto(q, max, hasLinkedOrder);
         }
 
         public async Task<int> GetCountByCompanyAsync(int companyId)
@@ -193,8 +219,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var quote = await _repository.GetByIdAsync(id);
             if (quote == null) return null;
-            if (quote.Status == "Converted")
-                throw new InvalidOperationException("A converted quote can no longer be edited.");
+            if (quote.ConvertedToSalesOrderId != null || await _context.SalesOrders.AnyAsync(so => so.SalesQuoteId == id))
+                throw new InvalidOperationException("A quote linked to a sales order can no longer be edited.");
             Validate(dto);
 
             if (dto.ClientId > 0 && dto.ClientId != quote.ClientId)
@@ -273,8 +299,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var quote = await _repository.GetByIdAsync(id);
             if (quote == null) return false;
-            if (quote.Status == "Converted" || quote.ConvertedToSalesOrderId != null)
-                throw new InvalidOperationException("This quote was converted to a sales order and cannot be deleted. Delete the order first.");
+            if (quote.ConvertedToSalesOrderId != null || await _context.SalesOrders.AnyAsync(so => so.SalesQuoteId == id))
+                throw new InvalidOperationException("This quote is linked to a sales order and cannot be deleted. Delete the order first.");
 
             var max = await _repository.GetMaxNumberAsync(quote.CompanyId);
             if (quote.QuoteNumber != max)
@@ -291,8 +317,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var quote = await _repository.GetByIdAsync(id);
             if (quote == null) throw new KeyNotFoundException("Quote not found.");
-            if (quote.ConvertedToSalesOrderId != null)
-                throw new InvalidOperationException($"This quote was already converted (Sales Order #{quote.ConvertedToSalesOrder?.SalesOrderNumber}).");
+            if (quote.ConvertedToSalesOrderId != null || await _context.SalesOrders.AnyAsync(so => so.SalesQuoteId == id))
+                throw new InvalidOperationException("This quote is already linked to a sales order.");
 
             var orderDto = new SalesOrderDto
             {

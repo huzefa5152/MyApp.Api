@@ -40,7 +40,25 @@ namespace MyApp.Api.Repositories.Implementations
             var query = WithIncludes().Where(q => q.CompanyId == companyId);
 
             if (!string.IsNullOrWhiteSpace(status))
-                query = query.Where(q => q.Status == status);
+            {
+                // Status is derived, not stored: Accepted = any Sales Order
+                // references the quote; Expired = past ValidUntil and not
+                // accepted; Active = otherwise. Mirrors SalesQuoteService.
+                var today = DateTime.UtcNow.Date;
+                if (status == "Accepted")
+                    query = query.Where(q => q.ConvertedToSalesOrderId != null
+                        || _context.SalesOrders.Any(so => so.SalesQuoteId == q.Id));
+                else if (status == "Expired")
+                    query = query.Where(q => q.ConvertedToSalesOrderId == null
+                        && !_context.SalesOrders.Any(so => so.SalesQuoteId == q.Id)
+                        && q.ValidUntil != null && q.ValidUntil < today);
+                else if (status == "Active")
+                    query = query.Where(q => q.ConvertedToSalesOrderId == null
+                        && !_context.SalesOrders.Any(so => so.SalesQuoteId == q.Id)
+                        && (q.ValidUntil == null || q.ValidUntil >= today));
+                else
+                    query = query.Where(q => q.Status == status);
+            }
             if (clientId.HasValue)
                 query = query.Where(q => q.ClientId == clientId.Value);
             if (divisionId.HasValue)
