@@ -37,6 +37,15 @@ namespace MyApp.Api.DTOs
         /// </summary>
         public bool IsFbrExcluded { get; set; }
         /// <summary>
+        /// True when this bill has been voided/cancelled. The bill keeps its
+        /// number (no gap) but is excluded from KPIs and can no longer be
+        /// edited or sent to FBR. The UI shows a "Cancelled" badge and hides
+        /// the edit / FBR / void actions.
+        /// </summary>
+        public bool IsCancelled { get; set; }
+        public DateTime? CancelledAt { get; set; }
+        public string? CancelReason { get; set; }
+        /// <summary>
         /// True when every item has HSCode + SaleType + UOM (either FbrUOMId or a non-empty UOM string),
         /// meaning the bill has enough data to be validated/submitted to FBR.
         /// </summary>

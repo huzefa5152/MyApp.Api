@@ -343,6 +343,43 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
+        /// Void (cancel) a bill that has NOT been submitted to FBR. Unlike
+        /// Delete (which only works on the trailing bill and removes the row),
+        /// Cancel works on ANY non-submitted bill: it keeps the bill number so
+        /// the sequence stays gap-free, flags the bill cancelled, and releases
+        /// its linked delivery challans back to a billable state so they can be
+        /// re-billed.
+        ///
+        /// Gated by its own `bills.manage.void` permission (distinct from
+        /// `bills.manage.delete`) so a role can be allowed to void bills
+        /// without also being trusted to hard-delete the trailing bill.
+        /// </summary>
+        [HttpPost("{id}/cancel")]
+        [HasPermission("bills.manage.void")]
+        public async Task<ActionResult<InvoiceDto>> Cancel(int id, [FromBody] CancelBillRequest? body)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            try
+            {
+                var updated = await _service.CancelAsync(id, body?.Reason, User.Identity?.Name);
+                if (updated == null) return NotFound(new { error = "Bill not found." });
+                return Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        public class CancelBillRequest
+        {
+            /// <summary>Optional free-text reason for the void (audit trail).</summary>
+            public string? Reason { get; set; }
+        }
+
+        /// <summary>
         /// Flip the FBR-exclusion flag on a bill. Excluded bills are skipped
         /// by Validate All / Submit All; per-bill validate/submit still work.
         /// Returns the updated DTO so the UI can re-render without a refetch.

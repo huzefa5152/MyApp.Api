@@ -2,13 +2,20 @@ import { useNavigate } from "react-router-dom";
 import {
   MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
-  MdEdit, MdDelete, MdOpenInNew,
+  MdEdit, MdDelete, MdOpenInNew, MdCancel,
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 
 // Renders the FBR-status pill in compact form for the table.
 function fbrStatusBadge(inv, isBillsMode) {
+  if (inv.isCancelled) {
+    return (
+      <StatusBadge tone="danger" title={inv.cancelReason ? `Cancelled — ${inv.cancelReason}` : "This bill has been cancelled (voided)"}>
+        Cancelled
+      </StatusBadge>
+    );
+  }
   if (inv.fbrStatus === "Submitted") {
     return (
       <StatusBadge tone="submitted" title={inv.fbrIRN ? `IRN: ${inv.fbrIRN}` : undefined}>
@@ -56,6 +63,7 @@ export default function InvoiceTable({
   onEdit,
   onToggleFbrExcluded,
   onDelete,
+  onVoid,
 }) {
   const navigate = useNavigate();
 
@@ -198,7 +206,7 @@ export default function InvoiceTable({
             <MdVisibility size={14} />
           </button>
         )}
-        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && !isSubmitted && (
+        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && !isSubmitted && !inv.isCancelled && (
           <>
             {perms.canFbrValidate && (
               <button
@@ -239,7 +247,7 @@ export default function InvoiceTable({
             )}
           </>
         )}
-        {perms.canOpenEdit && !isSubmitted && (
+        {perms.canOpenEdit && !isSubmitted && !inv.isCancelled && (
           <button
             style={btn.edit}
             onClick={() => onEdit?.(inv)}
@@ -248,7 +256,7 @@ export default function InvoiceTable({
             <MdEdit size={14} />
           </button>
         )}
-        {!isBillsMode && perms.canFbrExclude && !isSubmitted && (
+        {!isBillsMode && perms.canFbrExclude && !isSubmitted && !inv.isCancelled && (
           <button
             style={{
               ...btn.neutral,
@@ -264,9 +272,18 @@ export default function InvoiceTable({
             {inv.isFbrExcluded ? <MdRestore size={14} /> : <MdBlock size={14} />}
           </button>
         )}
-        {isBillsMode && perms.canDelete && !isSubmitted && inv.isLatest && (
-          <button style={btn.delete} onClick={() => onDelete?.(inv)} title="Delete bill">
+        {isBillsMode && perms.canDelete && !isSubmitted && !inv.isCancelled && inv.isLatest && (
+          <button style={btn.delete} onClick={() => onDelete?.(inv)} title="Delete bill — only the latest bill, removes it entirely and frees its challan(s).">
             <MdDelete size={14} />
+          </button>
+        )}
+        {isBillsMode && perms.canVoid && !isSubmitted && !inv.isCancelled && (
+          <button
+            style={btn.void}
+            onClick={() => onVoid?.(inv)}
+            title="Void bill — keeps the bill number (no gap), marks it cancelled and reverts its delivery challan(s) to Pending so they can be re-billed."
+          >
+            <MdCancel size={14} />
           </button>
         )}
       </>
@@ -306,6 +323,7 @@ const btn = {
   excel:       { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
   edit:        { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
   delete:      { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
+  void:        { ...baseBtn, backgroundColor: "#fff8e1", color: "#b26a00" },
   fbrValidate: { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
   fbrSubmit:   { ...baseBtn, backgroundColor: "#e8eaf6", color: "#1a237e" },
   neutral:     { ...baseBtn, backgroundColor: "#eceff1", color: "#546e7a" },

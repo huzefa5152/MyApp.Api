@@ -343,6 +343,7 @@ namespace MyApp.Api.Services.Implementations
                 from it in itJoin.DefaultIfEmpty()
                 where inv.CompanyId == request.CompanyId
                    && !inv.IsDemo
+                   && !inv.IsCancelled
                    && (period.From == null || inv.Date >= period.From)
                    && (period.To   == null || inv.Date <  period.To)
                    && ((it != null && it.HSCode != null && hsCodes.Contains(it.HSCode))
@@ -393,7 +394,7 @@ namespace MyApp.Api.Services.Implementations
                 join adj in _context.InvoiceItemAdjustments.AsNoTracking() on ii.Id equals adj.InvoiceItemId into adjJoin
                 from adj in adjJoin.DefaultIfEmpty()
                 let effLineTotal = adj != null && adj.AdjustedLineTotal != null ? adj.AdjustedLineTotal.Value : ii.LineTotal
-                where inv.CompanyId == request.CompanyId && !inv.IsDemo
+                where inv.CompanyId == request.CompanyId && !inv.IsDemo && !inv.IsCancelled
                 select effLineTotal * (inv.GSTRate / 100m)
             ).SumAsync();
             decimal currentPeriodSaleTax = salesAgg.Values.Sum(s => s.Tax);

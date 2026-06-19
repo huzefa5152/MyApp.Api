@@ -44,6 +44,22 @@ namespace MyApp.Api.Models
         /// </summary>
         public bool IsDemo { get; set; }
 
+        /// <summary>
+        /// True when this bill has been VOIDED/CANCELLED. A cancelled bill
+        /// keeps its <see cref="InvoiceNumber"/> (so the sequence stays
+        /// gap-free — no renumbering), but is treated as a non-document
+        /// everywhere it matters:
+        ///   • Excluded from every dashboard KPI (like <see cref="IsDemo"/>).
+        ///   • Cannot be edited or sent to FBR.
+        ///   • Its linked delivery challans are released back to a billable
+        ///     state so they can be re-billed.
+        /// Only non-FBR-submitted bills can be cancelled — a submitted bill
+        /// must be reversed with a Credit Note, never voided.
+        /// </summary>
+        public bool IsCancelled { get; set; }
+        public DateTime? CancelledAt { get; set; }
+        public string? CancelReason { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation

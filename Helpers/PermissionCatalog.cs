@@ -95,6 +95,12 @@ namespace MyApp.Api.Helpers
             new("bills.manage.create.standalone", "Bills", "Manage", "Create (No Challan)", "Create a bill directly without linking a delivery challan"),
             new("bills.manage.update",      "Bills", "Manage", "Update", "Edit a bill (all fields)"),
             new("bills.manage.delete",      "Bills", "Manage", "Delete", "Delete a bill"),
+            // Void is a distinct, less-destructive sibling of Delete: it keeps
+            // the bill (and its number, so the sequence stays gap-free) but
+            // marks it Cancelled and frees its challan(s) for re-billing.
+            // Separate key so a role can be allowed to void without also being
+            // trusted to hard-delete the trailing bill.
+            new("bills.manage.void",        "Bills", "Manage", "Void",   "Void (cancel) a non-submitted bill — keeps the number gap-free and reverts its delivery challan(s) to Pending"),
             new("bills.print.view",         "Bills", "Print",  "View",   "Print or download a Bill (Bill print, Bill PDF, Bill XLS)"),
 
             // ── Invoices (FBR classification + submission) ──────────────────

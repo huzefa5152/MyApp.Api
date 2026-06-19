@@ -152,8 +152,10 @@ namespace MyApp.Api.Services.Implementations
 
         /// <summary>
         /// Invoice (bill) is editable until it has been successfully submitted to FBR.
+        /// A cancelled (voided) bill is locked too — it is kept only as a
+        /// numbered record and must never be re-opened for editing.
         /// </summary>
-        private static bool IsInvoiceEditable(Invoice inv) => inv.FbrStatus != "Submitted";
+        private static bool IsInvoiceEditable(Invoice inv) => inv.FbrStatus != "Submitted" && !inv.IsCancelled;
 
         /// <summary>
         /// Computes which per-item FBR fields are missing so the UI can show a
@@ -208,6 +210,9 @@ namespace MyApp.Api.Services.Implementations
             CreatedAt = inv.CreatedAt,
             IsEditable = IsInvoiceEditable(inv),
             IsFbrExcluded = inv.IsFbrExcluded,
+            IsCancelled = inv.IsCancelled,
+            CancelledAt = inv.CancelledAt,
+            CancelReason = inv.CancelReason,
             FbrReady = missing.Count == 0,
             FbrMissing = missing,
             Items = inv.Items.Select(ii => new InvoiceItemDto
@@ -961,7 +966,9 @@ namespace MyApp.Api.Services.Implementations
             if (invoice == null) return null;
 
             if (!IsInvoiceEditable(invoice))
-                throw new InvalidOperationException("Cannot edit a bill that has been submitted to FBR.");
+                throw new InvalidOperationException(invoice.IsCancelled
+                    ? "Cannot edit a cancelled bill."
+                    : "Cannot edit a bill that has been submitted to FBR.");
 
             if (dto.GSTRate < 0 || dto.GSTRate > 100)
                 throw new InvalidOperationException("GST rate must be between 0 and 100.");
@@ -1167,7 +1174,9 @@ namespace MyApp.Api.Services.Implementations
             if (invoice == null) return null;
 
             if (!IsInvoiceEditable(invoice))
-                throw new InvalidOperationException("Cannot edit a bill that has been submitted to FBR.");
+                throw new InvalidOperationException(invoice.IsCancelled
+                    ? "Cannot edit a cancelled bill."
+                    : "Cannot edit a bill that has been submitted to FBR.");
 
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("At least one item is required.");
@@ -1731,6 +1740,98 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
+        public async Task<InvoiceDto?> CancelAsync(int id, string? reason, string? actorUserName = null)
+        {
+            // Tracked load (NOT the AsNoTracking repo path) so the flag
+            // changes + challan reverts are picked up by SaveChanges.
+            var invoice = await _context.Invoices
+                .Include(i => i.DeliveryChallans)
+                .FirstOrDefaultAsync(i => i.Id == id);
+            if (invoice == null) return null;
+
+            // A bill that reached FBR cannot be voided — it must be reversed
+            // with a Credit Note that references the original IRN. Voiding it
+            // locally would desync us from what FBR already recorded.
+            if (invoice.FbrStatus == "Submitted")
+                throw new InvalidOperationException(
+                    "Cannot cancel a bill that has been submitted to FBR. " +
+                    "Issue a Credit Note against it instead.");
+
+            if (invoice.IsCancelled)
+                throw new InvalidOperationException("This bill is already cancelled.");
+
+            var revertedChallans = new List<int>();
+
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // Release the linked challans back to a billable state so each
+                // DC re-appears in the pending list and can be re-billed.
+                // Same transition table as DeleteAsync — imported challans
+                // revert to "Imported", native ones to "Pending", and any
+                // PO-less challan to "No PO".
+                foreach (var dc in invoice.DeliveryChallans)
+                {
+                    var hasPo = !string.IsNullOrWhiteSpace(dc.PoNumber);
+                    dc.Status = hasPo ? (dc.IsImported ? "Imported" : "Pending") : "No PO";
+                    dc.InvoiceId = null;
+                    _context.DeliveryChallans.Update(dc);
+                    revertedChallans.Add(dc.ChallanNumber);
+                }
+
+                // A voided bill must stop deducting stock — purge its movements
+                // so on-hand reflects reality and the re-bill can re-deduct
+                // cleanly. SourceId isn't an FK, so EF won't cascade these.
+                var staleMovements = await _context.StockMovements
+                    .Where(m => m.CompanyId  == invoice.CompanyId
+                             && m.SourceType == StockMovementSourceType.Invoice
+                             && m.SourceId   == invoice.Id)
+                    .ToListAsync();
+                if (staleMovements.Count > 0)
+                    _context.StockMovements.RemoveRange(staleMovements);
+
+                // Keep the row + its InvoiceNumber (gap-free sequence) — just
+                // flag it cancelled. IsInvoiceEditable() and the FBR submit
+                // guard both key off IsCancelled from here on.
+                invoice.IsCancelled = true;
+                invoice.CancelledAt = DateTime.UtcNow;
+                invoice.CancelReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "InvoiceService: cancel transaction rolled back");
+                await transaction.RollbackAsync();
+                throw;
+            }
+
+            // Audit the void — a financial state change. Mirrors the
+            // narrow-edit audit shape; never let an audit failure surface.
+            try
+            {
+                await _auditLog.LogAsync(new AuditLog
+                {
+                    Level         = "Info",
+                    UserName      = actorUserName,
+                    HttpMethod    = "POST",
+                    RequestPath   = $"/invoices/{invoice.Id}/cancel",
+                    StatusCode    = 200,
+                    ExceptionType = "Invoice.Cancelled",
+                    Message       = $"Bill #{invoice.InvoiceNumber} cancelled. "
+                                  + (revertedChallans.Count > 0
+                                        ? $"Reverted challan(s) #{string.Join(", #", revertedChallans)} to billable. "
+                                        : "")
+                                  + (string.IsNullOrWhiteSpace(reason) ? "" : $"Reason: {reason.Trim()}"),
+                });
+            }
+            catch { /* audit must never break the operation */ }
+
+            var reloaded = await _invoiceRepo.GetByIdAsync(id);
+            return reloaded == null ? null : ToDto(reloaded);
+        }
+
         public async Task<PrintBillDto?> GetPrintBillAsync(int invoiceId)
         {
             var inv = await _invoiceRepo.GetByIdAsync(invoiceId);
@@ -1983,6 +2084,7 @@ namespace MyApp.Api.Services.Implementations
                 where i.CompanyId == companyId
                    && i.FbrStatus != "Submitted"
                    && !i.IsDemo
+                   && !i.IsCancelled
                 select new
                 {
                     i.Id,
@@ -2117,7 +2219,7 @@ namespace MyApp.Api.Services.Implementations
             // user actually charged a real customer, so leaving them in
             // would skew the avg/min/max summary band and mislead quoting.
             var q = _context.InvoiceItems
-                .Where(ii => ii.Invoice.CompanyId == companyId && !ii.Invoice.IsDemo);
+                .Where(ii => ii.Invoice.CompanyId == companyId && !ii.Invoice.IsDemo && !ii.Invoice.IsCancelled);
 
             if (itemTypeId.HasValue && itemTypeId.Value > 0)
             {
@@ -2202,7 +2304,7 @@ namespace MyApp.Api.Services.Implementations
             // Demo bills are excluded so synthetic FBR sandbox prices don't
             // leak into real quoting.
             var bills = _context.InvoiceItems
-                .Where(ii => ii.Invoice.CompanyId == companyId && !ii.Invoice.IsDemo);
+                .Where(ii => ii.Invoice.CompanyId == companyId && !ii.Invoice.IsDemo && !ii.Invoice.IsCancelled);
 
             foreach (var di in challan.Items)
             {

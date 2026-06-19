@@ -249,7 +249,7 @@ namespace MyApp.Api.Services.Implementations
         {
             var q = _context.Invoices
                 .AsNoTracking()
-                .Where(i => i.CompanyId == companyId && !i.IsDemo);
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled);
             if (from.HasValue) q = q.Where(i => i.Date >= from.Value);
             if (to.HasValue)   q = q.Where(i => i.Date < to.Value);
             var agg = await q
@@ -288,7 +288,7 @@ namespace MyApp.Api.Services.Implementations
         {
             var q = _context.Invoices
                 .AsNoTracking()
-                .Where(i => i.CompanyId == companyId && !i.IsDemo);
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled);
             if (period.From.HasValue) q = q.Where(i => i.Date >= period.From.Value);
             if (period.To.HasValue)   q = q.Where(i => i.Date < period.To.Value);
 
@@ -376,7 +376,7 @@ namespace MyApp.Api.Services.Implementations
 
             var rows = await _context.Invoices
                 .AsNoTracking()
-                .Where(i => i.CompanyId == companyId && !i.IsDemo
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
                          && i.Date >= earliest && i.Date < anchor.AddMonths(1))
                 .GroupBy(i => new { i.Date.Year, i.Date.Month })
                 .Select(g => new
@@ -507,7 +507,7 @@ namespace MyApp.Api.Services.Implementations
         {
             var q = _context.Invoices
                 .AsNoTracking()
-                .Where(i => i.CompanyId == companyId && !i.IsDemo);
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled);
             if (period.From.HasValue) q = q.Where(i => i.Date >= period.From.Value);
             if (period.To.HasValue)   q = q.Where(i => i.Date < period.To.Value);
 

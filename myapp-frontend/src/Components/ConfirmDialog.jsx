@@ -18,19 +18,32 @@ const variants = {
 
 export default function ConfirmProvider({ children }) {
   const [state, setState] = useState(null);
+  // Optional free-text capture (e.g. a void reason). Only used when the
+  // caller passes an `input` option; left "" otherwise.
+  const [inputValue, setInputValue] = useState("");
   const resolveRef = useRef(null);
 
-  const confirm = useCallback(({ title = "Are you sure?", message = "", variant = "danger", confirmText = "Confirm", cancelText = "Cancel" } = {}) => {
+  const confirm = useCallback(({ title = "Are you sure?", message = "", variant = "danger", confirmText = "Confirm", cancelText = "Cancel", input = null } = {}) => {
     return new Promise((resolve) => {
       resolveRef.current = resolve;
-      setState({ title, message, variant, confirmText, cancelText });
+      setInputValue(input?.defaultValue ?? "");
+      setState({ title, message, variant, confirmText, cancelText, input });
     });
   }, []);
 
-  const handleClose = (result) => {
+  // Backward-compatible resolution contract:
+  //   • no `input`  → resolves the plain boolean (existing callers).
+  //   • with `input`→ resolves { ok, value } so an empty-but-confirmed
+  //     reason isn't mistaken for a cancel (which "" would be, being falsy).
+  const handleClose = (confirmed) => {
+    const hadInput = !!state?.input;
+    const value = inputValue;
     setState(null);
-    resolveRef.current?.(result);
+    setInputValue("");
+    const resolver = resolveRef.current;
     resolveRef.current = null;
+    if (hadInput) resolver?.({ ok: confirmed, value: confirmed ? value : undefined });
+    else resolver?.(confirmed);
   };
 
   const v = state ? (variants[state.variant] || variants.danger) : null;
@@ -77,6 +90,29 @@ export default function ConfirmProvider({ children }) {
                 </p>
               )}
             </div>
+
+            {/* Optional free-text input (e.g. a void reason) */}
+            {state.input && (
+              <div style={{ padding: "4px 28px 0" }}>
+                {state.input.label && (
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#5f6d7e", marginBottom: 6, textAlign: "left" }}>
+                    {state.input.label}
+                  </label>
+                )}
+                <textarea
+                  autoFocus
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  placeholder={state.input.placeholder || ""}
+                  rows={3}
+                  style={{
+                    width: "100%", boxSizing: "border-box", padding: "10px 12px",
+                    borderRadius: 10, border: "1px solid #d0d7e2", fontSize: "0.9rem",
+                    resize: "vertical", fontFamily: "inherit", color: "#1a2332",
+                  }}
+                />
+              </div>
+            )}
 
             {/* Buttons */}
             <div style={{ display: "flex", gap: 10, padding: "16px 28px 24px", justifyContent: "center" }}>
