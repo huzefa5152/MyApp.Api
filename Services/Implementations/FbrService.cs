@@ -663,6 +663,11 @@ namespace MyApp.Api.Services.Implementations
             if (invoice == null)
                 return Fail("Invoice not found.");
 
+            // A voided bill is a non-document — never validate, submit, or
+            // even preview it against FBR.
+            if (invoice.IsCancelled)
+                return Fail("This bill has been cancelled and cannot be sent to FBR.");
+
             // Audit C-4 (2026-05-08): pre-fix, a network drop AFTER FBR
             // received the submit but BEFORE we got the response would let
             // the operator click Submit again and produce a duplicate IRN.

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyApp.Api.Data;
 
@@ -11,9 +12,11 @@ using MyApp.Api.Data;
 namespace MyApp.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260619110450_AddInvoiceCancellation")]
+    partial class AddInvoiceCancellation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,78 +24,6 @@ namespace MyApp.Api.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
-
-            modelBuilder.Entity("MyApp.Api.Models.Attachment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ContentSha256")
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("EntityId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("EntityType")
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
-
-                    b.Property<string>("FileExtension")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("FileName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<long>("FileSizeBytes")
-                        .HasColumnType("bigint");
-
-                    b.Property<int?>("FolderId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("StoragePath")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("StoredFileName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<int?>("UploadedByUserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("FolderId");
-
-                    b.HasIndex("UploadedByUserId");
-
-                    b.HasIndex("CompanyId", "FolderId");
-
-                    b.HasIndex("EntityType", "EntityId");
-
-                    b.ToTable("Attachments");
-                });
 
             modelBuilder.Entity("MyApp.Api.Models.AuditLog", b =>
                 {
@@ -295,12 +226,6 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("CurrentPurchaseBillNumber")
                         .HasColumnType("int");
 
-                    b.Property<int>("CurrentSalesOrderNumber")
-                        .HasColumnType("int");
-
-                    b.Property<int>("CurrentSalesQuoteNumber")
-                        .HasColumnType("int");
-
                     b.Property<string>("FbrBusinessActivity")
                         .HasColumnType("nvarchar(max)");
 
@@ -315,9 +240,6 @@ namespace MyApp.Api.Migrations
 
                     b.Property<string>("FbrDefaultUOM")
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("FbrEnabled")
-                        .HasColumnType("bit");
 
                     b.Property<string>("FbrEnvironment")
                         .HasColumnType("nvarchar(max)");
@@ -356,9 +278,6 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("Phone")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("RequireSalesOrderForBilling")
-                        .HasColumnType("bit");
-
                     b.Property<string>("STRN")
                         .HasColumnType("nvarchar(max)");
 
@@ -372,12 +291,6 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("int");
 
                     b.Property<int>("StartingPurchaseBillNumber")
-                        .HasColumnType("int");
-
-                    b.Property<int>("StartingSalesOrderNumber")
-                        .HasColumnType("int");
-
-                    b.Property<int>("StartingSalesQuoteNumber")
                         .HasColumnType("int");
 
                     b.Property<bool>("StockGuardHardBlock")
@@ -430,9 +343,6 @@ namespace MyApp.Api.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("SalesOrderId")
-                        .HasColumnType("int");
-
                     b.Property<string>("Site")
                         .HasColumnType("nvarchar(max)");
 
@@ -451,8 +361,6 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("DuplicatedFromId");
 
                     b.HasIndex("InvoiceId");
-
-                    b.HasIndex("SalesOrderId");
 
                     b.HasIndex("CompanyId", "ChallanNumber");
 
@@ -481,9 +389,6 @@ namespace MyApp.Api.Migrations
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
 
-                    b.Property<int?>("SalesOrderItemId")
-                        .HasColumnType("int");
-
                     b.Property<string>("Unit")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -494,36 +399,7 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("ItemTypeId");
 
-                    b.HasIndex("SalesOrderItemId");
-
                     b.ToTable("DeliveryItems");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.Division", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CompanyId", "Name")
-                        .IsUnique();
-
-                    b.ToTable("Divisions");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.FbrCommunicationLog", b =>
@@ -1008,42 +884,6 @@ namespace MyApp.Api.Migrations
                             Label = "Online",
                             SortOrder = 5
                         });
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.Folder", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("CreatedByUserId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("CompanyId", "Name")
-                        .IsUnique();
-
-                    b.ToTable("Folders");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.GoodsReceipt", b =>
@@ -2710,9 +2550,6 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("DivisionId")
-                        .HasColumnType("int");
-
                     b.Property<string>("EditorMode")
                         .HasColumnType("nvarchar(max)");
 
@@ -2726,14 +2563,6 @@ namespace MyApp.Api.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
                     b.Property<string>("TemplateJson")
                         .HasColumnType("nvarchar(max)");
 
@@ -2746,14 +2575,8 @@ namespace MyApp.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DivisionId");
-
-                    b.HasIndex("CompanyId", "DivisionId", "TemplateType")
-                        .IsUnique()
-                        .HasDatabaseName("UX_PrintTemplates_DefaultPerScope")
-                        .HasFilter("[IsDefault] = 1");
-
-                    b.HasIndex("CompanyId", "TemplateType", "DivisionId");
+                    b.HasIndex("CompanyId", "TemplateType")
+                        .IsUnique();
 
                     b.ToTable("PrintTemplates");
                 });
@@ -2987,227 +2810,6 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("PermissionId");
 
                     b.ToTable("RolePermissions");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.SalesOrder", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("ClientId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("CompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("CustomerPoDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CustomerPoNumber")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsImported")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("OrderDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("RequiredDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("SalesOrderNumber")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("SalesQuoteId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Site")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("nvarchar(max)")
-                        .HasDefaultValue("Open");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClientId");
-
-                    b.HasIndex("SalesQuoteId");
-
-                    b.HasIndex("CompanyId", "SalesOrderNumber")
-                        .IsUnique();
-
-                    b.ToTable("SalesOrders");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.SalesOrderItem", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int?>("ItemTypeId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<int>("SalesOrderId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Unit")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ItemTypeId");
-
-                    b.HasIndex("SalesOrderId");
-
-                    b.ToTable("SalesOrderItems");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.SalesQuote", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AmountInWords")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("ClientId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("CompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("ConvertedToSalesOrderId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CustomerEnquiryRef")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("DivisionId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("EnquiryDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<decimal>("GSTAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("GSTRate")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("decimal(5,2)");
-
-                    b.Property<decimal>("GrandTotal")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("QuoteNumber")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("nvarchar(max)")
-                        .HasDefaultValue("Draft");
-
-                    b.Property<decimal>("Subtotal")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime?>("ValidUntil")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClientId");
-
-                    b.HasIndex("ConvertedToSalesOrderId");
-
-                    b.HasIndex("DivisionId");
-
-                    b.HasIndex("CompanyId", "QuoteNumber")
-                        .IsUnique();
-
-                    b.ToTable("SalesQuotes");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.SalesQuoteItem", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int?>("ItemTypeId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("LineTotal")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<int>("SalesQuoteId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Unit")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal>("UnitPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ItemTypeId");
-
-                    b.HasIndex("SalesQuoteId");
-
-                    b.ToTable("SalesQuoteItems");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.StockMovement", b =>
@@ -3490,31 +3092,6 @@ namespace MyApp.Api.Migrations
                     b.ToTable("UserRoles");
                 });
 
-            modelBuilder.Entity("MyApp.Api.Models.Attachment", b =>
-                {
-                    b.HasOne("MyApp.Api.Models.Company", "Company")
-                        .WithMany()
-                        .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("MyApp.Api.Models.Folder", "Folder")
-                        .WithMany("Attachments")
-                        .HasForeignKey("FolderId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("MyApp.Api.Models.User", "UploadedByUser")
-                        .WithMany()
-                        .HasForeignKey("UploadedByUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.Navigation("Company");
-
-                    b.Navigation("Folder");
-
-                    b.Navigation("UploadedByUser");
-                });
-
             modelBuilder.Entity("MyApp.Api.Models.Client", b =>
                 {
                     b.HasOne("MyApp.Api.Models.ClientGroup", "ClientGroup")
@@ -3557,11 +3134,6 @@ namespace MyApp.Api.Migrations
                         .HasForeignKey("InvoiceId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("MyApp.Api.Models.SalesOrder", "SalesOrder")
-                        .WithMany("DeliveryChallans")
-                        .HasForeignKey("SalesOrderId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("Client");
 
                     b.Navigation("Company");
@@ -3569,8 +3141,6 @@ namespace MyApp.Api.Migrations
                     b.Navigation("DuplicatedFrom");
 
                     b.Navigation("Invoice");
-
-                    b.Navigation("SalesOrder");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.DeliveryItem", b =>
@@ -3586,45 +3156,9 @@ namespace MyApp.Api.Migrations
                         .HasForeignKey("ItemTypeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("MyApp.Api.Models.SalesOrderItem", "SalesOrderItem")
-                        .WithMany("DeliveryItems")
-                        .HasForeignKey("SalesOrderItemId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("DeliveryChallan");
 
                     b.Navigation("ItemType");
-
-                    b.Navigation("SalesOrderItem");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.Division", b =>
-                {
-                    b.HasOne("MyApp.Api.Models.Company", "Company")
-                        .WithMany()
-                        .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Company");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.Folder", b =>
-                {
-                    b.HasOne("MyApp.Api.Models.Company", "Company")
-                        .WithMany()
-                        .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("MyApp.Api.Models.User", "CreatedByUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.Navigation("Company");
-
-                    b.Navigation("CreatedByUser");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.GoodsReceipt", b =>
@@ -3798,14 +3332,7 @@ namespace MyApp.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("MyApp.Api.Models.Division", "Division")
-                        .WithMany()
-                        .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.Navigation("Company");
-
-                    b.Navigation("Division");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.PurchaseBill", b =>
@@ -3888,101 +3415,6 @@ namespace MyApp.Api.Migrations
                     b.Navigation("Permission");
 
                     b.Navigation("Role");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.SalesOrder", b =>
-                {
-                    b.HasOne("MyApp.Api.Models.Client", "Client")
-                        .WithMany()
-                        .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("MyApp.Api.Models.Company", "Company")
-                        .WithMany("SalesOrders")
-                        .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("MyApp.Api.Models.SalesQuote", "SalesQuote")
-                        .WithMany()
-                        .HasForeignKey("SalesQuoteId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.Navigation("Client");
-
-                    b.Navigation("Company");
-
-                    b.Navigation("SalesQuote");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.SalesOrderItem", b =>
-                {
-                    b.HasOne("MyApp.Api.Models.ItemType", "ItemType")
-                        .WithMany()
-                        .HasForeignKey("ItemTypeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("MyApp.Api.Models.SalesOrder", "SalesOrder")
-                        .WithMany("Items")
-                        .HasForeignKey("SalesOrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ItemType");
-
-                    b.Navigation("SalesOrder");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.SalesQuote", b =>
-                {
-                    b.HasOne("MyApp.Api.Models.Client", "Client")
-                        .WithMany()
-                        .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("MyApp.Api.Models.Company", "Company")
-                        .WithMany("SalesQuotes")
-                        .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("MyApp.Api.Models.SalesOrder", "ConvertedToSalesOrder")
-                        .WithMany()
-                        .HasForeignKey("ConvertedToSalesOrderId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("MyApp.Api.Models.Division", "Division")
-                        .WithMany()
-                        .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Client");
-
-                    b.Navigation("Company");
-
-                    b.Navigation("ConvertedToSalesOrder");
-
-                    b.Navigation("Division");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.SalesQuoteItem", b =>
-                {
-                    b.HasOne("MyApp.Api.Models.ItemType", "ItemType")
-                        .WithMany()
-                        .HasForeignKey("ItemTypeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("MyApp.Api.Models.SalesQuote", "SalesQuote")
-                        .WithMany("Items")
-                        .HasForeignKey("SalesQuoteId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ItemType");
-
-                    b.Navigation("SalesQuote");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.StockMovement", b =>
@@ -4084,21 +3516,12 @@ namespace MyApp.Api.Migrations
 
                     b.Navigation("PurchaseBills");
 
-                    b.Navigation("SalesOrders");
-
-                    b.Navigation("SalesQuotes");
-
                     b.Navigation("Suppliers");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.DeliveryChallan", b =>
                 {
                     b.Navigation("Items");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.Folder", b =>
-                {
-                    b.Navigation("Attachments");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.GoodsReceipt", b =>
@@ -4140,23 +3563,6 @@ namespace MyApp.Api.Migrations
                     b.Navigation("RolePermissions");
 
                     b.Navigation("UserRoles");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.SalesOrder", b =>
-                {
-                    b.Navigation("DeliveryChallans");
-
-                    b.Navigation("Items");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.SalesOrderItem", b =>
-                {
-                    b.Navigation("DeliveryItems");
-                });
-
-            modelBuilder.Entity("MyApp.Api.Models.SalesQuote", b =>
-                {
-                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Supplier", b =>

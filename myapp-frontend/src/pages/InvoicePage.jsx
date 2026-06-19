@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import StandaloneInvoiceForm from "../Components/StandaloneInvoiceForm";
 import EditBillForm from "../Components/EditBillForm";
@@ -10,7 +10,7 @@ import BulkFbrPreviewDialog from "../Components/BulkFbrPreviewDialog";
 import InvoiceTable from "../Components/InvoiceTable";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
-import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
+import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, cancelInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
@@ -74,6 +74,9 @@ export default function InvoicePage({ mode = "invoices" }) {
     ? canUpdate
     : (canEditItemType || canEditItemTypeAndQty);
   const canDelete = has("bills.manage.delete");
+  // Void is its own permission (bills.manage.void), distinct from delete, so a
+  // role can be allowed to void bills without also gaining hard-delete rights.
+  const canVoid = has("bills.manage.void");
   // Print is split now: bills.print.view → Bill print/PDF/XLS,
   // invoices.print.view → Tax-Invoice print/PDF/XLS. Bills tab uses
   // canPrintBill, Invoices tab uses canPrintTax.
@@ -425,6 +428,28 @@ export default function InvoicePage({ mode = "invoices" }) {
     }
   };
 
+  const handleVoidInvoice = async (inv) => {
+    if (inv.fbrStatus === "Submitted") {
+      notify("Cannot void an FBR-submitted bill — issue a Credit Note instead.", "error");
+      return;
+    }
+    const res = await confirm({
+      title: `Void Bill #${inv.invoiceNumber}?`,
+      message: "The bill keeps its number (no gap in the sequence) but is marked Cancelled and dropped from reports. Its delivery challan(s) revert to Pending so you can re-bill them.",
+      variant: "warning",
+      confirmText: "Void bill",
+      input: { label: "Reason (optional)", placeholder: "e.g. wrong rate / wrong challan — re-billing" },
+    });
+    if (!res?.ok) return;
+    try {
+      await cancelInvoice(inv.id, res.value);
+      notify(`Bill #${inv.invoiceNumber} voided. Challan(s) reverted to Pending.`, "success");
+      fetchInvoices(selectedCompany.id, page);
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to void bill.", "error");
+    }
+  };
+
   const [bulkFbrLoading, setBulkFbrLoading] = useState(false);
   // Per-bill outcome of the most recent Validate All / Submit All run.
   // Replaces the old summary toast — the operator sees a scrollable grid
@@ -444,8 +469,8 @@ export default function InvoicePage({ mode = "invoices" }) {
   // by Validate All / Submit All (bulk actions) but the per-bill buttons still
   // work. So we exclude them from these counts too — the badges are about what
   // the bulk buttons will process.
-  const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded);
-  const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.fbrReady && !inv.isFbrExcluded).length;
+  const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.fbrReady && !inv.isFbrExcluded);
+  const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.fbrReady && !inv.isFbrExcluded).length;
   const validatedCount = unsubmittedInvoices.filter(inv => fbrValidated.has(inv.id)).length;
 
   const handleToggleFbrExcluded = async (inv) => {
@@ -492,10 +517,10 @@ export default function InvoicePage({ mode = "invoices" }) {
     const all = data.items || [];
     if (action === "validate") {
       // Skip FBR-excluded bills — operator explicitly opted them out of bulk actions.
-      return all.filter(inv => inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded);
+      return all.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.fbrReady && !inv.isFbrExcluded);
     }
     if (action === "submit") {
-      return all.filter(inv => inv.fbrStatus !== "Submitted" && fbrValidated.has(inv.id) && !inv.isFbrExcluded);
+      return all.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && fbrValidated.has(inv.id) && !inv.isFbrExcluded);
     }
     return all;
   };
@@ -809,6 +834,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                 canOpenEdit: canEditInThisMode,
                 canFbrExclude,
                 canDelete,
+                canVoid,
               }}
               hasExcelBill={hasExcelBill}
               hasExcelTax={hasExcelTax}
@@ -830,6 +856,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               onEdit={(inv) => setEditingId(inv.id)}
               onToggleFbrExcluded={handleToggleFbrExcluded}
               onDelete={handleDeleteInvoice}
+              onVoid={handleVoidInvoice}
             />
           ) : (
           <div className="card-grid">
@@ -868,31 +895,40 @@ export default function InvoicePage({ mode = "invoices" }) {
                         previously rendered plain inline text so the
                         styling was inconsistent with the other status
                         pills (Ready / Validated / Failed / etc.). */}
-                    {inv.fbrStatus === "Submitted" && (
+                    {inv.isCancelled && (
+                      <div
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#ffebee", color: "#b71c1c", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #ef9a9a" }}
+                        title={inv.cancelReason ? `Cancelled — ${inv.cancelReason}` : "This bill has been cancelled (voided). Its delivery challan(s) were reverted to Pending so they can be re-billed."}
+                      >
+                        <MdCancel size={14} color="#b71c1c" />
+                        <span>Cancelled{inv.cancelReason ? ` — ${inv.cancelReason}` : ""}</span>
+                      </div>
+                    )}
+                    {!inv.isCancelled && inv.fbrStatus === "Submitted" && (
                       <div style={styles.fbrPillSubmitted} title={inv.fbrIRN ? `IRN: ${inv.fbrIRN}` : "This bill has been submitted to FBR and is locked from edits."}>
                         <MdCheckCircle size={14} color="#1b5e20" />
                         <span>{isBillsMode ? "Submitted to FBR" : "FBR: Submitted"}</span>
                         {inv.fbrIRN && <span style={styles.fbrPillIrn}>IRN {inv.fbrIRN}</span>}
                       </div>
                     )}
-                    {isBillsMode && fbrEnabled && inv.fbrStatus !== "Submitted" && (
+                    {isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && (
                       <div style={styles.fbrPillPending} title="This bill hasn't been submitted to FBR yet. Open the Invoices tab to validate and submit.">
                         <MdHourglassEmpty size={14} color="#b26a00" />
                         <span>Pending FBR submission</span>
                       </div>
                     )}
-                    {!isBillsMode && inv.fbrStatus === "Failed" && (
+                    {!isBillsMode && !inv.isCancelled && inv.fbrStatus === "Failed" && (
                       <div style={styles.fbrPillFailed} title={inv.fbrErrorMessage || "FBR rejected this submission. Open View FBR for details."}>
                         <MdError size={14} color="#b71c1c" />
                         <span>FBR Failed</span>
                       </div>
                     )}
-                    {!isBillsMode && inv.fbrStatus === "Failed" && inv.fbrErrorMessage && (
+                    {!isBillsMode && !inv.isCancelled && inv.fbrStatus === "Failed" && inv.fbrErrorMessage && (
                       <p style={{ fontSize: "0.72rem", color: "#c62828", marginTop: "0.35rem", wordBreak: "break-word", lineHeight: 1.35 }}>
                         {inv.fbrErrorMessage}
                       </p>
                     )}
-                    {!isBillsMode && fbrEnabled && inv.fbrStatus !== "Submitted" && !inv.fbrReady && (
+                    {!isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && !inv.fbrReady && (
                       <div
                         style={styles.fbrPillIncomplete}
                         title={inv.fbrMissing?.length ? `Missing:\n• ${inv.fbrMissing.join("\n• ")}` : ""}
@@ -909,7 +945,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         </div>
                       </div>
                     )}
-                    {!isBillsMode && fbrEnabled && inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded && (
+                    {!isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded && (
                       <div style={styles.fbrPillReady} title="All FBR fields are set. Click Validate to dry-run, or Submit to issue the IRN.">
                         <MdCheckCircle size={14} color="#0d47a1" />
                         <span>Ready to Validate</span>
@@ -1001,7 +1037,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdVisibility size={14} /> View FBR
                       </button>
                     )}
-                    {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && (
+                    {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
                       <>
                         {canFbrValidate && (
                           <button
@@ -1050,7 +1086,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         column is hidden so classification only happens on
                         the Invoices tab. Hidden once FBR-submitted (locks
                         edits permanently). */}
-                    {isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && (
+                    {isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
@@ -1065,7 +1101,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         Type for each line. Everything else (items, prices,
                         qty, dates) is read-only and reflects whatever was
                         last saved on the Bills tab. Hidden once submitted. */}
-                    {!isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && (
+                    {!isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
@@ -1074,7 +1110,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdEdit size={14} /> Edit
                       </button>
                     )}
-                    {!isBillsMode && canFbrExclude && inv.fbrStatus !== "Submitted" && (
+                    {!isBillsMode && canFbrExclude && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
                       <button
                         style={{
                           ...styles.printBtn,
@@ -1095,13 +1131,26 @@ export default function InvoicePage({ mode = "invoices" }) {
                     )}
                     {/* Delete: Bills tab only, last-created bill only,
                         not FBR-submitted. Same gates as before plus Bills mode. */}
-                    {isBillsMode && canDelete && inv.fbrStatus !== "Submitted" && inv.isLatest && (
+                    {isBillsMode && canDelete && inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.isLatest && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#ffebee", color: "#c62828", border: "1px solid #ef9a9a" }}
                         onClick={() => handleDeleteInvoice(inv)}
-                        title="Only the latest bill can be deleted — earlier bills must be edited to keep numbering gap-free."
+                        title="Delete this bill entirely — latest bill only, removes the row and frees its challan(s). Use Void to cancel an earlier bill without leaving a gap."
                       >
                         <MdDelete size={14} /> Delete
+                      </button>
+                    )}
+                    {/* Void: Bills tab, ANY non-submitted, non-cancelled bill
+                        (not just the latest). Keeps the bill number so the
+                        sequence stays gap-free, marks the bill Cancelled, and
+                        reverts its delivery challan(s) to Pending for re-billing. */}
+                    {isBillsMode && canVoid && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#fff8e1", color: "#b26a00", border: "1px solid #ffe082" }}
+                        onClick={() => handleVoidInvoice(inv)}
+                        title="Void this bill — keeps the bill number (no gap), marks it Cancelled and reverts its delivery challan(s) to Pending so they can be re-billed."
+                      >
+                        <MdCancel size={14} /> Void
                       </button>
                     )}
                   </div>

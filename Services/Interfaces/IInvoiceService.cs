@@ -36,6 +36,16 @@ namespace MyApp.Api.Services.Interfaces
         Task<InvoiceDto?> UpdateItemTypesAsync(int id, UpdateInvoiceItemTypesDto dto, bool allowQuantityEdit = false, string? actorUserName = null);
         Task<bool> DeleteAsync(int id);
         /// <summary>
+        /// Void (cancel) a bill that has NOT been submitted to FBR. The bill
+        /// keeps its InvoiceNumber (so the sequence stays gap-free), is
+        /// flagged cancelled (excluded from KPIs, locked from edits/FBR), and
+        /// its linked delivery challans are released back to a billable state
+        /// so they can be re-billed. Throws if the bill is already submitted
+        /// to FBR (use a Credit Note instead) or already cancelled. Returns
+        /// the updated bill, or null if not found.
+        /// </summary>
+        Task<InvoiceDto?> CancelAsync(int id, string? reason, string? actorUserName = null);
+        /// <summary>
         /// Flip the IsFbrExcluded flag. Excluded bills are skipped by the
         /// bulk Validate All / Submit All endpoints; per-bill validate and
         /// submit still work. Returns the updated bill or null if not found.
