@@ -198,6 +198,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
                 <thead>
                   <tr>
                     <th style={{ ...s.th, width: 28, textAlign: "center" }}>#</th>
+                    <th style={{ ...s.th, width: 190 }}>Item Type</th>
                     <th style={s.th}>Description</th>
                     <th style={{ ...s.th, width: 92, textAlign: "right" }}>Qty</th>
                     <th style={{ ...s.th, width: 120 }}>Unit</th>
@@ -210,14 +211,16 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
                   {items.map((item, idx) => (
                     <tr key={idx}>
                       <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
-                      <td style={s.td}>
+                      <td style={{ ...s.td, verticalAlign: "top" }}>
                         <SearchableItemTypeSelect
                           items={itemTypes}
                           value={item.itemTypeId || ""}
                           onChange={(newId, picked) => pickItemType(idx, newId, picked)}
-                          placeholder="— item type (optional) —"
-                          style={{ marginBottom: 4, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                          placeholder="— optional —"
+                          style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                         />
+                      </td>
+                      <td style={{ ...s.td, verticalAlign: "top" }}>
                         <LookupAutocomplete label="Item description" endpoint="/lookup/items" value={item.description} onChange={(v) => handleDescChange(idx, v)} inputStyle={s.cellInput} multiline />
                         {item.rateHint && <div style={s.hint}>{item.rateHint}</div>}
                       </td>

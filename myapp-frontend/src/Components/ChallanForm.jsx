@@ -262,23 +262,26 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
             <div style={{ marginTop: "0.25rem" }}>
               <label style={{ ...styles.label, marginBottom: "0.5rem" }}>Items</label>
 
-              {/* Item Type lives on the Invoices tab now — challans capture
-                  description / qty / unit only. Operators classify each line
-                  by Item Type when preparing the bill for FBR submission. */}
+              {/* Each line has an optional Item Type (its own column), then
+                  description / qty / unit. Item Type can still be (re)classified
+                  on the Invoices tab when preparing the bill for FBR. */}
 
               <div ref={itemsContainerRef} style={styles.itemsContainer}>
                 {items.map((item, idx) => (
                   <div key={idx} style={styles.itemRow}>
                     <div style={styles.itemIndex}>{idx + 1}</div>
 
-                    <div style={{ flex: 2, minWidth: 0 }}>
+                    <div style={{ width: 190, flexShrink: 0 }}>
                       <SearchableItemTypeSelect
                         items={itemTypes}
                         value={item.itemTypeId || ""}
                         onChange={(newId, picked) => pickItemType(idx, newId, picked)}
                         placeholder="— item type (optional) —"
-                        style={{ marginBottom: 4, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                        style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                       />
+                    </div>
+
+                    <div style={{ flex: 2, minWidth: 0 }}>
                       <LookupAutocomplete
                         label="Description"
                         endpoint="/lookup/items"
