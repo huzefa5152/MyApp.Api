@@ -1,6 +1,6 @@
 // src/theme.js — Blue/Teal color scheme matching Hakimi Traders dashboard
 
-const colors = {
+export const colors = {
   blue: "#0d47a1",
   blueDark: "#0a3680",
   blueLight: "#1565c0",

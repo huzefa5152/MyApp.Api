@@ -42,6 +42,15 @@ function fbrStatusBadge(inv, isBillsMode, fbrEnabled = true) {
   return <StatusBadge tone="ready">Ready</StatusBadge>;
 }
 
+// Renders the payment-status pill (balance due / paid / overdue).
+function paymentStatusBadge(inv) {
+  const s = inv.paymentStatus;
+  if (s === "Paid") return <StatusBadge tone="success">Paid</StatusBadge>;
+  if (s === "Overdue") return <StatusBadge tone="danger" title={inv.daysOverdue ? `${inv.daysOverdue} day(s) overdue` : undefined}>Overdue{inv.daysOverdue ? ` ${inv.daysOverdue}d` : ""}</StatusBadge>;
+  if (s === "PartiallyPaid") return <StatusBadge tone="info">Partial</StatusBadge>;
+  return <StatusBadge tone="neutral">Unpaid</StatusBadge>;
+}
+
 export default function InvoiceTable({
   invoices,
   isBillsMode,
@@ -127,6 +136,29 @@ export default function InvoiceTable({
       align: "right",
       accessor: (i) => i.grandTotal || 0,
       render: (i) => `Rs. ${(i.grandTotal ?? 0).toLocaleString()}`,
+    },
+    {
+      key: "balanceDue",
+      header: "Balance Due",
+      width: 130,
+      align: "right",
+      accessor: (i) => i.balanceDue ?? 0,
+      render: (i) => `Rs. ${(i.balanceDue ?? 0).toLocaleString()}`,
+    },
+    {
+      key: "paymentStatus",
+      header: "Payment",
+      width: 110,
+      accessor: (i) => i.paymentStatus || "",
+      render: (i) => paymentStatusBadge(i),
+    },
+    {
+      key: "dueDate",
+      header: "Due Date",
+      width: 110,
+      defaultHidden: true,
+      accessor: (i) => i.dueDate ? new Date(i.dueDate).getTime() : 0,
+      render: (i) => i.dueDate ? new Date(i.dueDate).toLocaleDateString() : "—",
     },
     {
       key: "fbrStatus",

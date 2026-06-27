@@ -10,6 +10,7 @@ import ImportChallansPage from "./pages/ImportChallansPage";
 import SalesQuotePage from "./pages/SalesQuotePage";
 import SalesOrderPage from "./pages/SalesOrderPage";
 import InvoicePage from "./pages/InvoicePage";
+import PaymentsPage from "./pages/PaymentsPage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
 import PurchaseBillsPage from "./pages/PurchaseBillsPage";
 import GoodsReceiptsPage from "./pages/GoodsReceiptsPage";
@@ -86,6 +87,11 @@ export default function App() {
           <Route path="/sales-quotes" element={<SalesQuotePage />} />
           <Route path="/sales-orders" element={<SalesOrderPage />} />
           <Route path="/item-rate-history" element={<ItemRateHistoryPage />} />
+          {/* Accounting — Receipts (money in) / Payments (money out). Distinct
+              keys force a fresh mount when switching modes so filter state
+              doesn't leak. */}
+          <Route path="/receipts" element={<PaymentsPage key="receipts" mode="receipts" />} />
+          <Route path="/payments" element={<PaymentsPage key="payments" mode="payments" />} />
           <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
           <Route path="/goods-receipts" element={<GoodsReceiptsPage />} />
           <Route path="/stock" element={<StockDashboardPage />} />

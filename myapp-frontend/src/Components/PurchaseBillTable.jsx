@@ -2,6 +2,15 @@ import { MdVisibility, MdEdit, MdDelete } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 
+// Payment-status pill (mirror of InvoiceTable's): Paid / Partial / Overdue / Unpaid.
+function paymentStatusBadge(b) {
+  const s = b.paymentStatus;
+  if (s === "Paid") return <StatusBadge tone="success">Paid</StatusBadge>;
+  if (s === "Overdue") return <StatusBadge tone="danger" title={b.daysOverdue ? `${b.daysOverdue} day(s) overdue` : undefined}>Overdue{b.daysOverdue ? ` ${b.daysOverdue}d` : ""}</StatusBadge>;
+  if (s === "PartiallyPaid") return <StatusBadge tone="info">Partial</StatusBadge>;
+  return <StatusBadge tone="neutral">Unpaid</StatusBadge>;
+}
+
 export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete }) {
   const columns = [
     {
@@ -38,6 +47,21 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       align: "right",
       accessor: (b) => b.grandTotal || 0,
       render: (b) => `Rs. ${(b.grandTotal ?? 0).toLocaleString()}`,
+    },
+    {
+      key: "balanceDue",
+      header: "Balance Due",
+      width: 130,
+      align: "right",
+      accessor: (b) => b.balanceDue ?? 0,
+      render: (b) => `Rs. ${(b.balanceDue ?? 0).toLocaleString()}`,
+    },
+    {
+      key: "paymentStatus",
+      header: "Payment",
+      width: 110,
+      accessor: (b) => b.paymentStatus || "",
+      render: (b) => paymentStatusBadge(b),
     },
     {
       key: "reconciliationStatus",
