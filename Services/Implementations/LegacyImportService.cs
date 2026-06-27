@@ -54,16 +54,16 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("Target company not found.");
 
             var result = new LegacyImportResult();
-            await ImportCoaAsync(companyId, result);
-            await ImportPartiesAsync(companyId, result);
+            var coa = ReadCoa();
+            await ImportCoaAsync(companyId, coa, result);
+            await ImportPartiesAsync(companyId, coa, result);
             return result;
         }
 
         // ── Chart of Accounts ───────────────────────────────────────────────────
 
-        private async Task ImportCoaAsync(int companyId, LegacyImportResult result)
+        private async Task ImportCoaAsync(int companyId, List<CoaRow> rows, LegacyImportResult result)
         {
-            var rows = ReadCoa();
             var groupIdByCode = new Dictionary<string, int>();
             var createdGroups = 0;
             var createdAccounts = 0;
@@ -126,8 +126,26 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Parties ─────────────────────────────────────────────────────────────
 
-        private async Task ImportPartiesAsync(int companyId, LegacyImportResult result)
+        private async Task ImportPartiesAsync(int companyId, List<CoaRow> coa, LegacyImportResult result)
         {
+            // A trader is a Client or Supplier based on WHICH control account its
+            // ledger sits under — NOT FKTraderTypeID, which this dataset files
+            // inconsistently (a sales customer like "CHINA STATE" is type 2). The
+            // authoritative signal: the root of its FKAccountCode chain — Asset
+            // (receivable) ⇒ Client, Liability (payable) ⇒ Supplier.
+            var parentByCode = coa.ToDictionary(r => r.Code, r => r.Parent);
+            var typeByCode = coa.ToDictionary(r => r.Code, r => r.Type);
+            string? RootType(string? code)
+            {
+                var guard = 0;
+                while (code != null && parentByCode.TryGetValue(code, out var parent) && guard++ < 50)
+                {
+                    if (parent == null) return typeByCode.GetValueOrDefault(code);
+                    code = parent;
+                }
+                return code != null ? typeByCode.GetValueOrDefault(code) : null;
+            }
+
             var traders = ReadTraders();
             // Existing imported refs for idempotency.
             var existingClients = await _db.Clients
@@ -139,37 +157,39 @@ namespace MyApp.Api.Services.Implementations
             var clientRefs = new HashSet<string>(existingClients);
             var supplierRefs = new HashSet<string>(existingSuppliers);
 
-            int newClients = 0, newSuppliers = 0, skipped = 0, other = 0;
+            int newClients = 0, newSuppliers = 0, skipped = 0, unclassified = 0;
             foreach (var t in traders)
             {
                 var er = $"trader:{t.Id}";
                 var name = string.IsNullOrWhiteSpace(t.Name) ? $"(trader {t.Id})" : t.Name.Trim();
-                if (t.Type == 1)
+                var root = RootType(t.AccountCode);   // "A" (asset/receivable) | "L" (liability/payable) | …
+                if (root == "A")
                 {
                     if (clientRefs.Contains(er)) { skipped++; continue; }
                     _db.Clients.Add(new Client { CompanyId = companyId, Name = name, NTN = t.Ntn, STRN = t.Gst, ExternalRef = er });
                     clientRefs.Add(er); newClients++;
                 }
-                else if (t.Type == 2)
+                else if (root == "L")
                 {
                     if (supplierRefs.Contains(er)) { skipped++; continue; }
                     _db.Suppliers.Add(new Supplier { CompanyId = companyId, Name = name, NTN = t.Ntn, STRN = t.Gst, ExternalRef = er });
                     supplierRefs.Add(er); newSuppliers++;
                 }
-                else { other++; }
+                else { unclassified++; }
             }
             await _db.SaveChangesAsync();
 
             result.Created["clients"] = newClients;
             result.Created["suppliers"] = newSuppliers;
             result.Skipped["partiesAlreadyImported"] = skipped;
-            if (other > 0) result.Notes.Add($"Skipped {other} 'other' (non customer/supplier) traders.");
+            result.Notes.Add("Parties classified by ledger control account (Asset→Client, Liability→Supplier), not FKTraderTypeID.");
+            if (unclassified > 0) result.Notes.Add($"Skipped {unclassified} traders whose account doesn't roll up to an asset/liability (no trade ledger).");
         }
 
         // ── Legacy reads (read-only) ──────────────────────────────────────────────
 
         private record CoaRow(string Code, string? Parent, string Desc, string Type, bool IsControl, decimal OpeningDebit, decimal OpeningCredit);
-        private record TraderRow(int Id, string? Name, int Type, string? Ntn, string? Gst);
+        private record TraderRow(int Id, string? Name, int Type, string? Ntn, string? Gst, string? AccountCode);
 
         private List<CoaRow> ReadCoa()
         {
@@ -204,7 +224,7 @@ namespace MyApp.Api.Services.Implementations
             using var conn = new SqlConnection(_connStr);
             conn.Open();
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT TraderID, Company, FKTraderTypeID, NTN, GSTNumber FROM Trader WHERE FKCostCentreID=1";
+            cmd.CommandText = "SELECT TraderID, Company, FKTraderTypeID, NTN, GSTNumber, FKAccountCode FROM Trader WHERE FKCostCentreID=1";
             using var rdr = cmd.ExecuteReader();
             while (rdr.Read())
             {
@@ -213,7 +233,8 @@ namespace MyApp.Api.Services.Implementations
                     rdr.IsDBNull(1) ? null : rdr.GetString(1).Trim(),
                     rdr.IsDBNull(2) ? 0 : rdr.GetInt32(2),
                     rdr.IsDBNull(3) ? null : rdr.GetString(3).Trim(),
-                    rdr.IsDBNull(4) ? null : rdr.GetString(4).Trim()));
+                    rdr.IsDBNull(4) ? null : rdr.GetString(4).Trim(),
+                    rdr.IsDBNull(5) ? null : rdr.GetString(5).Trim()));
             }
             return list;
         }
