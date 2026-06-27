@@ -183,6 +183,7 @@ export default function DashboardLayout() {
   const accountingKeys = [
     "accounting.receipts.view",
     "accounting.payments.view",
+    "accounting.coa.view",
   ];
   const adminKeys = [
     "users.manage.view",
@@ -213,7 +214,7 @@ export default function DashboardLayout() {
     const p = location.pathname.toLowerCase();
     if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p === "/bills" || p === "/invoices" || p === "/item-rate-history") return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
-    if (p.startsWith("/receipts") || p.startsWith("/payments")) return "accounting";
+    if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts")) return "accounting";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
       || p.startsWith("/templates") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor")) return "configuration";
@@ -413,6 +414,12 @@ export default function DashboardLayout() {
                 <NavLink to="/payments" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdPayments className="dl-subitem__icon" aria-hidden="true" />
                   <span>Payments</span>
+                </NavLink>
+              </Can>
+              <Can permission="accounting.coa.view">
+                <NavLink to="/chart-of-accounts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdAccountTree className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Chart of Accounts</span>
                 </NavLink>
               </Can>
             </NavGroup>
