@@ -951,7 +951,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <span>Ready to Validate</span>
                       </div>
                     )}
-                    {!isBillsMode && inv.fbrStatus !== "Submitted" && inv.isFbrExcluded && (
+                    {!isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && inv.isFbrExcluded && (
                       <div
                         style={styles.fbrPillExcluded}
                         title="This bill is excluded from Validate All / Submit All bulk actions. Per-bill Validate / Submit still work."
