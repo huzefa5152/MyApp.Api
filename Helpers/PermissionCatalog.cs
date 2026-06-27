@@ -118,6 +118,12 @@ namespace MyApp.Api.Helpers
             new("accounting.payments.create", "Accounting", "Payments", "Create", "Record a payment against one or more purchase bills"),
             new("accounting.payments.delete", "Accounting", "Payments", "Delete", "Delete a payment"),
 
+            // Chart of Accounts (the account tree postings land on). View to read
+            // the tree; manage to add/edit/delete groups & accounts and seed a
+            // sector preset. Control accounts can't be deleted (subledger-backed).
+            new("accounting.coa.view",   "Accounting", "Chart of Accounts", "View",   "View the chart of accounts"),
+            new("accounting.coa.manage", "Accounting", "Chart of Accounts", "Manage", "Add/edit/delete accounts & groups and seed a sector preset"),
+
             // ── Folders + Attachments (unified document management) ─────────
             // One shared system powers the Configuration → Folders library AND
             // the reusable attachment component on transaction modules. Folders

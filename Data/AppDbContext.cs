@@ -40,6 +40,12 @@ namespace MyApp.Api.Data
         public DbSet<MyApp.Api.Models.Accounting.Payment> Payments { get; set; }
         public DbSet<MyApp.Api.Models.Accounting.PaymentAllocation> PaymentAllocations { get; set; }
 
+        // ── Chart of Accounts (design §4) — the account dimension postings land
+        // on. AccountGroup = structural container (statement tree); Account =
+        // postable / control account fed by a subledger.
+        public DbSet<MyApp.Api.Models.Accounting.AccountGroup> AccountGroups { get; set; }
+        public DbSet<MyApp.Api.Models.Accounting.Account> Accounts { get; set; }
+
         // ── Unified attachments + document folders (additive) ──
         // One Attachment row per uploaded file (bytes on disk). A Folder is a
         // per-company named container; an attachment may also/instead be linked
@@ -605,6 +611,54 @@ namespace MyApp.Api.Data
                 .HasIndex(a => a.InvoiceId);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
                 .HasIndex(a => a.PurchaseBillId);
+
+            // ── Chart of Accounts (design §4) ──────────────────────────────────
+            // AccountGroup → Company (Restrict: a company's CoA can't be
+            // cascade-wiped) and a self-FK for nesting (Restrict — a parent with
+            // children is unlinked/emptied in app code, never cascade-deleted).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountGroup>()
+                .HasOne(g => g.Company).WithMany()
+                .HasForeignKey(g => g.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountGroup>()
+                .HasOne(g => g.ParentGroup).WithMany()
+                .HasForeignKey(g => g.ParentGroupId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountGroup>()
+                .Property(g => g.Name).HasMaxLength(150);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountGroup>()
+                .Property(g => g.ExternalRef).HasMaxLength(60);
+            // Ordering scope: a company's groups by statement + position.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountGroup>()
+                .HasIndex(g => new { g.CompanyId, g.Statement, g.Position });
+
+            // Account → Company (Restrict) and → AccountGroup (Restrict: can't
+            // drop a group that still holds accounts; move them first).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .HasOne(a => a.Company).WithMany()
+                .HasForeignKey(a => a.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .HasOne(a => a.AccountGroup).WithMany()
+                .HasForeignKey(a => a.AccountGroupId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .Property(a => a.Name).HasMaxLength(150);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .Property(a => a.Code).HasMaxLength(40);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .Property(a => a.ExternalRef).HasMaxLength(60);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .Property(a => a.OpeningBalance).HasPrecision(19, 4);
+            // Codes are optional but unique per company WHEN present (filtered
+            // index). NO unique-name index — account names legitimately repeat.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .HasIndex(a => new { a.CompanyId, a.Code })
+                .IsUnique()
+                .HasFilter("[Code] IS NOT NULL");
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .HasIndex(a => a.AccountGroupId);
 
             // ── Unified attachments + document folders ──────────────────────
             // A Folder is a per-company named container. An Attachment is one
