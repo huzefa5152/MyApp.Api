@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SelectDropdown from "./SelectDropdown";
+import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import QuantityInput from "./QuantityInput";
 import { getAllUnits } from "../api/unitsApi";
+import { getItemTypes } from "../api/itemTypeApi";
 import { getPagedSalesQuotesByCompany } from "../api/salesQuoteApi";
 import { formStyles, modalSizes } from "../theme";
 
@@ -30,6 +32,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
       : [blankItem()]
   );
   const [units, setUnits] = useState([]);
+  const [itemTypes, setItemTypes] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [salesQuoteId, setSalesQuoteId] = useState(order?.salesQuoteId ? String(order.salesQuoteId) : "");
@@ -37,6 +40,17 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   const [quoteLoadedMsg, setQuoteLoadedMsg] = useState("");
 
   useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
+  useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
+
+  // Optional item-type pick prefills description + unit.
+  const pickItemType = (idx, newId, picked) => {
+    const patch = { itemTypeId: newId ? parseInt(newId) : null };
+    if (picked) {
+      if (picked.name) patch.description = picked.name;
+      if (picked.uom) patch.unit = picked.uom;
+    }
+    setItem(idx, patch);
+  };
   useEffect(() => {
     getPagedSalesQuotesByCompany(companyId, { pageSize: 200 })
       .then(({ data }) => setQuotes(data.items || []))
@@ -188,6 +202,13 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
                       <tr key={idx}>
                         <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
                         <td style={s.td}>
+                          <SearchableItemTypeSelect
+                            items={itemTypes}
+                            value={item.itemTypeId || ""}
+                            onChange={(newId, picked) => pickItemType(idx, newId, picked)}
+                            placeholder="— item type (optional) —"
+                            style={{ marginBottom: 4, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                          />
                           <LookupAutocomplete label="Item description" endpoint="/lookup/items" value={item.description} onChange={(v) => setItem(idx, { description: v })} inputStyle={s.cellInput} multiline />
                           {locked && <div style={s.hint}>{item.delivered} already delivered — qty can't go below that</div>}
                         </td>

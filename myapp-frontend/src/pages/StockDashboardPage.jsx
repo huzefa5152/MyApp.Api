@@ -201,14 +201,13 @@ export default function StockDashboardPage() {
   const adjustUom = adjustItem?.uom || "";
   const adjustAllowsDecimal = isDecimalUnit(adjustUom, units);
 
-  // Modal pickers list only HS-coded catalog items — stock tracking is
-  // FBR-classified inventory; quick no-HS entries are bill drafts, not
-  // stockable goods. Opening Balance additionally hides items already on
-  // the on-hand grid: those are corrected via the per-row Adjust action,
-  // not by seeding a second opening.
-  const hsCodedItemTypes = itemTypes.filter(it => it.hsCode && it.hsCode.trim());
+  // Modal pickers list ALL catalog item types (HS-coded or not) — opening
+  // balances/adjustments are operational stock counts, not FBR submissions,
+  // so items without an HS code must be selectable too. Opening Balance still
+  // hides items already on the on-hand grid: those are corrected via the
+  // per-row Adjust action, not by seeding a second opening.
   const onhandIds = new Set(onhand.map(r => r.itemTypeId));
-  const openingPickerItems = hsCodedItemTypes.filter(it => !onhandIds.has(it.id));
+  const openingPickerItems = itemTypes.filter(it => !onhandIds.has(it.id));
 
   return (
     <div className="stock-page">
@@ -593,7 +592,7 @@ export default function StockDashboardPage() {
             ) : (
               <>
                 <SearchableItemTypeSelect
-                  items={hsCodedItemTypes}
+                  items={itemTypes}
                   value={adjustDraft.itemTypeId}
                   onChange={(newId) => setAdjustDraft({ ...adjustDraft, itemTypeId: newId ? String(newId) : "" })}
                   placeholder="Search & pick an item…"

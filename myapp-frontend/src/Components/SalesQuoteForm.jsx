@@ -3,8 +3,10 @@ import { MdAdd, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SelectDropdown from "./SelectDropdown";
 import DivisionSelect from "./DivisionSelect";
+import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import QuantityInput from "./QuantityInput";
 import { getAllUnits } from "../api/unitsApi";
+import { getItemTypes } from "../api/itemTypeApi";
 import { getQuoteItemRate } from "../api/salesQuoteApi";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
@@ -45,12 +47,24 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
       : [blankItem()]
   );
   const [units, setUnits] = useState([]);
+  const [itemTypes, setItemTypes] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const rateTimers = useRef({});
   const attachmentRef = useRef(null);
 
   useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
+  useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
+
+  // Picking an item type is optional; it prefills the description + unit.
+  const pickItemType = (idx, newId, picked) => {
+    const patch = { itemTypeId: newId ? parseInt(newId) : null };
+    if (picked) {
+      if (picked.name) patch.description = picked.name;
+      if (picked.uom) patch.unit = picked.uom;
+    }
+    setItem(idx, patch);
+  };
 
   const setItem = (idx, patch) =>
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
@@ -197,6 +211,13 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
                     <tr key={idx}>
                       <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
                       <td style={s.td}>
+                        <SearchableItemTypeSelect
+                          items={itemTypes}
+                          value={item.itemTypeId || ""}
+                          onChange={(newId, picked) => pickItemType(idx, newId, picked)}
+                          placeholder="— item type (optional) —"
+                          style={{ marginBottom: 4, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                        />
                         <LookupAutocomplete label="Item description" endpoint="/lookup/items" value={item.description} onChange={(v) => handleDescChange(idx, v)} inputStyle={s.cellInput} multiline />
                         {item.rateHint && <div style={s.hint}>{item.rateHint}</div>}
                       </td>

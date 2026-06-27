@@ -30,6 +30,8 @@ import { useEffect, useRef, useState } from "react";
 import { MdLock, MdInfo, MdInventory2 } from "react-icons/md";
 import { createItemType, updateItemType, getItemTypeFbrHints } from "../api/itemTypeApi";
 import { getFbrHsUom } from "../api/fbrApi";
+import { getOpeningBalances, upsertOpeningBalance } from "../api/stockApi";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { formStyles, modalSizes } from "../theme";
 import HsCodeAutocomplete from "./HsCodeAutocomplete";
 import LookupAutocomplete from "./LookupAutocomplete";
@@ -105,6 +107,31 @@ export default function ItemTypeForm({
   const [isFavorite, setIsFavorite] = useState(editItem?.isFavorite ?? true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Optional opening stock balance. ItemType is a global catalog but stock is
+  // per-company, so this seeds/updates the OpeningStockBalance for the company
+  // currently in context. Only shown to operators who can manage opening stock.
+  const { has } = usePermissions();
+  const canManageOpening = has("stock.opening.manage");
+  const [openingBalance, setOpeningBalance] = useState("");
+  const [openingInitial, setOpeningInitial] = useState("");
+
+  // Prefill the opening balance when editing (fetch this company's current
+  // opening for the item type, if any). Best-effort — never blocks the form.
+  useEffect(() => {
+    if (!canManageOpening || !companyId || mode !== "edit" || !editItem?.id) return;
+    let cancelled = false;
+    getOpeningBalances(companyId)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const row = (data || []).find((o) => o.itemTypeId === editItem.id);
+        const v = row ? String(row.quantity) : "";
+        setOpeningBalance(v);
+        setOpeningInitial(v);
+      })
+      .catch(() => { /* opening balance is optional context */ });
+    return () => { cancelled = true; };
+  }, [canManageOpening, companyId, mode, editItem?.id]);
 
   // FBR hint bundle for the currently-typed HS code: valid UOMs,
   // suggested sale type, suggested rate %, live SaleTypeToRate options.
@@ -282,6 +309,21 @@ export default function ItemTypeForm({
         const { data } = await createItemType(payload, companyId);
         saved = data;
       }
+
+      // Optional opening stock balance for the current company. Only when the
+      // operator can manage opening stock and the value actually changed.
+      if (canManageOpening && companyId && saved?.id && openingBalance.trim() !== openingInitial.trim()) {
+        try {
+          await upsertOpeningBalance({
+            companyId,
+            itemTypeId: saved.id,
+            quantity: parseFloat(openingBalance) || 0,
+            asOfDate: new Date().toISOString().slice(0, 10),
+            notes: "Set from item type form",
+          });
+        } catch { /* opening balance is best-effort; the item type is saved */ }
+      }
+
       onSaved?.(saved);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to save.");
@@ -542,6 +584,25 @@ export default function ItemTypeForm({
                   />
                   Show in challan &amp; bill dropdowns (favorite)
                 </label>
+              </div>
+            )}
+
+            {canManageOpening && companyId && (
+              <div style={styles.field}>
+                <label style={formStyles.label}>
+                  Opening stock balance <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  style={formStyles.input}
+                  value={openingBalance}
+                  onChange={(e) => setOpeningBalance(e.target.value)}
+                  placeholder="e.g. 100"
+                />
+                <small style={{ color: "#5f6d7e" }}>
+                  Sets this item's opening stock for the selected company. Leave blank to skip.
+                </small>
               </div>
             )}
           </div>

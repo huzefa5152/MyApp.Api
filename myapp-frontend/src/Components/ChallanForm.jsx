@@ -2,10 +2,12 @@ import { useState, useRef, useEffect } from "react";
 import { MdAdd, MdClose, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
+import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import SelectDropdown from "./SelectDropdown";
 import QuantityInput from "./QuantityInput";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
+import { getItemTypes } from "../api/itemTypeApi";
 import { formStyles, modalSizes } from "../theme";
 
 const colors = {
@@ -30,8 +32,9 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const [indentNo, setIndentNo] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
   const [items, setItems] = useState([
-    { description: "", quantity: 1, unit: "" },
+    { description: "", quantity: 1, unit: "", itemTypeId: null },
   ]);
+  const [itemTypes, setItemTypes] = useState([]);
   // Units list with the AllowsDecimalQuantity flag — drives whether each
   // row's quantity input accepts decimals or only whole numbers. Loaded
   // once on mount; cheap (≤50 rows) and the operator can flip flags via
@@ -44,6 +47,20 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   useEffect(() => {
     getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
   }, []);
+  useEffect(() => {
+    getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([]));
+  }, [companyId]);
+
+  // Optional item-type pick on a challan line: records the ItemTypeId and
+  // prefills description + unit. (Historically item type was deferred to the
+  // Invoices tab; it's now optionally captured here too.)
+  const pickItemType = (index, newId, picked) => {
+    const next = [...items];
+    next[index].itemTypeId = newId ? parseInt(newId) : null;
+    if (picked?.name) next[index].description = picked.name;
+    if (picked?.uom) next[index].unit = picked.uom;
+    setItems(next);
+  };
 
   useEffect(() => {
     if (itemsContainerRef.current) {
@@ -86,7 +103,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       return;
     }
     setError("");
-    setItems([...items, { description: "", quantity: 1, unit: "" }]);
+    setItems([...items, { description: "", quantity: 1, unit: "", itemTypeId: null }]);
   };
 
   const removeItem = (index) => setItems(items.filter((_, i) => i !== index));
@@ -118,10 +135,10 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
         deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : null,
         items: validItems.map((i) => ({
           ...i,
-          // Item Type isn't captured on the challan side anymore — that
-          // happens on the Invoices tab during FBR classification. Send
-          // null so the backend stores DeliveryItem.ItemTypeId=null.
-          itemTypeId: null,
+          // Item Type is optional on a challan line. When the operator picks
+          // one it persists on DeliveryItem.ItemTypeId; otherwise null and FBR
+          // classification can still happen later on the Invoices tab.
+          itemTypeId: i.itemTypeId || null,
           // parseFloat preserves decimals (12.5 KG, 0.0004 Carat). The
           // QuantityInput already coerces correctly per UOM, this is just
           // defensive in case a string slips through.
@@ -247,6 +264,13 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                     <div style={styles.itemIndex}>{idx + 1}</div>
 
                     <div style={{ flex: 2, minWidth: 0 }}>
+                      <SearchableItemTypeSelect
+                        items={itemTypes}
+                        value={item.itemTypeId || ""}
+                        onChange={(newId, picked) => pickItemType(idx, newId, picked)}
+                        placeholder="— item type (optional) —"
+                        style={{ marginBottom: 4, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                      />
                       <LookupAutocomplete
                         label="Description"
                         endpoint="/lookup/items"
