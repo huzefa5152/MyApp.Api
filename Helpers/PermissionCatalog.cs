@@ -47,6 +47,16 @@ namespace MyApp.Api.Helpers
             new("companies.manage.update", "Companies", "Manage", "Update", "Edit company details"),
             new("companies.manage.delete", "Companies", "Manage", "Delete", "Delete a company"),
 
+            // ── Divisions (per-company sub-brands / "sub-companies") ─────────
+            // A division carries its own branding (logo / brand / address) and
+            // its own Sales Quote numbering, managed from the Configuration →
+            // Divisions page. Dedicated keys (not companies.manage.*) so a role
+            // can be allowed to manage divisions without full company-edit rights.
+            new("divisions.manage.view",   "Divisions", "Manage", "View",   "View the divisions list"),
+            new("divisions.manage.create", "Divisions", "Manage", "Create", "Create a new division"),
+            new("divisions.manage.update", "Divisions", "Manage", "Update", "Edit a division and upload its logo"),
+            new("divisions.manage.delete", "Divisions", "Manage", "Delete", "Delete a division (referencing quotes/templates fall back to company-level)"),
+
             // ── Clients ─────────────────────────────────────────────────────
             new("clients.manage.view",     "Clients", "Manage", "View",   "View the clients list"),
             new("clients.manage.create",   "Clients", "Manage", "Create", "Create a new client"),

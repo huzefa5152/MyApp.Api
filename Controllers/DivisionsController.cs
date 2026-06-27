@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
@@ -16,11 +17,13 @@ namespace MyApp.Api.Controllers
     {
         private readonly IDivisionService _service;
         private readonly ICompanyAccessGuard _access;
+        private readonly IWebHostEnvironment _env;
 
-        public DivisionsController(IDivisionService service, ICompanyAccessGuard access)
+        public DivisionsController(IDivisionService service, ICompanyAccessGuard access, IWebHostEnvironment env)
         {
             _service = service;
             _access = access;
+            _env = env;
         }
 
         private int CurrentUserId =>
@@ -28,16 +31,16 @@ namespace MyApp.Api.Controllers
                 User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
                 out var id) ? id : 0;
 
-        // Divisions are company configuration — reuse the company permission keys
-        // (view to read, update to manage) rather than minting a new namespace.
+        // Divisions have their own RBAC namespace (divisions.manage.*) so a role
+        // can manage them independently of full company-edit rights.
         [HttpGet("company/{companyId}")]
-        [HasPermission("companies.manage.view")]
+        [HasPermission("divisions.manage.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<DivisionDto>>> GetByCompany(int companyId)
             => Ok(await _service.GetByCompanyAsync(companyId));
 
         [HttpPost("company/{companyId}")]
-        [HasPermission("companies.manage.update")]
+        [HasPermission("divisions.manage.create")]
         [AuthorizeCompany]
         public async Task<ActionResult<DivisionDto>> Create(int companyId, [FromBody] DivisionDto dto)
         {
@@ -50,7 +53,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPut("{id}")]
-        [HasPermission("companies.manage.update")]
+        [HasPermission("divisions.manage.update")]
         public async Task<ActionResult<DivisionDto>> Update(int id, [FromBody] DivisionDto dto)
         {
             var existing = await _service.GetByIdAsync(id);
@@ -65,7 +68,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpDelete("{id}")]
-        [HasPermission("companies.manage.update")]
+        [HasPermission("divisions.manage.delete")]
         public async Task<IActionResult> Delete(int id)
         {
             var existing = await _service.GetByIdAsync(id);
@@ -73,6 +76,41 @@ namespace MyApp.Api.Controllers
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             var ok = await _service.DeleteAsync(id);
             return ok ? NoContent() : NotFound();
+        }
+
+        // POST: api/divisions/{id}/logo — mirrors the company logo upload
+        // (tenant guard + ImageUploadValidator + magic-bytes sniff). Saved as
+        // division_{id}{ext} under data/uploads/logos so it never collides with
+        // a company logo (company_{id}{ext}).
+        [HttpPost("{id}/logo")]
+        [HasPermission("divisions.manage.update")]
+        public async Task<ActionResult<DivisionDto>> UploadLogo(int id, IFormFile file)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+
+            var validation = ImageUploadValidator.Validate(file, ImageUploadValidator.LogoMaxBytes);
+            if (validation != null)
+                return BadRequest(new { message = validation });
+
+            var uploadsDir = Path.Combine(_env.ContentRootPath, "data", "uploads", "logos");
+            Directory.CreateDirectory(uploadsDir);
+
+            // Path.GetFileName defends against path-traversal in FileName; the
+            // extension was already validated by ImageUploadValidator.
+            var ext = Path.GetExtension(Path.GetFileName(file.FileName ?? "")).ToLowerInvariant();
+            var fileName = $"division_{id}{ext}";
+            var filePath = Path.Combine(uploadsDir, fileName);
+
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            var logoPath = $"/data/uploads/logos/{fileName}";
+            var updated = await _service.SetLogoAsync(id, logoPath);
+            return updated == null ? NotFound() : Ok(updated);
         }
     }
 }

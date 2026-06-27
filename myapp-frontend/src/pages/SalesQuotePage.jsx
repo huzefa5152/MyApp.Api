@@ -151,9 +151,17 @@ export default function SalesQuotePage() {
   };
 
   const handleDelete = async (q) => {
-    const ok = await confirm({ title: "Delete Quote?", message: `Delete Quote #${q.quoteNumber}? This cannot be undone.`, variant: "danger", confirmText: "Delete" });
+    const linked = q.status === "Accepted" || q.convertedToSalesOrderNumber;
+    const ok = await confirm({
+      title: "Delete Quote?",
+      message: linked
+        ? `Delete Quote #${q.quoteNumber}? It's linked to a sales order — that link will be removed (the order keeps its items but no longer shows this quote number, and you can pick a new quote on it). This cannot be undone.`
+        : `Delete Quote #${q.quoteNumber}? This cannot be undone.`,
+      variant: "danger",
+      confirmText: "Delete",
+    });
     if (!ok) return;
-    try { await deleteSalesQuote(q.id); reload(); }
+    try { await deleteSalesQuote(q.id); notify(`Quote #${q.quoteNumber} deleted.`, "success"); reload(); }
     catch (err) { notify(err.response?.data?.error || "Failed to delete.", "error"); }
   };
 
@@ -248,7 +256,7 @@ export default function SalesQuotePage() {
                   {canUpdate && q.isEditable && <button style={st.actBtn} onClick={() => { setEditQuote(q); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
                   {canPrintQuote(q) && <button style={st.actBtn} onClick={() => handlePrint(q)} title="Print"><MdPrint size={16} /></button>}
                   {canConvert && q.status !== "Accepted" && <button style={{ ...st.actBtn, color: colors.teal }} onClick={() => handleConvert(q)} title="Convert to Sales Order"><MdSwapHoriz size={16} /></button>}
-                  {canDelete && q.isLatest && q.status !== "Accepted" && <button style={{ ...st.actBtn, color: "#dc3545" }} onClick={() => handleDelete(q)} title="Delete"><MdDelete size={16} /></button>}
+                  {canDelete && <button style={{ ...st.actBtn, color: "#dc3545" }} onClick={() => handleDelete(q)} title="Delete"><MdDelete size={16} /></button>}
                 </div>
               </div>
             ))}

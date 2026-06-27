@@ -652,6 +652,10 @@ using (var scope = app.Services.CreateScope())
     // seed ids collide with operator-added merge fields on drifted databases.
     await MyApp.Api.Data.SalesMergeFieldSeeder.SeedAsync(db);
 
+    // Division (sub-company) merge fields across all template types — same
+    // idempotent runtime-seed contract.
+    await MyApp.Api.Data.DivisionMergeFieldSeeder.SeedAsync(db);
+
     // Demo-environment data seeder. Runs ONLY when ASPNETCORE_ENVIRONMENT
     // is "Demo" (set by scripts/run-demo.ps1 which also points the
     // connection string at the DeliveryChallanDemo database). Lays down

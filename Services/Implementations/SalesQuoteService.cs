@@ -114,10 +114,10 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<List<SalesQuoteDto>> GetByCompanyAsync(int companyId)
         {
-            var max = await _repository.GetMaxNumberAsync(companyId);
+            var scopeMax = await _repository.GetMaxNumbersByScopeAsync(companyId);
             var quotes = await _repository.GetByCompanyAsync(companyId);
             var linked = await GetLinkedQuoteIdsAsync(companyId, quotes.Select(q => q.Id).ToList());
-            return quotes.Select(q => ToDto(q, max, linked.Contains(q.Id))).ToList();
+            return quotes.Select(q => ToDto(q, scopeMax.GetValueOrDefault(q.DivisionId, 0), linked.Contains(q.Id))).ToList();
         }
 
         public async Task<PagedResult<SalesQuoteDto>> GetPagedByCompanyAsync(
@@ -126,13 +126,13 @@ namespace MyApp.Api.Services.Implementations
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
             int? divisionId = null)
         {
-            var max = await _repository.GetMaxNumberAsync(companyId);
+            var scopeMax = await _repository.GetMaxNumbersByScopeAsync(companyId);
             var (items, totalCount) = await _repository.GetPagedByCompanyAsync(
                 companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, divisionId);
             var linked = await GetLinkedQuoteIdsAsync(companyId, items.Select(q => q.Id).ToList());
             return new PagedResult<SalesQuoteDto>
             {
-                Items = items.Select(q => ToDto(q, max, linked.Contains(q.Id))).ToList(),
+                Items = items.Select(q => ToDto(q, scopeMax.GetValueOrDefault(q.DivisionId, 0), linked.Contains(q.Id))).ToList(),
                 TotalCount = totalCount,
                 Page = page,
                 PageSize = pageSize
@@ -143,7 +143,7 @@ namespace MyApp.Api.Services.Implementations
         {
             var q = await _repository.GetByIdAsync(id);
             if (q == null) return null;
-            var max = await _repository.GetMaxNumberAsync(q.CompanyId);
+            var max = await _repository.GetMaxNumberAsync(q.CompanyId, q.DivisionId);
             var hasLinkedOrder = await _context.SalesOrders.AnyAsync(so => so.SalesQuoteId == id);
             return ToDto(q, max, hasLinkedOrder);
         }
@@ -162,16 +162,31 @@ namespace MyApp.Api.Services.Implementations
                 ?? throw new KeyNotFoundException("Client not found.");
             if (client.CompanyId != companyId)
                 throw new InvalidOperationException("Client does not belong to this company.");
-            if (dto.DivisionId.HasValue && !await _context.Divisions.AnyAsync(d => d.Id == dto.DivisionId.Value && d.CompanyId == companyId))
-                throw new InvalidOperationException("Division does not belong to this company.");
+            // Load the division (tracked) when the quote is tagged with one — this
+            // both validates it belongs to this company AND lets us advance the
+            // division's own CurrentSalesQuoteNumber below.
+            Division? division = null;
+            if (dto.DivisionId.HasValue)
+            {
+                division = await _context.Divisions
+                    .FirstOrDefaultAsync(d => d.Id == dto.DivisionId.Value && d.CompanyId == companyId);
+                if (division == null)
+                    throw new InvalidOperationException("Division does not belong to this company.");
+            }
 
             await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.Unit));
 
             var createdId = await NumberAllocationRetry.ExecuteAsync(async _ =>
             {
-                var max = await _repository.GetMaxNumberAsync(companyId);
-                var next = max > 0 ? max + 1
-                         : (company.StartingSalesQuoteNumber > 0 ? company.StartingSalesQuoteNumber : 1);
+                // Division-scoped numbering: a division-tagged quote draws from the
+                // division's own sequence (seeded by its StartingSalesQuoteNumber);
+                // a company-level quote uses the company's. The unique index is
+                // (CompanyId, DivisionId, QuoteNumber) so the two never collide.
+                var max = await _repository.GetMaxNumberAsync(companyId, dto.DivisionId);
+                var seed = division != null
+                    ? (division.StartingSalesQuoteNumber > 0 ? division.StartingSalesQuoteNumber : 1)
+                    : (company.StartingSalesQuoteNumber > 0 ? company.StartingSalesQuoteNumber : 1);
+                var next = max > 0 ? max + 1 : seed;
 
                 var quote = new SalesQuote
                 {
@@ -195,7 +210,8 @@ namespace MyApp.Api.Services.Implementations
                     }).ToList()
                 };
                 ApplyTotals(quote, dto.GSTRate);
-                company.CurrentSalesQuoteNumber = next;
+                if (division != null) division.CurrentSalesQuoteNumber = next;
+                else company.CurrentSalesQuoteNumber = next;
                 _context.SalesQuotes.Add(quote);
                 try
                 {
@@ -299,13 +315,19 @@ namespace MyApp.Api.Services.Implementations
         {
             var quote = await _repository.GetByIdAsync(id);
             if (quote == null) return false;
-            if (quote.ConvertedToSalesOrderId != null || await _context.SalesOrders.AnyAsync(so => so.SalesQuoteId == id))
-                throw new InvalidOperationException("This quote is linked to a sales order and cannot be deleted. Delete the order first.");
 
-            var max = await _repository.GetMaxNumberAsync(quote.CompanyId);
-            if (quote.QuoteNumber != max)
-                throw new InvalidOperationException(
-                    $"Only the latest quote (#{max}) can be deleted, to keep numbering gap-free. Edit earlier quotes instead.");
+            // Break the quote <-> order cross-links before deleting. Both FKs are
+            // NoAction (see AppDbContext), so any Sales Order pointing at this
+            // quote must have its SalesQuoteId cleared in app code first. The
+            // order itself SURVIVES — it just loses its quote reference (shows no
+            // quote number, and the operator can re-select a quote on the order).
+            // The quote's own ConvertedToSalesOrderId pointer goes away with the
+            // row. Quotes are pre-sale, non-FBR documents, so deleting one (even a
+            // converted, non-latest quote) is allowed and a numbering gap is
+            // acceptable here — unlike bills/invoices.
+            var linkedOrders = await _context.SalesOrders.Where(so => so.SalesQuoteId == id).ToListAsync();
+            foreach (var so in linkedOrders) so.SalesQuoteId = null;
+            if (linkedOrders.Count > 0) await _context.SaveChangesAsync();
 
             await _repository.DeleteAsync(quote);
             return true;
@@ -363,6 +385,15 @@ namespace MyApp.Api.Services.Implementations
                 CompanyPhone = company?.Phone,
                 CompanyNTN = company?.NTN,
                 CompanySTRN = company?.STRN,
+                // Division ("sub-company") branding — null for company-level quotes.
+                DivisionName = q.Division?.Name,
+                DivisionBrandName = q.Division?.BrandName,
+                DivisionLogoPath = q.Division?.LogoPath,
+                DivisionAddress = q.Division?.FullAddress,
+                DivisionPhone = q.Division?.Phone,
+                DivisionNTN = q.Division?.NTN,
+                DivisionSTRN = q.Division?.STRN,
+                DivisionEmail = q.Division?.Email,
                 QuoteNumber = q.QuoteNumber,
                 Date = q.Date,
                 ValidUntil = q.ValidUntil,

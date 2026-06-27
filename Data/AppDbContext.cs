@@ -525,10 +525,21 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<SalesQuoteItem>().Property(i => i.LineTotal).HasPrecision(18, 2);
             modelBuilder.Entity<SalesOrderItem>().Property(i => i.Quantity).HasPrecision(18, 4);
 
-            // Unique per-company numbering (mirror Invoice's (CompanyId, Number)
-            // so two concurrent creates can't both land MAX+1 — loser retries).
+            // Unique numbering per (company, division). A division has its own
+            // Sales Quote sequence, so two divisions (or a division and the
+            // company-level scope) can legitimately reuse the same QuoteNumber —
+            // uniqueness is therefore scoped by DivisionId. Company-level quotes
+            // share DivisionId = NULL; SQL Server treats the tuple, so
+            // (X, NULL, 1) and (X, NULL, 2) are distinct while (X, NULL, 1) twice
+            // is blocked — exactly the per-scope numbering we want. Still guards
+            // the concurrent-create race (loser retries on the unique violation).
+            // HasFilter(null) overrides EF's default "WHERE [DivisionId] IS NOT
+            // NULL" filter for unique indexes on nullable columns. We WANT the
+            // index to cover company-level rows (DivisionId NULL) too, so that
+            // scope keeps its (CompanyId, QuoteNumber) uniqueness + race guard.
             modelBuilder.Entity<SalesQuote>()
-                .HasIndex(q => new { q.CompanyId, q.QuoteNumber }).IsUnique();
+                .HasIndex(q => new { q.CompanyId, q.DivisionId, q.QuoteNumber }).IsUnique()
+                .HasFilter(null);
             modelBuilder.Entity<SalesQuote>().HasIndex(q => q.ClientId);
             modelBuilder.Entity<SalesOrder>()
                 .HasIndex(o => new { o.CompanyId, o.SalesOrderNumber }).IsUnique();

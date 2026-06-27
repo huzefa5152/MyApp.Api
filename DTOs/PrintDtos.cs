@@ -148,6 +148,17 @@ namespace MyApp.Api.DTOs
         public string? CompanyPhone { get; set; }
         public string? CompanyNTN { get; set; }
         public string? CompanySTRN { get; set; }
+        // Division ("sub-company") branding — filled from the quote's Division
+        // when one is tagged; null for company-level quotes (templates can fall
+        // back to the company fields via {{#if divisionLogoPath}}…{{else}}…).
+        public string? DivisionName { get; set; }
+        public string? DivisionBrandName { get; set; }
+        public string? DivisionLogoPath { get; set; }
+        public string? DivisionAddress { get; set; }
+        public string? DivisionPhone { get; set; }
+        public string? DivisionNTN { get; set; }
+        public string? DivisionSTRN { get; set; }
+        public string? DivisionEmail { get; set; }
         public int QuoteNumber { get; set; }
         public DateTime Date { get; set; }
         public DateTime? ValidUntil { get; set; }

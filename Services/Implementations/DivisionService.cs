@@ -21,7 +21,41 @@ namespace MyApp.Api.Services.Implementations
             _logger = logger;
         }
 
-        private static DivisionDto ToDto(Division d) => new() { Id = d.Id, CompanyId = d.CompanyId, Name = d.Name };
+        private static DivisionDto ToDto(Division d) => new()
+        {
+            Id = d.Id,
+            CompanyId = d.CompanyId,
+            Name = d.Name,
+            BrandName = d.BrandName,
+            LogoPath = d.LogoPath,
+            FullAddress = d.FullAddress,
+            Phone = d.Phone,
+            NTN = d.NTN,
+            CNIC = d.CNIC,
+            STRN = d.STRN,
+            Email = d.Email,
+            StartingSalesQuoteNumber = d.StartingSalesQuoteNumber,
+            CurrentSalesQuoteNumber = d.CurrentSalesQuoteNumber,
+        };
+
+        private static string? Trimmed(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+        // Apply operator-editable "personal details" + the starting quote number
+        // from the DTO. LogoPath is intentionally NOT set here (it flows through
+        // the dedicated logo-upload endpoint) and CurrentSalesQuoteNumber is
+        // system-managed by the sales-quote create flow, so neither is clobbered
+        // by a plain create/edit save.
+        private static void ApplyEditableFields(Division d, DivisionDto dto)
+        {
+            d.BrandName   = Trimmed(dto.BrandName);
+            d.FullAddress = Trimmed(dto.FullAddress);
+            d.Phone       = Trimmed(dto.Phone);
+            d.NTN         = Trimmed(dto.NTN);
+            d.CNIC        = Trimmed(dto.CNIC);
+            d.STRN        = Trimmed(dto.STRN);
+            d.Email       = Trimmed(dto.Email);
+            d.StartingSalesQuoteNumber = dto.StartingSalesQuoteNumber < 0 ? 0 : dto.StartingSalesQuoteNumber;
+        }
 
         public async Task<List<DivisionDto>> GetByCompanyAsync(int companyId) =>
             (await _repo.GetByCompanyAsync(companyId)).Select(ToDto).ToList();
@@ -39,7 +73,9 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("Division name is required.");
             if (await _repo.ExistsByNameAsync(companyId, name))
                 throw new InvalidOperationException($"A division named '{name}' already exists for this company.");
-            var created = await _repo.AddAsync(new Division { CompanyId = companyId, Name = name });
+            var division = new Division { CompanyId = companyId, Name = name };
+            ApplyEditableFields(division, dto);
+            var created = await _repo.AddAsync(division);
             return ToDto(created);
         }
 
@@ -53,6 +89,7 @@ namespace MyApp.Api.Services.Implementations
             if (await _repo.ExistsByNameAsync(d.CompanyId, name, id))
                 throw new InvalidOperationException($"A division named '{name}' already exists for this company.");
             d.Name = name;
+            ApplyEditableFields(d, dto);
             await _repo.UpdateAsync(d);
             return ToDto(d);
         }
@@ -62,21 +99,29 @@ namespace MyApp.Api.Services.Implementations
             var d = await _repo.GetByIdAsync(id);
             if (d == null) return false;
 
-            // The PrintTemplate -> Division FK is NoAction (avoids multiple cascade
-            // paths from Company), so a division's templates must be removed in app
-            // code. Delete the templates and the division in one transaction; remove
-            // the templates' on-disk Excel files only after the commit succeeds.
-            var excelPaths = new List<string>();
+            var logoPath = d.LogoPath;
+
+            // Delete-and-unlink: the division goes away, but documents/templates
+            // that referenced it fall back to company-level rather than being
+            // deleted.
+            //   • Sales quotes auto-unlink via the SalesQuote->Division SetNull
+            //     FK when the division row is removed (DB-level ON DELETE SET NULL).
+            //   • Print templates use a NoAction FK (to avoid multiple cascade
+            //     paths from Company), so they're unlinked here in app code:
+            //     DivisionId -> null + IsDefault -> false. Demoting IsDefault is
+            //     required so the now company-level template can't collide with
+            //     the existing company default (unique index
+            //     UX_PrintTemplates_DefaultPerScope).
             await using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
                 var templates = await _db.PrintTemplates.Where(pt => pt.DivisionId == id).ToListAsync();
-                excelPaths = templates
-                    .Where(t => !string.IsNullOrEmpty(t.ExcelTemplatePath))
-                    .Select(t => t.ExcelTemplatePath!)
-                    .ToList();
+                foreach (var t in templates)
+                {
+                    t.DivisionId = null;
+                    t.IsDefault = false;
+                }
 
-                if (templates.Count > 0) _db.PrintTemplates.RemoveRange(templates);
                 _db.Divisions.Remove(d);
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
@@ -87,21 +132,31 @@ namespace MyApp.Api.Services.Implementations
                 throw;
             }
 
-            // Best-effort file cleanup — never throw (the DB rows are already gone).
-            foreach (var rel in excelPaths)
+            // Best-effort: remove the division's own logo file after commit —
+            // never throw (the DB row is already gone).
+            if (!string.IsNullOrEmpty(logoPath))
             {
                 try
                 {
-                    var full = Path.Combine(Directory.GetCurrentDirectory(), rel.TrimStart('/'));
+                    var full = Path.Combine(Directory.GetCurrentDirectory(), logoPath.TrimStart('/'));
                     if (File.Exists(full)) File.Delete(full);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to delete Excel template file for removed division {DivisionId}", id);
+                    _logger.LogWarning(ex, "Failed to delete logo file for removed division {DivisionId}", id);
                 }
             }
 
             return true;
+        }
+
+        public async Task<DivisionDto?> SetLogoAsync(int id, string logoPath)
+        {
+            var d = await _repo.GetByIdAsync(id);
+            if (d == null) return null;
+            d.LogoPath = logoPath;
+            await _repo.UpdateAsync(d);
+            return ToDto(d);
         }
     }
 }

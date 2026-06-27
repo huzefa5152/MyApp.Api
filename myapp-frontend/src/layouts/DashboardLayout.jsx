@@ -34,6 +34,7 @@ import {
   MdLock,
   MdPointOfSale,
   MdAddShoppingCart,
+  MdAccountTree,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { Can, usePermissions } from "../contexts/PermissionsContext";
@@ -147,6 +148,7 @@ export default function DashboardLayout() {
   // / ADMINISTRATION render with nothing under them).
   const configKeys = [
     "companies.manage.view",
+    "divisions.manage.view",
     "clients.manage.view",
     "suppliers.manage.view",
     "itemtypes.manage.view",
@@ -395,6 +397,12 @@ export default function DashboardLayout() {
                 <NavLink to="/companies/list" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdBusiness className="dl-subitem__icon" aria-hidden="true" />
                   <span>Companies</span>
+                </NavLink>
+              </Can>
+              <Can permission="divisions.manage.view">
+                <NavLink to="/configuration/divisions" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdAccountTree className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Divisions</span>
                 </NavLink>
               </Can>
               <Can permission="clients.manage.view">

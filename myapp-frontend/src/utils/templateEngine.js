@@ -117,10 +117,26 @@ Handlebars.registerHelper("taxEmptyRows", (count) => {
 
 /**
  * Compile a Handlebars template and merge with data.
+ *
+ * Injects a <base> so relative asset URLs — notably the logo
+ * "/data/uploads/logos/…" from {{companyLogoPath}} / {{divisionLogoPath}} —
+ * resolve against the app origin. Printing opens an about:blank popup and
+ * document.write's this HTML; an about:blank document has no origin to resolve
+ * a path-absolute URL against, so without an explicit base the logo silently
+ * renders blank in the print/preview. Resolving against window.location.origin
+ * works in production (same origin serves /data) and in dev (the Vite server
+ * proxies /data to the backend).
  */
 export function mergeTemplate(htmlTemplate, data) {
   const compiled = Handlebars.compile(htmlTemplate);
-  return compiled(data);
+  const html = compiled(data);
+  if (typeof window !== "undefined" && window.location?.origin) {
+    const base = `<base href="${window.location.origin}/">`;
+    return /<head[^>]*>/i.test(html)
+      ? html.replace(/<head[^>]*>/i, (m) => m + base)
+      : base + html;
+  }
+  return html;
 }
 
 /**

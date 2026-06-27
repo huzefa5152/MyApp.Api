@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { createCompany, updateCompany, uploadCompanyLogo, getCompanyById } from "../api/companyApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
-import { getDivisionsByCompany, createDivision, updateDivision, deleteDivision } from "../api/divisionApi";
 import { formStyles, modalSizes } from "../theme";
 
 const {
@@ -29,7 +28,6 @@ const TABS = [
     { id: "general", label: "General" },
     { id: "numbering", label: "Document Numbers" },
     { id: "fbr", label: "FBR Integration" },
-    { id: "divisions", label: "Divisions" },
     { id: "inventory", label: "Inventory" },
     { id: "access", label: "Access" },
 ];
@@ -87,15 +85,6 @@ export default function CompanyForm({ company, onClose, onSaved }) {
     const [saleTypeOptions, setSaleTypeOptions] = useState([]);
     const [uomOptions, setUomOptions] = useState([]);
     const [paymentModeOptions, setPaymentModeOptions] = useState([]);
-
-    // Divisions — managed inline via direct API calls, independent of the
-    // company Save button. Only available once the company itself exists.
-    const [divisions, setDivisions] = useState([]);
-    const [divName, setDivName] = useState("");
-    const [editingDivId, setEditingDivId] = useState(null);
-    const [editDivName, setEditDivName] = useState("");
-    const [divError, setDivError] = useState("");
-    const [divBusy, setDivBusy] = useState(false);
 
     // Fresh company snapshot — guaranteed to reflect hasInvoices / hasChallans /
     // hasSalesQuotes / hasSalesOrders / fbrEnabled as-of RIGHT NOW.
@@ -173,45 +162,6 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         };
         loadLookups();
     }, []);
-
-    // Load divisions for an existing company (skipped while creating a new one).
-    useEffect(() => {
-        if (!company?.id) { setDivisions([]); return; }
-        let cancelled = false;
-        getDivisionsByCompany(company.id)
-            .then(({ data }) => { if (!cancelled) setDivisions(data || []); })
-            .catch(() => { if (!cancelled) setDivisions([]); });
-        return () => { cancelled = true; };
-    }, [company?.id]);
-
-    const reloadDivisions = async () => {
-        if (!company?.id) return;
-        try { const { data } = await getDivisionsByCompany(company.id); setDivisions(data || []); }
-        catch { /* ignore */ }
-    };
-    const addDivision = async () => {
-        const name = divName.trim();
-        if (!name || !company?.id || divBusy) return;
-        setDivBusy(true); setDivError("");
-        try { await createDivision(company.id, name); setDivName(""); await reloadDivisions(); }
-        catch (err) { setDivError(err.response?.data?.error || "Could not add division."); }
-        finally { setDivBusy(false); }
-    };
-    const saveDivision = async (d) => {
-        const name = editDivName.trim();
-        if (!name || divBusy) return;
-        setDivBusy(true); setDivError("");
-        try { await updateDivision(d.id, name); setEditingDivId(null); await reloadDivisions(); }
-        catch (err) { setDivError(err.response?.data?.error || "Could not rename division."); }
-        finally { setDivBusy(false); }
-    };
-    const removeDivision = async (d) => {
-        if (divBusy) return;
-        setDivBusy(true); setDivError("");
-        try { await deleteDivision(d.id); await reloadDivisions(); }
-        catch (err) { setDivError(err.response?.data?.error || "Could not remove division."); }
-        finally { setDivBusy(false); }
-    };
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -513,70 +463,6 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                     </span>
                                 </span>
                             </label>
-                        )}
-
-                        {/* ── DIVISIONS ───────────────────────────────────── */}
-                        {activeTab === "divisions" && (
-                            company?.id ? (
-                                <>
-                                    <p style={sectionHint}>
-                                        Divisions are sub-brands or departments within this company. Changes here save immediately — independent of the Update button.
-                                    </p>
-                                    {divError && <div style={errorStyle}>{divError}</div>}
-                                    <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
-                                        <input
-                                            type="text"
-                                            value={divName}
-                                            onChange={(e) => setDivName(e.target.value)}
-                                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addDivision(); } }}
-                                            placeholder="New division name"
-                                            style={{ ...input, flex: 1 }}
-                                            maxLength={200}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={addDivision}
-                                            disabled={divBusy || !divName.trim()}
-                                            style={{ ...button, ...submit, whiteSpace: "nowrap", opacity: divBusy || !divName.trim() ? 0.6 : 1 }}
-                                        >+ Add</button>
-                                    </div>
-                                    {divisions.length === 0 ? (
-                                        <p style={{ fontSize: "0.82rem", color: "#5f6d7e", fontStyle: "italic", margin: 0 }}>No divisions yet — add one above.</p>
-                                    ) : (
-                                        <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                                            {divisions.map((d) => (
-                                                <div key={d.id} style={divRow}>
-                                                    {editingDivId === d.id ? (
-                                                        <>
-                                                            <input
-                                                                type="text"
-                                                                value={editDivName}
-                                                                onChange={(e) => setEditDivName(e.target.value)}
-                                                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveDivision(d); } }}
-                                                                style={{ ...input, flex: 1 }}
-                                                                maxLength={200}
-                                                                autoFocus
-                                                            />
-                                                            <button type="button" onClick={() => saveDivision(d)} disabled={divBusy} style={divActSave}>Save</button>
-                                                            <button type="button" onClick={() => setEditingDivId(null)} style={divActCancel}>Cancel</button>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <span style={{ flex: 1, fontWeight: 600, color: "#1a2332", overflow: "hidden", textOverflow: "ellipsis" }}>{d.name}</span>
-                                                            <button type="button" onClick={() => { setEditingDivId(d.id); setEditDivName(d.name); setDivError(""); }} style={divActEdit}>Edit</button>
-                                                            <button type="button" onClick={() => removeDivision(d)} disabled={divBusy} style={divActRemove}>Remove</button>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </>
-                            ) : (
-                                <p style={{ fontSize: "0.86rem", color: "#5f6d7e", padding: "1rem", border: "1px dashed #d0d7e2", borderRadius: 10, backgroundColor: "#fafbfc", margin: 0 }}>
-                                    Save the company first, then reopen it here to add and manage its divisions.
-                                </p>
-                            )
                         )}
 
                         {/* ── ACCESS ──────────────────────────────────────── */}

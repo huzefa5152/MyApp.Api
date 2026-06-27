@@ -4,6 +4,7 @@ import DashboardLayout from "./layouts/DashboardLayout";
 import PublicLayout from "./layouts/PublicLayout";
 import DashboardPage from "./pages/DashboardPage";
 import CompanyPage from "./pages/CompanyPage";
+import DivisionsPage from "./pages/DivisionsPage";
 import ChallansPage from "./pages/ChallanPage";
 import ImportChallansPage from "./pages/ImportChallansPage";
 import SalesQuotePage from "./pages/SalesQuotePage";
@@ -61,6 +62,7 @@ export default function App() {
         <Route element={<DashboardLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/companies/*" element={<CompanyPage />} />
+          <Route path="/configuration/divisions" element={<DivisionsPage />} />
           <Route path="/Clients/*" element={<ClientsPage />} />
           <Route path="/Suppliers/*" element={<SuppliersPage />} />
           <Route path="/item-types" element={<ItemTypesPage />} />

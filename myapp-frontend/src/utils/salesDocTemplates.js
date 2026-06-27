@@ -47,12 +47,12 @@ export const defaultQuoteTemplate = `<!DOCTYPE html><html><head><title>Quotation
 </style></head><body>
   <div class="hdr">
     <div class="brand">
-      {{#if companyLogoPath}}<img src="{{companyLogoPath}}" />{{/if}}
+      {{#if divisionLogoPath}}<img src="{{divisionLogoPath}}" />{{else}}{{#if companyLogoPath}}<img src="{{companyLogoPath}}" />{{/if}}{{/if}}
       <div>
-        <div class="cname">{{companyBrandName}}</div>
-        {{#if companyAddress}}<div class="caddr">{{{nl2br companyAddress}}}</div>{{/if}}
-        {{#if companyPhone}}<div class="caddr">{{{nl2br companyPhone}}}</div>{{/if}}
-        {{#if companyNTN}}<div class="caddr">NTN: {{companyNTN}}{{#if companySTRN}} &nbsp; STRN: {{companySTRN}}{{/if}}</div>{{/if}}
+        <div class="cname">{{#if divisionBrandName}}{{divisionBrandName}}{{else}}{{companyBrandName}}{{/if}}</div>
+        {{#if divisionAddress}}<div class="caddr">{{{nl2br divisionAddress}}}</div>{{else}}{{#if companyAddress}}<div class="caddr">{{{nl2br companyAddress}}}</div>{{/if}}{{/if}}
+        {{#if divisionPhone}}<div class="caddr">{{{nl2br divisionPhone}}}</div>{{else}}{{#if companyPhone}}<div class="caddr">{{{nl2br companyPhone}}}</div>{{/if}}{{/if}}
+        {{#if divisionNTN}}<div class="caddr">NTN: {{divisionNTN}}{{#if divisionSTRN}} &nbsp; STRN: {{divisionSTRN}}{{/if}}</div>{{else}}{{#if companyNTN}}<div class="caddr">NTN: {{companyNTN}}{{#if companySTRN}} &nbsp; STRN: {{companySTRN}}{{/if}}</div>{{/if}}{{/if}}
       </div>
     </div>
     <div class="doc">

@@ -117,5 +117,30 @@ namespace MyApp.Api.Repositories.Implementations
                 .Where(q => q.CompanyId == companyId)
                 .MaxAsync(q => (int?)q.QuoteNumber) ?? 0;
         }
+
+        // Division-scoped max. A division has its own quote sequence; company-
+        // level quotes are the DivisionId == null scope. Branch explicitly so
+        // the null case translates to `WHERE DivisionId IS NULL` rather than a
+        // parameter equality that never matches.
+        public async Task<int> GetMaxNumberAsync(int companyId, int? divisionId)
+        {
+            var q = _context.SalesQuotes.Where(s => s.CompanyId == companyId);
+            q = divisionId.HasValue
+                ? q.Where(s => s.DivisionId == divisionId.Value)
+                : q.Where(s => s.DivisionId == null);
+            return await q.MaxAsync(s => (int?)s.QuoteNumber) ?? 0;
+        }
+
+        // Max quote number per scope (DivisionId → max), in one round-trip, so
+        // the list views can flag IsLatest per division without an N+1.
+        public async Task<Dictionary<int?, int>> GetMaxNumbersByScopeAsync(int companyId)
+        {
+            var rows = await _context.SalesQuotes
+                .Where(q => q.CompanyId == companyId)
+                .GroupBy(q => q.DivisionId)
+                .Select(g => new { DivisionId = g.Key, Max = g.Max(x => x.QuoteNumber) })
+                .ToListAsync();
+            return rows.ToDictionary(r => r.DivisionId, r => r.Max);
+        }
     }
 }
