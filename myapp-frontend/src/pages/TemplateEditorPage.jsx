@@ -111,6 +111,14 @@ const SAMPLE_DATA = {
     companyPhone: "0300-1234567",
     companyNTN: "1234567-8",
     companySTRN: "1234567890123",
+    divisionName: "NORTH DIVISION",
+    divisionBrandName: "NORTH DIVISION",
+    divisionLogoPath: "",
+    divisionAddress: "Division Office, City",
+    divisionPhone: "0300-7654321",
+    divisionNTN: "1112223-4",
+    divisionSTRN: "1112223334445",
+    divisionEmail: "sales@northdivision.example",
     quoteNumber: 12,
     date: new Date().toISOString(),
     validUntil: new Date().toISOString(),
@@ -176,7 +184,7 @@ export default function TemplateEditorPage() {
   const canSheetPin = has("printtemplates.manage.sheetpin");
   const canDelete = has("printtemplates.manage.delete");
   const { companies, selectedCompany, setSelectedCompany, loading } = useCompany();
-  const [templateType, setTemplateType] = useState("Challan");
+  const [templateType, setTemplateType] = useState(() => localStorage.getItem("te.type") || "Challan");
   const [htmlContent, setHtmlContent] = useState("");
   const [originalContent, setOriginalContent] = useState("");
   const [templateJson, setTemplateJson] = useState(null);
@@ -216,6 +224,18 @@ export default function TemplateEditorPage() {
   // adding it as an effect dependency (avoids re-populate loops).
   const currentTemplateIdRef = useRef(null);
 
+  // Captured ONCE at mount (before the persist effects below can overwrite
+  // localStorage) so a page reload restores the last scope + template. Restore
+  // is gated on the saved company matching the restored company, and is
+  // consumed after the first company-load — so a deliberate company switch
+  // resets to company-wide rather than restoring a stale division/template.
+  const initialRestoreRef = useRef({
+    companyId: Number(localStorage.getItem("te.companyId")) || null,
+    scope: (() => { const s = localStorage.getItem("te.scopeDivisionId"); return (s == null || s === "") ? null : Number(s); })(),
+    templateId: Number(localStorage.getItem("te.templateId")) || null,
+    consumed: false,
+  });
+
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
@@ -236,6 +256,19 @@ export default function TemplateEditorPage() {
       }
     })();
   }, [templateType]);
+
+  // Persist the editor's selections so a page reload restores them (the company
+  // is already restored globally by CompanyContext; these add type + scope +
+  // template on top). The restore reads via initialRestoreRef (captured at
+  // mount), so these writes can't clobber it.
+  useEffect(() => { localStorage.setItem("te.type", templateType); }, [templateType]);
+  useEffect(() => {
+    if (!selectedCompany) return;
+    localStorage.setItem("te.companyId", String(selectedCompany.id));
+    localStorage.setItem("te.scopeDivisionId", scopeDivisionId == null ? "" : String(scopeDivisionId));
+    if (currentTemplateId != null) localStorage.setItem("te.templateId", String(currentTemplateId));
+    else localStorage.removeItem("te.templateId");
+  }, [selectedCompany?.id, scopeDivisionId, currentTemplateId]);
 
   // ── Scope + multi-template helpers ──
 
@@ -310,12 +343,24 @@ export default function TemplateEditorPage() {
         ]);
         if (cancelled) return;
         const list = tplRes.data || [];
-        setDivisions(divRes.data || []);
+        const divs = divRes.data || [];
+        setDivisions(divs);
         setAllTemplates(list);
-        setScopeDivisionId(null);
-        loadScope(list, templateType, null);
+        // Restore the last scope + template on a same-company reload; reset to
+        // company-wide on a deliberate company switch (ref consumed after the
+        // first company-load, and only honoured when the saved company matches).
+        let scope = null, preferId = null;
+        const r = initialRestoreRef.current;
+        if (!r.consumed && r.companyId === selectedCompany.id) {
+          if (r.scope != null && divs.some((d) => d.id === r.scope)) scope = r.scope;
+          if (r.templateId) preferId = r.templateId;
+        }
+        r.consumed = true;
+        setScopeDivisionId(scope);
+        loadScope(list, templateType, scope, preferId);
       } catch {
         if (cancelled) return;
+        initialRestoreRef.current.consumed = true;
         setDivisions([]);
         setAllTemplates([]);
         setScopeDivisionId(null);
@@ -787,49 +832,61 @@ export default function TemplateEditorPage() {
         </div>
 
         {isMobile ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", width: "100%" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <MdBusiness size={16} color={colors.blue} style={{ flexShrink: 0 }} />
-              <select
-                style={{ ...dropdownStyles.base, minWidth: 0, flex: 1, fontSize: "0.82rem" }}
-                value={selectedCompany?.id || ""}
-                onChange={(e) => setSelectedCompany(companies.find(c => c.id === parseInt(e.target.value)))}
-              >
-                {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-              </select>
-            </div>
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <select
-                style={{ ...dropdownStyles.base, minWidth: 0, flex: 1, fontSize: "0.82rem" }}
-                value={templateType}
-                onChange={(e) => handleTypeChange(e.target.value)}
-              >
-                {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-              {divisions.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", width: "100%" }}>
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Company</label>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <MdBusiness size={16} color={colors.blue} style={{ flexShrink: 0 }} />
                 <select
                   style={{ ...dropdownStyles.base, minWidth: 0, flex: 1, fontSize: "0.82rem" }}
-                  value={scopeDivisionId ?? ""}
-                  onChange={(e) => handleScopeChange(e.target.value)}
-                  title="Template scope"
+                  value={selectedCompany?.id || ""}
+                  onChange={(e) => setSelectedCompany(companies.find(c => c.id === parseInt(e.target.value)))}
                 >
-                  <option value="">Company-wide</option>
-                  {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
                 </select>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
+              <div style={{ ...styles.fieldGroup, flex: 1, minWidth: 0 }}>
+                <label style={styles.fieldLabel}>Document Type</label>
+                <select
+                  style={{ ...dropdownStyles.base, minWidth: 0, width: "100%", fontSize: "0.82rem" }}
+                  value={templateType}
+                  onChange={(e) => handleTypeChange(e.target.value)}
+                >
+                  {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+              {divisions.length > 0 && (
+                <div style={{ ...styles.fieldGroup, flex: 1, minWidth: 0 }}>
+                  <label style={styles.fieldLabel}>Scope</label>
+                  <select
+                    style={{ ...dropdownStyles.base, minWidth: 0, width: "100%", fontSize: "0.82rem" }}
+                    value={scopeDivisionId ?? ""}
+                    onChange={(e) => handleScopeChange(e.target.value)}
+                    title="Template scope"
+                  >
+                    <option value="">Company-wide</option>
+                    {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
               )}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <MdDescription size={15} color={colors.blue} style={{ flexShrink: 0 }} />
-              <select
-                style={{ ...dropdownStyles.base, minWidth: 0, flex: 1, fontSize: "0.82rem" }}
-                value={currentTemplateId ?? ""}
-                onChange={(e) => { if (e.target.value) handleTemplateSelect(Number(e.target.value)); }}
-                disabled={scopeTemplates.length === 0}
-                title="Saved template"
-              >
-                {scopeTemplates.length === 0 && <option value="">New template (unsaved)</option>}
-                {scopeTemplates.map((t) => <option key={t.id} value={t.id}>{t.isDefault ? `★ ${t.name}` : t.name}</option>)}
-              </select>
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Template</label>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <MdDescription size={15} color={colors.blue} style={{ flexShrink: 0 }} />
+                <select
+                  style={{ ...dropdownStyles.base, minWidth: 0, flex: 1, fontSize: "0.82rem" }}
+                  value={currentTemplateId ?? ""}
+                  onChange={(e) => { if (e.target.value) handleTemplateSelect(Number(e.target.value)); }}
+                  disabled={scopeTemplates.length === 0}
+                  title="Saved template"
+                >
+                  {scopeTemplates.length === 0 && <option value="">New template (unsaved)</option>}
+                  {scopeTemplates.map((t) => <option key={t.id} value={t.id}>{t.isDefault ? `★ ${t.name}` : t.name}</option>)}
+                </select>
+              </div>
             </div>
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
               <button style={{ ...styles.btn, ...styles.btnOutline, padding: "0.4rem 0.6rem", fontSize: "0.78rem", flex: 1, justifyContent: "center" }} onClick={() => setShowManager(true)} title="Saved templates">
@@ -849,50 +906,63 @@ export default function TemplateEditorPage() {
             {hasChanges && <span style={{ fontSize: "0.75rem", color: "#e65100", fontWeight: 600 }}>Unsaved changes</span>}
           </div>
         ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <MdBusiness size={18} color={colors.blue} />
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "0.75rem", flexWrap: "wrap" }}>
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Company</label>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <MdBusiness size={18} color={colors.blue} style={{ flexShrink: 0 }} />
+                <select
+                  style={{ ...dropdownStyles.base, minWidth: "180px" }}
+                  value={selectedCompany?.id || ""}
+                  onChange={(e) => setSelectedCompany(companies.find(c => c.id === parseInt(e.target.value)))}
+                >
+                  {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Document Type</label>
               <select
                 style={{ ...dropdownStyles.base, minWidth: "180px" }}
-                value={selectedCompany?.id || ""}
-                onChange={(e) => setSelectedCompany(companies.find(c => c.id === parseInt(e.target.value)))}
+                value={templateType}
+                onChange={(e) => handleTypeChange(e.target.value)}
               >
-                {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
+                {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
-            <select
-              style={{ ...dropdownStyles.base, minWidth: "180px" }}
-              value={templateType}
-              onChange={(e) => handleTypeChange(e.target.value)}
-            >
-              {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
 
             {divisions.length > 0 && (
-              <select
-                style={{ ...dropdownStyles.base, minWidth: "170px" }}
-                value={scopeDivisionId ?? ""}
-                onChange={(e) => handleScopeChange(e.target.value)}
-                title="Template scope — Company-wide or a specific division"
-              >
-                <option value="">Company-wide</option>
-                {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </select>
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>Scope</label>
+                <select
+                  style={{ ...dropdownStyles.base, minWidth: "170px" }}
+                  value={scopeDivisionId ?? ""}
+                  onChange={(e) => handleScopeChange(e.target.value)}
+                  title="Template scope — Company-wide or a specific division"
+                >
+                  <option value="">Company-wide</option>
+                  {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
             )}
 
-            {/* Saved-template selector — switch which template is loaded for preview/edit */}
-            <select
-              style={{ ...dropdownStyles.base, minWidth: "190px" }}
-              value={currentTemplateId ?? ""}
-              onChange={(e) => { if (e.target.value) handleTemplateSelect(Number(e.target.value)); }}
-              disabled={scopeTemplates.length === 0}
-              title="Saved template — switch to preview / edit another"
-            >
-              {scopeTemplates.length === 0 && <option value="">New template (unsaved)</option>}
-              {scopeTemplates.map((t) => (
-                <option key={t.id} value={t.id}>{t.isDefault ? `★ ${t.name}` : t.name}</option>
-              ))}
-            </select>
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Template</label>
+              {/* Saved-template selector — switch which template is loaded for preview/edit */}
+              <select
+                style={{ ...dropdownStyles.base, minWidth: "190px" }}
+                value={currentTemplateId ?? ""}
+                onChange={(e) => { if (e.target.value) handleTemplateSelect(Number(e.target.value)); }}
+                disabled={scopeTemplates.length === 0}
+                title="Saved template — switch to preview / edit another"
+              >
+                {scopeTemplates.length === 0 && <option value="">New template (unsaved)</option>}
+                {scopeTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>{t.isDefault ? `★ ${t.name}` : t.name}</option>
+                ))}
+              </select>
+            </div>
 
             {/* Mode Toggle */}
             <div style={styles.modeToggle}>
@@ -1095,6 +1165,13 @@ export default function TemplateEditorPage() {
 }
 
 const styles = {
+  // Labeled dropdown groups in the toolbar — a small caption above each
+  // <select> so it's obvious what each control selects.
+  fieldGroup: { display: "flex", flexDirection: "column", gap: "0.18rem" },
+  fieldLabel: {
+    fontSize: "0.64rem", fontWeight: 700, textTransform: "uppercase",
+    letterSpacing: "0.05em", color: "#7a8696", paddingLeft: "0.15rem",
+  },
   topBar: {
     display: "flex",
     justifyContent: "space-between",
