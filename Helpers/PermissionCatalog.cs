@@ -123,6 +123,9 @@ namespace MyApp.Api.Helpers
             // sector preset. Control accounts can't be deleted (subledger-backed).
             new("accounting.coa.view",   "Accounting", "Chart of Accounts", "View",   "View the chart of accounts"),
             new("accounting.coa.manage", "Accounting", "Chart of Accounts", "Manage", "Add/edit/delete accounts & groups and seed a sector preset"),
+            // Legacy data migration (admin/ops). Also gated by a non-Production
+            // environment + the LegacyDb connection string — never reachable in prod.
+            new("accounting.import.run", "Accounting", "Data Migration", "Run", "Run the legacy Data_2021 ETL into a company (non-prod only)"),
 
             // ── Folders + Attachments (unified document management) ─────────
             // One shared system powers the Configuration → Folders library AND
