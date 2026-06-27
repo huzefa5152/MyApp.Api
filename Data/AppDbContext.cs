@@ -660,6 +660,14 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
                 .HasIndex(a => a.AccountGroupId);
 
+            // ── Data-migration traceability (design §13) ──────────────────────
+            // ExternalRef carries the legacy source key on imported masters so the
+            // ETL is idempotent (upsert/skip on re-run). Indexed per company.
+            modelBuilder.Entity<Client>().Property(c => c.ExternalRef).HasMaxLength(60);
+            modelBuilder.Entity<Client>().HasIndex(c => new { c.CompanyId, c.ExternalRef });
+            modelBuilder.Entity<Supplier>().Property(s => s.ExternalRef).HasMaxLength(60);
+            modelBuilder.Entity<Supplier>().HasIndex(s => new { s.CompanyId, s.ExternalRef });
+
             // ── Unified attachments + document folders ──────────────────────
             // A Folder is a per-company named container. An Attachment is one
             // uploaded file (bytes on disk); it may belong to a folder and/or
