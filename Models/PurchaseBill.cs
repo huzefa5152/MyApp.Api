@@ -73,6 +73,12 @@ namespace MyApp.Api.Models
         /// </summary>
         public string? Source { get; set; }
 
+        /// <summary>True when brought in by the legacy data migration
+        /// (historical). ExternalRef carries "pbill:{DocumentNumber}" for
+        /// idempotency.</summary>
+        public bool IsMigrated { get; set; }
+        public string? ExternalRef { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation

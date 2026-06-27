@@ -70,6 +70,13 @@ namespace MyApp.Api.Models
         public DateTime? CancelledAt { get; set; }
         public string? CancelReason { get; set; }
 
+        /// <summary>True when this bill was brought in by the legacy data
+        /// migration (historical, pre-FBR). Such bills are force-excluded from
+        /// FBR (IsFbrExcluded) and tagged for traceability. ExternalRef carries
+        /// the legacy "sinv:{DocumentNumber}" so the ETL is idempotent.</summary>
+        public bool IsMigrated { get; set; }
+        public string? ExternalRef { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation

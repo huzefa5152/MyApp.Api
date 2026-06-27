@@ -667,6 +667,10 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Client>().HasIndex(c => new { c.CompanyId, c.ExternalRef });
             modelBuilder.Entity<Supplier>().Property(s => s.ExternalRef).HasMaxLength(60);
             modelBuilder.Entity<Supplier>().HasIndex(s => new { s.CompanyId, s.ExternalRef });
+            modelBuilder.Entity<Invoice>().Property(i => i.ExternalRef).HasMaxLength(60);
+            modelBuilder.Entity<Invoice>().HasIndex(i => new { i.CompanyId, i.ExternalRef });
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.ExternalRef).HasMaxLength(60);
+            modelBuilder.Entity<PurchaseBill>().HasIndex(pb => new { pb.CompanyId, pb.ExternalRef });
 
             // ── Unified attachments + document folders ──────────────────────
             // A Folder is a per-company named container. An Attachment is one
