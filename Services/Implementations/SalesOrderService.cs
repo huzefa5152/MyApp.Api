@@ -129,6 +129,8 @@ namespace MyApp.Api.Services.Implementations
                 Id = o.Id,
                 SalesOrderNumber = o.SalesOrderNumber,
                 CompanyId = o.CompanyId,
+                DivisionId = o.DivisionId,
+                DivisionName = o.Division?.Name,
                 ClientId = o.ClientId,
                 ClientName = o.Client?.Name ?? "",
                 OrderDate = o.OrderDate,
@@ -237,15 +239,24 @@ namespace MyApp.Api.Services.Implementations
 
             await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.Unit));
 
+            // Per-division numbering: a division-tagged order draws from the
+            // division's own sequence; otherwise the company's.
+            var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, companyId, dto.DivisionId);
+
             var createdId = await NumberAllocationRetry.ExecuteAsync(async _ =>
             {
-                var max = await _repository.GetMaxNumberAsync(companyId);
-                var next = max > 0 ? max + 1
-                         : (company.StartingSalesOrderNumber > 0 ? company.StartingSalesOrderNumber : 1);
+                var maxQuery = _context.SalesOrders.Where(o => o.CompanyId == companyId);
+                maxQuery = dto.DivisionId.HasValue
+                    ? maxQuery.Where(o => o.DivisionId == dto.DivisionId.Value)
+                    : maxQuery.Where(o => o.DivisionId == null);
+                var max = await maxQuery.Select(o => (int?)o.SalesOrderNumber).MaxAsync() ?? 0;
+                var seed = division != null ? division.StartingSalesOrderNumber : company.StartingSalesOrderNumber;
+                var next = MyApp.Api.Helpers.DivisionNumbering.Next(max, seed);
 
                 var order = new SalesOrder
                 {
                     CompanyId = companyId,
+                    DivisionId = dto.DivisionId,
                     SalesOrderNumber = next,
                     ClientId = dto.ClientId,
                     OrderDate = dto.OrderDate == default ? DateTime.UtcNow.Date : dto.OrderDate,
@@ -265,7 +276,8 @@ namespace MyApp.Api.Services.Implementations
                         Unit = i.Unit
                     }).ToList()
                 };
-                company.CurrentSalesOrderNumber = next;
+                if (division != null) division.CurrentSalesOrderNumber = next;
+                else company.CurrentSalesOrderNumber = next;
                 _context.SalesOrders.Add(order);
                 try
                 {

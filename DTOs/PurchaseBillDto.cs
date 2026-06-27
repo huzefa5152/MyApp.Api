@@ -7,6 +7,8 @@ namespace MyApp.Api.DTOs
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public string CompanyName { get; set; } = "";
+        public int? DivisionId { get; set; }
+        public string? DivisionName { get; set; }
         public int SupplierId { get; set; }
         public string SupplierName { get; set; } = "";
         public string? SupplierBillNumber { get; set; }
@@ -74,6 +76,7 @@ namespace MyApp.Api.DTOs
     {
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
+        public int? DivisionId { get; set; }
         public int SupplierId { get; set; }
         public string? SupplierBillNumber { get; set; }
         public string? SupplierIRN { get; set; }

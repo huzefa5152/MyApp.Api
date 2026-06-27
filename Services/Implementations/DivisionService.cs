@@ -106,15 +106,27 @@ namespace MyApp.Api.Services.Implementations
             // deleted.
             //   • Sales quotes auto-unlink via the SalesQuote->Division SetNull
             //     FK when the division row is removed (DB-level ON DELETE SET NULL).
-            //   • Print templates use a NoAction FK (to avoid multiple cascade
-            //     paths from Company), so they're unlinked here in app code:
-            //     DivisionId -> null + IsDefault -> false. Demoting IsDefault is
-            //     required so the now company-level template can't collide with
-            //     the existing company default (unique index
-            //     UX_PrintTemplates_DefaultPerScope).
+            //   • Sales orders / challans / invoices / purchase bills / goods
+            //     receipts use NoAction FKs (their SetNull would create multiple
+            //     cascade paths — SQL Server error 1785), so they're unlinked here
+            //     in app code: DivisionId -> null. The documents keep their numbers.
+            //   • Print templates: NoAction; unlinked here, IsDefault -> false so
+            //     the now company-level template can't collide with the existing
+            //     company default (unique index UX_PrintTemplates_DefaultPerScope).
             await using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
+                await _db.SalesOrders.Where(o => o.DivisionId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(o => o.DivisionId, (int?)null));
+                await _db.DeliveryChallans.Where(dc => dc.DivisionId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(dc => dc.DivisionId, (int?)null));
+                await _db.Invoices.Where(i => i.DivisionId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(i => i.DivisionId, (int?)null));
+                await _db.PurchaseBills.Where(pb => pb.DivisionId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(pb => pb.DivisionId, (int?)null));
+                await _db.GoodsReceipts.Where(gr => gr.DivisionId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(gr => gr.DivisionId, (int?)null));
+
                 var templates = await _db.PrintTemplates.Where(pt => pt.DivisionId == id).ToListAsync();
                 foreach (var t in templates)
                 {

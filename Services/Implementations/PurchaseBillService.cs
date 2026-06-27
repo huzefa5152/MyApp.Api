@@ -34,6 +34,8 @@ namespace MyApp.Api.Services.Implementations
             Date = pb.Date,
             CompanyId = pb.CompanyId,
             CompanyName = pb.Company?.Name ?? "",
+            DivisionId = pb.DivisionId,
+            DivisionName = pb.Division?.Name,
             SupplierId = pb.SupplierId,
             SupplierName = pb.Supplier?.Name ?? "",
             SupplierBillNumber = pb.SupplierBillNumber,
@@ -188,14 +190,18 @@ namespace MyApp.Api.Services.Implementations
             if (dto.Items.Any(i => i.UnitPrice < 0))
                 throw new InvalidOperationException("Unit price cannot be negative.");
 
-            // Allocate next purchase-bill number — independent of the
-            // sales-side InvoiceNumber sequence.
-            var maxNumber = await _context.PurchaseBills
-                .Where(p => p.CompanyId == dto.CompanyId)
-                .Select(p => (int?)p.PurchaseBillNumber)
-                .MaxAsync() ?? 0;
-            var nextNumber = Math.Max(maxNumber + 1, company.StartingPurchaseBillNumber);
-            company.CurrentPurchaseBillNumber = nextNumber;
+            // Allocate next purchase-bill number — independent of the sales-side
+            // sequence, and scoped per division when the bill is tagged with one.
+            var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, dto.CompanyId, dto.DivisionId);
+            var maxQuery = _context.PurchaseBills.Where(p => p.CompanyId == dto.CompanyId);
+            maxQuery = dto.DivisionId.HasValue
+                ? maxQuery.Where(p => p.DivisionId == dto.DivisionId.Value)
+                : maxQuery.Where(p => p.DivisionId == null);
+            var maxNumber = await maxQuery.Select(p => (int?)p.PurchaseBillNumber).MaxAsync() ?? 0;
+            var seed = division != null ? division.StartingPurchaseBillNumber : company.StartingPurchaseBillNumber;
+            var nextNumber = MyApp.Api.Helpers.DivisionNumbering.Next(maxNumber, seed);
+            if (division != null) division.CurrentPurchaseBillNumber = nextNumber;
+            else company.CurrentPurchaseBillNumber = nextNumber;
 
             // Validate "Purchase Against Sale Bill" lines BEFORE we touch
             // anything. Any line with SourceInvoiceItemIds:
@@ -287,6 +293,7 @@ namespace MyApp.Api.Services.Implementations
                 PurchaseBillNumber = nextNumber,
                 Date = dto.Date.Date,
                 CompanyId = dto.CompanyId,
+                DivisionId = dto.DivisionId,
                 SupplierId = dto.SupplierId,
                 SupplierBillNumber = dto.SupplierBillNumber?.Trim(),
                 SupplierIRN = dto.SupplierIRN?.Trim(),

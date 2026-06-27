@@ -12,7 +12,7 @@ using MyApp.Api.Data;
 namespace MyApp.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260627160828_AddDivisionToDocuments")]
+    [Migration("20260627164651_AddDivisionToDocuments")]
     partial class AddDivisionToDocuments
     {
         /// <inheritdoc />
@@ -3984,7 +3984,7 @@ namespace MyApp.Api.Migrations
                     b.HasOne("MyApp.Api.Models.Division", "Division")
                         .WithMany()
                         .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("MyApp.Api.Models.DeliveryChallan", "DuplicatedFrom")
                         .WithMany()
@@ -4079,7 +4079,7 @@ namespace MyApp.Api.Migrations
                     b.HasOne("MyApp.Api.Models.Division", "Division")
                         .WithMany()
                         .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("MyApp.Api.Models.PurchaseBill", "PurchaseBill")
                         .WithMany("GoodsReceipts")
@@ -4136,7 +4136,7 @@ namespace MyApp.Api.Migrations
                     b.HasOne("MyApp.Api.Models.Division", "Division")
                         .WithMany()
                         .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("Client");
 
@@ -4274,7 +4274,7 @@ namespace MyApp.Api.Migrations
                     b.HasOne("MyApp.Api.Models.Division", "Division")
                         .WithMany()
                         .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("MyApp.Api.Models.Supplier", "Supplier")
                         .WithMany("PurchaseBills")
@@ -4369,7 +4369,7 @@ namespace MyApp.Api.Migrations
                     b.HasOne("MyApp.Api.Models.Division", "Division")
                         .WithMany()
                         .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("MyApp.Api.Models.SalesQuote", "SalesQuote")
                         .WithMany()

@@ -189,40 +189,35 @@ namespace MyApp.Api.Migrations
                 table: "DeliveryChallans",
                 column: "DivisionId",
                 principalTable: "Divisions",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
+                principalColumn: "Id");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_GoodsReceipts_Divisions_DivisionId",
                 table: "GoodsReceipts",
                 column: "DivisionId",
                 principalTable: "Divisions",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
+                principalColumn: "Id");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Invoices_Divisions_DivisionId",
                 table: "Invoices",
                 column: "DivisionId",
                 principalTable: "Divisions",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
+                principalColumn: "Id");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_PurchaseBills_Divisions_DivisionId",
                 table: "PurchaseBills",
                 column: "DivisionId",
                 principalTable: "Divisions",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
+                principalColumn: "Id");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_SalesOrders_Divisions_DivisionId",
                 table: "SalesOrders",
                 column: "DivisionId",
                 principalTable: "Divisions",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
+                principalColumn: "Id");
         }
 
         /// <inheritdoc />

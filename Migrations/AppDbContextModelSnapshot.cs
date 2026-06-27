@@ -3981,7 +3981,7 @@ namespace MyApp.Api.Migrations
                     b.HasOne("MyApp.Api.Models.Division", "Division")
                         .WithMany()
                         .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("MyApp.Api.Models.DeliveryChallan", "DuplicatedFrom")
                         .WithMany()
@@ -4076,7 +4076,7 @@ namespace MyApp.Api.Migrations
                     b.HasOne("MyApp.Api.Models.Division", "Division")
                         .WithMany()
                         .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("MyApp.Api.Models.PurchaseBill", "PurchaseBill")
                         .WithMany("GoodsReceipts")
@@ -4133,7 +4133,7 @@ namespace MyApp.Api.Migrations
                     b.HasOne("MyApp.Api.Models.Division", "Division")
                         .WithMany()
                         .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("Client");
 
@@ -4271,7 +4271,7 @@ namespace MyApp.Api.Migrations
                     b.HasOne("MyApp.Api.Models.Division", "Division")
                         .WithMany()
                         .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("MyApp.Api.Models.Supplier", "Supplier")
                         .WithMany("PurchaseBills")
@@ -4366,7 +4366,7 @@ namespace MyApp.Api.Migrations
                     b.HasOne("MyApp.Api.Models.Division", "Division")
                         .WithMany()
                         .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("MyApp.Api.Models.SalesQuote", "SalesQuote")
                         .WithMany()

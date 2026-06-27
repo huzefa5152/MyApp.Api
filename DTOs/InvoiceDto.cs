@@ -7,6 +7,8 @@ namespace MyApp.Api.DTOs
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public string CompanyName { get; set; } = "";
+        public int? DivisionId { get; set; }
+        public string? DivisionName { get; set; }
         public int ClientId { get; set; }
         public string ClientName { get; set; } = "";
         public decimal Subtotal { get; set; }
@@ -142,6 +144,7 @@ namespace MyApp.Api.DTOs
     {
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
+        public int? DivisionId { get; set; }
         public int ClientId { get; set; }
         public decimal GSTRate { get; set; }
         public string? PaymentTerms { get; set; }
@@ -184,6 +187,7 @@ namespace MyApp.Api.DTOs
     {
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
+        public int? DivisionId { get; set; }
         public int ClientId { get; set; }
         public decimal GSTRate { get; set; }
         public string? PaymentTerms { get; set; }

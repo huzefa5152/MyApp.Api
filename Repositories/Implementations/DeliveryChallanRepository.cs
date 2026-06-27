@@ -114,21 +114,29 @@ namespace MyApp.Api.Repositories.Implementations
                 // the next REAL challan number into the demo range and pollute the
                 // operator's actual numbering sequence.
                 bool isDemo = deliveryChallan.IsDemo;
-                var maxExisting = await _context.DeliveryChallans
-                                                .Where(c => c.CompanyId == deliveryChallan.CompanyId
-                                                         && c.IsDemo == isDemo)
-                                                .MaxAsync(c => (int?)c.ChallanNumber) ?? 0;
+                // Per-division numbering: a division-tagged challan draws from the
+                // division's own sequence; otherwise the company's. Scoped MAX so
+                // each (company, division) scope keeps its own running number.
+                var divisionId = deliveryChallan.DivisionId;
+                var division = divisionId.HasValue
+                    ? await _context.Divisions.FirstOrDefaultAsync(d => d.Id == divisionId.Value && d.CompanyId == deliveryChallan.CompanyId)
+                    : null;
+                var maxQuery = _context.DeliveryChallans
+                    .Where(c => c.CompanyId == deliveryChallan.CompanyId && c.IsDemo == isDemo);
+                maxQuery = divisionId.HasValue
+                    ? maxQuery.Where(c => c.DivisionId == divisionId.Value)
+                    : maxQuery.Where(c => c.DivisionId == null);
+                var maxExisting = await maxQuery.MaxAsync(c => (int?)c.ChallanNumber) ?? 0;
 
-                int nextNumber = maxExisting > 0
-                                 ? maxExisting + 1
-                                 : company.StartingChallanNumber;
+                var seedStarting = division != null ? division.StartingChallanNumber : company.StartingChallanNumber;
+                int nextNumber = maxExisting > 0 ? maxExisting + 1 : (seedStarting > 0 ? seedStarting : 1);
 
                 deliveryChallan.ChallanNumber = nextNumber;
-                // Don't touch the company's CurrentChallanNumber when seeding
-                // demo data — that field reflects the LIVE business sequence.
+                // Don't touch the live CurrentChallanNumber when seeding demo data.
                 if (!isDemo)
                 {
-                    company.CurrentChallanNumber = nextNumber;
+                    if (division != null) division.CurrentChallanNumber = nextNumber;
+                    else company.CurrentChallanNumber = nextNumber;
                 }
 
                 _context.DeliveryChallans.Add(deliveryChallan);

@@ -10,6 +10,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import LookupAutocomplete from "./LookupAutocomplete";
 import ClientForm from "./ClientForm";
+import DivisionSelect from "./DivisionSelect";
 import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 
@@ -124,6 +125,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
   const [selectedClientId, setSelectedClientId] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(todayYmd());
+  const canViewDivisions = has("divisions.manage.view");
+  const [divisionId, setDivisionId] = useState("");
   const [gstRate, setGstRate] = useState(18);
   const [paymentTerms, setPaymentTerms] = useState("");
   // Document Type is locked to Sale Invoice (4) on the no-challan flow.
@@ -406,6 +409,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       await createStandaloneInvoice({
         date: new Date(invoiceDate).toISOString(),
         companyId,
+        divisionId: divisionId ? parseInt(divisionId) : null,
         clientId: parseInt(selectedClientId),
         gstRate: parseFloat(gstRate),
         paymentTerms: paymentTerms || null,
@@ -716,6 +720,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               <label style={styles.label}>Bill Date</label>
                               <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
                             </div>
+                            {canViewDivisions && (
+                              <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 140 }} />
+                            )}
                             <div style={{ flex: 1, minWidth: 100 }}>
                               <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
                                 GST Rate (%) {chosenScenario && <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}><MdLock size={10} /> locked</span>}

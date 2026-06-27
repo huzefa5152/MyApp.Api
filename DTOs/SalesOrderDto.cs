@@ -11,6 +11,9 @@ namespace MyApp.Api.DTOs
         public int Id { get; set; }
         public int SalesOrderNumber { get; set; }
         public int CompanyId { get; set; }
+        /// <summary>Optional division ("sub-company"); drives per-division numbering.</summary>
+        public int? DivisionId { get; set; }
+        public string? DivisionName { get; set; }
         public int ClientId { get; set; }
         public string ClientName { get; set; } = "";
         public DateTime OrderDate { get; set; }

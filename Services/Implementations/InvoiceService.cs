@@ -192,6 +192,8 @@ namespace MyApp.Api.Services.Implementations
             Date = inv.Date,
             CompanyId = inv.CompanyId,
             CompanyName = inv.Company?.Name ?? "",
+            DivisionId = inv.DivisionId,
+            DivisionName = inv.Division?.Name,
             ClientId = inv.ClientId,
             ClientName = inv.Client?.Name ?? "",
             Subtotal = inv.Subtotal,
@@ -544,28 +546,33 @@ namespace MyApp.Api.Services.Implementations
             // new UNIQUE (CompanyId, InvoiceNumber) index now blocks the
             // second writer with a SQL 2601/2627; the retry recomputes
             // MAX(InvoiceNumber)+1 from a fresh read and tries again.
+            // Per-division numbering: a division-tagged bill draws from the
+            // division's own sequence; otherwise the company's.
+            var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, dto.CompanyId, dto.DivisionId);
             const int maxAttempts = NumberAllocationRetry.DefaultMaxAttempts;
             DbUpdateException? lastConflict = null;
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
                 // Use MAX(InvoiceNumber) so a deleted trailing number is reused on the next
-                // create (no gaps after deleting the last bill). Falls back to StartingInvoiceNumber
-                // when the company has no invoices yet. IsDemo bills live in their
-                // own 900000+ range and must not influence the regular sequence.
-                int maxExistingInvoice = await _context.Invoices
-                    .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo)
-                    .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+                // create (no gaps after deleting the last bill), scoped per division.
+                // IsDemo bills live in their own 900000+ range — excluded.
+                var maxQuery = _context.Invoices.Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo);
+                maxQuery = dto.DivisionId.HasValue
+                    ? maxQuery.Where(i => i.DivisionId == dto.DivisionId.Value)
+                    : maxQuery.Where(i => i.DivisionId == null);
+                int maxExistingInvoice = await maxQuery.MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
 
-                int nextInvoiceNumber = maxExistingInvoice > 0
-                    ? maxExistingInvoice + 1
-                    : company.StartingInvoiceNumber;
-                company.CurrentInvoiceNumber = nextInvoiceNumber;
+                var seedStarting = division != null ? division.StartingInvoiceNumber : company.StartingInvoiceNumber;
+                int nextInvoiceNumber = maxExistingInvoice > 0 ? maxExistingInvoice + 1 : (seedStarting > 0 ? seedStarting : 1);
+                if (division != null) division.CurrentInvoiceNumber = nextInvoiceNumber;
+                else company.CurrentInvoiceNumber = nextInvoiceNumber;
 
                 var invoice = new Invoice
                 {
                     InvoiceNumber = nextInvoiceNumber,
                     Date = dto.Date,
                     CompanyId = dto.CompanyId,
+                    DivisionId = dto.DivisionId,
                     ClientId = dto.ClientId,
                     Subtotal = subtotal,
                     GSTRate = dto.GSTRate,
@@ -865,27 +872,31 @@ namespace MyApp.Api.Services.Implementations
             // regular CreateAsync above. The UNIQUE (CompanyId,
             // InvoiceNumber) index now catches concurrent collisions; we
             // recompute MAX(InvoiceNumber)+1 and retry up to 3 times.
+            // Per-division numbering (mirrors CreateAsync).
+            var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, dto.CompanyId, dto.DivisionId);
             const int maxAttempts = NumberAllocationRetry.DefaultMaxAttempts;
             DbUpdateException? lastConflict = null;
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
                 // Share the regular numbering sequence — standalone bills are
-                // real bills, not demos. MAX(InvoiceNumber) excluding IsDemo
-                // matches CreateAsync.
-                int maxExistingInvoice = await _context.Invoices
-                    .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo)
-                    .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+                // real bills, not demos — scoped per division.
+                var maxQuery = _context.Invoices.Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo);
+                maxQuery = dto.DivisionId.HasValue
+                    ? maxQuery.Where(i => i.DivisionId == dto.DivisionId.Value)
+                    : maxQuery.Where(i => i.DivisionId == null);
+                int maxExistingInvoice = await maxQuery.MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
 
-                int nextInvoiceNumber = maxExistingInvoice > 0
-                    ? maxExistingInvoice + 1
-                    : company.StartingInvoiceNumber;
-                company.CurrentInvoiceNumber = nextInvoiceNumber;
+                var seedStarting = division != null ? division.StartingInvoiceNumber : company.StartingInvoiceNumber;
+                int nextInvoiceNumber = maxExistingInvoice > 0 ? maxExistingInvoice + 1 : (seedStarting > 0 ? seedStarting : 1);
+                if (division != null) division.CurrentInvoiceNumber = nextInvoiceNumber;
+                else company.CurrentInvoiceNumber = nextInvoiceNumber;
 
                 var invoice = new Invoice
                 {
                     InvoiceNumber = nextInvoiceNumber,
                     Date = dto.Date,
                     CompanyId = dto.CompanyId,
+                    DivisionId = dto.DivisionId,
                     ClientId = dto.ClientId,
                     Subtotal = subtotal,
                     GSTRate = dto.GSTRate,

@@ -8,9 +8,14 @@ import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import DivisionSelect from "./DivisionSelect";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSaved }) {
   const isEdit = !!receiptId;
+  const { has } = usePermissions();
+  const canViewDivisions = has("divisions.manage.view");
+  const [divisionId, setDivisionId] = useState("");
   const [suppliers, setSuppliers] = useState([]);
   const [bills, setBills] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -46,6 +51,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
       try {
         const { data } = await getGoodsReceiptById(receiptId);
         setSupplierId(String(data.supplierId));
+        setDivisionId(data.divisionId ? String(data.divisionId) : "");
         setPurchaseBillId(data.purchaseBillId ? String(data.purchaseBillId) : "");
         setReceiptDate(data.receiptDate.slice(0, 10));
         setSupplierChallanNumber(data.supplierChallanNumber || "");
@@ -75,6 +81,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
       const payload = {
         receiptDate,
         companyId,
+        divisionId: divisionId ? parseInt(divisionId) : null,
         supplierId: parseInt(supplierId),
         purchaseBillId: purchaseBillId ? parseInt(purchaseBillId) : null,
         supplierChallanNumber: supplierChallanNumber || null,
@@ -122,6 +129,11 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                 <label style={formStyles.label}>Receipt Date *</label>
                 <input type="date" style={formStyles.input} value={receiptDate} onChange={e => setReceiptDate(e.target.value)} />
               </div>
+              {canViewDivisions && (
+                <div style={formStyles.formGroup}>
+                  <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={formStyles.label} style={formStyles.input} />
+                </div>
+              )}
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Linked Purchase Bill</label>
                 <select style={formStyles.input} value={purchaseBillId} onChange={e => setPurchaseBillId(e.target.value)}>

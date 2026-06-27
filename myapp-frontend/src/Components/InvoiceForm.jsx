@@ -12,6 +12,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import ClientForm from "./ClientForm";
+import DivisionSelect from "./DivisionSelect";
 import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 // 2026-05-08: Same UOM autocomplete the ChallanForm uses, hooked up
@@ -106,6 +107,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // slice rolled the calendar day back by one for PKT operators billing
   // before 5am.
   const [invoiceDate, setInvoiceDate] = useState(todayYmd());
+  const canViewDivisions = has("divisions.manage.view");
+  const [divisionId, setDivisionId] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -515,6 +518,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       await createInvoice({
         date: new Date(invoiceDate).toISOString(),
         companyId,
+        divisionId: divisionId ? parseInt(divisionId) : null,
         clientId: parseInt(selectedClientId),
         gstRate: parseFloat(gstRate),
         paymentTerms: paymentTermsToSave,
@@ -863,6 +867,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                       {billHeaderOpen && (
                         <div style={{ ...styles.scenarioCollapseBody, marginBottom: 0 }}>
                           <div style={styles.row}>
+                            {canViewDivisions && (
+                              <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 140 }} />
+                            )}
                             <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Bill Date</label>
                               <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />

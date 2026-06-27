@@ -102,6 +102,8 @@ namespace MyApp.Api.Services.Implementations
                 Id = dc.Id,
                 ChallanNumber = dc.ChallanNumber,
                 CompanyId = dc.CompanyId,
+                DivisionId = dc.DivisionId,
+                DivisionName = dc.Division?.Name,
                 ClientId = dc.ClientId,
                 ClientName = dc.Client?.Name ?? "",
                 PoNumber = dc.PoNumber,
@@ -286,6 +288,7 @@ namespace MyApp.Api.Services.Implementations
             var deliveryChallan = new DeliveryChallan
             {
                 CompanyId = companyId,
+                DivisionId = dto.DivisionId,
                 ClientId = dto.ClientId,
                 Site = dto.Site,
                 PoNumber = dto.PoNumber?.Trim() ?? "",

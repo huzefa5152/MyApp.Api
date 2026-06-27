@@ -138,19 +138,25 @@ namespace MyApp.Api.Services.Implementations
                 if (dto.Items == null || dto.Items.Count == 0)
                     throw new InvalidOperationException("At least one item is required.");
 
-                // Number allocation, mirror PurchaseBill numbering.
-                var maxNumber = await _context.GoodsReceipts
-                    .Where(g => g.CompanyId == dto.CompanyId)
-                    .Select(g => (int?)g.GoodsReceiptNumber)
-                    .MaxAsync() ?? 0;
-                var nextNumber = Math.Max(maxNumber + 1, company.StartingGoodsReceiptNumber);
-                company.CurrentGoodsReceiptNumber = nextNumber;
+                // Per-division numbering: a division-tagged GRN draws from the
+                // division's own sequence; otherwise the company's (mirror SalesQuote).
+                var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, dto.CompanyId, dto.DivisionId);
+                var maxQuery = _context.GoodsReceipts.Where(g => g.CompanyId == dto.CompanyId);
+                maxQuery = dto.DivisionId.HasValue
+                    ? maxQuery.Where(g => g.DivisionId == dto.DivisionId.Value)
+                    : maxQuery.Where(g => g.DivisionId == null);
+                var maxNumber = await maxQuery.Select(g => (int?)g.GoodsReceiptNumber).MaxAsync() ?? 0;
+                var seed = division != null ? division.StartingGoodsReceiptNumber : company.StartingGoodsReceiptNumber;
+                var nextNumber = MyApp.Api.Helpers.DivisionNumbering.Next(maxNumber, seed);
+                if (division != null) division.CurrentGoodsReceiptNumber = nextNumber;
+                else company.CurrentGoodsReceiptNumber = nextNumber;
 
                 var receipt = new GoodsReceipt
                 {
                     GoodsReceiptNumber = nextNumber,
                     ReceiptDate = dto.ReceiptDate.Date,
                     CompanyId = dto.CompanyId,
+                    DivisionId = dto.DivisionId,
                     SupplierId = dto.SupplierId,
                     PurchaseBillId = dto.PurchaseBillId,
                     SupplierChallanNumber = dto.SupplierChallanNumber?.Trim(),

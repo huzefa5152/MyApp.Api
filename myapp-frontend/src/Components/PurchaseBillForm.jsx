@@ -8,6 +8,8 @@ import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import DivisionSelect from "./DivisionSelect";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 const colors = {
   blue: "#0d47a1",
@@ -25,6 +27,9 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [suppliers, setSuppliers] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
   const [supplierId, setSupplierId] = useState("");
+  const { has } = usePermissions();
+  const canViewDivisions = has("divisions.manage.view");
+  const [divisionId, setDivisionId] = useState("");
   const [date, setDate] = useState(todayYmd());
   const [supplierBillNumber, setSupplierBillNumber] = useState("");
   const [supplierIRN, setSupplierIRN] = useState("");
@@ -77,6 +82,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       try {
         const { data } = await getPurchaseBillById(billId);
         setSupplierId(String(data.supplierId));
+        setDivisionId(data.divisionId ? String(data.divisionId) : "");
         setDate(data.date.slice(0, 10));
         setSupplierBillNumber(data.supplierBillNumber || "");
         setSupplierIRN(data.supplierIRN || "");
@@ -196,6 +202,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       const payload = {
         date,
         companyId,
+        divisionId: divisionId ? parseInt(divisionId) : null,
         supplierId: parseInt(supplierId),
         supplierBillNumber: supplierBillNumber || null,
         supplierIRN: supplierIRN || null,
@@ -272,6 +279,11 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                 <label style={formStyles.label}>Bill Date *</label>
                 <input type="date" style={formStyles.input} value={date} onChange={e => setDate(e.target.value)} />
               </div>
+              {canViewDivisions && (
+                <div style={formStyles.formGroup}>
+                  <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={formStyles.label} style={formStyles.input} />
+                </div>
+              )}
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>GST Rate (%)</label>
                 <input type="number" min={0} step={0.01} style={formStyles.input} value={gstRate} onChange={e => setGstRate(e.target.value)} />

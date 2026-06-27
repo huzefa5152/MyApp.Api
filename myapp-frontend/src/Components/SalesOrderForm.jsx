@@ -3,7 +3,9 @@ import { MdAdd, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SelectDropdown from "./SelectDropdown";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import DivisionSelect from "./DivisionSelect";
 import QuantityInput from "./QuantityInput";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getPagedSalesQuotesByCompany } from "../api/salesQuoteApi";
@@ -33,6 +35,8 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   );
   const [units, setUnits] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
+  const { has } = usePermissions();
+  const [divisionId, setDivisionId] = useState(order?.divisionId ? String(order.divisionId) : "");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [salesQuoteId, setSalesQuoteId] = useState(order?.salesQuoteId ? String(order.salesQuoteId) : "");
@@ -102,6 +106,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
     try {
       await onSaved({
         clientId: client.id,
+        divisionId: divisionId ? parseInt(divisionId) : null,
         salesQuoteId: salesQuoteId ? parseInt(salesQuoteId) : null,
         orderDate: orderDate ? new Date(orderDate).toISOString() : null,
         requiredDate: requiredDate ? new Date(requiredDate).toISOString() : null,
@@ -163,6 +168,9 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
                 </select>
                 {quoteLoadedMsg && <div style={{ fontSize: "0.72rem", color: colors.teal, marginTop: 4, fontWeight: 600 }}>{quoteLoadedMsg}</div>}
               </div>
+              {has("divisions.manage.view") && (
+                <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={s.opt}>(optional)</span></>} labelStyle={s.label} style={s.input} wrapStyle={{ flex: 1, minWidth: 150 }} />
+              )}
             </div>
             <div style={s.row}>
               <div style={{ flex: 1, minWidth: 140 }}>

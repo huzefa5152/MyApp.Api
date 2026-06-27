@@ -314,11 +314,15 @@ namespace MyApp.Api.Data
                 .HasFilter(null);
             // Invoice -> Division (optional; SetNull so deleting a division leaves
             // its bills company-level rather than cascading).
+            // NoAction (not SetNull): several documents reach a division by more
+            // than one path (e.g. Division→Challan and Division→SalesOrder→Challan),
+            // which SQL Server rejects as multiple cascade paths (error 1785).
+            // DivisionService.DeleteAsync unlinks referencing documents in app code.
             modelBuilder.Entity<Invoice>()
                 .HasOne(i => i.Division).WithMany()
                 .HasForeignKey(i => i.DivisionId)
                 .IsRequired(false)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<DeliveryChallan>()
                 .HasIndex(dc => dc.ClientId);
@@ -326,7 +330,7 @@ namespace MyApp.Api.Data
                 .HasOne(dc => dc.Division).WithMany()
                 .HasForeignKey(dc => dc.DivisionId)
                 .IsRequired(false)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<DeliveryChallan>()
                 .HasIndex(dc => dc.CompanyId);
@@ -512,7 +516,7 @@ namespace MyApp.Api.Data
                 .HasForeignKey(o => o.ClientId).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<SalesOrder>()
                 .HasOne(o => o.Division).WithMany()
-                .HasForeignKey(o => o.DivisionId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+                .HasForeignKey(o => o.DivisionId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<SalesOrderItem>()
                 .HasOne(i => i.SalesOrder).WithMany(o => o.Items)
                 .HasForeignKey(i => i.SalesOrderId).OnDelete(DeleteBehavior.Cascade);
@@ -1174,7 +1178,7 @@ namespace MyApp.Api.Data
                 .OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<PurchaseBill>()
                 .HasOne(pb => pb.Division).WithMany()
-                .HasForeignKey(pb => pb.DivisionId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+                .HasForeignKey(pb => pb.DivisionId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => pb.CompanyId);
             // Audit C-8: unique numbering, now scoped per (company, division) so a
@@ -1269,7 +1273,7 @@ namespace MyApp.Api.Data
                 .OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<GoodsReceipt>()
                 .HasOne(gr => gr.Division).WithMany()
-                .HasForeignKey(gr => gr.DivisionId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+                .HasForeignKey(gr => gr.DivisionId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<GoodsReceipt>()
                 .HasIndex(gr => gr.CompanyId);
             // Audit C-8: unique numbering scoped per (company, division).

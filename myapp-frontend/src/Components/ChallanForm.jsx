@@ -4,7 +4,9 @@ import LookupAutocomplete from "./LookupAutocomplete";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import SelectDropdown from "./SelectDropdown";
+import DivisionSelect from "./DivisionSelect";
 import QuantityInput from "./QuantityInput";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
@@ -31,6 +33,8 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const [poDate, setPoDate] = useState("");
   const [indentNo, setIndentNo] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
+  const { has } = usePermissions();
+  const [divisionId, setDivisionId] = useState("");
   const [items, setItems] = useState([
     { description: "", quantity: 1, unit: "", itemTypeId: null },
   ]);
@@ -127,6 +131,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
     try {
       await onSaved({
         clientId: client.id,
+        divisionId: divisionId ? parseInt(divisionId) : null,
         clientName: client.label,
         site: site || null,
         poNumber: poNumber.trim(),
@@ -224,6 +229,9 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                 <label style={styles.label}>Delivery Date</label>
                 <input type="date" style={styles.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
               </div>
+              {has("divisions.manage.view") && (
+                <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ color: "#5f6d7e", fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 150 }} />
+              )}
             </div>
 
             {/* PO row: Number + Date + Indent No — flex weights match
