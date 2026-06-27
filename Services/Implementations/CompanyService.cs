@@ -290,6 +290,18 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                // 0. Payments/Receipts (AR/AP subledger). Allocation lines
+                //    reference Invoices/PurchaseBills via Restrict FKs, so they
+                //    MUST go before the invoice/bill deletes below. Allocations
+                //    cascade with their Payment, but delete them explicitly first
+                //    so the Restrict FK to invoices/bills is clear.
+                var paymentIds = await _context.Payments.Where(p => p.CompanyId == id).Select(p => p.Id).ToListAsync();
+                if (paymentIds.Count > 0)
+                {
+                    await _context.PaymentAllocations.Where(a => paymentIds.Contains(a.PaymentId)).ExecuteDeleteAsync();
+                    await _context.Payments.Where(p => p.CompanyId == id).ExecuteDeleteAsync();
+                }
+
                 // 1. Unlink challans from invoices
                 await _context.DeliveryChallans
                     .Where(dc => dc.CompanyId == id && dc.InvoiceId != null)
@@ -365,6 +377,12 @@ namespace MyApp.Api.Services.Implementations
                 //    becomes undeleteable.
                 await _context.FbrCommunicationLogs.Where(l => l.CompanyId == id).ExecuteDeleteAsync();
                 await _context.UserCompanies.Where(uc => uc.CompanyId == id).ExecuteDeleteAsync();
+
+                // 7b. Chart of Accounts. Account -> AccountGroup is Restrict, so
+                //     accounts go first; AccountGroup self-FK is satisfied by the
+                //     set-based delete (all the company's groups go at once).
+                await _context.Accounts.Where(a => a.CompanyId == id).ExecuteDeleteAsync();
+                await _context.AccountGroups.Where(g => g.CompanyId == id).ExecuteDeleteAsync();
 
                 // 8. Delete the company
                 await _repository.DeleteAsync(company);
