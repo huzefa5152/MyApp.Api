@@ -40,6 +40,14 @@ namespace MyApp.Api.Models
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }
 
+        // ── Payments / Receipts (AP subledger — design §11.5) ──
+        // Mirror of Invoice: DueDate drives Overdue/Coming-due; AmountPaid is the
+        // Σ of payment allocations to this bill, synced in the allocation
+        // transaction. BalanceDue + status are derived at read time
+        // (PaymentStatusCalculator).
+        public DateTime? DueDate { get; set; }
+        public decimal AmountPaid { get; set; }
+
         // FBR digital-invoicing classification — copied from supplier's
         // invoice for completeness (informational; we don't post this).
         public int? DocumentType { get; set; }

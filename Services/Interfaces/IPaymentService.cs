@@ -1,0 +1,33 @@
+using MyApp.Api.DTOs;
+using MyApp.Api.Models.Accounting;
+
+namespace MyApp.Api.Services.Interfaces
+{
+    /// <summary>Receipts (money in) + Payments (money out) — the AR/AP payment
+    /// subledger that produces invoice/bill balance-due and payment status
+    /// (design §11.5, Phase A: no GL dependency).</summary>
+    public interface IPaymentService
+    {
+        Task<PagedResult<PaymentDto>> GetPagedByCompanyAsync(
+            int companyId, PaymentDirection direction, int page, int pageSize,
+            string? search = null, int? contactId = null,
+            DateTime? dateFrom = null, DateTime? dateTo = null);
+
+        Task<PaymentDto?> GetByIdAsync(int id);
+
+        /// <summary>Payments/receipts that settled a given invoice / bill — for
+        /// the document-detail allocations panel.</summary>
+        Task<List<PaymentDto>> GetByInvoiceAsync(int companyId, int invoiceId);
+        Task<List<PaymentDto>> GetByPurchaseBillAsync(int companyId, int purchaseBillId);
+
+        /// <summary>Create a receipt/payment with its allocation lines, allocate
+        /// its number, and recompute the touched invoices'/bills' AmountPaid —
+        /// all in one transaction. Throws InvalidOperationException on validation
+        /// failures (bad allocation, cross-tenant link, over-allocation).</summary>
+        Task<PaymentDto> CreateAsync(int companyId, CreatePaymentDto dto);
+
+        /// <summary>Delete a payment (its allocations cascade) and recompute the
+        /// previously-settled invoices'/bills' AmountPaid. Returns false if not found.</summary>
+        Task<bool> DeleteAsync(int id);
+    }
+}

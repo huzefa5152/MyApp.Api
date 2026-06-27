@@ -110,6 +110,26 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        /// <summary>Set/clear the bill's payment due date (drives the
+        /// Overdue/Coming-due status). Gated by the payments permission — the
+        /// due date is an AP concern, set by whoever manages disbursements.</summary>
+        [HttpPut("{id}/due-date")]
+        [HasPermission("accounting.payments.create")]
+        public async Task<ActionResult<PurchaseBillDto>> SetDueDate(int id, [FromBody] SetDueDateRequest body)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            var updated = await _service.SetDueDateAsync(id, body.DueDate);
+            if (updated == null) return NotFound();
+            return Ok(updated);
+        }
+
+        public class SetDueDateRequest
+        {
+            public DateTime? DueDate { get; set; }
+        }
+
         [HttpDelete("{id}")]
         [HasPermission("purchasebills.manage.delete")]
         public async Task<IActionResult> Delete(int id)

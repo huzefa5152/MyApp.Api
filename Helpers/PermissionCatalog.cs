@@ -106,6 +106,18 @@ namespace MyApp.Api.Helpers
             new("salesorders.manage.delete", "SalesOrders", "Manage", "Delete", "Delete a sales order"),
             new("salesorders.print.view",    "SalesOrders", "Print",  "View",   "Print or download a sales order"),
 
+            // ── Accounting: Receipts & Payments (AR/AP subledger) ───────────
+            // Money in (receipts → settle sales invoices) and money out
+            // (payments → settle purchase bills). Split namespaces so a role can
+            // record receipts WITHOUT being able to pay money out (separation of
+            // duties). These produce invoice/bill balance-due + payment status.
+            new("accounting.receipts.view",   "Accounting", "Receipts", "View",   "View receipts (money in) and an invoice's settled payments"),
+            new("accounting.receipts.create", "Accounting", "Receipts", "Create", "Record a receipt against one or more sales invoices"),
+            new("accounting.receipts.delete", "Accounting", "Receipts", "Delete", "Delete a receipt"),
+            new("accounting.payments.view",   "Accounting", "Payments", "View",   "View payments (money out) and a bill's settled payments"),
+            new("accounting.payments.create", "Accounting", "Payments", "Create", "Record a payment against one or more purchase bills"),
+            new("accounting.payments.delete", "Accounting", "Payments", "Delete", "Delete a payment"),
+
             // ── Folders + Attachments (unified document management) ─────────
             // One shared system powers the Configuration → Folders library AND
             // the reusable attachment component on transaction modules. Folders

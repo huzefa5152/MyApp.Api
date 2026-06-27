@@ -44,6 +44,11 @@ namespace MyApp.Api.Services.Implementations
             GrandTotal = pb.GrandTotal,
             AmountInWords = pb.AmountInWords,
             PaymentTerms = pb.PaymentTerms,
+            DueDate = pb.DueDate,
+            AmountPaid = pb.AmountPaid,
+            BalanceDue = PaymentStatusCalculator.BalanceDue(pb.GrandTotal, pb.AmountPaid),
+            PaymentStatus = PaymentStatusCalculator.Status(pb.GrandTotal, pb.AmountPaid, pb.DueDate).ToString(),
+            DaysOverdue = PaymentStatusCalculator.DaysOverdue(pb.GrandTotal, pb.AmountPaid, pb.DueDate),
             DocumentType = pb.DocumentType,
             PaymentMode = pb.PaymentMode,
             ReconciliationStatus = pb.ReconciliationStatus,
@@ -135,6 +140,21 @@ namespace MyApp.Api.Services.Implementations
                             .ThenInclude(ii => ii.Invoice)
                 .FirstOrDefaultAsync(p => p.Id == id);
             return pb == null ? null : ToDto(pb);
+        }
+
+        public async Task<PurchaseBillDto?> SetDueDateAsync(int id, DateTime? dueDate)
+        {
+            var pb = await _context.PurchaseBills
+                .Include(p => p.Company)
+                .Include(p => p.Supplier)
+                .Include(p => p.Items).ThenInclude(pi => pi.ItemType)
+                .Include(p => p.Items).ThenInclude(pi => pi.SourceLines)
+                    .ThenInclude(sl => sl.InvoiceItem!).ThenInclude(ii => ii.Invoice)
+                .FirstOrDefaultAsync(p => p.Id == id);
+            if (pb == null) return null;
+            pb.DueDate = dueDate?.Date;
+            await _context.SaveChangesAsync();
+            return ToDto(pb);
         }
 
         public async Task<PurchaseBillDto> CreateAsync(CreatePurchaseBillDto dto)

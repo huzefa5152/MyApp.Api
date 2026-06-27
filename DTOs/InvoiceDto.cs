@@ -15,6 +15,18 @@ namespace MyApp.Api.DTOs
         public decimal GrandTotal { get; set; }
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }
+
+        // ── Payments / Receipts (design §11.5) ──
+        // DueDate is operator-set; AmountPaid is synced by the receipt flow;
+        // BalanceDue/PaymentStatus/DaysOverdue are derived at read time so
+        // "Overdue" stays correct without a write. PaymentStatus is one of
+        // "Unpaid" | "PartiallyPaid" | "Paid" | "Overdue".
+        public DateTime? DueDate { get; set; }
+        public decimal AmountPaid { get; set; }
+        public decimal BalanceDue { get; set; }
+        public string PaymentStatus { get; set; } = "Unpaid";
+        public int DaysOverdue { get; set; }
+
         public int? DocumentType { get; set; }
         public string? PaymentMode { get; set; }
         public string? FbrInvoiceNumber { get; set; }

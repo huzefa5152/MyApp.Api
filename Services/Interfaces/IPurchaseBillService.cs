@@ -11,6 +11,9 @@ namespace MyApp.Api.Services.Interfaces
         Task<PurchaseBillDto?> GetByIdAsync(int id);
         Task<PurchaseBillDto> CreateAsync(CreatePurchaseBillDto dto);
         Task<PurchaseBillDto?> UpdateAsync(int id, UpdatePurchaseBillDto dto);
+        /// <summary>Set (or clear, when null) the bill's payment due date —
+        /// drives the Overdue/Coming-due status (design §11.5).</summary>
+        Task<PurchaseBillDto?> SetDueDateAsync(int id, DateTime? dueDate);
         Task<bool> DeleteAsync(int id);
         Task<int> GetCountByCompanyAsync(int companyId);
     }

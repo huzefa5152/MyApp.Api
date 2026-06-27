@@ -200,6 +200,11 @@ namespace MyApp.Api.Services.Implementations
             GrandTotal = inv.GrandTotal,
             AmountInWords = inv.AmountInWords,
             PaymentTerms = inv.PaymentTerms,
+            DueDate = inv.DueDate,
+            AmountPaid = inv.AmountPaid,
+            BalanceDue = PaymentStatusCalculator.BalanceDue(inv.GrandTotal, inv.AmountPaid),
+            PaymentStatus = PaymentStatusCalculator.Status(inv.GrandTotal, inv.AmountPaid, inv.DueDate).ToString(),
+            DaysOverdue = PaymentStatusCalculator.DaysOverdue(inv.GrandTotal, inv.AmountPaid, inv.DueDate),
             DocumentType = inv.DocumentType,
             PaymentMode = inv.PaymentMode,
             FbrInvoiceNumber = inv.FbrInvoiceNumber,
@@ -1663,6 +1668,23 @@ namespace MyApp.Api.Services.Implementations
             if (invoice == null) return null;
 
             invoice.IsFbrExcluded = excluded;
+            await _context.SaveChangesAsync();
+            return ToDto(invoice);
+        }
+
+        public async Task<InvoiceDto?> SetDueDateAsync(int id, DateTime? dueDate)
+        {
+            // Tracked fetch (see SetFbrExcludedAsync) so the change persists.
+            var invoice = await _context.Invoices
+                .Include(i => i.Items)
+                .Include(i => i.Company)
+                .Include(i => i.Client)
+                .Include(i => i.DeliveryChallans)
+                .FirstOrDefaultAsync(i => i.Id == id);
+            if (invoice == null) return null;
+
+            // Store date-only (the picker sends midnight); status is derived.
+            invoice.DueDate = dueDate?.Date;
             await _context.SaveChangesAsync();
             return ToDto(invoice);
         }

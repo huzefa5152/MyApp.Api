@@ -14,6 +14,16 @@ namespace MyApp.Api.Models
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }
 
+        // ── Payments / Receipts (AR subledger — design §11.5) ──
+        // DueDate drives the Overdue/Coming-due status; null = no terms set.
+        // AmountPaid is the Σ of receipt allocations to this invoice, kept in
+        // sync inside the allocation transaction (avoids an N+1 on list views).
+        // BalanceDue (= GrandTotal − AmountPaid) and the payment status are
+        // DERIVED at read time so "Overdue" stays correct as the clock advances
+        // without needing a write — see PaymentStatusCalculator.
+        public DateTime? DueDate { get; set; }
+        public decimal AmountPaid { get; set; }
+
         // FBR Digital Invoicing
         public int? DocumentType { get; set; }
         public string? PaymentMode { get; set; }

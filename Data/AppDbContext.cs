@@ -33,6 +33,13 @@ namespace MyApp.Api.Data
         public DbSet<SalesOrder> SalesOrders { get; set; }
         public DbSet<SalesOrderItem> SalesOrderItems { get; set; }
 
+        // ── Payments / Receipts (AR/AP subledger — design §11.5, additive) ──
+        // Receipt (money in) + Payment (money out) documents and their
+        // allocation lines, which settle invoices/bills and drive balance-due +
+        // payment status. No GL dependency in Phase A.
+        public DbSet<MyApp.Api.Models.Accounting.Payment> Payments { get; set; }
+        public DbSet<MyApp.Api.Models.Accounting.PaymentAllocation> PaymentAllocations { get; set; }
+
         // ── Unified attachments + document folders (additive) ──
         // One Attachment row per uploaded file (bytes on disk). A Folder is a
         // per-company named container; an attachment may also/instead be linked
@@ -364,6 +371,7 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Invoice>().Property(i => i.GSTRate).HasPrecision(5, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.GSTAmount).HasPrecision(18, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.GrandTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<Invoice>().Property(i => i.AmountPaid).HasPrecision(18, 2);
             modelBuilder.Entity<InvoiceItem>().Property(ii => ii.UnitPrice).HasPrecision(18, 2);
             modelBuilder.Entity<InvoiceItem>().Property(ii => ii.LineTotal).HasPrecision(18, 2);
 
@@ -546,6 +554,57 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<SalesOrder>().HasIndex(o => o.ClientId);
             modelBuilder.Entity<DeliveryChallan>().HasIndex(dc => dc.SalesOrderId);
             modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.SalesOrderItemId);
+
+            // ── Payments / Receipts (AR/AP subledger — design §11.5) ───────────
+            // Payment header → Company (Restrict: a company's payment history
+            // can't be cascade-wiped). Direction + ChequeStatus persist as int.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .HasOne(p => p.Company).WithMany()
+                .HasForeignKey(p => p.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.Amount).HasPrecision(18, 2);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.ContactType).HasMaxLength(20);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.Method).HasMaxLength(30);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.BankAccountName).HasMaxLength(120);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.ChequeNumber).HasMaxLength(50);
+            // Unique numbering per (company, direction): receipts and payments
+            // each get their own gap-free sequence, and the loser of a concurrent
+            // create retries on this violation (NumberAllocationRetry).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .HasIndex(p => new { p.CompanyId, p.Direction, p.Number }).IsUnique();
+
+            // Allocation line → Payment (Cascade: lines die with their document).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasOne(a => a.Payment).WithMany(p => p.Allocations)
+                .HasForeignKey(a => a.PaymentId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // → Invoice / PurchaseBill (optional; Restrict so a settled document
+            // can't be hard-deleted out from under its allocations — and to avoid
+            // multiple cascade paths from Company. Deleting a payment unlinks via
+            // the cascade above; the invoice/bill survives).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasOne(a => a.Invoice).WithMany()
+                .HasForeignKey(a => a.InvoiceId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasOne(a => a.PurchaseBill).WithMany()
+                .HasForeignKey(a => a.PurchaseBillId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .Property(a => a.Amount).HasPrecision(18, 2);
+            // AccountId (direct income/expense line) has NO FK yet — the Accounts
+            // table arrives in the Chart-of-Accounts phase; wire the FK then.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasIndex(a => a.InvoiceId);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasIndex(a => a.PurchaseBillId);
 
             // ── Unified attachments + document folders ──────────────────────
             // A Folder is a per-company named container. An Attachment is one
@@ -1038,6 +1097,7 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.GSTRate).HasPrecision(5, 2);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.GSTAmount).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.GrandTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.AmountPaid).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.SupplierBillNumber).HasMaxLength(100);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.SupplierIRN).HasMaxLength(64);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.ReconciliationStatus).HasMaxLength(20).HasDefaultValue("Pending");

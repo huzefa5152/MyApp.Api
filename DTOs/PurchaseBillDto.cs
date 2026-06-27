@@ -17,6 +17,15 @@ namespace MyApp.Api.DTOs
         public decimal GrandTotal { get; set; }
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }
+
+        // ── Payments (design §11.5) — mirror of InvoiceDto. PaymentStatus is
+        // "Unpaid" | "PartiallyPaid" | "Paid" | "Overdue", derived at read time.
+        public DateTime? DueDate { get; set; }
+        public decimal AmountPaid { get; set; }
+        public decimal BalanceDue { get; set; }
+        public string PaymentStatus { get; set; } = "Unpaid";
+        public int DaysOverdue { get; set; }
+
         public int? DocumentType { get; set; }
         public string? PaymentMode { get; set; }
         public string ReconciliationStatus { get; set; } = "Pending";
