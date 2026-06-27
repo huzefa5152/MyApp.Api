@@ -22,5 +22,12 @@ namespace MyApp.Api.Services.Interfaces
         /// <summary>Import the masters: chart of accounts (structure, party
         /// ledgers excluded) + parties (Trader → Client/Supplier). Idempotent.</summary>
         Task<LegacyImportResult> ImportMastersAsync(int companyId);
+
+        /// <summary>Import documents: sales invoices (customer + billed total
+        /// reconstructed from the GL voucher) and purchase bills (supplier from
+        /// FKTraderID, total from the A/P voucher credit). Totals stored verbatim;
+        /// rows flagged IsMigrated + FBR-excluded. Idempotent on ExternalRef.
+        /// Requires masters to be imported first.</summary>
+        Task<LegacyImportResult> ImportDocumentsAsync(int companyId);
     }
 }

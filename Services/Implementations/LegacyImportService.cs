@@ -186,10 +186,236 @@ namespace MyApp.Api.Services.Implementations
             if (unclassified > 0) result.Notes.Add($"Skipped {unclassified} traders whose account doesn't roll up to an asset/liability (no trade ledger).");
         }
 
+        // ── Documents (sales invoices + purchase bills) ─────────────────────────
+
+        public async Task<LegacyImportResult> ImportDocumentsAsync(int companyId)
+        {
+            if (!IsConfigured)
+                throw new InvalidOperationException("Legacy import is not configured (ConnectionStrings:LegacyDb missing).");
+            if (!await _db.Companies.AnyAsync(c => c.Id == companyId))
+                throw new InvalidOperationException("Target company not found.");
+
+            // Map legacy keys -> our imported masters.
+            var traders = ReadTraders();
+            var clientByRef = await _db.Clients.Where(c => c.CompanyId == companyId && c.ExternalRef != null)
+                .ToDictionaryAsync(c => c.ExternalRef!, c => c.Id);
+            var supplierByRef = await _db.Suppliers.Where(s => s.CompanyId == companyId && s.ExternalRef != null)
+                .ToDictionaryAsync(s => s.ExternalRef!, s => s.Id);
+            var clientIdByAccount = new Dictionary<string, int>();
+            var supplierIdByTrader = new Dictionary<int, int>();
+            foreach (var t in traders)
+            {
+                if (t.AccountCode != null && clientByRef.TryGetValue($"trader:{t.Id}", out var cid))
+                    clientIdByAccount[t.AccountCode] = cid;
+                if (supplierByRef.TryGetValue($"trader:{t.Id}", out var sid))
+                    supplierIdByTrader[t.Id] = sid;
+            }
+
+            var result = new LegacyImportResult();
+            await ImportSalesAsync(companyId, clientIdByAccount, result);
+            await ImportPurchasesAsync(companyId, supplierIdByTrader, result);
+            return result;
+        }
+
+        private async Task ImportSalesAsync(int companyId, Dictionary<string, int> clientIdByAccount, LegacyImportResult result)
+        {
+            var headers = ReadSaleHeaders();
+            var folioCount = headers.GroupBy(h => h.Folio).ToDictionary(g => g.Key, g => g.Count());
+            var custDebits = ReadVoucherTraderLines(debit: true);   // folio -> [(account, amount)]
+            var detail = ReadDocDetail("SalesInvoiceDetail");        // doc -> lines
+
+            var existing = await _db.Invoices.Where(i => i.CompanyId == companyId && i.ExternalRef != null)
+                .Select(i => i.ExternalRef!).ToListAsync();
+            var existingRefs = new HashSet<string>(existing);
+
+            int created = 0, skippedExisting = 0, skippedSharedFolio = 0, skippedNoCustomer = 0;
+            foreach (var h in headers)
+            {
+                var er = $"sinv:{h.Doc}";
+                if (existingRefs.Contains(er)) { skippedExisting++; continue; }
+                // Shared folios can't attribute the AR debit to one invoice — skip.
+                if (folioCount.GetValueOrDefault(h.Folio) != 1) { skippedSharedFolio++; continue; }
+
+                var lines = custDebits.GetValueOrDefault(h.Folio) ?? new();
+                var custLines = lines.Where(l => clientIdByAccount.ContainsKey(l.Account)).ToList();
+                var distinctClients = custLines.Select(l => clientIdByAccount[l.Account]).Distinct().ToList();
+                if (distinctClients.Count != 1) { skippedNoCustomer++; continue; }
+
+                var total = custLines.Sum(l => l.Amount);          // GL-anchored billed amount
+                var gst = h.Tax;
+                var subtotal = total - gst;
+                var inv = new Invoice
+                {
+                    CompanyId = companyId,
+                    ClientId = distinctClients[0],
+                    InvoiceNumber = h.Doc,
+                    Date = h.Date,
+                    Subtotal = subtotal,
+                    GSTRate = subtotal > 0 ? Math.Round(gst / subtotal * 100, 2) : 0,
+                    GSTAmount = gst,
+                    GrandTotal = total,
+                    AmountInWords = "",
+                    IsMigrated = true,
+                    IsFbrExcluded = true,
+                    ExternalRef = er,
+                    Items = (detail.GetValueOrDefault(h.Doc) ?? new()).Select(d => new InvoiceItem
+                    {
+                        Description = d.Desc,
+                        Quantity = d.Qty,
+                        UOM = "",
+                        UnitPrice = d.Price,
+                        LineTotal = Math.Round(d.Qty * d.Price, 2),
+                    }).ToList(),
+                };
+                _db.Invoices.Add(inv);
+                created++;
+            }
+            await _db.SaveChangesAsync();
+
+            result.Created["salesInvoices"] = created;
+            result.Skipped["salesAlreadyImported"] = skippedExisting;
+            if (skippedSharedFolio > 0) result.Notes.Add($"Skipped {skippedSharedFolio} sales invoices on shared folios (can't attribute the GL customer line — e.g. opening-balance batch).");
+            if (skippedNoCustomer > 0) result.Notes.Add($"Skipped {skippedNoCustomer} sales invoices with no single GL customer match.");
+        }
+
+        private async Task ImportPurchasesAsync(int companyId, Dictionary<int, int> supplierIdByTrader, LegacyImportResult result)
+        {
+            var headers = ReadPurchaseHeaders();
+            var folioCount = headers.GroupBy(h => h.Folio).ToDictionary(g => g.Key, g => g.Count());
+            var credits = ReadVoucherTraderLines(debit: false);     // folio -> [(account, amount)]
+            var traderAccount = ReadTraders().Where(t => t.AccountCode != null)
+                .GroupBy(t => t.Id).ToDictionary(g => g.Key, g => g.First().AccountCode!);
+            var detail = ReadDocDetail("PurchaseDetail");
+
+            var existing = await _db.PurchaseBills.Where(p => p.CompanyId == companyId && p.ExternalRef != null)
+                .Select(p => p.ExternalRef!).ToListAsync();
+            var existingRefs = new HashSet<string>(existing);
+
+            int created = 0, skippedExisting = 0, skippedNoSupplier = 0, skippedNoTotal = 0;
+            foreach (var h in headers)
+            {
+                var er = $"pbill:{h.Doc}";
+                if (existingRefs.Contains(er)) { skippedExisting++; continue; }
+                if (!supplierIdByTrader.TryGetValue(h.TraderId, out var supplierId)) { skippedNoSupplier++; continue; }
+
+                // Total = the A/P credit to this supplier's ledger account on the
+                // purchase voucher (folio), when resolvable; else Σ detail cost.
+                decimal total = 0;
+                if (folioCount.GetValueOrDefault(h.Folio) == 1
+                    && traderAccount.TryGetValue(h.TraderId, out var acct)
+                    && credits.TryGetValue(h.Folio, out var lines))
+                {
+                    total = lines.Where(l => l.Account == acct).Sum(l => l.Amount);
+                }
+                var dlines = detail.GetValueOrDefault(h.Doc) ?? new();
+                if (total <= 0) total = dlines.Sum(d => Math.Round(d.Qty * d.Price, 2));
+                if (total <= 0) { skippedNoTotal++; continue; }
+
+                var bill = new PurchaseBill
+                {
+                    CompanyId = companyId,
+                    SupplierId = supplierId,
+                    PurchaseBillNumber = h.Doc,
+                    Date = h.Date,
+                    Subtotal = total,
+                    GSTRate = 0,
+                    GSTAmount = 0,
+                    GrandTotal = total,
+                    AmountInWords = "",
+                    SupplierBillNumber = h.SupplierInv,
+                    IsMigrated = true,
+                    ExternalRef = er,
+                    Items = dlines.Select(d => new PurchaseItem
+                    {
+                        Description = d.Desc,
+                        Quantity = d.Qty,
+                        UOM = "",
+                        UnitPrice = d.Price,
+                        LineTotal = Math.Round(d.Qty * d.Price, 2),
+                    }).ToList(),
+                };
+                _db.PurchaseBills.Add(bill);
+                created++;
+            }
+            await _db.SaveChangesAsync();
+
+            result.Created["purchaseBills"] = created;
+            result.Skipped["purchasesAlreadyImported"] = skippedExisting;
+            if (skippedNoSupplier > 0) result.Notes.Add($"Skipped {skippedNoSupplier} purchase bills whose supplier wasn't imported as a Supplier.");
+            if (skippedNoTotal > 0) result.Notes.Add($"Skipped {skippedNoTotal} purchase bills with no resolvable total.");
+        }
+
         // ── Legacy reads (read-only) ──────────────────────────────────────────────
 
         private record CoaRow(string Code, string? Parent, string Desc, string Type, bool IsControl, decimal OpeningDebit, decimal OpeningCredit);
         private record TraderRow(int Id, string? Name, int Type, string? Ntn, string? Gst, string? AccountCode);
+        private record SaleHeaderRow(int Doc, int Folio, DateTime Date, decimal Tax);
+        private record PurchaseHeaderRow(int Doc, int Folio, int TraderId, DateTime Date, string? SupplierInv);
+        private record VoucherLineRow(string Account, decimal Amount);
+        private record DetailRow(string Desc, decimal Qty, decimal Price);
+
+        private List<SaleHeaderRow> ReadSaleHeaders()
+        {
+            var list = new List<SaleHeaderRow>();
+            using var conn = new SqlConnection(_connStr); conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT DocumentNumber, ISNULL(FKFolioNumber,0), DocumentDate, ISNULL(TaxAmount1,0) FROM SalesInvoiceMaster WHERE FKCostCentreID=1";
+            using var rdr = cmd.ExecuteReader();
+            while (rdr.Read())
+                list.Add(new SaleHeaderRow(rdr.GetInt32(0), rdr.GetInt32(1), rdr.GetDateTime(2), rdr.GetDecimal(3)));
+            return list;
+        }
+
+        private List<PurchaseHeaderRow> ReadPurchaseHeaders()
+        {
+            var list = new List<PurchaseHeaderRow>();
+            using var conn = new SqlConnection(_connStr); conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT DocumentNumber, ISNULL(FKFolioNumber,0), ISNULL(FKTraderID,0), DocumentDate, SupplierInvoiceNumber FROM PurchaseMaster WHERE FKCostCentreID=1";
+            using var rdr = cmd.ExecuteReader();
+            while (rdr.Read())
+                list.Add(new PurchaseHeaderRow(rdr.GetInt32(0), rdr.GetInt32(1), rdr.GetInt32(2), rdr.GetDateTime(3),
+                    rdr.IsDBNull(4) ? null : rdr.GetString(4).Trim()));
+            return list;
+        }
+
+        /// <summary>Voucher lines tied to a trader's ledger account, grouped by
+        /// folio. debit=true returns the debit side (sale → customer A/R),
+        /// debit=false the credit side (purchase → supplier A/P).</summary>
+        private Dictionary<int, List<VoucherLineRow>> ReadVoucherTraderLines(bool debit)
+        {
+            var map = new Dictionary<int, List<VoucherLineRow>>();
+            using var conn = new SqlConnection(_connStr); conn.Open();
+            using var cmd = conn.CreateCommand();
+            var col = debit ? "Debit" : "Credit";
+            cmd.CommandText =
+                $"SELECT vd.FKFolio, vd.FKAccountCode, vd.{col} FROM VoucherDetail vd " +
+                $"JOIN Trader t ON t.FKAccountCode = vd.FKAccountCode AND t.FKCostCentreID=1 WHERE vd.{col} > 0";
+            using var rdr = cmd.ExecuteReader();
+            while (rdr.Read())
+            {
+                var folio = rdr.GetInt32(0);
+                if (!map.TryGetValue(folio, out var lst)) { lst = new(); map[folio] = lst; }
+                lst.Add(new VoucherLineRow(rdr.IsDBNull(1) ? "" : rdr.GetString(1).Trim(), rdr.GetDecimal(2)));
+            }
+            return map;
+        }
+
+        private Dictionary<int, List<DetailRow>> ReadDocDetail(string table)
+        {
+            var map = new Dictionary<int, List<DetailRow>>();
+            using var conn = new SqlConnection(_connStr); conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"SELECT FKDocumentNumber, Description, ISNULL(Quantity,0), ISNULL(UnitPrice,0) FROM {table} WHERE FKCostCentreID=1";
+            using var rdr = cmd.ExecuteReader();
+            while (rdr.Read())
+            {
+                var doc = rdr.GetInt32(0);
+                if (!map.TryGetValue(doc, out var lst)) { lst = new(); map[doc] = lst; }
+                lst.Add(new DetailRow(rdr.IsDBNull(1) ? "" : rdr.GetString(1).Trim(), rdr.GetDecimal(2), rdr.GetDecimal(3)));
+            }
+            return map;
+        }
 
         private List<CoaRow> ReadCoa()
         {
