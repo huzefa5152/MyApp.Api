@@ -307,6 +307,11 @@ endpoints_to_test = [
     ("GET",  "/api/folders/company/{cid}/paged"),
     ("GET",  "/api/attachments/company/{cid}/entity/SalesQuote/1"),
     ("GET",  "/api/attachments/company/{cid}/folder/1"),
+    # Payments / Receipts (AR/AP subledger — design §11.5).
+    ("GET",  "/api/payments/receipts/company/{cid}/paged"),
+    ("GET",  "/api/payments/payments/company/{cid}/paged"),
+    ("GET",  "/api/payments/company/{cid}/by-invoice/1"),
+    ("GET",  "/api/payments/company/{cid}/by-bill/1"),
 ]
 for username, forbidden in forbidden_for.items():
     if not forbidden:
