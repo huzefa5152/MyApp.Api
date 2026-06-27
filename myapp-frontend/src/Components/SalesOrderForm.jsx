@@ -46,15 +46,9 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
   useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
 
-  // Optional item-type pick prefills description + unit.
-  const pickItemType = (idx, newId, picked) => {
-    const patch = { itemTypeId: newId ? parseInt(newId) : null };
-    if (picked) {
-      if (picked.name) patch.description = picked.name;
-      if (picked.uom) patch.unit = picked.uom;
-    }
-    setItem(idx, patch);
-  };
+  // Picking an item type only TAGS the line (records ItemTypeId); it must NOT
+  // overwrite the operator's typed description/unit (that's Invoice-mode only).
+  const pickItemType = (idx, newId) => setItem(idx, { itemTypeId: newId ? parseInt(newId) : null });
   useEffect(() => {
     getPagedSalesQuotesByCompany(companyId, { pageSize: 200 })
       .then(({ data }) => setQuotes(data.items || []))

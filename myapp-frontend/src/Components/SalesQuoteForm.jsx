@@ -56,15 +56,10 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
   useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
   useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
 
-  // Picking an item type is optional; it prefills the description + unit.
-  const pickItemType = (idx, newId, picked) => {
-    const patch = { itemTypeId: newId ? parseInt(newId) : null };
-    if (picked) {
-      if (picked.name) patch.description = picked.name;
-      if (picked.uom) patch.unit = picked.uom;
-    }
-    setItem(idx, patch);
-  };
+  // Picking an item type only TAGS the line (records ItemTypeId). It must NOT
+  // overwrite the operator's typed description/unit — that auto-fill is reserved
+  // for Invoice (FBR-classification) mode, not pre-sale quotes/orders/challans.
+  const pickItemType = (idx, newId) => setItem(idx, { itemTypeId: newId ? parseInt(newId) : null });
 
   const setItem = (idx, patch) =>
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));

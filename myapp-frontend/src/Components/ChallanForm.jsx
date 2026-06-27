@@ -55,14 +55,12 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
     getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([]));
   }, [companyId]);
 
-  // Optional item-type pick on a challan line: records the ItemTypeId and
-  // prefills description + unit. (Historically item type was deferred to the
-  // Invoices tab; it's now optionally captured here too.)
-  const pickItemType = (index, newId, picked) => {
+  // Picking an item type only TAGS the challan line (records ItemTypeId); it must
+  // NOT overwrite the typed description/unit. Description auto-fill from an item
+  // type is reserved for Invoice (FBR-classification) mode.
+  const pickItemType = (index, newId) => {
     const next = [...items];
     next[index].itemTypeId = newId ? parseInt(newId) : null;
-    if (picked?.name) next[index].description = picked.name;
-    if (picked?.uom) next[index].unit = picked.uom;
     setItems(next);
   };
 
