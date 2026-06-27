@@ -88,5 +88,29 @@ namespace MyApp.Api.Controllers
                 return StatusCode(500, new { error = "Import failed. See server logs." });
             }
         }
+
+        [HttpPost("company/{companyId}/receipts-payments")]
+        [HasPermission("accounting.import.run")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> ImportReceiptsPayments(int companyId)
+        {
+            if (_env.IsProduction()) return NotFound();
+            if (!_import.IsConfigured)
+                return BadRequest(new { error = "Legacy import is not configured on this environment." });
+
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            try
+            {
+                var result = await _import.ImportReceiptsPaymentsAsync(companyId);
+                _logger.LogInformation("Legacy receipts/payments import into company {CompanyId}: {@Result}", companyId, result.Created);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Legacy receipts/payments import failed for company {CompanyId}", companyId);
+                return StatusCode(500, new { error = "Import failed. See server logs." });
+            }
+        }
     }
 }

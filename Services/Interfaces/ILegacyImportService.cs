@@ -29,5 +29,11 @@ namespace MyApp.Api.Services.Interfaces
         /// rows flagged IsMigrated + FBR-excluded. Idempotent on ExternalRef.
         /// Requires masters to be imported first.</summary>
         Task<LegacyImportResult> ImportDocumentsAsync(int companyId);
+
+        /// <summary>Import receipts (money in → settle sales invoices) and
+        /// payments (money out → settle purchase bills) with their allocations,
+        /// then reflow invoice/bill AmountPaid. Allocations to documents that
+        /// weren't imported are skipped. Requires documents imported first.</summary>
+        Task<LegacyImportResult> ImportReceiptsPaymentsAsync(int companyId);
     }
 }

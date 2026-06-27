@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
+using MyApp.Api.Models.Accounting;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Services.Implementations
@@ -345,7 +346,175 @@ namespace MyApp.Api.Services.Implementations
             if (skippedNoTotal > 0) result.Notes.Add($"Skipped {skippedNoTotal} purchase bills with no resolvable total.");
         }
 
+        // ── Receipts / Payments ─────────────────────────────────────────────────
+
+        public async Task<LegacyImportResult> ImportReceiptsPaymentsAsync(int companyId)
+        {
+            if (!IsConfigured)
+                throw new InvalidOperationException("Legacy import is not configured (ConnectionStrings:LegacyDb missing).");
+            if (!await _db.Companies.AnyAsync(c => c.Id == companyId))
+                throw new InvalidOperationException("Target company not found.");
+
+            var traders = ReadTraders();
+            var clientByRef = await _db.Clients.Where(c => c.CompanyId == companyId && c.ExternalRef != null)
+                .ToDictionaryAsync(c => c.ExternalRef!, c => c.Id);
+            var supplierByRef = await _db.Suppliers.Where(s => s.CompanyId == companyId && s.ExternalRef != null)
+                .ToDictionaryAsync(s => s.ExternalRef!, s => s.Id);
+            var clientIdByTrader = traders.Where(t => clientByRef.ContainsKey($"trader:{t.Id}"))
+                .ToDictionary(t => t.Id, t => clientByRef[$"trader:{t.Id}"]);
+            var supplierIdByTrader = traders.Where(t => supplierByRef.ContainsKey($"trader:{t.Id}"))
+                .ToDictionary(t => t.Id, t => supplierByRef[$"trader:{t.Id}"]);
+            var invoiceIdByDoc = await _db.Invoices.Where(i => i.CompanyId == companyId && i.ExternalRef != null)
+                .ToDictionaryAsync(i => i.ExternalRef!, i => i.Id);
+            var billIdByDoc = await _db.PurchaseBills.Where(p => p.CompanyId == companyId && p.ExternalRef != null)
+                .ToDictionaryAsync(p => p.ExternalRef!, p => p.Id);
+
+            var result = new LegacyImportResult();
+            var touchedInvoices = new HashSet<int>();
+            var touchedBills = new HashSet<int>();
+
+            await ImportMoneyDocsAsync(companyId, PaymentDirection.Receipt,
+                ReadReceiptHeaders(), ReadReceiptAllocs(),
+                tid => clientIdByTrader.GetValueOrDefault(tid),
+                doc => invoiceIdByDoc.GetValueOrDefault($"sinv:{doc}"),
+                touchedInvoices, result);
+            await ImportMoneyDocsAsync(companyId, PaymentDirection.Payment,
+                ReadPaymentHeaders(), ReadPaymentAllocs(),
+                tid => supplierIdByTrader.GetValueOrDefault(tid),
+                doc => billIdByDoc.GetValueOrDefault($"pbill:{doc}"),
+                touchedBills, result);
+
+            await ReflowPaidTotalsAsync(companyId, result);
+            return result;
+        }
+
+        // Generic for both directions: a money document settles target documents.
+        // resolveTarget maps a legacy target doc-number to our Invoice/Bill id (0 = not imported).
+        private async Task ImportMoneyDocsAsync(
+            int companyId, PaymentDirection direction,
+            List<MoneyHeaderRow> headers, Dictionary<int, List<(int Target, decimal Amount)>> allocsByDoc,
+            Func<int, int> resolveContact, Func<int, int> resolveTarget,
+            HashSet<int> touched, LegacyImportResult result)
+        {
+            var existingNums = await _db.Payments
+                .Where(p => p.CompanyId == companyId && p.Direction == direction)
+                .Select(p => p.Number).ToListAsync();
+            var existing = new HashSet<int>(existingNums);
+            var isReceipt = direction == PaymentDirection.Receipt;
+
+            int created = 0, skippedExisting = 0, skippedNoAlloc = 0, skippedNoContact = 0;
+            foreach (var h in headers)
+            {
+                if (existing.Contains(h.Doc)) { skippedExisting++; continue; }
+                var lines = (allocsByDoc.GetValueOrDefault(h.Doc) ?? new())
+                    .Select(l => (TargetId: resolveTarget(l.Target), l.Amount))
+                    .Where(l => l.TargetId != 0 && l.Amount > 0)
+                    .ToList();
+                if (lines.Count == 0) { skippedNoAlloc++; continue; }
+                var contactId = resolveContact(h.TraderId);
+                if (contactId == 0) { skippedNoContact++; continue; }
+
+                var payment = new Payment
+                {
+                    CompanyId = companyId,
+                    Direction = direction,
+                    Number = h.Doc,
+                    Date = h.Date,
+                    ContactType = isReceipt ? "Client" : "Supplier",
+                    ContactId = contactId,
+                    BankAccountName = h.Bank,
+                    Method = string.IsNullOrWhiteSpace(h.ChequeNo) ? "Cash" : "Cheque",
+                    ChequeNumber = h.ChequeNo,
+                    ChequeDate = h.ChequeDate,
+                    ChequeStatus = string.IsNullOrWhiteSpace(h.ChequeNo) ? ChequeStatus.None : ChequeStatus.Cleared,
+                    IsCancelled = h.Void,
+                    Amount = lines.Sum(l => l.Amount),
+                    Allocations = lines.Select(l => new PaymentAllocation
+                    {
+                        InvoiceId = isReceipt ? l.TargetId : (int?)null,
+                        PurchaseBillId = isReceipt ? (int?)null : l.TargetId,
+                        Amount = l.Amount,
+                    }).ToList(),
+                };
+                _db.Payments.Add(payment);
+                foreach (var l in lines) touched.Add(l.TargetId);
+                created++;
+            }
+            await _db.SaveChangesAsync();
+
+            var label = isReceipt ? "receipts" : "payments";
+            result.Created[label] = created;
+            result.Skipped[$"{label}AlreadyImported"] = skippedExisting;
+            if (skippedNoAlloc > 0) result.Notes.Add($"Skipped {skippedNoAlloc} {label} with no allocation to an imported document.");
+            if (skippedNoContact > 0) result.Notes.Add($"Skipped {skippedNoContact} {label} whose party wasn't imported.");
+        }
+
+        // Reflow AmountPaid = Σ non-cancelled allocations, for every touched document.
+        private async Task ReflowPaidTotalsAsync(int companyId, LegacyImportResult result)
+        {
+            var invSums = await _db.PaymentAllocations
+                .Where(a => a.InvoiceId != null && a.Payment.CompanyId == companyId && !a.Payment.IsCancelled)
+                .GroupBy(a => a.InvoiceId!.Value)
+                .Select(g => new { Id = g.Key, Sum = g.Sum(x => x.Amount) }).ToListAsync();
+            foreach (var s in invSums)
+            {
+                var inv = await _db.Invoices.FirstOrDefaultAsync(i => i.Id == s.Id);
+                if (inv != null) inv.AmountPaid = s.Sum;
+            }
+            var billSums = await _db.PaymentAllocations
+                .Where(a => a.PurchaseBillId != null && a.Payment.CompanyId == companyId && !a.Payment.IsCancelled)
+                .GroupBy(a => a.PurchaseBillId!.Value)
+                .Select(g => new { Id = g.Key, Sum = g.Sum(x => x.Amount) }).ToListAsync();
+            foreach (var s in billSums)
+            {
+                var bill = await _db.PurchaseBills.FirstOrDefaultAsync(b => b.Id == s.Id);
+                if (bill != null) bill.AmountPaid = s.Sum;
+            }
+            await _db.SaveChangesAsync();
+            result.Created["invoicesReflowed"] = invSums.Count;
+            result.Created["billsReflowed"] = billSums.Count;
+        }
+
         // ── Legacy reads (read-only) ──────────────────────────────────────────────
+
+        private record MoneyHeaderRow(int Doc, DateTime Date, int TraderId, string? Bank, string? ChequeNo, DateTime? ChequeDate, bool Void);
+
+        private List<MoneyHeaderRow> ReadMoneyHeaders(string table)
+        {
+            var list = new List<MoneyHeaderRow>();
+            using var conn = new SqlConnection(_connStr); conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"SELECT DocumentNumber, Date, ISNULL(FKTraderID,0), FKAccountCode_Bank, ChequeNumber, ChequeRealizationDate, ISNULL(FKFolioNumber_Void,0) FROM {table} WHERE FKCostCentreID=1";
+            using var rdr = cmd.ExecuteReader();
+            while (rdr.Read())
+                list.Add(new MoneyHeaderRow(
+                    rdr.GetInt32(0), rdr.GetDateTime(1), rdr.GetInt32(2),
+                    rdr.IsDBNull(3) ? null : rdr.GetString(3).Trim(),
+                    rdr.IsDBNull(4) ? null : rdr.GetString(4).Trim(),
+                    rdr.IsDBNull(5) ? null : rdr.GetDateTime(5),
+                    !rdr.IsDBNull(6) && rdr.GetInt32(6) > 0));
+            return list;
+        }
+        private List<MoneyHeaderRow> ReadReceiptHeaders() => ReadMoneyHeaders("ReceiptMaster");
+        private List<MoneyHeaderRow> ReadPaymentHeaders() => ReadMoneyHeaders("PaymentMaster");
+
+        private Dictionary<int, List<(int Target, decimal Amount)>> ReadAllocs(string table, string targetCol)
+        {
+            var map = new Dictionary<int, List<(int, decimal)>>();
+            using var conn = new SqlConnection(_connStr); conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"SELECT FKDocumentNumber, ISNULL({targetCol},0), ISNULL(Amount,0) FROM {table} WHERE FKCostCentreID=1";
+            using var rdr = cmd.ExecuteReader();
+            while (rdr.Read())
+            {
+                var parent = rdr.GetInt32(0);
+                if (!map.TryGetValue(parent, out var lst)) { lst = new(); map[parent] = lst; }
+                lst.Add((rdr.GetInt32(1), rdr.GetDecimal(2)));
+            }
+            return map;
+        }
+        private Dictionary<int, List<(int, decimal)>> ReadReceiptAllocs() => ReadAllocs("ReceiptDetail", "FKDocumentNumber_Sale");
+        private Dictionary<int, List<(int, decimal)>> ReadPaymentAllocs() => ReadAllocs("PaymentDetail", "FKDocumentNumber_GRN");
 
         private record CoaRow(string Code, string? Parent, string Desc, string Type, bool IsControl, decimal OpeningDebit, decimal OpeningCredit);
         private record TraderRow(int Id, string? Name, int Type, string? Ntn, string? Gst, string? AccountCode);
