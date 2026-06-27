@@ -6,6 +6,9 @@ namespace MyApp.Api.Models
         public int InvoiceNumber { get; set; }
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
+        /// <summary>Optional division ("sub-company"); when set the bill/invoice
+        /// numbers from the division's own sequence. Null = company-level.</summary>
+        public int? DivisionId { get; set; }
         public int ClientId { get; set; }
         public decimal Subtotal { get; set; }
         public decimal GSTRate { get; set; }
@@ -81,6 +84,7 @@ namespace MyApp.Api.Models
 
         // Navigation
         public Company Company { get; set; } = null!;
+        public Division? Division { get; set; }
         public Client Client { get; set; } = null!;
         public ICollection<InvoiceItem> Items { get; set; } = new List<InvoiceItem>();
         public ICollection<DeliveryChallan> DeliveryChallans { get; set; } = new List<DeliveryChallan>();

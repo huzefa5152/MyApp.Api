@@ -27,15 +27,24 @@ namespace MyApp.Api.Models
         public string? STRN { get; set; }
         public string? Email { get; set; }
 
-        // ── Per-division Sales Quote numbering ──
-        // When a sales quote is tagged with this division, its QuoteNumber is
-        // allocated from this division's own sequence (StartingSalesQuoteNumber
-        // seeds the first; CurrentSalesQuoteNumber tracks the last issued).
-        // Company-level quotes (no division) keep using the Company counters.
-        // Default 0 → the first division quote seeds from 1. Other document
-        // numbers (order / challan / invoice) stay company-level for now.
+        // ── Per-division document numbering ──
+        // When a document is tagged with this division, its number is allocated
+        // from this division's own sequence (Starting* seeds the first; Current*
+        // tracks the last issued). Company-level documents (no division) keep
+        // using the Company counters. Default 0 → the first division document
+        // seeds from 1 (or the division's Starting* when set).
         public int StartingSalesQuoteNumber { get; set; }
         public int CurrentSalesQuoteNumber { get; set; }
+        public int StartingSalesOrderNumber { get; set; }
+        public int CurrentSalesOrderNumber { get; set; }
+        public int StartingChallanNumber { get; set; }
+        public int CurrentChallanNumber { get; set; }
+        public int StartingInvoiceNumber { get; set; }
+        public int CurrentInvoiceNumber { get; set; }
+        public int StartingPurchaseBillNumber { get; set; }
+        public int CurrentPurchaseBillNumber { get; set; }
+        public int StartingGoodsReceiptNumber { get; set; }
+        public int CurrentGoodsReceiptNumber { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

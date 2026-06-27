@@ -20,6 +20,9 @@ namespace MyApp.Api.Models
     {
         public int Id { get; set; }
         public int CompanyId { get; set; }
+        /// <summary>Optional division ("sub-company"); when set the order numbers
+        /// from the division's own sequence. Null = company-level.</summary>
+        public int? DivisionId { get; set; }
         public int SalesOrderNumber { get; set; }
         public int ClientId { get; set; }
 
@@ -58,6 +61,7 @@ namespace MyApp.Api.Models
 
         // Navigation
         public Company Company { get; set; } = null!;
+        public Division? Division { get; set; }
         public Client Client { get; set; } = null!;
         public SalesQuote? SalesQuote { get; set; }
         public ICollection<SalesOrderItem> Items { get; set; } = new List<SalesOrderItem>();

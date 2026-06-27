@@ -4,6 +4,9 @@
     {
         public int Id { get; set; }
         public int CompanyId { get; set; }
+        /// <summary>Optional division ("sub-company"); when set the challan numbers
+        /// from the division's own sequence. Null = company-level.</summary>
+        public int? DivisionId { get; set; }
         public int ChallanNumber { get; set; }
 
         // Replace old ClientName with ClientId foreign key
@@ -50,6 +53,7 @@
 
         // Navigation
         public Company Company { get; set; } = null!;
+        public Division? Division { get; set; }
         public Client Client { get; set; } = null!;
         public Invoice? Invoice { get; set; }
         public SalesOrder? SalesOrder { get; set; }

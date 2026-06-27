@@ -304,12 +304,29 @@ namespace MyApp.Api.Data
             // so two concurrent creates can't both land MAX(InvoiceNumber)+1
             // — the loser gets a SQL 2601 / 2627 which the service catches
             // and retries (next number is re-read in the retry loop).
+            // Numbering is scoped per (company, division): a division-tagged bill
+            // draws from the division's own sequence, so (X, NULL, 1) and
+            // (X, div5, 1) coexist. HasFilter(null) keeps company-level rows
+            // (DivisionId NULL) covered by the unique guard too. Mirrors SalesQuote.
             modelBuilder.Entity<Invoice>()
-                .HasIndex(i => new { i.CompanyId, i.InvoiceNumber })
-                .IsUnique();
+                .HasIndex(i => new { i.CompanyId, i.DivisionId, i.InvoiceNumber })
+                .IsUnique()
+                .HasFilter(null);
+            // Invoice -> Division (optional; SetNull so deleting a division leaves
+            // its bills company-level rather than cascading).
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.Division).WithMany()
+                .HasForeignKey(i => i.DivisionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
 
             modelBuilder.Entity<DeliveryChallan>()
                 .HasIndex(dc => dc.ClientId);
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasOne(dc => dc.Division).WithMany()
+                .HasForeignKey(dc => dc.DivisionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
 
             modelBuilder.Entity<DeliveryChallan>()
                 .HasIndex(dc => dc.CompanyId);
@@ -328,8 +345,11 @@ namespace MyApp.Api.Data
             // band, not from any source migration). The
             // 20260504*_DropLegacyUniqueChallanNumberIndex migration drops
             // that legacy index before this non-unique one is created.
+            // Includes DivisionId so the per-division challan sequence groups
+            // correctly. STILL NON-UNIQUE by design (Duplicate Challan emits
+            // same-number rows).
             modelBuilder.Entity<DeliveryChallan>()
-                .HasIndex(dc => new { dc.CompanyId, dc.ChallanNumber });
+                .HasIndex(dc => new { dc.CompanyId, dc.DivisionId, dc.ChallanNumber });
 
             modelBuilder.Entity<InvoiceItem>()
                 .HasIndex(ii => ii.InvoiceId);
@@ -490,6 +510,9 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<SalesOrder>()
                 .HasOne(o => o.Client).WithMany()
                 .HasForeignKey(o => o.ClientId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SalesOrder>()
+                .HasOne(o => o.Division).WithMany()
+                .HasForeignKey(o => o.DivisionId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
             modelBuilder.Entity<SalesOrderItem>()
                 .HasOne(i => i.SalesOrder).WithMany(o => o.Items)
                 .HasForeignKey(i => i.SalesOrderId).OnDelete(DeleteBehavior.Cascade);
@@ -556,7 +579,8 @@ namespace MyApp.Api.Data
                 .HasFilter(null);
             modelBuilder.Entity<SalesQuote>().HasIndex(q => q.ClientId);
             modelBuilder.Entity<SalesOrder>()
-                .HasIndex(o => new { o.CompanyId, o.SalesOrderNumber }).IsUnique();
+                .HasIndex(o => new { o.CompanyId, o.DivisionId, o.SalesOrderNumber }).IsUnique()
+                .HasFilter(null);
             modelBuilder.Entity<SalesOrder>().HasIndex(o => o.ClientId);
             modelBuilder.Entity<DeliveryChallan>().HasIndex(dc => dc.SalesOrderId);
             modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.SalesOrderItemId);
@@ -1149,12 +1173,17 @@ namespace MyApp.Api.Data
                 .HasForeignKey(pb => pb.SupplierId)
                 .OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<PurchaseBill>()
-                .HasIndex(pb => pb.CompanyId);
-            // Audit C-8 (2026-05-13): unique (CompanyId, PurchaseBillNumber)
-            // so concurrent creates can't land the same number.
+                .HasOne(pb => pb.Division).WithMany()
+                .HasForeignKey(pb => pb.DivisionId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
             modelBuilder.Entity<PurchaseBill>()
-                .HasIndex(pb => new { pb.CompanyId, pb.PurchaseBillNumber })
-                .IsUnique();
+                .HasIndex(pb => pb.CompanyId);
+            // Audit C-8: unique numbering, now scoped per (company, division) so a
+            // division-tagged bill draws its own sequence. HasFilter(null) covers
+            // company-level rows (DivisionId NULL) too.
+            modelBuilder.Entity<PurchaseBill>()
+                .HasIndex(pb => new { pb.CompanyId, pb.DivisionId, pb.PurchaseBillNumber })
+                .IsUnique()
+                .HasFilter(null);
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => pb.SupplierId);
             modelBuilder.Entity<PurchaseBill>()
@@ -1239,11 +1268,15 @@ namespace MyApp.Api.Data
                 .HasForeignKey(gr => gr.PurchaseBillId)
                 .OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<GoodsReceipt>()
-                .HasIndex(gr => gr.CompanyId);
-            // Audit C-8 (2026-05-13): unique (CompanyId, GoodsReceiptNumber).
+                .HasOne(gr => gr.Division).WithMany()
+                .HasForeignKey(gr => gr.DivisionId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
             modelBuilder.Entity<GoodsReceipt>()
-                .HasIndex(gr => new { gr.CompanyId, gr.GoodsReceiptNumber })
-                .IsUnique();
+                .HasIndex(gr => gr.CompanyId);
+            // Audit C-8: unique numbering scoped per (company, division).
+            modelBuilder.Entity<GoodsReceipt>()
+                .HasIndex(gr => new { gr.CompanyId, gr.DivisionId, gr.GoodsReceiptNumber })
+                .IsUnique()
+                .HasFilter(null);
             modelBuilder.Entity<GoodsReceipt>()
                 .HasIndex(gr => gr.SupplierId);
             modelBuilder.Entity<GoodsReceipt>()

@@ -508,61 +508,50 @@ using (var scope = app.Services.CreateScope())
     // index in place. Operators have to dedupe first; the system stays
     // working in the meantime.
     db.Database.ExecuteSqlRaw(@"
+        -- 2026-06-27: numbering is now scoped per (CompanyId, DivisionId, *Number)
+        -- so division-tagged documents draw their own sequence. Drop the legacy
+        -- 2-col unique index (which would wrongly block a division reusing a
+        -- company-level number) and ensure the 3-col one exists. EF's migration
+        -- normally does this; the guard keeps drifted DBs consistent.
         BEGIN TRY
-            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices') AND is_unique = 0)
-            BEGIN
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices'))
                 DROP INDEX [IX_Invoices_CompanyId_InvoiceNumber] ON [Invoices];
-                CREATE UNIQUE INDEX [IX_Invoices_CompanyId_InvoiceNumber] ON [Invoices] ([CompanyId], [InvoiceNumber]);
-            END
-            ELSE IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices'))
-            BEGIN
-                CREATE UNIQUE INDEX [IX_Invoices_CompanyId_InvoiceNumber] ON [Invoices] ([CompanyId], [InvoiceNumber]);
-            END
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_DivisionId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices'))
+                CREATE UNIQUE INDEX [IX_Invoices_CompanyId_DivisionId_InvoiceNumber] ON [Invoices] ([CompanyId], [DivisionId], [InvoiceNumber]);
         END TRY
         BEGIN CATCH
-            -- Duplicate data prevents the unique index. Leave the existing
-            -- index in place; the service-layer retry on save still helps,
-            -- but operators must dedupe before full protection lands.
+            -- Duplicate data prevents the unique index. Leave things as-is;
+            -- the service-layer retry still helps, operators must dedupe first.
             INSERT INTO AuditLogs (Timestamp, Level, UserName, HttpMethod, RequestPath, StatusCode, ExceptionType, Message)
             VALUES (SYSUTCDATETIME(), 'Warning', 'system', 'SEED', '/migrations/unique-invoice-number', 500,
                     'INVOICE_UNIQUE_INDEX_BLOCKED',
-                    CONCAT('Could not enforce UNIQUE (CompanyId, InvoiceNumber): ', ERROR_MESSAGE()));
+                    CONCAT('Could not enforce UNIQUE (CompanyId, DivisionId, InvoiceNumber): ', ERROR_MESSAGE()));
         END CATCH;
 
         BEGIN TRY
-            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_PurchaseBills_CompanyId_PurchaseBillNumber' AND object_id = OBJECT_ID('PurchaseBills') AND is_unique = 0)
-            BEGIN
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_PurchaseBills_CompanyId_PurchaseBillNumber' AND object_id = OBJECT_ID('PurchaseBills'))
                 DROP INDEX [IX_PurchaseBills_CompanyId_PurchaseBillNumber] ON [PurchaseBills];
-                CREATE UNIQUE INDEX [IX_PurchaseBills_CompanyId_PurchaseBillNumber] ON [PurchaseBills] ([CompanyId], [PurchaseBillNumber]);
-            END
-            ELSE IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_PurchaseBills_CompanyId_PurchaseBillNumber' AND object_id = OBJECT_ID('PurchaseBills'))
-            BEGIN
-                CREATE UNIQUE INDEX [IX_PurchaseBills_CompanyId_PurchaseBillNumber] ON [PurchaseBills] ([CompanyId], [PurchaseBillNumber]);
-            END
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_PurchaseBills_CompanyId_DivisionId_PurchaseBillNumber' AND object_id = OBJECT_ID('PurchaseBills'))
+                CREATE UNIQUE INDEX [IX_PurchaseBills_CompanyId_DivisionId_PurchaseBillNumber] ON [PurchaseBills] ([CompanyId], [DivisionId], [PurchaseBillNumber]);
         END TRY
         BEGIN CATCH
             INSERT INTO AuditLogs (Timestamp, Level, UserName, HttpMethod, RequestPath, StatusCode, ExceptionType, Message)
             VALUES (SYSUTCDATETIME(), 'Warning', 'system', 'SEED', '/migrations/unique-purchasebill-number', 500,
                     'PURCHASEBILL_UNIQUE_INDEX_BLOCKED',
-                    CONCAT('Could not enforce UNIQUE (CompanyId, PurchaseBillNumber): ', ERROR_MESSAGE()));
+                    CONCAT('Could not enforce UNIQUE (CompanyId, DivisionId, PurchaseBillNumber): ', ERROR_MESSAGE()));
         END CATCH;
 
         BEGIN TRY
-            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_GoodsReceipts_CompanyId_GoodsReceiptNumber' AND object_id = OBJECT_ID('GoodsReceipts') AND is_unique = 0)
-            BEGIN
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_GoodsReceipts_CompanyId_GoodsReceiptNumber' AND object_id = OBJECT_ID('GoodsReceipts'))
                 DROP INDEX [IX_GoodsReceipts_CompanyId_GoodsReceiptNumber] ON [GoodsReceipts];
-                CREATE UNIQUE INDEX [IX_GoodsReceipts_CompanyId_GoodsReceiptNumber] ON [GoodsReceipts] ([CompanyId], [GoodsReceiptNumber]);
-            END
-            ELSE IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_GoodsReceipts_CompanyId_GoodsReceiptNumber' AND object_id = OBJECT_ID('GoodsReceipts'))
-            BEGIN
-                CREATE UNIQUE INDEX [IX_GoodsReceipts_CompanyId_GoodsReceiptNumber] ON [GoodsReceipts] ([CompanyId], [GoodsReceiptNumber]);
-            END
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_GoodsReceipts_CompanyId_DivisionId_GoodsReceiptNumber' AND object_id = OBJECT_ID('GoodsReceipts'))
+                CREATE UNIQUE INDEX [IX_GoodsReceipts_CompanyId_DivisionId_GoodsReceiptNumber] ON [GoodsReceipts] ([CompanyId], [DivisionId], [GoodsReceiptNumber]);
         END TRY
         BEGIN CATCH
             INSERT INTO AuditLogs (Timestamp, Level, UserName, HttpMethod, RequestPath, StatusCode, ExceptionType, Message)
             VALUES (SYSUTCDATETIME(), 'Warning', 'system', 'SEED', '/migrations/unique-goodsreceipt-number', 500,
                     'GOODSRECEIPT_UNIQUE_INDEX_BLOCKED',
-                    CONCAT('Could not enforce UNIQUE (CompanyId, GoodsReceiptNumber): ', ERROR_MESSAGE()));
+                    CONCAT('Could not enforce UNIQUE (CompanyId, DivisionId, GoodsReceiptNumber): ', ERROR_MESSAGE()));
         END CATCH;
     ");
 

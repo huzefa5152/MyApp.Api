@@ -14,6 +14,9 @@ namespace MyApp.Api.Models
         public int PurchaseBillNumber { get; set; }
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
+        /// <summary>Optional division ("sub-company"); when set the bill numbers
+        /// from the division's own sequence. Null = company-level.</summary>
+        public int? DivisionId { get; set; }
         public int SupplierId { get; set; }
 
         /// <summary>
@@ -83,6 +86,7 @@ namespace MyApp.Api.Models
 
         // Navigation
         public Company Company { get; set; } = null!;
+        public Division? Division { get; set; }
         public Supplier Supplier { get; set; } = null!;
         public ICollection<PurchaseItem> Items { get; set; } = new List<PurchaseItem>();
         public ICollection<GoodsReceipt> GoodsReceipts { get; set; } = new List<GoodsReceipt>();
