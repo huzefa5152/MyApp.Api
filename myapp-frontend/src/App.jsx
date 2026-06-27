@@ -12,6 +12,7 @@ import SalesOrderPage from "./pages/SalesOrderPage";
 import InvoicePage from "./pages/InvoicePage";
 import PaymentsPage from "./pages/PaymentsPage";
 import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
+import DataMigrationPage from "./pages/DataMigrationPage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
 import PurchaseBillsPage from "./pages/PurchaseBillsPage";
 import GoodsReceiptsPage from "./pages/GoodsReceiptsPage";
@@ -94,6 +95,7 @@ export default function App() {
           <Route path="/receipts" element={<PaymentsPage key="receipts" mode="receipts" />} />
           <Route path="/payments" element={<PaymentsPage key="payments" mode="payments" />} />
           <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />
+          <Route path="/accounting/data-migration" element={<DataMigrationPage />} />
           <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
           <Route path="/goods-receipts" element={<GoodsReceiptsPage />} />
           <Route path="/stock" element={<StockDashboardPage />} />
