@@ -9,6 +9,18 @@ namespace MyApp.Api.Services.Interfaces
         public List<string> Notes { get; set; } = new();
     }
 
+    /// <summary>Outcome of restoring an uploaded .bak: the temp DB to migrate
+    /// from, plus a quick content summary for the confirmation screen.</summary>
+    public class BackupRestoreResult
+    {
+        public string SourceDb { get; set; } = "";
+        public string? CostCentreName { get; set; }
+        public List<string> Divisions { get; set; } = new();
+        public int SalesInvoices { get; set; }
+        public int SalesQuotes { get; set; }
+        public int PurchaseBills { get; set; }
+    }
+
     /// <summary>
     /// Faithful ETL from the legacy Data_2021 database into a target MyApp
     /// company (design §13). Reads the legacy DB read-only via the "LegacyDb"
@@ -19,21 +31,25 @@ namespace MyApp.Api.Services.Interfaces
     {
         bool IsConfigured { get; }
 
-        /// <summary>Import the masters: chart of accounts (structure, party
+        /// <summary>Restore an uploaded .bak into a fresh temp DB and return its
+        /// name + a content summary. Subsequent steps read from that DB.</summary>
+        Task<BackupRestoreResult> RestoreBackupAsync(Stream bak, string fileName);
+
+        /// <summary>Drop a temp restore DB once migration is finished.</summary>
+        Task CleanupAsync(string sourceDb);
+
+        /// <summary>Masters: divisions (CompanyProfile), chart of accounts (party
         /// ledgers excluded) + parties (Trader → Client/Supplier). Idempotent.</summary>
-        Task<LegacyImportResult> ImportMastersAsync(int companyId);
+        Task<LegacyImportResult> ImportMastersAsync(string sourceDb, int companyId);
 
-        /// <summary>Import documents: sales invoices (customer + billed total
-        /// reconstructed from the GL voucher) and purchase bills (supplier from
-        /// FKTraderID, total from the A/P voucher credit). Totals stored verbatim;
-        /// rows flagged IsMigrated + FBR-excluded. Idempotent on ExternalRef.
-        /// Requires masters to be imported first.</summary>
-        Task<LegacyImportResult> ImportDocumentsAsync(int companyId);
+        /// <summary>Documents: sales invoices (GL-anchored, division-tagged),
+        /// sales quotes (QuotationMaster, division-tagged) and purchase bills
+        /// (company-level). Seeds per-division/company starting numbers. Idempotent.
+        /// Requires masters first.</summary>
+        Task<LegacyImportResult> ImportDocumentsAsync(string sourceDb, int companyId);
 
-        /// <summary>Import receipts (money in → settle sales invoices) and
-        /// payments (money out → settle purchase bills) with their allocations,
-        /// then reflow invoice/bill AmountPaid. Allocations to documents that
-        /// weren't imported are skipped. Requires documents imported first.</summary>
-        Task<LegacyImportResult> ImportReceiptsPaymentsAsync(int companyId);
+        /// <summary>Receipts (settle invoices) + payments (settle bills) with
+        /// allocations, then reflow AmountPaid. Requires documents first.</summary>
+        Task<LegacyImportResult> ImportReceiptsPaymentsAsync(string sourceDb, int companyId);
     }
 }

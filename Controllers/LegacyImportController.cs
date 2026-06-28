@@ -9,10 +9,11 @@ using MyApp.Api.Services.Interfaces;
 namespace MyApp.Api.Controllers
 {
     /// <summary>
-    /// Admin-only ETL from the legacy Data_2021 DB into a MyApp company
-    /// (design §13). Triple-gated: the accounting.import.run permission, the
-    /// LegacyDb connection string being configured, AND a non-Production
-    /// environment — a data importer that reads an external DB must never be
+    /// Admin-only ETL from a legacy Data_2021 <c>.bak</c> into a MyApp company
+    /// (design §13). The operator uploads a backup; the API restores it to a
+    /// temp DB and the ordered steps migrate from it. Triple-gated: the
+    /// accounting.import.run permission, a reachable SQL Server, AND a
+    /// non-Production environment — a restore-and-import tool must never be
     /// reachable in prod (CLAUDE.md: production is strict read-only).
     /// </summary>
     [Authorize]
@@ -40,75 +41,91 @@ namespace MyApp.Api.Controllers
                 User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
                 out var id) ? id : 0;
 
-        [HttpPost("company/{companyId}/masters")]
-        [HasPermission("accounting.import.run")]
-        [AuthorizeCompany]
-        public async Task<IActionResult> ImportMasters(int companyId)
+        // Shared gate for every endpoint here.
+        private IActionResult? Gate()
         {
-            if (_env.IsProduction())
-                return NotFound();  // the importer simply doesn't exist in prod
+            if (_env.IsProduction()) return NotFound();   // the importer doesn't exist in prod
             if (!_import.IsConfigured)
-                return BadRequest(new { error = "Legacy import is not configured on this environment." });
+                return BadRequest(new { error = "No SQL Server is configured for the importer on this environment." });
+            return null;
+        }
 
-            await _access.AssertAccessAsync(CurrentUserId, companyId);
+        // ── Backup upload + restore ──────────────────────────────────────────────
+
+        [HttpPost("upload-backup")]
+        [HasPermission("accounting.import.run")]
+        [DisableRequestSizeLimit]   // backups can be large; dev-only tool
+        public async Task<IActionResult> UploadBackup(IFormFile? file)
+        {
+            var gate = Gate(); if (gate != null) return gate;
+            if (file == null || file.Length == 0)
+                return BadRequest(new { error = "No backup file uploaded." });
+            if (!file.FileName.EndsWith(".bak", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { error = "Upload a SQL Server .bak backup file." });
+
             try
             {
-                var result = await _import.ImportMastersAsync(companyId);
-                _logger.LogInformation("Legacy masters import into company {CompanyId}: {@Result}", companyId, result.Created);
-                return Ok(result);
+                await using var stream = file.OpenReadStream();
+                var summary = await _import.RestoreBackupAsync(stream, file.FileName);
+                _logger.LogInformation("Restored legacy backup {File} into {Db}", file.FileName, summary.SourceDb);
+                return Ok(summary);
             }
             catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Legacy masters import failed for company {CompanyId}", companyId);
-                return StatusCode(500, new { error = "Import failed. See server logs." });
+                _logger.LogError(ex, "Backup restore failed for {File}", file.FileName);
+                return StatusCode(500, new { error = "Restore failed. Check the SQL Server has restore rights and disk space. See server logs." });
             }
         }
+
+        [HttpPost("cleanup")]
+        [HasPermission("accounting.import.run")]
+        public async Task<IActionResult> Cleanup([FromQuery] string source)
+        {
+            var gate = Gate(); if (gate != null) return gate;
+            try { await _import.CleanupAsync(source); return Ok(new { dropped = source }); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Backup cleanup failed for {Source}", source);
+                return StatusCode(500, new { error = "Cleanup failed. See server logs." });
+            }
+        }
+
+        // ── Ordered migration steps (read from the restored temp DB) ─────────────
+
+        [HttpPost("company/{companyId}/masters")]
+        [HasPermission("accounting.import.run")]
+        [AuthorizeCompany]
+        public Task<IActionResult> ImportMasters(int companyId, [FromQuery] string source)
+            => RunStep(companyId, "masters", () => _import.ImportMastersAsync(source, companyId));
 
         [HttpPost("company/{companyId}/documents")]
         [HasPermission("accounting.import.run")]
         [AuthorizeCompany]
-        public async Task<IActionResult> ImportDocuments(int companyId)
-        {
-            if (_env.IsProduction()) return NotFound();
-            if (!_import.IsConfigured)
-                return BadRequest(new { error = "Legacy import is not configured on this environment." });
-
-            await _access.AssertAccessAsync(CurrentUserId, companyId);
-            try
-            {
-                var result = await _import.ImportDocumentsAsync(companyId);
-                _logger.LogInformation("Legacy documents import into company {CompanyId}: {@Result}", companyId, result.Created);
-                return Ok(result);
-            }
-            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Legacy documents import failed for company {CompanyId}", companyId);
-                return StatusCode(500, new { error = "Import failed. See server logs." });
-            }
-        }
+        public Task<IActionResult> ImportDocuments(int companyId, [FromQuery] string source)
+            => RunStep(companyId, "documents", () => _import.ImportDocumentsAsync(source, companyId));
 
         [HttpPost("company/{companyId}/receipts-payments")]
         [HasPermission("accounting.import.run")]
         [AuthorizeCompany]
-        public async Task<IActionResult> ImportReceiptsPayments(int companyId)
-        {
-            if (_env.IsProduction()) return NotFound();
-            if (!_import.IsConfigured)
-                return BadRequest(new { error = "Legacy import is not configured on this environment." });
+        public Task<IActionResult> ImportReceiptsPayments(int companyId, [FromQuery] string source)
+            => RunStep(companyId, "receipts-payments", () => _import.ImportReceiptsPaymentsAsync(source, companyId));
 
+        private async Task<IActionResult> RunStep(int companyId, string step, Func<Task<LegacyImportResult>> run)
+        {
+            var gate = Gate(); if (gate != null) return gate;
             await _access.AssertAccessAsync(CurrentUserId, companyId);
             try
             {
-                var result = await _import.ImportReceiptsPaymentsAsync(companyId);
-                _logger.LogInformation("Legacy receipts/payments import into company {CompanyId}: {@Result}", companyId, result.Created);
+                var result = await run();
+                _logger.LogInformation("Legacy {Step} import into company {CompanyId}: {@Result}", step, companyId, result.Created);
                 return Ok(result);
             }
             catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Legacy receipts/payments import failed for company {CompanyId}", companyId);
+                _logger.LogError(ex, "Legacy {Step} import failed for company {CompanyId}", step, companyId);
                 return StatusCode(500, new { error = "Import failed. See server logs." });
             }
         }

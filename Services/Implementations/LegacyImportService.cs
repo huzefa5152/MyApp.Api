@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
@@ -20,7 +22,16 @@ namespace MyApp.Api.Services.Implementations
         private readonly AppDbContext _db;
         private readonly IAccountService _coa;
         private readonly ILogger<LegacyImportService> _logger;
-        private readonly string? _connStr;
+        // Base connection (server + auth) taken from DefaultConnection; the
+        // active read connection (_connStr) is built per-run pointing at the
+        // restored backup DB. Service is scoped, so the mutable field is safe.
+        private readonly string? _baseConn;
+        private string? _connStr;
+
+        // Temp restore DBs are named with this prefix; reads are restricted to
+        // names matching it so a forged "source" can't point at another DB.
+        private const string TempDbPrefix = "MyApp_LegacyImport_";
+        private static readonly Regex TempDbPattern = new($"^{TempDbPrefix}[0-9A-Za-z_]+$", RegexOptions.Compiled);
 
         // Legacy control-account codes whose children are ledger PARTIES (not
         // sub-accounts). Imported as Client/Supplier, not as Accounts.
@@ -42,23 +53,244 @@ namespace MyApp.Api.Services.Implementations
             _db = db;
             _coa = coa;
             _logger = logger;
-            _connStr = config.GetConnectionString("LegacyDb");
+            _baseConn = config.GetConnectionString("DefaultConnection")
+                     ?? config.GetConnectionString("LegacyDb");
         }
 
-        public bool IsConfigured => !string.IsNullOrWhiteSpace(_connStr);
+        // Configured = we can reach a SQL Server (to restore into / read from).
+        public bool IsConfigured => !string.IsNullOrWhiteSpace(_baseConn);
 
-        public async Task<LegacyImportResult> ImportMastersAsync(int companyId)
+        // Point the read helpers at a restored backup DB for the rest of this
+        // request. Validates the name so callers can't read an arbitrary DB.
+        private void UseSource(string? sourceDb)
         {
-            if (!IsConfigured)
-                throw new InvalidOperationException("Legacy import is not configured (ConnectionStrings:LegacyDb missing).");
-            if (!await _db.Companies.AnyAsync(c => c.Id == companyId))
-                throw new InvalidOperationException("Target company not found.");
+            if (string.IsNullOrWhiteSpace(sourceDb) || !TempDbPattern.IsMatch(sourceDb))
+                throw new InvalidOperationException("Invalid or missing backup source. Upload a backup first.");
+            _connStr = new SqlConnectionStringBuilder(_baseConn) { InitialCatalog = sourceDb }.ConnectionString;
+        }
+
+        private string MasterConnStr() =>
+            new SqlConnectionStringBuilder(_baseConn) { InitialCatalog = "master" }.ConnectionString;
+
+        // ── Backup restore / inspect / cleanup (dev-only ETL source) ────────────
+
+        /// <summary>Restore an uploaded .bak into a fresh temp DB on the same SQL
+        /// instance and return its name + a content summary. The .bak is written
+        /// to the instance's default data dir (which the SQL service account can
+        /// always read), then deleted after the restore.</summary>
+        public async Task<BackupRestoreResult> RestoreBackupAsync(Stream bak, string fileName)
+        {
+            if (!IsConfigured) throw new InvalidOperationException("No SQL Server is configured for restore.");
+
+            var master = MasterConnStr();
+            string dataDir = await ScalarAsync(master, "SELECT CONVERT(nvarchar(4000), SERVERPROPERTY('InstanceDefaultDataPath'))")
+                             ?? throw new InvalidOperationException("Could not resolve the SQL data directory.");
+            if (!dataDir.EndsWith("\\")) dataDir += "\\";
+
+            // Stage the .bak in a neutral dir under ProgramData: the app (running
+            // as the operator) can write here, and we grant "Authenticated Users"
+            // read so the SQL Server service account can read it for RESTORE.
+            // (SQL's own data dir under Program Files denies the app write access.)
+            var stamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+            var stageDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "MyApp", "legacy-import");
+            Directory.CreateDirectory(stageDir);
+            GrantSqlReadAccess(stageDir);
+            var bakPath = Path.Combine(stageDir, $"upload_{stamp}.bak");
+            await using (var fs = File.Create(bakPath)) await bak.CopyToAsync(fs);
+
+            var dbName = $"{TempDbPrefix}{stamp}";
+            try
+            {
+                // Logical file names → MOVE clauses.
+                var files = new List<(string Logical, string Type)>();
+                await using (var conn = new SqlConnection(master))
+                {
+                    await conn.OpenAsync();
+                    await using var cmd = conn.CreateCommand();
+                    cmd.CommandText = "RESTORE FILELISTONLY FROM DISK = @p";
+                    cmd.Parameters.AddWithValue("@p", bakPath);
+                    await using var rdr = await cmd.ExecuteReaderAsync();
+                    while (await rdr.ReadAsync())
+                        files.Add((rdr["LogicalName"].ToString()!, rdr["Type"].ToString()!.Trim()));
+                }
+                if (files.Count == 0) throw new InvalidOperationException("The backup contains no files (not a valid .bak?).");
+
+                var moves = files.Select((f, i) =>
+                {
+                    var ext = f.Type == "L" ? ".ldf" : (i == 0 ? ".mdf" : $"_{i}.ndf");
+                    return $"MOVE '{f.Logical.Replace("'", "''")}' TO '{dataDir}{dbName}_{i}{ext}'";
+                });
+
+                await using (var conn = new SqlConnection(master))
+                {
+                    await conn.OpenAsync();
+                    await using var cmd = conn.CreateCommand();
+                    cmd.CommandTimeout = 600;
+                    cmd.CommandText = $"RESTORE DATABASE [{dbName}] FROM DISK = @p WITH {string.Join(", ", moves)}, REPLACE, RECOVERY";
+                    cmd.Parameters.AddWithValue("@p", bakPath);
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+            finally
+            {
+                try { File.Delete(bakPath); } catch { /* best-effort */ }
+            }
+
+            UseSource(dbName);
+            var summary = ReadSummary();
+            summary.SourceDb = dbName;
+            return summary;
+        }
+
+        /// <summary>Drop a temp restore DB (validated name only).</summary>
+        public async Task CleanupAsync(string sourceDb)
+        {
+            if (string.IsNullOrWhiteSpace(sourceDb) || !TempDbPattern.IsMatch(sourceDb))
+                throw new InvalidOperationException("Invalid backup source name.");
+            await using var conn = new SqlConnection(MasterConnStr());
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText =
+                $"IF DB_ID(@db) IS NOT NULL BEGIN " +
+                $"ALTER DATABASE [{sourceDb}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{sourceDb}]; END";
+            cmd.Parameters.AddWithValue("@db", sourceDb);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        // Grant the SQL Server service account (via the Authenticated Users SID
+        // S-1-5-11) read+traverse on the staging dir so RESTORE can read the
+        // uploaded .bak. Best-effort; logged if it fails.
+        private void GrantSqlReadAccess(string dir)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("icacls", $"\"{dir}\" /grant *S-1-5-11:(OI)(CI)RX")
+                { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+                using var p = Process.Start(psi);
+                p?.WaitForExit(15000);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "icacls grant on {Dir} failed (RESTORE may fail if SQL can't read the staged backup).", dir);
+            }
+        }
+
+        private async Task<string?> ScalarAsync(string connStr, string sql)
+        {
+            await using var conn = new SqlConnection(connStr);
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            var v = await cmd.ExecuteScalarAsync();
+            return v == null || v == DBNull.Value ? null : v.ToString();
+        }
+
+        // Quick content summary for the confirmation screen (cost centre name,
+        // divisions/CompanyProfiles, doc counts). Uses the active _connStr.
+        private BackupRestoreResult ReadSummary()
+        {
+            var r = new BackupRestoreResult();
+            using var conn = new SqlConnection(_connStr); conn.Open();
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT TOP 1 Name FROM CostCentre WHERE CostCentreID = 1";
+                r.CostCentreName = cmd.ExecuteScalar()?.ToString()?.Trim();
+            }
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT Name FROM CompanyProfile WHERE FKCostCentreID = 1 ORDER BY CompanyID";
+                using var rdr = cmd.ExecuteReader();
+                while (rdr.Read()) r.Divisions.Add(rdr.GetString(0).Trim());
+            }
+            int Count(string sql) { using var c = conn.CreateCommand(); c.CommandText = sql; return Convert.ToInt32(c.ExecuteScalar()); }
+            r.SalesInvoices = Count("SELECT COUNT(*) FROM SalesInvoiceMaster WHERE FKCostCentreID = 1");
+            r.SalesQuotes = Count("SELECT COUNT(*) FROM QuotationMaster WHERE FKCostCentreID = 1");
+            r.PurchaseBills = Count("SELECT COUNT(*) FROM PurchaseMaster WHERE FKCostCentreID = 1");
+            return r;
+        }
+
+        // ── Masters ─────────────────────────────────────────────────────────────
+
+        public async Task<LegacyImportResult> ImportMastersAsync(string sourceDb, int companyId)
+        {
+            UseSource(sourceDb);
+            var company = await _db.Companies.FirstOrDefaultAsync(c => c.Id == companyId)
+                ?? throw new InvalidOperationException("Target company not found.");
 
             var result = new LegacyImportResult();
+
+            // Migration defaults for the target company: FBR off (historical data
+            // is never re-submitted), inventory tracking on, tenant/user-access
+            // restriction on. Idempotent — re-running just re-asserts them.
+            company.FbrEnabled = false;
+            company.InventoryTrackingEnabled = true;
+            company.IsTenantIsolated = true;
+            await _db.SaveChangesAsync();
+            result.Notes.Add("Target company set to: FBR integration OFF, inventory tracking ON, user-access restriction (tenant isolation) ON.");
+
+            // First migration: drop the shipped seed item types so the catalog
+            // isn't cluttered by the starter set (migrated lines are free-text).
+            var removedSeeds = await ItemTypeSeeder.RemoveSeedItemTypesAsync(_db);
+            result.Created["seedItemTypesRemoved"] = removedSeeds;
+            if (removedSeeds > 0) result.Notes.Add($"Removed {removedSeeds} seed item type(s) from the catalog.");
+
+            await ImportDivisionsAsync(companyId, result);
             var coa = ReadCoa();
             await ImportCoaAsync(companyId, coa, result);
             await ImportPartiesAsync(companyId, coa, result);
             return result;
+        }
+
+        // ── Divisions (legacy CompanyProfile → Division) ────────────────────────
+
+        /// <summary>Each CompanyProfile under the cost centre becomes a Division
+        /// of the target company. Idempotent by Name (unique per company).</summary>
+        private async Task ImportDivisionsAsync(int companyId, LegacyImportResult result)
+        {
+            var profiles = ReadCompanyProfiles();
+            var existingNames = await _db.Divisions
+                .Where(d => d.CompanyId == companyId)
+                .Select(d => d.Name).ToListAsync();
+            var have = new HashSet<string>(existingNames, StringComparer.OrdinalIgnoreCase);
+
+            int created = 0, skipped = 0;
+            foreach (var p in profiles)
+            {
+                var name = string.IsNullOrWhiteSpace(p.Name) ? (p.ShortName ?? $"Division {p.CompanyId}") : p.Name.Trim();
+                if (have.Contains(name)) { skipped++; continue; }
+                _db.Divisions.Add(new Division
+                {
+                    CompanyId = companyId,
+                    Name = name,
+                    BrandName = string.IsNullOrWhiteSpace(p.ShortName) ? null : p.ShortName.Trim(),
+                    FullAddress = string.IsNullOrWhiteSpace(p.Address) ? null : p.Address.Trim(),
+                    NTN = string.IsNullOrWhiteSpace(p.Ntn) ? null : p.Ntn.Trim(),
+                    STRN = string.IsNullOrWhiteSpace(p.Gst) ? null : p.Gst.Trim(),
+                });
+                have.Add(name); created++;
+            }
+            await _db.SaveChangesAsync();
+            result.Created["divisions"] = created;
+            result.Skipped["divisionsAlreadyImported"] = skipped;
+        }
+
+        /// <summary>Map legacy CompanyProfile.CompanyID → our DivisionId, matched
+        /// on the division Name we created above.</summary>
+        private async Task<Dictionary<int, int>> BuildDivisionMapAsync(int companyId)
+        {
+            var profiles = ReadCompanyProfiles();
+            var divByName = await _db.Divisions
+                .Where(d => d.CompanyId == companyId)
+                .ToDictionaryAsync(d => d.Name, d => d.Id, StringComparer.OrdinalIgnoreCase);
+            var map = new Dictionary<int, int>();
+            foreach (var p in profiles)
+            {
+                var name = string.IsNullOrWhiteSpace(p.Name) ? (p.ShortName ?? $"Division {p.CompanyId}") : p.Name.Trim();
+                if (divByName.TryGetValue(name, out var id)) map[p.CompanyId] = id;
+            }
+            return map;
         }
 
         // ── Chart of Accounts ───────────────────────────────────────────────────
@@ -189,10 +421,9 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Documents (sales invoices + purchase bills) ─────────────────────────
 
-        public async Task<LegacyImportResult> ImportDocumentsAsync(int companyId)
+        public async Task<LegacyImportResult> ImportDocumentsAsync(string sourceDb, int companyId)
         {
-            if (!IsConfigured)
-                throw new InvalidOperationException("Legacy import is not configured (ConnectionStrings:LegacyDb missing).");
+            UseSource(sourceDb);
             if (!await _db.Companies.AnyAsync(c => c.Id == companyId))
                 throw new InvalidOperationException("Target company not found.");
 
@@ -203,22 +434,33 @@ namespace MyApp.Api.Services.Implementations
             var supplierByRef = await _db.Suppliers.Where(s => s.CompanyId == companyId && s.ExternalRef != null)
                 .ToDictionaryAsync(s => s.ExternalRef!, s => s.Id);
             var clientIdByAccount = new Dictionary<string, int>();
+            var clientIdByTrader = new Dictionary<int, int>();
             var supplierIdByTrader = new Dictionary<int, int>();
             foreach (var t in traders)
             {
-                if (t.AccountCode != null && clientByRef.TryGetValue($"trader:{t.Id}", out var cid))
-                    clientIdByAccount[t.AccountCode] = cid;
+                if (clientByRef.TryGetValue($"trader:{t.Id}", out var cid))
+                {
+                    clientIdByTrader[t.Id] = cid;
+                    if (t.AccountCode != null) clientIdByAccount[t.AccountCode] = cid;
+                }
                 if (supplierByRef.TryGetValue($"trader:{t.Id}", out var sid))
                     supplierIdByTrader[t.Id] = sid;
             }
 
+            // Legacy FKCompanyID (CompanyProfile) -> our DivisionId.
+            var divisionMap = await BuildDivisionMapAsync(companyId);
+
             var result = new LegacyImportResult();
-            await ImportSalesAsync(companyId, clientIdByAccount, result);
+            await ImportSalesAsync(companyId, clientIdByAccount, divisionMap, result);
+            await ImportQuotesAsync(companyId, clientIdByTrader, divisionMap, result);
+            await ImportSalesOrdersAsync(companyId, clientIdByTrader, divisionMap, result);
+            await ImportChallansAsync(companyId, clientIdByTrader, divisionMap, result);
             await ImportPurchasesAsync(companyId, supplierIdByTrader, result);
+            await SeedStartingNumbersAsync(companyId, result);
             return result;
         }
 
-        private async Task ImportSalesAsync(int companyId, Dictionary<string, int> clientIdByAccount, LegacyImportResult result)
+        private async Task ImportSalesAsync(int companyId, Dictionary<string, int> clientIdByAccount, Dictionary<int, int> divisionMap, LegacyImportResult result)
         {
             var headers = ReadSaleHeaders();
             var folioCount = headers.GroupBy(h => h.Folio).ToDictionary(g => g.Key, g => g.Count());
@@ -232,7 +474,9 @@ namespace MyApp.Api.Services.Implementations
             int created = 0, skippedExisting = 0, skippedSharedFolio = 0, skippedNoCustomer = 0;
             foreach (var h in headers)
             {
-                var er = $"sinv:{h.Doc}";
+                // Namespace the ref by legacy company so the same DocumentNumber
+                // in two divisions doesn't collide on idempotency.
+                var er = $"sinv:{h.CompanyId}:{h.Doc}";
                 if (existingRefs.Contains(er)) { skippedExisting++; continue; }
                 // Shared folios can't attribute the AR debit to one invoice — skip.
                 if (folioCount.GetValueOrDefault(h.Folio) != 1) { skippedSharedFolio++; continue; }
@@ -249,6 +493,7 @@ namespace MyApp.Api.Services.Implementations
                 {
                     CompanyId = companyId,
                     ClientId = distinctClients[0],
+                    DivisionId = divisionMap.TryGetValue(h.CompanyId, out var invDiv) ? invDiv : (int?)null,
                     InvoiceNumber = h.Doc,
                     Date = h.Date,
                     Subtotal = subtotal,
@@ -277,6 +522,212 @@ namespace MyApp.Api.Services.Implementations
             result.Skipped["salesAlreadyImported"] = skippedExisting;
             if (skippedSharedFolio > 0) result.Notes.Add($"Skipped {skippedSharedFolio} sales invoices on shared folios (can't attribute the GL customer line — e.g. opening-balance batch).");
             if (skippedNoCustomer > 0) result.Notes.Add($"Skipped {skippedNoCustomer} sales invoices with no single GL customer match.");
+        }
+
+        // ── Sales quotes (NEW — QuotationMaster/Detail) ─────────────────────────
+        private async Task ImportQuotesAsync(int companyId,
+            Dictionary<int, int> clientIdByTrader, Dictionary<int, int> divisionMap, LegacyImportResult result)
+        {
+            var headers = ReadQuoteHeaders();
+            var detail = ReadDocDetail("QuotationDetail");
+
+            // SalesQuote has no ExternalRef — dedup on (DivisionId, QuoteNumber),
+            // which mirrors the unique index.
+            var existing = await _db.SalesQuotes.Where(q => q.CompanyId == companyId)
+                .Select(q => new { q.DivisionId, q.QuoteNumber }).ToListAsync();
+            var existingKeys = new HashSet<(int?, int)>(existing.Select(e => (e.DivisionId, e.QuoteNumber)));
+
+            int created = 0, skippedExisting = 0, skippedNoClient = 0;
+            foreach (var h in headers)
+            {
+                int? divId = divisionMap.TryGetValue(h.CompanyId, out var dv) ? dv : (int?)null;
+                if (existingKeys.Contains((divId, h.Doc))) { skippedExisting++; continue; }
+                // Quote customer = the contact person, which in this schema is a
+                // Trader id; only import when it resolved to a Client.
+                if (!clientIdByTrader.TryGetValue(h.ContactId, out var clientId)) { skippedNoClient++; continue; }
+
+                var lines = detail.GetValueOrDefault(h.Doc) ?? new();
+                var subtotal = lines.Sum(d => Math.Round(d.Qty * d.Price, 2));
+                _db.SalesQuotes.Add(new SalesQuote
+                {
+                    CompanyId = companyId,
+                    DivisionId = divId,
+                    ClientId = clientId,
+                    QuoteNumber = h.Doc,
+                    Date = h.Date,
+                    ValidUntil = h.Expiry,
+                    Subtotal = subtotal,
+                    GSTRate = 0,
+                    GSTAmount = 0,
+                    GrandTotal = subtotal,
+                    AmountInWords = "",
+                    Status = "Sent",
+                    Items = lines.Select(d => new SalesQuoteItem
+                    {
+                        Description = d.Desc,
+                        Quantity = d.Qty,
+                        Unit = "",
+                        UnitPrice = d.Price,
+                        LineTotal = Math.Round(d.Qty * d.Price, 2),
+                    }).ToList(),
+                });
+                existingKeys.Add((divId, h.Doc));
+                created++;
+            }
+            await _db.SaveChangesAsync();
+
+            result.Created["salesQuotes"] = created;
+            result.Skipped["quotesAlreadyImported"] = skippedExisting;
+            if (skippedNoClient > 0) result.Notes.Add($"Skipped {skippedNoClient} quotes whose customer (contact person) isn't an imported Client.");
+        }
+
+        // ── Sales orders (NEW — SalesOrderMaster/Detail) ────────────────────────
+        private async Task ImportSalesOrdersAsync(int companyId,
+            Dictionary<int, int> clientIdByTrader, Dictionary<int, int> divisionMap, LegacyImportResult result)
+        {
+            var headers = ReadSalesOrderHeaders();
+            var detail = ReadDocDetail("SalesOrderDetail");
+
+            // SalesOrder has no ExternalRef — dedup on (DivisionId, OrderNumber).
+            var existing = await _db.SalesOrders.Where(o => o.CompanyId == companyId)
+                .Select(o => new { o.DivisionId, o.SalesOrderNumber }).ToListAsync();
+            var existingKeys = new HashSet<(int?, int)>(existing.Select(e => (e.DivisionId, e.SalesOrderNumber)));
+
+            int created = 0, skippedExisting = 0, skippedNoClient = 0;
+            foreach (var h in headers)
+            {
+                int? divId = divisionMap.TryGetValue(h.CompanyId, out var dv) ? dv : (int?)null;
+                if (existingKeys.Contains((divId, h.Doc))) { skippedExisting++; continue; }
+                if (!clientIdByTrader.TryGetValue(h.ContactId, out var clientId)) { skippedNoClient++; continue; }
+
+                var lines = detail.GetValueOrDefault(h.Doc) ?? new();
+                _db.SalesOrders.Add(new SalesOrder
+                {
+                    CompanyId = companyId,
+                    DivisionId = divId,
+                    ClientId = clientId,
+                    SalesOrderNumber = h.Doc,
+                    OrderDate = h.Date,
+                    RequiredDate = h.Expected,
+                    Status = "Open",
+                    IsImported = true,
+                    Items = lines.Select(d => new SalesOrderItem
+                    {
+                        Description = d.Desc,
+                        Quantity = d.Qty,
+                        Unit = "",
+                    }).ToList(),
+                });
+                existingKeys.Add((divId, h.Doc));
+                created++;
+            }
+            await _db.SaveChangesAsync();
+
+            result.Created["salesOrders"] = created;
+            result.Skipped["salesOrdersAlreadyImported"] = skippedExisting;
+            if (skippedNoClient > 0) result.Notes.Add($"Skipped {skippedNoClient} sales orders whose customer (contact person) isn't an imported Client.");
+        }
+
+        // ── Delivery challans (NEW — DeliveryChallanMaster/Detail) ──────────────
+        private async Task ImportChallansAsync(int companyId,
+            Dictionary<int, int> clientIdByTrader, Dictionary<int, int> divisionMap, LegacyImportResult result)
+        {
+            var headers = ReadChallanHeaders();
+            var detail = ReadDocDetail("DeliveryChallanDetail");
+
+            // DeliveryChallan has no ExternalRef and challan numbers are non-unique
+            // by design; dedup on (DivisionId, ChallanNumber) for idempotency.
+            var existing = await _db.DeliveryChallans.Where(c => c.CompanyId == companyId)
+                .Select(c => new { c.DivisionId, c.ChallanNumber }).ToListAsync();
+            var existingKeys = new HashSet<(int?, int)>(existing.Select(e => (e.DivisionId, e.ChallanNumber)));
+
+            int created = 0, skippedExisting = 0, skippedNoClient = 0;
+            foreach (var h in headers)
+            {
+                int? divId = divisionMap.TryGetValue(h.CompanyId, out var dv) ? dv : (int?)null;
+                if (existingKeys.Contains((divId, h.Doc))) { skippedExisting++; continue; }
+                if (!clientIdByTrader.TryGetValue(h.ContactId, out var clientId)) { skippedNoClient++; continue; }
+
+                var lines = detail.GetValueOrDefault(h.Doc) ?? new();
+                _db.DeliveryChallans.Add(new DeliveryChallan
+                {
+                    CompanyId = companyId,
+                    DivisionId = divId,
+                    ClientId = clientId,
+                    ChallanNumber = h.Doc,
+                    PoNumber = h.Po ?? "",
+                    DeliveryDate = h.Date,
+                    Status = "Imported",
+                    IsImported = true,
+                    Items = lines.Select(d => new DeliveryItem
+                    {
+                        Description = d.Desc,
+                        Quantity = d.Qty,
+                        Unit = "",
+                    }).ToList(),
+                });
+                existingKeys.Add((divId, h.Doc));
+                created++;
+            }
+            await _db.SaveChangesAsync();
+
+            result.Created["deliveryChallans"] = created;
+            result.Skipped["challansAlreadyImported"] = skippedExisting;
+            if (skippedNoClient > 0) result.Notes.Add($"Skipped {skippedNoClient} delivery challans whose customer (contact person) isn't an imported Client.");
+        }
+
+        // ── Per-division / company document starting numbers ────────────────────
+        // The next document continues from the legacy sequence: Starting* is set
+        // to (imported max + 1) so the config screen shows the next number to use,
+        // and Current* to the imported max. Covers sales quote / invoice / challan
+        // per division, and purchase bill at company level (purchases carry no
+        // division). Only raises values (never lowers an operator-set number).
+        private async Task SeedStartingNumbersAsync(int companyId, LegacyImportResult result)
+        {
+            var invByDiv = await _db.Invoices.Where(i => i.CompanyId == companyId && i.DivisionId != null)
+                .GroupBy(i => i.DivisionId!.Value)
+                .Select(g => new { Div = g.Key, Max = g.Max(x => x.InvoiceNumber) }).ToDictionaryAsync(x => x.Div, x => x.Max);
+            var quoteByDiv = await _db.SalesQuotes.Where(q => q.CompanyId == companyId && q.DivisionId != null)
+                .GroupBy(q => q.DivisionId!.Value)
+                .Select(g => new { Div = g.Key, Max = g.Max(x => x.QuoteNumber) }).ToDictionaryAsync(x => x.Div, x => x.Max);
+            var challanByDiv = await _db.DeliveryChallans.Where(c => c.CompanyId == companyId && c.DivisionId != null)
+                .GroupBy(c => c.DivisionId!.Value)
+                .Select(g => new { Div = g.Key, Max = g.Max(x => x.ChallanNumber) }).ToDictionaryAsync(x => x.Div, x => x.Max);
+            var orderByDiv = await _db.SalesOrders.Where(o => o.CompanyId == companyId && o.DivisionId != null)
+                .GroupBy(o => o.DivisionId!.Value)
+                .Select(g => new { Div = g.Key, Max = g.Max(x => x.SalesOrderNumber) }).ToDictionaryAsync(x => x.Div, x => x.Max);
+
+            // Set Starting = max+1, Current = max (only when it raises the value).
+            static void Seed(int max, ref int starting, ref int current)
+            {
+                if (max <= 0) return;
+                if (max + 1 > starting) starting = max + 1;
+                if (max > current) current = max;
+            }
+
+            var divisions = await _db.Divisions.Where(d => d.CompanyId == companyId).ToListAsync();
+            foreach (var d in divisions)
+            {
+                var s = d.StartingInvoiceNumber; var c = d.CurrentInvoiceNumber;
+                Seed(invByDiv.GetValueOrDefault(d.Id), ref s, ref c); d.StartingInvoiceNumber = s; d.CurrentInvoiceNumber = c;
+                s = d.StartingSalesQuoteNumber; c = d.CurrentSalesQuoteNumber;
+                Seed(quoteByDiv.GetValueOrDefault(d.Id), ref s, ref c); d.StartingSalesQuoteNumber = s; d.CurrentSalesQuoteNumber = c;
+                s = d.StartingChallanNumber; c = d.CurrentChallanNumber;
+                Seed(challanByDiv.GetValueOrDefault(d.Id), ref s, ref c); d.StartingChallanNumber = s; d.CurrentChallanNumber = c;
+                s = d.StartingSalesOrderNumber; c = d.CurrentSalesOrderNumber;
+                Seed(orderByDiv.GetValueOrDefault(d.Id), ref s, ref c); d.StartingSalesOrderNumber = s; d.CurrentSalesOrderNumber = c;
+            }
+
+            var company = await _db.Companies.FirstAsync(c => c.Id == companyId);
+            var billMax = await _db.PurchaseBills.Where(p => p.CompanyId == companyId).MaxAsync(p => (int?)p.PurchaseBillNumber) ?? 0;
+            { var s = company.StartingPurchaseBillNumber; var c = company.CurrentPurchaseBillNumber; Seed(billMax, ref s, ref c); company.StartingPurchaseBillNumber = s; company.CurrentPurchaseBillNumber = c; }
+            // Company-level (no-division) fallbacks for sales docs, if any exist.
+            var invCoMax = await _db.Invoices.Where(i => i.CompanyId == companyId && i.DivisionId == null).MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+            { var s = company.StartingInvoiceNumber; var c = company.CurrentInvoiceNumber; Seed(invCoMax, ref s, ref c); company.StartingInvoiceNumber = s; company.CurrentInvoiceNumber = c; }
+
+            await _db.SaveChangesAsync();
+            result.Created["divisionsNumbered"] = divisions.Count;
+            result.Notes.Add("Seeded next (max+1) sales-quote / sales-order / invoice / delivery-challan numbers per division and the company's next purchase-bill number from the imported data — adjust in Company/Division config if a stray legacy number looks too high.");
         }
 
         private async Task ImportPurchasesAsync(int companyId, Dictionary<int, int> supplierIdByTrader, LegacyImportResult result)
@@ -348,10 +799,9 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Receipts / Payments ─────────────────────────────────────────────────
 
-        public async Task<LegacyImportResult> ImportReceiptsPaymentsAsync(int companyId)
+        public async Task<LegacyImportResult> ImportReceiptsPaymentsAsync(string sourceDb, int companyId)
         {
-            if (!IsConfigured)
-                throw new InvalidOperationException("Legacy import is not configured (ConnectionStrings:LegacyDb missing).");
+            UseSource(sourceDb);
             if (!await _db.Companies.AnyAsync(c => c.Id == companyId))
                 throw new InvalidOperationException("Target company not found.");
 
@@ -518,7 +968,7 @@ namespace MyApp.Api.Services.Implementations
 
         private record CoaRow(string Code, string? Parent, string Desc, string Type, bool IsControl, decimal OpeningDebit, decimal OpeningCredit);
         private record TraderRow(int Id, string? Name, int Type, string? Ntn, string? Gst, string? AccountCode);
-        private record SaleHeaderRow(int Doc, int Folio, DateTime Date, decimal Tax);
+        private record SaleHeaderRow(int Doc, int CompanyId, int Folio, DateTime Date, decimal Tax);
         private record PurchaseHeaderRow(int Doc, int Folio, int TraderId, DateTime Date, string? SupplierInv);
         private record VoucherLineRow(string Account, decimal Amount);
         private record DetailRow(string Desc, decimal Qty, decimal Price);
@@ -528,10 +978,10 @@ namespace MyApp.Api.Services.Implementations
             var list = new List<SaleHeaderRow>();
             using var conn = new SqlConnection(_connStr); conn.Open();
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT DocumentNumber, ISNULL(FKFolioNumber,0), DocumentDate, ISNULL(TaxAmount1,0) FROM SalesInvoiceMaster WHERE FKCostCentreID=1";
+            cmd.CommandText = "SELECT DocumentNumber, ISNULL(FKCompanyID,0), ISNULL(FKFolioNumber,0), DocumentDate, ISNULL(TaxAmount1,0) FROM SalesInvoiceMaster WHERE FKCostCentreID=1";
             using var rdr = cmd.ExecuteReader();
             while (rdr.Read())
-                list.Add(new SaleHeaderRow(rdr.GetInt32(0), rdr.GetInt32(1), rdr.GetDateTime(2), rdr.GetDecimal(3)));
+                list.Add(new SaleHeaderRow(rdr.GetInt32(0), rdr.GetInt32(1), rdr.GetInt32(2), rdr.GetDateTime(3), rdr.GetDecimal(4)));
             return list;
         }
 
@@ -610,6 +1060,74 @@ namespace MyApp.Api.Services.Implementations
                     rdr.IsDBNull(5) ? 0 : rdr.GetDecimal(5),
                     rdr.IsDBNull(6) ? 0 : rdr.GetDecimal(6)));
             }
+            return list;
+        }
+
+        private record CompanyProfileRow(int CompanyId, string? Name, string? ShortName, string? Address, string? Ntn, string? Gst);
+
+        private List<CompanyProfileRow> ReadCompanyProfiles()
+        {
+            var list = new List<CompanyProfileRow>();
+            using var conn = new SqlConnection(_connStr); conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT CompanyID, Name, ShortName, Address, NationalTaxNumber, GeneralSalesTaxNumber FROM CompanyProfile WHERE FKCostCentreID=1 ORDER BY CompanyID";
+            using var rdr = cmd.ExecuteReader();
+            while (rdr.Read())
+                list.Add(new CompanyProfileRow(
+                    rdr.GetInt32(0),
+                    rdr.IsDBNull(1) ? null : rdr.GetString(1).Trim(),
+                    rdr.IsDBNull(2) ? null : rdr.GetString(2).Trim(),
+                    rdr.IsDBNull(3) ? null : rdr.GetString(3).Trim(),
+                    rdr.IsDBNull(4) ? null : rdr.GetString(4).Trim(),
+                    rdr.IsDBNull(5) ? null : rdr.GetString(5).Trim()));
+            return list;
+        }
+
+        private record QuoteHeaderRow(int Doc, int CompanyId, int ContactId, DateTime Date, DateTime? Expiry);
+
+        private List<QuoteHeaderRow> ReadQuoteHeaders()
+        {
+            var list = new List<QuoteHeaderRow>();
+            using var conn = new SqlConnection(_connStr); conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT DocumentNumber, ISNULL(FKCompanyID,0), ISNULL(FKContactPersonID,0), DocumentDate, ExpiryDate FROM QuotationMaster WHERE FKCostCentreID=1";
+            using var rdr = cmd.ExecuteReader();
+            while (rdr.Read())
+                list.Add(new QuoteHeaderRow(
+                    rdr.GetInt32(0), rdr.GetInt32(1), rdr.GetInt32(2), rdr.GetDateTime(3),
+                    rdr.IsDBNull(4) ? (DateTime?)null : rdr.GetDateTime(4)));
+            return list;
+        }
+
+        private record SoHeaderRow(int Doc, int CompanyId, int ContactId, DateTime Date, DateTime? Expected);
+
+        private List<SoHeaderRow> ReadSalesOrderHeaders()
+        {
+            var list = new List<SoHeaderRow>();
+            using var conn = new SqlConnection(_connStr); conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT DocumentNumber, ISNULL(FKCompanyID,0), ISNULL(FKContactPersonID,0), DocumentDate, ExpectedDeliveryDate FROM SalesOrderMaster WHERE FKCostCentreID=1";
+            using var rdr = cmd.ExecuteReader();
+            while (rdr.Read())
+                list.Add(new SoHeaderRow(
+                    rdr.GetInt32(0), rdr.GetInt32(1), rdr.GetInt32(2), rdr.GetDateTime(3),
+                    rdr.IsDBNull(4) ? (DateTime?)null : rdr.GetDateTime(4)));
+            return list;
+        }
+
+        private record ChallanHeaderRow(int Doc, int CompanyId, int ContactId, DateTime Date, string? Po);
+
+        private List<ChallanHeaderRow> ReadChallanHeaders()
+        {
+            var list = new List<ChallanHeaderRow>();
+            using var conn = new SqlConnection(_connStr); conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT DocumentNumber, ISNULL(FKCompanyID,0), ISNULL(FKContactPersonID,0), DocumentDate, CustomerPONumber FROM DeliveryChallanMaster WHERE FKCostCentreID=1";
+            using var rdr = cmd.ExecuteReader();
+            while (rdr.Read())
+                list.Add(new ChallanHeaderRow(
+                    rdr.GetInt32(0), rdr.GetInt32(1), rdr.GetInt32(2), rdr.GetDateTime(3),
+                    rdr.IsDBNull(4) ? null : rdr.GetString(4).Trim()));
             return list;
         }
 
