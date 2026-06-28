@@ -6,6 +6,10 @@ export const getInvoicesByCompany = (companyId) =>
 export const getPagedInvoicesByCompany = (companyId, params = {}) =>
   httpClient.get(`/invoices/company/${companyId}/paged`, { params });
 
+// Sales-invoice count per client (clientId -> count) for the Clients page chip.
+export const getInvoiceCountsByClient = (companyId) =>
+  httpClient.get(`/invoices/company/${companyId}/counts-by-client`);
+
 export const getInvoiceById = (id) =>
   httpClient.get(`/invoices/${id}`);
 

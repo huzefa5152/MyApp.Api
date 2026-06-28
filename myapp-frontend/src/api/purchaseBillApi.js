@@ -8,3 +8,7 @@ export const updatePurchaseBill = (id, payload) => http.put(`/purchasebills/${id
 export const deletePurchaseBill = (id) => http.delete(`/purchasebills/${id}`);
 export const getPurchaseBillsCount = (companyId) =>
   http.get("/purchasebills/count", { params: { companyId } });
+
+// Purchase-bill count per supplier (supplierId -> count) for the Suppliers page chip.
+export const getPurchaseBillCountsBySupplier = (companyId) =>
+  http.get(`/purchasebills/company/${companyId}/counts-by-supplier`);

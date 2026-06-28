@@ -1,11 +1,11 @@
-import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete, MdContentCopy } from "react-icons/md";
+import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete, MdContentCopy, MdReceiptLong } from "react-icons/md";
 import { deleteClient, getClientDeleteImpact } from "../api/clientApi";
 import { cardStyles, cardHover } from "../theme";
 import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 
-export default function ClientList({ clients, onEdit, onCopy, fetchClients }) {
+export default function ClientList({ clients, onEdit, onCopy, fetchClients, invoiceCounts = {}, onShowInvoices }) {
   const confirm = useConfirm();
   const { has } = usePermissions();
   const canUpdate = has("clients.manage.update");
@@ -67,6 +67,17 @@ export default function ClientList({ clients, onEdit, onCopy, fetchClients }) {
           <div style={cardStyles.cardContent}>
             <div>
               <h5 style={cardStyles.title}>{client.name}</h5>
+              {onShowInvoices && (
+                <button
+                  type="button"
+                  onClick={() => onShowInvoices(client)}
+                  title="View this client's sales invoices"
+                  style={countChip}
+                >
+                  <MdReceiptLong size={13} />
+                  {invoiceCounts[client.id] || 0} sales invoice{(invoiceCounts[client.id] || 0) !== 1 ? "s" : ""}
+                </button>
+              )}
               {client.email && (
                 <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
                   <MdEmail style={{ color: "#0d47a1", flexShrink: 0 }} /> {client.email}
@@ -139,3 +150,10 @@ export default function ClientList({ clients, onEdit, onCopy, fetchClients }) {
     </div>
   );
 }
+
+const countChip = {
+  display: "inline-flex", alignItems: "center", gap: 4,
+  margin: "0.3rem 0 0.1rem", padding: "0.2rem 0.55rem",
+  borderRadius: 14, border: "1px solid #90caf9", background: "#e3f2fd",
+  color: "#0d47a1", fontSize: "0.74rem", fontWeight: 700, cursor: "pointer",
+};

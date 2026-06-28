@@ -58,6 +58,14 @@ namespace MyApp.Api.Controllers
             return Ok(invoices);
         }
 
+        /// <summary>Sales-invoice count per client (clientId → count) — powers the
+        /// clickable count on the Clients page.</summary>
+        [HttpGet("company/{companyId}/counts-by-client")]
+        [HasAnyPermission("bills.list.view", "invoices.list.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<Dictionary<int, int>>> GetCountsByClient(int companyId)
+            => Ok(await _service.GetInvoiceCountsByClientAsync(companyId));
+
         [HttpGet("company/{companyId}/paged")]
         [HasAnyPermission("bills.list.view", "invoices.list.view")]
         [AuthorizeCompany]

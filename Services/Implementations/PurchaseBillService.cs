@@ -602,5 +602,14 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<int> GetCountByCompanyAsync(int companyId) =>
             await _context.PurchaseBills.CountAsync(p => p.CompanyId == companyId);
+
+        // Purchase-bill count per supplier for a company — powers the clickable
+        // "N purchase bills" chip on the Suppliers page. Single GROUP BY.
+        public async Task<Dictionary<int, int>> GetCountsBySupplierAsync(int companyId) =>
+            await _context.PurchaseBills
+                .Where(p => p.CompanyId == companyId)
+                .GroupBy(p => p.SupplierId)
+                .Select(g => new { SupplierId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.SupplierId, x => x.Count);
     }
 }

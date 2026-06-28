@@ -2113,6 +2113,16 @@ namespace MyApp.Api.Services.Implementations
             return await _invoiceRepo.GetCountByCompanyAsync(companyId);
         }
 
+        // Sales-invoice count per client for a company — powers the clickable
+        // "N sales invoices" chip on the Clients page. Excludes demo invoices to
+        // match the page total; includes cancelled (they still show in the list).
+        public async Task<Dictionary<int, int>> GetInvoiceCountsByClientAsync(int companyId) =>
+            await _context.Invoices
+                .Where(i => i.CompanyId == companyId && !i.IsDemo)
+                .GroupBy(i => i.ClientId)
+                .Select(g => new { ClientId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.ClientId, x => x.Count);
+
         public async Task<List<AwaitingPurchaseInvoiceDto>> GetAwaitingPurchaseAsync(int companyId)
         {
             // A bill qualifies for the "Purchase Against Sale Bill" picker if:

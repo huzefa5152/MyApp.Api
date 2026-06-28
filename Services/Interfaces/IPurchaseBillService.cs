@@ -16,5 +16,6 @@ namespace MyApp.Api.Services.Interfaces
         Task<PurchaseBillDto?> SetDueDateAsync(int id, DateTime? dueDate);
         Task<bool> DeleteAsync(int id);
         Task<int> GetCountByCompanyAsync(int companyId);
+        Task<Dictionary<int, int>> GetCountsBySupplierAsync(int companyId);
     }
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { MdLocalShipping, MdAdd, MdSearch, MdBusiness } from "react-icons/md";
 import SupplierList from "../Components/SupplierList";
 import SupplierForm from "../Components/SupplierForm";
@@ -6,6 +7,7 @@ import CommonSuppliersPanel from "../Components/CommonSuppliersPanel";
 import CommonSupplierForm from "../Components/CommonSupplierForm";
 import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
 import { getSuppliersByCompany, getCommonSuppliers, copySupplierToCompanies } from "../api/supplierApi";
+import { getPurchaseBillCountsBySupplier } from "../api/purchaseBillApi";
 import { notify } from "../utils/notify";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
@@ -20,10 +22,15 @@ const colors = {
 };
 
 export default function SuppliersPage() {
+  const navigate = useNavigate();
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
   const canCreate = has("suppliers.manage.create");
+  // Whether the operator may open the Purchase Bills list (gates the chip).
+  const canViewBills = has("purchasebills.list.view");
   const [suppliers, setSuppliers] = useState([]);
+  // supplierId -> purchase-bill count, for the clickable chip on each card.
+  const [billCounts, setBillCounts] = useState({});
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
@@ -79,6 +86,18 @@ export default function SuppliersPage() {
     if (selectedCompany) fetchSuppliers(selectedCompany.id);
     else setSuppliers([]);
   }, [selectedCompany]);
+
+  // Purchase-bill counts per supplier (one GROUP BY call). Best-effort.
+  useEffect(() => {
+    if (!selectedCompany || !canViewBills) { setBillCounts({}); return; }
+    let cancelled = false;
+    getPurchaseBillCountsBySupplier(selectedCompany.id)
+      // Guard: only accept a plain object map (the SPA fallback returns HTML
+      // with a 200 when the endpoint is missing — must not become "counts").
+      .then(({ data }) => { if (!cancelled) setBillCounts(data && typeof data === "object" && !Array.isArray(data) ? data : {}); })
+      .catch(() => { if (!cancelled) setBillCounts({}); });
+    return () => { cancelled = true; };
+  }, [selectedCompany, canViewBills]);
 
   const handleEdit = (s) => { setSelectedSupplier(s); setShowModal(true); };
   const handleAdd = () => { setSelectedSupplier(null); setShowModal(true); };
@@ -193,6 +212,8 @@ export default function SuppliersPage() {
           onEdit={handleEdit}
           onCopy={(s) => setCopyingSupplier(s)}
           fetchSuppliers={() => fetchSuppliers(selectedCompany?.id)}
+          billCounts={billCounts}
+          onShowBills={canViewBills ? (s) => navigate(`/purchase-bills?supplierId=${s.id}`) : null}
         />
       )}
 

@@ -59,6 +59,7 @@ namespace MyApp.Api.Services.Interfaces
         Task<PrintTaxInvoiceDto?> GetPrintTaxInvoiceAsync(int invoiceId);
         Task<int> GetTotalCountAsync();
         Task<int> GetCountByCompanyAsync(int companyId);
+        Task<Dictionary<int, int>> GetInvoiceCountsByClientAsync(int companyId);
         /// <summary>
         /// Flat InvoiceItem search across a company's billing history. Powers
         /// the Item Rate History page — given an item (by catalog id or free

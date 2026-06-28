@@ -41,6 +41,14 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<int>> GetCount([FromQuery] int companyId)
             => Ok(await _service.GetCountByCompanyAsync(companyId));
 
+        /// <summary>Purchase-bill count per supplier (supplierId → count) — powers
+        /// the clickable count on the Suppliers page.</summary>
+        [HttpGet("company/{companyId}/counts-by-supplier")]
+        [HasPermission("purchasebills.list.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<Dictionary<int, int>>> GetCountsBySupplier(int companyId)
+            => Ok(await _service.GetCountsBySupplierAsync(companyId));
+
         [HttpGet("company/{companyId}/paged")]
         [HasPermission("purchasebills.list.view")]
         [AuthorizeCompany]
