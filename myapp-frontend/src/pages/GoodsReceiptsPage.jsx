@@ -6,6 +6,7 @@ import { dropdownStyles, cardStyles, cardHover } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
+import SearchableSelect from "../Components/SearchableSelect";
 import { notify } from "../utils/notify";
 import GoodsReceiptForm from "../Components/GoodsReceiptForm";
 import GoodsReceiptTable from "../Components/GoodsReceiptTable";
@@ -120,10 +121,14 @@ export default function GoodsReceiptsPage() {
                 <MdSearch size={15} className="filter-search-icon" />
                 <input type="text" placeholder="Search GR#, supplier, item..." className="filter-search-input" value={search} onChange={onFilterChange(setSearch)} />
               </div>
-              <select className="filter-select" value={supplierFilter} onChange={onFilterChange(setSupplierFilter)}>
-                <option value="">All Suppliers</option>
-                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <div style={{ minWidth: 220, maxWidth: 340 }}>
+                <SearchableSelect
+                  items={suppliers}
+                  value={supplierFilter}
+                  onChange={(id) => onFilterChange(setSupplierFilter)({ target: { value: id ? String(id) : "" } })}
+                  placeholder="All Suppliers"
+                />
+              </div>
               {isBigScreen && (
                 <div style={{ marginLeft: "auto" }}>
                   <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Goods receipts view mode" />

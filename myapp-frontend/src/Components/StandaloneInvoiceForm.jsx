@@ -11,6 +11,7 @@ import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import LookupAutocomplete from "./LookupAutocomplete";
 import ClientForm from "./ClientForm";
 import DivisionSelect from "./DivisionSelect";
+import SearchableSelect from "./SearchableSelect";
 import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 
@@ -641,18 +642,16 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                 clients yet.
                               </div>
                             ) : (
-                              <select
-                                style={{ ...styles.select, flex: 1 }}
-                                value={selectedClientId}
-                                onChange={(e) => setSelectedClientId(e.target.value)}
-                              >
-                                <option value="">— Choose a buyer —</option>
-                                {filteredClients.map((cl) => (
-                                  <option key={cl.id} value={cl.id}>
-                                    {cl.name} ({cl.registrationType || "—"}{cl.ntn ? ` · NTN ${cl.ntn}` : cl.cnic ? ` · CNIC ${cl.cnic}` : ""})
-                                  </option>
-                                ))}
-                              </select>
+                              <div style={{ flex: 1 }}>
+                                <SearchableSelect
+                                  items={filteredClients.map((cl) => ({ ...cl, _label: `${cl.name} (${cl.registrationType || "—"}${cl.ntn ? ` · NTN ${cl.ntn}` : cl.cnic ? ` · CNIC ${cl.cnic}` : ""})` }))}
+                                  value={selectedClientId}
+                                  onChange={(id) => setSelectedClientId(id ? String(id) : "")}
+                                  labelKey="_label"
+                                  searchKeys={["name", "ntn", "cnic"]}
+                                  placeholder="— Choose a buyer —"
+                                />
+                              </div>
                             )}
                             {/* Inline-create. Hidden when caller can't create
                                 clients — replaced by an inline hint instead. */}

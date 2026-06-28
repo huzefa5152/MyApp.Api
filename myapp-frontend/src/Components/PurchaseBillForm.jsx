@@ -8,6 +8,7 @@ import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
 import { usePermissions } from "../contexts/PermissionsContext";
 
@@ -21,9 +22,12 @@ const colors = {
   inputBorder: "#d0d7e2",
 };
 
-export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, readOnly = false }) {
+export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, prefillItems = null, prefillSourceLabel = null, readOnly = false }) {
   const isEdit = !!billId;
   const isAgainstSale = !!prefillFromInvoiceId;
+  // "Purchase Against Sales Order(s)" prefill — plain lines (NOT the FBR
+  // item-type-binding flow); the operator picks the supplier and unit prices.
+  const isFromOrders = Array.isArray(prefillItems) && prefillItems.length > 0;
   const [suppliers, setSuppliers] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
   const [supplierId, setSupplierId] = useState("");
@@ -144,6 +148,21 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       }
     })();
   }, [prefillFromInvoiceId]);
+
+  // "Purchase Against Sales Order(s)" — seed plain lines from the merged order
+  // items. Unit prices start at 0 (orders carry no pricing); operator fills them.
+  useEffect(() => {
+    if (!isFromOrders) return;
+    setItems(prefillItems.map(p => ({
+      ...newRow(),
+      itemTypeId: p.itemTypeId || null,
+      description: p.description || "",
+      quantity: p.quantity || 0,
+      unitPrice: p.unitPrice || 0,
+      uom: p.uom || "",
+    })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const subtotal = useMemo(
     () => items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0), 0),
@@ -267,13 +286,33 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               </div>
             )}
 
+            {isFromOrders && prefillSourceLabel && (
+              <div style={{
+                display: "flex", alignItems: "flex-start", gap: "0.65rem",
+                padding: "0.7rem 0.95rem", marginBottom: "0.85rem",
+                backgroundColor: "#e8f5e9", border: "1px solid #a5d6a7",
+                borderRadius: 8,
+              }}>
+                <MdReceipt size={20} color="#1b5e20" style={{ flexShrink: 0, marginTop: 1 }} />
+                <div style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.4 }}>
+                  <strong>Purchasing for Sales Order {prefillSourceLabel}</strong>
+                  <div style={{ fontSize: "0.76rem", color: "#5f6d7e", marginTop: 2 }}>
+                    Lines are prefilled with the outstanding (undelivered) quantities. Pick a supplier
+                    and enter unit prices. Quantities and lines are editable.
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "0.75rem" }}>
-              <div style={formStyles.formGroup}>
+              <div style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
                 <label style={formStyles.label}>Supplier *</label>
-                <select style={formStyles.input} value={supplierId} onChange={e => setSupplierId(e.target.value)}>
-                  <option value="">Select supplier...</option>
-                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                <SearchableSelect
+                  items={suppliers}
+                  value={supplierId}
+                  onChange={(id) => setSupplierId(id ? String(id) : "")}
+                  placeholder="Select supplier…"
+                />
               </div>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Bill Date *</label>

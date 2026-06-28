@@ -137,7 +137,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
           <div style={formStyles.body}>
             {error && <div style={s.err}>{error}</div>}
             <div style={s.row}>
-              <div style={{ flex: 2, minWidth: 220 }}>
+              <div style={{ flex: "1 1 100%", minWidth: 220 }}>
                 <SelectDropdown label="Client" endpoint={`/clients/company/${companyId}`} value={client} onChange={(v) => { setClient(v); setSite(""); setSalesQuoteId(""); }} placeholder="Choose client" />
               </div>
               <div style={{ flex: 1, minWidth: 150 }}>

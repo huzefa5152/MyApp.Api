@@ -13,6 +13,7 @@ import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import ClientForm from "./ClientForm";
 import DivisionSelect from "./DivisionSelect";
+import SearchableSelect from "./SearchableSelect";
 import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 // 2026-05-08: Same UOM autocomplete the ChallanForm uses, hooked up
@@ -789,21 +790,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 {canCreateClient ? " Add a buyer below." : " Switch scenarios or ask an admin to add one."}
                               </div>
                             ) : (
-                              <select
-                                style={{ ...styles.select, flex: 1 }}
-                                value={selectedClientId}
-                                onChange={handleClientChange}
-                              >
-                                <option value="">— Choose a buyer —</option>
-                                {clientsForScenario.map((cl) => {
-                                  const count = allChallans.filter((ch) => ch.clientId === cl.id).length;
-                                  return (
-                                    <option key={cl.id} value={cl.id}>
-                                      {cl.name} ({count} pending DC{count !== 1 ? "s" : ""})
-                                    </option>
-                                  );
-                                })}
-                              </select>
+                              <div style={{ flex: 1 }}>
+                                <SearchableSelect
+                                  items={clientsForScenario.map((cl) => {
+                                    const count = allChallans.filter((ch) => ch.clientId === cl.id).length;
+                                    return { ...cl, _label: `${cl.name} (${count} pending DC${count !== 1 ? "s" : ""})` };
+                                  })}
+                                  value={selectedClientId}
+                                  onChange={(id) => handleClientChange({ target: { value: id ? String(id) : "" } })}
+                                  labelKey="_label"
+                                  searchKeys={["name", "ntn"]}
+                                  placeholder="— Choose a buyer —"
+                                />
+                              </div>
                             )}
                             {canCreateClient ? (
                               <button

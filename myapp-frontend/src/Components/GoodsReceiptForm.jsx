@@ -8,6 +8,7 @@ import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
 import { usePermissions } from "../contexts/PermissionsContext";
 
@@ -118,12 +119,14 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
             {error && <div style={formStyles.error}>{error}</div>}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
-              <div style={formStyles.formGroup}>
+              <div style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
                 <label style={formStyles.label}>Supplier *</label>
-                <select style={formStyles.input} value={supplierId} onChange={e => setSupplierId(e.target.value)}>
-                  <option value="">Select...</option>
-                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                <SearchableSelect
+                  items={suppliers}
+                  value={supplierId}
+                  onChange={(id) => setSupplierId(id ? String(id) : "")}
+                  placeholder="Select supplier…"
+                />
               </div>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Receipt Date *</label>
