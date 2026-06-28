@@ -331,7 +331,10 @@ export default function DashboardLayout() {
                 </NavLink>
               </Can>
               <Can permission="challans.list.view">
-                <NavLink to="/challans" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                {/* `end`: /challans is a prefix of /challans/import, so without
+                    it this link stays active on the Import Challans route and
+                    both items light up. */}
+                <NavLink to="/challans" end className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdDescription className="dl-subitem__icon" aria-hidden="true" />
                   <span>Delivery Challans</span>
                 </NavLink>
