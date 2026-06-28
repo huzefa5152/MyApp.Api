@@ -69,6 +69,11 @@ namespace MyApp.Api.Controllers
         public Task<IActionResult> CreateReceipt(int companyId, [FromBody] CreatePaymentDto dto)
             => Create(companyId, dto, PaymentDirection.Receipt);
 
+        [HttpPut("receipts/{id}")]
+        [HasPermission("accounting.receipts.create")]
+        public Task<IActionResult> UpdateReceipt(int id, [FromBody] CreatePaymentDto dto)
+            => Update(id, dto, PaymentDirection.Receipt);
+
         [HttpDelete("receipts/{id}")]
         [HasPermission("accounting.receipts.delete")]
         public Task<IActionResult> DeleteReceipt(int id) => Delete(id, PaymentDirection.Receipt);
@@ -99,6 +104,11 @@ namespace MyApp.Api.Controllers
         [AuthorizeCompany]
         public Task<IActionResult> CreatePayment(int companyId, [FromBody] CreatePaymentDto dto)
             => Create(companyId, dto, PaymentDirection.Payment);
+
+        [HttpPut("payments/{id}")]
+        [HasPermission("accounting.payments.create")]
+        public Task<IActionResult> UpdatePayment(int id, [FromBody] CreatePaymentDto dto)
+            => Update(id, dto, PaymentDirection.Payment);
 
         [HttpDelete("payments/{id}")]
         [HasPermission("accounting.payments.delete")]
@@ -139,6 +149,25 @@ namespace MyApp.Api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Create {Direction} failed for company {CompanyId}", direction, companyId);
+                return StatusCode(500, new { error = "Could not save the document. Please try again." });
+            }
+        }
+
+        private async Task<IActionResult> Update(int id, CreatePaymentDto dto, PaymentDirection direction)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null || existing.Direction != direction.ToString()) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            dto.Direction = direction.ToString(); // route wins — never trust the body
+            try
+            {
+                var updated = await _service.UpdateAsync(id, dto);
+                return updated == null ? NotFound() : Ok(updated);
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Update {Direction} {Id} failed", direction, id);
                 return StatusCode(500, new { error = "Could not save the document. Please try again." });
             }
         }

@@ -611,6 +611,16 @@ namespace MyApp.Api.Data
             // create retries on this violation (NumberAllocationRetry).
             modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
                 .HasIndex(p => new { p.CompanyId, p.Direction, p.Number }).IsUnique();
+            // Optional Division tag. NoAction (not SetNull/Cascade): Company->Payment
+            // is Restrict and Company->Division is Cascade, so a cascading
+            // Division->Payment path would create multiple cascade paths. The app
+            // (DivisionService.DeleteAsync) unlinks referencing rows instead.
+            // Mirrors PurchaseBill/GoodsReceipt's Division FK.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .HasOne(p => p.Division).WithMany()
+                .HasForeignKey(p => p.DivisionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
 
             // Allocation line → Payment (Cascade: lines die with their document).
             modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()

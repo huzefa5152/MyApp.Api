@@ -16,6 +16,7 @@ namespace MyApp.Api.Repositories.Implementations
 
         private IQueryable<Payment> WithIncludes() =>
             _context.Payments
+                .Include(p => p.Division)
                 .Include(p => p.Allocations).ThenInclude(a => a.Invoice)
                 .Include(p => p.Allocations).ThenInclude(a => a.PurchaseBill);
 

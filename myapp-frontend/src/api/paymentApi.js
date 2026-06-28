@@ -13,6 +13,9 @@ export const getPaymentById = (dir, id) =>
 export const createPayment = (dir, companyId, payload) =>
   httpClient.post(`/payments/${dir}/company/${companyId}`, payload);
 
+export const updatePayment = (dir, id, payload) =>
+  httpClient.put(`/payments/${dir}/${id}`, payload);
+
 export const deletePayment = (dir, id) =>
   httpClient.delete(`/payments/${dir}/${id}`);
 

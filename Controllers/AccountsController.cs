@@ -53,6 +53,15 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<List<AccountDto>>> GetFlat(int companyId)
             => Ok(await _service.GetAccountsFlatAsync(companyId));
 
+        /// <summary>Bank/cash accounts for the receipt/payment "Received in /
+        /// Paid from" picker. Gated so anyone who can record a receipt/payment
+        /// (or view the CoA) can populate it.</summary>
+        [HttpGet("company/{companyId}/bank-cash")]
+        [HasAnyPermission("accounting.coa.view", "accounting.receipts.create", "accounting.payments.create", "accounting.receipts.view", "accounting.payments.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<List<AccountDto>>> GetBankCash(int companyId)
+            => Ok(await _service.GetBankCashAccountsAsync(companyId));
+
         // ── Groups ──────────────────────────────────────────────────────────────
 
         [HttpPost("company/{companyId}/groups")]

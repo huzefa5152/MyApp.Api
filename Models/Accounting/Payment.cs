@@ -44,6 +44,15 @@ namespace MyApp.Api.Models.Accounting
         public string ContactType { get; set; } = "Other";
         public int? ContactId { get; set; }
 
+        /// <summary>Optional reporting tag — reuses the company's Divisions, the
+        /// same optional dimension the transactional documents carry. Defaults
+        /// from the settled document when recorded via the invoice/bill shortcut.
+        /// Nullable + NoAction FK (mirrors Invoice/PurchaseBill) so deleting a
+        /// division never cascades a payment away. Does NOT scope the document
+        /// number — receipts/payments keep a single per-(company, direction)
+        /// sequence.</summary>
+        public int? DivisionId { get; set; }
+
         // ── Where the money landed / came from ──
         // BankAccountId is NULLABLE for now: the BankAccount subledger arrives in
         // the Chart-of-Accounts phase. Until then the operator picks via the
@@ -78,6 +87,7 @@ namespace MyApp.Api.Models.Accounting
 
         // Navigation
         public Company Company { get; set; } = null!;
+        public Division? Division { get; set; }
         public ICollection<PaymentAllocation> Allocations { get; set; } = new List<PaymentAllocation>();
     }
 }

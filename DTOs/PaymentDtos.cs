@@ -18,6 +18,10 @@ namespace MyApp.Api.DTOs
         /// <summary>Resolved Client/Supplier name (null for "Other").</summary>
         public string? ContactName { get; set; }
 
+        /// <summary>Optional Division tag and its resolved name.</summary>
+        public int? DivisionId { get; set; }
+        public string? DivisionName { get; set; }
+
         public int? BankAccountId { get; set; }
         public string? BankAccountName { get; set; }
         public string Method { get; set; } = "Cash";
@@ -61,6 +65,9 @@ namespace MyApp.Api.DTOs
 
         public string ContactType { get; set; } = "Other";
         public int? ContactId { get; set; }
+
+        /// <summary>Optional Division tag (validated against the company server-side).</summary>
+        public int? DivisionId { get; set; }
 
         public int? BankAccountId { get; set; }
         public string? BankAccountName { get; set; }

@@ -1,7 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { MdClose } from "react-icons/md";
 import { formStyles, modalSizes, colors, dropdownStyles } from "../theme";
-import { createPayment } from "../api/paymentApi";
+import SearchableSelect from "./SearchableSelect";
+import DivisionSelect from "./DivisionSelect";
+import BankCashSelect from "./BankCashSelect";
+import { usePermissions } from "../contexts/PermissionsContext";
+import { createPayment, updatePayment } from "../api/paymentApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getPagedInvoicesByCompany } from "../api/invoiceApi";
@@ -17,22 +21,38 @@ const METHODS = ["Cash", "Bank Transfer", "Cheque", "Online", "Other"];
  * input each; the payment total is the sum of the applied amounts. Direct
  * (account) lines are deferred to the Chart-of-Accounts phase.
  */
-export default function PaymentForm({ mode, companyId, preset, onClose, onSaved }) {
+export default function PaymentForm({ mode, companyId, preset, editPayment = null, onClose, onSaved }) {
+  const { has } = usePermissions();
+  const canViewDivisions = has("divisions.manage.view");
   const isReceipt = mode === "receipts";
+  const isEdit = !!editPayment?.id;
   const contactLabel = isReceipt ? "Client" : "Supplier";
   const docLabel = isReceipt ? "Invoice" : "Bill";
   const dir = isReceipt ? "receipts" : "payments";
 
   const today = new Date().toISOString().slice(0, 10);
-  const [date, setDate] = useState(today);
-  const [method, setMethod] = useState("Cash");
-  const [bankAccountName, setBankAccountName] = useState("");
-  const [description, setDescription] = useState("");
-  const [chequeNumber, setChequeNumber] = useState("");
-  const [chequeDate, setChequeDate] = useState("");
+  const [date, setDate] = useState(editPayment?.date ? editPayment.date.slice(0, 10) : today);
+  const [method, setMethod] = useState(editPayment?.method || "Cash");
+  // Bank/Cash account — sourced from the Chart of Accounts (manager.io model:
+  // every receipt/payment posts against a real bank/cash account, which is one
+  // leg of the journal). Bank/cash accounts are CoA accounts flagged with the
+  // BankCash control type; the Payments module is the subledger feeding them.
+  // When none exist yet, fall back to the legacy free-text name so the form
+  // stays usable until the operator sets up their accounts.
+  const [hasBankAccounts, setHasBankAccounts] = useState(false);
+  const [bankAccountId, setBankAccountId] = useState(editPayment?.bankAccountId ? String(editPayment.bankAccountId) : "");
+  const [bankAccountName, setBankAccountName] = useState(editPayment?.bankAccountName || "");
+  const [description, setDescription] = useState(editPayment?.description || "");
+  const [chequeNumber, setChequeNumber] = useState(editPayment?.chequeNumber || "");
+  const [chequeDate, setChequeDate] = useState(editPayment?.chequeDate ? editPayment.chequeDate.slice(0, 10) : "");
 
   const [contacts, setContacts] = useState([]);
-  const [contactId, setContactId] = useState(preset?.contactId ? String(preset.contactId) : "");
+  const [contactId, setContactId] = useState(
+    editPayment?.contactId ? String(editPayment.contactId) : (preset?.contactId ? String(preset.contactId) : ""));
+  // Optional Division tag — defaults from the settled document when opened via
+  // the invoice/bill shortcut.
+  const [divisionId, setDivisionId] = useState(
+    editPayment?.divisionId ? String(editPayment.divisionId) : (preset?.divisionId ? String(preset.divisionId) : ""));
   const [docs, setDocs] = useState([]);          // open documents for the contact
   const [alloc, setAlloc] = useState({});         // docId -> amount string
   const [loadingDocs, setLoadingDocs] = useState(false);
@@ -61,31 +81,51 @@ export default function PaymentForm({ mode, companyId, preset, onClose, onSaved 
     fetcher
       .then(({ data }) => {
         if (cancelled) return;
-        const open = (data.items || [])
-          .filter((d) => !d.isCancelled && (d.balanceDue ?? (d.grandTotal - (d.amountPaid || 0))) > 0)
-          .map((d) => ({
-            id: d.id,
-            number: isReceipt ? d.invoiceNumber : d.purchaseBillNumber,
-            date: d.date,
-            grandTotal: d.grandTotal,
-            balanceDue: d.balanceDue ?? (d.grandTotal - (d.amountPaid || 0)),
-          }));
-        setDocs(open);
-        // Pre-fill the preset document with its full balance, if any.
-        if (preset?.documentId) {
-          const target = open.find((d) => d.id === preset.documentId);
-          if (target) setAlloc({ [target.id]: String(target.balanceDue) });
+        // When editing, this payment's own allocations free up headroom on the
+        // docs it settled — show them (even if now fully paid) with
+        // available = balanceDue + own, and pre-fill the current amounts.
+        const ownAlloc = {};
+        if (editPayment) {
+          for (const a of editPayment.allocations || []) {
+            const docId = isReceipt ? a.invoiceId : a.purchaseBillId;
+            if (docId) ownAlloc[docId] = (ownAlloc[docId] || 0) + (a.amount || 0);
+          }
+        }
+        const shown = (data.items || [])
+          .filter((d) => !d.isCancelled)
+          .map((d) => {
+            const balanceDue = d.balanceDue ?? (d.grandTotal - (d.amountPaid || 0));
+            const own = ownAlloc[d.id] || 0;
+            return {
+              id: d.id,
+              number: isReceipt ? d.invoiceNumber : d.purchaseBillNumber,
+              date: d.date,
+              grandTotal: d.grandTotal,
+              balanceDue,
+              available: balanceDue + own,   // headroom this payment can apply
+            };
+          })
+          .filter((d) => d.available > 0.001);
+        setDocs(shown);
+
+        if (editPayment) {
+          const pre = {};
+          for (const d of shown) if (ownAlloc[d.id]) pre[d.id] = String(ownAlloc[d.id]);
+          setAlloc(pre);
+        } else if (preset?.documentId) {
+          const target = shown.find((d) => d.id === preset.documentId);
+          if (target) setAlloc({ [target.id]: String(target.available) });
         }
       })
       .catch(() => { if (!cancelled) setDocs([]); })
       .finally(() => { if (!cancelled) setLoadingDocs(false); });
     return () => { cancelled = true; };
-  }, [contactId, companyId, isReceipt, preset?.documentId]);
+  }, [contactId, companyId, isReceipt, preset?.documentId, editPayment?.id]);
 
   const setAllocAmount = (docId, value) =>
     setAlloc((prev) => ({ ...prev, [docId]: value }));
 
-  const fillBalance = (doc) => setAllocAmount(doc.id, String(doc.balanceDue));
+  const fillBalance = (doc) => setAllocAmount(doc.id, String(doc.available));
 
   const total = useMemo(
     () => Object.values(alloc).reduce((s, v) => s + (parseFloat(v) || 0), 0),
@@ -105,14 +145,21 @@ export default function PaymentForm({ mode, companyId, preset, onClose, onSaved 
       setError(`Enter an amount against at least one ${docLabel.toLowerCase()}.`);
       return;
     }
-    // Client-side over-allocation guard (server enforces too).
-    const over = allocations.find((x) => x.amount > x.doc.balanceDue + 0.001);
+    // Client-side over-allocation guard (server enforces too). Uses `available`
+    // (= balance due + this payment's own current allocation when editing).
+    const over = allocations.find((x) => x.amount > x.doc.available + 0.001);
     if (over) {
-      setError(`${docLabel} #${over.doc.number}: amount exceeds the balance due (${over.doc.balanceDue.toLocaleString()}).`);
+      setError(`${docLabel} #${over.doc.number}: amount exceeds the available balance (${over.doc.available.toLocaleString()}).`);
       return;
     }
     if (method === "Cheque" && !chequeNumber.trim()) {
       setError("Enter the cheque number.");
+      return;
+    }
+    // When bank/cash accounts are configured, picking one is mandatory — it's
+    // the account the money lands in / comes from (manager.io requires it too).
+    if (hasBankAccounts && !bankAccountId) {
+      setError(`Select the bank/cash account the money was ${isReceipt ? "received in" : "paid from"}.`);
       return;
     }
 
@@ -123,6 +170,8 @@ export default function PaymentForm({ mode, companyId, preset, onClose, onSaved 
         date: new Date(date).toISOString(),
         contactType: contactLabel,
         contactId: contactId ? Number(contactId) : null,
+        divisionId: divisionId ? Number(divisionId) : null,
+        bankAccountId: bankAccountId ? Number(bankAccountId) : null,
         bankAccountName: bankAccountName.trim() || null,
         method,
         description: description.trim() || null,
@@ -134,7 +183,8 @@ export default function PaymentForm({ mode, companyId, preset, onClose, onSaved 
           amount: x.amount,
         })),
       };
-      await createPayment(dir, companyId, payload);
+      if (isEdit) await updatePayment(dir, editPayment.id, payload);
+      else await createPayment(dir, companyId, payload);
       onSaved?.();
       onClose?.();
     } catch (err) {
@@ -147,12 +197,24 @@ export default function PaymentForm({ mode, companyId, preset, onClose, onSaved 
     <div style={formStyles.backdrop} onClick={onClose}>
       <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
-          <h5 style={formStyles.title}>{isReceipt ? "Record Receipt" : "Record Payment"}</h5>
+          <h5 style={formStyles.title}>{isEdit ? `Edit ${editPayment.reference || (isReceipt ? "Receipt" : "Payment")}` : (isReceipt ? "Record Receipt" : "Record Payment")}</h5>
           <button style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
             {error && <div style={formStyles.error}>{error}</div>}
+
+            {/* Contact picker spans the full row so long client/supplier names
+                aren't truncated inside a narrow grid column. */}
+            <div style={formStyles.formGroup}>
+              <label style={formStyles.label}>{contactLabel}</label>
+              <SearchableSelect
+                items={contacts}
+                value={contactId}
+                onChange={(id) => setContactId(id ? String(id) : "")}
+                placeholder={`— Select ${contactLabel} —`}
+              />
+            </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
@@ -160,22 +222,34 @@ export default function PaymentForm({ mode, companyId, preset, onClose, onSaved 
                 <input type="date" style={formStyles.input} value={date} onChange={(e) => setDate(e.target.value)} max={today} />
               </div>
               <div style={formStyles.formGroup}>
-                <label style={formStyles.label}>{contactLabel}</label>
-                <select style={{ ...dropdownStyles.base, width: "100%" }} value={contactId} onChange={(e) => setContactId(e.target.value)}>
-                  <option value="">— Select {contactLabel} —</option>
-                  {contacts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Method</label>
                 <select style={{ ...dropdownStyles.base, width: "100%" }} value={method} onChange={(e) => setMethod(e.target.value)}>
                   {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
-              <div style={formStyles.formGroup}>
-                <label style={formStyles.label}>{isReceipt ? "Received in (bank/cash)" : "Paid from (bank/cash)"}</label>
-                <input style={formStyles.input} value={bankAccountName} onChange={(e) => setBankAccountName(e.target.value)} placeholder="e.g. Meezan A/C 1234, Cash" />
-              </div>
+              <BankCashSelect
+                companyId={companyId}
+                value={bankAccountId}
+                name={bankAccountName}
+                onChange={(id, nm) => { setBankAccountId(id ? String(id) : ""); setBankAccountName(nm || ""); }}
+                onLoaded={(list) => setHasBankAccounts(list.length > 0)}
+                includeAccount={editPayment?.bankAccountId ? { id: editPayment.bankAccountId, name: editPayment.bankAccountName } : null}
+                autoSelectSingle={!isEdit}
+                label={isReceipt ? "Received in (bank/cash)" : "Paid from (bank/cash)"}
+              />
+              {canViewDivisions && (
+                <div style={formStyles.formGroup}>
+                  <DivisionSelect
+                    companyId={companyId}
+                    value={divisionId}
+                    onChange={setDivisionId}
+                    mode="select"
+                    label={<>Division <span style={{ fontWeight: 400, color: colors.textSecondary }}>(optional)</span></>}
+                    labelStyle={formStyles.label}
+                    style={{ ...dropdownStyles.base, width: "100%" }}
+                  />
+                </div>
+              )}
             </div>
 
             {method === "Cheque" && (
@@ -223,7 +297,7 @@ export default function PaymentForm({ mode, companyId, preset, onClose, onSaved 
                           <td style={td}><strong>#{d.number}</strong></td>
                           <td style={td}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</td>
                           <td style={{ ...td, textAlign: "right" }}>{d.grandTotal.toLocaleString()}</td>
-                          <td style={{ ...td, textAlign: "right" }}>{d.balanceDue.toLocaleString()}</td>
+                          <td style={{ ...td, textAlign: "right" }}>{d.available.toLocaleString()}</td>
                           <td style={{ ...td, textAlign: "right" }}>
                             <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
                               <input
@@ -250,9 +324,15 @@ export default function PaymentForm({ mode, companyId, preset, onClose, onSaved 
 
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || total <= 0 ? 0.6 : 1 }} disabled={saving || total <= 0}>
-              {saving ? "Saving…" : isReceipt ? "Save Receipt" : "Save Payment"}
-            </button>
+            {(() => {
+              const bankMissing = hasBankAccounts && !bankAccountId;
+              const blocked = saving || total <= 0 || bankMissing;
+              return (
+                <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: blocked ? 0.6 : 1 }} disabled={blocked}>
+                  {saving ? "Saving…" : isEdit ? "Save Changes" : isReceipt ? "Save Receipt" : "Save Payment"}
+                </button>
+              );
+            })()}
           </div>
         </form>
       </div>

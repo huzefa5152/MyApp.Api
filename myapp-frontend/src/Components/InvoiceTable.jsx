@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import {
   MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
-  MdEdit, MdDelete, MdOpenInNew, MdCancel,
+  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdPayments,
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
@@ -64,6 +64,8 @@ export default function InvoiceTable({
   exportingId,
   // handlers (parent owns them; we just call them)
   onView,
+  onRecordReceipt,
+  onShowPayments,
   onPrintBill,
   onPrintTax,
   onExportBillPdf,
@@ -150,7 +152,12 @@ export default function InvoiceTable({
       header: "Payment",
       width: 110,
       accessor: (i) => i.paymentStatus || "",
-      render: (i) => paymentStatusBadge(i),
+      render: (i) => (perms.canViewReceipts && onShowPayments && !i.isCancelled) ? (
+        <button type="button" onClick={() => onShowPayments(i)} title="View receipts & balance"
+          style={{ all: "unset", cursor: "pointer" }}>
+          {paymentStatusBadge(i)}
+        </button>
+      ) : paymentStatusBadge(i),
     },
     {
       key: "dueDate",
@@ -176,6 +183,11 @@ export default function InvoiceTable({
         {isBillsMode && (
           <button style={btn.view} onClick={() => onView?.(inv)} title="View bill">
             <MdVisibility size={14} />
+          </button>
+        )}
+        {perms.canRecordReceipt && !inv.isCancelled && (
+          <button style={btn.receipt} onClick={() => onRecordReceipt?.(inv)} title="Record a receipt (payment received) against this invoice">
+            <MdPayments size={14} />
           </button>
         )}
         {isBillsMode && (
@@ -360,6 +372,7 @@ const btn = {
   edit:        { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
   delete:      { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
   void:        { ...baseBtn, backgroundColor: "#fff8e1", color: "#b26a00" },
+  receipt:     { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20" },
   fbrValidate: { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
   fbrSubmit:   { ...baseBtn, backgroundColor: "#e8eaf6", color: "#1a237e" },
   neutral:     { ...baseBtn, backgroundColor: "#eceff1", color: "#546e7a" },

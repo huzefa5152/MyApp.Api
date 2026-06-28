@@ -65,6 +65,20 @@ namespace MyApp.Api.Services.Implementations
         public async Task<List<AccountDto>> GetAccountsFlatAsync(int companyId) =>
             (await _repo.GetAccountsAsync(companyId)).Select(ToDto).ToList();
 
+        public async Task<List<AccountDto>> GetBankCashAccountsAsync(int companyId)
+        {
+            var groupNameById = (await _repo.GetGroupsAsync(companyId))
+                .ToDictionary(g => g.Id, g => (g.Name ?? "").ToLowerInvariant());
+            bool IsBankCashGroup(int gid) =>
+                groupNameById.TryGetValue(gid, out var n) && (n.Contains("bank") || n.Contains("cash"));
+
+            return (await _repo.GetAccountsAsync(companyId))
+                .Where(a => a.IsActive
+                         && a.AccountType == AccountType.Asset
+                         && (a.ControlType == ControlType.BankCash || IsBankCashGroup(a.AccountGroupId)))
+                .Select(ToDto).ToList();
+        }
+
         public async Task<AccountDto?> GetAccountByIdAsync(int id)
         {
             var a = await _repo.GetAccountByIdAsync(id);

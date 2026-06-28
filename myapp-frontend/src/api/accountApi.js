@@ -7,6 +7,10 @@ export const getCoaTree = (companyId) =>
 export const getAccountsFlat = (companyId) =>
   httpClient.get(`/accounts/company/${companyId}/flat`);
 
+// Bank/cash accounts for the receipt/payment "Received in / Paid from" picker.
+export const getBankCashAccounts = (companyId) =>
+  httpClient.get(`/accounts/company/${companyId}/bank-cash`);
+
 export const createAccountGroup = (companyId, payload) =>
   httpClient.post(`/accounts/company/${companyId}/groups`, payload);
 

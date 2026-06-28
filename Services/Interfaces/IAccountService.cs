@@ -10,6 +10,11 @@ namespace MyApp.Api.Services.Interfaces
         Task<CoaTreeDto> GetTreeAsync(int companyId);
         Task<List<AccountDto>> GetAccountsFlatAsync(int companyId);
 
+        /// <summary>Active bank/cash accounts for the "Received in / Paid from"
+        /// picker (manager.io-style): accounts flagged BankCash OR asset accounts
+        /// under a Bank/Cash group (covers migrated bank GL accounts).</summary>
+        Task<List<AccountDto>> GetBankCashAccountsAsync(int companyId);
+
         Task<AccountDto?> GetAccountByIdAsync(int id);
         Task<AccountGroupDto?> GetGroupByIdAsync(int id);
 

@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
+import PaymentForm from "../Components/PaymentForm";
+import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
+import StatusBadge from "../Components/StatusBadge";
+import SearchableSelect from "../Components/SearchableSelect";
 import StandaloneInvoiceForm from "../Components/StandaloneInvoiceForm";
 import EditBillForm from "../Components/EditBillForm";
 import BulkFbrResultsDialog from "../Components/BulkFbrResultsDialog";
@@ -18,6 +22,7 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import { mergeTemplate } from "../utils/templateEngine";
+import { writeAndPrint } from "../utils/printDocument";
 import { defaultBillTemplate, defaultTaxInvoiceTemplate } from "../utils/defaultTemplates";
 import { exportToPdf } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
@@ -33,6 +38,15 @@ const colors = {
   inputBg: "#f8f9fb",
   inputBorder: "#d0d7e2",
 };
+
+// Payment-status pill (mirrors InvoiceTable's) for the card view.
+function paymentStatusBadge(inv) {
+  const s = inv.paymentStatus;
+  if (s === "Paid") return <StatusBadge tone="success">Paid</StatusBadge>;
+  if (s === "Overdue") return <StatusBadge tone="danger">Overdue{inv.daysOverdue ? ` ${inv.daysOverdue}d` : ""}</StatusBadge>;
+  if (s === "PartiallyPaid") return <StatusBadge tone="info">Partial</StatusBadge>;
+  return <StatusBadge tone="neutral">Unpaid</StatusBadge>;
+}
 
 export default function InvoicePage({ mode = "invoices" }) {
   // Tab split: `bills` mode is pre-FBR data entry — no item-type column
@@ -111,6 +125,17 @@ export default function InvoicePage({ mode = "invoices" }) {
   // non-functional empty dropdown. Gate both the fetch and the UI on
   // this permission — list still works without the filter.
   const canViewClients = has("clients.manage.view");
+  // Shortcut to record a receipt (money in) straight from a sales invoice/bill —
+  // opens the PaymentForm pre-filled with this client + this document. Gated by
+  // the same permission as the Receipts page create action.
+  const canRecordReceipt = has("accounting.receipts.create");
+  // View the receipts applied to an invoice (+ balance) — gates the clickable
+  // payment-status pill on the card.
+  const canViewReceipts = has("accounting.receipts.view");
+  // { contactId, documentId } for the receipt shortcut; null when closed.
+  const [receiptPreset, setReceiptPreset] = useState(null);
+  // Invoice whose receipt history is open in the dialog; null when closed.
+  const [paymentHistoryDoc, setPaymentHistoryDoc] = useState(null);
   // The bill currently shown in the FBR preview dialog (null when closed).
   const [fbrPreviewId, setFbrPreviewId] = useState(null);
   // Bulk FBR preview dialog — open shows every bill currently ready
@@ -162,7 +187,10 @@ export default function InvoicePage({ mode = "invoices" }) {
     else next.delete("search");
     setSearchParams(next, { replace: true });
   }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [clientFilter, setClientFilter] = useState("");
+  // Seed from ?clientId= so the Clients page "N sales invoices" chip deep-links
+  // straight to this list filtered to that client (distinct route key remounts
+  // the page, so this initializer always sees the current URL).
+  const [clientFilter, setClientFilter] = useState(() => searchParams.get("clientId") || "");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [hasExcelBill, setHasExcelBill] = useState(false);
@@ -261,12 +289,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         if (res.data?.htmlContent) template = res.data.htmlContent;
       } catch { /* use default */ }
       const html = mergeTemplate(template, data);
-      w.document.open();
-      w.document.write(html);
-      w.document.close();
-      w.focus();
-      w.onafterprint = () => w.close();
-      w.print();
+      writeAndPrint(w, html);
     } catch { w.close(); notify("Failed to load bill data.", "error"); }
   };
 
@@ -282,12 +305,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         if (res.data?.htmlContent) template = res.data.htmlContent;
       } catch { /* use default */ }
       const html = mergeTemplate(template, data);
-      w.document.open();
-      w.document.write(html);
-      w.document.close();
-      w.focus();
-      w.onafterprint = () => w.close();
-      w.print();
+      writeAndPrint(w, html);
     } catch { w.close(); notify("Failed to load tax invoice data.", "error"); }
   };
 
@@ -781,10 +799,14 @@ export default function InvoicePage({ mode = "invoices" }) {
                 />
               </div>
               {canViewClients && (
-                <select className="filter-select" value={clientFilter} onChange={handleFilterChange(setClientFilter)}>
-                  <option value="">All Clients</option>
-                  {clients.map((cl) => <option key={cl.id} value={cl.id}>{cl.name}</option>)}
-                </select>
+                <div style={{ minWidth: 220, maxWidth: 340 }}>
+                  <SearchableSelect
+                    items={clients}
+                    value={clientFilter}
+                    onChange={(id) => handleFilterChange(setClientFilter)({ target: { value: id ? String(id) : "" } })}
+                    placeholder="All Clients"
+                  />
+                </div>
               )}
               <div className="filter-date-group">
                 <input type="date" className="filter-date-input" value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" />
@@ -835,6 +857,8 @@ export default function InvoicePage({ mode = "invoices" }) {
                 canFbrExclude,
                 canDelete,
                 canVoid,
+                canRecordReceipt,
+                canViewReceipts,
               }}
               hasExcelBill={hasExcelBill}
               hasExcelTax={hasExcelTax}
@@ -844,6 +868,8 @@ export default function InvoicePage({ mode = "invoices" }) {
               fbrLoading={fbrLoading}
               exportingId={exportingId}
               onView={(inv) => setViewingId(inv.id)}
+              onRecordReceipt={(inv) => setReceiptPreset({ contactId: inv.clientId, documentId: inv.id, divisionId: inv.divisionId })}
+              onShowPayments={(inv) => setPaymentHistoryDoc(inv)}
               onPrintBill={handlePrintBill}
               onPrintTax={handlePrintTax}
               onExportBillPdf={handleExportBillPdf}
@@ -883,6 +909,23 @@ export default function InvoicePage({ mode = "invoices" }) {
                     {inv.site && <p style={cardStyles.text}><strong>Site:</strong> {inv.site}</p>}
                     <p style={cardStyles.text}><strong>Date:</strong> {new Date(inv.date).toLocaleDateString()}</p>
                     <p style={cardStyles.text}><strong>Grand Total:</strong> Rs. {inv.grandTotal?.toLocaleString()}</p>
+                    {/* Payment status + balance — clickable to see all receipts
+                        applied to this invoice and how much remains. */}
+                    {!inv.isCancelled && (
+                      <button
+                        type="button"
+                        onClick={canViewReceipts ? () => setPaymentHistoryDoc(inv) : undefined}
+                        title={canViewReceipts ? "View receipts & balance" : undefined}
+                        style={{ all: "unset", marginTop: 4, display: "inline-flex", alignItems: "center", gap: 6, cursor: canViewReceipts ? "pointer" : "default" }}
+                      >
+                        {paymentStatusBadge(inv)}
+                        {inv.balanceDue > 0 && (
+                          <span style={{ fontSize: "0.74rem", color: colors.textSecondary, fontWeight: 600 }}>
+                            Bal: Rs {inv.balanceDue?.toLocaleString()}
+                          </span>
+                        )}
+                      </button>
+                    )}
                     <p style={{ ...cardStyles.text, fontSize: "0.78rem", color: colors.textSecondary }}>
                       DC#{inv.challanNumbers?.join(", #")} | {inv.items?.length} items
                     </p>
@@ -962,6 +1005,17 @@ export default function InvoicePage({ mode = "invoices" }) {
                     )}
                   </div>
                   <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
+                    {/* Receipt shortcut — record money in against this invoice,
+                        pre-filling the client + this document in the form. */}
+                    {canRecordReceipt && !inv.isCancelled && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#e8f5e9", color: "#1b5e20", border: "1px solid #a5d6a7" }}
+                        onClick={() => setReceiptPreset({ contactId: inv.clientId, documentId: inv.id, divisionId: inv.divisionId })}
+                        title="Record a receipt (payment received) against this invoice"
+                      >
+                        <MdPayments size={14} /> Receipt
+                      </button>
+                    )}
                     {/* Bills card: View, Print Bill, Bill PDF, Bill XLS, Edit, Delete.
                         Invoices card: Tax Print, Tax PDF, Tax XLS, View FBR, Validate, Submit. */}
                     {isBillsMode && (
@@ -1207,6 +1261,25 @@ export default function InvoicePage({ mode = "invoices" }) {
           billsMode={isBillsMode}
           onClose={() => setShowStandaloneForm(false)}
           onSaved={() => { setShowStandaloneForm(false); handleCreated(); }}
+        />
+      )}
+
+      {receiptPreset && selectedCompany && (
+        <PaymentForm
+          mode="receipts"
+          companyId={selectedCompany.id}
+          preset={receiptPreset}
+          onClose={() => setReceiptPreset(null)}
+          onSaved={() => { setReceiptPreset(null); fetchInvoices(selectedCompany.id, page); }}
+        />
+      )}
+
+      {paymentHistoryDoc && selectedCompany && (
+        <PaymentHistoryDialog
+          mode="receipts"
+          companyId={selectedCompany.id}
+          doc={{ ...paymentHistoryDoc, number: paymentHistoryDoc.invoiceNumber }}
+          onClose={() => setPaymentHistoryDoc(null)}
         />
       )}
 
