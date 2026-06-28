@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { MdDescription, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
 import ChallanTable from "../Components/ChallanTable";
+import SearchableSelect from "../Components/SearchableSelect";
 import ChallanForm from "../Components/ChallanForm";
 import ChallanEditForm from "../Components/ChallanEditForm";
 import InvoiceForm from "../Components/InvoiceForm";
@@ -18,6 +19,7 @@ import {
 import { getClientsByCompany } from "../api/clientApi";
 import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import { mergeTemplate } from "../utils/templateEngine";
+import { writeAndPrint } from "../utils/printDocument";
 import { defaultChallanTemplate } from "../utils/defaultTemplates";
 import { renderRichTextHtml } from "../utils/richText";
 import { exportToPdf } from "../utils/exportUtils";
@@ -198,12 +200,7 @@ export default function ChallanPage() {
         if (res.data?.htmlContent) template = res.data.htmlContent;
       } catch { /* use default */ }
       const html = mergeTemplate(template, data);
-      w.document.open();
-      w.document.write(html);
-      w.document.close();
-      w.focus();
-      w.onafterprint = () => w.close();
-      w.print();
+      writeAndPrint(w, html);
     } catch {
       w.close();
       notify("Failed to load print data.", "error");
@@ -368,10 +365,14 @@ export default function ChallanPage() {
                 <option value="Cancelled">Cancelled</option>
               </select>
               {canViewClients && (
-                <select className="filter-select" value={clientFilter} onChange={handleFilterChange(setClientFilter)}>
-                  <option value="">All Clients</option>
-                  {clients.map((cl) => <option key={cl.id} value={cl.id}>{cl.name}</option>)}
-                </select>
+                <div style={{ minWidth: 220, maxWidth: 340 }}>
+                  <SearchableSelect
+                    items={clients}
+                    value={clientFilter}
+                    onChange={(id) => handleFilterChange(setClientFilter)({ target: { value: id ? String(id) : "" } })}
+                    placeholder="All Clients"
+                  />
+                </div>
               )}
               <div className="filter-date-group">
                 <input type="date" className="filter-date-input" value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" />

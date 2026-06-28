@@ -10,9 +10,11 @@ import { getEntityAttachmentCounts } from "../api/attachmentApi";
 import { getTemplatesByCompany } from "../api/printTemplateApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { mergeTemplate } from "../utils/templateEngine";
+import { writeAndPrint } from "../utils/printDocument";
 import { defaultQuoteTemplate } from "../utils/salesDocTemplates";
 import { dropdownStyles } from "../theme";
 import DivisionSelect from "../Components/DivisionSelect";
+import SearchableSelect from "../Components/SearchableSelect";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
@@ -180,9 +182,7 @@ export default function SalesQuotePage() {
       const tpl = resolveQuoteTemplate(q);
       const template = tpl?.htmlContent || defaultQuoteTemplate;
       const html = mergeTemplate(template, data);
-      w.document.open(); w.document.write(html); w.document.close(); w.focus();
-      w.onafterprint = () => w.close();
-      w.print();
+      writeAndPrint(w, html);
     } catch { w.close(); notify("Failed to load print data.", "error"); }
   };
 
@@ -220,10 +220,14 @@ export default function SalesQuotePage() {
                 <option value="">All Status</option>
                 {["Active", "Expired", "Accepted"].map((x) => <option key={x} value={x}>{x}</option>)}
               </select>
-              <select className="filter-select" value={clientFilter} onChange={(e) => { setClientFilter(e.target.value); setPage(1); }}>
-                <option value="">All Clients</option>
-                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <div style={{ minWidth: 220, maxWidth: 340 }}>
+                <SearchableSelect
+                  items={clients}
+                  value={clientFilter}
+                  onChange={(id) => { setClientFilter(id ? String(id) : ""); setPage(1); }}
+                  placeholder="All Clients"
+                />
+              </div>
             </div>
           )}
         </>

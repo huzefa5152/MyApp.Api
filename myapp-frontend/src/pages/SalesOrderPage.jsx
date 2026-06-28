@@ -11,6 +11,7 @@ import {
 } from "../api/salesOrderApi";
 import { getTemplate } from "../api/printTemplateApi";
 import { mergeTemplate } from "../utils/templateEngine";
+import { writeAndPrint } from "../utils/printDocument";
 import { defaultOrderTemplate } from "../utils/salesDocTemplates";
 import { richTextToPlain } from "../utils/richText";
 import { dropdownStyles } from "../theme";
@@ -107,9 +108,7 @@ export default function SalesOrderPage() {
       let template = defaultOrderTemplate;
       try { const res = await getTemplate(selectedCompany.id, "SalesOrder"); if (res.data?.htmlContent) template = res.data.htmlContent; } catch { /* default */ }
       const html = mergeTemplate(template, data);
-      w.document.open(); w.document.write(html); w.document.close(); w.focus();
-      w.onafterprint = () => w.close();
-      w.print();
+      writeAndPrint(w, html);
     } catch { w.close(); notify("Failed to load print data.", "error"); }
   };
 
