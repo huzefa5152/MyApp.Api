@@ -21,10 +21,20 @@ namespace MyApp.Api.DTOs
         public string? STRN { get; set; }
         public string? Email { get; set; }
 
-        // Per-division Sales Quote numbering. CurrentSalesQuoteNumber is
-        // read-only (advanced by the create flow); StartingSalesQuoteNumber is
-        // operator-editable to seed the sequence.
+        // Per-division document numbering (mirror of the Company counters).
+        // Starting* is operator-editable to seed each sequence; Current* is
+        // read-only (advanced by the create flows / migration).
         public int StartingSalesQuoteNumber { get; set; }
         public int CurrentSalesQuoteNumber { get; set; }
+        public int StartingSalesOrderNumber { get; set; }
+        public int CurrentSalesOrderNumber { get; set; }
+        public int StartingChallanNumber { get; set; }
+        public int CurrentChallanNumber { get; set; }
+        public int StartingInvoiceNumber { get; set; }
+        public int CurrentInvoiceNumber { get; set; }
+        public int StartingPurchaseBillNumber { get; set; }
+        public int CurrentPurchaseBillNumber { get; set; }
+        public int StartingGoodsReceiptNumber { get; set; }
+        public int CurrentGoodsReceiptNumber { get; set; }
     }
 }

@@ -36,15 +36,25 @@ namespace MyApp.Api.Services.Implementations
             Email = d.Email,
             StartingSalesQuoteNumber = d.StartingSalesQuoteNumber,
             CurrentSalesQuoteNumber = d.CurrentSalesQuoteNumber,
+            StartingSalesOrderNumber = d.StartingSalesOrderNumber,
+            CurrentSalesOrderNumber = d.CurrentSalesOrderNumber,
+            StartingChallanNumber = d.StartingChallanNumber,
+            CurrentChallanNumber = d.CurrentChallanNumber,
+            StartingInvoiceNumber = d.StartingInvoiceNumber,
+            CurrentInvoiceNumber = d.CurrentInvoiceNumber,
+            StartingPurchaseBillNumber = d.StartingPurchaseBillNumber,
+            CurrentPurchaseBillNumber = d.CurrentPurchaseBillNumber,
+            StartingGoodsReceiptNumber = d.StartingGoodsReceiptNumber,
+            CurrentGoodsReceiptNumber = d.CurrentGoodsReceiptNumber,
         };
 
         private static string? Trimmed(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
-        // Apply operator-editable "personal details" + the starting quote number
-        // from the DTO. LogoPath is intentionally NOT set here (it flows through
-        // the dedicated logo-upload endpoint) and CurrentSalesQuoteNumber is
-        // system-managed by the sales-quote create flow, so neither is clobbered
-        // by a plain create/edit save.
+        // Apply operator-editable "personal details" + the per-document Starting
+        // numbers from the DTO. LogoPath is NOT set here (dedicated logo-upload
+        // endpoint) and the Current* counters are system-managed (create flows /
+        // migration), so neither is clobbered by a plain create/edit save.
+        private static int NonNeg(int n) => n < 0 ? 0 : n;
         private static void ApplyEditableFields(Division d, DivisionDto dto)
         {
             d.BrandName   = Trimmed(dto.BrandName);
@@ -54,7 +64,12 @@ namespace MyApp.Api.Services.Implementations
             d.CNIC        = Trimmed(dto.CNIC);
             d.STRN        = Trimmed(dto.STRN);
             d.Email       = Trimmed(dto.Email);
-            d.StartingSalesQuoteNumber = dto.StartingSalesQuoteNumber < 0 ? 0 : dto.StartingSalesQuoteNumber;
+            d.StartingSalesQuoteNumber   = NonNeg(dto.StartingSalesQuoteNumber);
+            d.StartingSalesOrderNumber   = NonNeg(dto.StartingSalesOrderNumber);
+            d.StartingChallanNumber      = NonNeg(dto.StartingChallanNumber);
+            d.StartingInvoiceNumber      = NonNeg(dto.StartingInvoiceNumber);
+            d.StartingPurchaseBillNumber = NonNeg(dto.StartingPurchaseBillNumber);
+            d.StartingGoodsReceiptNumber = NonNeg(dto.StartingGoodsReceiptNumber);
         }
 
         public async Task<List<DivisionDto>> GetByCompanyAsync(int companyId) =>
@@ -126,6 +141,10 @@ namespace MyApp.Api.Services.Implementations
                     .ExecuteUpdateAsync(s => s.SetProperty(pb => pb.DivisionId, (int?)null));
                 await _db.GoodsReceipts.Where(gr => gr.DivisionId == id)
                     .ExecuteUpdateAsync(s => s.SetProperty(gr => gr.DivisionId, (int?)null));
+                // Receipts/Payments carry the same optional Division tag (NoAction
+                // FK) — unlink them too so the division row can be removed.
+                await _db.Payments.Where(p => p.DivisionId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(p => p.DivisionId, (int?)null));
 
                 var templates = await _db.PrintTemplates.Where(pt => pt.DivisionId == id).ToListAsync();
                 foreach (var t in templates)

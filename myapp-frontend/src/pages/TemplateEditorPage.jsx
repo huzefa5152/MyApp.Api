@@ -714,7 +714,34 @@ export default function TemplateEditorPage() {
       const src = editorMode === "visual" && visualEditorRef.current
         ? visualEditorRef.current.getHtml()
         : htmlContent;
-      return mergeTemplate(src, SAMPLE_DATA[templateType]);
+      // Use the REAL company/division branding for the selected scope so the
+      // preview shows what will actually print. The static SAMPLE_DATA ships
+      // empty logo paths, which made every preview look logo-less even when a
+      // logo was uploaded (Jorbai Sales Quote bug 2026-06-27). For a division
+      // scope we use that division's logo; company-wide leaves division fields
+      // blank so the template falls back to the company logo/identity.
+      const base = SAMPLE_DATA[templateType];
+      const scopeDiv = scopeDivisionId != null
+        ? divisions.find((d) => d.id === scopeDivisionId)
+        : null;
+      const previewData = {
+        ...base,
+        companyBrandName: selectedCompany?.brandName || selectedCompany?.name || base.companyBrandName,
+        companyLogoPath: selectedCompany?.logoPath || "",
+        companyAddress: selectedCompany?.fullAddress || base.companyAddress,
+        companyPhone: selectedCompany?.phone || base.companyPhone,
+        companyNTN: selectedCompany?.ntn || base.companyNTN,
+        companySTRN: selectedCompany?.strn || base.companySTRN,
+        divisionName: scopeDiv?.name || "",
+        divisionBrandName: scopeDiv?.brandName || scopeDiv?.name || "",
+        divisionLogoPath: scopeDiv?.logoPath || "",
+        divisionAddress: scopeDiv?.fullAddress || "",
+        divisionPhone: scopeDiv?.phone || "",
+        divisionNTN: scopeDiv?.ntn || "",
+        divisionSTRN: scopeDiv?.strn || "",
+        divisionEmail: scopeDiv?.email || "",
+      };
+      return mergeTemplate(src, previewData);
     } catch (e) {
       return `<div style="color:red;padding:20px;font-family:sans-serif"><h3>Template Error</h3><pre>${e.message}</pre></div>`;
     }

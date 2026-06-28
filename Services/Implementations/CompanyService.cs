@@ -121,10 +121,16 @@ namespace MyApp.Api.Services.Implementations
         {
             var company = await _repository.GetByIdAsync(id);
             if (company == null) return null;
-            var hasChallans = await _challanRepo.HasChallansForCompanyAsync(company.Id);
-            var hasInvoices = await _invoiceRepo.HasInvoicesForCompanyAsync(company.Id);
-            var hasSalesQuotes = await _context.SalesQuotes.AnyAsync(q => q.CompanyId == company.Id);
-            var hasSalesOrders = await _context.SalesOrders.AnyAsync(o => o.CompanyId == company.Id);
+            // The COMPANY starting numbers seed the company-level (no-division)
+            // sequence only, so they lock only when a company-level document of
+            // that type exists. Division-tagged docs have their own per-division
+            // sequences (locked on the division), so they must NOT lock the
+            // company field — otherwise a division-only company shows its
+            // company numbers needlessly frozen at 0.
+            var hasChallans = await _context.DeliveryChallans.AnyAsync(c => c.CompanyId == company.Id && c.DivisionId == null);
+            var hasInvoices = await _context.Invoices.AnyAsync(i => i.CompanyId == company.Id && i.DivisionId == null);
+            var hasSalesQuotes = await _context.SalesQuotes.AnyAsync(q => q.CompanyId == company.Id && q.DivisionId == null);
+            var hasSalesOrders = await _context.SalesOrders.AnyAsync(o => o.CompanyId == company.Id && o.DivisionId == null);
             return ToDto(company, hasChallans, hasInvoices, hasSalesQuotes, hasSalesOrders);
         }
 
@@ -230,31 +236,31 @@ namespace MyApp.Api.Services.Implementations
                 company.CurrentGoodsReceiptNumber = 0;
             }
 
-            // Only allow changing starting challan number if no challans exist
-            var hasChallans = await _challanRepo.HasChallansForCompanyAsync(id);
+            // Company starting numbers seed the company-level (no-division)
+            // sequence, so they're only locked once a COMPANY-LEVEL document of
+            // that type exists. Division-tagged docs use their division's own
+            // sequence and don't freeze the company field.
+            var hasChallans = await _context.DeliveryChallans.AnyAsync(c => c.CompanyId == id && c.DivisionId == null);
             if (!hasChallans)
             {
                 company.StartingChallanNumber = dto.StartingChallanNumber;
                 company.CurrentChallanNumber = 0;
             }
 
-            // Only allow changing starting invoice number if no invoices exist
-            var hasInvoices = await _invoiceRepo.HasInvoicesForCompanyAsync(id);
+            var hasInvoices = await _context.Invoices.AnyAsync(i => i.CompanyId == id && i.DivisionId == null);
             if (!hasInvoices)
             {
                 company.StartingInvoiceNumber = dto.StartingInvoiceNumber;
                 company.CurrentInvoiceNumber = 0;
             }
 
-            // Starting Sales Quote / Sales Order numbers — same rule: only
-            // settable while no document of that type exists yet.
-            var hasSalesQuotes = await _context.SalesQuotes.AnyAsync(q => q.CompanyId == id);
+            var hasSalesQuotes = await _context.SalesQuotes.AnyAsync(q => q.CompanyId == id && q.DivisionId == null);
             if (!hasSalesQuotes)
             {
                 company.StartingSalesQuoteNumber = dto.StartingSalesQuoteNumber;
                 company.CurrentSalesQuoteNumber = 0;
             }
-            var hasSalesOrders = await _context.SalesOrders.AnyAsync(o => o.CompanyId == id);
+            var hasSalesOrders = await _context.SalesOrders.AnyAsync(o => o.CompanyId == id && o.DivisionId == null);
             if (!hasSalesOrders)
             {
                 company.StartingSalesOrderNumber = dto.StartingSalesOrderNumber;
@@ -321,6 +327,32 @@ namespace MyApp.Api.Services.Implementations
                 {
                     await _context.DeliveryItems.Where(di => challanIds.Contains(di.DeliveryChallanId)).ExecuteDeleteAsync();
                     await _context.DeliveryChallans.Where(dc => dc.CompanyId == id).ExecuteDeleteAsync();
+                }
+
+                // 3b. Sales quotes + sales orders reference Client (Restrict) and
+                //     Division, and cross-reference each other (SalesOrder.SalesQuoteId,
+                //     SalesQuote.ConvertedToSalesOrderId). They MUST go before Clients,
+                //     and the cross-links are nulled first so the two deletes don't
+                //     trip each other's FK. (These tables postdated the original
+                //     cascade, so a company with quotes/orders — e.g. a migrated one —
+                //     used to be undeletable: FK_SalesQuotes_Clients_ClientId.)
+                var quoteIds = await _context.SalesQuotes.Where(q => q.CompanyId == id).Select(q => q.Id).ToListAsync();
+                var orderIds = await _context.SalesOrders.Where(o => o.CompanyId == id).Select(o => o.Id).ToListAsync();
+                if (orderIds.Count > 0)
+                    await _context.SalesOrders.Where(o => o.CompanyId == id)
+                        .ExecuteUpdateAsync(s => s.SetProperty(o => o.SalesQuoteId, (int?)null));
+                if (quoteIds.Count > 0)
+                    await _context.SalesQuotes.Where(q => q.CompanyId == id)
+                        .ExecuteUpdateAsync(s => s.SetProperty(q => q.ConvertedToSalesOrderId, (int?)null));
+                if (orderIds.Count > 0)
+                {
+                    await _context.SalesOrderItems.Where(oi => orderIds.Contains(oi.SalesOrderId)).ExecuteDeleteAsync();
+                    await _context.SalesOrders.Where(o => o.CompanyId == id).ExecuteDeleteAsync();
+                }
+                if (quoteIds.Count > 0)
+                {
+                    await _context.SalesQuoteItems.Where(qi => quoteIds.Contains(qi.SalesQuoteId)).ExecuteDeleteAsync();
+                    await _context.SalesQuotes.Where(q => q.CompanyId == id).ExecuteDeleteAsync();
                 }
 
                 // 4. Delete clients
