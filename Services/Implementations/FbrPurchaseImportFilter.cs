@@ -10,28 +10,34 @@ namespace MyApp.Api.Services.Implementations
     // "candidate" (meaning it survives filtering and goes to the
     // matcher for dedup + product lookup).
     //
-    // Rules (first match wins). Updated 2026-05-08 after the operator
-    // confirmed their workflow:
-    //   • ERP-first, IRIS-after — purchases are entered into our system
-    //     BEFORE the monthly Sales Tax Return is filed. By the time FBR
-    //     marks a row Status=Claimed, it's already in our PurchaseBills.
-    //   • Therefore Status=Claimed is treated as a hard skip: no dedup
-    //     check needed, the FBR field is the source of truth.
-    //   • Status=Valid is the only status that flows through to the
-    //     dedup + import path — those are the rows the operator hasn't
-    //     yet acted on in IRIS.
+    // Rules (first match wins). Updated 2026-06-29 — the original
+    // 2026-05-08 "ERP-first" assumption (every Status=Claimed row is
+    // already in our PurchaseBills, so hard-skip it) turned out to be
+    // wrong: some Claimed rows were submitted/claimed at FBR but never
+    // entered in our system. So Claimed no longer hard-skips — it flows
+    // to the dedup matcher exactly like Valid:
+    //   • If the matcher finds the purchase bill already in our system
+    //     → already-exists ("Already in ERP").
+    //   • If not → will-import / product-will-be-created.
+    // This way the operator is told "already in the system" for the ones
+    // we have, and can import the ones we're missing.
+    //
+    //   • Status=Valid AND Status=Claimed flow through to dedup + import.
+    //   • Status ∈ Cancelled/Rejected are hard-skipped (voided rows).
+    //   • Any other status (Pending/Disputed/…) stays a hard skip
+    //     (skip-already-claimed) — not actionable until FBR finalises it.
     //   • Empty Product Description is NOT a skip — many small suppliers
     //     leave it blank, but the row still has HS Code + qty + value.
-    //     Phase 2 will fall back to "HS {code}" for the ItemType name.
+    //     The committer falls back to "HS {code}" for the ItemType name.
     //
     //   1. Invoice Type ≠ "Purchase Invoice"               → skip-wrong-type
     //   2. Status ∈ Cancelled/Rejected                     → skip-cancelled
-    //   3. Status not Valid (i.e. Claimed/anything else)   → skip-already-claimed
+    //   3. Status ∉ {Valid, Claimed}                       → skip-already-claimed
     //   4. Taxpayer Type ≠ Registered (NTN=9999999999999) → skip-unregistered-seller
     //   5. HS Code blank or invalid (4-digit OR NNNN.NNNN) → skip-no-hs-code
     //   6. Quantity ≤ 0 or unparseable                     → skip-zero-qty
     //   7. Parser raised any per-row warning               → failed-validation
-    //   else                                               → candidate
+    //   else                                               → candidate (→ matcher dedup)
     //
     // The dedup + product lookup live in the matcher, not here, so this
     // class stays a pure function of the row + spec — testable without
@@ -77,6 +83,16 @@ namespace MyApp.Api.Services.Implementations
             "Rejected",
         };
 
+        // Statuses that are actionable — they flow through to the dedup
+        // matcher which decides already-exists vs will-import. "Valid" =
+        // not yet acted on in IRIS; "Claimed" = submitted/claimed at FBR
+        // but possibly not yet in our system (see header note 2026-06-29).
+        private static readonly HashSet<string> ImportableStatuses = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Valid",
+            "Claimed",
+        };
+
         public string? DecideOrCandidate(FbrPurchaseLedgerRow row)
         {
             // Rule 1 — Invoice Type
@@ -87,11 +103,12 @@ namespace MyApp.Api.Services.Implementations
             if (!string.IsNullOrWhiteSpace(row.Status) && CancelledStatuses.Contains(row.Status.Trim()))
                 return ImportDecision.SkipCancelled;
 
-            // Rule 3 — Status must be Valid. Anything else (Claimed,
-            // Pending, Disputed, etc.) is implicitly already-handled in
-            // the operator's ERP-first workflow.
+            // Rule 3 — Status must be actionable (Valid or Claimed).
+            // Claimed rows are dedup-checked downstream: already-exists if
+            // we have them, will-import if we don't (2026-06-29). Other
+            // statuses (Pending, Disputed, etc.) stay skipped.
             var statusTrim = row.Status?.Trim() ?? "";
-            if (!string.Equals(statusTrim, "Valid", StringComparison.OrdinalIgnoreCase))
+            if (!ImportableStatuses.Contains(statusTrim))
                 return ImportDecision.SkipAlreadyClaimed;
 
             // Rule 4 — Seller must be Registered. Unregistered carry the
