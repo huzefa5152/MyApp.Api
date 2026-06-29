@@ -163,6 +163,42 @@ namespace MyApp.Api.Controllers
                     Notes = m.Notes,
                 })
                 .ToListAsync();
+
+            // Resolve human-facing document numbers for the source rows.
+            // SourceId is the internal PK (e.g. Invoice.Id) — operators need
+            // the InvoiceNumber / PurchaseBillNumber / GoodsReceiptNumber.
+            // Batched per source type so the page is at most 3 extra queries.
+            var invoiceIds = rows.Where(r => r.SourceType == nameof(StockMovementSourceType.Invoice) && r.SourceId.HasValue)
+                                 .Select(r => r.SourceId!.Value).Distinct().ToList();
+            var billIds = rows.Where(r => r.SourceType == nameof(StockMovementSourceType.PurchaseBill) && r.SourceId.HasValue)
+                              .Select(r => r.SourceId!.Value).Distinct().ToList();
+            var grIds = rows.Where(r => r.SourceType == nameof(StockMovementSourceType.GoodsReceipt) && r.SourceId.HasValue)
+                            .Select(r => r.SourceId!.Value).Distinct().ToList();
+
+            var invNums = invoiceIds.Count == 0 ? new Dictionary<int, int>()
+                : await _context.Invoices.Where(i => invoiceIds.Contains(i.Id))
+                    .Select(i => new { i.Id, i.InvoiceNumber })
+                    .ToDictionaryAsync(x => x.Id, x => x.InvoiceNumber);
+            var billNums = billIds.Count == 0 ? new Dictionary<int, int>()
+                : await _context.PurchaseBills.Where(p => billIds.Contains(p.Id))
+                    .Select(p => new { p.Id, p.PurchaseBillNumber })
+                    .ToDictionaryAsync(x => x.Id, x => x.PurchaseBillNumber);
+            var grNums = grIds.Count == 0 ? new Dictionary<int, int>()
+                : await _context.GoodsReceipts.Where(g => grIds.Contains(g.Id))
+                    .Select(g => new { g.Id, g.GoodsReceiptNumber })
+                    .ToDictionaryAsync(x => x.Id, x => x.GoodsReceiptNumber);
+
+            foreach (var r in rows)
+            {
+                if (!r.SourceId.HasValue) continue;
+                if (r.SourceType == nameof(StockMovementSourceType.Invoice) && invNums.TryGetValue(r.SourceId.Value, out var iNo))
+                    r.SourceDocNumber = iNo.ToString();
+                else if (r.SourceType == nameof(StockMovementSourceType.PurchaseBill) && billNums.TryGetValue(r.SourceId.Value, out var pNo))
+                    r.SourceDocNumber = pNo.ToString();
+                else if (r.SourceType == nameof(StockMovementSourceType.GoodsReceipt) && grNums.TryGetValue(r.SourceId.Value, out var gNo))
+                    r.SourceDocNumber = gNo.ToString();
+            }
+
             return Ok(new PagedResult<StockMovementRowDto>
             {
                 Items = rows,

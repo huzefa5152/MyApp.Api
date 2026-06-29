@@ -13,12 +13,14 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly IDeliveryChallanRepository _repository;
         private readonly AppDbContext _context;
+        private readonly IStockService _stock;
         private readonly ILogger<DeliveryChallanService> _logger;
 
-        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context, ILogger<DeliveryChallanService> logger)
+        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context, IStockService stock, ILogger<DeliveryChallanService> logger)
         {
             _repository = repository;
             _context = context;
+            _stock = stock;
             _logger = logger;
         }
 
@@ -585,6 +587,18 @@ namespace MyApp.Api.Services.Implementations
             }
 
             await _context.SaveChangesAsync();
+
+            // Re-sync the bill's stock OUT movements to its new line set.
+            // Fix 2026-06-29: removing or re-qty-ing a line on the challan
+            // (the only way to add/remove lines on a billed invoice — see
+            // InvoiceService.UpdateAsync) used to delete/update the linked
+            // InvoiceItem here but never touched StockMovements, so the OUT
+            // for a removed sale lingered on the ledger and on-hand was
+            // never restored. SyncInvoiceStockMovementsAsync deletes the
+            // invoice's prior OUT rows and re-inserts from current items,
+            // so removals, qty changes, and additions all reflow. No-op
+            // when inventory tracking is off or the bill is a demo.
+            await _stock.SyncInvoiceStockMovementsAsync(invoice);
         }
 
         public async Task<bool> CancelAsync(int challanId)
