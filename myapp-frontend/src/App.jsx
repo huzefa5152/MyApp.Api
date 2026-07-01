@@ -7,6 +7,7 @@ import CompanyPage from "./pages/CompanyPage";
 import ChallansPage from "./pages/ChallanPage";
 import ImportChallansPage from "./pages/ImportChallansPage";
 import InvoicePage from "./pages/InvoicePage";
+import CreditDebitNotePage from "./pages/CreditDebitNotePage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
 import PurchaseBillsPage from "./pages/PurchaseBillsPage";
 import GoodsReceiptsPage from "./pages/GoodsReceiptsPage";
@@ -76,6 +77,7 @@ export default function App() {
           {/* Invoices tab — FBR classification & submission. Item-type
               editing + Validate All / Submit All bulk actions live here. */}
           <Route path="/invoices" element={<InvoicePage key="invoices" mode="invoices" />} />
+          <Route path="/credit-debit-notes" element={<CreditDebitNotePage />} />
           <Route path="/item-rate-history" element={<ItemRateHistoryPage />} />
           <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
           <Route path="/goods-receipts" element={<GoodsReceiptsPage />} />

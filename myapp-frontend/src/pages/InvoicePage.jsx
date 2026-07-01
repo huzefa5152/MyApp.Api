@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdUndo } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import StandaloneInvoiceForm from "../Components/StandaloneInvoiceForm";
 import EditBillForm from "../Components/EditBillForm";
@@ -10,7 +10,7 @@ import BulkFbrPreviewDialog from "../Components/BulkFbrPreviewDialog";
 import InvoiceTable from "../Components/InvoiceTable";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
-import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, cancelInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
+import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, cancelInvoice, reverseInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
@@ -77,6 +77,9 @@ export default function InvoicePage({ mode = "invoices" }) {
   // Void is its own permission (bills.manage.void), distinct from delete, so a
   // role can be allowed to void bills without also gaining hard-delete rights.
   const canVoid = has("bills.manage.void");
+  // Reverse an FBR-submitted bill by generating a Credit/Debit Note. Its own
+  // permission so the right to reverse a filed document is granted separately.
+  const canReverse = has("invoices.note.create");
   // Print is split now: bills.print.view → Bill print/PDF/XLS,
   // invoices.print.view → Tax-Invoice print/PDF/XLS. Bills tab uses
   // canPrintBill, Invoices tab uses canPrintTax.
@@ -439,6 +442,38 @@ export default function InvoicePage({ mode = "invoices" }) {
       fetchInvoices(selectedCompany.id, page);
     } catch (err) {
       notify(err.response?.data?.error || "Failed to void bill.", "error");
+    }
+  };
+
+  // Reverse an FBR-submitted bill → auto-generate the correct adjustment note
+  // (Credit Note for a return/reversal — the default — or a Debit Note). The
+  // note is created UNSUBMITTED and appears in the list so it can be Validated
+  // then Submitted to FBR just like an ordinary bill.
+  const handleReverseInvoice = async (inv) => {
+    if (inv.fbrStatus !== "Submitted") {
+      notify("Only an FBR-submitted bill can be reversed. Void a non-submitted bill instead.", "error");
+      return;
+    }
+    const res = await confirm({
+      title: `Reverse Bill #${inv.invoiceNumber}?`,
+      message:
+        "A Debit Note reversing this invoice will be generated as a new bill (unsubmitted). " +
+        "You can then Validate and Submit it to FBR. FBR keeps the original invoice — this note nets it off. " +
+        "(FBR's Digital Invoicing accepts a Debit Note as the reversal document; only one is allowed per invoice.)",
+      variant: "warning",
+      confirmText: "Generate Debit Note",
+      input: { label: "Reason", placeholder: "e.g. Goods returned / Order cancellation" },
+    });
+    if (!res?.ok) return;
+    try {
+      const { data: note } = await reverseInvoice(inv.id, { reason: res.value });
+      notify(
+        `Debit Note #${note.invoiceNumber} created against bill #${inv.invoiceNumber}. Validate then submit it to FBR.`,
+        "success"
+      );
+      fetchInvoices(selectedCompany.id, page);
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to reverse bill.", "error");
     }
   };
 
@@ -827,6 +862,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                 canFbrExclude,
                 canDelete,
                 canVoid,
+                canReverse,
               }}
               hasExcelBill={hasExcelBill}
               hasExcelTax={hasExcelTax}
@@ -848,6 +884,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               onToggleFbrExcluded={handleToggleFbrExcluded}
               onDelete={handleDeleteInvoice}
               onVoid={handleVoidInvoice}
+              onReverse={handleReverseInvoice}
             />
           ) : (
           <div className="card-grid">
@@ -893,6 +930,26 @@ export default function InvoicePage({ mode = "invoices" }) {
                       >
                         <MdCancel size={14} color="#b71c1c" />
                         <span>Cancelled{inv.cancelReason ? ` — ${inv.cancelReason}` : ""}</span>
+                      </div>
+                    )}
+                    {/* This document IS a credit/debit note — show what it adjusts. */}
+                    {(inv.documentType === 9 || inv.documentType === 10) && (
+                      <div
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#ede7f6", color: "#5e35b1", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #b39ddb" }}
+                        title={inv.originalInvoiceNumber ? `${inv.documentType === 10 ? "Credit" : "Debit"} Note against Bill #${inv.originalInvoiceNumber}${inv.originalInvoiceRefIRN ? ` (IRN ${inv.originalInvoiceRefIRN})` : ""}` : undefined}
+                      >
+                        <MdUndo size={14} color="#5e35b1" />
+                        <span>{inv.documentType === 10 ? "Credit Note" : "Debit Note"}{inv.originalInvoiceNumber ? ` ↩ against Bill #${inv.originalInvoiceNumber}` : ""}</span>
+                      </div>
+                    )}
+                    {/* This invoice HAS a credit note against it — clear reversed indicator. */}
+                    {inv.documentType !== 9 && inv.documentType !== 10 && inv.reversedByInvoiceNumber && (
+                      <div
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#ede7f6", color: "#5e35b1", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #b39ddb" }}
+                        title={`A Debit Note (#${inv.reversedByInvoiceNumber}) has been created against this invoice. It reverses this sale.`}
+                      >
+                        <MdUndo size={14} color="#5e35b1" />
+                        <span>Reversed — Debit Note #{inv.reversedByInvoiceNumber} created</span>
                       </div>
                     )}
                     {!inv.isCancelled && inv.fbrStatus === "Submitted" && (
@@ -1142,6 +1199,20 @@ export default function InvoicePage({ mode = "invoices" }) {
                         title="Void this bill — keeps the bill number (no gap), marks it Cancelled and reverts its delivery challan(s) to Pending so they can be re-billed."
                       >
                         <MdCancel size={14} /> Void
+                      </button>
+                    )}
+                    {/* Reverse: an FBR-SUBMITTED sale invoice (not itself a
+                        note) can be reversed → generates a Credit Note as a new
+                        unsubmitted bill to Validate + Submit. Replaces Void once
+                        the bill has reached FBR. */}
+                    {canReverse && inv.fbrStatus === "Submitted" && !inv.isCancelled && !inv.reversedByInvoiceNumber &&
+                     inv.documentType !== 9 && inv.documentType !== 10 && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#ede7f6", color: "#5e35b1", border: "1px solid #b39ddb" }}
+                        onClick={() => handleReverseInvoice(inv)}
+                        title="Reverse this FBR-submitted bill — generates a Credit Note (new unsubmitted bill) that you then Validate and Submit to FBR."
+                      >
+                        <MdUndo size={14} /> Reverse
                       </button>
                     )}
                   </div>

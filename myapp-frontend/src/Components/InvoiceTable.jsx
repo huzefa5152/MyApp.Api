@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import {
   MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
-  MdEdit, MdDelete, MdOpenInNew, MdCancel,
+  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdUndo,
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
@@ -64,6 +64,7 @@ export default function InvoiceTable({
   onToggleFbrExcluded,
   onDelete,
   onVoid,
+  onReverse,
 }) {
   const navigate = useNavigate();
 
@@ -71,9 +72,37 @@ export default function InvoiceTable({
     {
       key: "invoiceNumber",
       header: isBillsMode ? "Bill #" : "Invoice #",
-      width: 110,
+      width: 130,
       accessor: (i) => Number(i.invoiceNumber) || i.invoiceNumber,
-      render: (i) => <strong>{i.invoiceNumber}</strong>,
+      render: (i) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <strong>{i.invoiceNumber}</strong>
+          {(i.documentType === 9 || i.documentType === 10) && (
+            <span
+              style={{
+                fontSize: 10, fontWeight: 700, lineHeight: 1.2,
+                color: i.documentType === 10 ? "#5e35b1" : "#00695c",
+              }}
+              title={i.originalInvoiceNumber ? `Against bill #${i.originalInvoiceNumber}${i.originalInvoiceRefIRN ? ` (IRN ${i.originalInvoiceRefIRN})` : ""}` : undefined}
+            >
+              {i.documentType === 10 ? "CREDIT NOTE" : "DEBIT NOTE"}
+              {i.originalInvoiceNumber ? ` ↩ #${i.originalInvoiceNumber}` : ""}
+            </span>
+          )}
+          {i.documentType !== 9 && i.documentType !== 10 && i.reversedByInvoiceNumber && (
+            <span
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 3, alignSelf: "flex-start",
+                fontSize: 10, fontWeight: 700, lineHeight: 1.2, padding: "2px 6px",
+                borderRadius: 6, background: "#ede7f6", color: "#5e35b1", border: "1px solid #b39ddb",
+              }}
+              title={`A Debit Note (#${i.reversedByInvoiceNumber}) has been created against this invoice — it reverses this sale.`}
+            >
+              <MdUndo size={11} /> REVERSED · DN #{i.reversedByInvoiceNumber}
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       key: "clientName",
@@ -286,6 +315,16 @@ export default function InvoiceTable({
             <MdCancel size={14} />
           </button>
         )}
+        {perms.canReverse && isSubmitted && !inv.isCancelled && !inv.reversedByInvoiceNumber &&
+         inv.documentType !== 9 && inv.documentType !== 10 && (
+          <button
+            style={btn.reverse}
+            onClick={() => onReverse?.(inv)}
+            title="Reverse this FBR-submitted bill — generates a Credit Note (new unsubmitted bill) that you then Validate and Submit to FBR."
+          >
+            <MdUndo size={14} />
+          </button>
+        )}
       </>
     );
   };
@@ -324,6 +363,7 @@ const btn = {
   edit:        { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
   delete:      { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
   void:        { ...baseBtn, backgroundColor: "#fff8e1", color: "#b26a00" },
+  reverse:     { ...baseBtn, backgroundColor: "#ede7f6", color: "#5e35b1" },
   fbrValidate: { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
   fbrSubmit:   { ...baseBtn, backgroundColor: "#e8eaf6", color: "#1a237e" },
   neutral:     { ...baseBtn, backgroundColor: "#eceff1", color: "#546e7a" },

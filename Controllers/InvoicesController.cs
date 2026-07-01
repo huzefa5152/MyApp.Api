@@ -380,6 +380,64 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
+        /// Reverse an FBR-SUBMITTED invoice by auto-generating the correct
+        /// adjustment note (Credit Note for a return/reversal — the default —
+        /// or Debit Note for an upward correction). The note is created
+        /// UNSUBMITTED and appears in the Bills list so the operator can
+        /// Validate it, then Submit it to FBR just like an ordinary invoice.
+        ///
+        /// Gated by `invoices.note.create` (distinct from create/void) so the
+        /// right to reverse a submitted document can be granted independently.
+        /// </summary>
+        [HttpPost("{id}/reverse")]
+        [HasPermission("invoices.note.create")]
+        public async Task<ActionResult<InvoiceDto>> Reverse(int id, [FromBody] CreateReversalNoteDto? body)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            try
+            {
+                var note = await _service.CreateReversalNoteAsync(
+                    id, body?.Reason, body?.Remarks, body?.DocumentType, User.Identity?.Name);
+                if (note == null) return NotFound(new { error = "Bill not found." });
+                return Ok(note);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Manually create a Credit / Debit Note referencing an FBR-submitted
+        /// invoice, with optional PARTIAL line selection (subset of lines /
+        /// reduced quantities). Powers the dedicated Credit/Debit Note screen.
+        /// The note is created UNSUBMITTED, then validated + submitted like an
+        /// ordinary bill. Gated by `invoices.note.create`.
+        /// </summary>
+        [HttpPost("notes")]
+        [HasPermission("invoices.note.create")]
+        public async Task<ActionResult<InvoiceDto>> CreateNote([FromBody] CreateNoteDto body)
+        {
+            if (body == null || body.OriginalInvoiceId <= 0)
+                return BadRequest(new { error = "An original invoice must be selected." });
+            var existing = await _service.GetByIdAsync(body.OriginalInvoiceId);
+            if (existing == null) return NotFound(new { error = "Original invoice not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            try
+            {
+                var note = await _service.CreateNoteAsync(body, User.Identity?.Name);
+                if (note == null) return NotFound(new { error = "Original invoice not found." });
+                return Ok(note);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
         /// Flip the FBR-exclusion flag on a bill. Excluded bills are skipped
         /// by Validate All / Submit All; per-bill validate/submit still work.
         /// Returns the updated DTO so the UI can re-render without a refetch.

@@ -46,6 +46,31 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<InvoiceDto?> CancelAsync(int id, string? reason, string? actorUserName = null);
         /// <summary>
+        /// Reverse an FBR-SUBMITTED invoice by auto-generating the correct
+        /// adjustment note as a new, UNSUBMITTED invoice row:
+        ///   • Credit Note (DocumentType 10) for a return/reversal — the usual
+        ///     case, reduces output tax — or Debit Note (9) when
+        ///     <paramref name="documentTypeOverride"/> forces an upward
+        ///     correction.
+        /// The note copies the original's buyer, GST rate, and line items,
+        /// references the original's IRN (OriginalInvoiceRefIRN), and lands in
+        /// the Bills list so the operator can Validate then Submit it to FBR
+        /// exactly like an ordinary invoice.
+        ///
+        /// Throws InvalidOperationException if the original isn't FBR-submitted,
+        /// has no IRN, or already has a live (non-cancelled) note against it
+        /// (FBR 0064 — one credit note per invoice). Returns null if not found.
+        /// </summary>
+        Task<InvoiceDto?> CreateReversalNoteAsync(int originalInvoiceId, string? reason, string? remarks, int? documentTypeOverride = null, string? actorUserName = null);
+        /// <summary>
+        /// General Credit/Debit Note creation referencing an FBR-submitted
+        /// invoice. Supports PARTIAL notes (a subset of lines / reduced
+        /// quantities) via <see cref="CreateNoteDto.Lines"/>; an empty line list
+        /// means a full reversal. Same guards and FBR flow as
+        /// <see cref="CreateReversalNoteAsync"/> (which delegates here).
+        /// </summary>
+        Task<InvoiceDto?> CreateNoteAsync(CreateNoteDto dto, string? actorUserName = null);
+        /// <summary>
         /// Flip the IsFbrExcluded flag. Excluded bills are skipped by the
         /// bulk Validate All / Submit All endpoints; per-bill validate and
         /// submit still work. Returns the updated bill or null if not found.

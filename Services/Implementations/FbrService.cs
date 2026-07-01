@@ -68,7 +68,16 @@ namespace MyApp.Api.Services.Implementations
             PropertyNameCaseInsensitive = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            // FBR's DI responses are not strict JSON — e.g. debit/credit note
+            // validation returns a trailing comma before the closing brace
+            // ("sourceInvoiceNo":"",}) and may add fields we don't model. Read
+            // tolerantly so a valid FBR result (incl. real error codes) is
+            // surfaced instead of a generic "unrecognised response". These
+            // options only affect deserialisation; serialised requests are
+            // unaffected.
+            AllowTrailingCommas = true,
+            ReadCommentHandling = JsonCommentHandling.Skip,
         };
 
         // Document type int → FBR string. Fallback if FbrLookups has no row
@@ -497,10 +506,27 @@ namespace MyApp.Api.Services.Implementations
             var invoiceTypeStr = await ResolveDocTypeAsync(invoice.DocumentType);
             if (invoiceTypeStr == "Debit Note" || invoiceTypeStr == "Credit Note")
             {
-                if (string.IsNullOrWhiteSpace(invoice.FbrIRN))
+                // A note references the ORIGINAL invoice's IRN (OriginalInvoiceRefIRN),
+                // not its own FbrIRN. This is what goes to FBR as invoiceRefNo.
+                // The IRN was issued by FBR on the original submission, so it's
+                // valid by construction — we only require it to be present.
+                // Length varies with the seller's registration (7/9-digit NTN
+                // vs 13-digit CNIC → ~22–28 chars), so we do NOT hard-check the
+                // length; FBR validates the exact format (0057) at submit.
+                var refIrn = invoice.OriginalInvoiceRefIRN?.Trim();
+                if (string.IsNullOrWhiteSpace(refIrn))
                     errors.Add($"Invoice Reference Number is required for {invoiceTypeStr}s. The original invoice must be submitted to FBR first. [FBR 0026]");
-                else if (invoice.FbrIRN.Length != 22 && invoice.FbrIRN.Length != 28)
-                    errors.Add($"Invoice Reference Number must be 22 digits (NTN) or 28 digits (CNIC). Current: {invoice.FbrIRN.Length} characters.");
+
+                // FBR 0034: a note is only accepted within 180 days of the
+                // original invoice date, and 0035: not dated before it.
+                if (invoice.OriginalInvoice != null)
+                {
+                    var origDate = invoice.OriginalInvoice.Date.Date;
+                    if (invoice.Date.Date < origDate)
+                        errors.Add($"{invoiceTypeStr} date cannot be before the original invoice date ({origDate:yyyy-MM-dd}). [FBR 0035]");
+                    else if (invoice.Date.Date > origDate.AddDays(180))
+                        errors.Add($"{invoiceTypeStr} can only be issued within 180 days of the original invoice date ({origDate:yyyy-MM-dd}). [FBR 0034]");
+                }
             }
 
             // Already-submitted guard
@@ -828,7 +854,20 @@ namespace MyApp.Api.Services.Implementations
                 BuyerProvince = buyerProvince,
                 BuyerAddress = SanitizeForFbr(buyer.Address),
                 BuyerRegistrationType = buyerRegType,
-                InvoiceRefNo = (invoice.DocumentType == 9 || invoice.DocumentType == 10) ? (invoice.FbrIRN ?? "") : "",
+                // Notes (Debit=9 / Credit=10) reference the ORIGINAL invoice's
+                // IRN, stored on OriginalInvoiceRefIRN — NOT this note's own
+                // FbrIRN (which is null until the note itself is submitted).
+                InvoiceRefNo = (invoice.DocumentType == 9 || invoice.DocumentType == 10) ? (invoice.OriginalInvoiceRefIRN?.Trim() ?? "") : "",
+                // Reason (FBR 0027) + remarks (0028) — notes only; null omits them.
+                Reason = (invoice.DocumentType == 9 || invoice.DocumentType == 10)
+                    ? (string.IsNullOrWhiteSpace(invoice.NoteReason) ? null : invoice.NoteReason.Trim())
+                    : null,
+                ReasonRemarks = (invoice.DocumentType == 9 || invoice.DocumentType == 10)
+                    ? (string.IsNullOrWhiteSpace(invoice.NoteReasonRemarks) ? null : invoice.NoteReasonRemarks.Trim())
+                    : null,
+                // Sandbox requires a scenarioId (FBR 0201) — including for
+                // debit/credit notes (confirmed: omitting it → 0201). Notes
+                // carry the same scenario as their originating sale.
                 ScenarioId = isSandbox ? (scenarioId ?? "SN001") : null,
                 Items = new List<FbrInvoiceItemRequest>()
             };

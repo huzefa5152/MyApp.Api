@@ -21,6 +21,14 @@ namespace MyApp.Api.DTOs
         public string BuyerRegistrationType { get; set; } = "";
         public string InvoiceRefNo { get; set; } = "";
 
+        // Debit/Credit Note reason (FBR 0027) and remarks (FBR 0028, required
+        // when reason is "Others"). Omitted from JSON for ordinary sale invoices.
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Reason { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? ReasonRemarks { get; set; }
+
         // Only included for sandbox; null → omitted from JSON
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? ScenarioId { get; set; }

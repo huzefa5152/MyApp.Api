@@ -213,6 +213,11 @@ namespace MyApp.Api.Services.Implementations
             IsCancelled = inv.IsCancelled,
             CancelledAt = inv.CancelledAt,
             CancelReason = inv.CancelReason,
+            OriginalInvoiceId = inv.OriginalInvoiceId,
+            OriginalInvoiceNumber = inv.OriginalInvoice?.InvoiceNumber,
+            OriginalInvoiceRefIRN = inv.OriginalInvoiceRefIRN,
+            NoteReason = inv.NoteReason,
+            NoteReasonRemarks = inv.NoteReasonRemarks,
             FbrReady = missing.Count == 0,
             FbrMissing = missing,
             Items = inv.Items.Select(ii => new InvoiceItemDto
@@ -279,7 +284,31 @@ namespace MyApp.Api.Services.Implementations
         public async Task<List<InvoiceDto>> GetByCompanyAsync(int companyId)
         {
             var invoices = await _invoiceRepo.GetByCompanyAsync(companyId);
-            return invoices.Select(ToDto).ToList();
+            var dtos = invoices.Select(ToDto).ToList();
+            await AttachReversalInfoAsync(dtos);
+            return dtos;
+        }
+
+        /// <summary>
+        /// Stamp each sale invoice with the number of the LIVE Credit Note that
+        /// reverses it (if any), so the UI can hide the Reverse button and show
+        /// "Reversed by CN #N". One round-trip for the whole page.
+        /// </summary>
+        private async Task AttachReversalInfoAsync(List<InvoiceDto> dtos)
+        {
+            var ids = dtos
+                .Where(d => d.DocumentType != 9 && d.DocumentType != 10)
+                .Select(d => d.Id)
+                .ToList();
+            if (ids.Count == 0) return;
+            var noteMap = await _context.Invoices
+                .Where(n => (n.DocumentType == 9 || n.DocumentType == 10) && !n.IsCancelled
+                         && n.OriginalInvoiceId != null && ids.Contains(n.OriginalInvoiceId.Value))
+                .GroupBy(n => n.OriginalInvoiceId!.Value)
+                .Select(g => new { OriginalId = g.Key, NoteNumber = g.Max(x => x.InvoiceNumber) })
+                .ToDictionaryAsync(x => x.OriginalId, x => x.NoteNumber);
+            foreach (var d in dtos)
+                if (noteMap.TryGetValue(d.Id, out var nn)) d.ReversedByInvoiceNumber = nn;
         }
 
         public async Task<PagedResult<InvoiceDto>> GetPagedByCompanyAsync(
@@ -302,6 +331,7 @@ namespace MyApp.Api.Services.Implementations
             var dtos = items.Select(ToDto).ToList();
             foreach (var d in dtos)
                 d.IsLatest = d.InvoiceNumber == maxNumber;
+            await AttachReversalInfoAsync(dtos);
 
             return new PagedResult<InvoiceDto>
             {
@@ -315,7 +345,10 @@ namespace MyApp.Api.Services.Implementations
         public async Task<InvoiceDto?> GetByIdAsync(int id)
         {
             var inv = await _invoiceRepo.GetByIdAsync(id);
-            return inv == null ? null : ToDto(inv);
+            if (inv == null) return null;
+            var dto = ToDto(inv);
+            await AttachReversalInfoAsync(new List<InvoiceDto> { dto });
+            return dto;
         }
 
         public async Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto)
@@ -1830,6 +1863,264 @@ namespace MyApp.Api.Services.Implementations
 
             var reloaded = await _invoiceRepo.GetByIdAsync(id);
             return reloaded == null ? null : ToDto(reloaded);
+        }
+
+        // Quick full reversal (the "Reverse" button). Delegates to the general
+        // note builder with no line selection = every line, full quantity.
+        // A reversal is a Debit Note (docType 9) — the only reference-note type
+        // FBR's doctypecode exposes to this taxpayer ("Credit Note" is rejected
+        // with [0003]). Per FBR 0067 a debit note is capped at the original, so
+        // it is the return/reduction instrument.
+        public Task<InvoiceDto?> CreateReversalNoteAsync(
+            int originalInvoiceId, string? reason, string? remarks,
+            int? documentTypeOverride = null, string? actorUserName = null)
+            => CreateNoteAsync(new CreateNoteDto
+            {
+                OriginalInvoiceId = originalInvoiceId,
+                DocumentType      = documentTypeOverride == 10 ? 10 : 9,
+                Reason            = reason,
+                Remarks           = remarks,
+                Lines             = new(),   // empty = full reversal
+            }, actorUserName);
+
+        public async Task<InvoiceDto?> CreateNoteAsync(CreateNoteDto dto, string? actorUserName = null)
+        {
+            // Snapshot the original (read-only) with its items. AsNoTracking so
+            // the retry loop below can safely detach on a numbering collision
+            // without disturbing the source rows.
+            var original = await _context.Invoices
+                .AsNoTracking()
+                .Include(i => i.Items)
+                .FirstOrDefaultAsync(i => i.Id == dto.OriginalInvoiceId);
+            if (original == null) return null;
+
+            // A note may only reference a real, FBR-accepted SALE invoice.
+            if (original.DocumentType == 9 || original.DocumentType == 10)
+                throw new InvalidOperationException("A Credit/Debit Note cannot itself be reversed. Reference the original invoice instead.");
+            if (original.IsCancelled)
+                throw new InvalidOperationException("This bill is cancelled — there is nothing to reverse at FBR.");
+            if (original.FbrStatus != "Submitted" || string.IsNullOrWhiteSpace(original.FbrIRN))
+                throw new InvalidOperationException("Only an invoice that has been submitted to FBR can have a note issued against it. A non-submitted bill should be voided instead.");
+
+            // 9 = Debit Note (the reference-note type FBR allows this taxpayer —
+            // the return/reduction instrument). 10 = Credit Note only if a future
+            // caller explicitly forces it (not offered in the UI; FBR rejects it
+            // for wholesalers via [0003]). Default = Debit Note.
+            var docType = dto.DocumentType == 10 ? 10 : 9;
+            var label = docType == 10 ? "Credit Note" : "Debit Note";
+
+            // FBR 0064: only one live note of a given type per original invoice.
+            var alreadyExists = await _context.Invoices.AnyAsync(i =>
+                i.OriginalInvoiceId == original.Id &&
+                i.DocumentType == docType &&
+                !i.IsCancelled);
+            if (alreadyExists)
+                throw new InvalidOperationException($"A {label} already exists against bill #{original.InvoiceNumber}. FBR allows only one per invoice. Cancel the existing note first if it hasn't been submitted.");
+
+            // Project each original line to its FBR-EFFECTIVE values (dual-book
+            // overlay applied) — that's what was filed to FBR and what moved
+            // stock, so a note must reverse exactly those. Base ItemTypeId kept
+            // (the catalog item + HS code the original OUT was recorded against).
+            var overlays = await _context.InvoiceItemAdjustments
+                .AsNoTracking()
+                .Where(a => a.InvoiceId == original.Id)
+                .ToDictionaryAsync(a => a.InvoiceItemId, a => a);
+
+            InvoiceItem BuildLine(InvoiceItem src, decimal qty, decimal unitPrice, decimal lineTotal)
+            {
+                overlays.TryGetValue(src.Id, out var ov);
+                return new InvoiceItem
+                {
+                    ItemTypeId   = src.ItemTypeId,
+                    ItemTypeName = src.ItemTypeName,
+                    Description  = ov?.AdjustedDescription ?? src.Description,
+                    Quantity     = qty,
+                    UOM          = src.UOM,
+                    UnitPrice    = unitPrice,
+                    LineTotal    = lineTotal,
+                    HSCode       = ov?.AdjustedHSCode   ?? src.HSCode,
+                    FbrUOMId     = src.FbrUOMId,
+                    SaleType     = ov?.AdjustedSaleType ?? src.SaleType,
+                    RateId       = src.RateId,
+                    FixedNotifiedValueOrRetailPrice = src.FixedNotifiedValueOrRetailPrice,
+                    SroScheduleNo   = src.SroScheduleNo,
+                    SroItemSerialNo = src.SroItemSerialNo,
+                    DeliveryItemId  = null,   // a note isn't tied to challan lines
+                };
+            }
+
+            decimal EffQty(InvoiceItem src)   => overlays.TryGetValue(src.Id, out var ov) && ov.AdjustedQuantity  != null ? ov.AdjustedQuantity.Value  : src.Quantity;
+            decimal EffPrice(InvoiceItem src) => overlays.TryGetValue(src.Id, out var ov) && ov.AdjustedUnitPrice != null ? ov.AdjustedUnitPrice.Value : src.UnitPrice;
+            decimal EffTotal(InvoiceItem src) => overlays.TryGetValue(src.Id, out var ov) && ov.AdjustedLineTotal != null ? ov.AdjustedLineTotal.Value : src.LineTotal;
+
+            var noteItems = new List<InvoiceItem>();
+            var partial = dto.Lines != null && dto.Lines.Count > 0;
+            if (!partial)
+            {
+                // Full reversal — every line at its full effective quantity.
+                foreach (var src in original.Items)
+                    noteItems.Add(BuildLine(src, EffQty(src), EffPrice(src), EffTotal(src)));
+            }
+            else
+            {
+                // Partial — only the selected lines, quantity capped at the
+                // original's effective quantity; line total recomputed.
+                var byId = original.Items.ToDictionary(i => i.Id);
+                foreach (var sel in dto.Lines)
+                {
+                    if (!byId.TryGetValue(sel.InvoiceItemId, out var src)) continue;
+                    var maxQty = EffQty(src);
+                    var qty = sel.Quantity;
+                    if (qty <= 0) continue;
+                    if (qty > maxQty)
+                        throw new InvalidOperationException($"Return quantity {qty:0.####} for \"{src.Description}\" exceeds the invoiced quantity {maxQty:0.####}.");
+                    var unitPrice = EffPrice(src);
+                    noteItems.Add(BuildLine(src, qty, unitPrice, Math.Round(qty * unitPrice, 2)));
+                }
+            }
+            if (noteItems.Count == 0)
+                throw new InvalidOperationException("Select at least one line (with a quantity greater than zero) for the note.");
+
+            // Header totals. For a FULL reversal, mirror the original's stored
+            // totals exactly — re-summing effective line totals can drift by a
+            // few paise from the original's stored Subtotal (the original's own
+            // lines may not sum to its rounded header), which would falsely trip
+            // FBR 0036. For a PARTIAL note, recompute from the selected lines.
+            var gstRate = original.GSTRate;
+            decimal subtotal, gstAmount, grandTotal;
+            if (!partial)
+            {
+                subtotal   = original.Subtotal;
+                gstAmount  = original.GSTAmount;
+                grandTotal = original.GrandTotal;
+            }
+            else
+            {
+                subtotal   = noteItems.Sum(i => i.LineTotal);
+                gstAmount  = Math.Round(subtotal * gstRate / 100m, 2);
+                grandTotal = subtotal + gstAmount;
+            }
+
+            // A reference note's value cannot exceed the original invoice
+            // (Debit Note → FBR 0067, Credit Note → FBR 0036). Allow a 1-rupee
+            // tolerance so per-line rounding noise never blocks a valid note.
+            if (subtotal - original.Subtotal > 1.00m)
+            {
+                var code = docType == 10 ? "0036" : "0067";
+                throw new InvalidOperationException($"{label} value ({subtotal:0.##}) cannot exceed the original invoice value ({original.Subtotal:0.##}). [FBR {code}]");
+            }
+
+            var company = await _context.Companies.FirstOrDefaultAsync(c => c.Id == original.CompanyId);
+            if (company == null) throw new InvalidOperationException("Company not found for the original invoice.");
+
+            // Note date: caller-supplied or today, never before the original
+            // (FBR 0035). 180-day ceiling (0034) is enforced at FBR pre-validate.
+            var baseDate = (dto.Date ?? DateTime.UtcNow).Date;
+            var noteDate = baseDate < original.Date.Date ? original.Date.Date : baseDate;
+            var reason  = dto.Reason;
+            var remarks = dto.Remarks;
+
+            const int maxAttempts = NumberAllocationRetry.DefaultMaxAttempts;
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                // Notes share the regular (non-demo) numbering sequence — they
+                // are real FBR documents, same as standalone bills.
+                int maxExistingInvoice = await _context.Invoices
+                    .Where(i => i.CompanyId == original.CompanyId && !i.IsDemo)
+                    .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+                int nextInvoiceNumber = maxExistingInvoice > 0
+                    ? maxExistingInvoice + 1
+                    : company.StartingInvoiceNumber;
+                company.CurrentInvoiceNumber = nextInvoiceNumber;
+
+                // Fresh line entities each attempt (a rolled-back attempt detaches them).
+                var attemptItems = noteItems
+                    .Select(i => BuildLine(
+                        new InvoiceItem { Id = 0, ItemTypeId = i.ItemTypeId, ItemTypeName = i.ItemTypeName,
+                            Description = i.Description, Quantity = i.Quantity, UOM = i.UOM, UnitPrice = i.UnitPrice,
+                            LineTotal = i.LineTotal, HSCode = i.HSCode, FbrUOMId = i.FbrUOMId, SaleType = i.SaleType,
+                            RateId = i.RateId, FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
+                            SroScheduleNo = i.SroScheduleNo, SroItemSerialNo = i.SroItemSerialNo },
+                        i.Quantity, i.UnitPrice, i.LineTotal))
+                    .ToList();
+
+                var note = new Invoice
+                {
+                    InvoiceNumber = nextInvoiceNumber,
+                    Date          = noteDate,
+                    CompanyId     = original.CompanyId,
+                    ClientId      = original.ClientId,
+                    Subtotal      = subtotal,
+                    GSTRate       = gstRate,
+                    GSTAmount     = gstAmount,
+                    GrandTotal    = grandTotal,
+                    AmountInWords = NumberToWordsConverter.Convert(grandTotal),
+                    PaymentTerms  = original.PaymentTerms,   // carries [SNxxx] scenario tag
+                    DocumentType  = docType,
+                    PaymentMode   = original.PaymentMode,
+                    OriginalInvoiceId     = original.Id,
+                    OriginalInvoiceRefIRN = original.FbrIRN,
+                    NoteReason            = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(),
+                    NoteReasonRemarks     = string.IsNullOrWhiteSpace(remarks) ? null : remarks.Trim(),
+                    FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
+                        ? nextInvoiceNumber.ToString()
+                        : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
+                    Items = attemptItems,
+                };
+
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    var created = await _invoiceRepo.CreateAsync(note);
+                    await _companyRepo.UpdateAsync(company);
+
+                    // Stock reflow: Credit Note (10) → IN; Debit Note (9) → no
+                    // goods movement. SyncInvoiceStockMovements keys off DocType.
+                    await _stock.SyncInvoiceStockMovementsAsync(created);
+                    await transaction.CommitAsync();
+
+                    try
+                    {
+                        await _auditLog.LogAsync(new AuditLog
+                        {
+                            Level         = "Info",
+                            UserName      = actorUserName,
+                            HttpMethod    = "POST",
+                            RequestPath   = $"/invoices/{original.Id}/reverse",
+                            StatusCode    = 200,
+                            ExceptionType = "Invoice.ReversalNote",
+                            Message       = $"{label} #{nextInvoiceNumber} ({(partial ? "partial" : "full")}) created against bill #{original.InvoiceNumber} (IRN {original.FbrIRN}). "
+                                          + (string.IsNullOrWhiteSpace(reason) ? "" : $"Reason: {reason!.Trim()}. ")
+                                          + "Awaiting FBR validate/submit.",
+                        });
+                    }
+                    catch { /* audit must never break the operation */ }
+
+                    var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
+                    return loaded == null ? null : ToDto(loaded);
+                }
+                catch (DbUpdateException dupEx) when (NumberAllocationRetry.IsUniqueViolation(dupEx))
+                {
+                    _logger.LogWarning(
+                        "Note number {Number} for company {CompanyId} collided; retrying (attempt {Attempt}).",
+                        nextInvoiceNumber, original.CompanyId, attempt);
+                    await transaction.RollbackAsync();
+                    foreach (var entry in _context.ChangeTracker.Entries().ToList())
+                        if (entry.State != EntityState.Unchanged)
+                            entry.State = EntityState.Detached;
+                    if (attempt < maxAttempts)
+                        await Task.Delay(10 * attempt);
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "InvoiceService: note transaction rolled back");
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            }
+            throw new InvalidOperationException(
+                "Could not allocate a unique invoice number after " + maxAttempts + " attempts.");
         }
 
         public async Task<PrintBillDto?> GetPrintBillAsync(int invoiceId)

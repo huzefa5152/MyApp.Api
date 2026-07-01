@@ -215,6 +215,18 @@ namespace MyApp.Api.Services.Implementations
             if (invoice == null) return;
             if (!await IsTrackingEnabledAsync(invoice.CompanyId)) return;
 
+            // Direction depends on the document type:
+            //   • Sale Invoice (4/null)          → OUT (goods leave)
+            //   • Debit Note (9) / Credit Note (10) → IN  (a return/reversal —
+            //     goods come back). For this taxpayer FBR exposes only the Debit
+            //     Note as the reference-note type, and per FBR 0067 it is capped
+            //     at the original, i.e. a return instrument.
+            // Notes reuse SourceType.Invoice + SourceId=note.Id so the existing
+            // cancel/delete purges (which filter by SourceId) clean them up.
+            var dir = (invoice.DocumentType == 9 || invoice.DocumentType == 10)
+                ? StockMovementDirection.In
+                : StockMovementDirection.Out;
+
             // Delete any prior Out movements emitted for this invoice. The
             // re-insert below uses the current Items, so any item-line
             // qty change, item-type swap, or line deletion since the
@@ -231,7 +243,7 @@ namespace MyApp.Api.Services.Implementations
                 .Where(m => m.CompanyId  == invoice.CompanyId
                          && m.SourceType == StockMovementSourceType.Invoice
                          && m.SourceId   == invoice.Id
-                         && m.Direction  == StockMovementDirection.Out)
+                         && m.Direction  == dir)
                 .ToListAsync();
             if (stale.Count > 0)
             {
@@ -278,11 +290,14 @@ namespace MyApp.Api.Services.Implementations
                 if (effectiveQty <= 0) continue;
 
                 var hasOverlay = overlayQtyByItemId.ContainsKey(item.Id);
+                var docLabel = invoice.DocumentType == 10 ? "Credit Note"
+                             : invoice.DocumentType == 9  ? "Debit Note"
+                             : "Bill";
                 _context.StockMovements.Add(new StockMovement
                 {
                     CompanyId    = invoice.CompanyId,
                     ItemTypeId   = item.ItemTypeId.Value,
-                    Direction    = StockMovementDirection.Out,
+                    Direction    = dir,
                     // 2026-05-12: stored at full decimal(18,4) precision.
                     // Previously truncated to int (lost fractional KG /
                     // Liter / Carat sales).
@@ -291,8 +306,8 @@ namespace MyApp.Api.Services.Implementations
                     SourceId     = invoice.Id,
                     MovementDate = invoice.Date,
                     Notes        = hasOverlay
-                        ? $"Bill #{invoice.InvoiceNumber} saved (FBR-adjusted qty {effectiveQty:0.####}, bill row qty {item.Quantity:0.####})"
-                        : $"Bill #{invoice.InvoiceNumber} saved",
+                        ? $"{docLabel} #{invoice.InvoiceNumber} saved (FBR-adjusted qty {effectiveQty:0.####}, row qty {item.Quantity:0.####})"
+                        : $"{docLabel} #{invoice.InvoiceNumber} saved",
                     CreatedAt    = DateTime.UtcNow,
                 });
             }

@@ -60,6 +60,33 @@ namespace MyApp.Api.Models
         public DateTime? CancelledAt { get; set; }
         public string? CancelReason { get; set; }
 
+        // ── Credit / Debit Note linkage (2026-07-01) ─────────────────────
+        // A Credit Note (DocumentType 10) or Debit Note (DocumentType 9) is
+        // itself an Invoice row that ADJUSTS an earlier FBR-submitted sale.
+        // These fields link the note back to the original invoice.
+        //
+        // IMPORTANT: FbrIRN above always means "THIS document's own IRN"
+        // (a note gets its own IRN when submitted). The *reference* to the
+        // original invoice's IRN is stored separately here so submitting the
+        // note never clobbers the reference. FbrService reads
+        // OriginalInvoiceRefIRN for the FBR `invoiceRefNo` field on notes.
+
+        /// <summary>Local FK to the original invoice this note reverses/adjusts. Null for ordinary sale invoices.</summary>
+        public int? OriginalInvoiceId { get; set; }
+
+        /// <summary>
+        /// The ORIGINAL invoice's FBR IRN (22 digits NTN / 28 digits CNIC).
+        /// Sent to FBR as `invoiceRefNo` for Debit/Credit Notes (FBR 0026).
+        /// Distinct from <see cref="FbrIRN"/>, which is this note's own IRN.
+        /// </summary>
+        public string? OriginalInvoiceRefIRN { get; set; }
+
+        /// <summary>FBR reason for the note (goods returned, cancellation, etc). Required for notes (FBR 0027).</summary>
+        public string? NoteReason { get; set; }
+
+        /// <summary>Free-text remarks — required by FBR when the reason is "Others" (FBR 0028).</summary>
+        public string? NoteReasonRemarks { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation
@@ -67,5 +94,8 @@ namespace MyApp.Api.Models
         public Client Client { get; set; } = null!;
         public ICollection<InvoiceItem> Items { get; set; } = new List<InvoiceItem>();
         public ICollection<DeliveryChallan> DeliveryChallans { get; set; } = new List<DeliveryChallan>();
+
+        /// <summary>Self-reference to the original invoice a Credit/Debit Note adjusts. Null for ordinary invoices.</summary>
+        public Invoice? OriginalInvoice { get; set; }
     }
 }

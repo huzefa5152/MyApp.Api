@@ -233,6 +233,15 @@ namespace MyApp.Api.Data
                 .HasForeignKey(i => i.ClientId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Invoice -> OriginalInvoice (self-reference for Credit/Debit Notes).
+            // NoAction: never cascade a delete from the original into its notes
+            // (and notes are the trailing rows anyway). Optional FK.
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.OriginalInvoice)
+                .WithMany()
+                .HasForeignKey(i => i.OriginalInvoiceId)
+                .OnDelete(DeleteBehavior.NoAction);
+
             // Invoice -> InvoiceItems (cascade)
             modelBuilder.Entity<InvoiceItem>()
                 .HasOne(ii => ii.Invoice)

@@ -22,6 +22,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans)
+                .Include(i => i.OriginalInvoice)
                 .Where(i => i.CompanyId == companyId && !i.IsDemo)
                 .OrderByDescending(i => i.InvoiceNumber)
                 .ToListAsync();
@@ -36,6 +37,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans)
+                .Include(i => i.OriginalInvoice)
                 .Where(i => i.CompanyId == companyId && !i.IsDemo);
 
             if (clientId.HasValue)
@@ -87,6 +89,7 @@ namespace MyApp.Api.Repositories.Implementations
                     .ThenInclude(ii => ii.Adjustment)
                 .Include(i => i.DeliveryChallans)
                     .ThenInclude(dc => dc.Items)
+                .Include(i => i.OriginalInvoice)
                 .FirstOrDefaultAsync(i => i.Id == id);
         }
 
