@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Models;
@@ -18,6 +20,7 @@ namespace MyApp.Api.Services.Implementations
         private readonly IAttachmentRepository _repository;
         private readonly IFolderRepository _folderRepository;
         private readonly AttachmentStorage _storage;
+        private readonly AppDbContext _context;
         private readonly ILogger<AttachmentService> _logger;
         private readonly long _maxBytes;
 
@@ -25,12 +28,14 @@ namespace MyApp.Api.Services.Implementations
             IAttachmentRepository repository,
             IFolderRepository folderRepository,
             AttachmentStorage storage,
+            AppDbContext context,
             IConfiguration configuration,
             ILogger<AttachmentService> logger)
         {
             _repository = repository;
             _folderRepository = folderRepository;
             _storage = storage;
+            _context = context;
             _logger = logger;
             _maxBytes = configuration.GetValue<long>("Attachments:MaxFileBytes", AttachmentFileValidator.DefaultMaxBytes);
         }
@@ -61,6 +66,23 @@ namespace MyApp.Api.Services.Implementations
                     ?? throw new InvalidOperationException("Unsupported attachment entity type.");
                 if (!entityId.HasValue || entityId.Value <= 0)
                     throw new InvalidOperationException("An entity id is required when linking an attachment to a record.");
+
+                // Cross-tenant link guard (CLAUDE.md §4): the referenced record
+                // must exist IN THIS COMPANY — a forged entityId must not
+                // create a dangling link pointing at another tenant's document.
+                var id = entityId.Value;
+                var linkedOk = canonicalEntity switch
+                {
+                    AttachmentEntityTypes.SalesQuote => await _context.SalesQuotes.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
+                    AttachmentEntityTypes.SalesOrder => await _context.SalesOrders.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
+                    AttachmentEntityTypes.DeliveryChallan => await _context.DeliveryChallans.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
+                    AttachmentEntityTypes.Invoice => await _context.Invoices.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
+                    AttachmentEntityTypes.PurchaseBill => await _context.PurchaseBills.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
+                    AttachmentEntityTypes.GoodsReceipt => await _context.GoodsReceipts.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
+                    _ => false,
+                };
+                if (!linkedOk)
+                    throw new InvalidOperationException("The linked record was not found in this company.");
             }
 
             // Group on disk by folder name (or "Uncategorized") — mirrors the

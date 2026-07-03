@@ -12,12 +12,16 @@ namespace MyApp.Api.Helpers
         public const string SalesQuote = "SalesQuote";
         public const string SalesOrder = "SalesOrder";
         public const string DeliveryChallan = "DeliveryChallan";
-        public const string Bill = "Bill";
+        // Bills, invoices, and credit/debit notes are all rows of the Invoice
+        // entity (different tabs / DocumentTypes), so they share one type — an
+        // attachment made on the Bills tab is visible on the Invoices tab.
         public const string Invoice = "Invoice";
+        public const string PurchaseBill = "PurchaseBill";
+        public const string GoodsReceipt = "GoodsReceipt";
 
         public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
         {
-            SalesQuote, SalesOrder, DeliveryChallan, Bill, Invoice
+            SalesQuote, SalesOrder, DeliveryChallan, Invoice, PurchaseBill, GoodsReceipt
         };
 
         /// <summary>
