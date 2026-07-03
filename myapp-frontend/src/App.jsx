@@ -12,6 +12,10 @@ import SalesOrderPage from "./pages/SalesOrderPage";
 import InvoicePage from "./pages/InvoicePage";
 import PaymentsPage from "./pages/PaymentsPage";
 import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
+import JournalEntriesPage from "./pages/JournalEntriesPage";
+import TransfersPage from "./pages/TransfersPage";
+import AccountingDashboardPage from "./pages/AccountingDashboardPage";
+import AccountingReportsPage from "./pages/AccountingReportsPage";
 import DataMigrationPage from "./pages/DataMigrationPage";
 import CreditDebitNotePage from "./pages/CreditDebitNotePage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
@@ -103,6 +107,13 @@ export default function App() {
           <Route path="/receipts" element={<PaymentsPage key="receipts" mode="receipts" />} />
           <Route path="/payments" element={<PaymentsPage key="payments" mode="payments" />} />
           <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />
+          {/* General Ledger (Phase B): transfers move money between own
+              bank/cash accounts; journal entries are manual GL postings;
+              the accounting dashboard + reports read the live ledger. */}
+          <Route path="/transfers" element={<TransfersPage />} />
+          <Route path="/journal-entries" element={<JournalEntriesPage />} />
+          <Route path="/accounting/dashboard" element={<AccountingDashboardPage />} />
+          <Route path="/accounting/reports" element={<AccountingReportsPage />} />
           <Route path="/accounting/data-migration" element={<DataMigrationPage />} />
           <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
           <Route path="/goods-receipts" element={<GoodsReceiptsPage />} />

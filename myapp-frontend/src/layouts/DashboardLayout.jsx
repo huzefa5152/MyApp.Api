@@ -40,6 +40,10 @@ import {
   MdReceiptLong,
   MdPayments,
   MdCloudDownload,
+  MdSwapHoriz,
+  MdMenuBook,
+  MdInsights,
+  MdAssessment,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { Can, usePermissions } from "../contexts/PermissionsContext";
@@ -183,9 +187,13 @@ export default function DashboardLayout() {
     "fbrimport.purchase.preview",
   ];
   const accountingKeys = [
+    "accounting.dashboard.view",
     "accounting.receipts.view",
     "accounting.payments.view",
+    "accounting.transfers.view",
+    "accounting.journal.view",
     "accounting.coa.view",
+    "accounting.reports.view",
     "accounting.import.run",
   ];
   const adminKeys = [
@@ -217,7 +225,7 @@ export default function DashboardLayout() {
     const p = location.pathname.toLowerCase();
     if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history") return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
-    if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/accounting/")) return "accounting";
+    if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/transfers") || p.startsWith("/journal-entries") || p.startsWith("/accounting/")) return "accounting";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
       || p.startsWith("/templates") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor")) return "configuration";
@@ -427,6 +435,12 @@ export default function DashboardLayout() {
               defaultOpen={activeSection === "accounting"}
               isChildActive={activeSection === "accounting"}
             >
+              <Can permission="accounting.dashboard.view">
+                <NavLink to="/accounting/dashboard" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdInsights className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Dashboard</span>
+                </NavLink>
+              </Can>
               <Can permission="accounting.receipts.view">
                 <NavLink to="/receipts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdReceiptLong className="dl-subitem__icon" aria-hidden="true" />
@@ -439,10 +453,28 @@ export default function DashboardLayout() {
                   <span>Payments</span>
                 </NavLink>
               </Can>
+              <Can permission="accounting.transfers.view">
+                <NavLink to="/transfers" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdSwapHoriz className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Transfers</span>
+                </NavLink>
+              </Can>
+              <Can permission="accounting.journal.view">
+                <NavLink to="/journal-entries" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdMenuBook className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Journal Entries</span>
+                </NavLink>
+              </Can>
               <Can permission="accounting.coa.view">
                 <NavLink to="/chart-of-accounts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdAccountTree className="dl-subitem__icon" aria-hidden="true" />
                   <span>Chart of Accounts</span>
+                </NavLink>
+              </Can>
+              <Can permission="accounting.reports.view">
+                <NavLink to="/accounting/reports" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdAssessment className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Reports</span>
                 </NavLink>
               </Can>
               <Can permission="accounting.import.run">

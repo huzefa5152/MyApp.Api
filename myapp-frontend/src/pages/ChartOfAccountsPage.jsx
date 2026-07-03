@@ -9,10 +9,13 @@ import {
   getCoaTree, seedWholesaleCoa, createAccountGroup, createAccount,
   updateAccount, deleteAccount, deleteAccountGroup,
 } from "../api/accountApi";
+import { getGlStatus, enableGl } from "../api/accountingApi";
+import AccountLedgerDialog from "../Components/AccountLedgerDialog";
 
 const ACCOUNT_TYPES = ["Asset", "Liability", "Equity", "Income", "Expense"];
 const CONTROL_TYPES = ["None", "AccountsReceivable", "AccountsPayable", "Inventory", "BankCash",
-  "Capital", "RetainedEarnings", "OutputTax", "InputTax", "WithholdingReceivable", "WithholdingPayable"];
+  "Capital", "RetainedEarnings", "OutputTax", "InputTax", "WithholdingReceivable", "WithholdingPayable",
+  "ProductionWip", "EmployeeClearing", "Rounding"];
 
 const money = (n) => (n < 0 ? `(${Math.abs(n).toLocaleString()})` : n.toLocaleString());
 
@@ -31,16 +34,23 @@ export default function ChartOfAccountsPage() {
   const [loading, setLoading] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [form, setForm] = useState(null);   // { kind: "account"|"group", ... }
+  const [glStatus, setGlStatus] = useState(null);   // GET /accounting/gl/.../status
+  const [enabling, setEnabling] = useState(false);
+  const [ledgerAccount, setLedgerAccount] = useState(null); // { id, name, code }
 
   const companyId = selectedCompany?.id;
 
   const load = useCallback(async () => {
-    if (!companyId) { setTree({ balanceSheet: [], profitAndLoss: [] }); return; }
+    if (!companyId) { setTree({ balanceSheet: [], profitAndLoss: [] }); setGlStatus(null); return; }
     setLoading(true);
     try {
-      const { data } = await getCoaTree(companyId);
-      setTree(data || { balanceSheet: [], profitAndLoss: [] });
-    } catch { setTree({ balanceSheet: [], profitAndLoss: [] }); }
+      const [treeRes, statusRes] = await Promise.all([
+        getCoaTree(companyId),
+        getGlStatus(companyId).catch(() => null), // status failing must not blank the tree
+      ]);
+      setTree(treeRes.data || { balanceSheet: [], profitAndLoss: [] });
+      setGlStatus(statusRes?.data || null);
+    } catch { setTree({ balanceSheet: [], profitAndLoss: [] }); setGlStatus(null); }
     finally { setLoading(false); }
   }, [companyId]);
 
@@ -68,6 +78,23 @@ export default function ChartOfAccountsPage() {
     } finally { setSeeding(false); }
   };
 
+  const handleEnableGl = async () => {
+    if (enabling) return;
+    setEnabling(true);
+    try {
+      const { data } = await enableGl(companyId); // long-running: seeds + back-posts documents
+      const parts = [];
+      if (data?.seededAccounts != null) parts.push(`${data.seededAccounts} accounts seeded`);
+      if (data?.postedInvoices != null) parts.push(`${data.postedInvoices} invoices`);
+      if (data?.postedBills != null) parts.push(`${data.postedBills} bills`);
+      if (data?.postedPayments != null) parts.push(`${data.postedPayments} payments`);
+      notify(parts.length ? `GL enabled — posted ${parts.join(", ")}.` : "GL enabled.", "success");
+      await load(); // refresh tree balances + status chip
+    } catch (err) {
+      notify(err.response?.data?.error || "Could not enable GL.", "error");
+    } finally { setEnabling(false); }
+  };
+
   const handleDeleteAccount = async (a) => {
     const ok = await confirm({ title: "Delete account?", message: `Delete "${a.name}"? This cannot be undone.`, variant: "danger", confirmText: "Delete" });
     if (!ok) return;
@@ -87,24 +114,30 @@ export default function ChartOfAccountsPage() {
     <div key={node.id} style={{ marginLeft: depth ? 14 : 0, marginTop: depth ? 6 : 12 }}>
       <div style={st.groupHeader}>
         <span style={st.groupName}>{node.name}{node.isSystem && <MdLock size={12} style={{ marginLeft: 5, opacity: 0.5, verticalAlign: "middle" }} title="System group" />}</span>
-        <span style={st.groupTotal}>{money(node.openingBalanceTotal || 0)}</span>
+        <span style={st.groupTotal}>{money(node.balanceTotal ?? node.openingBalanceTotal ?? 0)}</span>
         {canManage && !node.isSystem && (
           <button style={st.iconBtn} title="Delete group" onClick={() => handleDeleteGroup(node)}><MdDelete size={14} /></button>
         )}
       </div>
       {node.accounts?.map((a) => (
-        <div key={a.id} style={st.accountRow}>
+        <div
+          key={a.id}
+          style={{ ...st.accountRow, cursor: "pointer" }}
+          title="View ledger"
+          onClick={() => setLedgerAccount({ id: a.id, name: a.name, code: a.code })}
+        >
           <span style={st.accName}>
             {a.code && <span style={st.code}>{a.code}</span>}
             {a.name}
             {a.isControlAccount && <span style={st.ctrlBadge} title={`Control: ${a.controlType}`}>control</span>}
             {!a.isActive && <span style={{ ...st.ctrlBadge, background: "#eceff1", color: "#607d8b" }}>inactive</span>}
           </span>
-          <span style={st.accAmt}>{a.openingBalance ? `${money(a.openingBalanceIsDebit ? a.openingBalance : -a.openingBalance)}` : ""}</span>
+          {/* Live balance (opening + GL movement, signed debit-positive); blank when zero */}
+          <span style={st.accAmt}>{a.balance ? money(a.balance) : ""}</span>
           {canManage && (
             <span style={st.rowActions}>
-              <button style={st.iconBtn} title="Edit" onClick={() => setForm({ kind: "account", ...a })}><MdEdit size={13} /></button>
-              {!a.isControlAccount && <button style={st.iconBtn} title="Delete" onClick={() => handleDeleteAccount(a)}><MdDelete size={13} /></button>}
+              <button style={st.iconBtn} title="Edit" onClick={(e) => { e.stopPropagation(); setForm({ kind: "account", ...a }); }}><MdEdit size={13} /></button>
+              {!a.isControlAccount && <button style={st.iconBtn} title="Delete" onClick={(e) => { e.stopPropagation(); handleDeleteAccount(a); }}><MdDelete size={13} /></button>}
             </span>
           )}
         </div>
@@ -123,9 +156,26 @@ export default function ChartOfAccountsPage() {
   return (
     <div style={{ padding: "clamp(0.75rem, 2vw, 1.5rem)" }}>
       <div style={st.headerRow}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
           <MdAccountTree size={26} color={colors.blue} />
           <h2 style={st.h2}>Chart of Accounts</h2>
+          {companyId && glStatus && (glStatus.enabled ? (
+            <>
+              <span style={st.glChipOn}>GL on · {(glStatus.entryCount ?? 0).toLocaleString()} entries</span>
+              {glStatus.isBalanced === false && (
+                <span style={st.glChipWarn} title="Total debits and credits do not match">unbalanced</span>
+              )}
+            </>
+          ) : (
+            <>
+              <span style={st.glChipOff}>GL off — balances show opening only</span>
+              {has("accounting.gl.manage") && (
+                <button style={{ ...st.glEnableBtn, opacity: enabling ? 0.6 : 1 }} onClick={handleEnableGl} disabled={enabling}>
+                  {enabling ? "Enabling…" : "Enable GL"}
+                </button>
+              )}
+            </>
+          ))}
         </div>
         {canManage && companyId && (
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -182,6 +232,10 @@ export default function ChartOfAccountsPage() {
           onSaved={() => { setForm(null); load(); }}
         />
       )}
+
+      {ledgerAccount && (
+        <AccountLedgerDialog account={ledgerAccount} onClose={() => setLedgerAccount(null)} />
+      )}
     </div>
   );
 }
@@ -212,7 +266,9 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
         if (!accountGroupId) { setError("Pick a group."); setSaving(false); return; }
         const payload = {
           name: name.trim(), code: code.trim() || null, accountGroupId: Number(accountGroupId),
-          accountType, controlType, openingBalance: Number(openingBalance) || 0, openingBalanceIsDebit: isDebit,
+          openingBalance: Number(openingBalance) || 0, openingBalanceIsDebit: isDebit,
+          // Classification is immutable after create — UpdateAccountDto has no such fields.
+          ...(isEdit ? {} : { accountType, controlType }),
         };
         if (isEdit) await updateAccount(form.id, payload);
         else await createAccount(companyId, payload);
@@ -276,9 +332,16 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
                   </div>
                   <div style={formStyles.formGroup}>
                     <label style={formStyles.label}>Type</label>
-                    <select style={{ ...dropdownStyles.base, width: "100%" }} value={accountType} onChange={(e) => setAccountType(e.target.value)} disabled={isEdit}>
-                      {ACCOUNT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                    {isEdit ? (
+                      <>
+                        <input style={formStyles.input} value={accountType} readOnly disabled title="Fixed after creation" />
+                        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 3 }}>Fixed after creation</div>
+                      </>
+                    ) : (
+                      <select style={{ ...dropdownStyles.base, width: "100%" }} value={accountType} onChange={(e) => setAccountType(e.target.value)}>
+                        {ACCOUNT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    )}
                   </div>
                   <div style={formStyles.formGroup}>
                     <label style={formStyles.label}>Code (optional)</label>
@@ -286,9 +349,16 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
                   </div>
                   <div style={formStyles.formGroup}>
                     <label style={formStyles.label}>Control type</label>
-                    <select style={{ ...dropdownStyles.base, width: "100%" }} value={controlType} onChange={(e) => setControlType(e.target.value)} disabled={isEdit}>
-                      {CONTROL_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                    {isEdit ? (
+                      <>
+                        <input style={formStyles.input} value={controlType} readOnly disabled title="Fixed after creation" />
+                        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 3 }}>Fixed after creation</div>
+                      </>
+                    ) : (
+                      <select style={{ ...dropdownStyles.base, width: "100%" }} value={controlType} onChange={(e) => setControlType(e.target.value)}>
+                        {CONTROL_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    )}
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px,100%),1fr))", gap: "0.75rem" }}>
@@ -322,6 +392,10 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
 const st = {
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" },
   h2: { margin: 0, fontSize: "1.4rem", color: colors.textPrimary },
+  glChipOn: { fontSize: "0.72rem", fontWeight: 700, color: "#1b5e20", background: "#e8f5e9", border: "1px solid #c8e6c9", padding: "3px 10px", borderRadius: 12, whiteSpace: "nowrap" },
+  glChipOff: { fontSize: "0.72rem", fontWeight: 700, color: colors.textSecondary, background: colors.inputBg, border: `1px solid ${colors.cardBorder}`, padding: "3px 10px", borderRadius: 12 },
+  glChipWarn: { fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#b71c1c", background: "#ffebee", border: "1px solid #ffcdd2", padding: "3px 10px", borderRadius: 12 },
+  glEnableBtn: { fontSize: "0.75rem", fontWeight: 700, padding: "0.3rem 0.85rem", minHeight: 36, borderRadius: 12, border: `1px solid ${colors.blue}`, background: "#fff", color: colors.blue, cursor: "pointer" },
   primaryBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "0.55rem 1rem", minHeight: 44, borderRadius: 8, border: "none", background: colors.blue, color: "#fff", fontWeight: 700, cursor: "pointer" },
   secondaryBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "0.55rem 1rem", minHeight: 44, borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontWeight: 700, cursor: "pointer" },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))", gap: "1rem", alignItems: "start" },
