@@ -19,7 +19,8 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(o => o.Items).ThenInclude(i => i.ItemType)
                 .Include(o => o.Client)
                 .Include(o => o.Company)
-                .Include(o => o.SalesQuote);
+                .Include(o => o.SalesQuote)
+                .Include(o => o.Division);
 
         public async Task<List<SalesOrder>> GetByCompanyAsync(int companyId)
         {
@@ -32,7 +33,8 @@ namespace MyApp.Api.Repositories.Implementations
         public async Task<(List<SalesOrder> Items, int TotalCount)> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
-            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null)
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? divisionId = null)
         {
             var query = WithIncludes().Where(o => o.CompanyId == companyId);
 
@@ -40,6 +42,8 @@ namespace MyApp.Api.Repositories.Implementations
                 query = query.Where(o => o.Status == status);
             if (clientId.HasValue)
                 query = query.Where(o => o.ClientId == clientId.Value);
+            if (divisionId.HasValue)
+                query = query.Where(o => o.DivisionId == divisionId.Value);
             if (dateFrom.HasValue)
                 query = query.Where(o => o.OrderDate >= dateFrom.Value);
             if (dateTo.HasValue)

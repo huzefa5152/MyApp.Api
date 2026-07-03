@@ -330,10 +330,10 @@ namespace MyApp.Api.Services.Implementations
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? noteType = null)
+            int? noteType = null, int? divisionId = null)
         {
             var (items, totalCount) = await _invoiceRepo.GetPagedByCompanyAsync(
-                companyId, page, pageSize, search, clientId, dateFrom, dateTo, noteType);
+                companyId, page, pageSize, search, clientId, dateFrom, dateTo, noteType, divisionId);
 
             // Gate the Delete button client-side — only the highest-numbered
             // bill for this company is deletable. Earlier bills must be edited.
@@ -400,9 +400,15 @@ namespace MyApp.Api.Services.Implementations
                 var dc = await _challanRepo.GetByIdAsync(challanId);
                 if (dc == null) throw new KeyNotFoundException($"Challan {challanId} not found.");
                 // Both "Pending" (natively-created) and "Imported" (back-filled)
-                // are billable. Anything else (Invoiced, Cancelled, Setup Required, No PO)
-                // blocks bill creation.
-                if (dc.Status != "Pending" && dc.Status != "Imported")
+                // are billable. "No PO" is billable only when the company runs
+                // with FBR OFF — those tenants routinely sell without a
+                // customer PO, so the needs-a-PO gate (an FBR / PO-driven
+                // workflow rule) would dead-end their SO → challan → bill
+                // flow. Everything else (Invoiced, Cancelled, Setup Required)
+                // always blocks bill creation.
+                var billable = dc.Status == "Pending" || dc.Status == "Imported"
+                            || (dc.Status == "No PO" && !company.FbrEnabled);
+                if (!billable)
                     throw new InvalidOperationException($"Challan {dc.ChallanNumber} is not in a billable status (got '{dc.Status}').");
                 if (dc.CompanyId != dto.CompanyId) throw new InvalidOperationException($"Challan {dc.ChallanNumber} does not belong to this company.");
                 challans.Add(dc);
@@ -419,6 +425,20 @@ namespace MyApp.Api.Services.Implementations
                 if (orphan != null)
                     throw new InvalidOperationException($"Challan {orphan.ChallanNumber} isn't linked to a Sales Order — this company requires every bill to come from one.");
             }
+
+            // Explicitly-picked catalog types on the incoming lines — the
+            // operator can (re)classify at bill time, Bills tab included.
+            // Preloaded in a single round-trip, same as the standalone path.
+            var pickedTypeIds = dto.Items
+                .Where(i => i.ItemTypeId.HasValue)
+                .Select(i => i.ItemTypeId!.Value)
+                .Distinct()
+                .ToList();
+            var pickedTypeMap = pickedTypeIds.Count == 0
+                ? new Dictionary<int, ItemType>()
+                : await _context.ItemTypes
+                    .Where(t => pickedTypeIds.Contains(t.Id))
+                    .ToDictionaryAsync(t => t.Id);
 
             // Build invoice items from delivery items + user-provided unit prices
             var invoiceItems = new List<InvoiceItem>();
@@ -444,7 +464,13 @@ namespace MyApp.Api.Services.Implementations
                 //    the Item Catalog: each FBR item in the catalog carries its
                 //    HS Code / UOM / SaleType, and bill lines referencing it pick
                 //    those up automatically so the user doesn't re-enter them.
-                var itemType = deliveryItem.ItemType;
+                //    A type picked ON THE BILL FORM wins over the challan line's
+                //    inherited type — the operator's bill-time classification
+                //    must persist onto the invoice line.
+                ItemType? pickedType = null;
+                if (itemDto.ItemTypeId.HasValue)
+                    pickedTypeMap.TryGetValue(itemDto.ItemTypeId.Value, out pickedType);
+                var itemType = pickedType ?? deliveryItem.ItemType;
 
                 // ── Per-company FBR defaults (configurable via Company settings) ──
                 //
@@ -593,13 +619,16 @@ namespace MyApp.Api.Services.Implementations
             // new UNIQUE (CompanyId, InvoiceNumber) index now blocks the
             // second writer with a SQL 2601/2627; the retry recomputes
             // MAX(InvoiceNumber)+1 from a fresh read and tries again.
-            // Per-division numbering: a division-tagged bill draws from the
-            // division's own sequence; otherwise the company's.
-            var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, dto.CompanyId, dto.DivisionId);
             const int maxAttempts = NumberAllocationRetry.DefaultMaxAttempts;
             DbUpdateException? lastConflict = null;
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
+                // Per-division numbering: a division-tagged bill draws from the
+                // division's own sequence; otherwise the company's. Resolved
+                // PER ATTEMPT — the collision catch detaches modified entities,
+                // so a division resolved outside the loop would lose its
+                // CurrentInvoiceNumber write after a retry.
+                var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, dto.CompanyId, dto.DivisionId);
                 // Use MAX(InvoiceNumber) so a deleted trailing number is reused on the next
                 // create (no gaps after deleting the last bill), scoped per division.
                 // IsDemo bills live in their own 900000+ range — excluded.
@@ -919,12 +948,14 @@ namespace MyApp.Api.Services.Implementations
             // regular CreateAsync above. The UNIQUE (CompanyId,
             // InvoiceNumber) index now catches concurrent collisions; we
             // recompute MAX(InvoiceNumber)+1 and retry up to 3 times.
-            // Per-division numbering (mirrors CreateAsync).
-            var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, dto.CompanyId, dto.DivisionId);
             const int maxAttempts = NumberAllocationRetry.DefaultMaxAttempts;
             DbUpdateException? lastConflict = null;
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
+                // Per-division numbering (mirrors CreateAsync) — resolved per
+                // attempt so a retry doesn't write counters on a detached
+                // division entity.
+                var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, dto.CompanyId, dto.DivisionId);
                 // Share the regular numbering sequence — standalone bills are
                 // real bills, not demos — scoped per division.
                 var maxQuery = _context.Invoices.Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo);
@@ -2205,21 +2236,48 @@ namespace MyApp.Api.Services.Implementations
             const int maxAttempts = NumberAllocationRetry.DefaultMaxAttempts;
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                // 2026-07-02: each note TYPE runs its own per-company
-                // sequence (Credit Note #1…, Debit Note #1…) — reversing
-                // bill #3821 must NOT consume sale-invoice number #3822.
-                // Uniqueness is enforced by the (CompanyId, NoteKind,
-                // InvoiceNumber) index, so Credit Note #1, Debit Note #1
-                // and sale bill #1 never collide.
-                int maxExistingNote = await _context.Invoices
+                // A note belongs to the SAME division as the invoice it
+                // adjusts — and draws its number from that division's own note
+                // sequence (Credit Note #1, Debit Note #1 per division),
+                // mirroring the per-division invoice numbering. Company-level
+                // originals keep using the company counters. ResolveAsync also
+                // guards the cross-tenant case (division must belong to the
+                // company). Resolved PER ATTEMPT: the collision catch below
+                // detaches every modified entity, so a division resolved
+                // outside the loop would be detached on retry and its
+                // Current*NoteNumber write silently dropped.
+                var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(
+                    _context, original.CompanyId, original.DivisionId);
+
+                // Each note TYPE runs its own per-(company, division) sequence
+                // (Credit Note #1…, Debit Note #1…) — reversing bill #3821
+                // must NOT consume sale-invoice number #3822. Uniqueness is
+                // enforced by the (CompanyId, DivisionId, NoteKind,
+                // InvoiceNumber) index, so Credit Note #1, Debit Note #1 and
+                // sale bill #1 never collide within or across divisions.
+                var maxNoteQuery = _context.Invoices
                     .Where(i => i.CompanyId == original.CompanyId && !i.IsDemo
-                             && i.DocumentType == docType)
-                    .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
-                var startingNumber = docType == 10
-                    ? (company.StartingCreditNoteNumber > 0 ? company.StartingCreditNoteNumber : 1)
-                    : (company.StartingDebitNoteNumber > 0 ? company.StartingDebitNoteNumber : 1);
+                             && i.DocumentType == docType);
+                maxNoteQuery = original.DivisionId.HasValue
+                    ? maxNoteQuery.Where(i => i.DivisionId == original.DivisionId.Value)
+                    : maxNoteQuery.Where(i => i.DivisionId == null);
+                int maxExistingNote = await maxNoteQuery.MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+
+                var startingNumber = division != null
+                    ? (docType == 10
+                        ? (division.StartingCreditNoteNumber > 0 ? division.StartingCreditNoteNumber : 1)
+                        : (division.StartingDebitNoteNumber > 0 ? division.StartingDebitNoteNumber : 1))
+                    : (docType == 10
+                        ? (company.StartingCreditNoteNumber > 0 ? company.StartingCreditNoteNumber : 1)
+                        : (company.StartingDebitNoteNumber > 0 ? company.StartingDebitNoteNumber : 1));
                 int nextInvoiceNumber = maxExistingNote > 0 ? maxExistingNote + 1 : startingNumber;
-                if (docType == 10) company.CurrentCreditNoteNumber = nextInvoiceNumber;
+
+                if (division != null)
+                {
+                    if (docType == 10) division.CurrentCreditNoteNumber = nextInvoiceNumber;
+                    else division.CurrentDebitNoteNumber = nextInvoiceNumber;
+                }
+                else if (docType == 10) company.CurrentCreditNoteNumber = nextInvoiceNumber;
                 else company.CurrentDebitNoteNumber = nextInvoiceNumber;
 
                 // Fresh line entities each attempt (a rolled-back attempt detaches them).
@@ -2238,6 +2296,10 @@ namespace MyApp.Api.Services.Implementations
                     InvoiceNumber = nextInvoiceNumber,
                     Date          = noteDate,
                     CompanyId     = original.CompanyId,
+                    // A note lives in its original invoice's division — it
+                    // prints with that division's branding and its number
+                    // came from that division's sequence above.
+                    DivisionId    = original.DivisionId,
                     ClientId      = original.ClientId,
                     Subtotal      = subtotal,
                     GSTRate       = gstRate,

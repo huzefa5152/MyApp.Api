@@ -71,12 +71,13 @@ namespace MyApp.Api.Controllers
             [FromQuery] string? status = null,
             [FromQuery] int? clientId = null,
             [FromQuery] DateTime? dateFrom = null,
-            [FromQuery] DateTime? dateTo = null)
+            [FromQuery] DateTime? dateTo = null,
+            [FromQuery] int? divisionId = null)
         {
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
             var result = await _service.GetPagedByCompanyAsync(
-                companyId, clampedPage, size, search, status, clientId, dateFrom, dateTo);
+                companyId, clampedPage, size, search, status, clientId, dateFrom, dateTo, divisionId);
             return Ok(result);
         }
 
@@ -191,6 +192,22 @@ namespace MyApp.Api.Controllers
             if (order == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, order.CompanyId);
             return Ok(await _service.GetChallansForOrderAsync(id));
+        }
+
+        /// <summary>
+        /// Prefill for "create a bill from this order" (FBR-off standalone
+        /// billing): header + lines with server-resolved unit prices (source
+        /// quote first, then last billed rate). Gated by the bill-create
+        /// permissions since billing price history is what it exposes.
+        /// </summary>
+        [HttpGet("{id}/invoice-prefill")]
+        [HasAnyPermission("bills.manage.create", "bills.manage.create.standalone")]
+        public async Task<ActionResult<SalesOrderInvoicePrefillDto>> GetInvoicePrefill(int id)
+        {
+            var dto = await _service.GetInvoicePrefillAsync(id);
+            if (dto == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
+            return Ok(dto);
         }
 
         [HttpGet("{id}/print")]

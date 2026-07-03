@@ -41,11 +41,12 @@ namespace MyApp.Api.Controllers
             [FromQuery] int? supplierId = null,
             [FromQuery] string? status = null,
             [FromQuery] DateTime? dateFrom = null,
-            [FromQuery] DateTime? dateTo = null)
+            [FromQuery] DateTime? dateTo = null,
+            [FromQuery] int? divisionId = null)
         {
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
-            var result = await _service.GetPagedByCompanyAsync(companyId, clampedPage, size, search, supplierId, status, dateFrom, dateTo);
+            var result = await _service.GetPagedByCompanyAsync(companyId, clampedPage, size, search, supplierId, status, dateFrom, dateTo, divisionId);
             return Ok(result);
         }
 

@@ -188,6 +188,13 @@ namespace MyApp.Api.DTOs
         public int DeliveryItemId { get; set; }
         public decimal UnitPrice { get; set; }
         public string? Description { get; set; }
+        /// <summary>
+        /// Optional ItemType (FBR catalog) link picked at bill time. Takes
+        /// precedence over the challan line's inherited ItemType so the
+        /// classification made on the bill form persists onto the invoice
+        /// line (visible on the Invoices tab afterwards).
+        /// </summary>
+        public int? ItemTypeId { get; set; }
         /// <summary>Optional override of the delivery item's UOM (e.g. the FBR-matched UOM).</summary>
         public string? UOM { get; set; }
         public string? HSCode { get; set; }

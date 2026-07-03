@@ -8,7 +8,8 @@ namespace MyApp.Api.Services.Interfaces
         Task<PagedResult<DeliveryChallanDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
-            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null);
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? divisionId = null);
         Task<DeliveryChallanDto?> GetByIdAsync(int id);
         Task<DeliveryChallanDto> CreateDeliveryChallanAsync(int companyId, DeliveryChallanDto dto);
         Task<DeliveryChallanDto?> UpdateItemsAsync(int challanId, List<DeliveryItemDto> items);

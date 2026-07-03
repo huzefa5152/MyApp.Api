@@ -25,6 +25,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans)
                 .Include(i => i.OriginalInvoice)
+                .Include(i => i.Division)
                 .Where(i => i.CompanyId == companyId && !i.IsDemo
                          && i.DocumentType != 9 && i.DocumentType != 10)
                 .OrderByDescending(i => i.InvoiceNumber)
@@ -35,7 +36,7 @@ namespace MyApp.Api.Repositories.Implementations
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? noteType = null)
+            int? noteType = null, int? divisionId = null)
         {
             // Three disjoint document groups, each with its own numbering
             // sequence: sale bills (noteType null, default), Debit Notes
@@ -45,6 +46,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans)
                 .Include(i => i.OriginalInvoice)
+                .Include(i => i.Division)
                 .Where(i => i.CompanyId == companyId && !i.IsDemo
                          && (noteType == null
                               ? (i.DocumentType != 9 && i.DocumentType != 10)
@@ -52,6 +54,9 @@ namespace MyApp.Api.Repositories.Implementations
 
             if (clientId.HasValue)
                 query = query.Where(i => i.ClientId == clientId.Value);
+
+            if (divisionId.HasValue)
+                query = query.Where(i => i.DivisionId == divisionId.Value);
 
             if (dateFrom.HasValue)
                 query = query.Where(i => i.Date >= dateFrom.Value);
@@ -100,6 +105,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(i => i.DeliveryChallans)
                     .ThenInclude(dc => dc.Items)
                 .Include(i => i.OriginalInvoice)
+                .Include(i => i.Division)
                 .FirstOrDefaultAsync(i => i.Id == id);
         }
 

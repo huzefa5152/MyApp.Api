@@ -10,7 +10,8 @@ namespace MyApp.Api.Services.Interfaces
         Task<PagedResult<SalesOrderDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
-            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null);
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? divisionId = null);
         Task<SalesOrderDto?> GetByIdAsync(int id);
         Task<SalesOrderDto> CreateAsync(int companyId, SalesOrderDto dto);
         Task<SalesOrderDto?> UpdateAsync(int id, SalesOrderDto dto);
@@ -23,6 +24,12 @@ namespace MyApp.Api.Services.Interfaces
         /// Sales Order line. Returns the created challan.
         /// </summary>
         Task<DeliveryChallanDto> CreateChallanFromOrderAsync(int id, CreateChallanFromOrderDto dto);
+        /// <summary>
+        /// Prefill payload for the standalone bill form: order header + lines
+        /// with unit prices resolved server-side (source quote first, then the
+        /// item's last billed rate). Null when the order doesn't exist.
+        /// </summary>
+        Task<SalesOrderInvoicePrefillDto?> GetInvoicePrefillAsync(int id);
         Task<PrintOrderDto?> GetPrintDataAsync(int id);
         Task<int> GetCountByCompanyAsync(int companyId);
         /// <summary>Delivery challans raised against this order, for the View / drill-down.</summary>

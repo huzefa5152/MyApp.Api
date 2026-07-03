@@ -129,4 +129,38 @@ namespace MyApp.Api.DTOs
         public decimal Quantity { get; set; }
         public string Unit { get; set; } = "";
     }
+
+    /// <summary>
+    /// Prefill payload for "create a bill from this Sales Order" (FBR-off
+    /// standalone billing). Orders are quantity-only, so each line's
+    /// <see cref="SalesOrderInvoicePrefillLineDto.UnitPrice"/> is resolved
+    /// server-side: the source quote's price when the order came from a
+    /// quote, else the item's last billed rate, else 0 (operator types it).
+    /// </summary>
+    public class SalesOrderInvoicePrefillDto
+    {
+        public int SalesOrderId { get; set; }
+        public int SalesOrderNumber { get; set; }
+        public int CompanyId { get; set; }
+        public int? DivisionId { get; set; }
+        public int ClientId { get; set; }
+        public string ClientName { get; set; } = "";
+        public string? CustomerPoNumber { get; set; }
+        public string? Site { get; set; }
+        public int? SalesQuoteId { get; set; }
+        /// <summary>GST rate of the source quote, when one is linked.</summary>
+        public decimal? GstRate { get; set; }
+        public List<SalesOrderInvoicePrefillLineDto> Lines { get; set; } = new();
+    }
+
+    public class SalesOrderInvoicePrefillLineDto
+    {
+        public int? ItemTypeId { get; set; }
+        public string Description { get; set; } = "";
+        public decimal Quantity { get; set; }
+        public string Unit { get; set; } = "";
+        public decimal UnitPrice { get; set; }
+        /// <summary>"Quote" / "LastBilled" / null — where UnitPrice came from.</summary>
+        public string? PriceSource { get; set; }
+    }
 }

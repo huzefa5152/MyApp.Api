@@ -345,6 +345,9 @@ namespace MyApp.Api.Services.Implementations
             var orderDto = new SalesOrderDto
             {
                 ClientId = quote.ClientId,
+                // The order stays in the quote's division — it numbers from
+                // that division's sequence and prints with its branding.
+                DivisionId = quote.DivisionId,
                 OrderDate = DateTime.UtcNow.Date,
                 Notes = $"Converted from Quote #{quote.QuoteNumber}",
                 SalesQuoteId = quote.Id,
@@ -429,12 +432,14 @@ namespace MyApp.Api.Services.Implementations
             var baseQuery = _context.InvoiceItems
                 .Where(ii => ii.Invoice.CompanyId == companyId && !ii.Invoice.IsDemo && ii.UnitPrice > 0);
 
-            // Prefer a catalog (ItemType) match — most reliable.
+            // Prefer a catalog (ItemType) match — most reliable. "Last" =
+            // most recent by bill date (Id breaks ties) — InvoiceNumber is
+            // not chronological across per-division sequences.
             if (itemTypeId.HasValue && itemTypeId.Value > 0)
             {
                 var byType = await baseQuery
                     .Where(ii => ii.ItemTypeId == itemTypeId.Value)
-                    .OrderByDescending(ii => ii.Invoice.InvoiceNumber)
+                    .OrderByDescending(ii => ii.Invoice.Date).ThenByDescending(ii => ii.Id)
                     .Select(ii => new { ii.UnitPrice, ii.Invoice.InvoiceNumber, ii.Invoice.Date, ClientName = ii.Invoice.Client.Name })
                     .FirstOrDefaultAsync();
                 if (byType != null)
@@ -454,7 +459,7 @@ namespace MyApp.Api.Services.Implementations
                 var d = description.Trim().ToLower();
                 var byDesc = await baseQuery
                     .Where(ii => ii.Description.ToLower() == d)
-                    .OrderByDescending(ii => ii.Invoice.InvoiceNumber)
+                    .OrderByDescending(ii => ii.Invoice.Date).ThenByDescending(ii => ii.Id)
                     .Select(ii => new { ii.UnitPrice, ii.Invoice.InvoiceNumber, ii.Invoice.Date, ClientName = ii.Invoice.Client.Name })
                     .FirstOrDefaultAsync();
                 if (byDesc != null)

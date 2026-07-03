@@ -86,7 +86,8 @@ namespace MyApp.Api.Services.Implementations
         public async Task<PagedResult<PurchaseBillDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, int? supplierId = null,
-            DateTime? dateFrom = null, DateTime? dateTo = null)
+            DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? divisionId = null)
         {
             var q = _context.PurchaseBills
                 .Include(pb => pb.Supplier)
@@ -96,9 +97,12 @@ namespace MyApp.Api.Services.Implementations
                     .ThenInclude(pi => pi.SourceLines)
                         .ThenInclude(sl => sl.InvoiceItem!)
                             .ThenInclude(ii => ii.Invoice)
+                .Include(pb => pb.Division)
                 .Where(pb => pb.CompanyId == companyId);
             if (supplierId.HasValue)
                 q = q.Where(pb => pb.SupplierId == supplierId.Value);
+            if (divisionId.HasValue)
+                q = q.Where(pb => pb.DivisionId == divisionId.Value);
             if (dateFrom.HasValue)
                 q = q.Where(pb => pb.Date >= dateFrom.Value);
             if (dateTo.HasValue)
@@ -140,6 +144,7 @@ namespace MyApp.Api.Services.Implementations
                     .ThenInclude(pi => pi.SourceLines)
                         .ThenInclude(sl => sl.InvoiceItem!)
                             .ThenInclude(ii => ii.Invoice)
+                .Include(p => p.Division)
                 .FirstOrDefaultAsync(p => p.Id == id);
             return pb == null ? null : ToDto(pb);
         }

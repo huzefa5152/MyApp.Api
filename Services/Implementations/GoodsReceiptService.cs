@@ -32,6 +32,8 @@ namespace MyApp.Api.Services.Implementations
             GoodsReceiptNumber = gr.GoodsReceiptNumber,
             ReceiptDate = gr.ReceiptDate,
             CompanyId = gr.CompanyId,
+            DivisionId = gr.DivisionId,
+            DivisionName = gr.Division?.Name,
             SupplierId = gr.SupplierId,
             SupplierName = gr.Supplier?.Name ?? "",
             PurchaseBillId = gr.PurchaseBillId,
@@ -55,15 +57,18 @@ namespace MyApp.Api.Services.Implementations
             int companyId, int page, int pageSize,
             string? search = null, int? supplierId = null,
             string? status = null,
-            DateTime? dateFrom = null, DateTime? dateTo = null)
+            DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? divisionId = null)
         {
             var q = _context.GoodsReceipts
                 .Include(gr => gr.Supplier)
                 .Include(gr => gr.PurchaseBill)
                 .Include(gr => gr.Items)
                     .ThenInclude(it => it.ItemType)
+                .Include(gr => gr.Division)
                 .Where(gr => gr.CompanyId == companyId);
             if (supplierId.HasValue) q = q.Where(gr => gr.SupplierId == supplierId.Value);
+            if (divisionId.HasValue) q = q.Where(gr => gr.DivisionId == divisionId.Value);
             if (!string.IsNullOrWhiteSpace(status)) q = q.Where(gr => gr.Status == status);
             if (dateFrom.HasValue) q = q.Where(gr => gr.ReceiptDate >= dateFrom.Value);
             if (dateTo.HasValue) q = q.Where(gr => gr.ReceiptDate <= dateTo.Value);
@@ -99,6 +104,7 @@ namespace MyApp.Api.Services.Implementations
                 .Include(g => g.PurchaseBill)
                 .Include(g => g.Items)
                     .ThenInclude(it => it.ItemType)
+                .Include(g => g.Division)
                 .FirstOrDefaultAsync(g => g.Id == id);
             return gr == null ? null : ToDto(gr);
         }

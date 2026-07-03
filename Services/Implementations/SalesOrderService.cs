@@ -198,10 +198,11 @@ namespace MyApp.Api.Services.Implementations
         public async Task<PagedResult<SalesOrderDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
-            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null)
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? divisionId = null)
         {
             var (items, totalCount) = await _repository.GetPagedByCompanyAsync(
-                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo);
+                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, divisionId);
             return new PagedResult<SalesOrderDto>
             {
                 Items = await MapManyAsync(items),
@@ -495,6 +496,10 @@ namespace MyApp.Api.Services.Implementations
             var challanDto = new DeliveryChallanDto
             {
                 ClientId = order.ClientId,
+                // A fulfilment challan belongs to the same division as its
+                // order — it must number from that division's sequence and
+                // print with the division's branding.
+                DivisionId = order.DivisionId,
                 DeliveryDate = dto.DeliveryDate ?? DateTime.UtcNow.Date,
                 Site = string.IsNullOrWhiteSpace(dto.Site) ? order.Site : dto.Site,
                 PoNumber = order.CustomerPoNumber ?? "",
@@ -528,6 +533,128 @@ namespace MyApp.Api.Services.Implementations
             }
 
             return createdChallan;
+        }
+
+        // ── Bill prefill (FBR-off standalone billing) ────────────────────────
+
+        /// <summary>
+        /// Everything the standalone bill form needs to start from this order.
+        /// Orders are quantity-only, so per line the unit price is resolved
+        /// here: source-quote price (ItemType match first, then exact
+        /// description), else the item's last billed rate, else 0.
+        /// </summary>
+        public async Task<SalesOrderInvoicePrefillDto?> GetInvoicePrefillAsync(int id)
+        {
+            var order = await _repository.GetByIdAsync(id);
+            if (order == null) return null;
+
+            var quoteItems = new List<SalesQuoteItem>();
+            decimal? gstRate = null;
+            if (order.SalesQuoteId.HasValue)
+            {
+                // Scoped to the order's company — a cross-company quote link
+                // must never leak another tenant's prices.
+                var quote = await _context.SalesQuotes
+                    .Include(q => q.Items)
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(q => q.Id == order.SalesQuoteId.Value
+                                           && q.CompanyId == order.CompanyId);
+                if (quote != null)
+                {
+                    quoteItems = quote.Items.ToList();
+                    gstRate = quote.GSTRate;
+                }
+            }
+
+            var lines = new List<SalesOrderInvoicePrefillLineDto>();
+            foreach (var item in order.Items)
+            {
+                var line = new SalesOrderInvoicePrefillLineDto
+                {
+                    ItemTypeId = item.ItemTypeId,
+                    Description = item.Description,
+                    Quantity = item.Quantity,
+                    Unit = item.Unit,
+                };
+
+                var match = (item.ItemTypeId.HasValue
+                        ? quoteItems.FirstOrDefault(qi => qi.ItemTypeId == item.ItemTypeId && qi.UnitPrice > 0)
+                        : null)
+                    ?? quoteItems.FirstOrDefault(qi => qi.UnitPrice > 0 && string.Equals(
+                        qi.Description.Trim(), item.Description.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (match != null)
+                {
+                    line.UnitPrice = match.UnitPrice;
+                    line.PriceSource = "Quote";
+                }
+                else
+                {
+                    var last = await GetLastBilledRateAsync(order.CompanyId, item.Description, item.ItemTypeId);
+                    if (last.HasValue)
+                    {
+                        line.UnitPrice = last.Value;
+                        line.PriceSource = "LastBilled";
+                    }
+                }
+                lines.Add(line);
+            }
+
+            return new SalesOrderInvoicePrefillDto
+            {
+                SalesOrderId = order.Id,
+                SalesOrderNumber = order.SalesOrderNumber,
+                CompanyId = order.CompanyId,
+                DivisionId = order.DivisionId,
+                ClientId = order.ClientId,
+                ClientName = order.Client?.Name ?? "",
+                CustomerPoNumber = order.CustomerPoNumber,
+                Site = order.Site,
+                SalesQuoteId = order.SalesQuoteId,
+                GstRate = gstRate,
+                Lines = lines
+            };
+        }
+
+        /// <summary>
+        /// Last billed unit price for an item — ItemType match first, then
+        /// exact (case-insensitive) description. Mirrors
+        /// SalesQuoteService.GetItemRateAsync; excludes demo bills and
+        /// credit/debit notes.
+        /// </summary>
+        private async Task<decimal?> GetLastBilledRateAsync(int companyId, string description, int? itemTypeId)
+        {
+            var baseQuery = _context.InvoiceItems
+                .Where(ii => ii.Invoice.CompanyId == companyId && !ii.Invoice.IsDemo
+                          && ii.Invoice.DocumentType != 9 && ii.Invoice.DocumentType != 10
+                          && ii.UnitPrice > 0);
+
+            // "Last" = most recent by bill date (Id breaks same-day ties).
+            // InvoiceNumber is NOT chronological across scopes — each
+            // (company, division) runs its own sequence, so an old
+            // company-level bill #3800 would outrank yesterday's division
+            // bill #12.
+            if (itemTypeId.HasValue && itemTypeId.Value > 0)
+            {
+                var byType = await baseQuery
+                    .Where(ii => ii.ItemTypeId == itemTypeId.Value)
+                    .OrderByDescending(ii => ii.Invoice.Date).ThenByDescending(ii => ii.Id)
+                    .Select(ii => (decimal?)ii.UnitPrice)
+                    .FirstOrDefaultAsync();
+                if (byType.HasValue) return byType;
+            }
+
+            if (!string.IsNullOrWhiteSpace(description))
+            {
+                var d = description.Trim().ToLower();
+                var byDesc = await baseQuery
+                    .Where(ii => ii.Description.ToLower() == d)
+                    .OrderByDescending(ii => ii.Invoice.Date).ThenByDescending(ii => ii.Id)
+                    .Select(ii => (decimal?)ii.UnitPrice)
+                    .FirstOrDefaultAsync();
+                if (byDesc.HasValue) return byDesc;
+            }
+
+            return null;
         }
 
         // ── Attached challans (View / drill-down) ────────────────────────────

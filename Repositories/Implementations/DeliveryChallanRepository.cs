@@ -35,7 +35,8 @@ namespace MyApp.Api.Repositories.Implementations
         public async Task<(List<DeliveryChallan> Items, int TotalCount)> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
-            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null)
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? divisionId = null)
         {
             var query = _context.DeliveryChallans
                 .Include(dc => dc.Items).ThenInclude(i => i.ItemType)
@@ -44,6 +45,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(dc => dc.Invoice)
                 .Include(dc => dc.DuplicatedFrom)
                 .Include(dc => dc.SalesOrder)
+                .Include(dc => dc.Division)
                 .Where(dc => dc.CompanyId == companyId && !dc.IsDemo);
 
             if (!string.IsNullOrWhiteSpace(status))
@@ -51,6 +53,9 @@ namespace MyApp.Api.Repositories.Implementations
 
             if (clientId.HasValue)
                 query = query.Where(dc => dc.ClientId == clientId.Value);
+
+            if (divisionId.HasValue)
+                query = query.Where(dc => dc.DivisionId == divisionId.Value);
 
             if (dateFrom.HasValue)
                 query = query.Where(dc => dc.DeliveryDate >= dateFrom.Value);
@@ -90,6 +95,7 @@ namespace MyApp.Api.Repositories.Implementations
                                      .ThenInclude(inv => inv!.Items)
                                  .Include(dc => dc.DuplicatedFrom)
                                  .Include(dc => dc.SalesOrder)
+                                 .Include(dc => dc.Division)
                                  .FirstOrDefaultAsync(dc => dc.Id == id);
         }
 
@@ -117,10 +123,12 @@ namespace MyApp.Api.Repositories.Implementations
                 // Per-division numbering: a division-tagged challan draws from the
                 // division's own sequence; otherwise the company's. Scoped MAX so
                 // each (company, division) scope keeps its own running number.
+                // ResolveAsync throws when the division belongs to another company —
+                // a forged dto.DivisionId must never be persisted (cross-tenant
+                // link guard, same as every other document module).
                 var divisionId = deliveryChallan.DivisionId;
-                var division = divisionId.HasValue
-                    ? await _context.Divisions.FirstOrDefaultAsync(d => d.Id == divisionId.Value && d.CompanyId == deliveryChallan.CompanyId)
-                    : null;
+                var division = await Helpers.DivisionNumbering.ResolveAsync(
+                    _context, deliveryChallan.CompanyId, divisionId);
                 var maxQuery = _context.DeliveryChallans
                     .Where(c => c.CompanyId == deliveryChallan.CompanyId && c.IsDemo == isDemo);
                 maxQuery = divisionId.HasValue
@@ -181,19 +189,22 @@ namespace MyApp.Api.Repositories.Implementations
             await _context.SaveChangesAsync();
         }
 
-        public async Task<List<DeliveryChallan>> GetPendingChallansByCompanyAsync(int companyId)
+        public async Task<List<DeliveryChallan>> GetPendingChallansByCompanyAsync(int companyId, bool includeNoPo = false)
         {
             // Both "Pending" (natively-created) and "Imported" (historical back-fill)
             // are billable — the bill-creation picker shows both populations.
-            // "No PO" / "Setup Required" are intentionally NOT billable (the
-            // InvoiceService create path rejects them): a challan needs a PO
-            // (→ "Pending") before it can go on a bill.
+            // "Setup Required" is never billable. "No PO" is billable ONLY for
+            // FBR-off companies (includeNoPo, decided by the service): the
+            // needs-a-PO-before-billing rule belongs to the FBR / PO-driven
+            // wholesale workflow, while migrated FBR-off tenants routinely
+            // sell without a customer PO (2026-07-03, Jorbai).
             return await _context.DeliveryChallans
                                  .Include(dc => dc.Items)
                                      .ThenInclude(i => i.ItemType)
                                  .Include(dc => dc.Client)
                                  .Where(dc => dc.CompanyId == companyId
-                                           && (dc.Status == "Pending" || dc.Status == "Imported"))
+                                           && (dc.Status == "Pending" || dc.Status == "Imported"
+                                               || (includeNoPo && dc.Status == "No PO")))
                                  .OrderBy(dc => dc.ChallanNumber)
                                  .ToListAsync();
         }
@@ -255,6 +266,10 @@ namespace MyApp.Api.Repositories.Implementations
             {
                 CompanyId = source.CompanyId,
                 ChallanNumber = source.ChallanNumber, // intentionally reused
+                // Keep the copy in the source's numbering scope — a duplicate
+                // of a division challan reuses a number from that division's
+                // sequence, so it must stay tagged to the same division.
+                DivisionId = source.DivisionId,
                 ClientId = source.ClientId,
                 PoNumber = source.PoNumber,
                 PoDate = source.PoDate,

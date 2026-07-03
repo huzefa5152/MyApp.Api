@@ -219,13 +219,14 @@ namespace MyApp.Api.Services.Implementations
         public async Task<PagedResult<DeliveryChallanDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
-            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null)
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? divisionId = null)
         {
             // Auto-clear "Setup Required" challans where FBR is now ready (runs once per page load)
             await ReEvaluateSetupRequiredAsync(companyId);
 
             var (items, totalCount) = await _repository.GetPagedByCompanyAsync(
-                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo);
+                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, divisionId);
 
             // Gate the Delete button client-side — only the highest-numbered
             // challan for this company is deletable.
@@ -907,7 +908,11 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<List<DeliveryChallanDto>> GetPendingChallansByCompanyAsync(int companyId)
         {
-            var challans = await _repository.GetPendingChallansByCompanyAsync(companyId);
+            // FBR-off companies don't require a customer PO to bill — their
+            // "No PO" challans are billable too (see repository comment).
+            var company = await _context.Companies.FindAsync(companyId);
+            var includeNoPo = company != null && !company.FbrEnabled;
+            var challans = await _repository.GetPendingChallansByCompanyAsync(companyId, includeNoPo);
             return challans.Select(ToDto).ToList();
         }
 

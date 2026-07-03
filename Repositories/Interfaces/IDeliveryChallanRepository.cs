@@ -8,14 +8,18 @@ namespace MyApp.Api.Repositories.Interfaces
         Task<(List<DeliveryChallan> Items, int TotalCount)> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
-            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null);
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? divisionId = null);
         Task<DeliveryChallan?> GetByIdAsync(int id);
         Task<DeliveryChallan> CreateDeliveryChallanAsync(DeliveryChallan deliveryChallan);
         Task<DeliveryChallan> UpdateAsync(DeliveryChallan deliveryChallan);
         Task DeleteAsync(DeliveryChallan deliveryChallan);
         Task DeleteItemAsync(DeliveryItem item);
         Task<DeliveryItem?> GetItemByIdAsync(int itemId);
-        Task<List<DeliveryChallan>> GetPendingChallansByCompanyAsync(int companyId);
+        /// <summary>Billable challans: "Pending" + "Imported", plus "No PO" when
+        /// <paramref name="includeNoPo"/> (FBR-off companies don't require a
+        /// customer PO to bill).</summary>
+        Task<List<DeliveryChallan>> GetPendingChallansByCompanyAsync(int companyId, bool includeNoPo = false);
         Task<int> GetTotalCountAsync();
         Task<int> GetCountByCompanyAsync(int companyId);
         Task<bool> HasChallansForCompanyAsync(int companyId);

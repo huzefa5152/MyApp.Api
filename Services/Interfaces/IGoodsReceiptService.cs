@@ -8,7 +8,8 @@ namespace MyApp.Api.Services.Interfaces
             int companyId, int page, int pageSize,
             string? search = null, int? supplierId = null,
             string? status = null,
-            DateTime? dateFrom = null, DateTime? dateTo = null);
+            DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? divisionId = null);
         Task<GoodsReceiptDto?> GetByIdAsync(int id);
         Task<GoodsReceiptDto> CreateAsync(CreateGoodsReceiptDto dto);
         Task<GoodsReceiptDto?> UpdateAsync(int id, UpdateGoodsReceiptDto dto);
