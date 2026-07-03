@@ -174,6 +174,15 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                   <div style={s.partyName}>{payload?.invoiceType}</div>
                   <div style={s.partyMeta}>Date: {payload?.invoiceDate}</div>
                   {payload?.scenarioId && <div style={s.partyMeta}>Scenario: {payload.scenarioId}</div>}
+                  {/* Debit/Credit note specifics — the reference invoice IRN and
+                      the reason/remarks FBR requires (0026/0027/0028). */}
+                  {payload?.invoiceRefNo && (
+                    <div style={{ ...s.partyMeta, wordBreak: "break-all" }}>
+                      Ref Invoice: <code style={s.codeInline}>{payload.invoiceRefNo}</code>
+                    </div>
+                  )}
+                  {payload?.reason && <div style={s.partyMeta}>Reason: <strong>{payload.reason}</strong></div>}
+                  {payload?.reasonRemarks && <div style={s.partyMeta}>Remarks: {payload.reasonRemarks}</div>}
                 </div>
               </div>
 

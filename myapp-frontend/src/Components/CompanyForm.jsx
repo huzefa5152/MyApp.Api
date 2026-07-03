@@ -48,6 +48,10 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         currentInvoiceNumber: 0,
         startingSalesQuoteNumber: 0,
         startingSalesOrderNumber: 0,
+        startingDebitNoteNumber: 1,
+        currentDebitNoteNumber: 0,
+        startingCreditNoteNumber: 1,
+        currentCreditNoteNumber: 0,
         invoiceNumberPrefix: "",
         // FBR master switch. Default ON for new companies (consistent with the
         // existing tenants); operator turns it OFF for non-FBR companies.
@@ -118,6 +122,10 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 currentInvoiceNumber: freshCompany.currentInvoiceNumber || 0,
                 startingSalesQuoteNumber: freshCompany.startingSalesQuoteNumber || 0,
                 startingSalesOrderNumber: freshCompany.startingSalesOrderNumber || 0,
+                startingDebitNoteNumber: freshCompany.startingDebitNoteNumber || 1,
+                currentDebitNoteNumber: freshCompany.currentDebitNoteNumber || 0,
+                startingCreditNoteNumber: freshCompany.startingCreditNoteNumber || 1,
+                currentCreditNoteNumber: freshCompany.currentCreditNoteNumber || 0,
                 invoiceNumberPrefix: freshCompany.invoiceNumberPrefix || "",
                 // Treat undefined as enabled (backwards-compat before the field loads).
                 fbrEnabled: freshCompany.fbrEnabled !== false,
@@ -173,7 +181,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
             setForm({ ...form, [name]: value === "" ? "" : Number(value) });
             return;
         }
-        if (["startingChallanNumber", "currentChallanNumber", "startingInvoiceNumber", "currentInvoiceNumber", "startingSalesQuoteNumber", "startingSalesOrderNumber", "startingPurchaseBillNumber", "startingGoodsReceiptNumber"].includes(name)) {
+        if (["startingChallanNumber", "currentChallanNumber", "startingInvoiceNumber", "currentInvoiceNumber", "startingSalesQuoteNumber", "startingSalesOrderNumber", "startingDebitNoteNumber", "startingCreditNoteNumber", "startingPurchaseBillNumber", "startingGoodsReceiptNumber"].includes(name)) {
             const numberValue = Number(value);
             if (isNaN(numberValue) || numberValue < 0 || numberValue > INT32_MAX) return;
             setForm({ ...form, [name]: numberValue });
@@ -336,6 +344,11 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 {numberField("startingInvoiceNumber", "Starting Invoice / Bill Number", freshCompany?.hasInvoices, "invoices exist", company?.currentInvoiceNumber)}
                                 {numberField("startingSalesQuoteNumber", "Starting Sales Quote Number", freshCompany?.hasSalesQuotes, "quotes exist", company?.currentSalesQuoteNumber)}
                                 {numberField("startingSalesOrderNumber", "Starting Sales Order Number", freshCompany?.hasSalesOrders, "orders exist", company?.currentSalesOrderNumber)}
+                                {/* Credit/Debit Notes run their own sequences — reversing
+                                    bill #3821 creates Credit Note #1, not bill #3822.
+                                    Locked once a note of that type exists. */}
+                                {numberField("startingCreditNoteNumber", "Starting Credit Note Number", (company?.currentCreditNoteNumber || 0) > 0, "credit notes exist", company?.currentCreditNoteNumber)}
+                                {numberField("startingDebitNoteNumber", "Starting Debit Note Number", (company?.currentDebitNoteNumber || 0) > 0, "debit notes exist", company?.currentDebitNoteNumber)}
                                 {numberField("startingPurchaseBillNumber", "Starting Purchase Bill Number", false, "", company?.currentPurchaseBillNumber)}
                                 {numberField("startingGoodsReceiptNumber", "Starting Goods Receipt Number", false, "", company?.currentGoodsReceiptNumber)}
                                 <label style={{ ...toggleCard, marginTop: "1rem" }}>

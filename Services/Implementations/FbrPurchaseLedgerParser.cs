@@ -120,6 +120,27 @@ namespace MyApp.Api.Services.Implementations
             public const string ItemSerialNo = "Item Sr. No.";
         }
 
+        // Header aliases. FBR ships at least two Annexure-A layouts:
+        //   • the IRIS "Sales Ledger" export (original H.* names)
+        //   • the newer "AnnexA Excel Report" export which renames several
+        //     columns (e.g. "Invoice No" without the period, "Supplier
+        //     Type" instead of "Taxpayer Type", "Value" instead of the
+        //     long "Value of Sales Excluding Sales Tax", "Purchase Type"
+        //     instead of "Sale Type"). We match the primary name first,
+        //     then fall back through these aliases, so both layouts parse.
+        private static readonly Dictionary<string, string[]> Aliases = new(StringComparer.OrdinalIgnoreCase)
+        {
+            [H.InvoiceNo]          = new[] { "Invoice No", "Invoice Number" },
+            [H.FbrInvoiceRefNo]    = new[] { "Invoice Ref No", "FBR Invoice Ref No." },
+            [H.TaxpayerType]       = new[] { "Supplier Type", "Seller Type" },
+            [H.SaleType]           = new[] { "Purchase Type" },
+            [H.ValueExclTax]       = new[] { "Value", "Value Excluding Sales Tax", "Value of Sales Excluding GST" },
+            [H.StWithheld]         = new[] { "ST Withheld as WH Agent", "Sales Tax Withheld at Source" },
+            [H.FixedNotifiedValue] = new[] { "Fixed / notified value or Retail Price", "Fixed Notified Value or Retail Price" },
+            [H.SroScheduleNo]      = new[] { "SRO No.", "Schedule No." },
+            [H.ItemSerialNo]       = new[] { "Item Serial No.", "Sr. No." },
+        };
+
         // Date formats FBR has been seen using. Leading entries are
         // tried first.
         private static readonly string[] DateFormats =
@@ -173,7 +194,18 @@ namespace MyApp.Api.Services.Implementations
             }
 
             var headerMap = BuildHeaderMap(sheet.GetRow(0));
-            int? Idx(string name) => headerMap.TryGetValue(NormalizeHeader(name), out var i) ? i : (int?)null;
+            int? Idx(string name)
+            {
+                // Primary header name first.
+                if (headerMap.TryGetValue(NormalizeHeader(name), out var i)) return i;
+                // Then any known alias for this field (other FBR layouts).
+                if (Aliases.TryGetValue(name, out var alts))
+                {
+                    foreach (var alt in alts)
+                        if (headerMap.TryGetValue(NormalizeHeader(alt), out var ai)) return ai;
+                }
+                return null;
+            }
 
             // Soft-warn if a key column is missing — we'll still parse
             // what we can. Missing HS Code or Quantity will cascade into
@@ -203,8 +235,15 @@ namespace MyApp.Api.Services.Implementations
                 parsed.TaxpayerType     = Get(row, Idx(H.TaxpayerType));
                 parsed.SaleType         = Get(row, Idx(H.SaleType));
                 parsed.Quantity         = ParseDecimal(Get(row, Idx(H.Quantity)),  parsed, H.Quantity);
+                // HS Code cells in the "Excel Report" layout embed the
+                // description: "8539.9090:-ELECTRIC". Split the leading HS
+                // code from any trailing text; use that text as the
+                // description when the Product Description column is blank.
+                var (hsCode, hsTrailingDesc) = SplitHsCode(Get(row, Idx(H.HsCode)));
+                parsed.HsCode           = hsCode;
                 parsed.ProductDescription = Get(row, Idx(H.ProductDescription));
-                parsed.HsCode           = Get(row, Idx(H.HsCode));
+                if (string.IsNullOrWhiteSpace(parsed.ProductDescription) && !string.IsNullOrWhiteSpace(hsTrailingDesc))
+                    parsed.ProductDescription = hsTrailingDesc;
                 parsed.Rate             = ParseRate(Get(row, Idx(H.Rate)), parsed);
                 parsed.Uom              = Get(row, Idx(H.Uom));
                 parsed.ValueExclTax     = ParseDecimal(Get(row, Idx(H.ValueExclTax)), parsed, H.ValueExclTax);
@@ -237,6 +276,27 @@ namespace MyApp.Api.Services.Implementations
         }
 
         private static string NormalizeHeader(string s) => s.Trim().Replace("  ", " ");
+
+        // Leading HS code (NNNN or NNNN.NNNN) at the start of a cell.
+        private static readonly System.Text.RegularExpressions.Regex HsLead =
+            new(@"^\s*(\d{4}(?:\.\d{4})?)", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        /// <summary>
+        /// Split an HS Code cell into (code, trailing description). Handles
+        /// the plain "8301.6000" form and the combined "8539.9090:-ELECTRIC"
+        /// form some FBR exports use. Returns the cell unchanged as the code
+        /// (and null description) when no HS pattern is found — the filter
+        /// then flags it as skip-no-hs-code.
+        /// </summary>
+        private static (string? code, string? desc) SplitHsCode(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return (null, null);
+            var m = HsLead.Match(raw);
+            if (!m.Success) return (raw.Trim(), null);
+            var code = m.Groups[1].Value;
+            var rest = raw.Substring(m.Index + m.Length).TrimStart(':', '-', ' ', '\t').Trim();
+            return (code, string.IsNullOrWhiteSpace(rest) ? null : rest);
+        }
 
         private static string? Get(IRow row, int? colIndex)
         {

@@ -261,6 +261,15 @@ namespace MyApp.Api.Data
                 .HasForeignKey(i => i.ClientId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Invoice -> OriginalInvoice (self-reference for Credit/Debit Notes).
+            // NoAction: never cascade a delete from the original into its notes
+            // (and notes are the trailing rows anyway). Optional FK.
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.OriginalInvoice)
+                .WithMany()
+                .HasForeignKey(i => i.OriginalInvoiceId)
+                .OnDelete(DeleteBehavior.NoAction);
+
             // Invoice -> InvoiceItems (cascade)
             modelBuilder.Entity<InvoiceItem>()
                 .HasOne(ii => ii.Invoice)
@@ -299,23 +308,35 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Invoice>()
                 .HasIndex(i => i.CompanyId);
 
-            // Composite index for paged invoice queries (WHERE CompanyId = X ORDER BY InvoiceNumber DESC).
-            // Audit C-8 (2026-05-13): unique on (CompanyId, InvoiceNumber)
-            // so two concurrent creates can't both land MAX(InvoiceNumber)+1
-            // — the loser gets a SQL 2601 / 2627 which the service catches
-            // and retries (next number is re-read in the retry loop).
-            // Numbering is scoped per (company, division): a division-tagged bill
-            // draws from the division's own sequence, so (X, NULL, 1) and
-            // (X, div5, 1) coexist. HasFilter(null) keeps company-level rows
-            // (DivisionId NULL) covered by the unique guard too. Mirrors SalesQuote.
+            // Credit Notes (10) and Debit Notes (9) each number from their
+            // OWN sequence, separate from sale invoices and from each other.
+            // NoteKind is a PERSISTED computed discriminator so the uniqueness
+            // below can be scoped per kind without SQL Server's filtered-index
+            // limitations (no IN/OR in filter predicates).
             modelBuilder.Entity<Invoice>()
-                .HasIndex(i => new { i.CompanyId, i.DivisionId, i.InvoiceNumber })
+                .Property(i => i.NoteKind)
+                .HasComputedColumnSql(
+                    "CASE WHEN [DocumentType] = 9 THEN CAST(1 AS tinyint) WHEN [DocumentType] = 10 THEN CAST(2 AS tinyint) ELSE CAST(0 AS tinyint) END",
+                    stored: true);
+
+            // Composite index for paged invoice queries (WHERE CompanyId = X ORDER BY InvoiceNumber DESC).
+            // Audit C-8 (2026-05-13): unique so two concurrent creates can't
+            // both land MAX+1 - the loser gets a SQL 2601 / 2627 which the
+            // service catches and retries (next number is re-read in the
+            // retry loop). MERGED 2026-07-03: numbering is scoped per
+            // (company, division, document kind) - a division-tagged bill
+            // draws from the division's own sequence ((X, NULL, 1) vs
+            // (X, div5, 1)), and Credit Note #1 / Debit Note #1 / sale bill #1
+            // coexist via NoteKind. HasFilter(null) keeps NULL-division rows
+            // covered by the unique guard too. Mirrors SalesQuote.
+            modelBuilder.Entity<Invoice>()
+                .HasIndex(i => new { i.CompanyId, i.DivisionId, i.NoteKind, i.InvoiceNumber })
                 .IsUnique()
                 .HasFilter(null);
-            // Invoice -> Division (optional; SetNull so deleting a division leaves
-            // its bills company-level rather than cascading).
+
+            // Invoice -> Division (optional).
             // NoAction (not SetNull): several documents reach a division by more
-            // than one path (e.g. Division→Challan and Division→SalesOrder→Challan),
+            // than one path (e.g. Division->Challan and Division->SalesOrder->Challan),
             // which SQL Server rejects as multiple cascade paths (error 1785).
             // DivisionService.DeleteAsync unlinks referencing documents in app code.
             modelBuilder.Entity<Invoice>()
@@ -323,6 +344,17 @@ namespace MyApp.Api.Data
                 .HasForeignKey(i => i.DivisionId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.NoAction);
+
+            // One LIVE note PER TYPE per original invoice, enforced in the DB
+            // (the service's AnyAsync guard alone is check-then-insert racy —
+            // two concurrent Reverse clicks could both pass). A credit note
+            // (return) and a debit note (upward correction) may legitimately
+            // coexist on one invoice; two live credit notes may not (FBR 0064).
+            // Filtered to non-cancelled rows so voiding a note frees the slot.
+            modelBuilder.Entity<Invoice>()
+                .HasIndex(i => new { i.OriginalInvoiceId, i.DocumentType })
+                .IsUnique()
+                .HasFilter("[OriginalInvoiceId] IS NOT NULL AND [IsCancelled] = 0");
 
             modelBuilder.Entity<DeliveryChallan>()
                 .HasIndex(dc => dc.ClientId);

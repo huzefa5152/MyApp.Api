@@ -181,6 +181,12 @@ namespace MyApp.Api.Helpers
             // (and optionally Qty) become editable.
             new("invoices.manage.update.itemtype",     "Invoices", "Manage", "Update Item Type",       "Edit ONLY the Item Type column on a bill from the Invoices tab"),
             new("invoices.manage.update.itemtype.qty", "Invoices", "Manage", "Update Item Type + Qty", "Edit Item Type and Quantity columns on a bill from the Invoices tab"),
+            // Reverse an FBR-submitted invoice → auto-generate a Credit Note
+            // (return/reversal) or Debit Note (upward correction). The note is
+            // created unsubmitted so it can be validated then submitted like an
+            // ordinary bill. Distinct from create/void so the right to reverse a
+            // filed document is granted independently.
+            new("invoices.note.create",    "Invoices", "Manage", "Reverse (Credit/Debit Note)", "Reverse an FBR-submitted bill by generating a Credit/Debit Note (created unsubmitted, then validated + submitted to FBR)"),
             // Two granular FBR permissions — separating dry-run from real
             // submission so an operator can be allowed to validate without
             // being trusted to commit. A user with .submit but not .validate

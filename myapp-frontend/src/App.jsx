@@ -13,6 +13,7 @@ import InvoicePage from "./pages/InvoicePage";
 import PaymentsPage from "./pages/PaymentsPage";
 import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
 import DataMigrationPage from "./pages/DataMigrationPage";
+import CreditDebitNotePage from "./pages/CreditDebitNotePage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
 import PurchaseBillsPage from "./pages/PurchaseBillsPage";
 import GoodsReceiptsPage from "./pages/GoodsReceiptsPage";
@@ -88,6 +89,13 @@ export default function App() {
               challan fulfilment). Pre-sale documents; not FBR. */}
           <Route path="/sales-quotes" element={<SalesQuotePage />} />
           <Route path="/sales-orders" element={<SalesOrderPage />} />
+          {/* Credit Notes (returns/reversals) and Debit Notes (upward
+              adjustments) — each tab lists ONLY its type, in its own
+              numbering sequence. Never mixed with Bills or Invoices.
+              The create screen lives at /credit-debit-notes?type=credit|debit. */}
+          <Route path="/credit-notes" element={<InvoicePage key="creditnotes" mode="creditnotes" />} />
+          <Route path="/debit-notes" element={<InvoicePage key="debitnotes" mode="debitnotes" />} />
+          <Route path="/credit-debit-notes" element={<CreditDebitNotePage />} />
           <Route path="/item-rate-history" element={<ItemRateHistoryPage />} />
           {/* Accounting — Receipts (money in) / Payments (money out). Distinct
               keys force a fresh mount when switching modes so filter state

@@ -18,9 +18,10 @@ namespace MyApp.Api.Migrations
                 name: "IX_PurchaseBills_CompanyId_PurchaseBillNumber",
                 table: "PurchaseBills");
 
-            migrationBuilder.DropIndex(
-                name: "IX_Invoices_CompanyId_InvoiceNumber",
-                table: "Invoices");
+            // MERGED 2026-07-03: both this migration and the note-numbering
+            // migration on the other branch drop this index — whichever runs
+            // second on a given database must tolerate it already being gone.
+            migrationBuilder.Sql(@"IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices')) DROP INDEX [IX_Invoices_CompanyId_InvoiceNumber] ON [Invoices];");
 
             migrationBuilder.DropIndex(
                 name: "IX_GoodsReceipts_CompanyId_GoodsReceiptNumber",

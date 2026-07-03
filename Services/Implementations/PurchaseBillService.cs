@@ -429,29 +429,21 @@ namespace MyApp.Api.Services.Implementations
             // explicit prevents a refactor from silently breaking it.
             var originalBillDate = bill.Date;
 
-            // Reverse previously emitted Stock IN before applying changes,
-            // then re-emit using the new line set. Simpler than diff-by-line
-            // and the StockMovement log preserves the audit trail (compensating
-            // OUT entries are inserted, not the IN rows mutated).
-            // 2026-05-13: skip lines whose ItemType has no HSCode — they
-            // were never moved in (gate is symmetric on create).
-            var oldItems = bill.Items.ToList();
-            var trackedOld = await _stock.GetStockTrackedItemTypeIdsAsync(
-                oldItems.Where(o => o.ItemTypeId.HasValue).Select(o => o.ItemTypeId!.Value));
-            foreach (var oi in oldItems)
-            {
-                if (!oi.ItemTypeId.HasValue || oi.Quantity <= 0) continue;
-                if (!trackedOld.Contains(oi.ItemTypeId.Value)) continue;
-                await _stock.RecordMovementAsync(
-                    companyId: bill.CompanyId,
-                    itemTypeId: oi.ItemTypeId.Value,
-                    direction: StockMovementDirection.Out,
-                    quantity: oi.Quantity,
-                    sourceType: StockMovementSourceType.PurchaseBill,
-                    sourceId: bill.Id,
-                    movementDate: originalBillDate,
-                    notes: $"Reversal — Purchase Bill #{bill.PurchaseBillNumber} edited");
-            }
+            // Reverse exactly what this bill actually posted to the stock
+            // ledger (read back from StockMovements), then re-emit from the
+            // new line set below. Fix 2026-06-29: the old logic synthesized
+            // compensating OUTs from the *current* line set, gated on each
+            // ItemType's *current* HSCode. When an ItemType was unclassified
+            // at create time (no Stock IN recorded) and classified later,
+            // editing the bill reversed an IN that never happened — leaving a
+            // phantom negative on-hand (e.g. item "Valve" 8481.1000 showing
+            // +170/-170 → 0 instead of +170). Reversing the bill's own posted
+            // net is symmetric with whatever was actually recorded, and it
+            // self-heals bills already corrupted by the old behaviour (their
+            // net is 0, so no reversal is emitted and the fresh IN restores
+            // the right balance).
+            await ReversePostedStockAsync(bill, originalBillDate,
+                $"Reversal — Purchase Bill #{bill.PurchaseBillNumber} edited");
 
             // Apply header changes
             if (dto.Date.HasValue) bill.Date = dto.Date.Value.Date;
@@ -554,6 +546,53 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
+        /// <summary>
+        /// Emits compensating OUT movements that reverse exactly what this
+        /// purchase bill has actually posted to the stock ledger so far —
+        /// its net (IN − OUT) per ItemType, read back from StockMovements —
+        /// rather than synthesizing OUTs from the bill's current line set.
+        ///
+        /// Why net-from-ledger instead of from-lines: the HSCode tracking
+        /// gate is evaluated at write time. A bill created against an
+        /// unclassified ItemType records no IN; if that ItemType is later
+        /// classified, reversing "the current lines" would fabricate an OUT
+        /// for an IN that never existed. Reading the bill's own posted net
+        /// is symmetric with whatever was recorded — and a bill already
+        /// corrupted by the old logic has net 0, so this emits nothing and
+        /// the caller's re-emit restores the correct on-hand (self-heal).
+        ///
+        /// No-op when inventory tracking is off (RecordMovementAsync gates
+        /// on it) or when nothing net-positive is outstanding.
+        /// </summary>
+        private async Task ReversePostedStockAsync(PurchaseBill bill, DateTime movementDate, string notes)
+        {
+            var posted = await _context.StockMovements
+                .Where(m => m.CompanyId == bill.CompanyId
+                         && m.SourceType == StockMovementSourceType.PurchaseBill
+                         && m.SourceId == bill.Id)
+                .GroupBy(m => m.ItemTypeId)
+                .Select(g => new
+                {
+                    ItemTypeId = g.Key,
+                    Net = g.Sum(m => m.Direction == StockMovementDirection.In ? m.Quantity : -m.Quantity),
+                })
+                .ToListAsync();
+
+            foreach (var p in posted)
+            {
+                if (p.Net <= 0m) continue;
+                await _stock.RecordMovementAsync(
+                    companyId: bill.CompanyId,
+                    itemTypeId: p.ItemTypeId,
+                    direction: StockMovementDirection.Out,
+                    quantity: p.Net,
+                    sourceType: StockMovementSourceType.PurchaseBill,
+                    sourceId: bill.Id,
+                    movementDate: movementDate,
+                    notes: notes);
+            }
+        }
+
         public async Task<bool> DeleteAsync(int id)
         {
             await using var tx = await _context.Database.BeginTransactionAsync();
@@ -564,28 +603,13 @@ namespace MyApp.Api.Services.Implementations
                 .FirstOrDefaultAsync(p => p.Id == id);
             if (bill == null) return false;
 
-            // Reverse Stock IN before deleting the bill rows. Compensating
-            // OUT entries are written rather than the original IN rows
-            // being deleted — keeps the movement log immutable.
-            // 2026-05-13: skip lines whose ItemType has no HSCode —
-            // gate is symmetric with create / update.
-            var trackedOnDelete = await _stock.GetStockTrackedItemTypeIdsAsync(
-                bill.Items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
-            foreach (var it in bill.Items)
-            {
-                if (!it.ItemTypeId.HasValue || it.Quantity <= 0) continue;
-                if (!trackedOnDelete.Contains(it.ItemTypeId.Value)) continue;
-                await _stock.RecordMovementAsync(
-                    companyId: bill.CompanyId,
-                    itemTypeId: it.ItemTypeId.Value,
-                    direction: StockMovementDirection.Out,
-                    // 2026-05-12: decimal qty now flows through cleanly.
-                    quantity: it.Quantity,
-                    sourceType: StockMovementSourceType.PurchaseBill,
-                    sourceId: bill.Id,
-                    movementDate: bill.Date,
-                    notes: $"Reversal — Purchase Bill #{bill.PurchaseBillNumber} deleted");
-            }
+            // Reverse the bill's actual posted stock before deleting its rows.
+            // Compensating OUT entries are written rather than the IN rows
+            // being deleted — keeps the movement log immutable. Reverses the
+            // bill's own posted net (see ReversePostedStockAsync) so a bill
+            // whose ItemType was classified after creation isn't over-reversed.
+            await ReversePostedStockAsync(bill, bill.Date,
+                $"Reversal — Purchase Bill #{bill.PurchaseBillNumber} deleted");
 
             _context.PurchaseBills.Remove(bill);
             await _context.SaveChangesAsync();

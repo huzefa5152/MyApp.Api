@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import PaymentForm from "../Components/PaymentForm";
 import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
@@ -55,9 +55,18 @@ export default function InvoicePage({ mode = "invoices" }) {
   // status badge still renders in both modes so the operator can see at
   // a glance which rows are locked. `invoices` mode keeps everything.
   const isBillsMode = mode === "bills";
-  // Persist view-mode per tab so Bills + Invoices can each remember their
-  // own setting (e.g. operator wants cards on Bills but table on Invoices).
-  const [viewMode, setViewMode, isBigScreen] = useListViewMode(isBillsMode ? "bills" : "invoices");
+  // Note tabs: `creditnotes` (returns / reversals, DocumentType 10) and
+  // `debitnotes` (upward adjustments, DocumentType 9). Each lists ONLY its
+  // type, numbered from its own per-company sequence (Credit Note #1…,
+  // Debit Note #1…). Both behave like the Invoices tab (FBR validate /
+  // submit visible) but with no create/edit — notes are generated from the
+  // note screen and are immutable (void + recreate to change).
+  const noteDocType = mode === "creditnotes" ? 10 : mode === "debitnotes" ? 9 : null;
+  const isNotesMode = noteDocType !== null;
+  const noteLabel = noteDocType === 10 ? "Credit Note" : "Debit Note";
+  // Persist view-mode per tab so each tab remembers its own setting
+  // (e.g. operator wants cards on Bills but table on Invoices).
+  const [viewMode, setViewMode, isBigScreen] = useListViewMode(isBillsMode ? "bills" : isNotesMode ? mode : "invoices");
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
   const confirm = useConfirm();
@@ -84,13 +93,19 @@ export default function InvoicePage({ mode = "invoices" }) {
   // button on the Bills tab (the full PUT would 403); the item-type/qty
   // perms drive the Invoices tab only. A bills.manage.update user edits on
   // the Bills tab, not the item-type classification flow.
-  const canEditInThisMode = isBillsMode
-    ? canUpdate
-    : (canEditItemType || canEditItemTypeAndQty);
+  // Note tabs: notes are immutable (server rejects edits too) — no Edit.
+  const canEditInThisMode = isNotesMode
+    ? false
+    : isBillsMode
+      ? canUpdate
+      : (canEditItemType || canEditItemTypeAndQty);
   const canDelete = has("bills.manage.delete");
   // Void is its own permission (bills.manage.void), distinct from delete, so a
   // role can be allowed to void bills without also gaining hard-delete rights.
   const canVoid = has("bills.manage.void");
+  // Reverse an FBR-submitted bill by generating a Credit/Debit Note. Its own
+  // permission so the right to reverse a filed document is granted separately.
+  const canReverse = has("invoices.note.create");
   // Print is split now: bills.print.view → Bill print/PDF/XLS,
   // invoices.print.view → Tax-Invoice print/PDF/XLS. Bills tab uses
   // canPrintBill, Invoices tab uses canPrintTax.
@@ -217,6 +232,9 @@ export default function InvoicePage({ mode = "invoices" }) {
       if (clientFilter) params.clientId = clientFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
+      // Note tabs list ONLY their own type; other tabs get sale bills
+      // only (server-side split — the three groups never mix).
+      if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
       const { data } = await getPagedInvoicesByCompany(companyId, params);
       setInvoices(data.items);
       setTotalCount(data.totalCount);
@@ -468,6 +486,19 @@ export default function InvoicePage({ mode = "invoices" }) {
     }
   };
 
+  // Reverse an FBR-submitted bill → opens the Credit Note screen prefilled
+  // with this invoice (industry pattern: Odoo's Reverse dialog / SAP credit
+  // memo by reference). The operator trims lines/quantities for a partial
+  // return or leaves everything for a full reversal, picks the FBR reason,
+  // and generates the note — which then Validates/Submits like any bill.
+  const handleReverseInvoice = (inv) => {
+    if (inv.fbrStatus !== "Submitted") {
+      notify("Only an FBR-submitted bill can be reversed. Void a non-submitted bill instead.", "error");
+      return;
+    }
+    navigate(`/credit-debit-notes?type=credit&invoiceId=${inv.id}`);
+  };
+
   const [bulkFbrLoading, setBulkFbrLoading] = useState(false);
   // Per-bill outcome of the most recent Validate All / Submit All run.
   // Replaces the old summary toast — the operator sees a scrollable grid
@@ -531,6 +562,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     if (clientFilter) params.clientId = clientFilter;
     if (dateFrom) params.dateFrom = dateFrom;
     if (dateTo) params.dateTo = dateTo;
+    if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
     const { data } = await getPagedInvoicesByCompany(selectedCompany.id, params);
     const all = data.items || [];
     if (action === "validate") {
@@ -673,12 +705,14 @@ export default function InvoicePage({ mode = "invoices" }) {
     <div>
       <div style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}><MdReceipt size={28} color="#fff" /></div>
+          <div style={styles.headerIcon}>{isNotesMode ? <MdUndo size={28} color="#fff" /> : <MdReceipt size={28} color="#fff" />}</div>
           <div>
-            <h2 style={styles.pageTitle}>{isBillsMode ? "Bills" : "Invoices"}</h2>
+            <h2 style={styles.pageTitle}>{isNotesMode ? `${noteLabel}s` : isBillsMode ? "Bills" : "Invoices"}</h2>
             <p style={styles.pageSubtitle}>
               {selectedCompany
-                ? (isBillsMode
+                ? (isNotesMode
+                    ? `${noteDocType === 10 ? "Returns / reversals of submitted invoices" : "Upward adjustments against submitted invoices"} — ${totalCount} note${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
+                    : isBillsMode
                     ? `${totalCount} bill${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
                     : `Classify items and submit to FBR — ${totalCount} record${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`)
                 : "Select a company"}
@@ -704,6 +738,20 @@ export default function InvoicePage({ mode = "invoices" }) {
               </button>
             )}
           </div>
+        )}
+        {/* Note tabs: notes are generated from an existing submitted
+            invoice — the "New" button opens the note screen in this
+            tab's mode. */}
+        {isNotesMode && companies.length > 0 && canReverse && (
+          <button
+            style={styles.addBtn}
+            onClick={() => navigate(`/credit-debit-notes?type=${noteDocType === 10 ? "credit" : "debit"}`)}
+            title={noteDocType === 10
+              ? "Reverse a submitted invoice — fully or line-by-line — by generating a Credit Note"
+              : "Record an upward adjustment (undercharge / rate change / extra goods) against a submitted invoice"}
+          >
+            <MdAdd size={18} /> New {noteLabel}
+          </button>
         )}
       </div>
 
@@ -847,6 +895,8 @@ export default function InvoicePage({ mode = "invoices" }) {
             <InvoiceTable
               invoices={invoices}
               isBillsMode={isBillsMode}
+              isReturnsMode={isNotesMode}
+              noteDocType={noteDocType}
               perms={{
                 canPrint,
                 canFbrPreview,
@@ -859,6 +909,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                 canVoid,
                 canRecordReceipt,
                 canViewReceipts,
+                canReverse,
               }}
               hasExcelBill={hasExcelBill}
               hasExcelTax={hasExcelTax}
@@ -883,6 +934,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               onToggleFbrExcluded={handleToggleFbrExcluded}
               onDelete={handleDeleteInvoice}
               onVoid={handleVoidInvoice}
+              onReverse={handleReverseInvoice}
             />
           ) : (
           <div className="card-grid">
@@ -897,7 +949,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                   <div>
                     <h5 style={cardStyles.title}>
                       <MdReceipt style={{ color: colors.blue, marginRight: 6 }} />
-                      {isBillsMode ? "Bill" : "Invoice"} #{inv.invoiceNumber}
+                      {isNotesMode ? noteLabel : isBillsMode ? "Bill" : "Invoice"} #{inv.invoiceNumber}
                     </h5>
                     <p style={cardStyles.text}><strong>Client:</strong> {inv.clientName}</p>
                     {/* PO Number / Indent No / Site come from the linked
@@ -945,6 +997,35 @@ export default function InvoicePage({ mode = "invoices" }) {
                       >
                         <MdCancel size={14} color="#b71c1c" />
                         <span>Cancelled{inv.cancelReason ? ` — ${inv.cancelReason}` : ""}</span>
+                      </div>
+                    )}
+                    {/* This document IS a credit/debit note — show what it adjusts. */}
+                    {(inv.documentType === 9 || inv.documentType === 10) && (
+                      <div
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#ede7f6", color: "#5e35b1", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #b39ddb" }}
+                        title={inv.originalInvoiceNumber ? `${inv.documentType === 10 ? "Credit" : "Debit"} Note against Bill #${inv.originalInvoiceNumber}${inv.originalInvoiceRefIRN ? ` (IRN ${inv.originalInvoiceRefIRN})` : ""}` : undefined}
+                      >
+                        <MdUndo size={14} color="#5e35b1" />
+                        <span>{inv.documentType === 10 ? "Credit Note" : "Debit Note"}{inv.originalInvoiceNumber ? ` ↩ against Bill #${inv.originalInvoiceNumber}` : ""}</span>
+                      </div>
+                    )}
+                    {/* This invoice HAS notes against it — clear indicators. */}
+                    {inv.documentType !== 9 && inv.documentType !== 10 && inv.reversedByCreditNoteNumber && (
+                      <div
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#ede7f6", color: "#5e35b1", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #b39ddb" }}
+                        title={`A Credit Note (#${inv.reversedByCreditNoteNumber}) has been created against this invoice. It reverses this sale.`}
+                      >
+                        <MdUndo size={14} color="#5e35b1" />
+                        <span>Reversed — Credit Note #{inv.reversedByCreditNoteNumber} created</span>
+                      </div>
+                    )}
+                    {inv.documentType !== 9 && inv.documentType !== 10 && inv.adjustedByDebitNoteNumber && (
+                      <div
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#e0f2f1", color: "#00695c", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #80cbc4" }}
+                        title={`A Debit Note (#${inv.adjustedByDebitNoteNumber}) adjusts this invoice upward.`}
+                      >
+                        <MdUndo size={14} color="#00695c" />
+                        <span>Adjusted — Debit Note #{inv.adjustedByDebitNoteNumber}</span>
                       </div>
                     )}
                     {!inv.isCancelled && inv.fbrStatus === "Submitted" && (
@@ -1185,11 +1266,11 @@ export default function InvoicePage({ mode = "invoices" }) {
                     )}
                     {/* Delete: Bills tab only, last-created bill only,
                         not FBR-submitted. Same gates as before plus Bills mode. */}
-                    {isBillsMode && canDelete && inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.isLatest && (
+                    {(isBillsMode || isNotesMode) && canDelete && inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.isLatest && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#ffebee", color: "#c62828", border: "1px solid #ef9a9a" }}
                         onClick={() => handleDeleteInvoice(inv)}
-                        title="Delete this bill entirely — latest bill only, removes the row and frees its challan(s). Use Void to cancel an earlier bill without leaving a gap."
+                        title="Delete this document entirely — latest in its sequence only. Use Void to cancel an earlier one without leaving a gap."
                       >
                         <MdDelete size={14} /> Delete
                       </button>
@@ -1198,13 +1279,29 @@ export default function InvoicePage({ mode = "invoices" }) {
                         (not just the latest). Keeps the bill number so the
                         sequence stays gap-free, marks the bill Cancelled, and
                         reverts its delivery challan(s) to Pending for re-billing. */}
-                    {isBillsMode && canVoid && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
+                    {(isBillsMode || isNotesMode) && canVoid && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff8e1", color: "#b26a00", border: "1px solid #ffe082" }}
                         onClick={() => handleVoidInvoice(inv)}
-                        title="Void this bill — keeps the bill number (no gap), marks it Cancelled and reverts its delivery challan(s) to Pending so they can be re-billed."
+                        title={isNotesMode
+                          ? "Void this note — keeps its number (no gap), frees the original invoice so it can be reversed again."
+                          : "Void this bill — keeps the bill number (no gap), marks it Cancelled and reverts its delivery challan(s) to Pending so they can be re-billed."}
                       >
                         <MdCancel size={14} /> Void
+                      </button>
+                    )}
+                    {/* Reverse: an FBR-SUBMITTED sale invoice (not itself a
+                        note) can be reversed → generates a Credit Note as a new
+                        unsubmitted bill to Validate + Submit. Replaces Void once
+                        the bill has reached FBR. */}
+                    {canReverse && inv.fbrStatus === "Submitted" && !inv.isCancelled && !inv.reversedByCreditNoteNumber &&
+                     inv.documentType !== 9 && inv.documentType !== 10 && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#ede7f6", color: "#5e35b1", border: "1px solid #b39ddb" }}
+                        onClick={() => handleReverseInvoice(inv)}
+                        title="Reverse this FBR-submitted bill — generates a Credit Note (new unsubmitted bill) that you then Validate and Submit to FBR."
+                      >
+                        <MdUndo size={14} /> Reverse
                       </button>
                     )}
                   </div>

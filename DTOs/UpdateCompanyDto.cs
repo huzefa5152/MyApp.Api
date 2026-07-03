@@ -14,6 +14,10 @@
         public int StartingInvoiceNumber { get; set; }
         public int StartingSalesQuoteNumber { get; set; }
         public int StartingSalesOrderNumber { get; set; }
+        /// <summary>Starting number for the separate Debit/Credit Note sequence (Return Invoices). Only honoured while the company has no notes yet.</summary>
+        public int StartingDebitNoteNumber { get; set; } = 1;
+        /// <summary>Starting number for the Credit Note sequence. Only honoured while the company has no credit notes yet.</summary>
+        public int StartingCreditNoteNumber { get; set; } = 1;
         public string? InvoiceNumberPrefix { get; set; }
         public bool FbrEnabled { get; set; } = true;
         public bool RequireSalesOrderForBilling { get; set; } = false;

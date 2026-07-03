@@ -27,6 +27,7 @@ import {
   MdHistory,
   MdRequestQuote,
   MdAssignment,
+  MdUndo,
   MdLocalShipping,
   MdShoppingCart,
   MdInventory,
@@ -214,7 +215,7 @@ export default function DashboardLayout() {
   // recomputing on every render.
   const activeSection = useMemo(() => {
     const p = location.pathname.toLowerCase();
-    if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p === "/bills" || p === "/invoices" || p === "/item-rate-history") return "sales";
+    if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history") return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
     if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/accounting/")) return "accounting";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
@@ -353,6 +354,23 @@ export default function DashboardLayout() {
                 <NavLink to="/invoices" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdReceipt className="dl-subitem__icon" aria-hidden="true" />
                   <span>Invoices</span>
+                </NavLink>
+              </Can>
+              {/* Credit Notes (returns/reversals) and Debit Notes (upward
+                  adjustments) — separate tabs, each with its own numbering
+                  sequence, never mixed with Bills/Invoices. Gated by the
+                  list-view perm; the "New" buttons on the pages are gated
+                  by invoices.note.create. */}
+              <Can permission="invoices.list.view">
+                <NavLink to="/credit-notes" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdUndo className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Credit Notes</span>
+                </NavLink>
+              </Can>
+              <Can permission="invoices.list.view">
+                <NavLink to="/debit-notes" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdUndo className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Debit Notes</span>
                 </NavLink>
               </Can>
               <Can permission="itemratehistory.view">
@@ -678,6 +696,9 @@ function getBreadcrumb(pathname) {
     "/challans/import": "Sales / Import Challans",
     "/bills": "Sales / Bills",
     "/invoices": "Sales / Invoices",
+    "/credit-notes": "Sales / Credit Notes",
+    "/debit-notes": "Sales / Debit Notes",
+    "/credit-debit-notes": "Sales / New Credit / Debit Note",
     "/item-rate-history": "Sales / Item Rate History",
     "/profile": "My Profile",
     "/users": "User Management",

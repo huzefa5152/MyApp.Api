@@ -41,7 +41,11 @@ namespace MyApp.Api.Models
         /// bulk buttons. Operators toggle this for bills they deliberately
         /// don't want to report to FBR (e.g. internal sample invoices,
         /// cancelled-but-retained records). The per-bill Validate / Submit
-        /// buttons still work — the flag only gates BULK actions.
+        /// buttons still work — the flag gates BULK actions.
+        /// 2026-07-02: the flag now ALSO gates inventory — an excluded bill
+        /// holds no stock movements (its deduction is reversed on exclude and
+        /// re-recorded on re-include, classified HS-coded lines only). The
+        /// toggle is rejected once the bill is FBR-submitted.
         /// </summary>
         public bool IsFbrExcluded { get; set; }
 
@@ -79,6 +83,54 @@ namespace MyApp.Api.Models
         /// the legacy "sinv:{DocumentNumber}" so the ETL is idempotent.</summary>
         public bool IsMigrated { get; set; }
         public string? ExternalRef { get; set; }
+        // ── Credit / Debit Note linkage (2026-07-01) ─────────────────────
+        // A Credit Note (DocumentType 10) or Debit Note (DocumentType 9) is
+        // itself an Invoice row that ADJUSTS an earlier FBR-submitted sale.
+        // These fields link the note back to the original invoice.
+        //
+        // IMPORTANT: FbrIRN above always means "THIS document's own IRN"
+        // (a note gets its own IRN when submitted). The *reference* to the
+        // original invoice's IRN is stored separately here so submitting the
+        // note never clobbers the reference. FbrService reads
+        // OriginalInvoiceRefIRN for the FBR `invoiceRefNo` field on notes.
+
+        /// <summary>Local FK to the original invoice this note reverses/adjusts. Null for ordinary sale invoices.</summary>
+        public int? OriginalInvoiceId { get; set; }
+
+        /// <summary>
+        /// The ORIGINAL invoice's FBR IRN (22 digits NTN / 28 digits CNIC).
+        /// Sent to FBR as `invoiceRefNo` for Debit/Credit Notes (FBR 0026).
+        /// Distinct from <see cref="FbrIRN"/>, which is this note's own IRN.
+        /// </summary>
+        public string? OriginalInvoiceRefIRN { get; set; }
+
+        /// <summary>FBR reason for the note (goods returned, cancellation, etc). Required for notes (FBR 0027).</summary>
+        public string? NoteReason { get; set; }
+
+        /// <summary>Free-text remarks — required by FBR when the reason is "Others" (FBR 0028).</summary>
+        public string? NoteReasonRemarks { get; set; }
+
+        /// <summary>
+        /// PERSISTED COMPUTED column (see AppDbContext): 0 = sale invoice,
+        /// 1 = Debit Note (DocumentType 9), 2 = Credit Note (DocumentType 10).
+        /// Each kind numbers from its own per-company sequence, so the
+        /// (CompanyId, InvoiceNumber) uniqueness is scoped per kind — the
+        /// unique index is (CompanyId, NoteKind, InvoiceNumber). Never set
+        /// from code.
+        /// </summary>
+        public byte NoteKind { get; private set; }
+
+        /// <summary>
+        /// Notes only (null on sale invoices): whether this note moves
+        /// inventory. Industry pattern (SAP returns-vs-credit-memo, Zoho
+        /// restock-vs-credit-only): a goods return (Credit Note, reason
+        /// "Return of goods"/"Cancellation of supply") re-enters stock; a
+        /// value-only adjustment (discount, rate change, undercharge Debit
+        /// Note) must NOT touch stock. Derived from the reason at creation,
+        /// operator-overridable. Direction when true: Credit Note → IN,
+        /// Debit Note → OUT (extra goods shipped).
+        /// </summary>
+        public bool? NoteAffectsStock { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -88,5 +140,8 @@ namespace MyApp.Api.Models
         public Client Client { get; set; } = null!;
         public ICollection<InvoiceItem> Items { get; set; } = new List<InvoiceItem>();
         public ICollection<DeliveryChallan> DeliveryChallans { get; set; } = new List<DeliveryChallan>();
+
+        /// <summary>Self-reference to the original invoice a Credit/Debit Note adjusts. Null for ordinary invoices.</summary>
+        public Invoice? OriginalInvoice { get; set; }
     }
 }

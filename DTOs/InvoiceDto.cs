@@ -59,6 +59,32 @@ namespace MyApp.Api.DTOs
         public bool IsCancelled { get; set; }
         public DateTime? CancelledAt { get; set; }
         public string? CancelReason { get; set; }
+
+        // ── Credit / Debit Note linkage (2026-07-01) ─────────────────────
+        /// <summary>Local id of the original invoice this note reverses/adjusts (null for ordinary sale invoices).</summary>
+        public int? OriginalInvoiceId { get; set; }
+        /// <summary>Human-facing bill number of the original invoice (for the "against #123" line). Null for ordinary invoices.</summary>
+        public int? OriginalInvoiceNumber { get; set; }
+        /// <summary>The original invoice's FBR IRN this note references (sent to FBR as invoiceRefNo).</summary>
+        public string? OriginalInvoiceRefIRN { get; set; }
+        /// <summary>FBR reason for the note.</summary>
+        public string? NoteReason { get; set; }
+        /// <summary>Remarks (required by FBR when reason is "Others").</summary>
+        public string? NoteReasonRemarks { get; set; }
+        /// <summary>Notes only: whether this note moves inventory (Credit Note → IN, Debit Note → OUT). Null on sale invoices.</summary>
+        public bool? NoteAffectsStock { get; set; }
+        /// <summary>
+        /// If this invoice has a LIVE (non-cancelled) CREDIT NOTE (return /
+        /// reversal) against it, that note's number in the credit-note
+        /// sequence — the UI hides the Reverse action and shows "Reversed by
+        /// CN #N". Null when none exists.
+        /// </summary>
+        public int? ReversedByCreditNoteNumber { get; set; }
+        /// <summary>
+        /// If this invoice has a LIVE DEBIT NOTE (upward adjustment) against
+        /// it, that note's number in the debit-note sequence. Null when none.
+        /// </summary>
+        public int? AdjustedByDebitNoteNumber { get; set; }
         /// <summary>
         /// True when every item has HSCode + SaleType + UOM (either FbrUOMId or a non-empty UOM string),
         /// meaning the bill has enough data to be validated/submitted to FBR.
@@ -227,6 +253,94 @@ namespace MyApp.Api.DTOs
         public string? SroScheduleNo { get; set; }
         /// <summary>Serial number within the referenced SRO/Schedule — required when SroScheduleNo is set (FBR rule 0078).</summary>
         public string? SroItemSerialNo { get; set; }
+    }
+
+    /// <summary>
+    /// Request to reverse an FBR-submitted invoice by auto-generating the
+    /// correct adjustment note (Credit Note for a return/reversal — the usual
+    /// case — or Debit Note for an upward correction). The generated note is
+    /// created UNSUBMITTED so the operator can Validate it, then Submit it to
+    /// FBR exactly like an ordinary invoice.
+    /// </summary>
+    public class CreateReversalNoteDto
+    {
+        /// <summary>
+        /// FBR reason for the note (e.g. "Goods Returned", "Order Cancellation",
+        /// "Post-Sale Discount", "Others"). Required by FBR (0027).
+        /// </summary>
+        public string? Reason { get; set; }
+
+        /// <summary>Free-text remarks — required by FBR when <see cref="Reason"/> is "Others" (0028).</summary>
+        public string? Remarks { get; set; }
+
+        /// <summary>
+        /// Optional override of the auto-detected note type: 10 = Credit Note
+        /// (reversal / return), 9 = Debit Note (upward correction). When null,
+        /// a full reversal defaults to a Credit Note.
+        /// </summary>
+        public int? DocumentType { get; set; }
+    }
+
+    /// <summary>
+    /// Manual Credit / Debit Note creation referencing an existing FBR-submitted
+    /// invoice. Supports PARTIAL notes: when <see cref="Lines"/> is non-empty,
+    /// only the listed lines (at the given return quantities) are included;
+    /// when empty, the whole invoice is reversed. The note is created
+    /// UNSUBMITTED so it can be validated then submitted to FBR.
+    /// </summary>
+    public class CreateNoteDto
+    {
+        /// <summary>The FBR-submitted invoice this note references.</summary>
+        public int OriginalInvoiceId { get; set; }
+        /// <summary>
+        /// 10 = CREDIT NOTE — the return / reversal / reduction document
+        /// (goods returned, cancellation, post-sale discount). 9 = DEBIT NOTE
+        /// — the upward adjustment (undercharge, rate change, extra goods).
+        /// Each type runs its own numbering sequence.
+        /// </summary>
+        public int DocumentType { get; set; } = 10;
+        /// <summary>
+        /// FBR reason — one of IRIS's enumerated values: "Cancellation of
+        /// supply", "Return of goods", "Change in nature of supply", "Change
+        /// in value of supply", "Change in amount of tax", "Others",
+        /// "Adjustment given to Steel Melters". Required (0027).
+        /// </summary>
+        public string? Reason { get; set; }
+        /// <summary>Remarks — required when <see cref="Reason"/> is "Others" (0028).</summary>
+        public string? Remarks { get; set; }
+        /// <summary>
+        /// Whether the note moves inventory (Credit Note → stock IN, Debit
+        /// Note → stock OUT). Null = derive from the reason: goods-moving
+        /// reasons ("Return of goods", "Cancellation of supply") default
+        /// true for credit notes; value-only reasons default false.
+        /// </summary>
+        public bool? AffectsStock { get; set; }
+        /// <summary>
+        /// Optional note date. Defaults to today, clamped to be ≥ the original
+        /// invoice date. FBR also enforces a 180-day ceiling (0034) at submit.
+        /// </summary>
+        public DateTime? Date { get; set; }
+        /// <summary>
+        /// Line selection for a PARTIAL note. Empty = full reversal of every
+        /// line. Each entry names an original InvoiceItem and the quantity to
+        /// return/adjust (capped at the original line's quantity).
+        /// </summary>
+        public List<NoteLineDto> Lines { get; set; } = new();
+    }
+
+    public class NoteLineDto
+    {
+        /// <summary>Id of the line on the ORIGINAL invoice being returned/adjusted.</summary>
+        public int InvoiceItemId { get; set; }
+        /// <summary>Quantity to return/adjust on this line (must be &gt; 0 and ≤ the original line quantity).</summary>
+        public decimal Quantity { get; set; }
+        /// <summary>
+        /// DEBIT NOTES ONLY: optional per-unit value for the adjustment — an
+        /// undercharge note carries the price DELTA per unit rather than the
+        /// original price. Ignored on credit notes (refunds are always at the
+        /// original invoice rate, per FBR 0068).
+        /// </summary>
+        public decimal? UnitPrice { get; set; }
     }
 
     /// <summary>

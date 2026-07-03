@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
@@ -249,7 +249,11 @@ namespace MyApp.Api.Services.Implementations
         {
             var q = _context.Invoices
                 .AsNoTracking()
-                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled);
+                // Debit/Credit Notes (DocumentType 9/10) are REVERSALS, not
+                // sales — including them would double-count a reversed sale
+                // instead of netting it. Excluded from every sales KPI.
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                         && i.DocumentType != 9 && i.DocumentType != 10);
             if (from.HasValue) q = q.Where(i => i.Date >= from.Value);
             if (to.HasValue)   q = q.Where(i => i.Date < to.Value);
             var agg = await q
@@ -288,7 +292,11 @@ namespace MyApp.Api.Services.Implementations
         {
             var q = _context.Invoices
                 .AsNoTracking()
-                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled);
+                // Debit/Credit Notes (DocumentType 9/10) are REVERSALS, not
+                // sales — including them would double-count a reversed sale
+                // instead of netting it. Excluded from every sales KPI.
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                         && i.DocumentType != 9 && i.DocumentType != 10);
             if (period.From.HasValue) q = q.Where(i => i.Date >= period.From.Value);
             if (period.To.HasValue)   q = q.Where(i => i.Date < period.To.Value);
 
@@ -377,6 +385,7 @@ namespace MyApp.Api.Services.Implementations
             var rows = await _context.Invoices
                 .AsNoTracking()
                 .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                         && i.DocumentType != 9 && i.DocumentType != 10
                          && i.Date >= earliest && i.Date < anchor.AddMonths(1))
                 .GroupBy(i => new { i.Date.Year, i.Date.Month })
                 .Select(g => new
@@ -507,7 +516,11 @@ namespace MyApp.Api.Services.Implementations
         {
             var q = _context.Invoices
                 .AsNoTracking()
-                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled);
+                // Debit/Credit Notes (DocumentType 9/10) are REVERSALS, not
+                // sales — including them would double-count a reversed sale
+                // instead of netting it. Excluded from every sales KPI.
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                         && i.DocumentType != 9 && i.DocumentType != 10);
             if (period.From.HasValue) q = q.Where(i => i.Date >= period.From.Value);
             if (period.To.HasValue)   q = q.Where(i => i.Date < period.To.Value);
 

@@ -176,15 +176,18 @@ namespace MyApp.Api.Services.Implementations
                     matchedSupplierId = sIdByName;
                 }
 
+                // Dedup check ("already in our system?") runs whenever the
+                // supplier resolved (by NTN or name — the SAME id the
+                // committer uses) and we have an invoice number. Date/total
+                // are optional corroboration inside the matcher — a unique
+                // IRN-style invoice number matches on the string alone.
                 int? matchedPurchaseBillId = null;
-                if (!string.IsNullOrWhiteSpace(supplierNtn) &&
-                    !string.IsNullOrWhiteSpace(baseInvoiceNo) &&
-                    first.InvoiceDate.HasValue &&
-                    totalGross > 0m)
+                if (matchedSupplierId.HasValue &&
+                    !string.IsNullOrWhiteSpace(baseInvoiceNo))
                 {
                     matchedPurchaseBillId = await _matcher.FindMatchingPurchaseBillIdAsync(
-                        companyId, supplierNtn, baseInvoiceNo,
-                        first.InvoiceDate.Value, totalGross);
+                        companyId, matchedSupplierId.Value, baseInvoiceNo, (first.InvoiceNo ?? "").Trim(),
+                        first.InvoiceDate ?? DateTime.MinValue, totalGross);
                 }
 
                 var invoiceDto = new FbrImportPreviewInvoiceDto

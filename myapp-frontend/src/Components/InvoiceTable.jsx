@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import {
   MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
-  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdPayments,
+  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdPayments, MdUndo,
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
@@ -54,6 +54,10 @@ function paymentStatusBadge(inv) {
 export default function InvoiceTable({
   invoices,
   isBillsMode,
+  // Note tabs — rows are Credit Notes or Debit Notes in their own
+  // numbering sequences; number column reads "Credit Note # / Debit Note #".
+  isReturnsMode = false,
+  noteDocType = null,
   perms,
   hasExcelBill,
   hasExcelTax,
@@ -79,22 +83,78 @@ export default function InvoiceTable({
   onToggleFbrExcluded,
   onDelete,
   onVoid,
+  onReverse,
 }) {
   const navigate = useNavigate();
 
   const columns = [
     {
       key: "invoiceNumber",
-      header: isBillsMode ? "Bill #" : "Invoice #",
-      width: 110,
+      header: isReturnsMode ? (noteDocType === 10 ? "Credit Note #" : "Debit Note #") : isBillsMode ? "Bill #" : "Invoice #",
+      width: 130,
       accessor: (i) => Number(i.invoiceNumber) || i.invoiceNumber,
-      render: (i) => <strong>{i.invoiceNumber}</strong>,
+      render: (i) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <strong>{i.invoiceNumber}</strong>
+          {(i.documentType === 9 || i.documentType === 10) && (
+            <span
+              style={{
+                fontSize: 10, fontWeight: 700, lineHeight: 1.2,
+                color: i.documentType === 10 ? "#5e35b1" : "#00695c",
+              }}
+              title={i.originalInvoiceNumber ? `Against bill #${i.originalInvoiceNumber}${i.originalInvoiceRefIRN ? ` (IRN ${i.originalInvoiceRefIRN})` : ""}` : undefined}
+            >
+              {i.documentType === 10 ? "CREDIT NOTE" : "DEBIT NOTE"}
+              {i.originalInvoiceNumber ? ` ↩ #${i.originalInvoiceNumber}` : ""}
+            </span>
+          )}
+          {i.documentType !== 9 && i.documentType !== 10 && i.reversedByCreditNoteNumber && (
+            <span
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 3, alignSelf: "flex-start",
+                fontSize: 10, fontWeight: 700, lineHeight: 1.2, padding: "2px 6px",
+                borderRadius: 6, background: "#ede7f6", color: "#5e35b1", border: "1px solid #b39ddb",
+              }}
+              title={`A Credit Note (#${i.reversedByCreditNoteNumber}) has been created against this invoice — it reverses this sale.`}
+            >
+              <MdUndo size={11} /> REVERSED · CN #{i.reversedByCreditNoteNumber}
+            </span>
+          )}
+          {i.documentType !== 9 && i.documentType !== 10 && i.adjustedByDebitNoteNumber && (
+            <span
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 3, alignSelf: "flex-start",
+                fontSize: 10, fontWeight: 700, lineHeight: 1.2, padding: "2px 6px",
+                borderRadius: 6, background: "#e0f2f1", color: "#00695c", border: "1px solid #80cbc4",
+              }}
+              title={`A Debit Note (#${i.adjustedByDebitNoteNumber}) adjusts this invoice upward.`}
+            >
+              <MdUndo size={11} /> ADJUSTED · DN #{i.adjustedByDebitNoteNumber}
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       key: "clientName",
       header: "Client",
       render: (i) => i.clientName || "—",
     },
+    // Returns tab only: which invoice the note reverses + the FBR reason.
+    ...(isReturnsMode ? [{
+      key: "against",
+      header: "Against / Reason",
+      render: (i) => (
+        <div>
+          <div style={{ fontWeight: 600 }}>
+            Bill #{i.originalInvoiceNumber ?? "—"}
+          </div>
+          <div style={{ fontSize: "0.75rem", color: "#5f6d7e" }} title={i.noteReasonRemarks || undefined}>
+            {i.noteReason || "—"}
+          </div>
+        </div>
+      ),
+    }] : []),
     {
       key: "poNumber",
       header: "PO",
@@ -320,18 +380,28 @@ export default function InvoiceTable({
             {inv.isFbrExcluded ? <MdRestore size={14} /> : <MdBlock size={14} />}
           </button>
         )}
-        {isBillsMode && perms.canDelete && !isSubmitted && !inv.isCancelled && inv.isLatest && (
-          <button style={btn.delete} onClick={() => onDelete?.(inv)} title="Delete bill — only the latest bill, removes it entirely and frees its challan(s).">
+        {(isBillsMode || isReturnsMode) && perms.canDelete && !isSubmitted && !inv.isCancelled && inv.isLatest && (
+          <button style={btn.delete} onClick={() => onDelete?.(inv)} title="Delete — only the latest document in its sequence, removes the row entirely.">
             <MdDelete size={14} />
           </button>
         )}
-        {isBillsMode && perms.canVoid && !isSubmitted && !inv.isCancelled && (
+        {(isBillsMode || isReturnsMode) && perms.canVoid && !isSubmitted && !inv.isCancelled && (
           <button
             style={btn.void}
             onClick={() => onVoid?.(inv)}
             title="Void bill — keeps the bill number (no gap), marks it cancelled and reverts its delivery challan(s) to Pending so they can be re-billed."
           >
             <MdCancel size={14} />
+          </button>
+        )}
+        {perms.canReverse && isSubmitted && !inv.isCancelled && !inv.reversedByCreditNoteNumber &&
+         inv.documentType !== 9 && inv.documentType !== 10 && (
+          <button
+            style={btn.reverse}
+            onClick={() => onReverse?.(inv)}
+            title="Reverse this FBR-submitted bill — opens the Credit Note screen prefilled with its lines (trim for a partial return)."
+          >
+            <MdUndo size={14} />
           </button>
         )}
       </>
@@ -373,6 +443,7 @@ const btn = {
   delete:      { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
   void:        { ...baseBtn, backgroundColor: "#fff8e1", color: "#b26a00" },
   receipt:     { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20" },
+  reverse:     { ...baseBtn, backgroundColor: "#ede7f6", color: "#5e35b1" },
   fbrValidate: { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
   fbrSubmit:   { ...baseBtn, backgroundColor: "#e8eaf6", color: "#1a237e" },
   neutral:     { ...baseBtn, backgroundColor: "#eceff1", color: "#546e7a" },

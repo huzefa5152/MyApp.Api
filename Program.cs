@@ -507,25 +507,38 @@ using (var scope = app.Services.CreateScope())
     // — we log a clear AuditLog row and leave the legacy non-unique
     // index in place. Operators have to dedupe first; the system stays
     // working in the meantime.
+    // 2026-07-02: the Invoice uniqueness is now scoped per document kind —
+    // the SplitCreditDebitNoteSeries migration owns
+    // UNIQUE (CompanyId, NoteKind, InvoiceNumber), which lets Credit Note #1,
+    // Debit Note #1 and sale bill #1 coexist while still catching concurrent
+    // MAX+1 collisions within each sequence (the C-8 guarantee). The legacy
+    // unscoped index this backfill used to (re)create must therefore be
+    // RETIRED — recreating it would make note #1 collide with bill #1.
     db.Database.ExecuteSqlRaw(@"
-        -- 2026-06-27: numbering is now scoped per (CompanyId, DivisionId, *Number)
-        -- so division-tagged documents draw their own sequence. Drop the legacy
-        -- 2-col unique index (which would wrongly block a division reusing a
-        -- company-level number) and ensure the 3-col one exists. EF's migration
-        -- normally does this; the guard keeps drifted DBs consistent.
+        -- Invoice numbering is scoped per (CompanyId, DivisionId, NoteKind,
+        -- InvoiceNumber) — the migration chain owns that index. This guard
+        -- only retires superseded runtime-created indexes on drifted DBs.
         BEGIN TRY
             IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices'))
+            BEGIN
                 DROP INDEX [IX_Invoices_CompanyId_InvoiceNumber] ON [Invoices];
-            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_DivisionId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices'))
-                CREATE UNIQUE INDEX [IX_Invoices_CompanyId_DivisionId_InvoiceNumber] ON [Invoices] ([CompanyId], [DivisionId], [InvoiceNumber]);
+            END
+            -- MERGED 2026-07-03: invoice numbering is now scoped per
+            -- (CompanyId, DivisionId, NoteKind, InvoiceNumber) — owned by the
+            -- SyncNoteAndDivisionNumbering migration. The narrower 3-col
+            -- division index (previously created here at runtime) would make
+            -- Credit/Debit Note #1 collide with sale bill #1, so it is
+            -- retired the same way as the legacy 2-col one above.
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_DivisionId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices'))
+            BEGIN
+                DROP INDEX [IX_Invoices_CompanyId_DivisionId_InvoiceNumber] ON [Invoices];
+            END
         END TRY
         BEGIN CATCH
-            -- Duplicate data prevents the unique index. Leave things as-is;
-            -- the service-layer retry still helps, operators must dedupe first.
             INSERT INTO AuditLogs (Timestamp, Level, UserName, HttpMethod, RequestPath, StatusCode, ExceptionType, Message)
             VALUES (SYSUTCDATETIME(), 'Warning', 'system', 'SEED', '/migrations/unique-invoice-number', 500,
-                    'INVOICE_UNIQUE_INDEX_BLOCKED',
-                    CONCAT('Could not enforce UNIQUE (CompanyId, DivisionId, InvoiceNumber): ', ERROR_MESSAGE()));
+                    'INVOICE_LEGACY_INDEX_DROP_BLOCKED',
+                    CONCAT('Could not drop legacy invoice-number index: ', ERROR_MESSAGE()));
         END CATCH;
 
         BEGIN TRY

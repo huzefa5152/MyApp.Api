@@ -17,6 +17,18 @@
         public int CurrentInvoiceNumber { get; set; }
         public string? InvoiceNumberPrefix { get; set; }
 
+        // Credit Notes and Debit Notes each run their OWN numbering
+        // sequence, independent of the sale-invoice sequence and of each
+        // other — reversing bill #3821 creates Credit Note #1, not bill
+        // #3822 (industry standard: notes are first-class fiscal documents
+        // with their own series). Same starting/current pattern as
+        // challan/invoice numbers. Existing rows default to 0; the
+        // allocator treats <=0 as "start at 1".
+        public int StartingDebitNoteNumber { get; set; } = 1;
+        public int CurrentDebitNoteNumber { get; set; }
+        public int StartingCreditNoteNumber { get; set; } = 1;
+        public int CurrentCreditNoteNumber { get; set; }
+
         // FBR Digital Invoicing
         // Master switch for the whole FBR flow on this company. When false,
         // the Validate/Submit-to-FBR buttons are hidden, challans don't get
