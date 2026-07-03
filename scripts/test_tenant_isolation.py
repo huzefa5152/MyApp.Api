@@ -296,6 +296,9 @@ endpoints_to_test = [
     ("GET",  "/api/purchasebills/count?companyId={cid}"),
     ("GET",  "/api/purchasebills/company/{cid}/paged"),
     ("GET",  "/api/goodsreceipts/company/{cid}/paged"),
+    ("GET",  "/api/salesquotes/company/{cid}/paged"),
+    ("GET",  "/api/salesorders/company/{cid}/paged"),
+    ("GET",  "/api/salesorders/company/{cid}/open"),
     ("GET",  "/api/stock/company/{cid}/onhand"),
     ("GET",  "/api/stock/company/{cid}/movements"),
     ("GET",  "/api/stock/company/{cid}/opening"),
@@ -537,6 +540,39 @@ if aid:
     request("DELETE", f"/api/attachments/{aid}", token=admin)
 if bfid:
     request("DELETE", f"/api/folders/{bfid}", token=admin)
+
+
+# Suite 9: sales-order invoice-prefill — id-based tenant guard. Added
+# 2026-07-03 with the "bill from sales order" prefill feature. The route
+# loads the order, then asserts access against its stored CompanyId, so a
+# user must not be able to read another tenant's order header + price
+# history by guessing ids.
+print("\n  Suite 9 — sales-order invoice-prefill tenant guard")
+suite9 = "salesorder invoice-prefill guard"
+status, so_client = request("POST", "/api/clients", token=admin, body={
+    "companyId": beta["id"], "name": "Beta SO Client", "phone": "+92-00-0000000",
+    "site": "Karachi", "ntn": "0000002", "cnic": "0000002000002",
+    "strn": "0000002000002", "registrationType": "Registered",
+})
+assert status in (200, 201), f"seed beta so client: {status} {so_client}"
+status, beta_so = request("POST", f"/api/salesorders/company/{beta['id']}", token=admin, body={
+    "clientId": so_client["id"],
+    "orderDate": "2026-07-03",
+    "items": [{"id": 0, "description": "Prefill Bait", "quantity": 5, "unit": "Numbers, pieces, units"}],
+})
+assert status in (200, 201), f"seed beta sales order: {status} {beta_so}"
+# alice (Alpha only, Administrator RBAC) — RBAC passes, tenant guard must 403
+s, _ = request("GET", f"/api/salesorders/{beta_so['id']}/invoice-prefill", token=tokens["alice"])
+status_check(suite9, "alice GET /salesorders/{betaId}/invoice-prefill", s, 403)
+# admin sees the prefill with the order's line (unit price resolves to 0 —
+# no quote, no billing history on a fresh company)
+s, prefill = request("GET", f"/api/salesorders/{beta_so['id']}/invoice-prefill", token=admin)
+check(suite9, "admin prefill 200 + 1 line",
+      s == 200 and isinstance(prefill, dict) and len(prefill.get("lines") or []) == 1,
+      f"status {s}, body {prefill}")
+# cleanup: order first (client delete would otherwise be restricted)
+request("DELETE", f"/api/salesorders/{beta_so['id']}", token=admin)
+request("DELETE", f"/api/clients/{so_client['id']}", token=admin)
 
 
 # ── Cleanup (test fails → keep rows for inspection) ──────────

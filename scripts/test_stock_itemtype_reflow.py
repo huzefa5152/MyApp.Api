@@ -55,13 +55,24 @@ _created_item_type_ids: list[int] = []
 _hs_pool: list[str] = []
 _hs_idx = 0
 
+# Static top-up when the live catalog has no (or too few) HS-coded items —
+# e.g. a fresh branch DB whose only HS-coded rows are soft-deleted leftovers
+# of this very suite (seen 2026-07-03 on DeliveryChallanDb: harvest = 0, the
+# single old fallback code repeated, and the near-duplicate guard correctly
+# 400'd every second item). Distinctness is what matters here; these are all
+# real PRAL chapter codes.
+_HS_FALLBACK = [
+    "5208.1000", "5209.1100", "5210.1100", "5407.1000", "5512.1100",
+    "6302.2100", "6117.8000", "7318.1500", "8471.3010", "8501.1000",
+    "8536.5000", "8538.1000", "3926.9099", "4819.1000", "7210.1190",
+]
+
 
 def next_hs() -> str:
-    """Return the next unused real HS code from the harvested pool."""
+    """Return the next unused HS code from the harvested (or fallback) pool."""
     global _hs_idx
-    if not _hs_pool:
-        return "8538.1000"  # fallback; should never hit once pool is filled
-    code = _hs_pool[_hs_idx % len(_hs_pool)]
+    pool = _hs_pool or _HS_FALLBACK
+    code = pool[_hs_idx % len(pool)]
     _hs_idx += 1
     return code
 
@@ -112,18 +123,48 @@ def setup(base: str, admin_user: str, admin_pw: str):
 
     # Harvest real HS codes from the live catalog so every test ItemType
     # gets a valid, DISTINCT code (avoids both PRAL validation rejects and
-    # the near-duplicate guard).
-    st, items = http("GET", "/api/itemtypes", base, token=token)
-    if st == 200 and isinstance(items, list):
-        seen = set()
-        for it in items:
+    # the near-duplicate guard). The bare endpoint only sees the default
+    # scope — on a fresh/branch DB that scope can be HS-less while other
+    # companies hold plenty, so fall through to a per-company sweep until
+    # the pool is big enough (2026-07-03: DeliveryChallanDb had 38 HS-coded
+    # items, all outside the default scope, and the suite failed at setup).
+    seen = set()
+
+    def _harvest(item_list):
+        for it in item_list or []:
             hs = (it.get("hsCode") or "").strip()
             if hs and hs not in seen:
                 seen.add(hs)
                 _hs_pool.append(hs)
+
+    st, items = http("GET", "/api/itemtypes", base, token=token)
+    if st == 200 and isinstance(items, list):
+        _harvest(items)
+    if len(_hs_pool) < 10:
+        # Item catalog is HS-less (fresh/branch DB) — pull codes straight
+        # from the cached PRAL HS catalog, i.e. the SAME source
+        # IsKnownHsCodeAsync validates against, so the codes always pass
+        # the [0007] master-catalog check. Shared cache — any accessible
+        # company id works.
+        st, companies = http("GET", "/api/companies", base, token=token)
+        first_cid = companies[0]["id"] if st == 200 and companies else None
+        if first_cid:
+            st2, codes = http("GET", f"/api/fbr/hscodes/{first_cid}", base, token=token)
+            for c in (codes or []) if st2 == 200 else []:
+                hs = (c.get("hS_CODE") or c.get("hsCode") or c.get("HS_CODE") or "").strip()
+                if hs and hs not in seen:
+                    seen.add(hs)
+                    _hs_pool.append(hs)
     print(f"  harvested {len(_hs_pool)} distinct HS codes from catalog")
     if len(_hs_pool) < 10:
-        print("  WARNING: small HS pool — codes may repeat across test items")
+        # Last resort (catalog cache empty too — validation is then
+        # format-only, so any well-formed code passes). Distinct codes
+        # keep the near-duplicate guard quiet across test items.
+        for hs in _HS_FALLBACK:
+            if hs not in seen:
+                seen.add(hs)
+                _hs_pool.append(hs)
+        print(f"  topped up with static fallback codes -> pool = {len(_hs_pool)}")
 
     suffix = datetime.now().strftime("%Y%m%d%H%M%S")
     company_name = f"_test_stock_reflow {suffix}"
