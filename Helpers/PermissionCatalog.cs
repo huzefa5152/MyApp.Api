@@ -123,6 +123,22 @@ namespace MyApp.Api.Helpers
             // sector preset. Control accounts can't be deleted (subledger-backed).
             new("accounting.coa.view",   "Accounting", "Chart of Accounts", "View",   "View the chart of accounts"),
             new("accounting.coa.manage", "Accounting", "Chart of Accounts", "Manage", "Add/edit/delete accounts & groups and seed a sector preset"),
+
+            // General Ledger (Phase B). journal.* = manual journal entries
+            // (system-posted entries are read-only); transfers.* = inter-account
+            // bank/cash movements; gl.manage = enable/backfill/rebuild + lock
+            // date (period close) — an admin-grade switch, deliberately separate
+            // from coa.manage; reports/dashboard are read-only surfaces.
+            new("accounting.journal.view",    "Accounting", "Journal Entries", "View",   "View journal entries (manual and system-posted)"),
+            new("accounting.journal.create",  "Accounting", "Journal Entries", "Create", "Create and edit manual journal entries"),
+            new("accounting.journal.delete",  "Accounting", "Journal Entries", "Delete", "Delete manual journal entries"),
+            new("accounting.transfers.view",   "Accounting", "Account Transfers", "View",   "View inter-account (bank/cash) transfers"),
+            new("accounting.transfers.create", "Accounting", "Account Transfers", "Create", "Record and edit inter-account transfers"),
+            new("accounting.transfers.delete", "Accounting", "Account Transfers", "Delete", "Delete inter-account transfers"),
+            new("accounting.gl.manage",       "Accounting", "General Ledger", "Manage", "Enable GL posting, run backfill/rebuild and set the lock date"),
+            new("accounting.reports.view",    "Accounting", "Reports", "View", "View trial balance and AR/AP aging reports"),
+            new("accounting.dashboard.view",  "Accounting", "Dashboard", "View", "View the accounting summary dashboard"),
+
             // Legacy data migration (admin/ops). Also gated by a non-Production
             // environment + the LegacyDb connection string — never reachable in prod.
             new("accounting.import.run", "Accounting", "Data Migration", "Run", "Run the legacy Data_2021 ETL into a company (non-prod only)"),

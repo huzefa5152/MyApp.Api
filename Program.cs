@@ -269,6 +269,14 @@ builder.Services.AddScoped<IDivisionService, DivisionService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<ICoaPresetSeeder, CoaPresetSeeder>();
+// General Ledger (Phase B): the posting engine, GL admin/reports/summary,
+// manual journal entries and inter-account transfers. All scoped — the
+// posting service shares the request's DbContext so it joins the caller's
+// transaction.
+builder.Services.AddScoped<IPostingService, PostingService>();
+builder.Services.AddScoped<IGeneralLedgerService, GeneralLedgerService>();
+builder.Services.AddScoped<IJournalEntryService, JournalEntryService>();
+builder.Services.AddScoped<IAccountTransferService, AccountTransferService>();
 builder.Services.AddScoped<ILegacyImportService, LegacyImportService>();
 builder.Services.AddScoped<IClientService, ClientService>();
 // "Common Clients" grouping — the same legal entity (matched by NTN, then

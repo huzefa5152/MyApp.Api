@@ -24,6 +24,10 @@ namespace MyApp.Api.DTOs
         public bool IsActive { get; set; } = true;
         public int Position { get; set; }
         public string? ExternalRef { get; set; }
+        /// <summary>Live balance (signed, debit-positive): opening balance +
+        /// Σ(journal debits − credits). Equals the signed opening balance until
+        /// GL posting is enabled for the company.</summary>
+        public decimal Balance { get; set; }
     }
 
     public class AccountGroupDto
@@ -54,6 +58,9 @@ namespace MyApp.Api.DTOs
         /// <summary>Σ of account opening balances under this node (debit-positive),
         /// for a quick subtotal in the tree.</summary>
         public decimal OpeningBalanceTotal { get; set; }
+        /// <summary>Σ of LIVE account balances under this node (debit-positive) —
+        /// opening + ledger movement. The figure the tree displays.</summary>
+        public decimal BalanceTotal { get; set; }
     }
 
     /// <summary>The whole CoA for a company, split by statement (the two columns).</summary>

@@ -114,6 +114,25 @@ namespace MyApp.Api.Controllers
         [HasPermission("accounting.payments.delete")]
         public Task<IActionResult> DeletePayment(int id) => Delete(id, PaymentDirection.Payment);
 
+        /// <summary>Cheque/PDC lifecycle: advance ChequeStatus (Pending →
+        /// Deposited → Cleared / Bounced) without a full document edit.
+        /// Direction-agnostic; anyone who can record either direction can
+        /// maintain the cheque register.</summary>
+        [HttpPatch("{id}/cheque-status")]
+        [HasAnyPermission("accounting.receipts.create", "accounting.payments.create")]
+        public async Task<IActionResult> SetChequeStatus(int id, [FromBody] UpdateChequeStatusDto dto)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            try
+            {
+                var updated = await _service.SetChequeStatusAsync(id, dto.Status);
+                return updated == null ? NotFound() : Ok(updated);
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
         // ── Shared implementations ────────────────────────────────────────────
 
         private async Task<ActionResult<PagedResult<PaymentDto>>> GetPaged(

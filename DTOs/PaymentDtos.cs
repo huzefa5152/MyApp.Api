@@ -88,4 +88,11 @@ namespace MyApp.Api.DTOs
         public int? AccountId { get; set; }
         public decimal Amount { get; set; }
     }
+
+    /// <summary>Cheque lifecycle update (PDC register): Pending, Deposited,
+    /// Cleared or Bounced.</summary>
+    public class UpdateChequeStatusDto
+    {
+        public string Status { get; set; } = "";
+    }
 }

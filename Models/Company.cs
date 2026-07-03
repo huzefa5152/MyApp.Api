@@ -29,6 +29,18 @@
         public int StartingCreditNoteNumber { get; set; } = 1;
         public int CurrentCreditNoteNumber { get; set; }
 
+        // ── General Ledger (Phase B posting engine) ──
+        // Master switch: when true, invoices/bills/payments/transfers post
+        // balanced journal entries at save time and the Chart of Accounts
+        // shows live balances. Defaults FALSE so existing tenants are
+        // untouched until an operator runs the GL enable + backfill flow.
+        public bool GlPostingEnabled { get; set; }
+
+        // Period lock: GL-affecting documents dated ON OR BEFORE this date
+        // can't be created/edited/deleted while posting is enabled (the
+        // reference product's Lock Date). Null = no lock.
+        public DateTime? GlLockDate { get; set; }
+
         // FBR Digital Invoicing
         // Master switch for the whole FBR flow on this company. When false,
         // the Validate/Submit-to-FBR buttons are hidden, challans don't get

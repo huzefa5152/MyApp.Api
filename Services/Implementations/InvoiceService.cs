@@ -32,6 +32,9 @@ namespace MyApp.Api.Services.Implementations
         // HSCode" combos with a clear message instead of silently
         // falling back to the company default.
         private readonly ITaxMappingEngine _taxEngine;
+        // Phase B: every invoice save/cancel/delete re-syncs the bill's GL
+        // journal entry (no-op unless the company enabled GL posting).
+        private readonly IPostingService _posting;
         private readonly ILogger<InvoiceService> _logger;
 
         public InvoiceService(
@@ -44,6 +47,7 @@ namespace MyApp.Api.Services.Implementations
             IAuditLogService auditLog,
             IStockService stock,
             ITaxMappingEngine taxEngine,
+            IPostingService posting,
             ILogger<InvoiceService> logger)
         {
             _invoiceRepo = invoiceRepo;
@@ -56,6 +60,7 @@ namespace MyApp.Api.Services.Implementations
             _auditLog = auditLog;
             _stock = stock;
             _taxEngine = taxEngine;
+            _posting = posting;
         }
 
         /// <summary>
@@ -704,6 +709,8 @@ namespace MyApp.Api.Services.Implementations
 
                     // 2026-05-12: stock-out on save (create path).
                     await _stock.SyncInvoiceStockMovementsAsync(created);
+                    // GL posting (Dr AR / Cr Sales + Output tax) — same tx.
+                    await _posting.PostInvoiceAsync(created);
                     await transaction.CommitAsync();
 
                     // Reload with includes
@@ -1016,6 +1023,8 @@ namespace MyApp.Api.Services.Implementations
 
                     // 2026-05-12: stock-out on save (standalone create path).
                     await _stock.SyncInvoiceStockMovementsAsync(created);
+                    // GL posting (Dr AR / Cr Sales + Output tax) — same tx.
+                    await _posting.PostInvoiceAsync(created);
                     await transaction.CommitAsync();
 
                     var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
@@ -1267,6 +1276,8 @@ namespace MyApp.Api.Services.Implementations
                 // 2026-05-12: stock-out on save (full-edit path).
                 // See UpdateItemTypesAsync for rationale.
                 await _stock.SyncInvoiceStockMovementsAsync(invoice);
+                // GL re-post: totals changed → replace the bill's journal entry.
+                await _posting.PostInvoiceAsync(invoice);
                 await transaction.CommitAsync();
 
                 var reloaded = await _invoiceRepo.GetByIdAsync(id);
@@ -1659,6 +1670,8 @@ namespace MyApp.Api.Services.Implementations
                 // before this code shipped) gets them now. No-op when
                 // inventory tracking is off for the company.
                 await _stock.SyncInvoiceStockMovementsAsync(invoice);
+                // GL re-post: qty edits change totals → replace the entry.
+                await _posting.PostInvoiceAsync(invoice);
                 await transaction.CommitAsync();
 
                 // ── Audit log (after commit so we don't log a rolled-back op) ──
@@ -1890,9 +1903,16 @@ namespace MyApp.Api.Services.Implementations
 
             var companyId = invoice.CompanyId;
 
+            // Period-close guard: a locked bill can't be deleted.
+            await _posting.AssertPeriodOpenAsync(companyId, invoice.Date);
+
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                // The ledger entry dies with its document.
+                await _posting.RemoveForSourceAsync(companyId,
+                    Models.Accounting.SourceDocType.Invoice, invoice.Id);
+
                 // Revert linked challans from "Invoiced" → their billable state.
                 // - Imported challans revert to "Imported" (or "No PO" if PO was cleared)
                 // - Native challans revert to "Pending" (or "No PO")
@@ -2016,6 +2036,9 @@ namespace MyApp.Api.Services.Implementations
                 invoice.CancelReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
 
                 await _context.SaveChangesAsync();
+                // GL: a cancelled bill's journal entry is removed (the engine
+                // treats IsCancelled as "no posting").
+                await _posting.PostInvoiceAsync(invoice);
                 await transaction.CommitAsync();
             }
             catch (Exception ex)
@@ -2332,6 +2355,9 @@ namespace MyApp.Api.Services.Implementations
                     // move) — Credit Note → IN (return), Debit Note → OUT
                     // (extra goods). Value-only notes leave inventory alone.
                     await _stock.SyncInvoiceStockMovementsAsync(created);
+                    // GL: Credit Note reverses the sale (Dr Sales+Tax / Cr AR);
+                    // Debit Note posts in the sale direction.
+                    await _posting.PostInvoiceAsync(created);
                     await transaction.CommitAsync();
 
                     try

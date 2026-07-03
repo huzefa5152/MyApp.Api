@@ -35,5 +35,9 @@ namespace MyApp.Api.Models.Accounting
         ProductionWip = 11,
         EmployeeClearing = 12,
         Rounding = 13,
+        /// <summary>Catch-all the posting engine falls back to when a role
+        /// account is missing — imbalances surface visibly instead of failing
+        /// the business operation (the reference product's Suspense account).</summary>
+        Suspense = 14,
     }
 }

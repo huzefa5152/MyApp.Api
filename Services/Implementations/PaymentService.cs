@@ -12,12 +12,15 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly IPaymentRepository _repo;
         private readonly AppDbContext _context;
+        private readonly IPostingService _posting;
         private readonly ILogger<PaymentService> _logger;
 
-        public PaymentService(IPaymentRepository repo, AppDbContext context, ILogger<PaymentService> logger)
+        public PaymentService(IPaymentRepository repo, AppDbContext context,
+            IPostingService posting, ILogger<PaymentService> logger)
         {
             _repo = repo;
             _context = context;
+            _posting = posting;
             _logger = logger;
         }
 
@@ -97,6 +100,9 @@ namespace MyApp.Api.Services.Implementations
                 if (a.PurchaseBillId.HasValue) billIds.Add(a.PurchaseBillId.Value);
             }
 
+            // Period-close guard (GL lock date) before any writes.
+            await _posting.AssertPeriodOpenAsync(companyId, dto.Date == default ? PakistanClock.Today : dto.Date);
+
             // Cross-tenant guard: every referenced document must belong to this
             // company (never trust the ids in the body — CLAUDE.md §1/§4).
             var invoices = await _context.Invoices
@@ -107,6 +113,10 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("One or more invoices do not belong to this company.");
             if (bills.Any(b => b.CompanyId != companyId) || bills.Count != billIds.Distinct().Count())
                 throw new InvalidOperationException("One or more purchase bills do not belong to this company.");
+
+            // Direct-line accounts must belong to this company too (the column
+            // now carries a real FK; never trust body ids).
+            await AssertAllocationAccountsAsync(companyId, dto);
 
             // Bank/cash account (the money's destination/source) must belong to
             // this company and be a BankCash account — never trust the id in the
@@ -214,6 +224,10 @@ namespace MyApp.Api.Services.Implementations
                 foreach (var id in billIds.Distinct()) await RecomputePurchaseBillAsync(id);
                 await _context.SaveChangesAsync();
 
+                // GL posting (no-op unless the company enabled it) — same tx,
+                // so the document and its ledger entry commit or roll back together.
+                await _posting.PostPaymentAsync(payment);
+
                 await tx.CommitAsync();
             }
             catch
@@ -237,6 +251,12 @@ namespace MyApp.Api.Services.Implementations
             if (dto.Allocations == null || dto.Allocations.Count == 0)
                 throw new InvalidOperationException("A payment needs at least one allocation line.");
 
+            // Period-close guard: the payment can't move out of OR into a
+            // locked period, so check both the stored and the incoming date.
+            await _posting.AssertPeriodOpenAsync(companyId, payment.Date);
+            if (dto.Date != default)
+                await _posting.AssertPeriodOpenAsync(companyId, dto.Date);
+
             var invoiceIds = new List<int>();
             var billIds = new List<int>();
             foreach (var a in dto.Allocations)
@@ -253,6 +273,7 @@ namespace MyApp.Api.Services.Implementations
                 if (a.InvoiceId.HasValue) invoiceIds.Add(a.InvoiceId.Value);
                 if (a.PurchaseBillId.HasValue) billIds.Add(a.PurchaseBillId.Value);
             }
+            await AssertAllocationAccountsAsync(companyId, dto);
 
             var invoices = await _context.Invoices.Where(i => invoiceIds.Contains(i.Id)).ToListAsync();
             var bills = await _context.PurchaseBills.Where(b => billIds.Contains(b.Id)).ToListAsync();
@@ -346,6 +367,10 @@ namespace MyApp.Api.Services.Implementations
                 foreach (var bid in oldBillIds.Union(billIds).Distinct()) await RecomputePurchaseBillAsync(bid);
                 await _context.SaveChangesAsync();
 
+                // Re-post: the engine replaces this payment's journal entry so
+                // the ledger mirrors the edited allocations/date/bank account.
+                await _posting.PostPaymentAsync(payment);
+
                 await tx.CommitAsync();
             }
             catch
@@ -364,6 +389,9 @@ namespace MyApp.Api.Services.Implementations
             var payment = await _repo.GetByIdAsync(id);
             if (payment == null) return false;
 
+            // Period-close guard: a locked payment can't be deleted either.
+            await _posting.AssertPeriodOpenAsync(payment.CompanyId, payment.Date);
+
             // Capture the documents this payment touched BEFORE the cascade
             // removes the allocation rows, so we can reflow their paid totals.
             var invoiceIds = payment.Allocations.Where(a => a.InvoiceId.HasValue)
@@ -374,6 +402,10 @@ namespace MyApp.Api.Services.Implementations
             await using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
+                // The ledger entry dies with its document.
+                await _posting.RemoveForSourceAsync(payment.CompanyId,
+                    Models.Accounting.SourceDocType.Payment, payment.Id);
+
                 _context.Payments.Remove(payment); // allocations cascade
                 await _context.SaveChangesAsync();
 
@@ -389,6 +421,38 @@ namespace MyApp.Api.Services.Implementations
                 throw;
             }
             return true;
+        }
+
+        // ── Cheque lifecycle ──────────────────────────────────────────────────
+
+        public async Task<PaymentDto?> SetChequeStatusAsync(int id, string status)
+        {
+            var payment = await _repo.GetByIdAsync(id);
+            if (payment == null) return null;
+
+            if (string.IsNullOrWhiteSpace(payment.ChequeNumber) && payment.ChequeStatus == ChequeStatus.None)
+                throw new InvalidOperationException("This document is not a cheque payment.");
+            if (!Enum.TryParse<ChequeStatus>(status, true, out var parsed) || parsed == ChequeStatus.None)
+                throw new InvalidOperationException("Cheque status must be Pending, Deposited, Cleared or Bounced.");
+
+            payment.ChequeStatus = parsed;
+            await _context.SaveChangesAsync();
+            return await GetByIdAsync(id);
+        }
+
+        /// <summary>Direct-line allocation accounts (PaymentAllocation.AccountId)
+        /// must be active accounts of THIS company — the ids come from the
+        /// request body and now carry a real FK.</summary>
+        private async Task AssertAllocationAccountsAsync(int companyId, CreatePaymentDto dto)
+        {
+            var accountIds = dto.Allocations!
+                .Where(a => a.AccountId.HasValue)
+                .Select(a => a.AccountId!.Value).Distinct().ToList();
+            if (accountIds.Count == 0) return;
+            var ok = await _context.Accounts.AsNoTracking()
+                .CountAsync(a => accountIds.Contains(a.Id) && a.CompanyId == companyId && a.IsActive);
+            if (ok != accountIds.Count)
+                throw new InvalidOperationException("One or more allocation accounts do not belong to this company.");
         }
 
         // ── Recompute helpers ─────────────────────────────────────────────────

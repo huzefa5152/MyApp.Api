@@ -36,5 +36,9 @@ namespace MyApp.Api.Services.Interfaces
         /// <summary>Delete a payment (its allocations cascade) and recompute the
         /// previously-settled invoices'/bills' AmountPaid. Returns false if not found.</summary>
         Task<bool> DeleteAsync(int id);
+
+        /// <summary>Advance a cheque's lifecycle (Pending → Deposited → Cleared /
+        /// Bounced) without a full document edit — the PDC register action.</summary>
+        Task<PaymentDto?> SetChequeStatusAsync(int id, string status);
     }
 }

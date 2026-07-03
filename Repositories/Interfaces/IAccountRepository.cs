@@ -15,6 +15,11 @@ namespace MyApp.Api.Repositories.Interfaces
         Task<Account?> GetAccountByExternalRefAsync(int companyId, string externalRef);
 
         Task<bool> GroupHasChildrenAsync(int groupId);     // accounts OR sub-groups
+
+        /// <summary>True when anything references the account: journal lines,
+        /// payment allocations, payment bank-account links, or transfers.
+        /// Such accounts deactivate instead of deleting.</summary>
+        Task<bool> AccountHasActivityAsync(int accountId);
         Task<int> NextGroupPositionAsync(int companyId, FinancialStatement statement, int? parentGroupId);
         Task<int> NextAccountPositionAsync(int accountGroupId);
 

@@ -8,11 +8,13 @@ namespace MyApp.Api.Services.Implementations
     public class AccountService : IAccountService
     {
         private readonly IAccountRepository _repo;
+        private readonly IGeneralLedgerService _gl;
         private readonly ILogger<AccountService> _logger;
 
-        public AccountService(IAccountRepository repo, ILogger<AccountService> logger)
+        public AccountService(IAccountRepository repo, IGeneralLedgerService gl, ILogger<AccountService> logger)
         {
             _repo = repo;
+            _gl = gl;
             _logger = logger;
         }
 
@@ -22,6 +24,10 @@ namespace MyApp.Api.Services.Implementations
         {
             var groups = await _repo.GetGroupsAsync(companyId);
             var accounts = await _repo.GetAccountsAsync(companyId);
+            // Live balances = signed opening + Σ(journal Dr−Cr) per account.
+            // Until GL posting is enabled the movement is zero, so this equals
+            // the signed opening balance and the tree behaves as before.
+            var balances = await _gl.GetAccountBalancesAsync(companyId);
             var accountsByGroup = accounts.GroupBy(a => a.AccountGroupId)
                 .ToDictionary(g => g.Key, g => g.OrderBy(a => a.Position).ThenBy(a => a.Id).ToList());
             // Children keyed by NON-NULL parent id (a Dictionary can't hold a null
@@ -29,6 +35,14 @@ namespace MyApp.Api.Services.Implementations
             var childrenByParent = groups.Where(g => g.ParentGroupId.HasValue)
                 .GroupBy(g => g.ParentGroupId!.Value)
                 .ToDictionary(g => g.Key, g => g.OrderBy(x => x.Position).ThenBy(x => x.Id).ToList());
+
+            AccountDto ToDtoWithBalance(Account a)
+            {
+                var dto = ToDto(a);
+                dto.Balance = balances.GetValueOrDefault(a.Id,
+                    a.OpeningBalanceIsDebit ? a.OpeningBalance : -a.OpeningBalance);
+                return dto;
+            }
 
             CoaGroupNode Build(AccountGroup g)
             {
@@ -42,7 +56,7 @@ namespace MyApp.Api.Services.Implementations
                     IsSystem = g.IsSystem,
                     ExternalRef = g.ExternalRef,
                     Accounts = accountsByGroup.TryGetValue(g.Id, out var accs)
-                        ? accs.Select(ToDto).ToList() : new(),
+                        ? accs.Select(ToDtoWithBalance).ToList() : new(),
                     Children = childrenByParent.TryGetValue(g.Id, out var kids)
                         ? kids.Select(Build).ToList() : new(),
                 };
@@ -50,6 +64,9 @@ namespace MyApp.Api.Services.Implementations
                 node.OpeningBalanceTotal =
                     node.Accounts.Sum(a => a.OpeningBalanceIsDebit ? a.OpeningBalance : -a.OpeningBalance)
                     + node.Children.Sum(c => c.OpeningBalanceTotal);
+                node.BalanceTotal =
+                    node.Accounts.Sum(a => a.Balance)
+                    + node.Children.Sum(c => c.BalanceTotal);
                 return node;
             }
 
@@ -62,8 +79,14 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
-        public async Task<List<AccountDto>> GetAccountsFlatAsync(int companyId) =>
-            (await _repo.GetAccountsAsync(companyId)).Select(ToDto).ToList();
+        public async Task<List<AccountDto>> GetAccountsFlatAsync(int companyId)
+        {
+            // Same live balances the tree carries — the flat list feeds pickers
+            // and scripts that read Balance directly.
+            var balances = await _gl.GetAccountBalancesAsync(companyId);
+            return (await _repo.GetAccountsAsync(companyId))
+                .Select(a => WithBalance(ToDto(a), a, balances)).ToList();
+        }
 
         public async Task<List<AccountDto>> GetBankCashAccountsAsync(int companyId)
         {
@@ -72,11 +95,19 @@ namespace MyApp.Api.Services.Implementations
             bool IsBankCashGroup(int gid) =>
                 groupNameById.TryGetValue(gid, out var n) && (n.Contains("bank") || n.Contains("cash"));
 
+            var balances = await _gl.GetAccountBalancesAsync(companyId);
             return (await _repo.GetAccountsAsync(companyId))
                 .Where(a => a.IsActive
                          && a.AccountType == AccountType.Asset
                          && (a.ControlType == ControlType.BankCash || IsBankCashGroup(a.AccountGroupId)))
-                .Select(ToDto).ToList();
+                .Select(a => WithBalance(ToDto(a), a, balances)).ToList();
+        }
+
+        private static AccountDto WithBalance(AccountDto dto, Account a, Dictionary<int, decimal> balances)
+        {
+            dto.Balance = balances.GetValueOrDefault(a.Id,
+                a.OpeningBalanceIsDebit ? a.OpeningBalance : -a.OpeningBalance);
+            return dto;
         }
 
         public async Task<AccountDto?> GetAccountByIdAsync(int id)
@@ -211,7 +242,8 @@ namespace MyApp.Api.Services.Implementations
                 account.OpeningBalanceIsDebit = dto.OpeningBalanceIsDebit;
                 account.DefaultLineDescription = Trimmed(dto.DefaultLineDescription);
                 account.DefaultTaxRateId = dto.DefaultTaxRateId;
-                account.IsControlAccount = dto.IsControlAccount;
+                // IsControlAccount derives from ControlType server-side; UI payloads never sent the flag.
+                account.IsControlAccount = control != ControlType.None;
                 account.ControlType = control;
                 await _repo.SaveAsync();
                 return ToDto(account);
@@ -230,7 +262,8 @@ namespace MyApp.Api.Services.Implementations
                 OpeningBalanceIsDebit = dto.OpeningBalanceIsDebit,
                 DefaultLineDescription = Trimmed(dto.DefaultLineDescription),
                 DefaultTaxRateId = dto.DefaultTaxRateId,
-                IsControlAccount = dto.IsControlAccount,
+                // IsControlAccount derives from ControlType server-side; UI payloads never sent the flag.
+                IsControlAccount = control != ControlType.None,
                 ControlType = control,
                 IsActive = true,
                 Position = await _repo.NextAccountPositionAsync(group.Id),
@@ -284,6 +317,11 @@ namespace MyApp.Api.Services.Implementations
             // (design §7). Operators deactivate instead.
             if (a.IsControlAccount)
                 throw new InvalidOperationException("Control accounts can't be deleted — deactivate the account instead.");
+            // An account with ledger/payment/transfer history can't be deleted
+            // either (the FKs would reject it with a raw 500 anyway) — surface
+            // a friendly message and point at deactivation.
+            if (await _repo.AccountHasActivityAsync(id))
+                throw new InvalidOperationException("This account has transactions — deactivate it instead of deleting.");
             await _repo.DeleteAccountAsync(a);
             return true;
         }

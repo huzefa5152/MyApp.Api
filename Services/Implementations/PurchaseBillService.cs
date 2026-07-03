@@ -18,12 +18,17 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly AppDbContext _context;
         private readonly IStockService _stock;
+        // Phase B: bill saves/deletes re-sync the bill's GL journal entry
+        // (no-op unless the company enabled GL posting).
+        private readonly IPostingService _posting;
         private readonly ILogger<PurchaseBillService> _logger;
 
-        public PurchaseBillService(AppDbContext context, IStockService stock, ILogger<PurchaseBillService> logger)
+        public PurchaseBillService(AppDbContext context, IStockService stock,
+            IPostingService posting, ILogger<PurchaseBillService> logger)
         {
             _context = context;
             _stock = stock;
+            _posting = posting;
             _logger = logger;
         }
 
@@ -385,6 +390,8 @@ namespace MyApp.Api.Services.Implementations
                     notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplier.Name}");
             }
 
+            // GL posting (Dr Inventory/Purchases + Input tax / Cr AP) — same tx.
+            await _posting.PostPurchaseBillAsync(bill);
             await tx.CommitAsync();
             return (await GetByIdAsync(bill.Id))!;
             }
@@ -540,6 +547,8 @@ namespace MyApp.Api.Services.Implementations
                     notes: $"Purchase Bill #{bill.PurchaseBillNumber} (edited)");
             }
 
+            // GL re-post: totals changed → replace the bill's journal entry.
+            await _posting.PostPurchaseBillAsync(bill);
             await tx.CommitAsync();
             return await GetByIdAsync(bill.Id);
             }
@@ -608,6 +617,9 @@ namespace MyApp.Api.Services.Implementations
                 .FirstOrDefaultAsync(p => p.Id == id);
             if (bill == null) return false;
 
+            // Period-close guard: a locked bill can't be deleted.
+            await _posting.AssertPeriodOpenAsync(bill.CompanyId, bill.Date);
+
             // Reverse the bill's actual posted stock before deleting its rows.
             // Compensating OUT entries are written rather than the IN rows
             // being deleted — keeps the movement log immutable. Reverses the
@@ -615,6 +627,10 @@ namespace MyApp.Api.Services.Implementations
             // whose ItemType was classified after creation isn't over-reversed.
             await ReversePostedStockAsync(bill, bill.Date,
                 $"Reversal — Purchase Bill #{bill.PurchaseBillNumber} deleted");
+
+            // The ledger entry dies with its document.
+            await _posting.RemoveForSourceAsync(bill.CompanyId,
+                Models.Accounting.SourceDocType.PurchaseBill, bill.Id);
 
             _context.PurchaseBills.Remove(bill);
             await _context.SaveChangesAsync();

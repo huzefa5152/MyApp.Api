@@ -42,6 +42,12 @@ namespace MyApp.Api.Repositories.Implementations
             await _context.Accounts.AnyAsync(a => a.AccountGroupId == groupId)
             || await _context.AccountGroups.AnyAsync(g => g.ParentGroupId == groupId);
 
+        public async Task<bool> AccountHasActivityAsync(int accountId) =>
+            await _context.JournalLines.AnyAsync(l => l.AccountId == accountId)
+            || await _context.PaymentAllocations.AnyAsync(a => a.AccountId == accountId)
+            || await _context.Payments.AnyAsync(p => p.BankAccountId == accountId)
+            || await _context.AccountTransfers.AnyAsync(t => t.FromAccountId == accountId || t.ToAccountId == accountId);
+
         public async Task<int> NextGroupPositionAsync(int companyId, FinancialStatement statement, int? parentGroupId)
         {
             var q = _context.AccountGroups.Where(g => g.CompanyId == companyId && g.Statement == statement);

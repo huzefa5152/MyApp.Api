@@ -46,6 +46,16 @@ namespace MyApp.Api.Data
         public DbSet<MyApp.Api.Models.Accounting.AccountGroup> AccountGroups { get; set; }
         public DbSet<MyApp.Api.Models.Accounting.Account> Accounts { get; set; }
 
+        // ── General Ledger (Phase B posting engine — design §11.1, additive) ──
+        // One balanced JournalEntry per source document (or manual journal),
+        // Dr/Cr detail in JournalLines. All account balances are live queries
+        // over these rows; nothing is denormalized.
+        public DbSet<MyApp.Api.Models.Accounting.JournalEntry> JournalEntries { get; set; }
+        public DbSet<MyApp.Api.Models.Accounting.JournalLine> JournalLines { get; set; }
+
+        // ── Inter-account transfers (bank↔cash movement, no contact) ──
+        public DbSet<MyApp.Api.Models.Accounting.AccountTransfer> AccountTransfers { get; set; }
+
         // ── Unified attachments + document folders (additive) ──
         // One Attachment row per uploaded file (bytes on disk). A Folder is a
         // per-company named container; an attachment may also/instead be linked
@@ -675,8 +685,23 @@ namespace MyApp.Api.Data
                 .OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
                 .Property(a => a.Amount).HasPrecision(18, 2);
-            // AccountId (direct income/expense line) has NO FK yet — the Accounts
-            // table arrives in the Chart-of-Accounts phase; wire the FK then.
+            // AccountId (direct income/expense line) → Accounts, Restrict: an
+            // account referenced by allocation lines can't be hard-deleted
+            // (AccountService pre-checks and returns a friendly message). The
+            // migration NULLs any dangling values before adding the constraint.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasOne<MyApp.Api.Models.Accounting.Account>().WithMany()
+                .HasForeignKey(a => a.AccountId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Payment.BankAccountId → Accounts, Restrict (same rationale). The
+            // migration backfills it from BankAccountName ↔ Account.Code (the
+            // ETL stored the legacy GL code as the free-text name).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .HasOne<MyApp.Api.Models.Accounting.Account>().WithMany()
+                .HasForeignKey(p => p.BankAccountId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
                 .HasIndex(a => a.InvoiceId);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
@@ -729,6 +754,77 @@ namespace MyApp.Api.Data
                 .HasFilter("[Code] IS NOT NULL");
             modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
                 .HasIndex(a => a.AccountGroupId);
+
+            // ── General Ledger (design §11.1) ──────────────────────────────────
+            // Entry → Company Restrict (ledger history can't cascade away).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .HasOne(e => e.Company).WithMany()
+                .HasForeignKey(e => e.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .Property(e => e.Narration).HasMaxLength(500);
+            // JE-#### sequence per company (NumberAllocationRetry on collision).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .HasIndex(e => new { e.CompanyId, e.EntryNo }).IsUnique();
+            // Idempotency: at most ONE entry per source document. Filtered so
+            // manual journals (SourceDocId null) are exempt.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .HasIndex(e => new { e.CompanyId, e.SourceDocType, e.SourceDocId })
+                .IsUnique()
+                .HasFilter("[SourceDocId] IS NOT NULL");
+            // Balance queries filter (company, date-range) then group by account.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .HasIndex(e => new { e.CompanyId, e.Date });
+
+            // Line → Entry Cascade (detail dies with its entry); → Account
+            // Restrict (an account with ledger history can't be hard-deleted —
+            // AccountService pre-checks for a friendly message).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasOne(l => l.JournalEntry).WithMany(e => e.Lines)
+                .HasForeignKey(l => l.JournalEntryId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasOne(l => l.Account).WithMany()
+                .HasForeignKey(l => l.AccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .Property(l => l.Debit).HasPrecision(19, 4);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .Property(l => l.Credit).HasPrecision(19, 4);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .Property(l => l.PartyType).HasMaxLength(20);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .Property(l => l.Description).HasMaxLength(300);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasIndex(l => l.AccountId);
+            // Party statements / control-account drill-down (soft refs, indexed).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasIndex(l => l.InvoiceId);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasIndex(l => l.PurchaseBillId);
+
+            // ── Inter-account transfers ────────────────────────────────────────
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountTransfer>()
+                .HasOne(t => t.Company).WithMany()
+                .HasForeignKey(t => t.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Both account FKs Restrict + NO nav cascade: a bank/cash account
+            // with transfer history can't be deleted (friendly pre-check in
+            // AccountService).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountTransfer>()
+                .HasOne(t => t.FromAccount).WithMany()
+                .HasForeignKey(t => t.FromAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountTransfer>()
+                .HasOne(t => t.ToAccount).WithMany()
+                .HasForeignKey(t => t.ToAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountTransfer>()
+                .Property(t => t.Amount).HasPrecision(18, 2);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountTransfer>()
+                .Property(t => t.Description).HasMaxLength(300);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountTransfer>()
+                .HasIndex(t => new { t.CompanyId, t.Number }).IsUnique();
 
             // ── Data-migration traceability (design §13) ──────────────────────
             // ExternalRef carries the legacy source key on imported masters so the

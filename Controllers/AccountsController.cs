@@ -21,15 +21,17 @@ namespace MyApp.Api.Controllers
     {
         private readonly IAccountService _service;
         private readonly ICoaPresetSeeder _seeder;
+        private readonly IGeneralLedgerService _gl;
         private readonly ICompanyAccessGuard _access;
         private readonly ILogger<AccountsController> _logger;
 
         public AccountsController(
-            IAccountService service, ICoaPresetSeeder seeder,
+            IAccountService service, ICoaPresetSeeder seeder, IGeneralLedgerService gl,
             ICompanyAccessGuard access, ILogger<AccountsController> logger)
         {
             _service = service;
             _seeder = seeder;
+            _gl = gl;
             _access = access;
             _logger = logger;
         }
@@ -61,6 +63,22 @@ namespace MyApp.Api.Controllers
         [AuthorizeCompany]
         public async Task<ActionResult<List<AccountDto>>> GetBankCash(int companyId)
             => Ok(await _service.GetBankCashAccountsAsync(companyId));
+
+        /// <summary>Account ledger drill-down: the journal lines that hit this
+        /// account (running balance included), newest window paged. Tenant
+        /// access is asserted against the account's own company.</summary>
+        [HttpGet("{id}/ledger")]
+        [HasPermission("accounting.coa.view")]
+        public async Task<ActionResult<AccountLedgerDto>> GetLedger(
+            int id, [FromQuery] DateTime? from = null, [FromQuery] DateTime? to = null,
+            [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
+        {
+            var existing = await _service.GetAccountByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            var ledger = await _gl.GetAccountLedgerAsync(id, from, to, page, pageSize);
+            return ledger == null ? NotFound() : Ok(ledger);
+        }
 
         // ── Groups ──────────────────────────────────────────────────────────────
 
