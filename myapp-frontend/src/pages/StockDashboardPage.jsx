@@ -705,8 +705,11 @@ export default function StockDashboardPage() {
 }
 
 // Per-item movement history shown inside an expanded On-Hand row / card.
-// Lists every movement (IN, OUT, reversal, adjustment, opening) newest-first
-// with a running on-hand so the operator can see exactly where each unit went.
+// Movements are GROUPED BY SOURCE DOCUMENT (one row per invoice / purchase
+// bill / receipt with the summed quantity across its line items) — a bill
+// with 3 lines of this item shows one row, not three. Adjustments, opening
+// stock and document-less reversals stay individual. Newest-first with a
+// running on-hand computed after each whole document.
 function DrillPanel({ rows, loading, uom }) {
   if (loading) {
     return <div style={drillStyles.state}><div style={styles.spinner} /></div>;
@@ -720,25 +723,45 @@ function DrillPanel({ rows, loading, uom }) {
 
   const fmtQty = (q) => Number(q).toLocaleString(undefined, { maximumFractionDigits: 4 });
 
-  // rows arrive newest-first from the API. Compute a running balance per row
-  // by walking oldest→newest, then display newest-first.
+  // rows arrive newest-first from the API. Walk oldest→newest computing the
+  // running balance, merging CONSECUTIVE rows that belong to the same source
+  // document (+ direction, defensively) into one summed entry whose balance
+  // is the on-hand AFTER the whole document. Rows without a SourceId
+  // (adjustments, opening stock, deleted-document reversals) never merge.
   const oldestFirst = [...rows].reverse();
   let bal = 0;
-  const withBalance = oldestFirst.map((m) => {
+  const grouped = [];
+  for (const m of oldestFirst) {
     bal += m.direction === "In" ? Number(m.quantity) : -Number(m.quantity);
-    return { ...m, balance: bal };
-  });
-  withBalance.reverse();
+    const key = m.sourceId != null ? `${m.sourceType}:${m.sourceId}:${m.direction}` : `row:${m.id}`;
+    const last = grouped[grouped.length - 1];
+    if (last && last.groupKey === key) {
+      last.quantity = Number(last.quantity) + Number(m.quantity);
+      last.balance = bal;
+      last.lineCount += 1;
+      last.id = m.id;                     // newest id keeps the React key stable
+      last.movementDate = m.movementDate; // same document date; keep newest
+    } else {
+      grouped.push({ ...m, groupKey: key, quantity: Number(m.quantity), balance: bal, lineCount: 1 });
+    }
+  }
+  grouped.reverse();
 
   return (
     <div style={drillStyles.wrap}>
       <div style={drillStyles.heading}>
-        <MdHistory size={15} /> Movement history ({rows.length})
+        <MdHistory size={15} /> Movement history ({grouped.length}{grouped.length !== rows.length ? ` documents · ${rows.length} line movements` : ""})
       </div>
       <div style={drillStyles.list}>
-        {withBalance.map((m) => {
+        {grouped.map((m) => {
           const isIn = m.direction === "In";
           const isAdjust = m.sourceType === "Adjustment";
+          // Grouped rows: keep the note's document prefix, drop the per-line
+          // detail (each line carried its own qty breakdown), and say how
+          // many line items were summed.
+          const noteText = m.lineCount > 1
+            ? `${(m.notes || "").split(" (")[0]}${m.notes ? " — " : ""}${m.lineCount} line items summed`
+            : m.notes;
           return (
             <div key={m.id} style={drillStyles.row}>
               <div style={drillStyles.rowMain}>
@@ -754,7 +777,7 @@ function DrillPanel({ rows, loading, uom }) {
                 <span style={drillStyles.date}>{new Date(m.movementDate).toLocaleDateString()}</span>
                 <span style={drillStyles.bal}>bal {fmtQty(m.balance)}</span>
               </div>
-              {m.notes && <div style={drillStyles.notes}>{m.notes}</div>}
+              {noteText && <div style={drillStyles.notes}>{noteText}</div>}
             </div>
           );
         })}
