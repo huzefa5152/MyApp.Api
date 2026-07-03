@@ -57,12 +57,20 @@ namespace MyApp.Api.DTOs
         public string? NoteReason { get; set; }
         /// <summary>Remarks (required by FBR when reason is "Others").</summary>
         public string? NoteReasonRemarks { get; set; }
+        /// <summary>Notes only: whether this note moves inventory (Credit Note → IN, Debit Note → OUT). Null on sale invoices.</summary>
+        public bool? NoteAffectsStock { get; set; }
         /// <summary>
-        /// If this invoice has a LIVE (non-cancelled) Credit Note against it,
-        /// the note's bill number — so the UI can hide the Reverse button and
-        /// show "Reversed by CN #N". Null when no credit note exists yet.
+        /// If this invoice has a LIVE (non-cancelled) CREDIT NOTE (return /
+        /// reversal) against it, that note's number in the credit-note
+        /// sequence — the UI hides the Reverse action and shows "Reversed by
+        /// CN #N". Null when none exists.
         /// </summary>
-        public int? ReversedByInvoiceNumber { get; set; }
+        public int? ReversedByCreditNoteNumber { get; set; }
+        /// <summary>
+        /// If this invoice has a LIVE DEBIT NOTE (upward adjustment) against
+        /// it, that note's number in the debit-note sequence. Null when none.
+        /// </summary>
+        public int? AdjustedByDebitNoteNumber { get; set; }
         /// <summary>
         /// True when every item has HSCode + SaleType + UOM (either FbrUOMId or a non-empty UOM string),
         /// meaning the bill has enough data to be validated/submitted to FBR.
@@ -269,15 +277,28 @@ namespace MyApp.Api.DTOs
         /// <summary>The FBR-submitted invoice this note references.</summary>
         public int OriginalInvoiceId { get; set; }
         /// <summary>
-        /// 9 = Debit Note (the reference-note type FBR allows this taxpayer — the
-        /// return/reduction instrument; default). 10 = Credit Note (not offered
-        /// in the UI; FBR rejects it for wholesalers).
+        /// 10 = CREDIT NOTE — the return / reversal / reduction document
+        /// (goods returned, cancellation, post-sale discount). 9 = DEBIT NOTE
+        /// — the upward adjustment (undercharge, rate change, extra goods).
+        /// Each type runs its own numbering sequence.
         /// </summary>
-        public int DocumentType { get; set; } = 9;
-        /// <summary>FBR reason (e.g. "Goods Returned", "Order Cancellation", "Price Increase", "Others"). Required (0027).</summary>
+        public int DocumentType { get; set; } = 10;
+        /// <summary>
+        /// FBR reason — one of IRIS's enumerated values: "Cancellation of
+        /// supply", "Return of goods", "Change in nature of supply", "Change
+        /// in value of supply", "Change in amount of tax", "Others",
+        /// "Adjustment given to Steel Melters". Required (0027).
+        /// </summary>
         public string? Reason { get; set; }
         /// <summary>Remarks — required when <see cref="Reason"/> is "Others" (0028).</summary>
         public string? Remarks { get; set; }
+        /// <summary>
+        /// Whether the note moves inventory (Credit Note → stock IN, Debit
+        /// Note → stock OUT). Null = derive from the reason: goods-moving
+        /// reasons ("Return of goods", "Cancellation of supply") default
+        /// true for credit notes; value-only reasons default false.
+        /// </summary>
+        public bool? AffectsStock { get; set; }
         /// <summary>
         /// Optional note date. Defaults to today, clamped to be ≥ the original
         /// invoice date. FBR also enforces a 180-day ceiling (0034) at submit.
@@ -297,6 +318,13 @@ namespace MyApp.Api.DTOs
         public int InvoiceItemId { get; set; }
         /// <summary>Quantity to return/adjust on this line (must be &gt; 0 and ≤ the original line quantity).</summary>
         public decimal Quantity { get; set; }
+        /// <summary>
+        /// DEBIT NOTES ONLY: optional per-unit value for the adjustment — an
+        /// undercharge note carries the price DELTA per unit rather than the
+        /// original price. Ignored on credit notes (refunds are always at the
+        /// original invoice rate, per FBR 0068).
+        /// </summary>
+        public decimal? UnitPrice { get; set; }
     }
 
     /// <summary>

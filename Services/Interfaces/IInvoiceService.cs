@@ -5,10 +5,17 @@ namespace MyApp.Api.Services.Interfaces
     public interface IInvoiceService
     {
         Task<List<InvoiceDto>> GetByCompanyAsync(int companyId);
+        /// <summary>
+        /// Paged list. <paramref name="noteType"/> selects the document group:
+        /// null (default) = sale bills only; 9 = Debit Notes; 10 = Credit
+        /// Notes. The three groups run separate numbering sequences and are
+        /// never mixed in one list.
+        /// </summary>
         Task<PagedResult<InvoiceDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
-            DateTime? dateFrom = null, DateTime? dateTo = null);
+            DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? noteType = null);
         Task<InvoiceDto?> GetByIdAsync(int id);
         Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto);
         /// <summary>

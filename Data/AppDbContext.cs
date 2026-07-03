@@ -280,14 +280,39 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Invoice>()
                 .HasIndex(i => i.CompanyId);
 
-            // Composite index for paged invoice queries (WHERE CompanyId = X ORDER BY InvoiceNumber DESC).
-            // Audit C-8 (2026-05-13): unique on (CompanyId, InvoiceNumber)
-            // so two concurrent creates can't both land MAX(InvoiceNumber)+1
-            // — the loser gets a SQL 2601 / 2627 which the service catches
-            // and retries (next number is re-read in the retry loop).
+            // Credit Notes (10) and Debit Notes (9) each number from their
+            // OWN per-company sequence (Credit Note #1…, Debit Note #1…),
+            // separate from sale invoices and from each other. NoteKind is a
+            // PERSISTED computed discriminator so the uniqueness below can be
+            // scoped per kind without SQL Server's filtered-index limitations
+            // (no IN/OR in filter predicates).
             modelBuilder.Entity<Invoice>()
-                .HasIndex(i => new { i.CompanyId, i.InvoiceNumber })
+                .Property(i => i.NoteKind)
+                .HasComputedColumnSql(
+                    "CASE WHEN [DocumentType] = 9 THEN CAST(1 AS tinyint) WHEN [DocumentType] = 10 THEN CAST(2 AS tinyint) ELSE CAST(0 AS tinyint) END",
+                    stored: true);
+
+            // Composite index for paged invoice queries (WHERE CompanyId = X ORDER BY InvoiceNumber DESC).
+            // Audit C-8 (2026-05-13): unique so two concurrent creates can't
+            // both land MAX+1 — the loser gets a SQL 2601 / 2627 which the
+            // service catches and retries (next number is re-read in the
+            // retry loop). 2026-07-02: scoped by NoteKind so all three
+            // sequences (sale / debit note / credit note) can each start at 1
+            // without colliding.
+            modelBuilder.Entity<Invoice>()
+                .HasIndex(i => new { i.CompanyId, i.NoteKind, i.InvoiceNumber })
                 .IsUnique();
+
+            // One LIVE note PER TYPE per original invoice, enforced in the DB
+            // (the service's AnyAsync guard alone is check-then-insert racy —
+            // two concurrent Reverse clicks could both pass). A credit note
+            // (return) and a debit note (upward correction) may legitimately
+            // coexist on one invoice; two live credit notes may not (FBR 0064).
+            // Filtered to non-cancelled rows so voiding a note frees the slot.
+            modelBuilder.Entity<Invoice>()
+                .HasIndex(i => new { i.OriginalInvoiceId, i.DocumentType })
+                .IsUnique()
+                .HasFilter("[OriginalInvoiceId] IS NOT NULL AND [IsCancelled] = 0");
 
             modelBuilder.Entity<DeliveryChallan>()
                 .HasIndex(dc => dc.ClientId);

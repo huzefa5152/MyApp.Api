@@ -54,6 +54,10 @@ namespace MyApp.Api.Services.Implementations
             CurrentChallanNumber = c.CurrentChallanNumber,
             StartingInvoiceNumber = c.StartingInvoiceNumber,
             CurrentInvoiceNumber = c.CurrentInvoiceNumber,
+            StartingDebitNoteNumber = c.StartingDebitNoteNumber > 0 ? c.StartingDebitNoteNumber : 1,
+            CurrentDebitNoteNumber = c.CurrentDebitNoteNumber,
+            StartingCreditNoteNumber = c.StartingCreditNoteNumber > 0 ? c.StartingCreditNoteNumber : 1,
+            CurrentCreditNoteNumber = c.CurrentCreditNoteNumber,
             InvoiceNumberPrefix = c.InvoiceNumberPrefix,
             FbrProvinceCode = c.FbrProvinceCode,
             FbrBusinessActivity = c.FbrBusinessActivity,
@@ -125,6 +129,10 @@ namespace MyApp.Api.Services.Implementations
                 CurrentChallanNumber = 0,
                 StartingInvoiceNumber = dto.StartingInvoiceNumber,
                 CurrentInvoiceNumber = 0,
+                StartingDebitNoteNumber = dto.StartingDebitNoteNumber > 0 ? dto.StartingDebitNoteNumber : 1,
+                CurrentDebitNoteNumber = 0,
+                StartingCreditNoteNumber = dto.StartingCreditNoteNumber > 0 ? dto.StartingCreditNoteNumber : 1,
+                CurrentCreditNoteNumber = 0,
                 InvoiceNumberPrefix = dto.InvoiceNumberPrefix,
                 FbrProvinceCode = dto.FbrProvinceCode,
                 FbrBusinessActivity = dto.FbrBusinessActivity,
@@ -215,6 +223,21 @@ namespace MyApp.Api.Services.Implementations
             {
                 company.StartingInvoiceNumber = dto.StartingInvoiceNumber;
                 company.CurrentInvoiceNumber = 0;
+            }
+
+            // Note sequences — same lock per type: changeable only while the
+            // company has no notes of that type yet (mirrors invoices/challans).
+            var hasDebitNotes = await _invoiceRepo.HasNotesForCompanyAsync(id, 9);
+            if (!hasDebitNotes)
+            {
+                company.StartingDebitNoteNumber = dto.StartingDebitNoteNumber > 0 ? dto.StartingDebitNoteNumber : 1;
+                company.CurrentDebitNoteNumber = 0;
+            }
+            var hasCreditNotes = await _invoiceRepo.HasNotesForCompanyAsync(id, 10);
+            if (!hasCreditNotes)
+            {
+                company.StartingCreditNoteNumber = dto.StartingCreditNoteNumber > 0 ? dto.StartingCreditNoteNumber : 1;
+                company.CurrentCreditNoteNumber = 0;
             }
 
             var updated = await _repository.UpdateAsync(company);

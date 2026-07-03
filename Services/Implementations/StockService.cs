@@ -215,15 +215,57 @@ namespace MyApp.Api.Services.Implementations
             if (invoice == null) return;
             if (!await IsTrackingEnabledAsync(invoice.CompanyId)) return;
 
+            // 2026-07-02: an FBR-EXCLUDED document must hold NO stock
+            // movements — exclusion marks the bill as not a real supply
+            // (internal sample, duplicate, retained-but-void record), so any
+            // deduction it made is reversed here. Re-including the bill runs
+            // this sync again and re-inserts the movements below (only for
+            // classified item types with quantity, per the tracked-item gate).
+            // Cancelled bills are handled the same way defensively —
+            // CancelAsync purges too, but this keeps the invariant local.
+            if (invoice.IsFbrExcluded || invoice.IsCancelled)
+            {
+                var purge = await _context.StockMovements
+                    .Where(m => m.CompanyId  == invoice.CompanyId
+                             && m.SourceType == StockMovementSourceType.Invoice
+                             && m.SourceId   == invoice.Id)
+                    .ToListAsync();
+                if (purge.Count > 0)
+                {
+                    _context.StockMovements.RemoveRange(purge);
+                    await _context.SaveChangesAsync();
+                }
+                return;
+            }
+
+            // Notes move goods ONLY when NoteAffectsStock is set (industry
+            // pattern: physical return is separate from the financial
+            // adjustment — a discount/rate-change note must not touch
+            // inventory). A value-only note is purged like an excluded bill.
+            var isNote = invoice.DocumentType == 9 || invoice.DocumentType == 10;
+            if (isNote && invoice.NoteAffectsStock != true)
+            {
+                var valueOnly = await _context.StockMovements
+                    .Where(m => m.CompanyId  == invoice.CompanyId
+                             && m.SourceType == StockMovementSourceType.Invoice
+                             && m.SourceId   == invoice.Id)
+                    .ToListAsync();
+                if (valueOnly.Count > 0)
+                {
+                    _context.StockMovements.RemoveRange(valueOnly);
+                    await _context.SaveChangesAsync();
+                }
+                return;
+            }
+
             // Direction depends on the document type:
-            //   • Sale Invoice (4/null)          → OUT (goods leave)
-            //   • Debit Note (9) / Credit Note (10) → IN  (a return/reversal —
-            //     goods come back). For this taxpayer FBR exposes only the Debit
-            //     Note as the reference-note type, and per FBR 0067 it is capped
-            //     at the original, i.e. a return instrument.
+            //   • Sale Invoice (4/null) → OUT (goods leave)
+            //   • Credit Note (10)      → IN  (a sales return — goods come back)
+            //   • Debit Note (9)        → OUT (extra goods shipped beyond the
+            //     original invoice — the upward-adjustment case with goods)
             // Notes reuse SourceType.Invoice + SourceId=note.Id so the existing
             // cancel/delete purges (which filter by SourceId) clean them up.
-            var dir = (invoice.DocumentType == 9 || invoice.DocumentType == 10)
+            var dir = invoice.DocumentType == 10
                 ? StockMovementDirection.In
                 : StockMovementDirection.Out;
 

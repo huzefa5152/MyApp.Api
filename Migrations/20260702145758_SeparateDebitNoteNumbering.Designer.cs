@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyApp.Api.Data;
 
@@ -11,9 +12,11 @@ using MyApp.Api.Data;
 namespace MyApp.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260702145758_SeparateDebitNoteNumbering")]
+    partial class SeparateDebitNoteNumbering
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -214,9 +217,6 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("CurrentChallanNumber")
                         .HasColumnType("int");
 
-                    b.Property<int>("CurrentCreditNoteNumber")
-                        .HasColumnType("int");
-
                     b.Property<int>("CurrentDebitNoteNumber")
                         .HasColumnType("int");
 
@@ -285,9 +285,6 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("StartingChallanNumber")
-                        .HasColumnType("int");
-
-                    b.Property<int>("StartingCreditNoteNumber")
                         .HasColumnType("int");
 
                     b.Property<int>("StartingDebitNoteNumber")
@@ -1054,13 +1051,10 @@ namespace MyApp.Api.Migrations
                     b.Property<bool>("IsFbrExcluded")
                         .HasColumnType("bit");
 
-                    b.Property<bool?>("NoteAffectsStock")
-                        .HasColumnType("bit");
-
-                    b.Property<byte>("NoteKind")
+                    b.Property<bool>("IsReturnNote")
                         .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("tinyint")
-                        .HasComputedColumnSql("CASE WHEN [DocumentType] = 9 THEN CAST(1 AS tinyint) WHEN [DocumentType] = 10 THEN CAST(2 AS tinyint) ELSE CAST(0 AS tinyint) END", true);
+                        .HasColumnType("bit")
+                        .HasComputedColumnSql("CASE WHEN [DocumentType] IN (9, 10) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END", true);
 
                     b.Property<string>("NoteReason")
                         .HasColumnType("nvarchar(max)");
@@ -1090,11 +1084,11 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("CompanyId");
 
-                    b.HasIndex("OriginalInvoiceId", "DocumentType")
+                    b.HasIndex("OriginalInvoiceId")
                         .IsUnique()
                         .HasFilter("[OriginalInvoiceId] IS NOT NULL AND [IsCancelled] = 0");
 
-                    b.HasIndex("CompanyId", "NoteKind", "InvoiceNumber")
+                    b.HasIndex("CompanyId", "IsReturnNote", "InvoiceNumber")
                         .IsUnique();
 
                     b.ToTable("Invoices");

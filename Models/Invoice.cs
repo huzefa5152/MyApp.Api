@@ -28,7 +28,11 @@ namespace MyApp.Api.Models
         /// bulk buttons. Operators toggle this for bills they deliberately
         /// don't want to report to FBR (e.g. internal sample invoices,
         /// cancelled-but-retained records). The per-bill Validate / Submit
-        /// buttons still work — the flag only gates BULK actions.
+        /// buttons still work — the flag gates BULK actions.
+        /// 2026-07-02: the flag now ALSO gates inventory — an excluded bill
+        /// holds no stock movements (its deduction is reversed on exclude and
+        /// re-recorded on re-include, classified HS-coded lines only). The
+        /// toggle is rejected once the bill is FBR-submitted.
         /// </summary>
         public bool IsFbrExcluded { get; set; }
 
@@ -86,6 +90,28 @@ namespace MyApp.Api.Models
 
         /// <summary>Free-text remarks — required by FBR when the reason is "Others" (FBR 0028).</summary>
         public string? NoteReasonRemarks { get; set; }
+
+        /// <summary>
+        /// PERSISTED COMPUTED column (see AppDbContext): 0 = sale invoice,
+        /// 1 = Debit Note (DocumentType 9), 2 = Credit Note (DocumentType 10).
+        /// Each kind numbers from its own per-company sequence, so the
+        /// (CompanyId, InvoiceNumber) uniqueness is scoped per kind — the
+        /// unique index is (CompanyId, NoteKind, InvoiceNumber). Never set
+        /// from code.
+        /// </summary>
+        public byte NoteKind { get; private set; }
+
+        /// <summary>
+        /// Notes only (null on sale invoices): whether this note moves
+        /// inventory. Industry pattern (SAP returns-vs-credit-memo, Zoho
+        /// restock-vs-credit-only): a goods return (Credit Note, reason
+        /// "Return of goods"/"Cancellation of supply") re-enters stock; a
+        /// value-only adjustment (discount, rate change, undercharge Debit
+        /// Note) must NOT touch stock. Derived from the reason at creation,
+        /// operator-overridable. Direction when true: Credit Note → IN,
+        /// Debit Note → OUT (extra goods shipped).
+        /// </summary>
+        public bool? NoteAffectsStock { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

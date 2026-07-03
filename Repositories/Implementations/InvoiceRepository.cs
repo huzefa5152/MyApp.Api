@@ -17,13 +17,16 @@ namespace MyApp.Api.Repositories.Implementations
         public async Task<List<Invoice>> GetByCompanyAsync(int companyId)
         {
             // Default list excludes IsDemo bills — those are managed via the
-            // FBR Sandbox tab, not the regular Bills page.
+            // FBR Sandbox tab, not the regular Bills page — and Debit/Credit
+            // Notes (DocumentType 9/10), which live on the Return Invoices
+            // tab with their own numbering sequence.
             return await _context.Invoices
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans)
                 .Include(i => i.OriginalInvoice)
-                .Where(i => i.CompanyId == companyId && !i.IsDemo)
+                .Where(i => i.CompanyId == companyId && !i.IsDemo
+                         && i.DocumentType != 9 && i.DocumentType != 10)
                 .OrderByDescending(i => i.InvoiceNumber)
                 .ToListAsync();
         }
@@ -31,14 +34,21 @@ namespace MyApp.Api.Repositories.Implementations
         public async Task<(List<Invoice> Items, int TotalCount)> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
-            DateTime? dateFrom = null, DateTime? dateTo = null)
+            DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? noteType = null)
         {
+            // Three disjoint document groups, each with its own numbering
+            // sequence: sale bills (noteType null, default), Debit Notes
+            // (9) and Credit Notes (10). A row is never in two lists.
             var query = _context.Invoices
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans)
                 .Include(i => i.OriginalInvoice)
-                .Where(i => i.CompanyId == companyId && !i.IsDemo);
+                .Where(i => i.CompanyId == companyId && !i.IsDemo
+                         && (noteType == null
+                              ? (i.DocumentType != 9 && i.DocumentType != 10)
+                              : i.DocumentType == noteType));
 
             if (clientId.HasValue)
                 query = query.Where(i => i.ClientId == clientId.Value);
@@ -124,6 +134,12 @@ namespace MyApp.Api.Repositories.Implementations
         public async Task<bool> HasInvoicesForCompanyAsync(int companyId)
         {
             return await _context.Invoices.AnyAsync(i => i.CompanyId == companyId);
+        }
+
+        public async Task<bool> HasNotesForCompanyAsync(int companyId, int docType)
+        {
+            return await _context.Invoices.AnyAsync(i =>
+                i.CompanyId == companyId && i.DocumentType == docType);
         }
 
         public async Task<Dictionary<int, bool>> HasInvoicesForClientsAsync(IEnumerable<int> clientIds)

@@ -35,6 +35,10 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         currentChallanNumber: 0,
         startingInvoiceNumber: 0,
         currentInvoiceNumber: 0,
+        startingDebitNoteNumber: 1,
+        currentDebitNoteNumber: 0,
+        startingCreditNoteNumber: 1,
+        currentCreditNoteNumber: 0,
         invoiceNumberPrefix: "",
         fbrProvinceCode: "",
         fbrBusinessActivity: "",
@@ -107,6 +111,10 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 currentChallanNumber: freshCompany.currentChallanNumber || 0,
                 startingInvoiceNumber: freshCompany.startingInvoiceNumber || 0,
                 currentInvoiceNumber: freshCompany.currentInvoiceNumber || 0,
+                startingDebitNoteNumber: freshCompany.startingDebitNoteNumber || 1,
+                currentDebitNoteNumber: freshCompany.currentDebitNoteNumber || 0,
+                startingCreditNoteNumber: freshCompany.startingCreditNoteNumber || 1,
+                currentCreditNoteNumber: freshCompany.currentCreditNoteNumber || 0,
                 invoiceNumberPrefix: freshCompany.invoiceNumberPrefix || "",
                 fbrProvinceCode: freshCompany.fbrProvinceCode ?? "",
                 fbrBusinessActivity: freshCompany.fbrBusinessActivity || "",
@@ -162,7 +170,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
             setForm({ ...form, [name]: value === "" ? "" : Number(value) });
             return;
         }
-        if (["startingChallanNumber", "currentChallanNumber", "startingInvoiceNumber", "currentInvoiceNumber", "startingPurchaseBillNumber", "startingGoodsReceiptNumber"].includes(name)) {
+        if (["startingChallanNumber", "currentChallanNumber", "startingInvoiceNumber", "currentInvoiceNumber", "startingDebitNoteNumber", "startingCreditNoteNumber", "startingPurchaseBillNumber", "startingGoodsReceiptNumber"].includes(name)) {
             const numberValue = Number(value);
             if (isNaN(numberValue) || numberValue < 0 || numberValue > INT32_MAX) return;
             setForm({ ...form, [name]: numberValue });
@@ -342,6 +350,48 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                             {company?.currentInvoiceNumber > 0 && (
                                 <span style={{ fontSize: "0.78rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
                                     Current invoice number: {company.currentInvoiceNumber}
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Debit/Credit Notes (Return Invoices) run their own
+                            sequence — reversing bill #3821 creates Debit Note
+                            #1, not bill #3822. Locked once a note exists,
+                            mirroring the invoice/challan number locks. */}
+                        <div style={formGroup}>
+                            <label style={label}>
+                                Starting Debit Note Number
+                            </label>
+                            <input
+                                type="number"
+                                name="startingDebitNoteNumber"
+                                value={form.startingDebitNoteNumber}
+                                onChange={handleChange}
+                                style={input}
+                                min="1"
+                            />
+                            {company?.currentDebitNoteNumber > 0 && (
+                                <span style={{ fontSize: "0.78rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
+                                    Current debit note number: {company.currentDebitNoteNumber} (locked — notes exist)
+                                </span>
+                            )}
+                        </div>
+
+                        <div style={formGroup}>
+                            <label style={label}>
+                                Starting Credit Note Number
+                            </label>
+                            <input
+                                type="number"
+                                name="startingCreditNoteNumber"
+                                value={form.startingCreditNoteNumber}
+                                onChange={handleChange}
+                                style={input}
+                                min="1"
+                            />
+                            {company?.currentCreditNoteNumber > 0 && (
+                                <span style={{ fontSize: "0.78rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
+                                    Current credit note number: {company.currentCreditNoteNumber} (locked — notes exist)
                                 </span>
                             )}
                         </div>

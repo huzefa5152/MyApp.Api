@@ -42,6 +42,10 @@ function fbrStatusBadge(inv, isBillsMode) {
 export default function InvoiceTable({
   invoices,
   isBillsMode,
+  // Note tabs — rows are Credit Notes or Debit Notes in their own
+  // numbering sequences; number column reads "Credit Note # / Debit Note #".
+  isReturnsMode = false,
+  noteDocType = null,
   perms,
   hasExcelBill,
   hasExcelTax,
@@ -71,7 +75,7 @@ export default function InvoiceTable({
   const columns = [
     {
       key: "invoiceNumber",
-      header: isBillsMode ? "Bill #" : "Invoice #",
+      header: isReturnsMode ? (noteDocType === 10 ? "Credit Note #" : "Debit Note #") : isBillsMode ? "Bill #" : "Invoice #",
       width: 130,
       accessor: (i) => Number(i.invoiceNumber) || i.invoiceNumber,
       render: (i) => (
@@ -89,16 +93,28 @@ export default function InvoiceTable({
               {i.originalInvoiceNumber ? ` ↩ #${i.originalInvoiceNumber}` : ""}
             </span>
           )}
-          {i.documentType !== 9 && i.documentType !== 10 && i.reversedByInvoiceNumber && (
+          {i.documentType !== 9 && i.documentType !== 10 && i.reversedByCreditNoteNumber && (
             <span
               style={{
                 display: "inline-flex", alignItems: "center", gap: 3, alignSelf: "flex-start",
                 fontSize: 10, fontWeight: 700, lineHeight: 1.2, padding: "2px 6px",
                 borderRadius: 6, background: "#ede7f6", color: "#5e35b1", border: "1px solid #b39ddb",
               }}
-              title={`A Debit Note (#${i.reversedByInvoiceNumber}) has been created against this invoice — it reverses this sale.`}
+              title={`A Credit Note (#${i.reversedByCreditNoteNumber}) has been created against this invoice — it reverses this sale.`}
             >
-              <MdUndo size={11} /> REVERSED · DN #{i.reversedByInvoiceNumber}
+              <MdUndo size={11} /> REVERSED · CN #{i.reversedByCreditNoteNumber}
+            </span>
+          )}
+          {i.documentType !== 9 && i.documentType !== 10 && i.adjustedByDebitNoteNumber && (
+            <span
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 3, alignSelf: "flex-start",
+                fontSize: 10, fontWeight: 700, lineHeight: 1.2, padding: "2px 6px",
+                borderRadius: 6, background: "#e0f2f1", color: "#00695c", border: "1px solid #80cbc4",
+              }}
+              title={`A Debit Note (#${i.adjustedByDebitNoteNumber}) adjusts this invoice upward.`}
+            >
+              <MdUndo size={11} /> ADJUSTED · DN #{i.adjustedByDebitNoteNumber}
             </span>
           )}
         </div>
@@ -109,6 +125,21 @@ export default function InvoiceTable({
       header: "Client",
       render: (i) => i.clientName || "—",
     },
+    // Returns tab only: which invoice the note reverses + the FBR reason.
+    ...(isReturnsMode ? [{
+      key: "against",
+      header: "Against / Reason",
+      render: (i) => (
+        <div>
+          <div style={{ fontWeight: 600 }}>
+            Bill #{i.originalInvoiceNumber ?? "—"}
+          </div>
+          <div style={{ fontSize: "0.75rem", color: "#5f6d7e" }} title={i.noteReasonRemarks || undefined}>
+            {i.noteReason || "—"}
+          </div>
+        </div>
+      ),
+    }] : []),
     {
       key: "poNumber",
       header: "PO",
@@ -301,12 +332,12 @@ export default function InvoiceTable({
             {inv.isFbrExcluded ? <MdRestore size={14} /> : <MdBlock size={14} />}
           </button>
         )}
-        {isBillsMode && perms.canDelete && !isSubmitted && !inv.isCancelled && inv.isLatest && (
-          <button style={btn.delete} onClick={() => onDelete?.(inv)} title="Delete bill — only the latest bill, removes it entirely and frees its challan(s).">
+        {(isBillsMode || isReturnsMode) && perms.canDelete && !isSubmitted && !inv.isCancelled && inv.isLatest && (
+          <button style={btn.delete} onClick={() => onDelete?.(inv)} title="Delete — only the latest document in its sequence, removes the row entirely.">
             <MdDelete size={14} />
           </button>
         )}
-        {isBillsMode && perms.canVoid && !isSubmitted && !inv.isCancelled && (
+        {(isBillsMode || isReturnsMode) && perms.canVoid && !isSubmitted && !inv.isCancelled && (
           <button
             style={btn.void}
             onClick={() => onVoid?.(inv)}
@@ -315,12 +346,12 @@ export default function InvoiceTable({
             <MdCancel size={14} />
           </button>
         )}
-        {perms.canReverse && isSubmitted && !inv.isCancelled && !inv.reversedByInvoiceNumber &&
+        {perms.canReverse && isSubmitted && !inv.isCancelled && !inv.reversedByCreditNoteNumber &&
          inv.documentType !== 9 && inv.documentType !== 10 && (
           <button
             style={btn.reverse}
             onClick={() => onReverse?.(inv)}
-            title="Reverse this FBR-submitted bill — generates a Credit Note (new unsubmitted bill) that you then Validate and Submit to FBR."
+            title="Reverse this FBR-submitted bill — opens the Credit Note screen prefilled with its lines (trim for a partial return)."
           >
             <MdUndo size={14} />
           </button>

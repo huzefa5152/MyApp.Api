@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { MdUndo, MdSearch, MdReceipt, MdArrowBack } from "react-icons/md";
 import { getInvoicesByCompany, createNote } from "../api/invoiceApi";
 import { useCompany } from "../contexts/CompanyContext";
@@ -16,16 +16,26 @@ const colors = {
   inputBg: "#f8f9fb",
 };
 
-// FBR's Digital Invoicing exposes only "Sale Invoice" and "Debit Note" to a
-// wholesaler (doctypecode) — a return/reversal is filed as a DEBIT NOTE, capped
-// at the original invoice (FBR 0067). These are the return reasons.
-const RETURN_REASONS = [
-  "Goods Returned", "Order Cancellation", "Post-Sale Discount",
-  "Quantity Short", "Defective Goods", "Others",
+// FBR's OFFICIAL note reasons — the enumerated list from IRIS (bulk-import
+// template REFERENCES sheet / Annexure-I DCN dropdown). Free text is not
+// accepted; "Others" requires remarks (FBR 0028).
+const FBR_REASONS = [
+  "Cancellation of supply",
+  "Return of goods",
+  "Change in nature of supply",
+  "Change in value of supply",
+  "Change in amount of tax",
+  "Others",
+  "Adjustment given to Steel Melters",
 ];
 
+// Reasons where goods PHYSICALLY move — drives the default of the
+// "affects stock" toggle (industry pattern: physical return is separate
+// from the financial adjustment; a discount note must not touch stock).
+const GOODS_REASONS = new Set(["Return of goods", "Cancellation of supply"]);
+
 // Effective (FBR-facing) line values — mirror the server's overlay-first logic
-// so the partial-return quantities the operator sees match what was filed.
+// so the quantities the operator sees match what was filed.
 const effQty  = (it) => it.adjustment?.adjustedQuantity  ?? it.quantity;
 const effPrice = (it) => it.adjustment?.adjustedUnitPrice ?? it.unitPrice;
 const effDesc = (it) => it.adjustment?.adjustedDescription ?? it.description;
@@ -33,36 +43,73 @@ const effHs   = (it) => it.adjustment?.adjustedHSCode ?? it.hsCode;
 
 export default function CreditDebitNotePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { selectedCompany } = useCompany();
   const { has } = usePermissions();
   const canCreate = has("invoices.note.create");
 
+  // ?type=credit|debit picks the note kind; ?invoiceId=N preselects the
+  // original invoice (the Reverse button's entry path).
+  const isCredit = (searchParams.get("type") || "credit") !== "debit";
+  const docType = isCredit ? 10 : 9;
+  const label = isCredit ? "Credit Note" : "Debit Note";
+  const preselectId = Number(searchParams.get("invoiceId")) || null;
+
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState(null);  // the chosen original invoice
-  const [lines, setLines] = useState([]);          // [{ id, include, returnQty, ... }]
-  const [reason, setReason] = useState("");
+  const [selected, setSelected] = useState(null);   // the chosen original invoice
+  const [lines, setLines] = useState([]);           // [{ id, include, noteQty, noteRate, ... }]
+  const [reason, setReason] = useState(isCredit ? "Return of goods" : "");
   const [remarks, setRemarks] = useState("");
+  const [affectsStock, setAffectsStock] = useState(isCredit); // derived default, operator-overridable
+  const [stockTouched, setStockTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const pickInvoice = useCallback((inv) => {
+    setSelected(inv);
+    setLines((inv.items || []).map((it) => ({
+      id: it.id,
+      description: effDesc(it),
+      hsCode: effHs(it),
+      uom: it.uom,
+      invoicedQty: effQty(it),
+      invoicedRate: effPrice(it),
+      include: true,
+      noteQty: effQty(it),
+      noteRate: effPrice(it),   // debit notes may lower this to the delta
+    })));
+  }, []);
 
   const fetchInvoices = useCallback(async () => {
     if (!selectedCompany?.id) return;
     setLoading(true);
     try {
       const { data } = await getInvoicesByCompany(selectedCompany.id);
-      // Only FBR-submitted SALE invoices that aren't already reversed.
-      setInvoices((data || []).filter(
-        (i) => i.fbrStatus === "Submitted" && i.documentType !== 9 && i.documentType !== 10 && !i.reversedByInvoiceNumber
-      ));
+      // Only FBR-submitted sale invoices; per type, hide ones that already
+      // carry a live note of THIS type (FBR 0064 — one per type per invoice).
+      const eligible = (data || []).filter((i) =>
+        i.fbrStatus === "Submitted" &&
+        (isCredit ? !i.reversedByCreditNoteNumber : !i.adjustedByDebitNoteNumber));
+      setInvoices(eligible);
+      if (preselectId) {
+        const pre = eligible.find((i) => i.id === preselectId);
+        if (pre) pickInvoice(pre);
+        else notify("That invoice is not eligible (not submitted, or it already has a note of this type).", "error");
+      }
     } catch {
       notify("Failed to load invoices.", "error");
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany?.id]);
+  }, [selectedCompany?.id, isCredit, preselectId, pickInvoice]);
 
   useEffect(() => { fetchInvoices(); }, [fetchInvoices]);
+
+  // Reason drives the stock default until the operator overrides the toggle.
+  useEffect(() => {
+    if (!stockTouched) setAffectsStock(isCredit && GOODS_REASONS.has(reason));
+  }, [reason, isCredit, stockTouched]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -74,55 +121,50 @@ export default function CreditDebitNotePage() {
     ).slice(0, 50);
   }, [invoices, search]);
 
-  const pickInvoice = (inv) => {
-    setSelected(inv);
-    setLines((inv.items || []).map((it) => ({
-      id: it.id,
-      description: effDesc(it),
-      hsCode: effHs(it),
-      uom: it.uom,
-      invoicedQty: effQty(it),
-      unitPrice: effPrice(it),
-      include: true,
-      returnQty: effQty(it),
-    })));
-  };
-
-  const clearSelection = () => { setSelected(null); setLines([]); setReason(""); setRemarks(""); };
+  const clearSelection = () => { setSelected(null); setLines([]); setRemarks(""); };
 
   const updateLine = (id, patch) =>
     setLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
 
-  const chosen = lines.filter((l) => l.include && Number(l.returnQty) > 0);
-  const subtotal = chosen.reduce((s, l) => s + Number(l.returnQty) * Number(l.unitPrice), 0);
+  const chosen = lines.filter((l) => l.include && Number(l.noteQty) > 0);
+  const subtotal = chosen.reduce((s, l) => s + Number(l.noteQty) * Number(l.noteRate), 0);
   const gstRate = selected?.gstRate ?? 0;
   const gstAmount = Math.round(subtotal * gstRate) / 100;
   const grandTotal = subtotal + gstAmount;
 
-  const overQty = lines.some((l) => l.include && Number(l.returnQty) > Number(l.invoicedQty));
+  const overQty = lines.some((l) => l.include && Number(l.noteQty) > Number(l.invoicedQty));
+  const overRate = lines.some((l) => l.include && Number(l.noteRate) > Number(l.invoicedRate));
   const needsRemarks = reason === "Others" && !remarks.trim();
   const canSubmit =
-    canCreate && selected && chosen.length > 0 && reason && !needsRemarks && !overQty && !submitting;
+    canCreate && selected && chosen.length > 0 && reason && !needsRemarks && !overQty && !overRate && !submitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      // If every line is fully included, send empty lines = full reversal;
-      // otherwise send the explicit partial selection.
-      const fullReversal =
+      // Full reversal (credit note, every line untouched) → empty lines so
+      // the server mirrors the original's totals exactly; otherwise the
+      // explicit selection.
+      const fullReversal = isCredit &&
         chosen.length === lines.length &&
-        lines.every((l) => Number(l.returnQty) === Number(l.invoicedQty));
+        lines.every((l) => Number(l.noteQty) === Number(l.invoicedQty) && Number(l.noteRate) === Number(l.invoicedRate));
       const payload = {
         originalInvoiceId: selected.id,
-        documentType: 9,   // Debit Note — the FBR-accepted reversal document
+        documentType: docType,
         reason,
         remarks: reason === "Others" ? remarks.trim() : (remarks.trim() || null),
-        lines: fullReversal ? [] : chosen.map((l) => ({ invoiceItemId: l.id, quantity: Number(l.returnQty) })),
+        affectsStock,
+        lines: fullReversal ? [] : chosen.map((l) => ({
+          invoiceItemId: l.id,
+          quantity: Number(l.noteQty),
+          // Debit notes may carry a per-unit DELTA (undercharge); credit
+          // notes always refund at the original rate — the server pins it.
+          ...(isCredit ? {} : { unitPrice: Number(l.noteRate) }),
+        })),
       };
       const { data: note } = await createNote(payload);
-      notify(`Debit Note #${note.invoiceNumber} created against bill #${selected.invoiceNumber}. Validate then submit it to FBR.`, "success");
-      navigate("/invoices");
+      notify(`${label} #${note.invoiceNumber} created against bill #${selected.invoiceNumber}. Validate then submit it to FBR.`, "success");
+      navigate(isCredit ? "/credit-notes" : "/debit-notes");
     } catch (err) {
       notify(err.response?.data?.error || "Failed to create note.", "error");
     } finally {
@@ -131,27 +173,26 @@ export default function CreditDebitNotePage() {
   };
 
   if (!canCreate) {
-    return <div style={{ padding: 24 }}>You don't have permission to create Debit Notes.</div>;
+    return <div style={{ padding: 24 }}>You don't have permission to create Credit/Debit Notes.</div>;
   }
   if (!selectedCompany?.id) {
-    return <div style={{ padding: 24 }}>Select a company to create a Debit Note.</div>;
+    return <div style={{ padding: 24 }}>Select a company to create a {label}.</div>;
   }
 
   return (
     <div style={{ padding: "16px", maxWidth: 1100, margin: "0 auto" }}>
       <h2 style={{ display: "flex", alignItems: "center", gap: 8, color: colors.textPrimary, margin: "0 0 4px" }}>
-        <MdUndo style={{ color: colors.purple }} /> Debit Notes (Returns)
+        <MdUndo style={{ color: isCredit ? colors.purple : colors.teal }} /> New {label}
       </h2>
       <p style={{ color: colors.textSecondary, marginTop: 0 }}>
-        Reference an FBR-submitted invoice to reverse it — fully or partially. FBR's Digital
-        Invoicing files a return as a <strong>Debit Note</strong> against the original invoice
-        (capped at its value). The note is created unsubmitted — validate and submit it to FBR
-        from the Invoices tab. One debit note is allowed per invoice.
+        {isCredit
+          ? "Reverse an FBR-submitted invoice — fully or partially. A Credit Note reduces the sale (goods returned, cancellation, discount) and re-enters stock only when goods physically come back."
+          : "Record an upward adjustment against an FBR-submitted invoice (undercharge, rate change, extra goods). A Debit Note increases the sale and normally leaves stock untouched."}
+        {" "}The note is created unsubmitted — validate and submit it to FBR from its tab.
       </p>
 
       {!selected ? (
         <>
-          {/* Invoice picker */}
           <div style={{ position: "relative", margin: "12px 0" }}>
             <MdSearch style={{ position: "absolute", left: 10, top: 12, color: colors.textSecondary }} />
             <input
@@ -164,7 +205,7 @@ export default function CreditDebitNotePage() {
           {loading ? (
             <p style={{ color: colors.textSecondary }}>Loading…</p>
           ) : filtered.length === 0 ? (
-            <p style={{ color: colors.textSecondary }}>No FBR-submitted invoices available to reverse.</p>
+            <p style={{ color: colors.textSecondary }}>No eligible FBR-submitted invoices.</p>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))", gap: 10 }}>
               {filtered.map((inv) => (
@@ -208,14 +249,15 @@ export default function CreditDebitNotePage() {
                   <th style={{ padding: 6 }}>Item</th>
                   <th style={{ padding: 6 }}>HS</th>
                   <th style={{ padding: 6, textAlign: "right" }}>Invoiced</th>
-                  <th style={{ padding: 6, textAlign: "right" }}>Return qty</th>
-                  <th style={{ padding: 6, textAlign: "right" }}>Unit</th>
+                  <th style={{ padding: 6, textAlign: "right" }}>{isCredit ? "Return qty" : "Adjust qty"}</th>
+                  <th style={{ padding: 6, textAlign: "right" }}>{isCredit ? "Rate (fixed)" : "Rate / delta"}</th>
                   <th style={{ padding: 6, textAlign: "right" }}>Total</th>
                 </tr>
               </thead>
               <tbody>
                 {lines.map((l) => {
-                  const over = l.include && Number(l.returnQty) > Number(l.invoicedQty);
+                  const oQty = l.include && Number(l.noteQty) > Number(l.invoicedQty);
+                  const oRate = l.include && Number(l.noteRate) > Number(l.invoicedRate);
                   return (
                     <tr key={l.id} style={{ borderBottom: "1px solid #eef1f5", opacity: l.include ? 1 : 0.5 }}>
                       <td style={{ padding: 6 }}>
@@ -223,18 +265,32 @@ export default function CreditDebitNotePage() {
                       </td>
                       <td style={{ padding: 6 }}>{l.description}</td>
                       <td style={{ padding: 6, color: colors.textSecondary }}>{l.hsCode || "—"}</td>
-                      <td style={{ padding: 6, textAlign: "right" }}>{Number(l.invoicedQty).toLocaleString()} {l.uom}</td>
+                      <td style={{ padding: 6, textAlign: "right" }}>
+                        {Number(l.invoicedQty).toLocaleString()} {l.uom} @ {Number(l.invoicedRate).toLocaleString()}
+                      </td>
                       <td style={{ padding: 6, textAlign: "right" }}>
                         <input
                           type="number" min="0" step="any" disabled={!l.include}
-                          value={l.returnQty}
-                          onChange={(e) => updateLine(l.id, { returnQty: e.target.value })}
-                          style={{ width: 90, padding: "4px 6px", textAlign: "right", borderRadius: 6, border: `1px solid ${over ? "#e53935" : colors.border}` }}
+                          value={l.noteQty}
+                          onChange={(e) => updateLine(l.id, { noteQty: e.target.value })}
+                          style={{ width: 84, padding: "4px 6px", textAlign: "right", borderRadius: 6, border: `1px solid ${oQty ? "#e53935" : colors.border}` }}
                         />
                       </td>
-                      <td style={{ padding: 6, textAlign: "right" }}>{Number(l.unitPrice).toLocaleString()}</td>
                       <td style={{ padding: 6, textAlign: "right" }}>
-                        {(Number(l.returnQty || 0) * Number(l.unitPrice)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        {isCredit ? (
+                          Number(l.noteRate).toLocaleString()
+                        ) : (
+                          <input
+                            type="number" min="0" step="any" disabled={!l.include}
+                            value={l.noteRate}
+                            onChange={(e) => updateLine(l.id, { noteRate: e.target.value })}
+                            title="Per-unit adjustment value — e.g. the undercharged amount per unit. Cannot exceed the invoiced rate."
+                            style={{ width: 84, padding: "4px 6px", textAlign: "right", borderRadius: 6, border: `1px solid ${oRate ? "#e53935" : colors.border}` }}
+                          />
+                        )}
+                      </td>
+                      <td style={{ padding: 6, textAlign: "right" }}>
+                        {(Number(l.noteQty || 0) * Number(l.noteRate || 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </td>
                     </tr>
                   );
@@ -242,15 +298,16 @@ export default function CreditDebitNotePage() {
               </tbody>
             </table>
           </div>
-          {overQty && <p style={{ color: "#e53935", fontSize: "0.8rem" }}>A return quantity exceeds what was invoiced.</p>}
+          {overQty && <p style={{ color: "#e53935", fontSize: "0.8rem" }}>A quantity exceeds what was invoiced.</p>}
+          {overRate && <p style={{ color: "#e53935", fontSize: "0.8rem" }}>An adjustment rate exceeds the invoiced rate (FBR caps the note at the original).</p>}
 
-          {/* Reason + remarks */}
+          {/* Reason + remarks + stock toggle */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))", gap: 12, marginTop: 12 }}>
             <label style={{ fontSize: "0.85rem", color: colors.textSecondary }}>
-              Reason
+              Reason (FBR official list)
               <select value={reason} onChange={(e) => setReason(e.target.value)} style={{ width: "100%", padding: 8, borderRadius: 8, border: `1px solid ${colors.border}`, marginTop: 4 }}>
                 <option value="">Select a reason…</option>
-                {RETURN_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                {FBR_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </label>
             <label style={{ fontSize: "0.85rem", color: colors.textSecondary }}>
@@ -262,6 +319,17 @@ export default function CreditDebitNotePage() {
               />
             </label>
           </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: "0.88rem", color: colors.textPrimary }}>
+            <input
+              type="checkbox"
+              checked={affectsStock}
+              onChange={(e) => { setAffectsStock(e.target.checked); setStockTouched(true); }}
+            />
+            <span>
+              Goods physically {isCredit ? "returned — add the quantities back to stock" : "shipped — deduct the quantities from stock"}
+              <span style={{ color: colors.textSecondary }}> (off = value-only adjustment, inventory untouched)</span>
+            </span>
+          </label>
 
           {/* Totals + submit */}
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 16 }}>
@@ -275,10 +343,10 @@ export default function CreditDebitNotePage() {
               style={{
                 padding: "12px 20px", borderRadius: 8, border: "none", fontWeight: 700, fontSize: "0.95rem",
                 cursor: canSubmit ? "pointer" : "not-allowed",
-                background: canSubmit ? colors.purple : "#c5c9d1", color: "#fff",
+                background: canSubmit ? (isCredit ? colors.purple : colors.teal) : "#c5c9d1", color: "#fff",
               }}
             >
-              {submitting ? "Creating…" : "Generate Debit Note"}
+              {submitting ? "Creating…" : `Generate ${label}`}
             </button>
           </div>
         </>

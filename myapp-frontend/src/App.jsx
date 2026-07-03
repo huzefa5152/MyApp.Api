@@ -77,6 +77,12 @@ export default function App() {
           {/* Invoices tab — FBR classification & submission. Item-type
               editing + Validate All / Submit All bulk actions live here. */}
           <Route path="/invoices" element={<InvoicePage key="invoices" mode="invoices" />} />
+          {/* Credit Notes (returns/reversals) and Debit Notes (upward
+              adjustments) — each tab lists ONLY its type, in its own
+              numbering sequence. Never mixed with Bills or Invoices.
+              The create screen lives at /credit-debit-notes?type=credit|debit. */}
+          <Route path="/credit-notes" element={<InvoicePage key="creditnotes" mode="creditnotes" />} />
+          <Route path="/debit-notes" element={<InvoicePage key="debitnotes" mode="debitnotes" />} />
           <Route path="/credit-debit-notes" element={<CreditDebitNotePage />} />
           <Route path="/item-rate-history" element={<ItemRateHistoryPage />} />
           <Route path="/purchase-bills" element={<PurchaseBillsPage />} />

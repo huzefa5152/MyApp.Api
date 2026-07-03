@@ -45,6 +45,64 @@ Frontend (built + copied to `wwwroot`):
 Verified so far: `dotnet build` 0 errors; frontend build OK. **NOT yet run
 against a live/sandbox FBR invoice** — see §9.
 
+### 0c. Round 3 (2026-07-02) — separate note sequence + Return Invoices tab (UNCOMMITTED)
+
+- **Own numbering:** notes now number from a per-company **Debit Note sequence**
+  (`Company.StartingDebitNoteNumber`/`CurrentDebitNoteNumber`, default start 1)
+  — reversing bill #3821 creates **Debit Note #1**, not bill #3822. Uniqueness
+  scoped by a new persisted computed column `Invoices.IsReturnNote` + unique
+  index (CompanyId, IsReturnNote, InvoiceNumber). Migration
+  `SeparateDebitNoteNumbering` renumbers pre-existing notes to 1..N per company
+  and stamps `FbrInvoiceNumber = DN-{n}`. A filtered unique index on
+  `OriginalInvoiceId` (live rows) closes the 0064 race (one live note/original).
+- **Return Invoices tab:** nav Sales → Return Invoices (`/return-invoices`,
+  InvoicePage mode="returns", gated `invoices.list.view`); paged endpoint takes
+  `type=notes`. Bills/Invoices lists now EXCLUDE notes entirely. "New Return /
+  Reverse" button links to the create screen.
+- **Notes are immutable:** UpdateAsync + narrow edits reject DocumentType 9/10
+  (void + recreate instead); sale bills can no longer be flipped to 9/10 via
+  edit (was a stock/sequence corruption vector). Demo originals can't be reversed.
+- **Mix-fixes from the research audit:** dashboard sales KPIs, item-rate-history,
+  last-rates, and awaiting-purchase all exclude notes (a reversal no longer
+  double-counts as a sale).
+- Verified locally: migration renumbered DN #1–3, reverse allocated DN #4 while
+  sale max stayed 3821, scoped delete works, lists fully split; 30/30 basic
+  flows + 52/52 stock reflow.
+
+### 0d. Round 4 (2026-07-02) — Credit Note + Debit Note as first-class tabs (UNCOMMITTED)
+
+Design grounded in the deep-research ERP patterns (SAP returns-vs-credit-memo,
+Odoo Reverse dialog, Zoho restock-vs-credit-only, Tally CN=sales return):
+
+- **Two tabs**: Sales → **Credit Notes** (`/credit-notes`, returns/reversals,
+  DocumentType 10) and **Debit Notes** (`/debit-notes`, upward adjustments,
+  DocumentType 9). Each lists ONLY its type; sale-invoice lists exclude both.
+- **Per-type numbering**: `NoteKind` persisted computed column (0/1/2) +
+  unique (CompanyId, NoteKind, InvoiceNumber); Company gains
+  Starting/CurrentCreditNoteNumber alongside the debit fields; display
+  numbers CN-n / DN-n. Migration `SplitCreditDebitNoteSeries`.
+  ⚠️ Root-caused: the C-8 startup backfill in Program.cs recreated the legacy
+  unscoped UNIQUE (CompanyId, InvoiceNumber) at every boot — retired it (the
+  NoteKind index now owns the C-8 guarantee).
+- **Manual + partial creation restored for BOTH types** at
+  `/credit-debit-notes?type=credit|debit&invoiceId=N` (Reverse button opens
+  it prefilled). Reasons = FBR's OFFICIAL enumerated list (IRIS bulk-import
+  template): Cancellation of supply · Return of goods · Change in nature of
+  supply · Change in value of supply · Change in amount of tax · Others ·
+  Adjustment given to Steel Melters.
+- **Industry stock semantics** ("separate the physical return from the
+  financial credit"): notes carry `NoteAffectsStock` — derived from reason
+  (goods reasons on a credit note → true), operator-overridable toggle.
+  Credit Note + affects-stock → IN; Debit Note + affects-stock → OUT (extra
+  goods); value-only note → inventory untouched.
+- **Debit notes carry delta pricing**: per-line unit-price override
+  (undercharge per unit), capped at the invoiced rate (FBR 0067).
+- One live note **per type** per original (CN + DN may coexist); DTO exposes
+  ReversedByCreditNoteNumber + AdjustedByDebitNoteNumber.
+- Verified live 19/19 (CN #1 partial return stock +4; DN #1 value-only stock
+  unchanged, subtotal = qty×delta; list separation; per-type guard; badges)
+  + 30/30 + 52/52 + 67/67 suites.
+
 ### 0b. Round 2 additions (2026-07-01)
 
 - **Fix:** the Reverse button no longer shows on an invoice that already has a

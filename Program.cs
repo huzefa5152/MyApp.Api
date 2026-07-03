@@ -485,26 +485,25 @@ using (var scope = app.Services.CreateScope())
     // — we log a clear AuditLog row and leave the legacy non-unique
     // index in place. Operators have to dedupe first; the system stays
     // working in the meantime.
+    // 2026-07-02: the Invoice uniqueness is now scoped per document kind —
+    // the SplitCreditDebitNoteSeries migration owns
+    // UNIQUE (CompanyId, NoteKind, InvoiceNumber), which lets Credit Note #1,
+    // Debit Note #1 and sale bill #1 coexist while still catching concurrent
+    // MAX+1 collisions within each sequence (the C-8 guarantee). The legacy
+    // unscoped index this backfill used to (re)create must therefore be
+    // RETIRED — recreating it would make note #1 collide with bill #1.
     db.Database.ExecuteSqlRaw(@"
         BEGIN TRY
-            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices') AND is_unique = 0)
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices'))
             BEGIN
                 DROP INDEX [IX_Invoices_CompanyId_InvoiceNumber] ON [Invoices];
-                CREATE UNIQUE INDEX [IX_Invoices_CompanyId_InvoiceNumber] ON [Invoices] ([CompanyId], [InvoiceNumber]);
-            END
-            ELSE IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices'))
-            BEGIN
-                CREATE UNIQUE INDEX [IX_Invoices_CompanyId_InvoiceNumber] ON [Invoices] ([CompanyId], [InvoiceNumber]);
             END
         END TRY
         BEGIN CATCH
-            -- Duplicate data prevents the unique index. Leave the existing
-            -- index in place; the service-layer retry on save still helps,
-            -- but operators must dedupe before full protection lands.
             INSERT INTO AuditLogs (Timestamp, Level, UserName, HttpMethod, RequestPath, StatusCode, ExceptionType, Message)
             VALUES (SYSUTCDATETIME(), 'Warning', 'system', 'SEED', '/migrations/unique-invoice-number', 500,
-                    'INVOICE_UNIQUE_INDEX_BLOCKED',
-                    CONCAT('Could not enforce UNIQUE (CompanyId, InvoiceNumber): ', ERROR_MESSAGE()));
+                    'INVOICE_LEGACY_INDEX_DROP_BLOCKED',
+                    CONCAT('Could not drop legacy IX_Invoices_CompanyId_InvoiceNumber: ', ERROR_MESSAGE()));
         END CATCH;
 
         BEGIN TRY

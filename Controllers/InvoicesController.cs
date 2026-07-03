@@ -68,12 +68,19 @@ namespace MyApp.Api.Controllers
             [FromQuery] string? search = null,
             [FromQuery] int? clientId = null,
             [FromQuery] DateTime? dateFrom = null,
-            [FromQuery] DateTime? dateTo = null)
+            [FromQuery] DateTime? dateTo = null,
+            [FromQuery] string? type = null)
         {
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
+            // type=debitnotes → Debit Notes only; type=creditnotes → Credit
+            // Notes only (each tab has its own numbering sequence). Anything
+            // else → sale bills only.
+            int? noteType = string.Equals(type, "debitnotes", StringComparison.OrdinalIgnoreCase) ? 9
+                          : string.Equals(type, "creditnotes", StringComparison.OrdinalIgnoreCase) ? 10
+                          : null;
             var result = await _service.GetPagedByCompanyAsync(
-                companyId, clampedPage, size, search, clientId, dateFrom, dateTo);
+                companyId, clampedPage, size, search, clientId, dateFrom, dateTo, noteType);
             return Ok(result);
         }
 
@@ -454,9 +461,16 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound(new { error = "Bill not found." });
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
-            var updated = await _service.SetFbrExcludedAsync(id, body.Excluded);
-            if (updated == null) return NotFound(new { error = "Bill not found." });
-            return Ok(updated);
+            try
+            {
+                var updated = await _service.SetFbrExcludedAsync(id, body.Excluded);
+                if (updated == null) return NotFound(new { error = "Bill not found." });
+                return Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
         }
 
         public class SetFbrExcludedRequest

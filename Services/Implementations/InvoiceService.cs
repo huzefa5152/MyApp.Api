@@ -218,6 +218,7 @@ namespace MyApp.Api.Services.Implementations
             OriginalInvoiceRefIRN = inv.OriginalInvoiceRefIRN,
             NoteReason = inv.NoteReason,
             NoteReasonRemarks = inv.NoteReasonRemarks,
+            NoteAffectsStock = inv.NoteAffectsStock,
             FbrReady = missing.Count == 0,
             FbrMissing = missing,
             Items = inv.Items.Select(ii => new InvoiceItemDto
@@ -290,9 +291,10 @@ namespace MyApp.Api.Services.Implementations
         }
 
         /// <summary>
-        /// Stamp each sale invoice with the number of the LIVE Credit Note that
-        /// reverses it (if any), so the UI can hide the Reverse button and show
-        /// "Reversed by CN #N". One round-trip for the whole page.
+        /// Stamp each sale invoice with the numbers of any LIVE notes against
+        /// it: the Credit Note (return/reversal — hides the Reverse action,
+        /// shows "Reversed by CN #N") and the Debit Note (upward adjustment).
+        /// One round-trip for the whole page.
         /// </summary>
         private async Task AttachReversalInfoAsync(List<InvoiceDto> dtos)
         {
@@ -304,28 +306,40 @@ namespace MyApp.Api.Services.Implementations
             var noteMap = await _context.Invoices
                 .Where(n => (n.DocumentType == 9 || n.DocumentType == 10) && !n.IsCancelled
                          && n.OriginalInvoiceId != null && ids.Contains(n.OriginalInvoiceId.Value))
-                .GroupBy(n => n.OriginalInvoiceId!.Value)
-                .Select(g => new { OriginalId = g.Key, NoteNumber = g.Max(x => x.InvoiceNumber) })
-                .ToDictionaryAsync(x => x.OriginalId, x => x.NoteNumber);
+                .Select(n => new { OriginalId = n.OriginalInvoiceId!.Value, n.DocumentType, n.InvoiceNumber })
+                .ToListAsync();
             foreach (var d in dtos)
-                if (noteMap.TryGetValue(d.Id, out var nn)) d.ReversedByInvoiceNumber = nn;
+            {
+                d.ReversedByCreditNoteNumber = noteMap
+                    .Where(n => n.OriginalId == d.Id && n.DocumentType == 10)
+                    .Select(n => (int?)n.InvoiceNumber).Max();
+                d.AdjustedByDebitNoteNumber = noteMap
+                    .Where(n => n.OriginalId == d.Id && n.DocumentType == 9)
+                    .Select(n => (int?)n.InvoiceNumber).Max();
+            }
         }
 
         public async Task<PagedResult<InvoiceDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
-            DateTime? dateFrom = null, DateTime? dateTo = null)
+            DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? noteType = null)
         {
             var (items, totalCount) = await _invoiceRepo.GetPagedByCompanyAsync(
-                companyId, page, pageSize, search, clientId, dateFrom, dateTo);
+                companyId, page, pageSize, search, clientId, dateFrom, dateTo, noteType);
 
             // Gate the Delete button client-side — only the highest-numbered
             // bill for this company is deletable. Earlier bills must be edited.
             // EXCLUDE demo bills (FBR Sandbox) from the max — they live in
             // their own 900000+ range and would otherwise prevent any real
-            // bill from being marked IsLatest.
+            // bill from being marked IsLatest. Scoped to the requested group
+            // (sale bills / debit notes / credit notes), which each run their
+            // own sequence.
             var maxNumber = await _context.Invoices
-                .Where(i => i.CompanyId == companyId && !i.IsDemo)
+                .Where(i => i.CompanyId == companyId && !i.IsDemo
+                         && (noteType == null
+                              ? (i.DocumentType != 9 && i.DocumentType != 10)
+                              : i.DocumentType == noteType))
                 .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
 
             var dtos = items.Select(ToDto).ToList();
@@ -1003,6 +1017,22 @@ namespace MyApp.Api.Services.Implementations
                     ? "Cannot edit a cancelled bill."
                     : "Cannot edit a bill that has been submitted to FBR.");
 
+            // Debit/Credit Notes are immutable after creation: their lines were
+            // derived from (and value-capped at) the original invoice, and a
+            // free edit here could raise them past the FBR 0067 cap. To change
+            // a note, void it and generate a new one from the Returns screen.
+            if (invoice.DocumentType == 9 || invoice.DocumentType == 10)
+                throw new InvalidOperationException(
+                    "A Debit/Credit Note cannot be edited. Void it and create a new return from the Return Invoices screen.");
+
+            // ...and the reverse flip: a sale bill can never be converted INTO
+            // a note via edit — notes live in a separate numbering sequence
+            // and stock direction, so a flip would corrupt both. (The Reverse
+            // action is the only way to create a note.)
+            if (dto.DocumentType == 9 || dto.DocumentType == 10)
+                throw new InvalidOperationException(
+                    "A bill cannot be converted into a Debit/Credit Note. Use the Reverse action on a submitted invoice instead.");
+
             if (dto.GSTRate < 0 || dto.GSTRate > 100)
                 throw new InvalidOperationException("GST rate must be between 0 and 100.");
             if (dto.Items == null || dto.Items.Count == 0)
@@ -1210,6 +1240,12 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException(invoice.IsCancelled
                     ? "Cannot edit a cancelled bill."
                     : "Cannot edit a bill that has been submitted to FBR.");
+
+            // Notes are immutable (see UpdateAsync) — the narrow edit paths
+            // could equally push a note past its original-invoice cap.
+            if (invoice.DocumentType == 9 || invoice.DocumentType == 10)
+                throw new InvalidOperationException(
+                    "A Debit/Credit Note cannot be edited. Void it and create a new return from the Return Invoices screen.");
 
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("At least one item is required.");
@@ -1671,8 +1707,58 @@ namespace MyApp.Api.Services.Implementations
                 .FirstOrDefaultAsync(i => i.Id == id);
             if (invoice == null) return null;
 
-            invoice.IsFbrExcluded = excluded;
-            await _context.SaveChangesAsync();
+            // 2026-07-02: the flag now carries STOCK semantics (an excluded
+            // bill holds no inventory movements), so flipping it on a bill
+            // that already reached FBR would desync stock from a real filed
+            // supply. Submitted bills are skipped by bulk actions anyway.
+            if (invoice.FbrStatus == "Submitted" && invoice.IsFbrExcluded != excluded)
+                throw new InvalidOperationException(
+                    "Cannot change FBR exclusion on a bill that has been submitted to FBR.");
+
+            var wasExcluded = invoice.IsFbrExcluded;
+
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                invoice.IsFbrExcluded = excluded;
+                await _context.SaveChangesAsync();
+
+                // Excluded → purge the bill's stock movements (goods return
+                // to on-hand). Re-included → re-insert OUT movements for
+                // every classified (HS-coded) item line with quantity. The
+                // sync reads IsFbrExcluded off the entity, so one call
+                // handles both directions idempotently.
+                await _stock.SyncInvoiceStockMovementsAsync(invoice);
+                await transaction.CommitAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "InvoiceService: FBR-exclusion toggle rolled back");
+                await transaction.RollbackAsync();
+                throw;
+            }
+
+            // Audit — the toggle now moves inventory, which is a financial
+            // state change. Never let audit failure surface.
+            if (wasExcluded != excluded)
+            {
+                try
+                {
+                    await _auditLog.LogAsync(new AuditLog
+                    {
+                        Level         = "Info",
+                        HttpMethod    = "PUT",
+                        RequestPath   = $"/invoices/{invoice.Id}/fbr-excluded",
+                        StatusCode    = 200,
+                        ExceptionType = "Invoice.FbrExcluded",
+                        Message       = excluded
+                            ? $"Bill #{invoice.InvoiceNumber} EXCLUDED from FBR — its stock movements were reversed (on-hand restored)."
+                            : $"Bill #{invoice.InvoiceNumber} re-INCLUDED in FBR — stock re-deducted for classified item lines.",
+                    });
+                }
+                catch { /* audit must never break the operation */ }
+            }
+
             return ToDto(invoice);
         }
 
@@ -1690,13 +1776,24 @@ namespace MyApp.Api.Services.Implementations
             // Demo bills (FBR Sandbox) live in their own 900000+ range and
             // are excluded so the latest-real-bill rule isn't blocked by
             // demo numbers. Demo deletes are gated by FbrSandboxService.
+            // 2026-07-02: Credit Notes and Debit Notes each run their own
+            // sequence, so the "latest" comparison is scoped to the
+            // document's own TYPE — Credit Note #3 is deletable even while
+            // sale bills sit at #3800+ or debit notes at #7.
+            var isNoteDoc = invoice.DocumentType == 9 || invoice.DocumentType == 10;
             var maxNumber = invoice.IsDemo
                 ? await _context.Invoices
                     .Where(i => i.CompanyId == invoice.CompanyId && i.IsDemo)
                     .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0
-                : await _context.Invoices
-                    .Where(i => i.CompanyId == invoice.CompanyId && !i.IsDemo)
-                    .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+                : isNoteDoc
+                    ? await _context.Invoices
+                        .Where(i => i.CompanyId == invoice.CompanyId && !i.IsDemo
+                                 && i.DocumentType == invoice.DocumentType)
+                        .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0
+                    : await _context.Invoices
+                        .Where(i => i.CompanyId == invoice.CompanyId && !i.IsDemo
+                                 && i.DocumentType != 9 && i.DocumentType != 10)
+                        .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
             if (invoice.InvoiceNumber != maxNumber)
                 throw new InvalidOperationException(
                     $"Only the latest bill can be deleted (currently #{maxNumber}). " +
@@ -1867,18 +1964,20 @@ namespace MyApp.Api.Services.Implementations
 
         // Quick full reversal (the "Reverse" button). Delegates to the general
         // note builder with no line selection = every line, full quantity.
-        // A reversal is a Debit Note (docType 9) — the only reference-note type
-        // FBR's doctypecode exposes to this taxpayer ("Credit Note" is rejected
-        // with [0003]). Per FBR 0067 a debit note is capped at the original, so
-        // it is the return/reduction instrument.
+        // A reversal is a CREDIT NOTE (docType 10) — the industry- and
+        // law-standard return/reduction document (Rule 21(2) STR 2006; SAP
+        // credit memo, Odoo credit note, Tally sales return). FBR currently
+        // gates credit-note POSTING per taxpayer (0071 / Commissioner
+        // approval), so the note may sit unsubmitted until enablement — the
+        // document itself is correct either way.
         public Task<InvoiceDto?> CreateReversalNoteAsync(
             int originalInvoiceId, string? reason, string? remarks,
             int? documentTypeOverride = null, string? actorUserName = null)
             => CreateNoteAsync(new CreateNoteDto
             {
                 OriginalInvoiceId = originalInvoiceId,
-                DocumentType      = documentTypeOverride == 10 ? 10 : 9,
-                Reason            = reason,
+                DocumentType      = documentTypeOverride == 9 ? 9 : 10,
+                Reason            = string.IsNullOrWhiteSpace(reason) ? "Return of goods" : reason,
                 Remarks           = remarks,
                 Lines             = new(),   // empty = full reversal
             }, actorUserName);
@@ -1899,14 +1998,16 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("A Credit/Debit Note cannot itself be reversed. Reference the original invoice instead.");
             if (original.IsCancelled)
                 throw new InvalidOperationException("This bill is cancelled — there is nothing to reverse at FBR.");
+            if (original.IsDemo)
+                throw new InvalidOperationException("Sandbox (demo) bills cannot be reversed — they exist only for FBR scenario testing.");
             if (original.FbrStatus != "Submitted" || string.IsNullOrWhiteSpace(original.FbrIRN))
                 throw new InvalidOperationException("Only an invoice that has been submitted to FBR can have a note issued against it. A non-submitted bill should be voided instead.");
 
-            // 9 = Debit Note (the reference-note type FBR allows this taxpayer —
-            // the return/reduction instrument). 10 = Credit Note only if a future
-            // caller explicitly forces it (not offered in the UI; FBR rejects it
-            // for wholesalers via [0003]). Default = Debit Note.
-            var docType = dto.DocumentType == 10 ? 10 : 9;
+            // 10 = CREDIT NOTE (return / reversal / reduction — the default);
+            // 9 = DEBIT NOTE (upward adjustment: undercharge, rate change,
+            // extra goods). Both are first-class documents with their own
+            // numbering sequences and their own tabs.
+            var docType = dto.DocumentType == 9 ? 9 : 10;
             var label = docType == 10 ? "Credit Note" : "Debit Note";
 
             // FBR 0064: only one live note of a given type per original invoice.
@@ -1974,7 +2075,20 @@ namespace MyApp.Api.Services.Implementations
                     if (qty <= 0) continue;
                     if (qty > maxQty)
                         throw new InvalidOperationException($"Return quantity {qty:0.####} for \"{src.Description}\" exceeds the invoiced quantity {maxQty:0.####}.");
+                    // Credit notes always refund at the ORIGINAL rate (FBR
+                    // 0068 rejects a mismatched rate). Debit notes may carry
+                    // a per-unit DELTA value (undercharge / rate-change
+                    // adjustments) — never above the original rate, so the
+                    // note stays within the FBR 0067 cap.
                     var unitPrice = EffPrice(src);
+                    if (docType == 9 && sel.UnitPrice.HasValue)
+                    {
+                        if (sel.UnitPrice.Value <= 0)
+                            throw new InvalidOperationException($"Adjustment rate for \"{src.Description}\" must be greater than zero.");
+                        if (sel.UnitPrice.Value > unitPrice)
+                            throw new InvalidOperationException($"Adjustment rate {sel.UnitPrice.Value:0.##} for \"{src.Description}\" cannot exceed the invoiced rate {unitPrice:0.##}. [FBR 0067]");
+                        unitPrice = sel.UnitPrice.Value;
+                    }
                     noteItems.Add(BuildLine(src, qty, unitPrice, Math.Round(qty * unitPrice, 2)));
                 }
             }
@@ -2020,18 +2134,36 @@ namespace MyApp.Api.Services.Implementations
             var reason  = dto.Reason;
             var remarks = dto.Remarks;
 
+            // Stock semantics (industry pattern: separate the physical return
+            // from the financial adjustment — SAP returns-vs-credit-memo,
+            // Zoho restock-vs-credit-only). Derived from the reason unless
+            // the operator overrides: goods physically move only for
+            // "Return of goods" / "Cancellation of supply" on a CREDIT note;
+            // every value-only reason (discount, rate change, tax change) and
+            // debit-note adjustments default to NO stock movement.
+            var goodsReasons = new[] { "Return of goods", "Cancellation of supply" };
+            var affectsStock = dto.AffectsStock
+                ?? (docType == 10 && goodsReasons.Contains((reason ?? "").Trim(), StringComparer.OrdinalIgnoreCase));
+
             const int maxAttempts = NumberAllocationRetry.DefaultMaxAttempts;
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                // Notes share the regular (non-demo) numbering sequence — they
-                // are real FBR documents, same as standalone bills.
-                int maxExistingInvoice = await _context.Invoices
-                    .Where(i => i.CompanyId == original.CompanyId && !i.IsDemo)
+                // 2026-07-02: each note TYPE runs its own per-company
+                // sequence (Credit Note #1…, Debit Note #1…) — reversing
+                // bill #3821 must NOT consume sale-invoice number #3822.
+                // Uniqueness is enforced by the (CompanyId, NoteKind,
+                // InvoiceNumber) index, so Credit Note #1, Debit Note #1
+                // and sale bill #1 never collide.
+                int maxExistingNote = await _context.Invoices
+                    .Where(i => i.CompanyId == original.CompanyId && !i.IsDemo
+                             && i.DocumentType == docType)
                     .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
-                int nextInvoiceNumber = maxExistingInvoice > 0
-                    ? maxExistingInvoice + 1
-                    : company.StartingInvoiceNumber;
-                company.CurrentInvoiceNumber = nextInvoiceNumber;
+                var startingNumber = docType == 10
+                    ? (company.StartingCreditNoteNumber > 0 ? company.StartingCreditNoteNumber : 1)
+                    : (company.StartingDebitNoteNumber > 0 ? company.StartingDebitNoteNumber : 1);
+                int nextInvoiceNumber = maxExistingNote > 0 ? maxExistingNote + 1 : startingNumber;
+                if (docType == 10) company.CurrentCreditNoteNumber = nextInvoiceNumber;
+                else company.CurrentDebitNoteNumber = nextInvoiceNumber;
 
                 // Fresh line entities each attempt (a rolled-back attempt detaches them).
                 var attemptItems = noteItems
@@ -2062,9 +2194,12 @@ namespace MyApp.Api.Services.Implementations
                     OriginalInvoiceRefIRN = original.FbrIRN,
                     NoteReason            = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(),
                     NoteReasonRemarks     = string.IsNullOrWhiteSpace(remarks) ? null : remarks.Trim(),
+                    NoteAffectsStock      = affectsStock,
+                    // "CN-"/"DN-" marks the per-type note sequence so the
+                    // display number can never be read as a sale-invoice number.
                     FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
-                        ? nextInvoiceNumber.ToString()
-                        : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
+                        ? $"{(docType == 10 ? "CN" : "DN")}-{nextInvoiceNumber}"
+                        : $"{company.InvoiceNumberPrefix}{(docType == 10 ? "CN" : "DN")}-{nextInvoiceNumber}",
                     Items = attemptItems,
                 };
 
@@ -2074,8 +2209,9 @@ namespace MyApp.Api.Services.Implementations
                     var created = await _invoiceRepo.CreateAsync(note);
                     await _companyRepo.UpdateAsync(company);
 
-                    // Stock reflow: Credit Note (10) → IN; Debit Note (9) → no
-                    // goods movement. SyncInvoiceStockMovements keys off DocType.
+                    // Stock reflow: only when NoteAffectsStock (goods actually
+                    // move) — Credit Note → IN (return), Debit Note → OUT
+                    // (extra goods). Value-only notes leave inventory alone.
                     await _stock.SyncInvoiceStockMovementsAsync(created);
                     await transaction.CommitAsync();
 
@@ -2376,6 +2512,8 @@ namespace MyApp.Api.Services.Implementations
                    && i.FbrStatus != "Submitted"
                    && !i.IsDemo
                    && !i.IsCancelled
+                   // Notes are reversals — nothing to procure against them.
+                   && i.DocumentType != 9 && i.DocumentType != 10
                 select new
                 {
                     i.Id,
@@ -2510,7 +2648,10 @@ namespace MyApp.Api.Services.Implementations
             // user actually charged a real customer, so leaving them in
             // would skew the avg/min/max summary band and mislead quoting.
             var q = _context.InvoiceItems
-                .Where(ii => ii.Invoice.CompanyId == companyId && !ii.Invoice.IsDemo && !ii.Invoice.IsCancelled);
+                // Debit/Credit Note lines are RETURNS — excluding them keeps
+                // rate suggestions based on actual sales only.
+                .Where(ii => ii.Invoice.CompanyId == companyId && !ii.Invoice.IsDemo && !ii.Invoice.IsCancelled
+                          && ii.Invoice.DocumentType != 9 && ii.Invoice.DocumentType != 10);
 
             if (itemTypeId.HasValue && itemTypeId.Value > 0)
             {
@@ -2595,7 +2736,10 @@ namespace MyApp.Api.Services.Implementations
             // Demo bills are excluded so synthetic FBR sandbox prices don't
             // leak into real quoting.
             var bills = _context.InvoiceItems
-                .Where(ii => ii.Invoice.CompanyId == companyId && !ii.Invoice.IsDemo && !ii.Invoice.IsCancelled);
+                // Debit/Credit Note lines are RETURNS — excluding them keeps
+                // rate suggestions based on actual sales only.
+                .Where(ii => ii.Invoice.CompanyId == companyId && !ii.Invoice.IsDemo && !ii.Invoice.IsCancelled
+                          && ii.Invoice.DocumentType != 9 && ii.Invoice.DocumentType != 10);
 
             foreach (var di in challan.Items)
             {

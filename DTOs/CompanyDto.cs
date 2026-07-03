@@ -15,6 +15,10 @@
         public int CurrentChallanNumber { get; set; }
         public int StartingInvoiceNumber { get; set; }
         public int CurrentInvoiceNumber { get; set; }
+        public int StartingDebitNoteNumber { get; set; }
+        public int CurrentDebitNoteNumber { get; set; }
+        public int StartingCreditNoteNumber { get; set; }
+        public int CurrentCreditNoteNumber { get; set; }
         public string? InvoiceNumberPrefix { get; set; }
         public int? FbrProvinceCode { get; set; }
         public string? FbrBusinessActivity { get; set; }
