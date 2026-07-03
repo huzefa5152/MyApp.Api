@@ -153,11 +153,26 @@ namespace MyApp.Api.Migrations
                 table: "PurchaseBills",
                 column: "DivisionId");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Invoices_CompanyId_DivisionId_InvoiceNumber",
-                table: "Invoices",
-                columns: new[] { "CompanyId", "DivisionId", "InvoiceNumber" },
-                unique: true);
+            // MERGED 2026-07-03: on databases that took MASTER's note-split
+            // migrations first (prod), credit/debit notes were renumbered into
+            // per-kind sequences — a CN and a DN legally share a number, and a
+            // note may share a number with a sale bill (uniqueness there is
+            // scoped by NoteKind / IsReturnNote). A note-kind-blind unique
+            // index would fail to CREATE on that data and abort AutoMigrate at
+            // startup. Include the note-kind column when one exists; the plain
+            // shape only ever runs on DBs that predate the note split (fresh
+            // replays), where SyncNoteAndDivisionNumbering later normalises
+            // the final shape. Index NAME is identical in all three branches
+            // so the later IF EXISTS drop keeps working. NoteKind/IsReturnNote
+            // references live inside EXEC so this batch parses on DBs where
+            // those columns don't exist yet (CLAUDE.md §11).
+            migrationBuilder.Sql(@"
+IF COL_LENGTH('Invoices', 'NoteKind') IS NOT NULL
+    EXEC('CREATE UNIQUE INDEX [IX_Invoices_CompanyId_DivisionId_InvoiceNumber] ON [Invoices] ([CompanyId], [DivisionId], [NoteKind], [InvoiceNumber])');
+ELSE IF COL_LENGTH('Invoices', 'IsReturnNote') IS NOT NULL
+    EXEC('CREATE UNIQUE INDEX [IX_Invoices_CompanyId_DivisionId_InvoiceNumber] ON [Invoices] ([CompanyId], [DivisionId], [IsReturnNote], [InvoiceNumber])');
+ELSE
+    CREATE UNIQUE INDEX [IX_Invoices_CompanyId_DivisionId_InvoiceNumber] ON [Invoices] ([CompanyId], [DivisionId], [InvoiceNumber]);");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Invoices_DivisionId",

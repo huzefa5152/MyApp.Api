@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
@@ -46,6 +46,10 @@ namespace MyApp.Api.Services.Implementations
             CurrentPurchaseBillNumber = d.CurrentPurchaseBillNumber,
             StartingGoodsReceiptNumber = d.StartingGoodsReceiptNumber,
             CurrentGoodsReceiptNumber = d.CurrentGoodsReceiptNumber,
+            StartingCreditNoteNumber = d.StartingCreditNoteNumber,
+            CurrentCreditNoteNumber = d.CurrentCreditNoteNumber,
+            StartingDebitNoteNumber = d.StartingDebitNoteNumber,
+            CurrentDebitNoteNumber = d.CurrentDebitNoteNumber,
         };
 
         private static string? Trimmed(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
@@ -70,6 +74,8 @@ namespace MyApp.Api.Services.Implementations
             d.StartingInvoiceNumber      = NonNeg(dto.StartingInvoiceNumber);
             d.StartingPurchaseBillNumber = NonNeg(dto.StartingPurchaseBillNumber);
             d.StartingGoodsReceiptNumber = NonNeg(dto.StartingGoodsReceiptNumber);
+            d.StartingCreditNoteNumber   = NonNeg(dto.StartingCreditNoteNumber);
+            d.StartingDebitNoteNumber    = NonNeg(dto.StartingDebitNoteNumber);
         }
 
         public async Task<List<DivisionDto>> GetByCompanyAsync(int companyId) =>

@@ -41,11 +41,17 @@ namespace MyApp.Api.Migrations
                 computedColumnSql: "CASE WHEN [DocumentType] IN (9, 10) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END",
                 stored: true);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Invoices_CompanyId_IsReturnNote_InvoiceNumber",
-                table: "Invoices",
-                columns: new[] { "CompanyId", "IsReturnNote", "InvoiceNumber" },
-                unique: true);
+            // MERGED 2026-07-03: on databases that took the division branch
+            // first, Invoices.DivisionId already exists and two divisions may
+            // legally share an invoice number — a 3-column unique index would
+            // fail on real data (e.g. two bills #55 in different divisions).
+            // Include DivisionId when present; the SyncNoteAndDivisionNumbering
+            // reconcile migration normalises the final shape either way.
+            migrationBuilder.Sql(@"
+IF COL_LENGTH('Invoices', 'DivisionId') IS NOT NULL
+    CREATE UNIQUE INDEX [IX_Invoices_CompanyId_IsReturnNote_InvoiceNumber] ON [Invoices] ([CompanyId], [DivisionId], [IsReturnNote], [InvoiceNumber]);
+ELSE
+    CREATE UNIQUE INDEX [IX_Invoices_CompanyId_IsReturnNote_InvoiceNumber] ON [Invoices] ([CompanyId], [IsReturnNote], [InvoiceNumber]);");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Invoices_OriginalInvoiceId",

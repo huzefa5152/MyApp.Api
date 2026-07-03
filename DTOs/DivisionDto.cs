@@ -1,4 +1,4 @@
-namespace MyApp.Api.DTOs
+﻿namespace MyApp.Api.DTOs
 {
     /// <summary>Wire shape for a company division ("sub-company"). Used for
     /// read + create/update (Id ignored on create; CompanyId comes from the
@@ -36,5 +36,9 @@ namespace MyApp.Api.DTOs
         public int CurrentPurchaseBillNumber { get; set; }
         public int StartingGoodsReceiptNumber { get; set; }
         public int CurrentGoodsReceiptNumber { get; set; }
+        public int StartingCreditNoteNumber { get; set; }
+        public int CurrentCreditNoteNumber { get; set; }
+        public int StartingDebitNoteNumber { get; set; }
+        public int CurrentDebitNoteNumber { get; set; }
     }
 }

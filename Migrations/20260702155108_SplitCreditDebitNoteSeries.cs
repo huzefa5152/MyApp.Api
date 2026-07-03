@@ -50,11 +50,14 @@ namespace MyApp.Api.Migrations
                 computedColumnSql: "CASE WHEN [DocumentType] = 9 THEN CAST(1 AS tinyint) WHEN [DocumentType] = 10 THEN CAST(2 AS tinyint) ELSE CAST(0 AS tinyint) END",
                 stored: true);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Invoices_CompanyId_NoteKind_InvoiceNumber",
-                table: "Invoices",
-                columns: new[] { "CompanyId", "NoteKind", "InvoiceNumber" },
-                unique: true);
+            // MERGED 2026-07-03: division-aware for databases that carry
+            // Invoices.DivisionId (see SeparateDebitNoteNumbering) — a plain
+            // 3-column unique index fails on per-division duplicate numbers.
+            migrationBuilder.Sql(@"
+IF COL_LENGTH('Invoices', 'DivisionId') IS NOT NULL
+    CREATE UNIQUE INDEX [IX_Invoices_CompanyId_NoteKind_InvoiceNumber] ON [Invoices] ([CompanyId], [DivisionId], [NoteKind], [InvoiceNumber]);
+ELSE
+    CREATE UNIQUE INDEX [IX_Invoices_CompanyId_NoteKind_InvoiceNumber] ON [Invoices] ([CompanyId], [NoteKind], [InvoiceNumber]);");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Invoices_OriginalInvoiceId_DocumentType",

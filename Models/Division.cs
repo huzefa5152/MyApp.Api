@@ -1,4 +1,4 @@
-namespace MyApp.Api.Models
+﻿namespace MyApp.Api.Models
 {
     /// <summary>
     /// A division / department / sub-brand within a company (e.g. "Aliasghar",
@@ -45,6 +45,13 @@ namespace MyApp.Api.Models
         public int CurrentPurchaseBillNumber { get; set; }
         public int StartingGoodsReceiptNumber { get; set; }
         public int CurrentGoodsReceiptNumber { get; set; }
+        // Credit/Debit Notes: a note inherits its ORIGINAL invoice's division
+        // and numbers from that division's own note sequence (Credit Note #1,
+        // Debit Note #1 per division), mirroring the invoice pattern above.
+        public int StartingCreditNoteNumber { get; set; }
+        public int CurrentCreditNoteNumber { get; set; }
+        public int StartingDebitNoteNumber { get; set; }
+        public int CurrentDebitNoteNumber { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
