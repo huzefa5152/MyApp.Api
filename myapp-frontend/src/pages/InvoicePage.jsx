@@ -6,6 +6,7 @@ import PaymentForm from "../Components/PaymentForm";
 import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
 import StatusBadge from "../Components/StatusBadge";
 import SearchableSelect from "../Components/SearchableSelect";
+import DivisionSelect from "../Components/DivisionSelect";
 import StandaloneInvoiceForm from "../Components/StandaloneInvoiceForm";
 import EditBillForm from "../Components/EditBillForm";
 import BulkFbrResultsDialog from "../Components/BulkFbrResultsDialog";
@@ -206,6 +207,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   // straight to this list filtered to that client (distinct route key remounts
   // the page, so this initializer always sees the current URL).
   const [clientFilter, setClientFilter] = useState(() => searchParams.get("clientId") || "");
+  const [divisionFilter, setDivisionFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [hasExcelBill, setHasExcelBill] = useState(false);
@@ -230,6 +232,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       const params = { page: pg || page };
       if (search) params.search = search;
       if (clientFilter) params.clientId = clientFilter;
+      if (divisionFilter) params.divisionId = divisionFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
       // Note tabs list ONLY their own type; other tabs get sale bills
@@ -258,13 +261,18 @@ export default function InvoicePage({ mode = "invoices" }) {
       });
     } catch { setInvoices([]); setTotalCount(0); setTotalPages(0); }
     finally { setLoadingInvoices(false); }
-  }, [page, search, clientFilter, dateFrom, dateTo]);
+  }, [page, search, clientFilter, divisionFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (selectedCompany) {
       fetchClients(selectedCompany.id);
       setPage(1);
-      fetchInvoices(selectedCompany.id, 1);
+      // Division ids are per-company — a stale filter would blank the list.
+      // Resetting it retriggers the filter effect below, so only fetch
+      // directly when there's no reset to piggyback on (avoids a stale-
+      // division request racing the corrected one).
+      if (divisionFilter) setDivisionFilter("");
+      else fetchInvoices(selectedCompany.id, 1);
       hasExcelTemplate(selectedCompany.id, "Bill")
         .then(r => setHasExcelBill(r.data.hasExcelTemplate))
         .catch(() => setHasExcelBill(false));
@@ -281,10 +289,10 @@ export default function InvoicePage({ mode = "invoices" }) {
 
   useEffect(() => {
     if (selectedCompany) fetchInvoices(selectedCompany.id, page);
-  }, [page, search, clientFilter, dateFrom, dateTo]);
+  }, [page, search, clientFilter, divisionFilter, dateFrom, dateTo]);
 
   const resetFilters = () => {
-    setSearch(""); setClientFilter(""); setDateFrom(""); setDateTo(""); setPage(1);
+    setSearch(""); setClientFilter(""); setDivisionFilter(""); setDateFrom(""); setDateTo(""); setPage(1);
   };
 
   const handleFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
@@ -560,6 +568,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     const params = { page: 1, pageSize: 10000 };
     if (search) params.search = search;
     if (clientFilter) params.clientId = clientFilter;
+    if (divisionFilter) params.divisionId = divisionFilter;
     if (dateFrom) params.dateFrom = dateFrom;
     if (dateTo) params.dateTo = dateTo;
     if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
@@ -699,7 +708,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     setBulkResults({ open: true, action: "submit", items: results });
   };
 
-  const hasFilters = search || clientFilter || dateFrom || dateTo;
+  const hasFilters = search || clientFilter || divisionFilter || dateFrom || dateTo;
 
   return (
     <div>
@@ -856,6 +865,14 @@ export default function InvoicePage({ mode = "invoices" }) {
                   />
                 </div>
               )}
+              {/* Renders nothing when the company has no divisions. */}
+              <DivisionSelect
+                companyId={selectedCompany?.id}
+                value={divisionFilter}
+                onChange={(v) => { setDivisionFilter(v); setPage(1); }}
+                mode="filter"
+                className="filter-select"
+              />
               <div className="filter-date-group">
                 <input type="date" className="filter-date-input" value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" />
                 <span className="filter-date-sep">–</span>
@@ -1346,6 +1363,7 @@ export default function InvoicePage({ mode = "invoices" }) {
           companyId={selectedCompany.id}
           company={selectedCompany}
           billsMode={isBillsMode}
+          defaultDivisionId={divisionFilter}
           onClose={() => setShowForm(false)}
           onSaved={handleCreated}
         />
@@ -1356,6 +1374,7 @@ export default function InvoicePage({ mode = "invoices" }) {
           companyId={selectedCompany.id}
           company={selectedCompany}
           billsMode={isBillsMode}
+          defaultDivisionId={divisionFilter}
           onClose={() => setShowStandaloneForm(false)}
           onSaved={() => { setShowStandaloneForm(false); handleCreated(); }}
         />

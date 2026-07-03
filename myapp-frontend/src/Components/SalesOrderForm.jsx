@@ -1,15 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SelectDropdown from "./SelectDropdown";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
 import QuantityInput from "./QuantityInput";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
-import { getPagedSalesQuotesByCompany } from "../api/salesQuoteApi";
+import { getSalesQuotesForPicker } from "../api/salesQuoteApi";
 import { formStyles, modalSizes } from "../theme";
+import AttachmentManager from "./AttachmentManager";
 
 const colors = {
   textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
@@ -19,7 +21,7 @@ const colors = {
 const blankItem = () => ({ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" });
 
 // Create + edit a Sales Order (quantity-only). Pass `order` to edit.
-export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
+export default function SalesOrderForm({ onClose, onSaved, companyId, order, defaultDivisionId }) {
   const isEdit = !!order;
   const [client, setClient] = useState(order ? { id: order.clientId, label: order.clientName } : null);
   const [orderDate, setOrderDate] = useState(order?.orderDate ? order.orderDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
@@ -36,12 +38,16 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   const [units, setUnits] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
   const { has } = usePermissions();
-  const [divisionId, setDivisionId] = useState(order?.divisionId ? String(order.divisionId) : "");
+  // New orders default to the division currently being filtered (so "filter to
+  // a division → New Order" lands in that division); edits keep their own.
+  const [divisionId, setDivisionId] = useState(
+    order?.divisionId ? String(order.divisionId) : (defaultDivisionId ? String(defaultDivisionId) : ""));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [salesQuoteId, setSalesQuoteId] = useState(order?.salesQuoteId ? String(order.salesQuoteId) : "");
   const [quotes, setQuotes] = useState([]);
   const [quoteLoadedMsg, setQuoteLoadedMsg] = useState("");
+  const attachmentRef = useRef(null);
 
   useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
   useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
@@ -50,23 +56,32 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   // overwrite the operator's typed description/unit (that's Invoice-mode only).
   const pickItemType = (idx, newId) => setItem(idx, { itemTypeId: newId ? parseInt(newId) : null });
   useEffect(() => {
-    getPagedSalesQuotesByCompany(companyId, { pageSize: 200 })
-      .then(({ data }) => setQuotes(data.items || []))
+    // Page-walking helper: the server clamps pageSize at 100, and the linked
+    // quote must stay findable in edit mode even on quote-heavy companies.
+    getSalesQuotesForPicker(companyId)
+      .then((items) => setQuotes(items))
       .catch(() => setQuotes([]));
   }, [companyId]);
 
-  // Only Draft / Sent / Accepted quotes are offered for linking (a Rejected /
-  // Expired / Converted quote isn't a candidate). Keep the currently-linked
-  // quote visible in edit mode even if its status has since changed, so
-  // editing never silently drops the link.
-  const QUOTE_LINKABLE = ["Draft", "Sent", "Accepted"];
-  const clientQuotes = quotes.filter((q) => client && q.clientId === client.id
-    && (QUOTE_LINKABLE.includes(q.status) || String(q.id) === salesQuoteId));
+  // Quote status on the paged list is DERIVED server-side — Active /
+  // Accepted / Expired, never the stored Draft/Sent (SalesQuoteService.
+  // DeriveStatus). Offer Active + Accepted for linking (Expired isn't a
+  // candidate; Accepted stays offered for repeat orders off the same
+  // quote). Draft/Sent kept defensively should the API ever surface stored
+  // statuses. Keep the currently-linked quote visible in edit mode even if
+  // its status has since changed, so editing never silently drops the
+  // link. Quote-first flow: before a client is chosen every linkable quote
+  // is offered; picking a client narrows the list to that client's quotes.
+  const QUOTE_LINKABLE = ["Active", "Accepted", "Draft", "Sent"];
+  const quoteOptions = quotes
+    .filter((q) => (QUOTE_LINKABLE.includes(q.status) || String(q.id) === salesQuoteId)
+      && (!client || q.clientId === client.id))
+    .map((q) => ({ id: q.id, label: `Quote #${q.quoteNumber} — ${q.clientName}${q.divisionName ? ` · ${q.divisionName}` : ""}` }));
 
-  // Picking a quote on a NEW order pulls its client + line items in (quantity
-  // only — prices are dropped, re-entered at bill time); the lines stay fully
-  // editable. On EDIT we only re-link, never replacing items that may already
-  // have deliveries against them.
+  // Picking a quote on a NEW order pulls its client + division + line items in
+  // (quantity only — prices are dropped, re-entered at bill time); the lines
+  // stay fully editable. On EDIT we only re-link, never replacing items that
+  // may already have deliveries against them.
   const handleQuoteSelect = (value) => {
     setSalesQuoteId(value);
     setQuoteLoadedMsg("");
@@ -74,6 +89,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
     const q = quotes.find((x) => String(x.id) === String(value));
     if (!q) return;
     if (q.clientId && (!client || client.id !== q.clientId)) setClient({ id: q.clientId, label: q.clientName });
+    setDivisionId(q.divisionId ? String(q.divisionId) : "");
     if (q.items?.length) {
       setItems(q.items.map((i) => ({ id: 0, itemTypeId: i.itemTypeId || null, description: i.description, quantity: i.quantity, unit: i.unit })));
       setQuoteLoadedMsg(`Loaded ${q.items.length} item${q.items.length !== 1 ? "s" : ""} from Quote #${q.quoteNumber} — edit as needed.`);
@@ -98,7 +114,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
 
     setSaving(true);
     try {
-      await onSaved({
+      const saved = await onSaved({
         clientId: client.id,
         divisionId: divisionId ? parseInt(divisionId) : null,
         salesQuoteId: salesQuoteId ? parseInt(salesQuoteId) : null,
@@ -116,6 +132,12 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
           unit: i.unit,
         })),
       });
+      // Upload any attachments staged before the order had an id. No-op in
+      // edit mode (there they upload immediately) and when nothing's staged.
+      try {
+        const savedId = saved?.id ?? order?.id;
+        if (savedId) await attachmentRef.current?.flush(savedId);
+      } catch { /* attachments are best-effort — the order is already saved */ }
       onClose();
     } catch (err) {
       const msg = err.response?.data?.error || err.response?.data?.message;
@@ -138,6 +160,17 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
             {error && <div style={s.err}>{error}</div>}
             <div style={s.row}>
               <div style={{ flex: "1 1 100%", minWidth: 220 }}>
+                <label style={s.label}>Sales Quote <span style={s.opt}>(optional — picking one pre-fills the order)</span></label>
+                <SearchableSelect
+                  items={quoteOptions}
+                  value={salesQuoteId}
+                  onChange={(id) => handleQuoteSelect(id ? String(id) : "")}
+                  labelKey="label"
+                  placeholder="— not linked —"
+                />
+                {quoteLoadedMsg && <div style={{ fontSize: "0.72rem", color: colors.teal, marginTop: 4, fontWeight: 600 }}>{quoteLoadedMsg}</div>}
+              </div>
+              <div style={{ flex: "1 1 100%", minWidth: 220 }}>
                 <SelectDropdown label="Client" endpoint={`/clients/company/${companyId}`} value={client} onChange={(v) => { setClient(v); setSite(""); setSalesQuoteId(""); }} placeholder="Choose client" />
               </div>
               <div style={{ flex: 1, minWidth: 150 }}>
@@ -153,14 +186,6 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
                     <input type="text" style={s.input} value={site} onChange={(e) => setSite(e.target.value)} placeholder={client ? "Optional" : "Pick a client first"} disabled={!client} />
                   );
                 })()}
-              </div>
-              <div style={{ flex: 1, minWidth: 160 }}>
-                <label style={s.label}>Sales Quote <span style={s.opt}>(optional)</span></label>
-                <select style={s.input} value={salesQuoteId} onChange={(e) => handleQuoteSelect(e.target.value)} disabled={!client}>
-                  <option value="">{client ? "— not linked —" : "Pick a client first"}</option>
-                  {clientQuotes.map((q) => <option key={q.id} value={q.id}>Quote #{q.quoteNumber}{q.status ? ` · ${q.status}` : ""}</option>)}
-                </select>
-                {quoteLoadedMsg && <div style={{ fontSize: "0.72rem", color: colors.teal, marginTop: 4, fontWeight: 600 }}>{quoteLoadedMsg}</div>}
               </div>
               {has("divisions.manage.view") && (
                 <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={s.opt}>(optional)</span></>} labelStyle={s.label} style={s.input} wrapStyle={{ flex: 1, minWidth: 150 }} />
@@ -238,6 +263,14 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
               <label style={s.label}>Notes <span style={s.opt}>(optional)</span></label>
               <textarea style={{ ...s.input, minHeight: 56, resize: "vertical" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Internal notes for this order" />
             </div>
+
+            <AttachmentManager
+              ref={attachmentRef}
+              companyId={companyId}
+              entityType="SalesOrder"
+              entityId={order?.id ?? null}
+              mode="edit"
+            />
           </div>
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>

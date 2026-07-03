@@ -5,6 +5,7 @@ import ChallanTable from "../Components/ChallanTable";
 import SearchableSelect from "../Components/SearchableSelect";
 import ChallanForm from "../Components/ChallanForm";
 import ChallanEditForm from "../Components/ChallanEditForm";
+import DivisionSelect from "../Components/DivisionSelect";
 import InvoiceForm from "../Components/InvoiceForm";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
@@ -72,6 +73,7 @@ export default function ChallanPage() {
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [divisionFilter, setDivisionFilter] = useState("");
   const [clientFilter, setClientFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -105,6 +107,7 @@ export default function ChallanPage() {
       const params = { page: pg || page };
       if (search) params.search = search;
       if (statusFilter) params.status = statusFilter;
+      if (divisionFilter) params.divisionId = divisionFilter;
       if (clientFilter) params.clientId = clientFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
@@ -120,13 +123,18 @@ export default function ChallanPage() {
     } finally {
       setLoadingChallans(false);
     }
-  }, [page, search, statusFilter, clientFilter, dateFrom, dateTo]);
+  }, [page, search, statusFilter, divisionFilter, clientFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (selectedCompany) {
       fetchClients(selectedCompany.id);
       setPage(1);
-      fetchChallans(selectedCompany.id, 1);
+      // Division ids are per-company — a stale filter would blank the list.
+      // Resetting it retriggers the filter effect below, so only fetch
+      // directly when there's no reset to piggyback on (avoids a stale-
+      // division request racing the corrected one).
+      if (divisionFilter) setDivisionFilter("");
+      else fetchChallans(selectedCompany.id, 1);
       hasExcelTemplate(selectedCompany.id, "Challan")
         .then(r => setHasExcelTpl(r.data.hasExcelTemplate))
         .catch(() => setHasExcelTpl(false));
@@ -140,11 +148,12 @@ export default function ChallanPage() {
   // Re-fetch when filters or page change
   useEffect(() => {
     if (selectedCompany) fetchChallans(selectedCompany.id, page);
-  }, [page, search, statusFilter, clientFilter, dateFrom, dateTo]);
+  }, [page, search, statusFilter, divisionFilter, clientFilter, dateFrom, dateTo]);
 
   const resetFilters = () => {
     setSearch("");
     setStatusFilter("");
+    setDivisionFilter("");
     setClientFilter("");
     setDateFrom("");
     setDateTo("");
@@ -160,9 +169,11 @@ export default function ChallanPage() {
 
   const handleSaveChallan = async (payload) => {
     if (!selectedCompany) return;
-    await createDeliveryChallan(selectedCompany.id, payload);
+    // Return the created challan so the form can flush staged attachments
+    // against the new id. The form closes itself (after the flush) via onClose.
+    const res = await createDeliveryChallan(selectedCompany.id, payload);
     fetchChallans(selectedCompany.id, page);
-    setShowModal(false);
+    return res.data;
   };
 
   const handleCancel = async (challan) => {
@@ -291,7 +302,7 @@ export default function ChallanPage() {
     }
   };
 
-  const hasFilters = search || statusFilter || clientFilter || dateFrom || dateTo;
+  const hasFilters = search || statusFilter || divisionFilter || clientFilter || dateFrom || dateTo;
 
   return (
     <div>
@@ -364,6 +375,12 @@ export default function ChallanPage() {
                 <option value="Invoiced">Billed</option>
                 <option value="Cancelled">Cancelled</option>
               </select>
+              <DivisionSelect
+                companyId={selectedCompany.id}
+                value={divisionFilter}
+                onChange={(v) => { setDivisionFilter(v); setPage(1); }}
+                className="filter-select"
+              />
               {canViewClients && (
                 <div style={{ minWidth: 220, maxWidth: 340 }}>
                   <SearchableSelect
@@ -468,6 +485,7 @@ export default function ChallanPage() {
       {showModal && selectedCompany && (
         <ChallanForm
           companyId={selectedCompany.id}
+          defaultDivisionId={divisionFilter}
           onClose={() => setShowModal(false)}
           onSaved={handleSaveChallan}
         />

@@ -7,6 +7,7 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import SearchableSelect from "../Components/SearchableSelect";
+import DivisionSelect from "../Components/DivisionSelect";
 import { notify } from "../utils/notify";
 import GoodsReceiptForm from "../Components/GoodsReceiptForm";
 import GoodsReceiptTable from "../Components/GoodsReceiptTable";
@@ -39,6 +40,7 @@ export default function GoodsReceiptsPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [search, setSearch] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("");
+  const [divisionFilter, setDivisionFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
@@ -49,6 +51,7 @@ export default function GoodsReceiptsPage() {
       const params = { page: pg || page };
       if (search) params.search = search;
       if (supplierFilter) params.supplierId = supplierFilter;
+      if (divisionFilter) params.divisionId = divisionFilter;
       const { data } = await getGoodsReceiptsByCompanyPaged(selectedCompany.id, params);
       setReceipts(data.items || []);
       setTotalCount(data.totalCount || 0);
@@ -58,17 +61,23 @@ export default function GoodsReceiptsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany, page, search, supplierFilter]);
+  }, [selectedCompany, page, search, supplierFilter, divisionFilter]);
 
   useEffect(() => {
     if (selectedCompany) {
       getSuppliersByCompany(selectedCompany.id).then(r => setSuppliers(r.data || [])).catch(() => setSuppliers([]));
       setPage(1);
-      fetchReceipts(1);
+      // Division ids are per-company — a stale filter would blank the list.
+      // Resetting it retriggers the filter effect below, so only fetch
+      // directly when there's no reset to piggyback on (avoids a stale-
+      // division request racing the corrected one).
+      if (divisionFilter) setDivisionFilter("");
+      else fetchReceipts(1);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany]);
 
-  useEffect(() => { if (selectedCompany) fetchReceipts(page); }, [page, search, supplierFilter]);
+  useEffect(() => { if (selectedCompany) fetchReceipts(page); }, [page, search, supplierFilter, divisionFilter]);
 
   const onFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
   const handleDelete = async (gr) => {
@@ -129,6 +138,7 @@ export default function GoodsReceiptsPage() {
                   placeholder="All Suppliers"
                 />
               </div>
+              <DivisionSelect companyId={selectedCompany.id} value={divisionFilter} onChange={(v) => { setDivisionFilter(v); setPage(1); }} className="filter-select" />
               {isBigScreen && (
                 <div style={{ marginLeft: "auto" }}>
                   <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Goods receipts view mode" />
@@ -170,6 +180,7 @@ export default function GoodsReceiptsPage() {
                         <p style={cardStyles.text}><strong>Date:</strong> {new Date(gr.receiptDate).toLocaleDateString()}</p>
                         {gr.purchaseBillNumber && <p style={cardStyles.text}><strong>Linked PB:</strong> #{gr.purchaseBillNumber}</p>}
                         {gr.supplierChallanNumber && <p style={cardStyles.text}><strong>Supplier DC:</strong> {gr.supplierChallanNumber}</p>}
+                        {gr.divisionName && <span style={styles.divisionChip}>{gr.divisionName}</span>}
                         <p style={{ ...cardStyles.text, fontSize: "0.74rem" }}>{gr.items?.length || 0} items · {gr.status}</p>
                       </div>
                       <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
@@ -198,6 +209,7 @@ export default function GoodsReceiptsPage() {
         <GoodsReceiptForm
           companyId={selectedCompany.id}
           receiptId={editingId}
+          defaultDivisionId={editingId ? null : divisionFilter}
           onClose={() => { setShowForm(false); setEditingId(null); }}
           onSaved={() => { setShowForm(false); setEditingId(null); fetchReceipts(page); }}
         />
@@ -215,6 +227,7 @@ const styles = {
   loading: { display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem 0" },
   spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
   empty: { display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary },
+  divisionChip: { display: "inline-block", marginTop: "0.1rem", marginBottom: "0.35rem", fontSize: "0.72rem", fontWeight: 700, color: colors.blue, background: "#e3f0ff", padding: "0.12rem 0.55rem", borderRadius: 6 },
   pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", padding: "1rem 0", marginTop: "0.5rem" },
   pageBtn: { display: "inline-flex", alignItems: "center", gap: "0.2rem", padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
   pageInfo: { fontSize: "0.82rem", color: colors.textSecondary, fontWeight: 500 },

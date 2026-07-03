@@ -3,6 +3,7 @@ import {
   MdClose, MdPrint, MdLocalShipping, MdEdit, MdInventory2, MdReceiptLong,
 } from "react-icons/md";
 import { getSalesOrderChallans } from "../api/salesOrderApi";
+import AttachmentManager from "./AttachmentManager";
 import RichText from "./RichText";
 
 const colors = {
@@ -75,6 +76,7 @@ export default function SalesOrderDetailModal({ order, onClose, onPrint, onEdit,
             {order.requiredDate && <Meta label="Required Date" value={fmtDate(order.requiredDate)} />}
             {order.customerPoNumber && <Meta label="Customer PO" value={order.customerPoNumber + (order.customerPoDate ? ` (${fmtDate(order.customerPoDate)})` : "")} />}
             {order.salesQuoteNumber && <Meta label="Source Quote" value={`#${order.salesQuoteNumber}`} />}
+            {order.divisionName && <Meta label="Division" value={order.divisionName} />}
             {order.site && <Meta label="Site" value={order.site} />}
             {order.isImported && <Meta label="Origin" value="Imported (PO)" />}
           </div>
@@ -160,6 +162,9 @@ export default function SalesOrderDetailModal({ order, onClose, onPrint, onEdit,
               })}
             </div>
           )}
+
+          {/* Attachments — read-only (preview + download). */}
+          <AttachmentManager companyId={order.companyId} entityType="SalesOrder" entityId={order.id} mode="view" />
         </div>
 
         {/* Footer actions */}

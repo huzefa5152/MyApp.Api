@@ -3,7 +3,7 @@ import { MdUploadFile, MdTextSnippet, MdAdd, MdDelete, MdWarning, MdCheckCircle,
 import { parsePdf, parseText, ensureLookups } from "../api/poImportApi";
 import { getClientsByCompany, getClientById } from "../api/clientApi";
 import { createSalesOrder } from "../api/salesOrderApi";
-import { getPagedSalesQuotesByCompany } from "../api/salesQuoteApi";
+import { getSalesQuotesForPicker } from "../api/salesQuoteApi";
 import { getAllUnits } from "../api/unitsApi";
 import { formStyles, modalSizes } from "../theme";
 import { todayYmd } from "../utils/dateInput";
@@ -68,14 +68,15 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const [clientRes, unitsRes, quoteRes] = await Promise.all([
+        const [clientRes, unitsRes, quoteItems] = await Promise.all([
           getClientsByCompany(companyId),
           getAllUnits().catch(() => ({ data: [] })),
-          getPagedSalesQuotesByCompany(companyId, { pageSize: 200 }).catch(() => ({ data: { items: [] } })),
+          // Page-walking helper: the server clamps pageSize at 100.
+          getSalesQuotesForPicker(companyId).catch(() => []),
         ]);
         setClients(clientRes.data);
         setUnits(unitsRes.data || []);
-        setQuotes(quoteRes.data?.items || []);
+        setQuotes(quoteItems || []);
       } catch { /* ignore */ }
     };
     load();
@@ -111,6 +112,12 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
       }
 
       const data = res.data;
+      // A fresh parse is a fresh PO — drop any quote link chosen for a
+      // previous preview. Without this, re-parsing a PO that matches a
+      // different client keeps the old quote id in state while the picker
+      // shows "— not linked —" (its option list narrowed to the new
+      // client), silently linking the order to another client's quote.
+      setSalesQuoteId("");
       setPoNumber(data.poNumber || "");
       setPoDate(data.poDate ? data.poDate.split("T")[0] : "");
       setItems(data.items?.map((item, idx) => ({
@@ -176,9 +183,28 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
 
   const selectedClient = clients.find((c) => c.id === parseInt(selectedClientId));
   const clientSites = selectedClient?.site ? selectedClient.site.split(";").map((s) => s.trim()).filter(Boolean) : [];
-  // Only Draft / Sent / Accepted quotes are candidates for linking an imported PO.
-  const clientQuotes = quotes.filter((q) => String(q.clientId) === String(selectedClientId)
-    && (q.status === "Draft" || q.status === "Sent" || q.status === "Accepted"));
+  // Quote status on the paged list is DERIVED server-side — Active /
+  // Accepted / Expired, never the stored Draft/Sent. Active + Accepted are
+  // candidates for linking an imported PO (Expired isn't); Draft/Sent kept
+  // defensively should the API ever surface stored statuses. Before a
+  // client is picked the list spans the whole company (option labels carry
+  // client + division so it stays readable); once a client is set —
+  // manually or via quote pick — it narrows to that client's quotes.
+  const linkableQuotes = quotes.filter((q) =>
+    (q.status === "Active" || q.status === "Accepted" || q.status === "Draft" || q.status === "Sent")
+    && (!selectedClientId || String(q.clientId) === String(selectedClientId)));
+
+  // Picking a quote first auto-fills the client from it (same pre-select path
+  // as a matched POFormat), so the operator isn't asked for the client twice.
+  const handleQuotePick = async (quoteId) => {
+    setSalesQuoteId(quoteId);
+    if (!quoteId) return;
+    const q = quotes.find((x) => String(x.id) === String(quoteId));
+    if (!q?.clientId || String(q.clientId) === String(selectedClientId)) return;
+    if (!clients.some((c) => c.id === q.clientId)) await ensureClientInList(q.clientId);
+    setSelectedClientId(String(q.clientId));
+    setSite(""); // site belongs to the previous client
+  };
 
   const canSubmit = selectedClientId && deliveryDate && items.length > 0 &&
     items.every((i) => i.description.trim() && i.quantity > 0);
@@ -197,9 +223,16 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
       // Create a Sales Order from the parsed PO (quantity-only). The customer's
       // PO number/date carry onto the order; delivery challans are raised
       // against this order afterwards to track fulfilment.
+      const linkedQuote = salesQuoteId
+        ? quotes.find((x) => String(x.id) === String(salesQuoteId))
+        : null;
       const payload = {
         clientId: parseInt(selectedClientId),
         salesQuoteId: salesQuoteId ? parseInt(salesQuoteId) : null,
+        // The order lives in its source quote's division — same inheritance
+        // the convert-to-order flow applies, so the imported order numbers
+        // from the quote's division sequence and prints with its branding.
+        divisionId: linkedQuote?.divisionId ?? null,
         customerPoNumber: poNumber.trim() || null,
         customerPoDate: poDate ? new Date(poDate).toISOString() : null,
         orderDate: new Date(deliveryDate).toISOString(),
@@ -323,6 +356,22 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                 </div>
               )}
 
+              {/* Quote link is asked FIRST — picking one auto-fills the client
+                  below. Optional; the list narrows once a client is set. */}
+              <div style={styles.row}>
+                <div style={{ flex: 1, minWidth: 220 }}>
+                  <label style={styles.label}>Sales Quote (optional)</label>
+                  <select style={styles.select} value={salesQuoteId} onChange={(e) => handleQuotePick(e.target.value)}>
+                    <option value="">— not linked —</option>
+                    {linkableQuotes.map((q) => (
+                      <option key={q.id} value={q.id}>
+                        Quote #{q.quoteNumber} · {q.clientName}{q.divisionName ? ` · ${q.divisionName}` : ""}{q.status ? ` · ${q.status}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               {/* Header row: Client / Site / Delivery Date — same 2/1.5/1
                   layout as Add and Edit Challan so the import preview feels
                   identical to the regular create flow. */}
@@ -362,8 +411,8 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                 </div>
               </div>
 
-              {/* PO row: Number + Date + Indent No — same 1/1/1 (180/140/180)
-                  layout as Add and Edit Challan. */}
+              {/* PO row: Number + Date — same field sizing as Add and Edit
+                  Challan (the quote link moved to the top row above). */}
               <div style={styles.row}>
                 <div style={{ flex: 1, minWidth: 180 }}>
                   <label style={styles.label}>PO Number</label>
@@ -372,13 +421,6 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                 <div style={{ flex: 1, minWidth: 140 }}>
                   <label style={styles.label}>PO Date</label>
                   <input type="date" style={styles.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
-                </div>
-                <div style={{ flex: 1, minWidth: 180 }}>
-                  <label style={styles.label}>Sales Quote (optional)</label>
-                  <select style={styles.select} value={salesQuoteId} onChange={(e) => setSalesQuoteId(e.target.value)} disabled={!selectedClientId}>
-                    <option value="">{selectedClientId ? "— not linked —" : "Pick a client first"}</option>
-                    {clientQuotes.map((q) => <option key={q.id} value={q.id}>Quote #{q.quoteNumber}{q.status ? ` · ${q.status}` : ""}</option>)}
-                  </select>
                 </div>
               </div>
 

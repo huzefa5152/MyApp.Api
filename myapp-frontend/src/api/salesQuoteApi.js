@@ -3,6 +3,20 @@ import httpClient from "./httpClient";
 export const getPagedSalesQuotesByCompany = (companyId, params = {}) =>
   httpClient.get(`/salesquotes/company/${companyId}/paged`, { params });
 
+// Picker helper: the paged endpoint clamps pageSize at 100 server-side, so a
+// single oversized request silently truncates larger companies. Walk pages
+// (bounded) and return a flat item array.
+export const getSalesQuotesForPicker = async (companyId, params = {}, maxPages = 5) => {
+  const items = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const { data } = await getPagedSalesQuotesByCompany(companyId, { ...params, page, pageSize: 100 });
+    items.push(...(data?.items || []));
+    const total = data?.totalCount ?? items.length;
+    if (!data?.items?.length || items.length >= total) break;
+  }
+  return items;
+};
+
 export const getSalesQuoteById = (id) =>
   httpClient.get(`/salesquotes/${id}`);
 

@@ -10,6 +10,7 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import SearchableSelect from "../Components/SearchableSelect";
+import DivisionSelect from "../Components/DivisionSelect";
 import { notify } from "../utils/notify";
 import PurchaseBillForm from "../Components/PurchaseBillForm";
 import PurchaseBillTable from "../Components/PurchaseBillTable";
@@ -66,6 +67,7 @@ export default function PurchaseBillsPage() {
   // Seed from ?supplierId= so the Suppliers page "N purchase bills" chip
   // deep-links straight to this list filtered to that supplier.
   const [supplierFilter, setSupplierFilter] = useState(() => searchParams.get("supplierId") || "");
+  const [divisionFilter, setDivisionFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -175,6 +177,7 @@ export default function PurchaseBillsPage() {
       const params = { page: pg || page };
       if (search) params.search = search;
       if (supplierFilter) params.supplierId = supplierFilter;
+      if (divisionFilter) params.divisionId = divisionFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
       const { data } = await getPurchaseBillsByCompanyPaged(selectedCompany.id, params);
@@ -186,23 +189,29 @@ export default function PurchaseBillsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany, page, search, supplierFilter, dateFrom, dateTo]);
+  }, [selectedCompany, page, search, supplierFilter, divisionFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (selectedCompany) {
       getSuppliersByCompany(selectedCompany.id).then(r => setSuppliers(r.data || [])).catch(() => setSuppliers([]));
       setPage(1);
-      fetchBills(1);
+      // Division ids are per-company — a stale filter would blank the list.
+      // Resetting it retriggers the filter effect below, so only fetch
+      // directly when there's no reset to piggyback on (avoids a stale-
+      // division request racing the corrected one).
+      if (divisionFilter) setDivisionFilter("");
+      else fetchBills(1);
     } else {
       setBills([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany]);
 
-  useEffect(() => { if (selectedCompany) fetchBills(page); }, [page, search, supplierFilter, dateFrom, dateTo]);
+  useEffect(() => { if (selectedCompany) fetchBills(page); }, [page, search, supplierFilter, divisionFilter, dateFrom, dateTo]);
 
   const onFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
-  const hasFilters = search || supplierFilter || dateFrom || dateTo;
-  const resetFilters = () => { setSearch(""); setSupplierFilter(""); setDateFrom(""); setDateTo(""); setPage(1); };
+  const hasFilters = search || supplierFilter || divisionFilter || dateFrom || dateTo;
+  const resetFilters = () => { setSearch(""); setSupplierFilter(""); setDivisionFilter(""); setDateFrom(""); setDateTo(""); setPage(1); };
 
   const handleDelete = async (b) => {
     const ok = await confirm({
@@ -295,6 +304,12 @@ export default function PurchaseBillsPage() {
                   placeholder="All Suppliers"
                 />
               </div>
+              <DivisionSelect
+                companyId={selectedCompany.id}
+                value={divisionFilter}
+                onChange={(v) => { setDivisionFilter(v); setPage(1); }}
+                className="filter-select"
+              />
               <div className="filter-date-group">
                 <input type="date" className="filter-date-input" value={dateFrom} onChange={onFilterChange(setDateFrom)} title="From" />
                 <span className="filter-date-sep">–</span>
@@ -342,6 +357,7 @@ export default function PurchaseBillsPage() {
                           <MdShoppingCart style={{ color: colors.purple, marginRight: 6 }} />
                           PB #{b.purchaseBillNumber}
                         </h5>
+                        {b.divisionName && <span style={styles.divisionChip}>{b.divisionName}</span>}
                         <p style={cardStyles.text}><strong>Supplier:</strong> {b.supplierName}</p>
                         <p style={cardStyles.text}><strong>Date:</strong> {new Date(b.date).toLocaleDateString()}</p>
                         <p style={cardStyles.text}><strong>Grand Total:</strong> Rs. {b.grandTotal?.toLocaleString()}</p>
@@ -415,6 +431,7 @@ export default function PurchaseBillsPage() {
           companyId={selectedCompany.id}
           billId={editingId}
           readOnly={viewOnly}
+          defaultDivisionId={editingId ? null : divisionFilter}
           prefillFromInvoiceId={prefillFromInvoiceId}
           prefillItems={prefillItems}
           prefillSourceLabel={prefillSourceLabel}
@@ -658,6 +675,7 @@ const styles = {
   loading: { display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem 0" },
   spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
   empty: { display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary },
+  divisionChip: { display: "inline-block", marginBottom: "0.35rem", fontSize: "0.72rem", fontWeight: 700, color: colors.blue, background: "#e3f0ff", padding: "0.12rem 0.55rem", borderRadius: 6 },
   pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", padding: "1rem 0", marginTop: "0.5rem" },
   pageBtn: { display: "inline-flex", alignItems: "center", gap: "0.2rem", padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
   pageInfo: { fontSize: "0.82rem", color: colors.textSecondary, fontWeight: 500 },

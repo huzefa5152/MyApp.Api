@@ -11,6 +11,7 @@ import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { formStyles, modalSizes } from "../theme";
+import AttachmentManager from "./AttachmentManager";
 
 const colors = {
   blue: "#0d47a1",
@@ -26,7 +27,7 @@ const colors = {
   success: "#28a745",
 };
 
-export default function ChallanForm({ onClose, onSaved, companyId }) {
+export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisionId }) {
   const [client, setClient] = useState(null);
   const [site, setSite] = useState("");
   const [poNumber, setPoNumber] = useState("");
@@ -34,7 +35,9 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const [indentNo, setIndentNo] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
   const { has } = usePermissions();
-  const [divisionId, setDivisionId] = useState("");
+  // New challans default to the division the page is currently filtered to
+  // (so "filter to a division → New Challan" lands in that division).
+  const [divisionId, setDivisionId] = useState(defaultDivisionId ? String(defaultDivisionId) : "");
   const [items, setItems] = useState([
     { description: "", quantity: 1, unit: "", itemTypeId: null },
   ]);
@@ -47,6 +50,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const itemsContainerRef = useRef(null);
+  const attachmentRef = useRef(null);
 
   useEffect(() => {
     getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
@@ -127,7 +131,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
     setSaving(true);
     try {
-      await onSaved({
+      const saved = await onSaved({
         clientId: client.id,
         divisionId: divisionId ? parseInt(divisionId) : null,
         clientName: client.label,
@@ -148,6 +152,11 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
           quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
         })),
       });
+      // Upload any attachments staged before the challan had an id — must run
+      // BEFORE onClose() unmounts this form (and its staged files with it).
+      try {
+        if (saved?.id) await attachmentRef.current?.flush(saved.id);
+      } catch { /* attachments are best-effort — the challan is already saved */ }
       onClose();
     } catch (err) {
       // Server-supplied user-friendly message wins; otherwise show a
@@ -318,6 +327,16 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
               <button type="button" style={styles.addItemBtn} onClick={addItem}><MdAdd size={16} /> Add Item</button>
             </div>
+
+            {/* entityId=null — files are staged client-side and flushed against
+                the new challan id after save (this form is create-only). */}
+            <AttachmentManager
+              ref={attachmentRef}
+              companyId={companyId}
+              entityType="DeliveryChallan"
+              entityId={null}
+              mode="edit"
+            />
           </div>
 
           <div style={formStyles.footer}>

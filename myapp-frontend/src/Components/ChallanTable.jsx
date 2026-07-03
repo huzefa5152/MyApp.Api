@@ -69,7 +69,12 @@ export default function ChallanTable({
     {
       key: "clientName",
       header: "Client",
-      render: (c) => c.clientName || "—",
+      render: (c) => (
+        <span>
+          {c.clientName || "—"}
+          {c.divisionName && <span style={divisionChip}>{c.divisionName}</span>}
+        </span>
+      ),
     },
     {
       key: "poNumber",
@@ -202,6 +207,19 @@ export default function ChallanTable({
     </>
   );
 }
+
+// Same palette as SalesQuotePage's division chip. inline-block (no nowrap /
+// ellipsis) so long division names wrap instead of truncating.
+const divisionChip = {
+  display: "inline-block",
+  marginLeft: 6,
+  fontSize: "0.7rem",
+  fontWeight: 700,
+  color: "#0d47a1",
+  background: "#e3f0ff",
+  padding: "0.1rem 0.5rem",
+  borderRadius: 6,
+};
 
 const baseBtn = {
   display: "inline-flex",

@@ -1,7 +1,9 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MdUndo, MdSearch, MdReceipt, MdArrowBack } from "react-icons/md";
 import { getInvoicesByCompany, createNote } from "../api/invoiceApi";
+import { getDivisionsByCompany } from "../api/divisionApi";
+import AttachmentManager from "../Components/AttachmentManager";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
@@ -58,6 +60,14 @@ export default function CreditDebitNotePage() {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  // Division + payment filters for the invoice picker. A note inherits its
+  // original invoice's division (and numbers from that division's own note
+  // sequence), so the operator narrows the picker to one division's
+  // submitted invoices. Payment filter defaults to PAID — returns are
+  // normally raised against settled invoices; switch to All to widen.
+  const [divisions, setDivisions] = useState([]);
+  const [divisionFilter, setDivisionFilter] = useState("all"); // all | company | <divisionId>
+  const [paymentFilter, setPaymentFilter] = useState("Paid");  // Paid | All | Unpaid | PartiallyPaid | Overdue
   const [selected, setSelected] = useState(null);   // the chosen original invoice
   const [lines, setLines] = useState([]);           // [{ id, include, noteQty, noteRate, ... }]
   const [reason, setReason] = useState(isCredit ? "Return of goods" : "");
@@ -65,6 +75,7 @@ export default function CreditDebitNotePage() {
   const [affectsStock, setAffectsStock] = useState(isCredit); // derived default, operator-overridable
   const [stockTouched, setStockTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const attachmentRef = useRef(null); // staged files flush against the note id post-create
 
   const pickInvoice = useCallback((inv) => {
     setSelected(inv);
@@ -85,6 +96,9 @@ export default function CreditDebitNotePage() {
     if (!selectedCompany?.id) return;
     setLoading(true);
     try {
+      getDivisionsByCompany(selectedCompany.id)
+        .then(r => setDivisions(r.data || []))
+        .catch(() => setDivisions([]));
       const { data } = await getInvoicesByCompany(selectedCompany.id);
       // Only FBR-submitted sale invoices; per type, hide ones that already
       // carry a live note of THIS type (FBR 0064 — one per type per invoice).
@@ -113,13 +127,18 @@ export default function CreditDebitNotePage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return invoices.slice(0, 50);
-    return invoices.filter((i) =>
-      String(i.invoiceNumber).includes(q) ||
-      (i.clientName || "").toLowerCase().includes(q) ||
-      (i.fbrIRN || "").toLowerCase().includes(q)
-    ).slice(0, 50);
-  }, [invoices, search]);
+    let list = invoices;
+    if (divisionFilter === "company") list = list.filter((i) => !i.divisionId);
+    else if (divisionFilter !== "all") list = list.filter((i) => String(i.divisionId) === String(divisionFilter));
+    if (paymentFilter !== "All") list = list.filter((i) => (i.paymentStatus || "Unpaid") === paymentFilter);
+    if (q) {
+      list = list.filter((i) =>
+        String(i.invoiceNumber).includes(q) ||
+        (i.clientName || "").toLowerCase().includes(q) ||
+        (i.fbrIRN || "").toLowerCase().includes(q));
+    }
+    return list.slice(0, 50);
+  }, [invoices, search, divisionFilter, paymentFilter]);
 
   const clearSelection = () => { setSelected(null); setLines([]); setRemarks(""); };
 
@@ -163,6 +182,10 @@ export default function CreditDebitNotePage() {
         })),
       };
       const { data: note } = await createNote(payload);
+      // Upload attachments staged before the note had an id — must finish
+      // BEFORE navigate() unmounts this page.
+      try { await attachmentRef.current?.flush(note.id); }
+      catch { /* attachments are best-effort — the note is already created */ }
       notify(`${label} #${note.invoiceNumber} created against bill #${selected.invoiceNumber}. Validate then submit it to FBR.`, "success");
       navigate(isCredit ? "/credit-notes" : "/debit-notes");
     } catch (err) {
@@ -193,6 +216,34 @@ export default function CreditDebitNotePage() {
 
       {!selected ? (
         <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: 10, margin: "12px 0 0" }}>
+            <label style={{ fontSize: "0.82rem", color: colors.textSecondary }}>
+              Division
+              <select
+                value={divisionFilter}
+                onChange={(e) => setDivisionFilter(e.target.value)}
+                style={{ width: "100%", padding: 8, borderRadius: 8, border: `1px solid ${colors.border}`, marginTop: 4, background: "#fff" }}
+              >
+                <option value="all">All divisions</option>
+                <option value="company">Company level (no division)</option>
+                {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </label>
+            <label style={{ fontSize: "0.82rem", color: colors.textSecondary }}>
+              Payment status
+              <select
+                value={paymentFilter}
+                onChange={(e) => setPaymentFilter(e.target.value)}
+                style={{ width: "100%", padding: 8, borderRadius: 8, border: `1px solid ${colors.border}`, marginTop: 4, background: "#fff" }}
+              >
+                <option value="Paid">Paid only</option>
+                <option value="All">All statuses</option>
+                <option value="PartiallyPaid">Partially paid</option>
+                <option value="Unpaid">Unpaid</option>
+                <option value="Overdue">Overdue</option>
+              </select>
+            </label>
+          </div>
           <div style={{ position: "relative", margin: "12px 0" }}>
             <MdSearch style={{ position: "absolute", left: 10, top: 12, color: colors.textSecondary }} />
             <input
@@ -205,7 +256,7 @@ export default function CreditDebitNotePage() {
           {loading ? (
             <p style={{ color: colors.textSecondary }}>Loading…</p>
           ) : filtered.length === 0 ? (
-            <p style={{ color: colors.textSecondary }}>No eligible FBR-submitted invoices.</p>
+            <p style={{ color: colors.textSecondary }}>No eligible FBR-submitted invoices{paymentFilter !== "All" ? ` with status "${paymentFilter}"` : ""}{divisionFilter !== "all" ? " in the selected division" : ""}. Adjust the filters above to widen the list.</p>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))", gap: 10 }}>
               {filtered.map((inv) => (
@@ -218,6 +269,18 @@ export default function CreditDebitNotePage() {
                     <MdReceipt style={{ color: colors.blue }} /> Bill #{inv.invoiceNumber}
                   </div>
                   <div style={{ fontSize: "0.85rem", color: colors.textSecondary }}>{inv.clientName}</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+                    <span style={{ fontSize: "0.7rem", fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: "#e3f2fd", color: "#0d47a1" }}>
+                      {inv.divisionName || "Company level"}
+                    </span>
+                    <span style={{
+                      fontSize: "0.7rem", fontWeight: 700, padding: "2px 8px", borderRadius: 10,
+                      background: inv.paymentStatus === "Paid" ? "#e8f5e9" : inv.paymentStatus === "PartiallyPaid" ? "#fff8e1" : "#ffebee",
+                      color:      inv.paymentStatus === "Paid" ? "#1b5e20" : inv.paymentStatus === "PartiallyPaid" ? "#b26a00" : "#b71c1c",
+                    }}>
+                      {inv.paymentStatus === "PartiallyPaid" ? "Partially paid" : (inv.paymentStatus || "Unpaid")}
+                    </span>
+                  </div>
                   <div style={{ fontSize: "0.8rem", color: colors.textSecondary }}>
                     {inv.date ? new Date(inv.date).toLocaleDateString() : ""} · Rs {Number(inv.grandTotal).toLocaleString()}
                   </div>
@@ -237,6 +300,9 @@ export default function CreditDebitNotePage() {
 
           <div style={{ padding: 12, borderRadius: 10, border: `1px solid ${colors.border}`, background: colors.inputBg, marginBottom: 12 }}>
             <strong>Bill #{selected.invoiceNumber}</strong> · {selected.clientName}
+            <span style={{ marginLeft: 8, fontSize: "0.72rem", fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: "#e3f2fd", color: "#0d47a1" }}>
+              {selected.divisionName || "Company level"}
+            </span>
             <div style={{ fontSize: "0.78rem", color: colors.textSecondary, wordBreak: "break-all" }}>IRN {selected.fbrIRN}</div>
           </div>
 
@@ -330,6 +396,16 @@ export default function CreditDebitNotePage() {
               <span style={{ color: colors.textSecondary }}> (off = value-only adjustment, inventory untouched)</span>
             </span>
           </label>
+
+          {/* Notes are Invoice rows — staged here, flushed against the note id after create */}
+          <AttachmentManager
+            ref={attachmentRef}
+            companyId={selectedCompany.id}
+            entityType="Invoice"
+            entityId={null}
+            mode="edit"
+            title="Attachments"
+          />
 
           {/* Totals + submit */}
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 16 }}>

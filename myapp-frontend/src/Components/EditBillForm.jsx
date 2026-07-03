@@ -15,6 +15,7 @@ import LookupAutocomplete from "./LookupAutocomplete";
 import RichText from "./RichText";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import ItemTypeForm from "./ItemTypeForm";
+import AttachmentManager from "./AttachmentManager";
 
 const colors = {
   blue: "#0d47a1",
@@ -1065,6 +1066,20 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                       ))}
                     </select>
                   </div>
+                  {/* Division is set at creation time and never editable here —
+                      shown read-only so the operator can tell which division's
+                      sequence the bill belongs to. */}
+                  {invoice?.divisionName && (
+                    <div style={{ flex: 1, minWidth: 140 }}>
+                      <label style={styles.label}>Division</label>
+                      <input
+                        type="text"
+                        style={{ ...styles.input, ...styles.readOnlyInput }}
+                        value={invoice.divisionName}
+                        readOnly
+                      />
+                    </div>
+                  )}
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <label style={styles.label}>Bill Date</label>
                     <input
@@ -1438,6 +1453,19 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     ⓘ Editing this bill will clear its FBR validation status. You'll need to re-validate before submitting to FBR.
                   </div>
                 )}
+
+                {/* Attachments — the bill exists, so uploads bind immediately.
+                    Rendered in every tier (read-only view and the narrow
+                    item-type modes included): the component permission-gates
+                    its own upload / delete buttons. View tier renders
+                    mode="view" (no drop-zone / folder affordances) to match
+                    the other modules' view modals. */}
+                <AttachmentManager
+                  companyId={invoice.companyId}
+                  entityType="Invoice"
+                  entityId={invoice.id}
+                  mode={readOnly ? "view" : "edit"}
+                />
               </>
             )}
           </div>

@@ -15,6 +15,7 @@ import { writeAndPrint } from "../utils/printDocument";
 import { defaultOrderTemplate } from "../utils/salesDocTemplates";
 import { richTextToPlain } from "../utils/richText";
 import { dropdownStyles } from "../theme";
+import DivisionSelect from "../Components/DivisionSelect";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
@@ -55,6 +56,7 @@ export default function SalesOrderPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [divisionFilter, setDivisionFilter] = useState("");
 
   const fetchOrders = useCallback(async (companyId, pg) => {
     if (!companyId) return;
@@ -63,28 +65,40 @@ export default function SalesOrderPage() {
       const params = { page: pg || page };
       if (search) params.search = search;
       if (statusFilter) params.status = statusFilter;
+      if (divisionFilter) params.divisionId = divisionFilter;
       const { data } = await getPagedSalesOrdersByCompany(companyId, params);
       setOrders(data.items);
       setTotalCount(data.totalCount);
       setTotalPages(data.totalPages);
     } catch { setOrders([]); setTotalCount(0); setTotalPages(0); }
     finally { setLoading(false); }
-  }, [page, search, statusFilter]);
+  }, [page, search, statusFilter, divisionFilter]);
 
   useEffect(() => {
-    if (selectedCompany) { setPage(1); fetchOrders(selectedCompany.id, 1); }
-    else setOrders([]);
+    // Division ids are per-company — a stale filter would blank the list.
+    // Resetting it retriggers the filter effect below, so only fetch
+    // directly when there's no reset to piggyback on (avoids a stale-
+    // division request racing the corrected one).
+    if (selectedCompany) {
+      setPage(1);
+      if (divisionFilter) setDivisionFilter("");
+      else fetchOrders(selectedCompany.id, 1);
+    } else { setDivisionFilter(""); setOrders([]); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany]);
-  useEffect(() => { if (selectedCompany) fetchOrders(selectedCompany.id, page); }, [page, search, statusFilter]);
+  useEffect(() => { if (selectedCompany) fetchOrders(selectedCompany.id, page); }, [page, search, statusFilter, divisionFilter]);
 
   const reload = () => selectedCompany && fetchOrders(selectedCompany.id, page);
 
   const handleSave = async (payload) => {
-    if (editOrder) await updateSalesOrder(editOrder.id, payload);
-    else await createSalesOrder(selectedCompany.id, payload);
+    // Return the saved order so the form can flush staged attachments against
+    // the new id. The form closes itself (after the flush) via onClose.
+    const res = editOrder
+      ? await updateSalesOrder(editOrder.id, payload)
+      : await createSalesOrder(selectedCompany.id, payload);
     reload();
-    setShowForm(false); setEditOrder(null);
     notify(editOrder ? "Order updated." : "Order created.", "success");
+    return res.data;
   };
 
   const handleStatus = async (o, status) => {
@@ -166,11 +180,12 @@ export default function SalesOrderPage() {
 
       {loadingCompanies ? <Spinner label="Loading companies..." /> : companies.length > 0 ? (
         <>
-          <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
             <MdBusiness size={20} color={colors.blue} />
             <select style={dropdownStyles.base} value={selectedCompany?.id || ""} onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}>
               {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
             </select>
+            <DivisionSelect companyId={selectedCompany?.id} value={divisionFilter} onChange={(v) => { setDivisionFilter(v); setPage(1); }} style={dropdownStyles.base} />
           </div>
           {selectedCompany && (
             <div className="filters-row">
@@ -206,6 +221,7 @@ export default function SalesOrderPage() {
                   <div style={st.metaRow}><span>{fmtDate(o.orderDate)}</span><span>{o.items?.length || 0} item{(o.items?.length || 0) !== 1 ? "s" : ""}</span></div>
                   {o.customerPoNumber && <div style={st.meta}>Customer PO: {o.customerPoNumber}</div>}
                   {o.salesQuoteNumber && <div style={st.meta}>From Quote #{o.salesQuoteNumber}</div>}
+                  {o.divisionName && <span style={st.divisionChip}>{o.divisionName}</span>}
                   <div style={st.fulfilBar}>
                     {(o.items || []).slice(0, 4).map((i) => (
                       <div key={i.id} style={st.fulfilRow}>
@@ -254,7 +270,7 @@ export default function SalesOrderPage() {
       )}
 
       {showForm && selectedCompany && (
-        <SalesOrderForm companyId={selectedCompany.id} order={editOrder} onClose={() => { setShowForm(false); setEditOrder(null); }} onSaved={handleSave} />
+        <SalesOrderForm companyId={selectedCompany.id} order={editOrder} defaultDivisionId={editOrder ? null : divisionFilter} onClose={() => { setShowForm(false); setEditOrder(null); }} onSaved={handleSave} />
       )}
       {deliverOrder && (
         <CreateChallanFromOrderModal order={deliverOrder} onClose={() => setDeliverOrder(null)} onCreated={onChallanCreated} />
@@ -315,6 +331,7 @@ const st = {
   client: { marginTop: "0.5rem", fontWeight: 600, color: colors.textPrimary, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
   metaRow: { display: "flex", justifyContent: "space-between", marginTop: "0.35rem", fontSize: "0.8rem", color: colors.textSecondary },
   meta: { marginTop: "0.2rem", fontSize: "0.78rem", color: colors.textSecondary },
+  divisionChip: { display: "inline-block", marginTop: "0.35rem", fontSize: "0.72rem", fontWeight: 700, color: colors.blue, background: "#e3f0ff", padding: "0.12rem 0.55rem", borderRadius: 6 },
   fulfilBar: { marginTop: "0.6rem", borderTop: `1px dashed ${colors.cardBorder}`, paddingTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.2rem" },
   fulfilRow: { display: "flex", justifyContent: "space-between", gap: "0.5rem", fontSize: "0.78rem" },
   fItem: { color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 },

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { MdAdd, MdDelete, MdReceipt } from "react-icons/md";
 import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById } from "../api/purchaseBillApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
@@ -10,6 +10,7 @@ import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
+import AttachmentManager from "./AttachmentManager";
 import { usePermissions } from "../contexts/PermissionsContext";
 
 const colors = {
@@ -22,7 +23,7 @@ const colors = {
   inputBorder: "#d0d7e2",
 };
 
-export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, prefillItems = null, prefillSourceLabel = null, readOnly = false }) {
+export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, prefillItems = null, prefillSourceLabel = null, readOnly = false, defaultDivisionId = null }) {
   const isEdit = !!billId;
   const isAgainstSale = !!prefillFromInvoiceId;
   // "Purchase Against Sales Order(s)" prefill — plain lines (NOT the FBR
@@ -33,7 +34,10 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [supplierId, setSupplierId] = useState("");
   const { has } = usePermissions();
   const canViewDivisions = has("divisions.manage.view");
-  const [divisionId, setDivisionId] = useState("");
+  // New bills default to the division the list is filtered to; edits hydrate
+  // their stored division from the loaded bill below.
+  const [divisionId, setDivisionId] = useState(
+    !isEdit && defaultDivisionId ? String(defaultDivisionId) : "");
   const [date, setDate] = useState(todayYmd());
   const [supplierBillNumber, setSupplierBillNumber] = useState("");
   const [supplierIRN, setSupplierIRN] = useState("");
@@ -45,6 +49,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [saving, setSaving] = useState(false);
   // Source-bill metadata when in "Purchase Against Sale" mode
   const [sourceBill, setSourceBill] = useState(null);
+  const attachmentRef = useRef(null);
 
   function newRow() {
     return {
@@ -243,6 +248,12 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       const res = isEdit
         ? await updatePurchaseBill(billId, payload)
         : await createPurchaseBill(payload);
+      // Upload any attachments staged before the bill had an id. No-op in
+      // edit mode (there they upload immediately) and when nothing's staged.
+      try {
+        const savedId = res.data?.id ?? billId;
+        if (savedId) await attachmentRef.current?.flush(savedId);
+      } catch { /* attachments are best-effort — the bill is already saved */ }
       notify(`Purchase bill ${isEdit ? "updated" : "created"}.`, "success");
       onSaved(res.data);
       onClose();
@@ -261,8 +272,8 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+          <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
             {error && <div style={formStyles.error}>{error}</div>}
 
             {sourceBill && (
@@ -441,8 +452,17 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               <span></span>
               <strong style={{ fontSize: "1.05rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
             </div>
-          </div>
           </fieldset>
+
+            {/* Outside the disabled fieldset so preview/download stay clickable in view mode. */}
+            <AttachmentManager
+              ref={attachmentRef}
+              companyId={companyId}
+              entityType="PurchaseBill"
+              entityId={billId ?? null}
+              mode={readOnly ? "view" : "edit"}
+            />
+          </div>
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>{readOnly ? "Close" : "Cancel"}</button>
             {!readOnly && (

@@ -1,6 +1,7 @@
-import { MdPerson, MdReceipt, MdCalendarToday, MdLocationOn, MdAssignmentTurnedIn, MdEventNote } from "react-icons/md";
+import { MdPerson, MdReceipt, MdCalendarToday, MdLocationOn, MdAssignmentTurnedIn, MdEventNote, MdAccountTree } from "react-icons/md";
 import { formStyles, modalSizes } from "../theme";
 import RichText from "./RichText";
+import AttachmentManager from "./AttachmentManager";
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "—");
 
@@ -88,6 +89,15 @@ export default function ChallanModal({ challan, onClose }) {
                 </div>
               </div>
             )}
+            {challan.divisionName && (
+              <div style={styles.infoItem}>
+                <MdAccountTree size={16} color={colors.blue} />
+                <div>
+                  <span style={styles.infoLabel}>Division</span>
+                  <span style={styles.infoValue}>{challan.divisionName}</span>
+                </div>
+              </div>
+            )}
             <div style={styles.infoItem}>
               <MdAssignmentTurnedIn size={16} color={colors.textSecondary} />
               <div>
@@ -129,6 +139,14 @@ export default function ChallanModal({ challan, onClose }) {
               </table>
             </div>
           </div>
+
+          {/* Read-only attachment list (preview + download only). */}
+          <AttachmentManager
+            companyId={challan.companyId}
+            entityType="DeliveryChallan"
+            entityId={challan.id}
+            mode="view"
+          />
         </div>
 
         {/* Footer */}

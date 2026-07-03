@@ -138,7 +138,12 @@ export default function InvoiceTable({
     {
       key: "clientName",
       header: "Client",
-      render: (i) => i.clientName || "—",
+      render: (i) => (
+        <span>
+          {i.clientName || "—"}
+          {i.divisionName && <span style={divisionChip}>{i.divisionName}</span>}
+        </span>
+      ),
     },
     // Returns tab only: which invoice the note reverses + the FBR reason.
     ...(isReturnsMode ? [{
@@ -420,6 +425,19 @@ export default function InvoiceTable({
     />
   );
 }
+
+// Same chip ChallanTable uses — wraps with the client name, no
+// nowrap/ellipsis, so long division names never mask each other.
+const divisionChip = {
+  display: "inline-block",
+  marginLeft: 6,
+  fontSize: "0.7rem",
+  fontWeight: 700,
+  color: "#0d47a1",
+  background: "#e3f0ff",
+  padding: "0.1rem 0.5rem",
+  borderRadius: 6,
+};
 
 const baseBtn = {
   display: "inline-flex",

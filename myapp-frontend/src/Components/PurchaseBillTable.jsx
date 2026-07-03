@@ -23,7 +23,12 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
     {
       key: "supplierName",
       header: "Supplier",
-      render: (b) => b.supplierName || "—",
+      render: (b) => (
+        <>
+          {b.supplierName || "—"}
+          {b.divisionName && <span style={divisionChip}>{b.divisionName}</span>}
+        </>
+      ),
     },
     {
       key: "date",
@@ -122,6 +127,9 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
     />
   );
 }
+
+// Subtle per-row division tag (mirrors SalesQuotePage's card chip).
+const divisionChip = { display: "inline-block", marginLeft: 6, fontSize: "0.7rem", fontWeight: 700, color: "#0d47a1", background: "#e3f0ff", padding: "0.1rem 0.5rem", borderRadius: 6 };
 
 const baseBtn = {
   display: "inline-flex",

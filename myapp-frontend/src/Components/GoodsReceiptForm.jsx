@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
 import { createGoodsReceipt, updateGoodsReceipt, getGoodsReceiptById } from "../api/goodsReceiptApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
@@ -10,13 +10,17 @@ import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
+import AttachmentManager from "./AttachmentManager";
 import { usePermissions } from "../contexts/PermissionsContext";
 
-export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSaved }) {
+export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSaved, defaultDivisionId }) {
   const isEdit = !!receiptId;
   const { has } = usePermissions();
   const canViewDivisions = has("divisions.manage.view");
-  const [divisionId, setDivisionId] = useState("");
+  // New receipts default to the division currently being filtered (so "filter
+  // to a division → New Receipt" lands in that division); edits hydrate from
+  // the loaded receipt below.
+  const [divisionId, setDivisionId] = useState(!isEdit && defaultDivisionId ? String(defaultDivisionId) : "");
   const [suppliers, setSuppliers] = useState([]);
   const [bills, setBills] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -30,6 +34,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   const [items, setItems] = useState([{ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const attachmentRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -98,6 +103,12 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
       const res = isEdit
         ? await updateGoodsReceipt(receiptId, { ...payload, status: undefined })
         : await createGoodsReceipt(payload);
+      // Upload any attachments staged before the receipt had an id. No-op in
+      // edit mode (there they upload immediately) and when nothing's staged.
+      try {
+        const savedId = res.data?.id ?? receiptId;
+        if (savedId) await attachmentRef.current?.flush(savedId);
+      } catch { /* attachments are best-effort — the receipt is already saved */ }
       notify(`Goods Receipt ${isEdit ? "updated" : "created"}.`, "success");
       onSaved(res.data);
       onClose();
@@ -206,6 +217,14 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                 </tbody>
               </table>
             </div>
+
+            <AttachmentManager
+              ref={attachmentRef}
+              companyId={companyId}
+              entityType="GoodsReceipt"
+              entityId={receiptId ?? null}
+              mode="edit"
+            />
           </div>
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
