@@ -814,8 +814,23 @@ namespace MyApp.Api.Services.Implementations
                 .ToDictionary(t => t.Id, t => clientByRef[$"trader:{t.Id}"]);
             var supplierIdByTrader = traders.Where(t => supplierByRef.ContainsKey($"trader:{t.Id}"))
                 .ToDictionary(t => t.Id, t => supplierByRef[$"trader:{t.Id}"]);
-            var invoiceIdByDoc = await _db.Invoices.Where(i => i.CompanyId == companyId && i.ExternalRef != null)
-                .ToDictionaryAsync(i => i.ExternalRef!, i => i.Id);
+            // Step-2 stores sales refs as "sinv:{legacyCompanyId}:{doc}" (division-
+            // namespaced); older imports used "sinv:{doc}". ReceiptMaster/Detail
+            // expose no legacy FKCompanyID — only FKDocumentNumber_Sale — so key
+            // by the legacy doc number and keep ClientId so an ambiguous doc
+            // number (same number in 2+ divisions) can be pinned via the
+            // receipt's trader.
+            var invoiceRefs = await _db.Invoices.Where(i => i.CompanyId == companyId && i.ExternalRef != null)
+                .Select(i => new { i.Id, i.ClientId, i.ExternalRef }).ToListAsync();
+            var invoicesByLegacyDoc = new Dictionary<int, List<(int InvoiceId, int ClientId)>>();
+            foreach (var r in invoiceRefs)
+            {
+                var parts = r.ExternalRef!.Split(':');
+                if (parts.Length < 2 || parts[0] != "sinv") continue;
+                if (!int.TryParse(parts[^1], out var legacyDoc)) continue;
+                if (!invoicesByLegacyDoc.TryGetValue(legacyDoc, out var lst)) { lst = new(); invoicesByLegacyDoc[legacyDoc] = lst; }
+                lst.Add((r.Id, r.ClientId));
+            }
             var billIdByDoc = await _db.PurchaseBills.Where(p => p.CompanyId == companyId && p.ExternalRef != null)
                 .ToDictionaryAsync(p => p.ExternalRef!, p => p.Id);
 
@@ -823,27 +838,50 @@ namespace MyApp.Api.Services.Implementations
             var touchedInvoices = new HashSet<int>();
             var touchedBills = new HashSet<int>();
 
+            int ambiguousReceiptAllocs = 0;
+            int ResolveReceiptInvoice(int traderId, int doc)
+            {
+                if (!invoicesByLegacyDoc.TryGetValue(doc, out var candidates)) return 0;
+                if (candidates.Count == 1) return candidates[0].InvoiceId;
+                // Same doc number imported in 2+ divisions: the receipt row has
+                // no legacy company id, so match on the receipt's trader.
+                var clientId = clientIdByTrader.GetValueOrDefault(traderId);
+                var matches = clientId != 0
+                    ? candidates.Where(c => c.ClientId == clientId).ToList()
+                    : new List<(int InvoiceId, int ClientId)>();
+                if (matches.Count == 1) return matches[0].InvoiceId;
+                ambiguousReceiptAllocs++;
+                return 0;
+            }
+
             await ImportMoneyDocsAsync(companyId, PaymentDirection.Receipt,
                 ReadReceiptHeaders(), ReadReceiptAllocs(),
                 tid => clientIdByTrader.GetValueOrDefault(tid),
-                doc => invoiceIdByDoc.GetValueOrDefault($"sinv:{doc}"),
+                ResolveReceiptInvoice,
                 touchedInvoices, result);
             await ImportMoneyDocsAsync(companyId, PaymentDirection.Payment,
                 ReadPaymentHeaders(), ReadPaymentAllocs(),
                 tid => supplierIdByTrader.GetValueOrDefault(tid),
-                doc => billIdByDoc.GetValueOrDefault($"pbill:{doc}"),
+                (_, doc) => billIdByDoc.GetValueOrDefault($"pbill:{doc}"),
                 touchedBills, result);
+
+            if (ambiguousReceiptAllocs > 0)
+            {
+                result.Skipped["receiptAllocationsAmbiguousDivision"] = ambiguousReceiptAllocs;
+                result.Notes.Add($"Skipped {ambiguousReceiptAllocs} receipt allocations whose legacy doc number matched invoices in multiple divisions and the receipt's trader couldn't single one out.");
+            }
 
             await ReflowPaidTotalsAsync(companyId, result);
             return result;
         }
 
         // Generic for both directions: a money document settles target documents.
-        // resolveTarget maps a legacy target doc-number to our Invoice/Bill id (0 = not imported).
+        // resolveTarget maps (header traderId, legacy target doc-number) to our
+        // Invoice/Bill id (0 = not imported / unresolvable).
         private async Task ImportMoneyDocsAsync(
             int companyId, PaymentDirection direction,
             List<MoneyHeaderRow> headers, Dictionary<int, List<(int Target, decimal Amount)>> allocsByDoc,
-            Func<int, int> resolveContact, Func<int, int> resolveTarget,
+            Func<int, int> resolveContact, Func<int, int, int> resolveTarget,
             HashSet<int> touched, LegacyImportResult result)
         {
             var existingNums = await _db.Payments
@@ -857,7 +895,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 if (existing.Contains(h.Doc)) { skippedExisting++; continue; }
                 var lines = (allocsByDoc.GetValueOrDefault(h.Doc) ?? new())
-                    .Select(l => (TargetId: resolveTarget(l.Target), l.Amount))
+                    .Select(l => (TargetId: resolveTarget(h.TraderId, l.Target), l.Amount))
                     .Where(l => l.TargetId != 0 && l.Amount > 0)
                     .ToList();
                 if (lines.Count == 0) { skippedNoAlloc++; continue; }
