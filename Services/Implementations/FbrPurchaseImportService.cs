@@ -35,7 +35,8 @@ namespace MyApp.Api.Services.Implementations
         }
 
         public async Task<FbrImportCommitResponse> CommitAsync(
-            Stream fileStream, string originalFileName, int companyId, int? userId)
+            Stream fileStream, string originalFileName, int companyId, int? userId,
+            int? divisionId = null)
         {
             // The commit path re-runs Preview's pipeline (parse → filter
             // → match → group). This is intentionally stateless: the
@@ -83,7 +84,7 @@ namespace MyApp.Api.Services.Implementations
                 }
 
                 var oneResult = await _committer.CommitOneInvoiceAsync(
-                    companyId, userId, inv, response.Counts);
+                    companyId, userId, divisionId, inv, response.Counts);
                 response.Invoices.Add(oneResult);
 
                 switch (oneResult.Outcome)

@@ -46,6 +46,10 @@ namespace MyApp.Api.Services.Interfaces
         /// InvoiceItem / DeliveryItem / PurchaseItem precision. Pre-fix
         /// fractional UOMs were truncated at this boundary.
         /// </summary>
+        /// <param name="divisionId">The source document's division tag —
+        /// callers pass document.DivisionId so division-restricted stock
+        /// views can scope the ledger. Null for company-level documents,
+        /// opening balances, and adjustments.</param>
         Task RecordMovementAsync(
             int companyId,
             int itemTypeId,
@@ -54,7 +58,8 @@ namespace MyApp.Api.Services.Interfaces
             StockMovementSourceType sourceType,
             int? sourceId,
             DateTime movementDate,
-            string? notes = null);
+            string? notes = null,
+            int? divisionId = null);
 
         /// <summary>
         /// Current on-hand for one item under one company. Computed as
@@ -62,17 +67,23 @@ namespace MyApp.Api.Services.Interfaces
         /// <paramref name="asOfDate"/> (default: now). Returns 0 when no
         /// data exists. Reads work even when tracking is disabled.
         /// </summary>
-        Task<decimal> GetOnHandAsync(int companyId, int itemTypeId, DateTime? asOfDate = null);
+        Task<decimal> GetOnHandAsync(int companyId, int itemTypeId, DateTime? asOfDate = null,
+            HashSet<int>? allowedDivisionIds = null);
 
         /// <summary>
         /// Bulk on-hand lookup — same math as <see cref="GetOnHandAsync"/>
         /// but for many items at once. Returns a dictionary keyed by
         /// itemTypeId; missing keys mean "no data, treat as 0".
+        /// <paramref name="allowedDivisionIds"/> is the division-RBAC scope:
+        /// non-null restricts the movement sum to company-level rows plus
+        /// these divisions (opening balances are company-level and always
+        /// included — policy D1). Null = unrestricted.
         /// </summary>
         Task<Dictionary<int, decimal>> GetOnHandBulkAsync(
             int companyId,
             IEnumerable<int> itemTypeIds,
-            DateTime? asOfDate = null);
+            DateTime? asOfDate = null,
+            HashSet<int>? allowedDivisionIds = null);
 
         /// <summary>
         /// Cross-company on-hand aggregate. Sums opening balance + Σ In −
@@ -83,10 +94,15 @@ namespace MyApp.Api.Services.Interfaces
         /// operator sees a single global on-hand per item regardless of
         /// which company filter is active in the header.
         /// </summary>
+        /// <param name="divisionRestrictionsByCompany">Per-company division-RBAC
+        /// scope (IDivisionAccessGuard.GetRestrictionsAsync shape) — companies
+        /// present in the map only sum company-level movements plus the listed
+        /// divisions'. Absent/null = unrestricted.</param>
         Task<Dictionary<int, decimal>> GetOnHandBulkAcrossCompaniesAsync(
             IEnumerable<int> companyIds,
             IEnumerable<int> itemTypeIds,
-            DateTime? asOfDate = null);
+            DateTime? asOfDate = null,
+            Dictionary<int, HashSet<int>>? divisionRestrictionsByCompany = null);
 
         /// <summary>
         /// Pre-flight check used by FBR submission: do we have enough stock

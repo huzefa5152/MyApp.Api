@@ -183,12 +183,12 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Reads ────────────────────────────────────────────────────────────
 
-        public async Task<List<SalesOrderDto>> GetByCompanyAsync(int companyId)
-            => await MapManyAsync(await _repository.GetByCompanyAsync(companyId));
+        public async Task<List<SalesOrderDto>> GetByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
+            => await MapManyAsync(await _repository.GetByCompanyAsync(companyId, allowedDivisionIds));
 
-        public async Task<List<SalesOrderDto>> GetOpenByCompanyAsync(int companyId)
+        public async Task<List<SalesOrderDto>> GetOpenByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            var mapped = await MapManyAsync(await _repository.GetOpenByCompanyAsync(companyId));
+            var mapped = await MapManyAsync(await _repository.GetOpenByCompanyAsync(companyId, allowedDivisionIds));
             // Only orders that still have something to deliver are useful in the
             // "create challan" picker.
             return mapped.Where(o => o.FulfillmentStatus != "Fully Delivered"
@@ -199,10 +199,10 @@ namespace MyApp.Api.Services.Implementations
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? divisionId = null)
+            int? divisionId = null, HashSet<int>? allowedDivisionIds = null)
         {
             var (items, totalCount) = await _repository.GetPagedByCompanyAsync(
-                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, divisionId);
+                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, divisionId, allowedDivisionIds);
             return new PagedResult<SalesOrderDto>
             {
                 Items = await MapManyAsync(items),
@@ -215,8 +215,8 @@ namespace MyApp.Api.Services.Implementations
         public async Task<SalesOrderDto?> GetByIdAsync(int id)
             => await MapOneAsync(await _repository.GetByIdAsync(id));
 
-        public async Task<int> GetCountByCompanyAsync(int companyId)
-            => await _repository.GetCountByCompanyAsync(companyId);
+        public async Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
+            => await _repository.GetCountByCompanyAsync(companyId, allowedDivisionIds);
 
         // ── Create ───────────────────────────────────────────────────────────
 

@@ -4,12 +4,15 @@ namespace MyApp.Api.Services.Interfaces
 {
     public interface IDeliveryChallanService
     {
-        Task<List<DeliveryChallanDto>> GetDeliveryChallansByCompanyAsync(int companyId);
+        /// <param name="allowedDivisionIds">Division-RBAC scope from
+        /// IDivisionAccessGuard: non-null = restricted user, return only rows in
+        /// these divisions or with no division (policy D1). Null = unrestricted.</param>
+        Task<List<DeliveryChallanDto>> GetDeliveryChallansByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
         Task<PagedResult<DeliveryChallanDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? divisionId = null);
+            int? divisionId = null, HashSet<int>? allowedDivisionIds = null);
         Task<DeliveryChallanDto?> GetByIdAsync(int id);
         Task<DeliveryChallanDto> CreateDeliveryChallanAsync(int companyId, DeliveryChallanDto dto);
         Task<DeliveryChallanDto?> UpdateItemsAsync(int challanId, List<DeliveryItemDto> items);
@@ -27,16 +30,16 @@ namespace MyApp.Api.Services.Interfaces
         Task<bool> DeleteItemAsync(int itemId);
 
         /// <summary>
-        /// Returns the parent challan's CompanyId for a given item, or
-        /// null when the item doesn't exist. Used by the controller to
-        /// gate per-item endpoints with ICompanyAccessGuard (audit H-2,
-        /// 2026-05-13).
+        /// Returns the parent challan's (CompanyId, DivisionId) for a given
+        /// item, or null when the item doesn't exist. Used by the controller
+        /// to gate per-item endpoints with ICompanyAccessGuard (audit H-2,
+        /// 2026-05-13) and IDivisionAccessGuard.
         /// </summary>
-        Task<int?> GetCompanyForItemAsync(int itemId);
-        Task<List<DeliveryChallanDto>> GetPendingChallansByCompanyAsync(int companyId);
+        Task<(int CompanyId, int? DivisionId)?> GetCompanyForItemAsync(int itemId);
+        Task<List<DeliveryChallanDto>> GetPendingChallansByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
         Task<PrintChallanDto?> GetPrintDataAsync(int challanId);
         Task<int> GetTotalCountAsync();
-        Task<int> GetCountByCompanyAsync(int companyId);
+        Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
         Task<int> ReEvaluateSetupRequiredAsync(int companyId, int? clientId = null);
 
         /// <summary>
@@ -44,8 +47,10 @@ namespace MyApp.Api.Services.Interfaces
         /// imported old Excel file). Does NOT bump the company's live challan
         /// counter — imports back-fill history only. Fails if the number is
         /// already taken on this company. Marks the row as IsImported.
+        /// divisionId (write-asserted by the controller) is validated against
+        /// the company and stamped on the challan; null = company-level.
         /// </summary>
-        Task<ChallanImportResultDto> ImportHistoricalAsync(int companyId, ChallanImportPreviewDto dto);
+        Task<ChallanImportResultDto> ImportHistoricalAsync(int companyId, ChallanImportPreviewDto dto, int? divisionId = null);
 
         /// <summary>
         /// Clone an existing challan as a new, independently-billable row that

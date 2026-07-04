@@ -58,7 +58,7 @@ namespace MyApp.Api.Services.Implementations
             string? search = null, int? supplierId = null,
             string? status = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? divisionId = null)
+            int? divisionId = null, HashSet<int>? allowedDivisionIds = null)
         {
             var q = _context.GoodsReceipts
                 .Include(gr => gr.Supplier)
@@ -67,6 +67,11 @@ namespace MyApp.Api.Services.Implementations
                     .ThenInclude(it => it.ItemType)
                 .Include(gr => gr.Division)
                 .Where(gr => gr.CompanyId == companyId);
+            // Division-RBAC scope first (null = unrestricted); the operator's
+            // explicit divisionId FILTER below is a view preference layered on
+            // top — the controller asserts it against the same allowed set.
+            if (allowedDivisionIds != null)
+                q = q.Where(gr => gr.DivisionId == null || allowedDivisionIds.Contains(gr.DivisionId.Value));
             if (supplierId.HasValue) q = q.Where(gr => gr.SupplierId == supplierId.Value);
             if (divisionId.HasValue) q = q.Where(gr => gr.DivisionId == divisionId.Value);
             if (!string.IsNullOrWhiteSpace(status)) q = q.Where(gr => gr.Status == status);

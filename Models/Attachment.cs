@@ -20,6 +20,16 @@ namespace MyApp.Api.Models
         public int Id { get; set; }
         public int CompanyId { get; set; }
 
+        /// <summary>
+        /// Denormalized from the linked entity at upload time (null for
+        /// folder-only documents and attachments on company-level records) so
+        /// division-restricted reads don't need a per-entityType join.
+        /// NoAction FK — unlinked in app code by DivisionService.DeleteAsync,
+        /// same as the document DivisionId columns. Backfilled once by
+        /// ATTACHMENT_DIVISION_BACKFILL_V1.
+        /// </summary>
+        public int? DivisionId { get; set; }
+
         /// <summary>Optional folder grouping. Null = uncategorized.</summary>
         public int? FolderId { get; set; }
 
@@ -45,6 +55,7 @@ namespace MyApp.Api.Models
 
         // Navigation
         public Company Company { get; set; } = null!;
+        public Division? Division { get; set; }
         public Folder? Folder { get; set; }
         public User? UploadedByUser { get; set; }
     }

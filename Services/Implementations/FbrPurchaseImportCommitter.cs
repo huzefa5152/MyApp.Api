@@ -39,10 +39,13 @@ namespace MyApp.Api.Services.Implementations
         /// outcome to roll up at the caller. Suppliers and ItemTypes
         /// created during this call are reported via the out counters
         /// so the caller can surface them on the result page.
+        /// divisionId (validated + write-asserted upstream) is stamped
+        /// on the PurchaseBill and its StockMovements; null = company-level.
         /// </summary>
         Task<FbrImportCommitInvoiceResult> CommitOneInvoiceAsync(
             int companyId,
             int? userId,
+            int? divisionId,
             FbrImportPreviewInvoiceDto invoice,
             FbrImportCommitCounts runningCounts);
     }
@@ -69,6 +72,7 @@ namespace MyApp.Api.Services.Implementations
         public async Task<FbrImportCommitInvoiceResult> CommitOneInvoiceAsync(
             int companyId,
             int? userId,
+            int? divisionId,
             FbrImportPreviewInvoiceDto invoice,
             FbrImportCommitCounts runningCounts)
         {
@@ -148,6 +152,7 @@ namespace MyApp.Api.Services.Implementations
                 var bill = new PurchaseBill
                 {
                     CompanyId = companyId,
+                    DivisionId = divisionId,
                     SupplierId = supplier.Id,
                     PurchaseBillNumber = nextNumber,
                     Date = invoice.InvoiceDate ?? DateTime.UtcNow.Date,
@@ -217,7 +222,8 @@ namespace MyApp.Api.Services.Implementations
                         sourceType: StockMovementSourceType.PurchaseBill,
                         sourceId: bill.Id,
                         movementDate: bill.Date,
-                        notes: $"FBR Import: {invoice.SupplierName} #{invoice.InvoiceNo}");
+                        notes: $"FBR Import: {invoice.SupplierName} #{invoice.InvoiceNo}",
+                        divisionId: divisionId);
                     runningCounts.StockMovementsRecorded++;
                 }
 

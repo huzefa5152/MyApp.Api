@@ -318,6 +318,17 @@ namespace MyApp.Api.Helpers
                 "View user → company tenant-access assignments"),
             new("tenantaccess.manage.assign", "Tenant Access", "Manage", "Assign",
                 "Grant or revoke a user's access to specific companies"),
+            // ── Division Access (user → division assignments) ────────────────
+            // The layer below Tenant Access: within a company the user can
+            // reach, optionally restrict them to specific divisions
+            // (UserCompany.RestrictToDivisions + UserDivision rows, enforced
+            // by IDivisionAccessGuard). Separate keys from tenantaccess.* so a
+            // company-level admin role can delegate division assignment
+            // without the power to open whole companies.
+            new("divisionaccess.manage.view",   "Division Access", "Manage", "View",
+                "View user → division access assignments"),
+            new("divisionaccess.manage.assign", "Division Access", "Manage", "Assign",
+                "Restrict a user to specific divisions, or lift the restriction"),
             // Audit H-1 (2026-05-13): flipping Company.IsTenantIsolated
             // changes who passes the access guard for that company. Carve
             // it out from generic companies.manage.update so a regular

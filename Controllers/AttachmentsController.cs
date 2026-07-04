@@ -16,13 +16,15 @@ namespace MyApp.Api.Controllers
     {
         private readonly IAttachmentService _service;
         private readonly ICompanyAccessGuard _access;
+        private readonly IDivisionAccessGuard _divisionAccess;
         private readonly ILogger<AttachmentsController> _logger;
 
         public AttachmentsController(IAttachmentService service, ICompanyAccessGuard access,
-            ILogger<AttachmentsController> logger)
+            IDivisionAccessGuard divisionAccess, ILogger<AttachmentsController> logger)
         {
             _service = service;
             _access = access;
+            _divisionAccess = divisionAccess;
             _logger = logger;
         }
 
@@ -50,6 +52,9 @@ namespace MyApp.Api.Controllers
                 return Ok(dto);
             }
             catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+            // Division guard fires inside the service — let the middleware map
+            // it to 403 rather than the catch-all turning it into a 500.
+            catch (UnauthorizedAccessException) { throw; }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Upload attachment failed for company {CompanyId}", companyId);
@@ -61,7 +66,8 @@ namespace MyApp.Api.Controllers
         [HasPermission("attachments.list.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<AttachmentDto>>> GetByFolder(int companyId, int folderId)
-            => Ok(await _service.GetByFolderAsync(companyId, folderId));
+            => Ok(await _service.GetByFolderAsync(companyId, folderId,
+                await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId)));
 
         // The always-present "Uncategorized" bucket — attachments not filed in
         // any folder (FolderId == null). Used by the Folders library's permanent
@@ -70,13 +76,15 @@ namespace MyApp.Api.Controllers
         [HasPermission("attachments.list.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<AttachmentDto>>> GetUncategorized(int companyId)
-            => Ok(await _service.GetUncategorizedAsync(companyId));
+            => Ok(await _service.GetUncategorizedAsync(companyId,
+                await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId)));
 
         [HttpGet("company/{companyId}/entity/{entityType}/{entityId}")]
         [HasPermission("attachments.list.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<AttachmentDto>>> GetByEntity(int companyId, string entityType, int entityId)
-            => Ok(await _service.GetByEntityAsync(companyId, entityType, entityId));
+            => Ok(await _service.GetByEntityAsync(companyId, entityType, entityId,
+                await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId)));
 
         // Batch attachment counts for a set of entity ids — powers list-card
         // badges (e.g. the Sales Quote list) without N round-trips. Separate
@@ -93,17 +101,20 @@ namespace MyApp.Api.Controllers
                 .Select(s => int.TryParse(s, out var n) ? n : 0)
                 .Where(n => n > 0)
                 .ToList();
-            return Ok(await _service.GetCountsByEntityAsync(companyId, entityType, idList));
+            return Ok(await _service.GetCountsByEntityAsync(companyId, entityType, idList,
+                await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId)));
         }
 
         [HttpGet("{id}/download")]
         [HasPermission("attachments.list.view")]
         public async Task<IActionResult> Download(int id)
         {
-            // Assert access against the row's own CompanyId before resolving disk.
+            // Assert access against the row's own CompanyId (and its linked
+            // document's division) before resolving disk.
             var meta = await _service.GetByIdAsync(id);
             if (meta == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, meta.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, meta.CompanyId, meta.DivisionId);
 
             var dl = await _service.GetForDownloadAsync(id);
             if (dl == null) return NotFound(new { error = "The file is missing on disk." });
@@ -117,6 +128,7 @@ namespace MyApp.Api.Controllers
             var meta = await _service.GetByIdAsync(id);
             if (meta == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, meta.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, meta.CompanyId, meta.DivisionId);
             try
             {
                 var ok = await _service.DeleteAsync(id);

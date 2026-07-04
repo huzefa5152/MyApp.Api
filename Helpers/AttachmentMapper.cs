@@ -14,6 +14,7 @@ namespace MyApp.Api.Helpers
         {
             Id = a.Id,
             CompanyId = a.CompanyId,
+            DivisionId = a.DivisionId,
             FolderId = a.FolderId,
             FolderName = a.Folder?.Name,
             EntityType = a.EntityType,

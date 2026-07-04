@@ -16,12 +16,15 @@ namespace MyApp.Api.Controllers
     {
         private readonly IGoodsReceiptService _service;
         private readonly ICompanyAccessGuard _access;
+        private readonly IDivisionAccessGuard _divisionAccess;
         private readonly int _defaultPageSize;
 
-        public GoodsReceiptsController(IGoodsReceiptService service, ICompanyAccessGuard access, IConfiguration configuration)
+        public GoodsReceiptsController(IGoodsReceiptService service, ICompanyAccessGuard access,
+            IDivisionAccessGuard divisionAccess, IConfiguration configuration)
         {
             _service = service;
             _access = access;
+            _divisionAccess = divisionAccess;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
 
@@ -46,7 +49,13 @@ namespace MyApp.Api.Controllers
         {
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
-            var result = await _service.GetPagedByCompanyAsync(companyId, clampedPage, size, search, supplierId, status, dateFrom, dateTo, divisionId);
+            // Division RBAC: an explicit divisionId filter must be one the
+            // caller can access; without a filter, restricted users get their
+            // scope applied inside the query (company-level rows included).
+            if (divisionId.HasValue)
+                await _divisionAccess.AssertAccessAsync(CurrentUserId, companyId, divisionId.Value);
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            var result = await _service.GetPagedByCompanyAsync(companyId, clampedPage, size, search, supplierId, status, dateFrom, dateTo, divisionId, divScope);
             return Ok(result);
         }
 
@@ -57,6 +66,7 @@ namespace MyApp.Api.Controllers
             var gr = await _service.GetByIdAsync(id);
             if (gr == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, gr.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, gr.CompanyId, gr.DivisionId);
             return Ok(gr);
         }
 
@@ -65,6 +75,9 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<GoodsReceiptDto>> Create([FromBody] CreateGoodsReceiptDto dto)
         {
             await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
+            // Division-restricted users must tag the receipt with one of their
+            // divisions (write-assert also rejects null — policy D2).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, dto.DivisionId);
             try
             {
                 var created = await _service.CreateAsync(dto);
@@ -81,6 +94,9 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            // Division is immutable on update (UpdateGoodsReceiptDto carries
+            // none) — the read-assert on the stored tag is sufficient.
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             var updated = await _service.UpdateAsync(id, dto);
             if (updated == null) return NotFound();
             return Ok(updated);
@@ -93,6 +109,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             var ok = await _service.DeleteAsync(id);
             if (!ok) return NotFound();
             return NoContent();

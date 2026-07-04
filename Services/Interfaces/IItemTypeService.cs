@@ -18,9 +18,14 @@ namespace MyApp.Api.Services.Interfaces
         /// so the operator sees a single global on-hand number per item
         /// regardless of the global company filter.
         /// </summary>
+        /// <param name="divisionRestrictionsByCompany">Division-RBAC scope
+        /// (IDivisionAccessGuard.GetRestrictionsAsync shape). Applies to
+        /// whichever on-hand path runs: restricted companies only sum
+        /// company-level movements plus the listed divisions'.</param>
         Task<List<ItemTypeDto>> GetAllAsync(
             int? companyId = null,
-            IEnumerable<int>? aggregateAcrossCompanyIds = null);
+            IEnumerable<int>? aggregateAcrossCompanyIds = null,
+            Dictionary<int, HashSet<int>>? divisionRestrictionsByCompany = null);
         Task<ItemTypeDto?> GetByIdAsync(int id);
         Task<ItemTypeDto> CreateAsync(ItemTypeDto dto, int? enrichWithCompanyId = null);
         Task<ItemTypeDto?> UpdateAsync(int id, ItemTypeDto dto, int? enrichWithCompanyId = null);

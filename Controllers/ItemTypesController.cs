@@ -20,15 +20,18 @@ namespace MyApp.Api.Controllers
         private readonly IItemTypeService _service;
         private readonly ITaxMappingEngine _taxEngine;
         private readonly ICompanyAccessGuard _access;
+        private readonly IDivisionAccessGuard _divisionAccess;
 
         public ItemTypesController(
             IItemTypeService service,
             ITaxMappingEngine taxEngine,
-            ICompanyAccessGuard access)
+            ICompanyAccessGuard access,
+            IDivisionAccessGuard divisionAccess)
         {
             _service = service;
             _taxEngine = taxEngine;
             _access = access;
+            _divisionAccess = divisionAccess;
         }
 
         private int CurrentUserId =>
@@ -89,17 +92,26 @@ namespace MyApp.Api.Controllers
             // legitimate stock that lives under a different company. We
             // aggregate across the caller's accessible-company set
             // (filtered to tracking-enabled by the stock service).
+            // Division RBAC: restricted users' AvailableQty sums exclude other
+            // divisions' movements in every path (company-level rows stay in).
+            var divisionRestrictions = await _divisionAccess.GetRestrictionsAsync(CurrentUserId);
             List<ItemTypeDto> items;
             if (companyId.HasValue)
             {
-                items = await _service.GetAllAsync(companyId);
+                // Tenant guard — AvailableQty is per-company stock data; without
+                // this any authenticated user could read another tenant's
+                // on-hand quantities by passing an arbitrary companyId.
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+                items = await _service.GetAllAsync(companyId,
+                    divisionRestrictionsByCompany: divisionRestrictions);
             }
             else
             {
                 var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
                 items = await _service.GetAllAsync(
                     companyId: null,
-                    aggregateAcrossCompanyIds: accessible);
+                    aggregateAcrossCompanyIds: accessible,
+                    divisionRestrictionsByCompany: divisionRestrictions);
             }
             return Ok(items);
         }

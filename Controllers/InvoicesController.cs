@@ -16,12 +16,15 @@ namespace MyApp.Api.Controllers
     {
         private readonly IInvoiceService _service;
         private readonly ICompanyAccessGuard _access;
+        private readonly IDivisionAccessGuard _divisionAccess;
         private readonly int _defaultPageSize;
 
-        public InvoicesController(IInvoiceService service, ICompanyAccessGuard access, IConfiguration configuration)
+        public InvoicesController(IInvoiceService service, ICompanyAccessGuard access,
+            IDivisionAccessGuard divisionAccess, IConfiguration configuration)
         {
             _service = service;
             _access = access;
+            _divisionAccess = divisionAccess;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
 
@@ -37,7 +40,8 @@ namespace MyApp.Api.Controllers
             if (companyId.HasValue)
             {
                 await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
-                return Ok(await _service.GetCountByCompanyAsync(companyId.Value));
+                var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId.Value);
+                return Ok(await _service.GetCountByCompanyAsync(companyId.Value, divScope));
             }
             // Total across companies — only seed admin / users who can
             // access every company should see this; others get the sum
@@ -45,7 +49,10 @@ namespace MyApp.Api.Controllers
             var allowed = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
             var byCompany = 0;
             foreach (var cid in allowed)
-                byCompany += await _service.GetCountByCompanyAsync(cid);
+            {
+                var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, cid);
+                byCompany += await _service.GetCountByCompanyAsync(cid, divScope);
+            }
             return Ok(byCompany);
         }
 
@@ -54,7 +61,8 @@ namespace MyApp.Api.Controllers
         [AuthorizeCompany]
         public async Task<ActionResult<List<InvoiceDto>>> GetByCompany(int companyId)
         {
-            var invoices = await _service.GetByCompanyAsync(companyId);
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            var invoices = await _service.GetByCompanyAsync(companyId, divScope);
             return Ok(invoices);
         }
 
@@ -64,7 +72,10 @@ namespace MyApp.Api.Controllers
         [HasAnyPermission("bills.list.view", "invoices.list.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<Dictionary<int, int>>> GetCountsByClient(int companyId)
-            => Ok(await _service.GetInvoiceCountsByClientAsync(companyId));
+        {
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            return Ok(await _service.GetInvoiceCountsByClientAsync(companyId, divScope));
+        }
 
         [HttpGet("company/{companyId}/paged")]
         [HasAnyPermission("bills.list.view", "invoices.list.view")]
@@ -88,8 +99,14 @@ namespace MyApp.Api.Controllers
             int? noteType = string.Equals(type, "debitnotes", StringComparison.OrdinalIgnoreCase) ? 9
                           : string.Equals(type, "creditnotes", StringComparison.OrdinalIgnoreCase) ? 10
                           : null;
+            // Division RBAC: an explicit divisionId filter must be one the
+            // caller can access; without a filter, restricted users get their
+            // scope applied inside the query (company-level rows included).
+            if (divisionId.HasValue)
+                await _divisionAccess.AssertAccessAsync(CurrentUserId, companyId, divisionId.Value);
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
             var result = await _service.GetPagedByCompanyAsync(
-                companyId, clampedPage, size, search, clientId, dateFrom, dateTo, noteType, divisionId);
+                companyId, clampedPage, size, search, clientId, dateFrom, dateTo, noteType, divisionId, divScope);
             return Ok(result);
         }
 
@@ -100,6 +117,7 @@ namespace MyApp.Api.Controllers
             var invoice = await _service.GetByIdAsync(id);
             if (invoice == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, invoice.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, invoice.CompanyId, invoice.DivisionId);
             return Ok(invoice);
         }
 
@@ -126,8 +144,9 @@ namespace MyApp.Api.Controllers
         {
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
             var result = await _service.GetItemRateHistoryAsync(
-                companyId, clampedPage, size, itemTypeId, search, clientId, dateFrom, dateTo);
+                companyId, clampedPage, size, itemTypeId, search, clientId, dateFrom, dateTo, divScope);
             return Ok(result);
         }
 
@@ -160,7 +179,10 @@ namespace MyApp.Api.Controllers
         [HasPermission("purchasebills.manage.create")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<AwaitingPurchaseInvoiceDto>>> GetAwaitingPurchase(int companyId)
-            => Ok(await _service.GetAwaitingPurchaseAsync(companyId));
+        {
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            return Ok(await _service.GetAwaitingPurchaseAsync(companyId, divScope));
+        }
 
         /// <summary>
         /// Per-line procurement template for one sale bill — HSCode-empty
@@ -174,6 +196,7 @@ namespace MyApp.Api.Controllers
             var inv = await _service.GetByIdAsync(invoiceId);
             if (inv == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, inv.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, inv.CompanyId, inv.DivisionId);
             var dto = await _service.GetPurchaseTemplateAsync(invoiceId);
             if (dto == null) return NotFound();
             return Ok(dto);
@@ -184,6 +207,9 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<InvoiceDto>> Create([FromBody] CreateInvoiceDto dto)
         {
             await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
+            // Division-restricted users must tag the bill with one of their
+            // divisions (write-assert also rejects null — policy D2).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, dto.DivisionId);
             try
             {
                 if (dto.ChallanIds == null || !dto.ChallanIds.Any())
@@ -225,6 +251,9 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<InvoiceDto>> CreateStandalone([FromBody] CreateStandaloneInvoiceDto dto)
         {
             await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
+            // Division-restricted users must tag the bill with one of their
+            // divisions (write-assert also rejects null — policy D2).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, dto.DivisionId);
             try
             {
                 if (dto.Items == null || !dto.Items.Any())
@@ -256,6 +285,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound(new { error = "Bill not found." });
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             try
             {
                 if (dto.Items == null || !dto.Items.Any())
@@ -295,6 +325,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound(new { error = "Bill not found." });
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             try
             {
                 // allowQuantityEdit=false — qty fields in payload are ignored
@@ -327,6 +358,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound(new { error = "Bill not found." });
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             try
             {
                 var updated = await _service.UpdateItemTypesAsync(id, dto, allowQuantityEdit: true, actorUserName: User.Identity?.Name);
@@ -346,6 +378,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound(new { error = "Bill not found." });
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             try
             {
                 var deleted = await _service.DeleteAsync(id);
@@ -377,6 +410,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound(new { error = "Bill not found." });
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             try
             {
                 var updated = await _service.CancelAsync(id, body?.Reason, User.Identity?.Name);
@@ -412,6 +446,9 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound(new { error = "Bill not found." });
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            // The note inherits the original invoice's division, so read
+            // access to that division is the right gate for the reversal.
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             try
             {
                 var note = await _service.CreateReversalNoteAsync(
@@ -441,6 +478,9 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(body.OriginalInvoiceId);
             if (existing == null) return NotFound(new { error = "Original invoice not found." });
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            // The note inherits the original invoice's division, so read
+            // access to that division is the right gate for creating it.
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             try
             {
                 var note = await _service.CreateNoteAsync(body, User.Identity?.Name);
@@ -470,6 +510,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound(new { error = "Bill not found." });
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             try
             {
                 var updated = await _service.SetFbrExcludedAsync(id, body.Excluded);
@@ -497,6 +538,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound(new { error = "Bill not found." });
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             var updated = await _service.SetDueDateAsync(id, body.DueDate);
             if (updated == null) return NotFound(new { error = "Bill not found." });
             return Ok(updated);
@@ -514,6 +556,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             var dto = await _service.GetPrintBillAsync(id);
             if (dto == null) return NotFound();
             return Ok(dto);
@@ -526,6 +569,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             var dto = await _service.GetPrintTaxInvoiceAsync(id);
             if (dto == null) return NotFound();
             return Ok(dto);

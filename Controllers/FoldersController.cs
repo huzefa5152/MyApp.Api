@@ -57,7 +57,7 @@ namespace MyApp.Api.Controllers
         [HasPermission("folders.list.view")]
         public async Task<ActionResult<FolderDto>> GetById(int id)
         {
-            var folder = await _service.GetByIdAsync(id);
+            var folder = await _service.GetByIdAsync(id, CurrentUserId);
             if (folder == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, folder.CompanyId);
             return Ok(folder);

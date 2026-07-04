@@ -21,6 +21,7 @@ namespace MyApp.Api.Services.Implementations
         private readonly IFolderRepository _folderRepository;
         private readonly AttachmentStorage _storage;
         private readonly AppDbContext _context;
+        private readonly IDivisionAccessGuard _divisionAccess;
         private readonly ILogger<AttachmentService> _logger;
         private readonly long _maxBytes;
 
@@ -29,6 +30,7 @@ namespace MyApp.Api.Services.Implementations
             IFolderRepository folderRepository,
             AttachmentStorage storage,
             AppDbContext context,
+            IDivisionAccessGuard divisionAccess,
             IConfiguration configuration,
             ILogger<AttachmentService> logger)
         {
@@ -36,9 +38,14 @@ namespace MyApp.Api.Services.Implementations
             _folderRepository = folderRepository;
             _storage = storage;
             _context = context;
+            _divisionAccess = divisionAccess;
             _logger = logger;
             _maxBytes = configuration.GetValue<long>("Attachments:MaxFileBytes", AttachmentFileValidator.DefaultMaxBytes);
         }
+
+        /// <summary>EF projection target for the entity-link lookup — null result
+        /// means "not found in this company"; DivisionId is the linked document's.</summary>
+        private sealed record LinkedEntityRef(int? DivisionId);
 
         public async Task<AttachmentDto> UploadAsync(int companyId, IFormFile file, int? folderId, string? entityType, int? entityId, int userId)
         {
@@ -60,6 +67,7 @@ namespace MyApp.Api.Services.Implementations
 
             // A supplied entity link must be a known type with a real id.
             string? canonicalEntity = null;
+            int? divisionId = null;
             if (!string.IsNullOrWhiteSpace(entityType))
             {
                 canonicalEntity = AttachmentEntityTypes.Canonical(entityType)
@@ -70,19 +78,32 @@ namespace MyApp.Api.Services.Implementations
                 // Cross-tenant link guard (CLAUDE.md §4): the referenced record
                 // must exist IN THIS COMPANY — a forged entityId must not
                 // create a dangling link pointing at another tenant's document.
+                // The projection also carries the document's DivisionId so the
+                // attachment inherits it (division-restricted reads filter on it).
                 var id = entityId.Value;
-                var linkedOk = canonicalEntity switch
+                var linked = canonicalEntity switch
                 {
-                    AttachmentEntityTypes.SalesQuote => await _context.SalesQuotes.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
-                    AttachmentEntityTypes.SalesOrder => await _context.SalesOrders.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
-                    AttachmentEntityTypes.DeliveryChallan => await _context.DeliveryChallans.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
-                    AttachmentEntityTypes.Invoice => await _context.Invoices.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
-                    AttachmentEntityTypes.PurchaseBill => await _context.PurchaseBills.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
-                    AttachmentEntityTypes.GoodsReceipt => await _context.GoodsReceipts.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
-                    _ => false,
+                    AttachmentEntityTypes.SalesQuote => await _context.SalesQuotes.Where(x => x.Id == id && x.CompanyId == companyId)
+                        .Select(x => new LinkedEntityRef(x.DivisionId)).FirstOrDefaultAsync(),
+                    AttachmentEntityTypes.SalesOrder => await _context.SalesOrders.Where(x => x.Id == id && x.CompanyId == companyId)
+                        .Select(x => new LinkedEntityRef(x.DivisionId)).FirstOrDefaultAsync(),
+                    AttachmentEntityTypes.DeliveryChallan => await _context.DeliveryChallans.Where(x => x.Id == id && x.CompanyId == companyId)
+                        .Select(x => new LinkedEntityRef(x.DivisionId)).FirstOrDefaultAsync(),
+                    AttachmentEntityTypes.Invoice => await _context.Invoices.Where(x => x.Id == id && x.CompanyId == companyId)
+                        .Select(x => new LinkedEntityRef(x.DivisionId)).FirstOrDefaultAsync(),
+                    AttachmentEntityTypes.PurchaseBill => await _context.PurchaseBills.Where(x => x.Id == id && x.CompanyId == companyId)
+                        .Select(x => new LinkedEntityRef(x.DivisionId)).FirstOrDefaultAsync(),
+                    AttachmentEntityTypes.GoodsReceipt => await _context.GoodsReceipts.Where(x => x.Id == id && x.CompanyId == companyId)
+                        .Select(x => new LinkedEntityRef(x.DivisionId)).FirstOrDefaultAsync(),
+                    _ => null,
                 };
-                if (!linkedOk)
+                if (linked == null)
                     throw new InvalidOperationException("The linked record was not found in this company.");
+
+                // Division RBAC: attaching to a document you can't see is a
+                // write into that division — assert before touching disk.
+                await _divisionAccess.AssertAccessAsync(userId, companyId, linked.DivisionId);
+                divisionId = linked.DivisionId;
             }
 
             // Group on disk by folder name (or "Uncategorized") — mirrors the
@@ -93,6 +114,7 @@ namespace MyApp.Api.Services.Implementations
                 var attachment = new Attachment
                 {
                     CompanyId = companyId,
+                    DivisionId = divisionId,
                     FolderId = folderId,
                     EntityType = canonicalEntity,
                     EntityId = canonicalEntity != null ? entityId : null,
@@ -120,40 +142,50 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
-        public async Task<List<AttachmentDto>> GetByFolderAsync(int companyId, int folderId)
+        /// <summary>Division-RBAC read scope: rows tagged with a division outside
+        /// the allowed set are hidden; company-level rows (null) stay — policy D1.
+        /// Null set = unrestricted caller, no filter.</summary>
+        private static List<Attachment> ScopeToDivisions(List<Attachment> rows, HashSet<int>? allowedDivisionIds) =>
+            allowedDivisionIds == null
+                ? rows
+                : rows.Where(a => a.DivisionId == null || allowedDivisionIds.Contains(a.DivisionId.Value)).ToList();
+
+        public async Task<List<AttachmentDto>> GetByFolderAsync(int companyId, int folderId, HashSet<int>? allowedDivisionIds = null)
         {
             var rows = await ReconcileAsync(await _repository.GetByFolderAsync(companyId, folderId));
-            return rows.Select(AttachmentMapper.ToDto).ToList();
+            return ScopeToDivisions(rows, allowedDivisionIds).Select(AttachmentMapper.ToDto).ToList();
         }
 
-        public async Task<List<AttachmentDto>> GetUncategorizedAsync(int companyId)
+        public async Task<List<AttachmentDto>> GetUncategorizedAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
             var rows = await ReconcileAsync(await _repository.GetUncategorizedAsync(companyId));
-            return rows.Select(AttachmentMapper.ToDto).ToList();
+            return ScopeToDivisions(rows, allowedDivisionIds).Select(AttachmentMapper.ToDto).ToList();
         }
 
-        public async Task<List<AttachmentDto>> GetByEntityAsync(int companyId, string entityType, int entityId)
+        public async Task<List<AttachmentDto>> GetByEntityAsync(int companyId, string entityType, int entityId, HashSet<int>? allowedDivisionIds = null)
         {
             var canonical = AttachmentEntityTypes.Canonical(entityType);
             if (canonical == null) return new List<AttachmentDto>();
             var rows = await ReconcileAsync(await _repository.GetByEntityAsync(companyId, canonical, entityId));
-            return rows.Select(AttachmentMapper.ToDto).ToList();
+            return ScopeToDivisions(rows, allowedDivisionIds).Select(AttachmentMapper.ToDto).ToList();
         }
 
-        public async Task<Dictionary<int, int>> GetCountsByEntityAsync(int companyId, string entityType, IEnumerable<int> entityIds)
+        public async Task<Dictionary<int, int>> GetCountsByEntityAsync(int companyId, string entityType, IEnumerable<int> entityIds, HashSet<int>? allowedDivisionIds = null)
         {
             var canonical = AttachmentEntityTypes.Canonical(entityType);
             if (canonical == null) return new Dictionary<int, int>();
             var rows = await ReconcileAsync(await _repository.GetByEntityIdsAsync(companyId, canonical, entityIds));
-            return rows.Where(r => r.EntityId.HasValue)
+            return ScopeToDivisions(rows, allowedDivisionIds)
+                       .Where(r => r.EntityId.HasValue)
                        .GroupBy(r => r.EntityId!.Value)
                        .ToDictionary(g => g.Key, g => g.Count());
         }
 
-        public async Task<Dictionary<int, int>> GetCountsByFolderAsync(int companyId, IEnumerable<int> folderIds)
+        public async Task<Dictionary<int, int>> GetCountsByFolderAsync(int companyId, IEnumerable<int> folderIds, HashSet<int>? allowedDivisionIds = null)
         {
             var rows = await ReconcileAsync(await _repository.GetByFolderIdsAsync(companyId, folderIds));
-            return rows.Where(r => r.FolderId.HasValue)
+            return ScopeToDivisions(rows, allowedDivisionIds)
+                       .Where(r => r.FolderId.HasValue)
                        .GroupBy(r => r.FolderId!.Value)
                        .ToDictionary(g => g.Key, g => g.Count());
         }

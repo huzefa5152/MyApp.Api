@@ -210,9 +210,9 @@ namespace MyApp.Api.Services.Implementations
             return "Pending";
         }
 
-        public async Task<List<DeliveryChallanDto>> GetDeliveryChallansByCompanyAsync(int companyId)
+        public async Task<List<DeliveryChallanDto>> GetDeliveryChallansByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            var challans = await _repository.GetDeliveryChallansByCompanyAsync(companyId);
+            var challans = await _repository.GetDeliveryChallansByCompanyAsync(companyId, allowedDivisionIds);
             return challans.Select(ToDto).ToList();
         }
 
@@ -220,13 +220,13 @@ namespace MyApp.Api.Services.Implementations
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? divisionId = null)
+            int? divisionId = null, HashSet<int>? allowedDivisionIds = null)
         {
             // Auto-clear "Setup Required" challans where FBR is now ready (runs once per page load)
             await ReEvaluateSetupRequiredAsync(companyId);
 
             var (items, totalCount) = await _repository.GetPagedByCompanyAsync(
-                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, divisionId);
+                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, divisionId, allowedDivisionIds);
 
             // Gate the Delete button client-side — only the highest-numbered
             // challan for this company is deletable.
@@ -278,6 +278,11 @@ namespace MyApp.Api.Services.Implementations
                 throw new KeyNotFoundException("Client not found.");
             if (client.CompanyId != companyId)
                 throw new InvalidOperationException("Client does not belong to this company.");
+            // Division guard — same rationale as the client guard above. Every
+            // other document create validates via DivisionNumbering.ResolveAsync;
+            // without it a forged dto.DivisionId could tag this challan with
+            // another tenant's division and print with that division's branding.
+            await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, companyId, dto.DivisionId);
             var fbrReady = company != null && IsFbrReady(company, client);
 
             string status;
@@ -702,15 +707,16 @@ namespace MyApp.Api.Services.Implementations
             return true;
         }
 
-        public async Task<int?> GetCompanyForItemAsync(int itemId)
+        public async Task<(int CompanyId, int? DivisionId)?> GetCompanyForItemAsync(int itemId)
         {
-            // Lightweight lookup used by the controller for tenant
+            // Lightweight lookup used by the controller for tenant + division
             // authorization before delete (audit H-2). Returns null when
             // the item doesn't exist.
             var item = await _repository.GetItemByIdAsync(itemId);
             if (item == null) return null;
             var dc = await _repository.GetByIdAsync(item.DeliveryChallanId);
-            return dc?.CompanyId;
+            if (dc == null) return null;
+            return (dc.CompanyId, dc.DivisionId);
         }
 
         public async Task<bool> DeleteItemAsync(int itemId)
@@ -906,13 +912,13 @@ namespace MyApp.Api.Services.Implementations
             return reloaded == null ? null : ToDto(reloaded);
         }
 
-        public async Task<List<DeliveryChallanDto>> GetPendingChallansByCompanyAsync(int companyId)
+        public async Task<List<DeliveryChallanDto>> GetPendingChallansByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
             // FBR-off companies don't require a customer PO to bill — their
             // "No PO" challans are billable too (see repository comment).
             var company = await _context.Companies.FindAsync(companyId);
             var includeNoPo = company != null && !company.FbrEnabled;
-            var challans = await _repository.GetPendingChallansByCompanyAsync(companyId, includeNoPo);
+            var challans = await _repository.GetPendingChallansByCompanyAsync(companyId, includeNoPo, allowedDivisionIds);
             return challans.Select(ToDto).ToList();
         }
 
@@ -949,9 +955,9 @@ namespace MyApp.Api.Services.Implementations
             return await _repository.GetTotalCountAsync();
         }
 
-        public async Task<int> GetCountByCompanyAsync(int companyId)
+        public async Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            return await _repository.GetCountByCompanyAsync(companyId);
+            return await _repository.GetCountByCompanyAsync(companyId, allowedDivisionIds);
         }
 
         public async Task<int> ReEvaluateSetupRequiredAsync(int companyId, int? clientId = null)
@@ -974,7 +980,7 @@ namespace MyApp.Api.Services.Implementations
             return transitioned;
         }
 
-        public async Task<ChallanImportResultDto> ImportHistoricalAsync(int companyId, ChallanImportPreviewDto dto)
+        public async Task<ChallanImportResultDto> ImportHistoricalAsync(int companyId, ChallanImportPreviewDto dto, int? divisionId = null)
         {
             var result = new ChallanImportResultDto
             {
@@ -984,6 +990,19 @@ namespace MyApp.Api.Services.Implementations
             };
 
             // ── Validation ───────────────────────────────────────────────────
+            // Division→company integrity — surfaced as a per-row error (this
+            // method reports via result.Error, not exceptions) even though the
+            // whole batch shares one target division.
+            try
+            {
+                await DivisionNumbering.ResolveAsync(_context, companyId, divisionId);
+            }
+            catch (InvalidOperationException ex)
+            {
+                result.Error = ex.Message;
+                return result;
+            }
+
             if (dto.ChallanNumber <= 0)
             {
                 result.Error = "Challan number is missing or invalid.";
@@ -1027,6 +1046,7 @@ namespace MyApp.Api.Services.Implementations
             var challan = new DeliveryChallan
             {
                 CompanyId = companyId,
+                DivisionId = divisionId,
                 ClientId = dto.ClientId.Value,
                 ChallanNumber = dto.ChallanNumber,
                 Site = string.IsNullOrWhiteSpace(dto.Site) ? null : dto.Site.Trim(),

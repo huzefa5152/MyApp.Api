@@ -151,6 +151,14 @@ namespace MyApp.Api.Services.Implementations
                 // FK) — unlink them too so the division row can be removed.
                 await _db.Payments.Where(p => p.DivisionId == id)
                     .ExecuteUpdateAsync(s => s.SetProperty(p => p.DivisionId, (int?)null));
+                // Attachments denormalize their linked document's division
+                // (NoAction FK) — fall back to company-level like the documents.
+                await _db.Attachments.Where(a => a.DivisionId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(a => a.DivisionId, (int?)null));
+                // Stock movements carry the source document's division tag
+                // (NoAction FK) — same fallback.
+                await _db.StockMovements.Where(m => m.DivisionId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(m => m.DivisionId, (int?)null));
 
                 var templates = await _db.PrintTemplates.Where(pt => pt.DivisionId == id).ToListAsync();
                 foreach (var t in templates)

@@ -99,6 +99,7 @@ namespace MyApp.Api.Data
         public DbSet<RolePermission> RolePermissions { get; set; }
         public DbSet<UserRole> UserRoles { get; set; }
         public DbSet<UserCompany> UserCompanies { get; set; }
+        public DbSet<UserDivision> UserDivisions { get; set; }
 
         // Purchase + Inventory module
         public DbSet<Supplier> Suppliers { get; set; }
@@ -883,6 +884,14 @@ namespace MyApp.Api.Data
                 .HasForeignKey(a => a.UploadedByUserId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.NoAction);
+            // Attachment -> Division (optional; NoAction — SetNull/Cascade would
+            // add a second cascade path from Company. DivisionService.DeleteAsync
+            // unlinks in app code, same as the document DivisionId columns).
+            modelBuilder.Entity<Attachment>()
+                .HasOne(a => a.Division).WithMany()
+                .HasForeignKey(a => a.DivisionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<Attachment>().Property(a => a.FileName).HasMaxLength(255);
             modelBuilder.Entity<Attachment>().Property(a => a.StoredFileName).HasMaxLength(100);
@@ -1259,6 +1268,27 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<UserCompany>()
                 .HasIndex(uc => uc.CompanyId);
 
+            // ── Division-level access: UserDivision ──
+            // Composite PK on (UserId, DivisionId). Only consulted when the
+            // user's UserCompany.RestrictToDivisions flag is set for the
+            // division's company. Cascade from both sides is safe here (unlike
+            // the NoAction document→Division FKs): the only cascade path into
+            // this table from a Company delete is Company→Division→UserDivision.
+            modelBuilder.Entity<UserDivision>()
+                .HasKey(ud => new { ud.UserId, ud.DivisionId });
+            modelBuilder.Entity<UserDivision>()
+                .HasOne(ud => ud.User)
+                .WithMany()
+                .HasForeignKey(ud => ud.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UserDivision>()
+                .HasOne(ud => ud.Division)
+                .WithMany()
+                .HasForeignKey(ud => ud.DivisionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UserDivision>()
+                .HasIndex(ud => ud.DivisionId);
+
             // ── Purchase + Inventory module ────────────────────────────────
 
             // Supplier — mirror of Client
@@ -1450,6 +1480,15 @@ namespace MyApp.Api.Data
                 .WithMany()
                 .HasForeignKey(sm => sm.ItemTypeId)
                 .OnDelete(DeleteBehavior.Restrict);
+            // StockMovement -> Division (optional; NoAction — SetNull/Cascade
+            // would add a second cascade path from Company). Unlinked in app
+            // code by DivisionService.DeleteAsync, like the document columns.
+            modelBuilder.Entity<StockMovement>()
+                .HasOne(sm => sm.Division)
+                .WithMany()
+                .HasForeignKey(sm => sm.DivisionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
             // Composite index for the hot-path on-hand query:
             //   WHERE CompanyId = X AND ItemTypeId = Y
             //   then SUM(Direction == In ? Quantity : -Quantity)

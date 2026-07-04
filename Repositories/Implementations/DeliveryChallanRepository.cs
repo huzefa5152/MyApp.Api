@@ -14,29 +14,34 @@ namespace MyApp.Api.Repositories.Implementations
             _context = context;
         }
 
-        public async Task<List<DeliveryChallan>> GetDeliveryChallansByCompanyAsync(int companyId)
+        public async Task<List<DeliveryChallan>> GetDeliveryChallansByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
             // IsDemo challans live in the 900000+ range and are managed only
             // through the FBR Sandbox tab — they do NOT appear on the regular
             // Challans page.
-            return await _context.DeliveryChallans
-                                 .Include(dc => dc.Items)
-                                     .ThenInclude(i => i.ItemType)
-                                 .Include(dc => dc.Client)
-                                 .Include(dc => dc.Company)
-                                 .Include(dc => dc.Invoice)
-                                 .Include(dc => dc.DuplicatedFrom)
-                                 .Include(dc => dc.SalesOrder)
-                                 .Where(dc => dc.CompanyId == companyId && !dc.IsDemo)
-                                 .OrderBy(dc => dc.ChallanNumber)
-                                 .ToListAsync();
+            var query = _context.DeliveryChallans
+                                .Include(dc => dc.Items)
+                                    .ThenInclude(i => i.ItemType)
+                                .Include(dc => dc.Client)
+                                .Include(dc => dc.Company)
+                                .Include(dc => dc.Invoice)
+                                .Include(dc => dc.DuplicatedFrom)
+                                .Include(dc => dc.SalesOrder)
+                                .Where(dc => dc.CompanyId == companyId && !dc.IsDemo);
+            // Division-RBAC scope (null = unrestricted); company-level rows
+            // (DivisionId == null) stay visible to everyone — policy D1.
+            if (allowedDivisionIds != null)
+                query = query.Where(dc => dc.DivisionId == null || allowedDivisionIds.Contains(dc.DivisionId.Value));
+            return await query
+                .OrderBy(dc => dc.ChallanNumber)
+                .ToListAsync();
         }
 
         public async Task<(List<DeliveryChallan> Items, int TotalCount)> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? divisionId = null)
+            int? divisionId = null, HashSet<int>? allowedDivisionIds = null)
         {
             var query = _context.DeliveryChallans
                 .Include(dc => dc.Items).ThenInclude(i => i.ItemType)
@@ -47,6 +52,12 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(dc => dc.SalesOrder)
                 .Include(dc => dc.Division)
                 .Where(dc => dc.CompanyId == companyId && !dc.IsDemo);
+
+            // Division-RBAC scope first (null = unrestricted); the operator's
+            // explicit divisionId FILTER below is a view preference layered on
+            // top — the controller asserts it against the same allowed set.
+            if (allowedDivisionIds != null)
+                query = query.Where(dc => dc.DivisionId == null || allowedDivisionIds.Contains(dc.DivisionId.Value));
 
             if (!string.IsNullOrWhiteSpace(status))
                 query = query.Where(dc => dc.Status == status);
@@ -189,7 +200,7 @@ namespace MyApp.Api.Repositories.Implementations
             await _context.SaveChangesAsync();
         }
 
-        public async Task<List<DeliveryChallan>> GetPendingChallansByCompanyAsync(int companyId, bool includeNoPo = false)
+        public async Task<List<DeliveryChallan>> GetPendingChallansByCompanyAsync(int companyId, bool includeNoPo = false, HashSet<int>? allowedDivisionIds = null)
         {
             // Both "Pending" (natively-created) and "Imported" (historical back-fill)
             // are billable — the bill-creation picker shows both populations.
@@ -198,15 +209,20 @@ namespace MyApp.Api.Repositories.Implementations
             // needs-a-PO-before-billing rule belongs to the FBR / PO-driven
             // wholesale workflow, while migrated FBR-off tenants routinely
             // sell without a customer PO (2026-07-03, Jorbai).
-            return await _context.DeliveryChallans
-                                 .Include(dc => dc.Items)
-                                     .ThenInclude(i => i.ItemType)
-                                 .Include(dc => dc.Client)
-                                 .Where(dc => dc.CompanyId == companyId
-                                           && (dc.Status == "Pending" || dc.Status == "Imported"
-                                               || (includeNoPo && dc.Status == "No PO")))
-                                 .OrderBy(dc => dc.ChallanNumber)
-                                 .ToListAsync();
+            var query = _context.DeliveryChallans
+                                .Include(dc => dc.Items)
+                                    .ThenInclude(i => i.ItemType)
+                                .Include(dc => dc.Client)
+                                .Where(dc => dc.CompanyId == companyId
+                                          && (dc.Status == "Pending" || dc.Status == "Imported"
+                                              || (includeNoPo && dc.Status == "No PO")));
+            // Division-RBAC scope (null = unrestricted); company-level rows
+            // (DivisionId == null) stay visible to everyone — policy D1.
+            if (allowedDivisionIds != null)
+                query = query.Where(dc => dc.DivisionId == null || allowedDivisionIds.Contains(dc.DivisionId.Value));
+            return await query
+                .OrderBy(dc => dc.ChallanNumber)
+                .ToListAsync();
         }
 
         public async Task<int> GetTotalCountAsync()
@@ -214,9 +230,12 @@ namespace MyApp.Api.Repositories.Implementations
             return await _context.DeliveryChallans.CountAsync();
         }
 
-        public async Task<int> GetCountByCompanyAsync(int companyId)
+        public async Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            return await _context.DeliveryChallans.CountAsync(dc => dc.CompanyId == companyId);
+            var query = _context.DeliveryChallans.Where(dc => dc.CompanyId == companyId);
+            if (allowedDivisionIds != null)
+                query = query.Where(dc => dc.DivisionId == null || allowedDivisionIds.Contains(dc.DivisionId.Value));
+            return await query.CountAsync();
         }
 
         public async Task<bool> HasChallansForCompanyAsync(int companyId)

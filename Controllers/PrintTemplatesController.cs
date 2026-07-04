@@ -25,12 +25,15 @@ namespace MyApp.Api.Controllers
 
         private readonly IPrintTemplateRepository _repo;
         private readonly ICompanyAccessGuard _access;
+        private readonly IDivisionAccessGuard _divisionAccess;
         private readonly IDivisionService _divisions;
 
-        public PrintTemplatesController(IPrintTemplateRepository repo, ICompanyAccessGuard access, IDivisionService divisions)
+        public PrintTemplatesController(IPrintTemplateRepository repo, ICompanyAccessGuard access,
+            IDivisionAccessGuard divisionAccess, IDivisionService divisions)
         {
             _repo = repo;
             _access = access;
+            _divisionAccess = divisionAccess;
             _divisions = divisions;
         }
 
@@ -87,6 +90,11 @@ namespace MyApp.Api.Controllers
             // HTML — gate behind the print-template view perm so general
             // tenant members don't pull script-containing template bodies.
             var templates = await _repo.GetByCompanyAsync(companyId);
+            // Division RBAC: restricted users see their divisions' templates
+            // plus company-level ones (DivisionId == null) — policy D1.
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            if (divScope != null)
+                templates = templates.Where(t => t.DivisionId == null || divScope.Contains(t.DivisionId.Value)).ToList();
             return Ok(templates.Select(ToDto));
         }
 
@@ -109,6 +117,10 @@ namespace MyApp.Api.Controllers
             if (!ValidTypes.Contains(templateType))
                 return BadRequest(new { error = "Invalid template type. Use: Challan, Bill, TaxInvoice, SalesQuote, or SalesOrder" });
 
+            // Division RBAC: this writes the company-level default — restricted
+            // users may not overwrite it (write-assert rejects null, policy D2).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, companyId, null);
+
             // Legacy single-template save path — upserts the company-level default.
             var t = await _repo.UpsertAsync(companyId, templateType, dto.HtmlContent, dto.TemplateJson, dto.EditorMode);
             return Ok(ToDto(t));
@@ -123,6 +135,7 @@ namespace MyApp.Api.Controllers
             var t = await _repo.GetByIdAsync(id);
             if (t == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, t.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, t.CompanyId, t.DivisionId);
             return Ok(ToDto(t));
         }
 
@@ -143,6 +156,10 @@ namespace MyApp.Api.Controllers
                     return BadRequest(new { error = "Invalid division for this company." });
             }
 
+            // Division-restricted users must tag the template with one of their
+            // divisions (write-assert also rejects null — policy D2).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, companyId, dto.DivisionId);
+
             var name = string.IsNullOrWhiteSpace(dto.Name) ? "Untitled" : dto.Name.Trim();
             var t = await _repo.CreateAsync(companyId, dto.DivisionId, dto.TemplateType, name,
                 dto.HtmlContent, dto.TemplateJson, dto.EditorMode, dto.IsDefault);
@@ -156,6 +173,7 @@ namespace MyApp.Api.Controllers
             var existing = await _repo.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
 
             var updated = await _repo.UpdateContentAsync(id, dto.Name, dto.HtmlContent, dto.TemplateJson, dto.EditorMode);
             return updated == null ? NotFound() : Ok(ToDto(updated));
@@ -168,6 +186,7 @@ namespace MyApp.Api.Controllers
             var existing = await _repo.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
 
             await _repo.SetDefaultAsync(id);
             return Ok(new { id, isDefault = true });
@@ -180,6 +199,7 @@ namespace MyApp.Api.Controllers
             var existing = await _repo.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
 
             var excelPath = await _repo.DeleteAsync(id);
             if (!string.IsNullOrEmpty(excelPath))
@@ -199,6 +219,7 @@ namespace MyApp.Api.Controllers
             var template = await _repo.GetByIdAsync(id);
             if (template == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, template.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, template.CompanyId, template.DivisionId);
 
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file uploaded" });
@@ -276,6 +297,7 @@ namespace MyApp.Api.Controllers
             var template = await _repo.GetByIdAsync(id);
             if (template == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, template.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, template.CompanyId, template.DivisionId);
             if (string.IsNullOrEmpty(template.ExcelTemplatePath))
                 return NotFound(new { error = "No Excel template found for this template." });
 
@@ -315,6 +337,7 @@ namespace MyApp.Api.Controllers
             var template = await _repo.GetByIdAsync(id);
             if (template == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, template.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, template.CompanyId, template.DivisionId);
             if (string.IsNullOrEmpty(template.ExcelTemplatePath))
                 return NotFound(new { error = "No Excel template found" });
 
@@ -334,6 +357,7 @@ namespace MyApp.Api.Controllers
             var template = await _repo.GetByIdAsync(id);
             if (template == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, template.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, template.CompanyId, template.DivisionId);
             bool has = !string.IsNullOrEmpty(template.ExcelTemplatePath)
                 && System.IO.File.Exists(Path.Combine(Directory.GetCurrentDirectory(), template.ExcelTemplatePath.TrimStart('/')));
             return Ok(new { hasExcelTemplate = has });
@@ -488,6 +512,7 @@ namespace MyApp.Api.Controllers
 
         [HttpPost("company/{companyId}/Challan/export-excel")]
         [AuthorizeCompany]
+        [HasPermission("challans.print.view")]
         public async Task<IActionResult> ExportChallanExcel(int companyId, [FromBody] PrintChallanDto dto)
         {
             return await ProcessExcelExport(companyId, "Challan", ExcelTemplateEngine.ChallanToDict(dto),
@@ -496,6 +521,7 @@ namespace MyApp.Api.Controllers
 
         [HttpPost("company/{companyId}/Bill/export-excel")]
         [AuthorizeCompany]
+        [HasPermission("bills.print.view")]
         public async Task<IActionResult> ExportBillExcel(int companyId, [FromBody] PrintBillDto dto)
         {
             return await ProcessExcelExport(companyId, "Bill", ExcelTemplateEngine.BillToDict(dto),
@@ -504,6 +530,7 @@ namespace MyApp.Api.Controllers
 
         [HttpPost("company/{companyId}/TaxInvoice/export-excel")]
         [AuthorizeCompany]
+        [HasPermission("invoices.print.view")]
         public async Task<IActionResult> ExportTaxInvoiceExcel(int companyId, [FromBody] PrintTaxInvoiceDto dto)
         {
             // Uppercase INVOICE prefix — matches operator convention for tax invoices

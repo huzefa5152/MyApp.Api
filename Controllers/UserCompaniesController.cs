@@ -29,13 +29,16 @@ namespace MyApp.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly ICompanyAccessGuard _access;
+        private readonly IDivisionAccessGuard _divisionAccess;
         private readonly int _seedAdminUserId;
         private readonly ILogger<UserCompaniesController> _logger;
 
-        public UserCompaniesController(AppDbContext context, ICompanyAccessGuard access, IConfiguration configuration, ILogger<UserCompaniesController> logger)
+        public UserCompaniesController(AppDbContext context, ICompanyAccessGuard access,
+            IDivisionAccessGuard divisionAccess, IConfiguration configuration, ILogger<UserCompaniesController> logger)
         {
             _context = context;
             _access = access;
+            _divisionAccess = divisionAccess;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
             _logger = logger;
         }
@@ -196,6 +199,10 @@ namespace MyApp.Api.Controllers
                 await tx.CommitAsync();
 
                 _access.InvalidateUser(userId);
+                // A removed company grant also removes its RestrictToDivisions
+                // flag — drop the division-guard cache so restrictions don't
+                // linger for the 60s TTL.
+                _divisionAccess.InvalidateUser(userId);
 
                 return Ok(new SetUserCompaniesResultDto
                 {

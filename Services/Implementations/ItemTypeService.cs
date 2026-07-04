@@ -53,7 +53,8 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<List<ItemTypeDto>> GetAllAsync(
             int? companyId = null,
-            IEnumerable<int>? aggregateAcrossCompanyIds = null)
+            IEnumerable<int>? aggregateAcrossCompanyIds = null,
+            Dictionary<int, HashSet<int>>? divisionRestrictionsByCompany = null)
         {
             var items = await _repo.GetAllAsync();
 
@@ -71,7 +72,8 @@ namespace MyApp.Api.Services.Implementations
             if (aggregateIds != null && aggregateIds.Count > 0)
             {
                 var ids = items.Select(i => i.Id).ToList();
-                onHandByItem = await _stock.GetOnHandBulkAcrossCompaniesAsync(aggregateIds, ids);
+                onHandByItem = await _stock.GetOnHandBulkAcrossCompaniesAsync(
+                    aggregateIds, ids, divisionRestrictionsByCompany: divisionRestrictionsByCompany);
             }
             else if (companyId.HasValue && await _stock.IsTrackingEnabledAsync(companyId.Value))
             {
@@ -80,7 +82,9 @@ namespace MyApp.Api.Services.Implementations
                 // no purchase/sale history get 0 from the bulk method
                 // (no row in the dictionary).
                 var ids = items.Select(i => i.Id).ToList();
-                onHandByItem = await _stock.GetOnHandBulkAsync(companyId.Value, ids);
+                HashSet<int>? divScope = null;
+                divisionRestrictionsByCompany?.TryGetValue(companyId.Value, out divScope);
+                onHandByItem = await _stock.GetOnHandBulkAsync(companyId.Value, ids, allowedDivisionIds: divScope);
             }
 
             if (onHandByItem != null)

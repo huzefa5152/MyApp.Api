@@ -19,6 +19,7 @@ namespace MyApp.Api.Services.Implementations
         private readonly IAttachmentService _attachmentService;
         private readonly AttachmentStorage _storage;
         private readonly AppDbContext _context;
+        private readonly IDivisionAccessGuard _divisionAccess;
         private readonly ILogger<FolderService> _logger;
 
         public FolderService(
@@ -26,12 +27,14 @@ namespace MyApp.Api.Services.Implementations
             IAttachmentService attachmentService,
             AttachmentStorage storage,
             AppDbContext context,
+            IDivisionAccessGuard divisionAccess,
             ILogger<FolderService> logger)
         {
             _repository = repository;
             _attachmentService = attachmentService;
             _storage = storage;
             _context = context;
+            _divisionAccess = divisionAccess;
             _logger = logger;
         }
 
@@ -69,12 +72,17 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
-        public async Task<FolderDto?> GetByIdAsync(int id)
+        public async Task<FolderDto?> GetByIdAsync(int id, int? userIdForDivisionScope = null)
         {
             var f = await _repository.GetByIdWithCreatorAsync(id);
             if (f == null) return null;
+            // Division-restricted callers only see their divisions' attachments
+            // in the folder detail (the scope resolution is cached in the guard).
+            var divScope = userIdForDivisionScope.HasValue
+                ? await _divisionAccess.GetAccessibleDivisionIdsAsync(userIdForDivisionScope.Value, f.CompanyId)
+                : null;
             // Attachments come back disk-reconciled (manually-deleted files pruned).
-            var attachments = await _attachmentService.GetByFolderAsync(f.CompanyId, f.Id);
+            var attachments = await _attachmentService.GetByFolderAsync(f.CompanyId, f.Id, divScope);
             var dto = ToDto(f, attachments.Count);
             dto.Attachments = attachments;
             return dto;

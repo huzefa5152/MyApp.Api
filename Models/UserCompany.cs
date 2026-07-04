@@ -18,5 +18,15 @@ namespace MyApp.Api.Models
 
         public DateTime AssignedAt { get; set; } = DateTime.UtcNow;
         public int? AssignedByUserId { get; set; }
+
+        /// <summary>
+        /// When true, this user's view of the company is limited to the
+        /// divisions granted in <see cref="UserDivision"/> rows (plus
+        /// company-level records with no division). Default false = full
+        /// company access, today's behaviour — so no backfill is needed and
+        /// deleting a user's last UserDivision row can never silently widen
+        /// access. Enforced by <c>IDivisionAccessGuard</c>.
+        /// </summary>
+        public bool RestrictToDivisions { get; set; }
     }
 }

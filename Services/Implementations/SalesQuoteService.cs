@@ -112,27 +112,27 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Reads ────────────────────────────────────────────────────────────
 
-        public async Task<List<SalesQuoteDto>> GetByCompanyAsync(int companyId)
+        public async Task<List<SalesQuoteDto>> GetByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
             var scopeMax = await _repository.GetMaxNumbersByScopeAsync(companyId);
-            var quotes = await _repository.GetByCompanyAsync(companyId);
+            var quotes = await _repository.GetByCompanyAsync(companyId, allowedDivisionIds);
             var linked = await GetLinkedQuoteIdsAsync(companyId, quotes.Select(q => q.Id).ToList());
-            return quotes.Select(q => ToDto(q, scopeMax.GetValueOrDefault(q.DivisionId, 0), linked.Contains(q.Id))).ToList();
+            return quotes.Select(q => ToDto(q, scopeMax.GetValueOrDefault(q.DivisionId ?? 0, 0), linked.Contains(q.Id))).ToList();
         }
 
         public async Task<PagedResult<SalesQuoteDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? divisionId = null)
+            int? divisionId = null, HashSet<int>? allowedDivisionIds = null)
         {
             var scopeMax = await _repository.GetMaxNumbersByScopeAsync(companyId);
             var (items, totalCount) = await _repository.GetPagedByCompanyAsync(
-                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, divisionId);
+                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, divisionId, allowedDivisionIds);
             var linked = await GetLinkedQuoteIdsAsync(companyId, items.Select(q => q.Id).ToList());
             return new PagedResult<SalesQuoteDto>
             {
-                Items = items.Select(q => ToDto(q, scopeMax.GetValueOrDefault(q.DivisionId, 0), linked.Contains(q.Id))).ToList(),
+                Items = items.Select(q => ToDto(q, scopeMax.GetValueOrDefault(q.DivisionId ?? 0, 0), linked.Contains(q.Id))).ToList(),
                 TotalCount = totalCount,
                 Page = page,
                 PageSize = pageSize
@@ -148,8 +148,8 @@ namespace MyApp.Api.Services.Implementations
             return ToDto(q, max, hasLinkedOrder);
         }
 
-        public async Task<int> GetCountByCompanyAsync(int companyId)
-            => await _repository.GetCountByCompanyAsync(companyId);
+        public async Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
+            => await _repository.GetCountByCompanyAsync(companyId, allowedDivisionIds);
 
         // ── Create ───────────────────────────────────────────────────────────
 

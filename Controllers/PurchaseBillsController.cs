@@ -21,12 +21,15 @@ namespace MyApp.Api.Controllers
     {
         private readonly IPurchaseBillService _service;
         private readonly ICompanyAccessGuard _access;
+        private readonly IDivisionAccessGuard _divisionAccess;
         private readonly int _defaultPageSize;
 
-        public PurchaseBillsController(IPurchaseBillService service, ICompanyAccessGuard access, IConfiguration configuration)
+        public PurchaseBillsController(IPurchaseBillService service, ICompanyAccessGuard access,
+            IDivisionAccessGuard divisionAccess, IConfiguration configuration)
         {
             _service = service;
             _access = access;
+            _divisionAccess = divisionAccess;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
 
@@ -39,7 +42,10 @@ namespace MyApp.Api.Controllers
         [HasPermission("purchasebills.list.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<int>> GetCount([FromQuery] int companyId)
-            => Ok(await _service.GetCountByCompanyAsync(companyId));
+        {
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            return Ok(await _service.GetCountByCompanyAsync(companyId, divScope));
+        }
 
         /// <summary>Purchase-bill count per supplier (supplierId → count) — powers
         /// the clickable count on the Suppliers page.</summary>
@@ -47,7 +53,10 @@ namespace MyApp.Api.Controllers
         [HasPermission("purchasebills.list.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<Dictionary<int, int>>> GetCountsBySupplier(int companyId)
-            => Ok(await _service.GetCountsBySupplierAsync(companyId));
+        {
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            return Ok(await _service.GetCountsBySupplierAsync(companyId, divScope));
+        }
 
         [HttpGet("company/{companyId}/paged")]
         [HasPermission("purchasebills.list.view")]
@@ -64,7 +73,13 @@ namespace MyApp.Api.Controllers
         {
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
-            var result = await _service.GetPagedByCompanyAsync(companyId, clampedPage, size, search, supplierId, dateFrom, dateTo, divisionId);
+            // Division RBAC: an explicit divisionId filter must be one the
+            // caller can access; without a filter, restricted users get their
+            // scope applied inside the query (company-level rows included).
+            if (divisionId.HasValue)
+                await _divisionAccess.AssertAccessAsync(CurrentUserId, companyId, divisionId.Value);
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            var result = await _service.GetPagedByCompanyAsync(companyId, clampedPage, size, search, supplierId, dateFrom, dateTo, divisionId, divScope);
             return Ok(result);
         }
 
@@ -75,6 +90,7 @@ namespace MyApp.Api.Controllers
             var pb = await _service.GetByIdAsync(id);
             if (pb == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, pb.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, pb.CompanyId, pb.DivisionId);
             return Ok(pb);
         }
 
@@ -83,6 +99,9 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<PurchaseBillDto>> Create([FromBody] CreatePurchaseBillDto dto)
         {
             await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
+            // Division-restricted users must tag the bill with one of their
+            // divisions (write-assert also rejects null — policy D2).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, dto.DivisionId);
             try
             {
                 var created = await _service.CreateAsync(dto);
@@ -107,6 +126,9 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            // Division is immutable on update (UpdatePurchaseBillDto carries
+            // none) — the read-assert on the stored tag is sufficient.
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             try
             {
                 var updated = await _service.UpdateAsync(id, dto);
@@ -129,6 +151,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             var updated = await _service.SetDueDateAsync(id, body.DueDate);
             if (updated == null) return NotFound();
             return Ok(updated);
@@ -146,6 +169,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             var ok = await _service.DeleteAsync(id);
             if (!ok) return NotFound();
             return Ok(new { message = "Purchase bill deleted; stock movements reversed." });

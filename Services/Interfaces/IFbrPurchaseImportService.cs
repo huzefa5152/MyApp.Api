@@ -41,9 +41,12 @@ namespace MyApp.Api.Services.Interfaces
         ///
         /// Caller has already verified the fbrimport.purchase.commit
         /// permission. userId may be null (we still write — auditing
-        /// degrades gracefully).
+        /// degrades gracefully). divisionId (already validated + write-
+        /// asserted by the controller) tags every created PurchaseBill
+        /// and StockMovement; null = company-level.
         /// </summary>
         Task<FbrImportCommitResponse> CommitAsync(
-            Stream fileStream, string originalFileName, int companyId, int? userId);
+            Stream fileStream, string originalFileName, int companyId, int? userId,
+            int? divisionId = null);
     }
 }

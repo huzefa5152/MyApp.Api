@@ -24,13 +24,16 @@ namespace MyApp.Api.Controllers
         private readonly AppDbContext _context;
         private readonly IStockService _stock;
         private readonly ICompanyAccessGuard _access;
+        private readonly IDivisionAccessGuard _divisionAccess;
         private readonly int _defaultPageSize;
 
-        public StockController(AppDbContext context, IStockService stock, ICompanyAccessGuard access, IConfiguration configuration)
+        public StockController(AppDbContext context, IStockService stock, ICompanyAccessGuard access,
+            IDivisionAccessGuard divisionAccess, IConfiguration configuration)
         {
             _context = context;
             _stock = stock;
             _access = access;
+            _divisionAccess = divisionAccess;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
 
@@ -49,9 +52,19 @@ namespace MyApp.Api.Controllers
         [AuthorizeCompany]
         public async Task<ActionResult<List<StockOnHandRowDto>>> GetOnHand(int companyId)
         {
+            // Division RBAC: restricted users see company-level movements plus
+            // their divisions' (policy D1); other divisions' traffic is
+            // excluded from every aggregate below. Openings stay unfiltered —
+            // they're company-level by design.
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            IQueryable<StockMovement> ScopedMovements() =>
+                divScope == null
+                    ? _context.StockMovements.Where(m => m.CompanyId == companyId)
+                    : _context.StockMovements.Where(m => m.CompanyId == companyId
+                        && (m.DivisionId == null || divScope.Contains(m.DivisionId.Value)));
+
             // Items that have ever moved or have an opening balance.
-            var movItemIds = await _context.StockMovements
-                .Where(m => m.CompanyId == companyId)
+            var movItemIds = await ScopedMovements()
                 .Select(m => m.ItemTypeId)
                 .Distinct()
                 .ToListAsync();
@@ -73,14 +86,14 @@ namespace MyApp.Api.Controllers
                 .Select(g => new { ItemTypeId = g.Key, Qty = g.Sum(o => o.Quantity) })
                 .ToDictionaryAsync(x => x.ItemTypeId, x => x.Qty);
 
-            var moveAggs = await _context.StockMovements
-                .Where(m => m.CompanyId == companyId && ids.Contains(m.ItemTypeId))
+            var moveAggs = await ScopedMovements()
+                .Where(m => ids.Contains(m.ItemTypeId))
                 .GroupBy(m => new { m.ItemTypeId, m.Direction })
                 .Select(g => new { g.Key.ItemTypeId, g.Key.Direction, Qty = g.Sum(m => m.Quantity) })
                 .ToListAsync();
 
-            var lastDates = await _context.StockMovements
-                .Where(m => m.CompanyId == companyId && ids.Contains(m.ItemTypeId))
+            var lastDates = await ScopedMovements()
+                .Where(m => ids.Contains(m.ItemTypeId))
                 .GroupBy(m => m.ItemTypeId)
                 .Select(g => new { ItemTypeId = g.Key, Last = g.Max(m => m.MovementDate) })
                 .ToDictionaryAsync(x => x.ItemTypeId, x => x.Last);
@@ -135,6 +148,11 @@ namespace MyApp.Api.Controllers
             var q = _context.StockMovements
                 .Include(m => m.ItemType)
                 .Where(m => m.CompanyId == companyId);
+            // Division RBAC: restricted users only see company-level movements
+            // plus their own divisions' (policy D1).
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            if (divScope != null)
+                q = q.Where(m => m.DivisionId == null || divScope.Contains(m.DivisionId.Value));
             if (itemTypeId.HasValue) q = q.Where(m => m.ItemTypeId == itemTypeId.Value);
             if (!string.IsNullOrWhiteSpace(sourceType)
                 && Enum.TryParse<StockMovementSourceType>(sourceType, true, out var src))
@@ -245,6 +263,9 @@ namespace MyApp.Api.Controllers
             [FromBody] UpsertOpeningBalanceDto dto)
         {
             await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
+            // Opening balances are company-level inventory state — a
+            // division-restricted user may not write that scope (policy D2).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, null);
             var existing = await _context.OpeningStockBalances
                 .FirstOrDefaultAsync(o => o.CompanyId == dto.CompanyId && o.ItemTypeId == dto.ItemTypeId);
             if (existing == null)
@@ -288,6 +309,7 @@ namespace MyApp.Api.Controllers
             var row = await _context.OpeningStockBalances.FindAsync(id);
             if (row == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, row.CompanyId);
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, row.CompanyId, null);
             _context.OpeningStockBalances.Remove(row);
             await _context.SaveChangesAsync();
             return NoContent();
@@ -306,6 +328,9 @@ namespace MyApp.Api.Controllers
         {
             if (dto.Delta == 0) return BadRequest(new { error = "Delta cannot be zero." });
             await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
+            // Adjustments correct company-level inventory — blocked for
+            // division-restricted users (policy D2).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, null);
 
             // Negative deltas can't drive stock below zero. The previous
             // version of this endpoint allowed any signed delta — useful

@@ -294,9 +294,9 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
-        public async Task<List<InvoiceDto>> GetByCompanyAsync(int companyId)
+        public async Task<List<InvoiceDto>> GetByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            var invoices = await _invoiceRepo.GetByCompanyAsync(companyId);
+            var invoices = await _invoiceRepo.GetByCompanyAsync(companyId, allowedDivisionIds);
             var dtos = invoices.Select(ToDto).ToList();
             await AttachReversalInfoAsync(dtos);
             return dtos;
@@ -335,10 +335,12 @@ namespace MyApp.Api.Services.Implementations
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? noteType = null, int? divisionId = null)
+            int? noteType = null, int? divisionId = null,
+            HashSet<int>? allowedDivisionIds = null)
         {
             var (items, totalCount) = await _invoiceRepo.GetPagedByCompanyAsync(
-                companyId, page, pageSize, search, clientId, dateFrom, dateTo, noteType, divisionId);
+                companyId, page, pageSize, search, clientId, dateFrom, dateTo, noteType, divisionId,
+                allowedDivisionIds);
 
             // Gate the Delete button client-side — only the highest-numbered
             // bill for this company is deletable. Earlier bills must be edited.
@@ -2623,22 +2625,28 @@ namespace MyApp.Api.Services.Implementations
             return await _invoiceRepo.GetTotalCountAsync();
         }
 
-        public async Task<int> GetCountByCompanyAsync(int companyId)
+        public async Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            return await _invoiceRepo.GetCountByCompanyAsync(companyId);
+            return await _invoiceRepo.GetCountByCompanyAsync(companyId, allowedDivisionIds);
         }
 
         // Sales-invoice count per client for a company — powers the clickable
         // "N sales invoices" chip on the Clients page. Excludes demo invoices to
         // match the page total; includes cancelled (they still show in the list).
-        public async Task<Dictionary<int, int>> GetInvoiceCountsByClientAsync(int companyId) =>
-            await _context.Invoices
-                .Where(i => i.CompanyId == companyId && !i.IsDemo)
+        public async Task<Dictionary<int, int>> GetInvoiceCountsByClientAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
+        {
+            var q = _context.Invoices.Where(i => i.CompanyId == companyId && !i.IsDemo);
+            // Division-RBAC scope (null = unrestricted); company-level rows
+            // (DivisionId == null) stay visible — policy D1.
+            if (allowedDivisionIds != null)
+                q = q.Where(i => i.DivisionId == null || allowedDivisionIds.Contains(i.DivisionId.Value));
+            return await q
                 .GroupBy(i => i.ClientId)
                 .Select(g => new { ClientId = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.ClientId, x => x.Count);
+        }
 
-        public async Task<List<AwaitingPurchaseInvoiceDto>> GetAwaitingPurchaseAsync(int companyId)
+        public async Task<List<AwaitingPurchaseInvoiceDto>> GetAwaitingPurchaseAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
             // A bill qualifies for the "Purchase Against Sale Bill" picker if:
             //   • not yet submitted to FBR (still mutable)
@@ -2658,10 +2666,16 @@ namespace MyApp.Api.Services.Implementations
                       pi => pi.Id,
                       (psl, pi) => new { psl.InvoiceItemId, pi.Quantity });
 
+            // Division-RBAC scope (null = unrestricted); company-level bills
+            // (DivisionId == null) stay visible — policy D1.
+            var billQuery = _context.Invoices.AsQueryable();
+            if (allowedDivisionIds != null)
+                billQuery = billQuery.Where(i => i.DivisionId == null || allowedDivisionIds.Contains(i.DivisionId.Value));
+
             // We need raw item rows to compute the per-bill qualification
             // server-side. EF will translate the LINQ to a single query.
             var rawLines = await (
-                from i in _context.Invoices
+                from i in billQuery
                 join ii in _context.InvoiceItems on i.Id equals ii.InvoiceId
                 where i.CompanyId == companyId
                    && i.FbrStatus != "Submitted"
@@ -2792,7 +2806,8 @@ namespace MyApp.Api.Services.Implementations
         public async Task<ItemRateHistoryResultDto> GetItemRateHistoryAsync(
             int companyId, int page, int pageSize,
             int? itemTypeId, string? search,
-            int? clientId, DateTime? dateFrom, DateTime? dateTo)
+            int? clientId, DateTime? dateFrom, DateTime? dateTo,
+            HashSet<int>? allowedDivisionIds = null)
         {
             // Flat InvoiceItem projection scoped to one company. We project
             // to the row DTO directly so EF translates the whole thing into
@@ -2807,6 +2822,10 @@ namespace MyApp.Api.Services.Implementations
                 // rate suggestions based on actual sales only.
                 .Where(ii => ii.Invoice.CompanyId == companyId && !ii.Invoice.IsDemo && !ii.Invoice.IsCancelled
                           && ii.Invoice.DocumentType != 9 && ii.Invoice.DocumentType != 10);
+            // Division-RBAC scope (null = unrestricted); lines on company-level
+            // bills (DivisionId == null) stay visible — policy D1.
+            if (allowedDivisionIds != null)
+                q = q.Where(ii => ii.Invoice.DivisionId == null || allowedDivisionIds.Contains(ii.Invoice.DivisionId.Value));
 
             if (itemTypeId.HasValue && itemTypeId.Value > 0)
             {

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyApp.Api.Data;
 
@@ -11,9 +12,11 @@ using MyApp.Api.Data;
 namespace MyApp.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260704104730_AddAttachmentDivisionId")]
+    partial class AddAttachmentDivisionId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3798,9 +3801,6 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("Direction")
                         .HasColumnType("int");
 
-                    b.Property<int?>("DivisionId")
-                        .HasColumnType("int");
-
                     b.Property<int>("ItemTypeId")
                         .HasColumnType("int");
 
@@ -3821,8 +3821,6 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("DivisionId");
 
                     b.HasIndex("ItemTypeId");
 
@@ -4795,11 +4793,6 @@ namespace MyApp.Api.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("MyApp.Api.Models.Division", "Division")
-                        .WithMany()
-                        .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.HasOne("MyApp.Api.Models.ItemType", "ItemType")
                         .WithMany()
                         .HasForeignKey("ItemTypeId")
@@ -4807,8 +4800,6 @@ namespace MyApp.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Company");
-
-                    b.Navigation("Division");
 
                     b.Navigation("ItemType");
                 });

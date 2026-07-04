@@ -17,11 +17,14 @@ namespace MyApp.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IPermissionService _permissions;
+        private readonly IDivisionAccessGuard _divisionAccess;
 
-        public PermissionsController(AppDbContext context, IPermissionService permissions)
+        public PermissionsController(AppDbContext context, IPermissionService permissions,
+            IDivisionAccessGuard divisionAccess)
         {
             _context = context;
             _permissions = permissions;
+            _divisionAccess = divisionAccess;
         }
 
         /// <summary>Flat list of every permission in the catalog.</summary>
@@ -93,11 +96,18 @@ namespace MyApp.Api.Controllers
                 return Unauthorized();
 
             var keys = await _permissions.GetUserPermissionsAsync(userId);
+            // Division restrictions keyed by companyId — companies where the
+            // user is unrestricted are simply absent, so the common case
+            // (no restrictions anywhere) serialises to an empty object and
+            // the frontend can treat "key missing" as "all divisions".
+            var restrictions = await _divisionAccess.GetRestrictionsAsync(userId);
             return Ok(new
             {
                 userId,
                 isSeedAdmin = _permissions.IsSeedAdmin(userId),
-                permissions = keys
+                permissions = keys,
+                divisionRestrictions = restrictions.ToDictionary(
+                    kv => kv.Key.ToString(), kv => kv.Value.OrderBy(x => x).ToList())
             });
         }
     }

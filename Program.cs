@@ -430,6 +430,12 @@ builder.Services.AddScoped<IPermissionService, PermissionService>();
 // through otherwise (preserves Hakimi/Roshan behaviour).
 builder.Services.AddScoped<ICompanyAccessGuard, CompanyAccessGuard>();
 
+// Division-scope guard — the layer below the company guard: within a
+// company, users flagged RestrictToDivisions on their UserCompany row
+// only reach the divisions granted in UserDivisions. Default (flag off)
+// is unrestricted, so existing users see no behaviour change.
+builder.Services.AddScoped<IDivisionAccessGuard, DivisionAccessGuard>();
+
 // CORS — origins read from configuration (Cors:AllowedOrigins, comma-
 // separated). Empty / missing collapses to "no cross-origin allowed",
 // which is correct when the SPA is served from the same host as the
@@ -1765,6 +1771,83 @@ using (var scope = app.Services.CreateScope())
         catch (Exception ex)
         {
             Log.Warning(ex, "Attachment storage flatten backfill failed (non-fatal).");
+        }
+    }
+
+    // Division RBAC: Attachments now denormalize their linked document's
+    // DivisionId (stamped at upload for new rows). Backfill existing rows from
+    // the entity each one points at — company-matched join so a corrupt link
+    // can never pull a foreign division. Folder-only rows stay NULL. Idempotent
+    // via the AuditLog marker.
+    if (!db.AuditLogs.Any(a => a.ExceptionType == "ATTACHMENT_DIVISION_BACKFILL_V1"))
+    {
+        try
+        {
+            var tables = new (string EntityType, string Table)[]
+            {
+                ("SalesQuote", "SalesQuotes"),
+                ("SalesOrder", "SalesOrders"),
+                ("DeliveryChallan", "DeliveryChallans"),
+                ("Invoice", "Invoices"),
+                ("PurchaseBill", "PurchaseBills"),
+                ("GoodsReceipt", "GoodsReceipts"),
+            };
+            var stamped = 0;
+            foreach (var (entityType, table) in tables)
+            {
+                stamped += db.Database.ExecuteSqlRaw(
+                    $"UPDATE a SET a.DivisionId = d.DivisionId FROM Attachments a " +
+                    $"JOIN {table} d ON d.Id = a.EntityId AND d.CompanyId = a.CompanyId " +
+                    $"WHERE a.EntityType = {{0}} AND a.DivisionId IS NULL AND d.DivisionId IS NOT NULL",
+                    entityType);
+            }
+
+            db.Database.ExecuteSqlRaw(
+                "INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp]) " +
+                "VALUES ('Info', 'ATTACHMENT_DIVISION_BACKFILL_V1', {0}, 'STARTUP', '/seed/attachments/division', 200, SYSUTCDATETIME())",
+                $"Attachment DivisionId backfilled from linked documents: {stamped} row(s) stamped.");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Attachment division backfill failed (non-fatal).");
+        }
+    }
+
+    // Division RBAC (Phase 4): StockMovements now denormalize the source
+    // document's DivisionId (stamped at record time for new rows). Backfill
+    // existing rows from their source Invoice / PurchaseBill / GoodsReceipt —
+    // company-matched join, same defensive stance as the attachment backfill.
+    // Opening balances and adjustments stay NULL (company-level, policy D1).
+    // SourceType ints per StockMovementSourceType: PurchaseBill=1, Invoice=2,
+    // GoodsReceipt=4.
+    if (!db.AuditLogs.Any(a => a.ExceptionType == "STOCKMOVEMENT_DIVISION_BACKFILL_V1"))
+    {
+        try
+        {
+            var sources = new (int SourceType, string Table)[]
+            {
+                (1, "PurchaseBills"),
+                (2, "Invoices"),
+                (4, "GoodsReceipts"),
+            };
+            var stamped = 0;
+            foreach (var (sourceType, table) in sources)
+            {
+                stamped += db.Database.ExecuteSqlRaw(
+                    $"UPDATE m SET m.DivisionId = d.DivisionId FROM StockMovements m " +
+                    $"JOIN {table} d ON d.Id = m.SourceId AND d.CompanyId = m.CompanyId " +
+                    $"WHERE m.SourceType = {{0}} AND m.DivisionId IS NULL AND d.DivisionId IS NOT NULL",
+                    sourceType);
+            }
+
+            db.Database.ExecuteSqlRaw(
+                "INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp]) " +
+                "VALUES ('Info', 'STOCKMOVEMENT_DIVISION_BACKFILL_V1', {0}, 'STARTUP', '/seed/stock/division', 200, SYSUTCDATETIME())",
+                $"StockMovement DivisionId backfilled from source documents: {stamped} row(s) stamped.");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "StockMovement division backfill failed (non-fatal).");
         }
     }
 }

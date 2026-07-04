@@ -17,12 +17,15 @@ namespace MyApp.Api.Controllers
     {
         private readonly IDivisionService _service;
         private readonly ICompanyAccessGuard _access;
+        private readonly IDivisionAccessGuard _divisionAccess;
         private readonly IWebHostEnvironment _env;
 
-        public DivisionsController(IDivisionService service, ICompanyAccessGuard access, IWebHostEnvironment env)
+        public DivisionsController(IDivisionService service, ICompanyAccessGuard access,
+            IDivisionAccessGuard divisionAccess, IWebHostEnvironment env)
         {
             _service = service;
             _access = access;
+            _divisionAccess = divisionAccess;
             _env = env;
         }
 
@@ -37,7 +40,15 @@ namespace MyApp.Api.Controllers
         [HasPermission("divisions.manage.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<DivisionDto>>> GetByCompany(int companyId)
-            => Ok(await _service.GetByCompanyAsync(companyId));
+        {
+            // This endpoint feeds every DivisionSelect dropdown — filter it
+            // server-side so a division-restricted user never learns the
+            // names of divisions they can't reach (dropdown filtering in the
+            // frontend alone would be cosmetic, not security).
+            var rows = await _service.GetByCompanyAsync(companyId);
+            var allowed = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            return Ok(allowed == null ? rows : rows.Where(d => allowed.Contains(d.Id)).ToList());
+        }
 
         [HttpPost("company/{companyId}")]
         [HasPermission("divisions.manage.create")]

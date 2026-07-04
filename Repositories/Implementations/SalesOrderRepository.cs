@@ -22,10 +22,12 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(o => o.SalesQuote)
                 .Include(o => o.Division);
 
-        public async Task<List<SalesOrder>> GetByCompanyAsync(int companyId)
+        public async Task<List<SalesOrder>> GetByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            return await WithIncludes()
-                .Where(o => o.CompanyId == companyId)
+            var query = WithIncludes().Where(o => o.CompanyId == companyId);
+            if (allowedDivisionIds != null)
+                query = query.Where(o => o.DivisionId == null || allowedDivisionIds.Contains(o.DivisionId.Value));
+            return await query
                 .OrderByDescending(o => o.SalesOrderNumber)
                 .ToListAsync();
         }
@@ -34,9 +36,14 @@ namespace MyApp.Api.Repositories.Implementations
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? divisionId = null)
+            int? divisionId = null, HashSet<int>? allowedDivisionIds = null)
         {
             var query = WithIncludes().Where(o => o.CompanyId == companyId);
+            // Division-RBAC scope first (null = unrestricted); the operator's
+            // explicit divisionId FILTER below is a view preference layered on
+            // top — the controller asserts it against the same allowed set.
+            if (allowedDivisionIds != null)
+                query = query.Where(o => o.DivisionId == null || allowedDivisionIds.Contains(o.DivisionId.Value));
 
             if (!string.IsNullOrWhiteSpace(status))
                 query = query.Where(o => o.Status == status);
@@ -86,9 +93,12 @@ namespace MyApp.Api.Repositories.Implementations
             await _context.SaveChangesAsync();
         }
 
-        public async Task<int> GetCountByCompanyAsync(int companyId)
+        public async Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            return await _context.SalesOrders.CountAsync(o => o.CompanyId == companyId);
+            var query = _context.SalesOrders.Where(o => o.CompanyId == companyId);
+            if (allowedDivisionIds != null)
+                query = query.Where(o => o.DivisionId == null || allowedDivisionIds.Contains(o.DivisionId.Value));
+            return await query.CountAsync();
         }
 
         public async Task<int> GetMaxNumberAsync(int companyId)
@@ -103,10 +113,12 @@ namespace MyApp.Api.Repositories.Implementations
             return await _context.DeliveryChallans.AnyAsync(dc => dc.SalesOrderId == salesOrderId);
         }
 
-        public async Task<List<SalesOrder>> GetOpenByCompanyAsync(int companyId)
+        public async Task<List<SalesOrder>> GetOpenByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            return await WithIncludes()
-                .Where(o => o.CompanyId == companyId && o.Status == "Open")
+            var query = WithIncludes().Where(o => o.CompanyId == companyId && o.Status == "Open");
+            if (allowedDivisionIds != null)
+                query = query.Where(o => o.DivisionId == null || allowedDivisionIds.Contains(o.DivisionId.Value));
+            return await query
                 .OrderByDescending(o => o.SalesOrderNumber)
                 .ToListAsync();
         }

@@ -4,7 +4,10 @@ namespace MyApp.Api.Services.Interfaces
 {
     public interface IInvoiceService
     {
-        Task<List<InvoiceDto>> GetByCompanyAsync(int companyId);
+        /// <param name="allowedDivisionIds">Division-RBAC scope from
+        /// IDivisionAccessGuard: non-null = restricted user, return only rows in
+        /// these divisions or with no division (policy D1). Null = unrestricted.</param>
+        Task<List<InvoiceDto>> GetByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
         /// <summary>
         /// Paged list. <paramref name="noteType"/> selects the document group:
         /// null (default) = sale bills only; 9 = Debit Notes; 10 = Credit
@@ -15,7 +18,8 @@ namespace MyApp.Api.Services.Interfaces
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? noteType = null, int? divisionId = null);
+            int? noteType = null, int? divisionId = null,
+            HashSet<int>? allowedDivisionIds = null);
         Task<InvoiceDto?> GetByIdAsync(int id);
         Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto);
         /// <summary>
@@ -90,8 +94,8 @@ namespace MyApp.Api.Services.Interfaces
         Task<PrintBillDto?> GetPrintBillAsync(int invoiceId);
         Task<PrintTaxInvoiceDto?> GetPrintTaxInvoiceAsync(int invoiceId);
         Task<int> GetTotalCountAsync();
-        Task<int> GetCountByCompanyAsync(int companyId);
-        Task<Dictionary<int, int>> GetInvoiceCountsByClientAsync(int companyId);
+        Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
+        Task<Dictionary<int, int>> GetInvoiceCountsByClientAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
         /// <summary>
         /// Flat InvoiceItem search across a company's billing history. Powers
         /// the Item Rate History page — given an item (by catalog id or free
@@ -103,7 +107,8 @@ namespace MyApp.Api.Services.Interfaces
         Task<ItemRateHistoryResultDto> GetItemRateHistoryAsync(
             int companyId, int page, int pageSize,
             int? itemTypeId, string? search,
-            int? clientId, DateTime? dateFrom, DateTime? dateTo);
+            int? clientId, DateTime? dateFrom, DateTime? dateTo,
+            HashSet<int>? allowedDivisionIds = null);
 
         /// <summary>
         /// For each item in the given challan, look up the most-recent
@@ -122,7 +127,7 @@ namespace MyApp.Api.Services.Interfaces
         /// remaining qty to procure. Drives the "pick a sale bill" step of
         /// the Purchase Against Sale Bill flow.
         /// </summary>
-        Task<List<AwaitingPurchaseInvoiceDto>> GetAwaitingPurchaseAsync(int companyId);
+        Task<List<AwaitingPurchaseInvoiceDto>> GetAwaitingPurchaseAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
 
         /// <summary>
         /// Per-line procurement template for one sale bill — the lines

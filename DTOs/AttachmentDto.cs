@@ -9,6 +9,7 @@ namespace MyApp.Api.DTOs
     {
         public int Id { get; set; }
         public int CompanyId { get; set; }
+        public int? DivisionId { get; set; }
         public int? FolderId { get; set; }
         public string? FolderName { get; set; }
         public string? EntityType { get; set; }

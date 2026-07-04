@@ -72,7 +72,8 @@ namespace MyApp.Api.Services.Implementations
             StockMovementSourceType sourceType,
             int? sourceId,
             DateTime movementDate,
-            string? notes = null)
+            string? notes = null,
+            int? divisionId = null)
         {
             if (quantity <= 0m) return;
             if (!await IsTrackingEnabledAsync(companyId)) return;
@@ -80,6 +81,7 @@ namespace MyApp.Api.Services.Implementations
             _context.StockMovements.Add(new StockMovement
             {
                 CompanyId = companyId,
+                DivisionId = divisionId,
                 ItemTypeId = itemTypeId,
                 Direction = direction,
                 Quantity = quantity,
@@ -106,16 +108,18 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
-        public async Task<decimal> GetOnHandAsync(int companyId, int itemTypeId, DateTime? asOfDate = null)
+        public async Task<decimal> GetOnHandAsync(int companyId, int itemTypeId, DateTime? asOfDate = null,
+            HashSet<int>? allowedDivisionIds = null)
         {
-            var dict = await GetOnHandBulkAsync(companyId, new[] { itemTypeId }, asOfDate);
+            var dict = await GetOnHandBulkAsync(companyId, new[] { itemTypeId }, asOfDate, allowedDivisionIds);
             return dict.TryGetValue(itemTypeId, out var qty) ? qty : 0m;
         }
 
         public async Task<Dictionary<int, decimal>> GetOnHandBulkAcrossCompaniesAsync(
             IEnumerable<int> companyIds,
             IEnumerable<int> itemTypeIds,
-            DateTime? asOfDate = null)
+            DateTime? asOfDate = null,
+            Dictionary<int, HashSet<int>>? divisionRestrictionsByCompany = null)
         {
             var cids = companyIds?.Distinct().ToList() ?? new List<int>();
             var iids = itemTypeIds?.Distinct().ToList() ?? new List<int>();
@@ -135,6 +139,7 @@ namespace MyApp.Api.Services.Implementations
 
             // Single SQL trip each for opening balances and movements,
             // grouped by ItemTypeId across the tracked-company subset.
+            // Openings are company-level and never division-filtered (D1).
             var openingQ = _context.OpeningStockBalances
                 .Where(o => trackedCids.Contains(o.CompanyId) && iids.Contains(o.ItemTypeId));
             if (asOfDate.HasValue)
@@ -144,14 +149,40 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new { ItemTypeId = g.Key, Qty = g.Sum(o => o.Quantity) })
                 .ToDictionaryAsync(x => x.ItemTypeId, x => x.Qty);
 
-            var movQ = _context.StockMovements
-                .Where(m => trackedCids.Contains(m.CompanyId) && iids.Contains(m.ItemTypeId));
-            if (asOfDate.HasValue)
-                movQ = movQ.Where(m => m.MovementDate <= asOfDate.Value);
-            var moves = await movQ
-                .GroupBy(m => new { m.ItemTypeId, m.Direction })
-                .Select(g => new { g.Key.ItemTypeId, g.Key.Direction, Qty = g.Sum(m => m.Quantity) })
-                .ToListAsync();
+            // Movements: companies where the caller is division-restricted
+            // need a per-company division filter, which one grouped query
+            // can't express — split them out (one extra query per restricted
+            // company; the common case has zero).
+            var restrictions = divisionRestrictionsByCompany ?? new Dictionary<int, HashSet<int>>();
+            var openCids = trackedCids.Where(c => !restrictions.ContainsKey(c)).ToList();
+            var moves = new List<(int ItemTypeId, StockMovementDirection Direction, decimal Qty)>();
+
+            if (openCids.Count > 0)
+            {
+                var movQ = _context.StockMovements
+                    .Where(m => openCids.Contains(m.CompanyId) && iids.Contains(m.ItemTypeId));
+                if (asOfDate.HasValue)
+                    movQ = movQ.Where(m => m.MovementDate <= asOfDate.Value);
+                moves.AddRange((await movQ
+                    .GroupBy(m => new { m.ItemTypeId, m.Direction })
+                    .Select(g => new { g.Key.ItemTypeId, g.Key.Direction, Qty = g.Sum(m => m.Quantity) })
+                    .ToListAsync())
+                    .Select(x => (x.ItemTypeId, x.Direction, x.Qty)));
+            }
+            foreach (var cid in trackedCids.Where(restrictions.ContainsKey))
+            {
+                var allowed = restrictions[cid];
+                var movQ = _context.StockMovements
+                    .Where(m => m.CompanyId == cid && iids.Contains(m.ItemTypeId)
+                             && (m.DivisionId == null || allowed.Contains(m.DivisionId.Value)));
+                if (asOfDate.HasValue)
+                    movQ = movQ.Where(m => m.MovementDate <= asOfDate.Value);
+                moves.AddRange((await movQ
+                    .GroupBy(m => new { m.ItemTypeId, m.Direction })
+                    .Select(g => new { g.Key.ItemTypeId, g.Key.Direction, Qty = g.Sum(m => m.Quantity) })
+                    .ToListAsync())
+                    .Select(x => (x.ItemTypeId, x.Direction, x.Qty)));
+            }
 
             var result = new Dictionary<int, decimal>();
             foreach (var id in iids)
@@ -169,7 +200,8 @@ namespace MyApp.Api.Services.Implementations
         public async Task<Dictionary<int, decimal>> GetOnHandBulkAsync(
             int companyId,
             IEnumerable<int> itemTypeIds,
-            DateTime? asOfDate = null)
+            DateTime? asOfDate = null,
+            HashSet<int>? allowedDivisionIds = null)
         {
             var ids = itemTypeIds?.Distinct().ToList() ?? new List<int>();
             if (ids.Count == 0) return new Dictionary<int, decimal>();
@@ -178,6 +210,8 @@ namespace MyApp.Api.Services.Implementations
             // they exist independent of tracking-enabled. The flag only gates
             // *writes*, not reads, so the dashboard works the moment a company
             // turns tracking on (given the opening balances are already entered).
+            // Opening balances are company-level by design and stay visible to
+            // division-restricted users (policy D1) — no division filter here.
             var openingQ = _context.OpeningStockBalances
                 .Where(o => o.CompanyId == companyId && ids.Contains(o.ItemTypeId));
             if (asOfDate.HasValue)
@@ -187,9 +221,13 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new { ItemTypeId = g.Key, Qty = g.Sum(o => o.Quantity) })
                 .ToDictionaryAsync(x => x.ItemTypeId, x => x.Qty);
 
-            // Net of In − Out from the movement log.
+            // Net of In − Out from the movement log. Division-RBAC scope:
+            // restricted callers see company-level movements plus their own
+            // divisions' — other divisions' traffic is excluded from the sum.
             var movQ = _context.StockMovements
                 .Where(m => m.CompanyId == companyId && ids.Contains(m.ItemTypeId));
+            if (allowedDivisionIds != null)
+                movQ = movQ.Where(m => m.DivisionId == null || allowedDivisionIds.Contains(m.DivisionId.Value));
             if (asOfDate.HasValue)
                 movQ = movQ.Where(m => m.MovementDate <= asOfDate.Value);
             var moves = await movQ
@@ -338,6 +376,7 @@ namespace MyApp.Api.Services.Implementations
                 _context.StockMovements.Add(new StockMovement
                 {
                     CompanyId    = invoice.CompanyId,
+                    DivisionId   = invoice.DivisionId,
                     ItemTypeId   = item.ItemTypeId.Value,
                     Direction    = dir,
                     // 2026-05-12: stored at full decimal(18,4) precision.

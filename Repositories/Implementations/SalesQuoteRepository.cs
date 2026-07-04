@@ -22,10 +22,12 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(q => q.Division)
                 .Include(q => q.ConvertedToSalesOrder);
 
-        public async Task<List<SalesQuote>> GetByCompanyAsync(int companyId)
+        public async Task<List<SalesQuote>> GetByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            return await WithIncludes()
-                .Where(q => q.CompanyId == companyId)
+            var query = WithIncludes().Where(q => q.CompanyId == companyId);
+            if (allowedDivisionIds != null)
+                query = query.Where(q => q.DivisionId == null || allowedDivisionIds.Contains(q.DivisionId.Value));
+            return await query
                 .OrderByDescending(q => q.QuoteNumber)
                 .AsNoTracking()
                 .ToListAsync();
@@ -35,9 +37,14 @@ namespace MyApp.Api.Repositories.Implementations
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? divisionId = null)
+            int? divisionId = null, HashSet<int>? allowedDivisionIds = null)
         {
             var query = WithIncludes().Where(q => q.CompanyId == companyId);
+            // Division-RBAC scope first (null = unrestricted); the operator's
+            // explicit divisionId FILTER below is a view preference layered on
+            // top — the controller asserts it against the same allowed set.
+            if (allowedDivisionIds != null)
+                query = query.Where(q => q.DivisionId == null || allowedDivisionIds.Contains(q.DivisionId.Value));
 
             if (!string.IsNullOrWhiteSpace(status))
             {
@@ -106,9 +113,12 @@ namespace MyApp.Api.Repositories.Implementations
             await _context.SaveChangesAsync();
         }
 
-        public async Task<int> GetCountByCompanyAsync(int companyId)
+        public async Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            return await _context.SalesQuotes.CountAsync(q => q.CompanyId == companyId);
+            var query = _context.SalesQuotes.Where(q => q.CompanyId == companyId);
+            if (allowedDivisionIds != null)
+                query = query.Where(q => q.DivisionId == null || allowedDivisionIds.Contains(q.DivisionId.Value));
+            return await query.CountAsync();
         }
 
         public async Task<int> GetMaxNumberAsync(int companyId)
@@ -133,14 +143,18 @@ namespace MyApp.Api.Repositories.Implementations
 
         // Max quote number per scope (DivisionId → max), in one round-trip, so
         // the list views can flag IsLatest per division without an N+1.
-        public async Task<Dictionary<int?, int>> GetMaxNumbersByScopeAsync(int companyId)
+        // Key 0 = the company-level (DivisionId == null) scope: Dictionary
+        // can't hold a null key — the old Dictionary<int?, int> shape threw
+        // ArgumentNullException the moment a company had a no-division quote
+        // (division ids are identity ints, so 0 can't collide).
+        public async Task<Dictionary<int, int>> GetMaxNumbersByScopeAsync(int companyId)
         {
             var rows = await _context.SalesQuotes
                 .Where(q => q.CompanyId == companyId)
                 .GroupBy(q => q.DivisionId)
                 .Select(g => new { DivisionId = g.Key, Max = g.Max(x => x.QuoteNumber) })
                 .ToListAsync();
-            return rows.ToDictionary(r => r.DivisionId, r => r.Max);
+            return rows.ToDictionary(r => r.DivisionId ?? 0, r => r.Max);
         }
     }
 }

@@ -92,7 +92,7 @@ namespace MyApp.Api.Services.Implementations
             int companyId, int page, int pageSize,
             string? search = null, int? supplierId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? divisionId = null)
+            int? divisionId = null, HashSet<int>? allowedDivisionIds = null)
         {
             var q = _context.PurchaseBills
                 .Include(pb => pb.Supplier)
@@ -104,6 +104,11 @@ namespace MyApp.Api.Services.Implementations
                             .ThenInclude(ii => ii.Invoice)
                 .Include(pb => pb.Division)
                 .Where(pb => pb.CompanyId == companyId);
+            // Division-RBAC scope first (null = unrestricted); the operator's
+            // explicit divisionId FILTER below is a view preference layered on
+            // top — the controller asserts it against the same allowed set.
+            if (allowedDivisionIds != null)
+                q = q.Where(pb => pb.DivisionId == null || allowedDivisionIds.Contains(pb.DivisionId.Value));
             if (supplierId.HasValue)
                 q = q.Where(pb => pb.SupplierId == supplierId.Value);
             if (divisionId.HasValue)
@@ -387,7 +392,8 @@ namespace MyApp.Api.Services.Implementations
                     sourceType: StockMovementSourceType.PurchaseBill,
                     sourceId: bill.Id,
                     movementDate: bill.Date,
-                    notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplier.Name}");
+                    notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplier.Name}",
+                    divisionId: bill.DivisionId);
             }
 
             // GL posting (Dr Inventory/Purchases + Input tax / Cr AP) — same tx.
@@ -544,7 +550,8 @@ namespace MyApp.Api.Services.Implementations
                     sourceType: StockMovementSourceType.PurchaseBill,
                     sourceId: bill.Id,
                     movementDate: bill.Date,
-                    notes: $"Purchase Bill #{bill.PurchaseBillNumber} (edited)");
+                    notes: $"Purchase Bill #{bill.PurchaseBillNumber} (edited)",
+                    divisionId: bill.DivisionId);
             }
 
             // GL re-post: totals changed → replace the bill's journal entry.
@@ -603,7 +610,8 @@ namespace MyApp.Api.Services.Implementations
                     sourceType: StockMovementSourceType.PurchaseBill,
                     sourceId: bill.Id,
                     movementDate: movementDate,
-                    notes: notes);
+                    notes: notes,
+                    divisionId: bill.DivisionId);
             }
         }
 
@@ -645,16 +653,25 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
-        public async Task<int> GetCountByCompanyAsync(int companyId) =>
-            await _context.PurchaseBills.CountAsync(p => p.CompanyId == companyId);
+        public async Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
+        {
+            var q = _context.PurchaseBills.Where(p => p.CompanyId == companyId);
+            if (allowedDivisionIds != null)
+                q = q.Where(p => p.DivisionId == null || allowedDivisionIds.Contains(p.DivisionId.Value));
+            return await q.CountAsync();
+        }
 
         // Purchase-bill count per supplier for a company — powers the clickable
         // "N purchase bills" chip on the Suppliers page. Single GROUP BY.
-        public async Task<Dictionary<int, int>> GetCountsBySupplierAsync(int companyId) =>
-            await _context.PurchaseBills
-                .Where(p => p.CompanyId == companyId)
+        public async Task<Dictionary<int, int>> GetCountsBySupplierAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
+        {
+            var q = _context.PurchaseBills.Where(p => p.CompanyId == companyId);
+            if (allowedDivisionIds != null)
+                q = q.Where(p => p.DivisionId == null || allowedDivisionIds.Contains(p.DivisionId.Value));
+            return await q
                 .GroupBy(p => p.SupplierId)
                 .Select(g => new { SupplierId = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.SupplierId, x => x.Count);
+        }
     }
 }

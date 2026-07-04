@@ -4,14 +4,17 @@ namespace MyApp.Api.Services.Interfaces
 {
     public interface ISalesOrderService
     {
-        Task<List<SalesOrderDto>> GetByCompanyAsync(int companyId);
+        /// <param name="allowedDivisionIds">Division-RBAC scope from
+        /// IDivisionAccessGuard: non-null = restricted user, return only rows in
+        /// these divisions or with no division (policy D1). Null = unrestricted.</param>
+        Task<List<SalesOrderDto>> GetByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
         /// <summary>Open orders that still have undelivered quantity — powers the challan picker.</summary>
-        Task<List<SalesOrderDto>> GetOpenByCompanyAsync(int companyId);
+        Task<List<SalesOrderDto>> GetOpenByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
         Task<PagedResult<SalesOrderDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? divisionId = null);
+            int? divisionId = null, HashSet<int>? allowedDivisionIds = null);
         Task<SalesOrderDto?> GetByIdAsync(int id);
         Task<SalesOrderDto> CreateAsync(int companyId, SalesOrderDto dto);
         Task<SalesOrderDto?> UpdateAsync(int id, SalesOrderDto dto);
@@ -31,7 +34,7 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<SalesOrderInvoicePrefillDto?> GetInvoicePrefillAsync(int id);
         Task<PrintOrderDto?> GetPrintDataAsync(int id);
-        Task<int> GetCountByCompanyAsync(int companyId);
+        Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
         /// <summary>Delivery challans raised against this order, for the View / drill-down.</summary>
         Task<List<SalesOrderChallanDto>> GetChallansForOrderAsync(int orderId);
     }
