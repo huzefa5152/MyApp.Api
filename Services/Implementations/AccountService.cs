@@ -9,13 +9,26 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly IAccountRepository _repo;
         private readonly IGeneralLedgerService _gl;
+        private readonly IDivisionRepository _divisions;
         private readonly ILogger<AccountService> _logger;
 
-        public AccountService(IAccountRepository repo, IGeneralLedgerService gl, ILogger<AccountService> logger)
+        public AccountService(IAccountRepository repo, IGeneralLedgerService gl,
+            IDivisionRepository divisions, ILogger<AccountService> logger)
         {
             _repo = repo;
             _gl = gl;
+            _divisions = divisions;
             _logger = logger;
+        }
+
+        /// <summary>Division guard — same rule every document service applies:
+        /// a DivisionId from the request must belong to the account's company.</summary>
+        private async Task AssertDivisionBelongsAsync(int companyId, int? divisionId)
+        {
+            if (!divisionId.HasValue) return;
+            var div = await _divisions.GetByIdAsync(divisionId.Value);
+            if (div == null || div.CompanyId != companyId)
+                throw new InvalidOperationException("Division does not belong to this company.");
         }
 
         // ── Tree ──────────────────────────────────────────────────────────────
@@ -210,6 +223,7 @@ namespace MyApp.Api.Services.Implementations
             var group = await _repo.GetGroupByIdAsync(dto.AccountGroupId);
             if (group == null || group.CompanyId != companyId)
                 throw new InvalidOperationException("Account group does not belong to this company.");
+            await AssertDivisionBelongsAsync(companyId, dto.DivisionId);
 
             var type = ParseAccountType(dto.AccountType, group.Statement);
             var control = ParseControlType(dto.ControlType);
@@ -297,7 +311,13 @@ namespace MyApp.Api.Services.Implementations
                 a.AccountGroupId = group.Id;
             }
             if (dto.CashFlowClass != null) a.CashFlowClass = ParseCashFlow(dto.CashFlowClass);
-            if (dto.DivisionId.HasValue) a.DivisionId = dto.DivisionId.Value == 0 ? null : dto.DivisionId.Value;
+            if (dto.DivisionId.HasValue)
+            {
+                // 0 is the UI's "clear division" sentinel — only validate real ids.
+                if (dto.DivisionId.Value != 0)
+                    await AssertDivisionBelongsAsync(a.CompanyId, dto.DivisionId.Value);
+                a.DivisionId = dto.DivisionId.Value == 0 ? null : dto.DivisionId.Value;
+            }
             if (dto.OpeningBalance.HasValue) a.OpeningBalance = dto.OpeningBalance.Value;
             if (dto.OpeningBalanceIsDebit.HasValue) a.OpeningBalanceIsDebit = dto.OpeningBalanceIsDebit.Value;
             if (dto.DefaultLineDescription != null) a.DefaultLineDescription = Trimmed(dto.DefaultLineDescription);

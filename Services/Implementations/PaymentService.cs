@@ -172,6 +172,21 @@ namespace MyApp.Api.Services.Implementations
                         $"Payment would over-pay Bill #{bill.PurchaseBillNumber} (balance due is {bill.GrandTotal - bill.AmountPaid:0.00}).");
             }
 
+            // Division tag: when the caller didn't pick one, default from the
+            // settled documents — a receipt against a single division's invoices
+            // is that division's receipt. Only when unambiguous: mixed-division
+            // or division-less documents leave the tag null. (Payment.cs promised
+            // this default; it previously never happened.)
+            var divisionId = dto.DivisionId;
+            if (!divisionId.HasValue)
+            {
+                var docDivisions = invoices.Select(i => i.DivisionId)
+                    .Concat(bills.Select(b => b.DivisionId))
+                    .Distinct().ToList();
+                if (docDivisions.Count == 1 && docDivisions[0].HasValue)
+                    divisionId = docDivisions[0];
+            }
+
             var payment = new Payment
             {
                 CompanyId = companyId,
@@ -179,7 +194,7 @@ namespace MyApp.Api.Services.Implementations
                 Date = dto.Date == default ? PakistanClock.Today : dto.Date,
                 ContactType = string.IsNullOrWhiteSpace(dto.ContactType) ? "Other" : dto.ContactType.Trim(),
                 ContactId = dto.ContactId,
-                DivisionId = dto.DivisionId,
+                DivisionId = divisionId,
                 BankAccountId = dto.BankAccountId,
                 BankAccountName = bankAccountName,
                 Method = string.IsNullOrWhiteSpace(dto.Method) ? "Cash" : dto.Method.Trim(),

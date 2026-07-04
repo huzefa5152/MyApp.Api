@@ -45,12 +45,14 @@ namespace MyApp.Api.Models.Accounting
         public int? ContactId { get; set; }
 
         /// <summary>Optional reporting tag — reuses the company's Divisions, the
-        /// same optional dimension the transactional documents carry. Defaults
-        /// from the settled document when recorded via the invoice/bill shortcut.
-        /// Nullable + NoAction FK (mirrors Invoice/PurchaseBill) so deleting a
-        /// division never cascades a payment away. Does NOT scope the document
-        /// number — receipts/payments keep a single per-(company, direction)
-        /// sequence.</summary>
+        /// same optional dimension the transactional documents carry. When the
+        /// caller doesn't supply one, create defaults it from the settled
+        /// documents — but only when they unambiguously share one division
+        /// (see PaymentService.CreateAsync); mixed or division-less allocations
+        /// leave it null. Nullable + NoAction FK (mirrors Invoice/PurchaseBill)
+        /// so deleting a division never cascades a payment away. Does NOT scope
+        /// the document number — receipts/payments keep a single
+        /// per-(company, direction) sequence.</summary>
         public int? DivisionId { get; set; }
 
         // ── Where the money landed / came from ──

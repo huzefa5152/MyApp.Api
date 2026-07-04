@@ -439,6 +439,15 @@ namespace MyApp.Api.Services.Implementations
                 await _context.Accounts.Where(a => a.CompanyId == id).ExecuteDeleteAsync();
                 await _context.AccountGroups.Where(g => g.CompanyId == id).ExecuteDeleteAsync();
 
+                // 7c. Attachments + folders. Attachment -> Company is Restrict and
+                //     Attachment -> Division is NoAction, so these rows MUST go
+                //     before the company row (whose delete cascades Divisions).
+                //     Without this, any company that ever had an upload was
+                //     undeletable. Bytes on disk are left for the attachment
+                //     reconciler — same data-only stance as the rest of the cascade.
+                await _context.Attachments.Where(a => a.CompanyId == id).ExecuteDeleteAsync();
+                await _context.Folders.Where(f => f.CompanyId == id).ExecuteDeleteAsync();
+
                 // 8. Delete the company
                 await _repository.DeleteAsync(company);
 
