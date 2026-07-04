@@ -34,8 +34,12 @@ export const PERMISSION_SECTIONS = [
     modules: [{ key: "Dashboard" }],
   },
   {
+    // Module order inside each section mirrors the sidebar's item order so
+    // the role editor reads exactly like the navbar.
     section: "Sales",
     modules: [
+      { key: "SalesQuotes", label: "Sales Quotes" },
+      { key: "SalesOrders", label: "Sales Orders" },
       { key: "Challans", label: "Delivery Challans" },
       // Bills (data entry) and Invoices (FBR submission) are two views of
       // the same underlying bill data. Each has its own permission namespace
@@ -59,9 +63,17 @@ export const PERMISSION_SECTIONS = [
     ],
   },
   {
+    // Everything under the sidebar's Accounting group (receipts, payments,
+    // transfers, journals, CoA, GL, reports, data migration) shares the
+    // single "Accounting" catalog module.
+    section: "Accounting",
+    modules: [{ key: "Accounting" }],
+  },
+  {
     section: "Configuration",
     modules: [
       { key: "Companies" },
+      { key: "Divisions" },
       { key: "Clients" },
       { key: "Suppliers" },
       { key: "ItemTypes", label: "Item Types" },
@@ -69,6 +81,10 @@ export const PERMISSION_SECTIONS = [
       { key: "POFormats", label: "PO Formats" },
       { key: "PrintTemplates", label: "Print Templates" },
       { key: "FBR" },
+      // The Configuration → Navigation Menu document library: folders plus
+      // the attachments that also power every transaction module's clip.
+      { key: "Folders" },
+      { key: "Attachments" },
     ],
   },
   {
@@ -77,6 +93,9 @@ export const PERMISSION_SECTIONS = [
       { key: "Users" },
       { key: "RBAC", label: "Roles & Permissions" },
       { key: "Tenant Access" },
+      // Division-level restriction grants — managed from the Tenant Access
+      // page's "Divisions" button, so it sits right below Tenant Access.
+      { key: "Division Access" },
       { key: "AuditLogs", label: "Audit Logs" },
     ],
   },

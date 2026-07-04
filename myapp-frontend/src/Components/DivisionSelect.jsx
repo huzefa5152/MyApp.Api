@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getDivisionsByCompany } from "../api/divisionApi";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 /**
  * Generic, reusable Division dropdown — shared by every screen that filters or
@@ -26,6 +27,13 @@ export default function DivisionSelect({
   hideWhenEmpty = true, onLoaded,
 }) {
   const [divisions, setDivisions] = useState([]);
+  const { isDivisionRestricted } = usePermissions();
+
+  // Division-restricted users can't save company-level (null) documents —
+  // policy D2 — so form mode drops the none option. Filter mode keeps "All"
+  // (it means "all I can see"; the backend scopes the query).
+  const restricted = mode === "select" && isDivisionRestricted(companyId);
+  const isEmpty = value === "" || value == null;
 
   useEffect(() => {
     if (!companyId) { setDivisions([]); return; }
@@ -37,11 +45,19 @@ export default function DivisionSelect({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
+  // Restricted + exactly one allowed division: pick it for the user.
+  useEffect(() => {
+    if (restricted && isEmpty && divisions.length === 1) onChange(String(divisions[0].id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restricted, isEmpty, divisions]);
+
   if (hideWhenEmpty && divisions.length === 0) return null;
 
   const select = (
     <select className={className} style={style} value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
-      <option value="">{mode === "filter" ? allLabel : noneLabel}</option>
+      {restricted
+        ? isEmpty && <option value="" disabled>Select division…</option>
+        : <option value="">{mode === "filter" ? allLabel : noneLabel}</option>}
       {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
     </select>
   );

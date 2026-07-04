@@ -10,11 +10,16 @@ import {
   MdPerson,
   MdCheckBox,
   MdCheckBoxOutlineBlank,
+  MdAccountTree,
 } from "react-icons/md";
 import {
   getAllAssignments,
   setUserCompanies,
+  getDivisionAssignments,
 } from "../api/userCompaniesApi";
+import DivisionAccessModal, {
+  eligibleDivisionCompanies,
+} from "../Components/DivisionAccessModal";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import { formStyles, modalSizes } from "../theme";
@@ -41,6 +46,8 @@ export default function TenantAccessPage() {
   const { has } = usePermissions();
   const canView = has("tenantaccess.manage.view");
   const canAssign = has("tenantaccess.manage.assign");
+  const canViewDivisions = has("divisionaccess.manage.view");
+  const canAssignDivisions = has("divisionaccess.manage.assign");
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +57,12 @@ export default function TenantAccessPage() {
   const [editUser, setEditUser] = useState(null);
   const [editSelected, setEditSelected] = useState(() => new Set());
   const [saving, setSaving] = useState(false);
+
+  // Division restrictions per company: { [companyId]: { divisions, users } },
+  // null when the fetch failed (e.g. isolated company the viewer can't
+  // reach) — those companies simply don't show the Divisions affordance.
+  const [divisionInfo, setDivisionInfo] = useState({});
+  const [divisionUser, setDivisionUser] = useState(null);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -66,6 +79,53 @@ export default function TenantAccessPage() {
   useEffect(() => {
     if (canView) fetchAll();
   }, [canView]);
+
+  // The per-company GET returns one row per member with the restriction
+  // flag and per-division tick state; index it for O(1) lookups. The
+  // division list is identical on every row, so take it from the first.
+  const fetchDivisionInfo = async (companyIds) => {
+    const entries = await Promise.all(
+      companyIds.map(async (companyId) => {
+        try {
+          const { data } = await getDivisionAssignments(companyId);
+          const divisions =
+            data[0]?.divisions.map((d) => ({
+              divisionId: d.divisionId,
+              divisionName: d.divisionName,
+            })) ?? [];
+          const users = {};
+          for (const row of data) {
+            users[row.userId] = {
+              restrictToDivisions: row.restrictToDivisions,
+              grantedIds: row.divisions
+                .filter((d) => d.hasExplicitGrant)
+                .map((d) => d.divisionId),
+            };
+          }
+          return [companyId, { divisions, users }];
+        } catch {
+          return [companyId, null];
+        }
+      })
+    );
+    setDivisionInfo((prev) => {
+      const next = { ...prev };
+      for (const [companyId, info] of entries) next[companyId] = info;
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!canViewDivisions || rows.length === 0) return;
+    const companyIds = [
+      ...new Set(
+        rows.flatMap((r) =>
+          r.companies.filter((c) => c.hasExplicitGrant).map((c) => c.companyId)
+        )
+      ),
+    ];
+    if (companyIds.length > 0) fetchDivisionInfo(companyIds);
+  }, [rows, canViewDivisions]);
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -217,15 +277,27 @@ export default function TenantAccessPage() {
                         )}
                       </td>
                       <td style={{ ...pageStyles.td, textAlign: "right" }}>
-                        <button
-                          type="button"
-                          style={pageStyles.btnPrimary}
-                          disabled={!canAssign}
-                          title={canAssign ? "" : "Requires tenantaccess.manage.assign permission"}
-                          onClick={() => openEdit(row)}
-                        >
-                          <MdEdit /> Edit Access
-                        </button>
+                        <div style={pageStyles.actionsCell}>
+                          {canViewDivisions &&
+                            eligibleDivisionCompanies(row, divisionInfo).length > 0 && (
+                              <button
+                                type="button"
+                                style={pageStyles.btnDivisions}
+                                onClick={() => setDivisionUser(row)}
+                              >
+                                <MdAccountTree /> Divisions
+                              </button>
+                            )}
+                          <button
+                            type="button"
+                            style={pageStyles.btnPrimary}
+                            disabled={!canAssign}
+                            title={canAssign ? "" : "Requires tenantaccess.manage.assign permission"}
+                            onClick={() => openEdit(row)}
+                          >
+                            <MdEdit /> Edit Access
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -286,6 +358,18 @@ export default function TenantAccessPage() {
                   >
                     <MdEdit size={16} /> Edit Access
                   </button>
+
+                  {canViewDivisions &&
+                    eligibleDivisionCompanies(row, divisionInfo).length > 0 && (
+                      <button
+                        type="button"
+                        className="tenant-card__edit"
+                        style={{ background: colors.teal, minHeight: 44 }}
+                        onClick={() => setDivisionUser(row)}
+                      >
+                        <MdAccountTree size={16} /> Division Access
+                      </button>
+                    )}
                 </div>
               );
             })}
@@ -302,6 +386,16 @@ export default function TenantAccessPage() {
           onClose={closeEdit}
           saving={saving}
           canAssign={canAssign}
+        />
+      )}
+
+      {canViewDivisions && divisionUser && (
+        <DivisionAccessModal
+          user={divisionUser}
+          divisionInfo={divisionInfo}
+          canAssign={canAssignDivisions}
+          onClose={() => setDivisionUser(null)}
+          onSaved={(companyId) => fetchDivisionInfo([companyId])}
         />
       )}
     </div>
@@ -428,6 +522,8 @@ const pageStyles = {
   pillDanger: { display: "inline-block", padding: "0.2rem 0.55rem", borderRadius: 999, background: colors.dangerLight, border: `1px solid ${colors.danger}`, color: colors.danger, fontSize: "0.8rem", fontWeight: 600 },
   muted: { color: colors.textSecondary, fontSize: "0.85rem" },
   btnPrimary: { display: "inline-flex", alignItems: "center", gap: "0.4rem", background: colors.blue, color: "white", border: "none", borderRadius: 6, padding: "0.45rem 0.75rem", cursor: "pointer", fontWeight: 600, fontSize: "0.85rem" },
+  btnDivisions: { display: "inline-flex", alignItems: "center", gap: "0.4rem", background: colors.teal, color: "white", border: "none", borderRadius: 6, padding: "0.45rem 0.75rem", cursor: "pointer", fontWeight: 600, fontSize: "0.85rem" },
+  actionsCell: { display: "inline-flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "flex-end" },
   helpText: { color: colors.textSecondary, fontSize: "0.85rem", marginTop: 0, marginBottom: "1rem", lineHeight: 1.5 },
   companyList: { display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: "60vh", overflowY: "auto" },
   companyRow: { display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.7rem 0.9rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, cursor: "pointer", transition: "all 0.15s ease" },
