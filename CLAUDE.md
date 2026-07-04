@@ -100,6 +100,14 @@ const { has } = usePermissions();
 Action buttons that the user can't activate **must not render**. Don't show a
 button that 403s on click.
 
+**Permission-module grouping (user rule, 2026-07-04):** every `Module` string
+in `PermissionCatalog.cs` **must** be mapped to its navbar section in
+`myapp-frontend/src/config/permissionSections.js` — nothing may fall into the
+role editor's "Other" bucket. When a new feature adds a permission module,
+add the mapping in the same change, under the section where the feature lives
+in the sidebar. `python scripts/verify_permission_sections.py` enforces this
+(fails on unmapped or stale modules) — run it whenever the catalog changes.
+
 ### 3. Mobile-first UI
 
 - Grids: `gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))"` — collapses to one column on phones with no media queries
@@ -180,6 +188,8 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
 | Stock item-type reflow | `python scripts/test_stock_itemtype_reflow.py` | `52/52 checks passed` |
+| Division isolation | `python scripts/test_division_isolation.py` | `43/43 checks passed` |
+| Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 
 If you add a new endpoint that takes `companyId`, add a tenant-isolation
 case to `scripts/test_tenant_isolation.py`. If you touch invoice/bill
