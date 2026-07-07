@@ -44,6 +44,7 @@ import {
   MdMenuBook,
   MdInsights,
   MdAssessment,
+  MdFactCheck,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { Can, usePermissions } from "../contexts/PermissionsContext";
@@ -196,6 +197,10 @@ export default function DashboardLayout() {
     "accounting.reports.view",
     "accounting.import.run",
   ];
+  const reportsKeys = [
+    "reports.sales.view",
+    "reports.taxsheet.view",
+  ];
   const adminKeys = [
     "users.manage.view",
     "rbac.roles.view",
@@ -206,6 +211,7 @@ export default function DashboardLayout() {
   const canSeeSales         = hasAny(salesKeys);
   const canSeePurchases     = hasAny(purchasesKeys);
   const canSeeAccounting    = hasAny(accountingKeys);
+  const canSeeReports       = hasAny(reportsKeys);
   const canSeeAdmin         = hasAny(adminKeys);
 
   // Per-group counts (visible-child count for the section's "[N]" badge).
@@ -214,6 +220,7 @@ export default function DashboardLayout() {
   const salesCount         = salesKeys.filter(has).length;
   const purchasesCount     = purchasesKeys.filter(has).length;
   const accountingCount    = accountingKeys.filter(has).length;
+  const reportsCount       = reportsKeys.filter(has).length;
   const configurationCount = configKeys.filter(has).length;
   const administrationCount = adminKeys.filter(has).length;
 
@@ -226,6 +233,7 @@ export default function DashboardLayout() {
     if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history") return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
     if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/transfers") || p.startsWith("/journal-entries") || p.startsWith("/accounting/")) return "accounting";
+    if (p.startsWith("/reports")) return "reports";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
       || p.startsWith("/templates") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor")) return "configuration";
@@ -481,6 +489,30 @@ export default function DashboardLayout() {
                 <NavLink to="/accounting/data-migration" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdCloudDownload className="dl-subitem__icon" aria-hidden="true" />
                   <span>Data Migration</span>
+                </NavLink>
+              </Can>
+            </NavGroup>
+          )}
+
+          {canSeeReports && (
+            <NavGroup
+              id="reports"
+              icon={MdAssessment}
+              title="Reports"
+              count={reportsCount}
+              defaultOpen={activeSection === "reports"}
+              isChildActive={activeSection === "reports"}
+            >
+              <Can permission="reports.sales.view">
+                <NavLink to="/reports/sales" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdAssessment className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Sales Report</span>
+                </NavLink>
+              </Can>
+              <Can permission="reports.taxsheet.view">
+                <NavLink to="/reports/tax-sheet" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdFactCheck className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Tax Sheet</span>
                 </NavLink>
               </Can>
             </NavGroup>

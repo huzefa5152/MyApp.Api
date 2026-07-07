@@ -4,6 +4,7 @@ import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById } from "../
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getPurchaseTemplate } from "../api/invoiceApi";
+import { getAllUnits } from "../api/unitsApi";
 import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
@@ -12,6 +13,7 @@ import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
 import AttachmentManager from "./AttachmentManager";
 import { usePermissions } from "../contexts/PermissionsContext";
+import QuantityInput from "./QuantityInput";
 
 const colors = {
   blue: "#0d47a1",
@@ -31,6 +33,10 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const isFromOrders = Array.isArray(prefillItems) && prefillItems.length > 0;
   const [suppliers, setSuppliers] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
+  // Units list — gates each row's quantity input on the picked UOM
+  // (decimal allowed for KG/Liter/etc., integer-only for Pcs/SET/etc.),
+  // same behaviour as the sales bill form.
+  const [units, setUnits] = useState([]);
   const [supplierId, setSupplierId] = useState("");
   const { has } = usePermissions();
   const canViewDivisions = has("divisions.manage.view");
@@ -73,12 +79,14 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   useEffect(() => {
     (async () => {
       try {
-        const [sRes, tRes] = await Promise.all([
+        const [sRes, tRes, uRes] = await Promise.all([
           getSuppliersByCompany(companyId),
           getItemTypes(),
+          getAllUnits(),
         ]);
         setSuppliers(sRes.data || []);
         setItemTypes(tRes.data || []);
+        setUnits(uRes.data || []);
       } catch {
         setError("Failed to load suppliers or item types.");
       }
@@ -211,7 +219,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     if (!supplierId) return setError("Select a supplier.");
     if (items.length === 0) return setError("Add at least one item.");
     if (items.some(i => !i.description?.trim())) return setError("Every line needs a description.");
-    if (items.some(i => !(parseInt(i.quantity) > 0))) return setError("Quantity must be greater than zero on every line.");
+    if (items.some(i => !(parseFloat(i.quantity) > 0))) return setError("Quantity must be greater than zero on every line.");
     if (items.some(i => parseFloat(i.unitPrice) < 0)) return setError("Unit price cannot be negative.");
     if (isAgainstSale) {
       // In the "Purchase Against Sale" flow every row MUST have an
@@ -237,7 +245,9 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
           description: i.description?.trim(),
-          quantity: parseInt(i.quantity),
+          // parseFloat preserves decimals (12.5 KG, 0.0004 Carat) — same as
+          // the sales bill form; the server clamps/validates per UOM.
+          quantity: parseFloat(i.quantity) || 0,
           unitPrice: parseFloat(i.unitPrice),
           uom: i.uom || null,
           hsCode: i.hsCode || null,
@@ -417,7 +427,13 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                             <textarea rows={2} style={{ ...cellInput, resize: "vertical", minHeight: 38, lineHeight: 1.4 }} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
                           </td>
                           <td style={td}>
-                            <input type="number" min={1} style={{ ...cellInput, textAlign: "right" }} value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} />
+                            <QuantityInput
+                              value={it.quantity}
+                              onChange={val => updateItem(idx, "quantity", val)}
+                              unit={it.uom}
+                              units={units}
+                              style={{ ...cellInput, textAlign: "right" }}
+                            />
                           </td>
                           <td style={td}>
                             <input type="number" min={0} step={0.01} style={{ ...cellInput, textAlign: "right" }} value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />

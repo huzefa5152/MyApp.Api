@@ -307,34 +307,21 @@ namespace MyApp.Api.Services.Implementations
                 ? StockMovementDirection.In
                 : StockMovementDirection.Out;
 
-            // Delete any prior Out movements emitted for this invoice. The
-            // re-insert below uses the current Items, so any item-line
-            // qty change, item-type swap, or line deletion since the
-            // last save is automatically reflected.
-            //
-            // Append-only-log purity is sacrificed here intentionally —
-            // an invoice's edit history is already captured in
-            // AuditLog.Invoice.NarrowEdit / Invoice.Update entries, so
-            // we don't need a second audit trail in StockMovements.
-            // Keeping movements scoped 1:1 with the invoice's *current*
-            // state keeps on-hand math simple and avoids stale rows
-            // accumulating per edit.
-            var stale = await _context.StockMovements
-                .Where(m => m.CompanyId  == invoice.CompanyId
-                         && m.SourceType == StockMovementSourceType.Invoice
-                         && m.SourceId   == invoice.Id
-                         && m.Direction  == dir)
-                .ToListAsync();
-            if (stale.Count > 0)
-            {
-                _context.StockMovements.RemoveRange(stale);
-            }
-
-            // Skip demo (sandbox) bills — they exist purely to validate
-            // FBR scenarios and don't represent real shipments.
+            // Demo (sandbox) bills never represent real shipments — make sure
+            // they hold no movements for this direction, then stop.
             if (invoice.IsDemo)
             {
-                await _context.SaveChangesAsync();
+                var demoStale = await _context.StockMovements
+                    .Where(m => m.CompanyId  == invoice.CompanyId
+                             && m.SourceType == StockMovementSourceType.Invoice
+                             && m.SourceId   == invoice.Id
+                             && m.Direction  == dir)
+                    .ToListAsync();
+                if (demoStale.Count > 0)
+                {
+                    _context.StockMovements.RemoveRange(demoStale);
+                    await _context.SaveChangesAsync();
+                }
                 return;
             }
 
@@ -359,6 +346,55 @@ namespace MyApp.Api.Services.Implementations
             // See GetStockTrackedItemTypeIdsAsync for the policy.
             var trackedItemTypeIds = await GetStockTrackedItemTypeIdsAsync(
                 invoice.Items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
+
+            // Desired net per ItemType from the current lines (overlay-aware,
+            // classified-only) — exactly what the movements below would hold.
+            var desired = new Dictionary<int, decimal>();
+            foreach (var item in invoice.Items)
+            {
+                if (!item.ItemTypeId.HasValue) continue;
+                if (!trackedItemTypeIds.Contains(item.ItemTypeId.Value)) continue;
+                var q = overlayQtyByItemId.TryGetValue(item.Id, out var adjQty) ? adjQty : item.Quantity;
+                if (q <= 0m) continue;
+                desired.TryGetValue(item.ItemTypeId.Value, out var cur);
+                desired[item.ItemTypeId.Value] = cur + q;
+            }
+
+            // What this invoice already posted (this direction), per ItemType.
+            var posted = (await _context.StockMovements
+                    .Where(m => m.CompanyId  == invoice.CompanyId
+                             && m.SourceType == StockMovementSourceType.Invoice
+                             && m.SourceId   == invoice.Id
+                             && m.Direction  == dir)
+                    .GroupBy(m => m.ItemTypeId)
+                    .Select(g => new { ItemTypeId = g.Key, Qty = g.Sum(m => m.Quantity) })
+                    .ToListAsync())
+                .ToDictionary(x => x.ItemTypeId, x => x.Qty);
+
+            // No-op guard: if the current lines would post exactly what's
+            // already on the ledger, leave the movements untouched. An edit
+            // that changes no tracked item's quantity/type moves no stock and
+            // doesn't churn movement dates/timestamps or the audit feed.
+            if (desired.Count == posted.Count
+                && desired.All(kv => posted.TryGetValue(kv.Key, out var q) && q == kv.Value))
+            {
+                return;
+            }
+
+            // Something changed — rebuild this invoice's movements 1:1 with the
+            // current lines: delete the prior set (this direction) and re-insert
+            // fresh. Keeping movements scoped to the invoice's current state
+            // keeps on-hand math simple and avoids stale rows accumulating.
+            var stale = await _context.StockMovements
+                .Where(m => m.CompanyId  == invoice.CompanyId
+                         && m.SourceType == StockMovementSourceType.Invoice
+                         && m.SourceId   == invoice.Id
+                         && m.Direction  == dir)
+                .ToListAsync();
+            if (stale.Count > 0)
+            {
+                _context.StockMovements.RemoveRange(stale);
+            }
 
             foreach (var item in invoice.Items)
             {

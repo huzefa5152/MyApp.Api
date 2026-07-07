@@ -70,6 +70,12 @@ export const PERMISSION_SECTIONS = [
     modules: [{ key: "Accounting" }],
   },
   {
+    // Reporting module — Sales report + Tax Sheet share the "Reports"
+    // catalog module.
+    section: "Reports",
+    modules: [{ key: "Reports" }],
+  },
+  {
     section: "Configuration",
     modules: [
       { key: "Companies" },

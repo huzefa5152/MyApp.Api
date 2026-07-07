@@ -230,10 +230,14 @@ def check_phase_c() -> None:
         r"_stock\.CheckAvailabilityAsync\(dto\.CompanyId, requirements\)")
     record(phase, "C14 InvoiceService invokes CheckAvailabilityAsync on save", ok, where)
 
-    # M2 — Reversal date captured
+    # M2 — Purchase bill edit reconciles stock by DELTA (2026-07-07).
+    # Replaces the old reverse-all + re-emit-all approach (which captured
+    # originalBillDate for the reversal OUT and churned Total In/Out on every
+    # save). Now UpdateAsync emits only the per-ItemType difference, so a
+    # no-op edit moves no stock.
     ok, where = grep(["Services/Implementations/PurchaseBillService.cs"],
-        r"var originalBillDate = bill\.Date")
-    record(phase, "M2 PurchaseBillService UpdateAsync captures original bill.Date", ok, where)
+        r"ReconcileStockToLinesAsync\(bill, newItems\)")
+    record(phase, "M2 PurchaseBillService UpdateAsync reconciles stock by delta", ok, where)
 
     # M13 — Challan duplicate flow in transaction
     ok, where = grep(["Services/Implementations/DeliveryChallanService.cs"],

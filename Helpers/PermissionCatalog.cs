@@ -296,6 +296,12 @@ namespace MyApp.Api.Helpers
             new("stock.opening.manage",     "Inventory", "Opening Balance", "Manage", "Set or edit opening stock balance per item"),
             new("stock.adjust.create",      "Inventory", "Adjustment",      "Create", "Record a stock adjustment (count correction, write-off)"),
 
+            // ── Reports ─────────────────────────────────────────────────────
+            new("reports.sales.view",       "Reports", "Sales", "View",   "View the Sales report (FBR-submitted invoices grouped by date, monthly/yearly)"),
+            new("reports.sales.export",     "Reports", "Sales", "Export", "Export the Sales report to CSV/Excel"),
+            new("reports.taxsheet.view",    "Reports", "Tax Sheet", "View",   "View the Tax Sheet (invoice lines still missing a valid HS code, for the tax consultant)"),
+            new("reports.taxsheet.export",  "Reports", "Tax Sheet", "Export", "Export the Tax Sheet to Excel"),
+
             // ── Audit Logs ──────────────────────────────────────────────────
             new("auditlogs.view",          "AuditLogs", "View", "View", "View application audit/exception logs"),
 
