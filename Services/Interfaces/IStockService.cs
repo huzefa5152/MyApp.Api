@@ -24,17 +24,23 @@ namespace MyApp.Api.Services.Interfaces
 
         /// <summary>
         /// Of the supplied ItemType ids, returns the subset that are
-        /// **stock-tracked** — i.e. they have a non-empty HSCode and are
-        /// therefore real classified inventory items.
+        /// **stock-tracked** for the given company. The predicate depends on
+        /// the company's <c>InventoryFlowVersion</c> (2026-07 redesign):
         ///
-        /// 2026-05-13: un-classified ItemTypes (HSCode is null/empty) live
-        /// outside the stock-tracking system on BOTH the IN and OUT side.
-        /// A buy or sell of an un-classified ItemType does not move
-        /// inventory; once the operator adds an HSCode, the next save
-        /// starts moving stock. Used by Invoice / PurchaseBill /
-        /// CheckAvailability flows to skip un-classified items.
+        ///   • V1 (legacy, default): tracked iff the ItemType has a non-empty
+        ///     HSCode — byte-identical to the pre-redesign behaviour. Kept so
+        ///     the two live tenants and the pinned reflow suite are untouched.
+        ///   • V2: ALL non-deleted item types are tracked (HS code is FBR
+        ///     metadata only), except those a <c>CompanyItemTypeSetting</c>
+        ///     marks <c>FbrOnly</c>.
+        ///
+        /// A per-company <c>CompanyItemTypeSetting</c> override wins in both
+        /// versions (Tracked forces in, FbrOnly forces out); with no override
+        /// rows the V1 path is exactly the old query. companyId is required so
+        /// policy is loaded internally — no caller can mis-gate by passing a
+        /// mismatched company.
         /// </summary>
-        Task<HashSet<int>> GetStockTrackedItemTypeIdsAsync(IEnumerable<int> itemTypeIds);
+        Task<HashSet<int>> GetStockTrackedItemTypeIdsAsync(int companyId, IEnumerable<int> itemTypeIds);
 
         /// <summary>
         /// Append a movement to the log. No-op if tracking is disabled for

@@ -376,6 +376,7 @@ namespace MyApp.Api.Services.Implementations
             // system. Symmetric with the OUT-side gate in
             // StockService.SyncInvoiceStockMovementsAsync.
             var trackedOnCreate = await _stock.GetStockTrackedItemTypeIdsAsync(
+                bill.CompanyId,
                 items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
             foreach (var it in items)
             {
@@ -564,6 +565,7 @@ namespace MyApp.Api.Services.Implementations
             // Desired net IN per tracked ItemType from the new lines
             // (symmetric HSCode gate — un-classified ItemTypes don't move).
             var trackedNew = await _stock.GetStockTrackedItemTypeIdsAsync(
+                bill.CompanyId,
                 newItems.Where(n => n.ItemTypeId.HasValue).Select(n => n.ItemTypeId!.Value));
             var desired = new Dictionary<int, decimal>();
             foreach (var ni in newItems)

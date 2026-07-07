@@ -283,6 +283,33 @@ namespace MyApp.Api.Services.Implementations
             // without it a forged dto.DivisionId could tag this challan with
             // another tenant's division and print with that division's branding.
             await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, companyId, dto.DivisionId);
+
+            // Cross-tenant link guard (PR-04): the Sales Order fulfilment links
+            // feed the derived committed/delivered metrics, so a forged
+            // dto.SalesOrderId / line SalesOrderItemId from another tenant must
+            // never be persisted. Validate the SO belongs to this company and
+            // every line link belongs to that SO.
+            if (dto.SalesOrderId.HasValue)
+            {
+                var linkedSo = await _context.SalesOrders
+                    .Where(o => o.Id == dto.SalesOrderId.Value && o.CompanyId == companyId)
+                    .Select(o => new { o.Id, ItemIds = o.Items.Select(it => it.Id).ToList() })
+                    .FirstOrDefaultAsync();
+                if (linkedSo == null)
+                    throw new InvalidOperationException("The linked sales order was not found for this company.");
+                var validItemIds = linkedSo.ItemIds.ToHashSet();
+                foreach (var line in dto.Items ?? Enumerable.Empty<DeliveryItemDto>())
+                {
+                    if (line.SalesOrderItemId.HasValue && !validItemIds.Contains(line.SalesOrderItemId.Value))
+                        throw new InvalidOperationException("A challan line references a sales-order line that does not belong to the linked order.");
+                }
+            }
+            else if ((dto.Items ?? Enumerable.Empty<DeliveryItemDto>()).Any(i => i.SalesOrderItemId.HasValue))
+            {
+                // Line-level SO link without a header link is inconsistent/forged.
+                throw new InvalidOperationException("Challan lines carry sales-order links but no sales order is linked.");
+            }
+
             var fbrReady = company != null && IsFbrReady(company, client);
 
             string status;

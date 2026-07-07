@@ -76,6 +76,10 @@ namespace MyApp.Api.Data
         public DbSet<ItemDescription> ItemDescriptions { get; set; }
         public DbSet<Unit> Units { get; set; }
         public DbSet<ItemType> ItemTypes { get; set; }
+        // Per-(company, item-type) inventory policy overrides + reorder level
+        // (2026-07 inventory V2 redesign). ItemType is a global catalog with no
+        // CompanyId, so per-company tracking policy must live here.
+        public DbSet<CompanyItemTypeSetting> CompanyItemTypeSettings { get; set; }
         public DbSet<User> Users { get; set; }
         public DbSet<PrintTemplate> PrintTemplates { get; set; }
         public DbSet<MergeField> MergeFields { get; set; }
@@ -294,6 +298,25 @@ namespace MyApp.Api.Data
                 .WithMany()
                 .HasForeignKey(ii => ii.DeliveryItemId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // ── Sales Order lineage on the bill (2026-07 inventory redesign) ──
+            // Header + line pointers to the Sales Order this bill fulfils.
+            // Both nullable, NoAction (no cascade path — SalesOrder->Company is
+            // Restrict, Invoice->Company is Restrict), keyless nav (query by the
+            // scalar FK). Enables the derived read model's "to deliver =
+            // ordered − delivered − directly-invoiced" and reservation release.
+            modelBuilder.Entity<Invoice>()
+                .HasOne<SalesOrder>()
+                .WithMany()
+                .HasForeignKey(i => i.SalesOrderId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvoiceItem>()
+                .HasOne<SalesOrderItem>()
+                .WithMany()
+                .HasForeignKey(ii => ii.SalesOrderItemId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
 
             // DeliveryChallan -> Client (optional FK, restrict delete)
             modelBuilder.Entity<DeliveryChallan>()
@@ -597,7 +620,9 @@ namespace MyApp.Api.Data
 
             // Status defaults mirror DeliveryChallan's pattern.
             modelBuilder.Entity<SalesQuote>().Property(q => q.Status).HasDefaultValue("Draft");
-            modelBuilder.Entity<SalesOrder>().Property(o => o.Status).HasDefaultValue("Open");
+            // MaxLength(50) so Status is indexable (see IX_SalesOrders_Co_Status).
+            // Statuses are short code words ("Open", "Partially Delivered", …).
+            modelBuilder.Entity<SalesOrder>().Property(o => o.Status).HasMaxLength(50).HasDefaultValue("Open");
 
             // Decimal precision — money (18,2), GST rate (5,2), quantity (18,4).
             modelBuilder.Entity<SalesQuote>().Property(q => q.Subtotal).HasPrecision(18, 2);
@@ -1522,6 +1547,63 @@ namespace MyApp.Api.Data
             // decimal(18,4).
             modelBuilder.Entity<StockMovement>().Property(sm => sm.Quantity).HasPrecision(18, 4);
             modelBuilder.Entity<OpeningStockBalance>().Property(osb => osb.Quantity).HasPrecision(18, 4);
+
+            // ── Inventory V2 foundation (2026-07 redesign) ─────────────────────
+            // Per-(company, item-type) tracking policy override + reorder level.
+            // Company delete cascades these away; ItemType (global catalog) is
+            // Restrict — no multiple-cascade path since ItemType has no company.
+            modelBuilder.Entity<CompanyItemTypeSetting>()
+                .HasOne(s => s.Company).WithMany()
+                .HasForeignKey(s => s.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CompanyItemTypeSetting>()
+                .HasOne(s => s.ItemType).WithMany()
+                .HasForeignKey(s => s.ItemTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<CompanyItemTypeSetting>()
+                .HasIndex(s => new { s.CompanyId, s.ItemTypeId }).IsUnique();
+            modelBuilder.Entity<CompanyItemTypeSetting>()
+                .Property(s => s.Mode).HasConversion<byte>();
+            modelBuilder.Entity<CompanyItemTypeSetting>()
+                .Property(s => s.ReorderLevel).HasPrecision(18, 4);
+
+            // Movement-history + running-balance index: keyed on
+            // (CompanyId, ItemTypeId, MovementDate, Id) so the dashboard feed
+            // (ORDER BY MovementDate, Id) and the per-item running-balance
+            // window function run index-ordered, with the signed-sum columns
+            // carried as INCLUDEs to keep it a covering seek.
+            modelBuilder.Entity<StockMovement>()
+                .HasIndex(sm => new { sm.CompanyId, sm.ItemTypeId, sm.MovementDate, sm.Id })
+                .IncludeProperties(sm => new { sm.Direction, sm.Quantity, sm.SourceType, sm.SourceId, sm.DivisionId })
+                .HasDatabaseName("IX_StockMovements_Co_Item_Date");
+            // Company-wide movement feed (no item filter), newest first.
+            modelBuilder.Entity<StockMovement>()
+                .HasIndex(sm => new { sm.CompanyId, sm.MovementDate })
+                .HasDatabaseName("IX_StockMovements_Co_Date");
+
+            // Derived read-model working-set indexes: the buckets scan only the
+            // OPEN documents, so filter to un-fulfilled rows.
+            //   • un-billed challans feed "Qty Delivered"
+            //   • un-billed goods receipts feed "Incoming Qty"
+            //   • open sales orders feed "Qty To Deliver" / "Committed"
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasIndex(dc => new { dc.CompanyId, dc.SalesOrderId })
+                .HasFilter("[InvoiceId] IS NULL")
+                .HasDatabaseName("IX_DeliveryChallans_Open");
+            // Named overload so this is a SEPARATE filtered index — it must not
+            // clobber the existing unfiltered IX_GoodsReceipts_CompanyId (EF
+            // treats same-column HasIndex calls as one index otherwise).
+            modelBuilder.Entity<GoodsReceipt>()
+                .HasIndex(new[] { nameof(GoodsReceipt.CompanyId) }, "IX_GoodsReceipts_Open")
+                .HasFilter("[PurchaseBillId] IS NULL");
+            modelBuilder.Entity<SalesOrder>()
+                .HasIndex(o => new { o.CompanyId, o.Status })
+                .HasDatabaseName("IX_SalesOrders_Co_Status");
+
+            // Existing companies (and new ones) default to V1 legacy tracking.
+            modelBuilder.Entity<Company>()
+                .Property(c => c.InventoryFlowVersion)
+                .HasDefaultValue((byte)1);
         }
 
     }

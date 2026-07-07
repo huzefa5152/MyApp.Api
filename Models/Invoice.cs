@@ -98,6 +98,16 @@ namespace MyApp.Api.Models
         public int? OriginalInvoiceId { get; set; }
 
         /// <summary>
+        /// Header-level lineage to the Sales Order this bill fulfils, when the
+        /// bill was created via the SO→bill prefill flow (2026-07 inventory
+        /// redesign — closes the missing SO↔invoice link). Nullable NoAction
+        /// FK. Line-level fulfilment uses InvoiceItem.SalesOrderItemId; this
+        /// header pointer is the fast filter for "bills against order X".
+        /// Company-validated on write (never trusted from the DTO).
+        /// </summary>
+        public int? SalesOrderId { get; set; }
+
+        /// <summary>
         /// The ORIGINAL invoice's FBR IRN (22 digits NTN / 28 digits CNIC).
         /// Sent to FBR as `invoiceRefNo` for Debit/Credit Notes (FBR 0026).
         /// Distinct from <see cref="FbrIRN"/>, which is this note's own IRN.

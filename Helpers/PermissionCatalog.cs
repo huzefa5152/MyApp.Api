@@ -295,6 +295,8 @@ namespace MyApp.Api.Helpers
             new("stock.movements.view",     "Inventory", "Movements",       "View",   "View the stock-movement audit log"),
             new("stock.opening.manage",     "Inventory", "Opening Balance", "Manage", "Set or edit opening stock balance per item"),
             new("stock.adjust.create",      "Inventory", "Adjustment",      "Create", "Record a stock adjustment (count correction, write-off)"),
+            new("stock.policy.manage",      "Inventory", "Policy",          "Manage", "Switch a company's inventory tracking version (V1 legacy ⇄ V2) — reversible, audited"),
+            new("stock.overcommit.allow",   "Inventory", "Over-commit",     "Allow",  "Override the availability hard-block and knowingly over-commit / oversell stock"),
 
             // ── Reports ─────────────────────────────────────────────────────
             new("reports.sales.view",       "Reports", "Sales", "View",   "View the Sales report (FBR-submitted invoices grouped by date, monthly/yearly)"),

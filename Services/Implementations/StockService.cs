@@ -26,29 +26,76 @@ namespace MyApp.Api.Services.Implementations
         }
 
         /// <summary>
-        /// True iff the ItemType has a non-empty HSCode. Un-classified
-        /// ItemTypes (no HSCode) are placeholders / drafts and live
-        /// **outside** the stock-tracking system on both the IN and OUT
-        /// side — buy or sell of an un-classified ItemType does NOT
-        /// move inventory.
+        /// Returns the subset of the supplied ItemType ids that are
+        /// stock-tracked for <paramref name="companyId"/>, per the company's
+        /// InventoryFlowVersion:
         ///
-        /// 2026-05-13: the gate was added symmetrically to prevent
-        /// "phantom inventory" where IN would record but OUT wouldn't
-        /// (or vice-versa), drifting on-hand away from physical reality.
-        /// Once the operator adds an HSCode to the ItemType, the next
-        /// invoice/purchase save starts moving inventory.
+        ///   • V1 (legacy, default): tracked iff the ItemType has a non-empty
+        ///     HSCode. Un-classified ItemTypes (no HSCode) are drafts and live
+        ///     outside stock tracking on both the IN and OUT side. This is the
+        ///     exact pre-2026-07 predicate — with no CompanyItemTypeSetting
+        ///     override rows it is byte-identical, so the pinned reflow suite
+        ///     and the two live tenants are unaffected.
+        ///   • V2 (redesign): ALL non-deleted ItemTypes are inventory (HS code
+        ///     is FBR metadata only), minus any the company marks FbrOnly.
+        ///
+        /// A per-company CompanyItemTypeSetting override wins in either version
+        /// (Tracked forces in, FbrOnly forces out). Policy is loaded here so no
+        /// caller can mis-gate by passing a mismatched company.
+        ///
+        /// 2026-05-13: the HS gate was added symmetrically to prevent phantom
+        /// inventory (IN recording while OUT didn't, or vice-versa). 2026-07:
+        /// generalised to the per-company flow version.
         /// </summary>
-        public async Task<HashSet<int>> GetStockTrackedItemTypeIdsAsync(IEnumerable<int> itemTypeIds)
+        public async Task<HashSet<int>> GetStockTrackedItemTypeIdsAsync(int companyId, IEnumerable<int> itemTypeIds)
         {
             var ids = itemTypeIds?.Where(i => i > 0).Distinct().ToList() ?? new List<int>();
             if (ids.Count == 0) return new HashSet<int>();
-            return (await _context.ItemTypes
-                .Where(it => ids.Contains(it.Id)
-                          && it.HSCode != null
-                          && it.HSCode != "")
-                .Select(it => it.Id)
-                .ToListAsync())
-                .ToHashSet();
+
+            var flowVersion = await _context.Companies
+                .Where(c => c.Id == companyId)
+                .Select(c => c.InventoryFlowVersion)
+                .FirstOrDefaultAsync(); // 0 for a missing company → V1 predicate below
+
+            // Per-company overrides (honoured by both versions). Empty for the
+            // reflow suite's ephemeral company, which is what keeps V1 identical.
+            var overrides = await _context.CompanyItemTypeSettings
+                .Where(s => s.CompanyId == companyId
+                         && ids.Contains(s.ItemTypeId)
+                         && s.Mode != InventoryItemMode.Default)
+                .Select(s => new { s.ItemTypeId, s.Mode })
+                .ToListAsync();
+            var forcedTracked = overrides.Where(o => o.Mode == InventoryItemMode.Tracked)
+                                         .Select(o => o.ItemTypeId).ToHashSet();
+            var forcedFbrOnly = overrides.Where(o => o.Mode == InventoryItemMode.FbrOnly)
+                                         .Select(o => o.ItemTypeId).ToHashSet();
+
+            HashSet<int> tracked;
+            if (flowVersion >= (byte)InventoryFlowVersion.V2Standard)
+            {
+                // V2: every non-deleted item type is inventory.
+                tracked = (await _context.ItemTypes
+                        .Where(it => ids.Contains(it.Id) && !it.IsDeleted)
+                        .Select(it => it.Id)
+                        .ToListAsync())
+                    .ToHashSet();
+            }
+            else
+            {
+                // V1: only HS-coded item types (verbatim the old query — no
+                // IsDeleted filter, so byte-identical to pre-redesign).
+                tracked = (await _context.ItemTypes
+                        .Where(it => ids.Contains(it.Id)
+                                  && it.HSCode != null
+                                  && it.HSCode != "")
+                        .Select(it => it.Id)
+                        .ToListAsync())
+                    .ToHashSet();
+            }
+
+            tracked.UnionWith(forcedTracked);
+            tracked.ExceptWith(forcedFbrOnly);
+            return tracked;
         }
 
         /// <summary>
@@ -345,6 +392,7 @@ namespace MyApp.Api.Services.Implementations
             // saving a bill against one must not decrement inventory.
             // See GetStockTrackedItemTypeIdsAsync for the policy.
             var trackedItemTypeIds = await GetStockTrackedItemTypeIdsAsync(
+                invoice.CompanyId,
                 invoice.Items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
 
             // Desired net per ItemType from the current lines (overlay-aware,
@@ -472,7 +520,7 @@ namespace MyApp.Api.Services.Implementations
             // SyncInvoiceStockMovementsAsync), so it would be wrong to
             // block the save on an availability check that the save
             // itself won't honor.
-            var tracked = await GetStockTrackedItemTypeIdsAsync(demand.Select(d => d.ItemTypeId));
+            var tracked = await GetStockTrackedItemTypeIdsAsync(companyId, demand.Select(d => d.ItemTypeId));
             demand = demand.Where(d => tracked.Contains(d.ItemTypeId)).ToList();
             if (demand.Count == 0) return new List<StockShortage>();
 

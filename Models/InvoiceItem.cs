@@ -7,6 +7,16 @@ namespace MyApp.Api.Models
         public int? DeliveryItemId { get; set; }
 
         /// <summary>
+        /// Line-level lineage to the ordered Sales Order line this bill line
+        /// fulfils (2026-07 inventory redesign). Lets the derived read model
+        /// compute a Sales Order's remaining "to deliver" as
+        /// ordered − delivered − directly-invoiced, and lets an invoice release
+        /// its reservation footprint. Nullable NoAction FK; stamped from the
+        /// source challan/SO chain at bill create, never trusted from the DTO.
+        /// </summary>
+        public int? SalesOrderItemId { get; set; }
+
+        /// <summary>
         /// Direct link to the ItemType (FBR-mapped product). Changing this on a
         /// bill overrides whatever type was set on the source delivery item, and
         /// auto-applies the ItemType's HS Code / UOM / Sale Type to this line.

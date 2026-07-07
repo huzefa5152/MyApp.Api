@@ -34,6 +34,8 @@
         // Inventory module toggle. Off by default. Flip on once the
         // operator has entered opening balances.
         public bool InventoryTrackingEnabled { get; set; }
+        // Hard-block over-commit/oversell (409) when tracking is on. See Q4.
+        public bool StockGuardHardBlock { get; set; }
         public int StartingPurchaseBillNumber { get; set; }
         public int StartingGoodsReceiptNumber { get; set; }
 

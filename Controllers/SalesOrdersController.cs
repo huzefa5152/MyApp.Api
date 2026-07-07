@@ -124,6 +124,11 @@ namespace MyApp.Api.Controllers
                 var created = await _service.CreateAsync(companyId, dto);
                 return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
             }
+            catch (MyApp.Api.Helpers.StockShortageException ex)
+            {
+                // Over-commit hard block (Q4) — 409 with the per-item shortfall.
+                return Conflict(new { error = ex.Message, shortages = ex.Shortages });
+            }
             catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
             catch (KeyNotFoundException ex) { return BadRequest(new { error = ex.Message }); }
             catch (Exception ex)

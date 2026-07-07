@@ -302,6 +302,10 @@ builder.Services.AddScoped<IFbrLookupService, FbrLookupService>();
 // All write operations are no-ops when Company.InventoryTrackingEnabled
 // is false, so existing tenants keep working unchanged.
 builder.Services.AddScoped<IStockService, StockService>();
+// Derived inventory read model (V2): computes Committed/ToDeliver/Delivered/
+// Incoming buckets from live document state (nothing persisted, so nothing
+// drifts). Read-only; used by the inventory summary + availability guard.
+builder.Services.AddScoped<IInventoryReadService, InventoryReadService>();
 // Reporting module (read-only, company-scoped reports for the Reports navbar).
 builder.Services.AddScoped<IReportService, ReportService>();
 // Tax mapping engine: single source of truth for HS_UOM, SaleTypeToRate

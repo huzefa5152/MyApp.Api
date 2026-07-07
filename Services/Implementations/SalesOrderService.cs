@@ -19,19 +19,96 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly ISalesOrderRepository _repository;
         private readonly IDeliveryChallanService _challanService;
+        private readonly IStockService _stock;
+        private readonly IInventoryReadService _inventory;
         private readonly AppDbContext _context;
         private readonly ILogger<SalesOrderService> _logger;
 
         public SalesOrderService(
             ISalesOrderRepository repository,
             IDeliveryChallanService challanService,
+            IStockService stock,
+            IInventoryReadService inventory,
             AppDbContext context,
             ILogger<SalesOrderService> logger)
         {
             _repository = repository;
             _challanService = challanService;
+            _stock = stock;
+            _inventory = inventory;
             _context = context;
             _logger = logger;
+        }
+
+        // ── V2 inventory rules for order lines ───────────────────────────────
+
+        /// <summary>
+        /// On a V2 company every inventory-affecting order line must carry an
+        /// item type (Q5) and use that item's single base UOM (Q10) — so
+        /// committed quantities never silently undercount or mix units. No-op
+        /// on V1 companies. FBR-only items aren't inventory-constrained.
+        /// </summary>
+        private async Task ValidateV2OrderLinesAsync(Company company, List<SalesOrderItemDto> items)
+        {
+            if (company.InventoryFlowVersion != (byte)InventoryFlowVersion.V2Standard) return;
+
+            if (items.Any(i => !i.ItemTypeId.HasValue || i.ItemTypeId.Value <= 0))
+                throw new InvalidOperationException(
+                    "On a V2 (standard inventory) company, every sales-order line must have an item type selected.");
+
+            var itemTypeIds = items.Select(i => i.ItemTypeId!.Value).Distinct().ToList();
+            var tracked = await _stock.GetStockTrackedItemTypeIdsAsync(company.Id, itemTypeIds);
+            var meta = await _context.ItemTypes
+                .Where(it => itemTypeIds.Contains(it.Id))
+                .Select(it => new { it.Id, it.Name, it.UOM })
+                .ToDictionaryAsync(x => x.Id, x => x);
+
+            foreach (var i in items)
+            {
+                var id = i.ItemTypeId!.Value;
+                if (!tracked.Contains(id)) continue;               // FBR-only → unconstrained
+                var m = meta.GetValueOrDefault(id);
+                var baseUom = m?.UOM;
+                if (!string.IsNullOrWhiteSpace(baseUom)
+                    && !string.IsNullOrWhiteSpace(i.Unit)
+                    && !string.Equals(baseUom.Trim(), i.Unit.Trim(), StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException(
+                        $"\"{m!.Name}\" is tracked in its base unit \"{baseUom}\"; this line uses \"{i.Unit}\". " +
+                        "Use the item's base unit so quantities aren't mixed across units.");
+            }
+        }
+
+        /// <summary>
+        /// Hard-block over-commit guard (Q4). Assumes it runs inside a
+        /// transaction holding the per-company stock lock, so the available
+        /// figure it reads reflects every committed peer. Throws
+        /// <see cref="StockShortageException"/> (→ 409) if any tracked line
+        /// exceeds available (= on-hand − already-committed).
+        /// </summary>
+        private async Task AssertOrderAvailabilityAsync(int companyId, List<SalesOrderItemDto> items)
+        {
+            var reqs = items
+                .Where(i => i.ItemTypeId.HasValue && i.ItemTypeId.Value > 0 && i.Quantity > 0)
+                .GroupBy(i => i.ItemTypeId!.Value)
+                .Select(g => new { ItemTypeId = g.Key, Qty = g.Sum(x => x.Quantity), Name = g.First().Description })
+                .ToList();
+            if (reqs.Count == 0) return;
+
+            var tracked = await _stock.GetStockTrackedItemTypeIdsAsync(companyId, reqs.Select(r => r.ItemTypeId));
+            var shortages = new List<StockShortageDetail>();
+            foreach (var r in reqs)
+            {
+                if (!tracked.Contains(r.ItemTypeId)) continue;
+                var available = await _inventory.GetAvailableAsync(companyId, r.ItemTypeId);
+                if (r.Qty > available)
+                    shortages.Add(new StockShortageDetail(r.ItemTypeId, r.Name ?? "", r.Qty, available));
+            }
+            if (shortages.Count > 0)
+            {
+                var msg = "Insufficient available stock to reserve this order: " + string.Join(", ",
+                    shortages.Select(s => $"{s.ItemName} (need {s.Required}, available {s.Available})"));
+                throw new StockShortageException(msg, shortages);
+            }
         }
 
         // ── Fulfilment mapping ───────────────────────────────────────────────
@@ -238,13 +315,27 @@ namespace MyApp.Api.Services.Implementations
             if (client.CompanyId != companyId)
                 throw new InvalidOperationException("Client does not belong to this company.");
 
+            // Cross-tenant guard (PR-03): a linked Sales Quote must belong to
+            // the SAME company — never trust dto.SalesQuoteId from the body.
+            if (dto.SalesQuoteId.HasValue)
+            {
+                var quoteOk = await _context.SalesQuotes.AnyAsync(
+                    q => q.Id == dto.SalesQuoteId.Value && q.CompanyId == companyId);
+                if (!quoteOk)
+                    throw new InvalidOperationException("The linked sales quote was not found for this company.");
+            }
+
+            // V2 line rules (item type required + single base UOM).
+            await ValidateV2OrderLinesAsync(company, dto.Items);
+
             await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.Unit));
 
             // Per-division numbering: a division-tagged order draws from the
             // division's own sequence; otherwise the company's.
             var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, companyId, dto.DivisionId);
 
-            var createdId = await NumberAllocationRetry.ExecuteAsync(async _ =>
+            // Numbering + insert, shared by the guarded and unguarded paths.
+            async Task<int> InsertOrderAsync()
             {
                 var maxQuery = _context.SalesOrders.Where(o => o.CompanyId == companyId);
                 maxQuery = dto.DivisionId.HasValue
@@ -291,7 +382,28 @@ namespace MyApp.Api.Services.Implementations
                     throw;
                 }
                 return order.Id;
-            });
+            }
+
+            // Hard-block over-commit (Q4): V2 + tracking + hard-block. The
+            // availability check + insert run inside one transaction holding
+            // the per-company stock lock, so two concurrent orders on the last
+            // units can't both reserve (closes the TOCTOU race).
+            var enforce = company.InventoryFlowVersion == (byte)InventoryFlowVersion.V2Standard
+                       && company.InventoryTrackingEnabled && company.StockGuardHardBlock;
+
+            int createdId;
+            if (enforce)
+            {
+                await using var tx = await _context.Database.BeginTransactionAsync();
+                await MyApp.Api.Helpers.StockLock.AcquireCompanyAsync(_context, companyId);
+                await AssertOrderAvailabilityAsync(companyId, dto.Items);
+                createdId = await InsertOrderAsync();
+                await tx.CommitAsync();
+            }
+            else
+            {
+                createdId = await NumberAllocationRetry.ExecuteAsync(async _ => await InsertOrderAsync());
+            }
 
             return (await MapOneAsync(await _repository.GetByIdAsync(createdId)))!;
         }
@@ -315,6 +427,12 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("Item descriptions cannot be empty.");
             if (dto.Items.Any(i => i.Quantity <= 0))
                 throw new InvalidOperationException("Item quantity must be greater than zero.");
+
+            // V2 line rules (item type required + single base UOM). Load the
+            // company for its flow version (order.Company may not be included).
+            var soCompany = await _context.Companies.FindAsync(order.CompanyId)
+                ?? throw new KeyNotFoundException("Company not found.");
+            await ValidateV2OrderLinesAsync(soCompany, dto.Items);
 
             await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.Unit));
 
@@ -349,6 +467,14 @@ namespace MyApp.Api.Services.Implementations
             order.Site = string.IsNullOrWhiteSpace(dto.Site) ? null : dto.Site.Trim();
             order.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
             // Reference link to a Sales Quote (set/cleared from the form).
+            // Cross-tenant guard (PR-03): only accept a quote from this company.
+            if (dto.SalesQuoteId.HasValue)
+            {
+                var quoteOk = await _context.SalesQuotes.AnyAsync(
+                    q => q.Id == dto.SalesQuoteId.Value && q.CompanyId == order.CompanyId);
+                if (!quoteOk)
+                    throw new InvalidOperationException("The linked sales quote was not found for this company.");
+            }
             order.SalesQuoteId = dto.SalesQuoteId;
 
             // ── Items diff with delivery guards ──

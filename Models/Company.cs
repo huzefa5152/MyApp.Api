@@ -92,6 +92,15 @@
         // discipline.
         public bool StockGuardHardBlock { get; set; }
 
+        // Inventory tracking policy version (2026-07 redesign). 1 = V1 legacy
+        // (only HS-coded item types are stock-tracked — today's behaviour,
+        // byte-identical). 2 = V2 (all non-deleted item types are inventory;
+        // HS code is FBR metadata only), with per-item opt-outs via
+        // CompanyItemTypeSetting. Default 1 so every existing company is
+        // untouched until an admin opts in via the reversible, audited toggle.
+        // See InventoryFlowVersion enum + StockService.GetStockTrackedItemTypeIdsAsync.
+        public byte InventoryFlowVersion { get; set; } = 1;
+
         // Independent counters for the purchase side so purchase-bill numbers
         // don't collide with sales-invoice numbers. Same pattern as
         // CurrentInvoiceNumber / StartingInvoiceNumber.

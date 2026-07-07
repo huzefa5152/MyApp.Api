@@ -49,6 +49,11 @@
         // FBR submission is silent. Operators flip this on once they've
         // entered opening balances and are ready to track inventory.
         public bool InventoryTrackingEnabled { get; set; }
+        // Hard-block over-commit/oversell (409) when tracking is on (Q4).
+        public bool StockGuardHardBlock { get; set; }
+        // Inventory tracking version: 1 = legacy (only HS-coded items tracked),
+        // 2 = standard (all item types are inventory). Drives the V1/V2 toggle.
+        public byte InventoryFlowVersion { get; set; } = 1;
         public int StartingPurchaseBillNumber { get; set; }
         public int CurrentPurchaseBillNumber { get; set; }
         public int StartingGoodsReceiptNumber { get; set; }

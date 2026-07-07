@@ -23,15 +23,20 @@ namespace MyApp.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IStockService _stock;
+        private readonly IInventoryReadService _inventory;
+        private readonly IAuditLogService _audit;
         private readonly ICompanyAccessGuard _access;
         private readonly IDivisionAccessGuard _divisionAccess;
         private readonly int _defaultPageSize;
 
-        public StockController(AppDbContext context, IStockService stock, ICompanyAccessGuard access,
+        public StockController(AppDbContext context, IStockService stock, IInventoryReadService inventory,
+            IAuditLogService audit, ICompanyAccessGuard access,
             IDivisionAccessGuard divisionAccess, IConfiguration configuration)
         {
             _context = context;
             _stock = stock;
+            _inventory = inventory;
+            _audit = audit;
             _access = access;
             _divisionAccess = divisionAccess;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
@@ -374,5 +379,116 @@ namespace MyApp.Api.Controllers
             await _context.SaveChangesAsync();
             return Ok(new { message = "Adjustment recorded." });
         }
+
+        /// <summary>
+        /// Inventory summary (V2 derived read model): one row per item type with
+        /// OnHand / Committed / ToDeliver / Delivered / Available / Incoming,
+        /// computed live from documents. Backs the central inventory summary on
+        /// the Item Types screen and the stock dashboard buckets.
+        /// </summary>
+        [HttpGet("company/{companyId}/summary")]
+        [HasPermission("stock.dashboard.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<List<InventoryBucketRow>>> GetInventorySummary(int companyId)
+        {
+            // Division RBAC scope (policy D1) — same shape the on-hand grid uses.
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            var rows = await _inventory.GetBucketsAsync(companyId, null, divScope);
+            return Ok(rows);
+        }
+
+        /// <summary>
+        /// Switch a company between inventory tracking versions:
+        /// 1 = V1 legacy (only HS-coded item types tracked) and 2 = V2
+        /// (all item types are inventory; HS code is FBR metadata only).
+        /// Reversible and audited — safe because the derived read model
+        /// persists no bucket snapshots, so a flip requires no data migration
+        /// or cleanup (Q8). Gated by stock.policy.manage (admin).
+        /// </summary>
+        [HttpPost("company/{companyId}/flow-version")]
+        [HasPermission("stock.policy.manage")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> SetFlowVersion(int companyId, [FromBody] SetInventoryFlowVersionRequest req)
+        {
+            if (req == null || (req.Version != 1 && req.Version != 2))
+                return BadRequest(new { error = "Version must be 1 (legacy HS-gated) or 2 (standard inventory)." });
+
+            var company = await _context.Companies.FirstOrDefaultAsync(c => c.Id == companyId);
+            if (company == null) return NotFound();
+
+            var previous = company.InventoryFlowVersion;
+            if (previous == req.Version)
+                return Ok(new { companyId, inventoryFlowVersion = previous, changed = false });
+
+            company.InventoryFlowVersion = req.Version;
+            // Q4: over-commit/oversell is hard-blocked by default under V2.
+            // Turning V2 on enables the guard; operators can still switch it to
+            // soft mode afterwards via the company update. Leaving V2 keeps the
+            // operator's current setting (no forced change on the way back).
+            if (req.Version == (byte)InventoryFlowVersion.V2Standard && !company.StockGuardHardBlock)
+                company.StockGuardHardBlock = true;
+            await _context.SaveChangesAsync();
+
+            await _audit.LogAsync(new AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                Level = "Information",
+                UserName = User.Identity?.Name,
+                HttpMethod = "POST",
+                RequestPath = $"/api/stock/company/{companyId}/flow-version",
+                StatusCode = 200,
+                ExceptionType = "INVENTORY_POLICY_CHANGE",
+                Message = $"Inventory flow version changed {previous} → {req.Version} for company {companyId}",
+                CompanyId = companyId,
+            });
+
+            return Ok(new { companyId, inventoryFlowVersion = req.Version, changed = true, previous });
+        }
+
+        /// <summary>
+        /// Set (upsert) a per-company inventory policy override for one item
+        /// type: Mode (0 = follow the company default, 1 = force-tracked,
+        /// 2 = FBR-only / excluded from inventory) and an optional reorder
+        /// level. Since ItemType is a global catalog, this per-company override
+        /// is the only place tracking can be tuned per item. Gated by
+        /// stock.policy.manage.
+        /// </summary>
+        [HttpPost("company/{companyId}/itemtype-policy")]
+        [HasPermission("stock.policy.manage")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> SetItemTypePolicy(int companyId, [FromBody] SetItemTypePolicyRequest req)
+        {
+            if (req == null || req.ItemTypeId <= 0)
+                return BadRequest(new { error = "itemTypeId is required." });
+            if (req.Mode > 2)
+                return BadRequest(new { error = "mode must be 0 (default), 1 (tracked) or 2 (FBR-only)." });
+            if (!await _context.ItemTypes.AnyAsync(it => it.Id == req.ItemTypeId))
+                return NotFound(new { error = "Item type not found." });
+
+            var setting = await _context.CompanyItemTypeSettings
+                .FirstOrDefaultAsync(s => s.CompanyId == companyId && s.ItemTypeId == req.ItemTypeId);
+            if (setting == null)
+            {
+                setting = new CompanyItemTypeSetting
+                {
+                    CompanyId = companyId,
+                    ItemTypeId = req.ItemTypeId,
+                    CreatedAt = DateTime.UtcNow,
+                };
+                _context.CompanyItemTypeSettings.Add(setting);
+            }
+            setting.Mode = (InventoryItemMode)req.Mode;
+            setting.ReorderLevel = req.ReorderLevel;
+            setting.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { companyId, itemTypeId = req.ItemTypeId, mode = req.Mode, reorderLevel = req.ReorderLevel });
+        }
     }
+
+    /// <summary>Request body for POST company/{id}/flow-version.</summary>
+    public record SetInventoryFlowVersionRequest(byte Version);
+
+    /// <summary>Request body for POST company/{id}/itemtype-policy.</summary>
+    public record SetItemTypePolicyRequest(int ItemTypeId, byte Mode, decimal? ReorderLevel);
 }

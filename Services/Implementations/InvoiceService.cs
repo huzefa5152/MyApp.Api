@@ -379,6 +379,37 @@ namespace MyApp.Api.Services.Implementations
             return dto;
         }
 
+        /// <summary>
+        /// Hard-block oversell guard for bill creation. MUST be called inside
+        /// the create transaction: it takes a per-company app lock so concurrent
+        /// bills consuming the last units serialise, then re-checks physical
+        /// availability under the lock. No-op unless InventoryTrackingEnabled
+        /// &amp;&amp; StockGuardHardBlock. Throws StockShortageException (→ 409).
+        /// Availability is policy-aware (V2 tracks non-HS items too).
+        /// </summary>
+        private async Task AssertBillStockAvailabilityAsync(Company company, int companyId, IEnumerable<InvoiceItem> items)
+        {
+            if (!(company.InventoryTrackingEnabled && company.StockGuardHardBlock)) return;
+            await MyApp.Api.Helpers.StockLock.AcquireCompanyAsync(_context, companyId);
+
+            var requirements = items
+                .Where(i => i.ItemTypeId.HasValue)
+                .Select(i => new StockRequirement(i.ItemTypeId!.Value, i.ItemTypeName ?? "", i.Quantity))
+                .ToList();
+            if (requirements.Count == 0) return;
+
+            var shortages = await _stock.CheckAvailabilityAsync(companyId, requirements);
+            if (shortages.Count > 0)
+            {
+                var details = shortages
+                    .Select(s => new StockShortageDetail(s.ItemTypeId, s.ItemName, s.RequiredQuantity, s.OnHandQuantity))
+                    .ToList();
+                var names = string.Join(", ", shortages.Select(s =>
+                    $"{s.ItemName} (need {s.RequiredQuantity}, have {s.OnHandQuantity})"));
+                throw new StockShortageException("Insufficient stock to issue this bill: " + names, details);
+            }
+        }
+
         public async Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto)
         {
             var company = await _companyRepo.GetByIdAsync(dto.CompanyId);
@@ -525,6 +556,10 @@ namespace MyApp.Api.Services.Implementations
                 invoiceItems.Add(new InvoiceItem
                 {
                     DeliveryItemId = deliveryItem.Id,
+                    // Carry the SO-line lineage through from the delivery item so
+                    // the derived read model can net this bill against the order
+                    // and release its reservation (2026-07 inventory redesign).
+                    SalesOrderItemId = deliveryItem.SalesOrderItemId,
                     ItemTypeId = itemType?.Id,        // flow the catalog linkage through
                     ItemTypeName = itemType?.Name ?? "",
                     Description = description,
@@ -571,6 +606,13 @@ namespace MyApp.Api.Services.Implementations
             const int SeededDefaultDocType = 4;  // Sale Invoice
             var effectiveDocType = dto.DocumentType ?? SeededDefaultDocType;
 
+            // Header-level SO lineage: when every source challan fulfils the
+            // same Sales Order, stamp it on the bill (fast "bills against order X"
+            // filter + reservation release). Mixed/none → left null.
+            var challanSoIds = challans.Where(c => c.SalesOrderId.HasValue)
+                                       .Select(c => c.SalesOrderId!.Value).Distinct().ToList();
+            int? headerSalesOrderId = challanSoIds.Count == 1 ? challanSoIds[0] : (int?)null;
+
             string? effectivePaymentMode = dto.PaymentMode;
             if (string.IsNullOrWhiteSpace(effectivePaymentMode))
             {
@@ -589,33 +631,13 @@ namespace MyApp.Api.Services.Implementations
             var gstAmount = Math.Round(subtotal * dto.GSTRate / 100, 2);
             var grandTotal = subtotal + gstAmount;
 
-            // Audit C-14 (2026-05-13): pre-save stock availability check.
-            // Only blocks when Company.StockGuardHardBlock = true; with
-            // tracking disabled or hard-block off, CheckAvailabilityAsync
-            // is a no-op. Two concurrent bills consuming the last 10
-            // units now get one accepted + one rejected instead of both
-            // succeeding and driving on-hand negative.
-            if (company.InventoryTrackingEnabled && company.StockGuardHardBlock)
-            {
-                var requirements = invoiceItems
-                    .Where(i => i.ItemTypeId.HasValue)
-                    .Select(i => new StockRequirement(
-                        i.ItemTypeId!.Value,
-                        i.ItemTypeName ?? "",
-                        i.Quantity))
-                    .ToList();
-                if (requirements.Count > 0)
-                {
-                    var shortages = await _stock.CheckAvailabilityAsync(dto.CompanyId, requirements);
-                    if (shortages.Count > 0)
-                    {
-                        var names = string.Join(", ", shortages.Select(s =>
-                            $"{s.ItemName} (need {s.RequiredQuantity}, have {s.OnHandQuantity})"));
-                        throw new InvalidOperationException(
-                            "Insufficient stock to issue this bill: " + names);
-                    }
-                }
-            }
+            // Audit C-14 (2026-05-13) + 2026-07 fix: the stock availability
+            // guard now runs INSIDE the create transaction under a per-company
+            // app lock (see AssertBillStockAvailabilityAsync, called below),
+            // so two concurrent bills consuming the last N units serialise —
+            // exactly one commits, the other gets a 409. The old pre-transaction
+            // check here was a TOCTOU race (both could pass). Only enforces when
+            // InventoryTrackingEnabled && StockGuardHardBlock.
 
             // Generate next invoice number per company
             if (company.StartingInvoiceNumber == 0)
@@ -665,6 +687,7 @@ namespace MyApp.Api.Services.Implementations
                     PaymentTerms = dto.PaymentTerms,
                     DocumentType = effectiveDocType,
                     PaymentMode = effectivePaymentMode,
+                    SalesOrderId = headerSalesOrderId,
                     FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
                         ? nextInvoiceNumber.ToString()
                         : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
@@ -675,6 +698,10 @@ namespace MyApp.Api.Services.Implementations
                 await using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
+                    // Oversell guard under the per-company stock lock (inside tx,
+                    // so it serialises concurrent bills — closes the TOCTOU race).
+                    await AssertBillStockAvailabilityAsync(company, dto.CompanyId, invoiceItems);
+
                     var created = await _invoiceRepo.CreateAsync(invoice);
 
                     // Transition challans to Invoiced + apply any PO date updates
@@ -910,29 +937,10 @@ namespace MyApp.Api.Services.Implementations
             var gstAmount = Math.Round(subtotal * dto.GSTRate / 100, 2);
             var grandTotal = subtotal + gstAmount;
 
-            // Audit C-14 (2026-05-13): same pre-save availability check
-            // as the regular CreateAsync — only blocks under hard-block.
-            if (company.InventoryTrackingEnabled && company.StockGuardHardBlock)
-            {
-                var requirements = invoiceItems
-                    .Where(i => i.ItemTypeId.HasValue)
-                    .Select(i => new StockRequirement(
-                        i.ItemTypeId!.Value,
-                        i.ItemTypeName ?? "",
-                        i.Quantity))
-                    .ToList();
-                if (requirements.Count > 0)
-                {
-                    var shortages = await _stock.CheckAvailabilityAsync(dto.CompanyId, requirements);
-                    if (shortages.Count > 0)
-                    {
-                        var names = string.Join(", ", shortages.Select(s =>
-                            $"{s.ItemName} (need {s.RequiredQuantity}, have {s.OnHandQuantity})"));
-                        throw new InvalidOperationException(
-                            "Insufficient stock to issue this bill: " + names);
-                    }
-                }
-            }
+            // Audit C-14 (2026-05-13) + 2026-07: availability guard moved inside
+            // the create transaction under the per-company stock lock — see the
+            // AssertBillStockAvailabilityAsync call below. Only blocks under
+            // InventoryTrackingEnabled && StockGuardHardBlock.
 
             if (company.StartingInvoiceNumber == 0)
                 throw new InvalidOperationException("Starting invoice number has not been set for this company. Please set it first.");
@@ -1002,6 +1010,9 @@ namespace MyApp.Api.Services.Implementations
                 await using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
+                    // Oversell guard under the per-company stock lock (inside tx).
+                    await AssertBillStockAvailabilityAsync(company, dto.CompanyId, invoiceItems);
+
                     var created = await _invoiceRepo.CreateAsync(invoice);
                     await _companyRepo.UpdateAsync(company);
 

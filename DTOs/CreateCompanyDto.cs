@@ -38,6 +38,9 @@
         // omitted from the payload — operators turn it on when they're
         // ready to track stock movements.
         public bool InventoryTrackingEnabled { get; set; }
+        // When true (with tracking on), over-commit/oversell is hard-blocked
+        // (409) instead of a soft warning. Set on for V2 companies (Q4).
+        public bool StockGuardHardBlock { get; set; }
         public int StartingPurchaseBillNumber { get; set; }
         public int StartingGoodsReceiptNumber { get; set; }
 

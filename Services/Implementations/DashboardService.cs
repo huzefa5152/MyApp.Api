@@ -649,6 +649,24 @@ namespace MyApp.Api.Services.Implementations
                 })
                 .ToListAsync();
 
+            // Opening balances are company-level (not division-scoped — policy
+            // D1) and are the base of on-hand. Fix 2026-07 (PR-16): the KPI
+            // previously summed movements ONLY, so it disagreed with the Stock
+            // Dashboard (StockService.GetOnHandBulkAsync includes openings) for
+            // any company with opening balances. Merge them here so the two
+            // agree, and so an item with only an opening balance still counts.
+            var openingsByItem = await _context.OpeningStockBalances
+                .AsNoTracking()
+                .Where(o => o.CompanyId == companyId)
+                .GroupBy(o => o.ItemTypeId)
+                .Select(g => new { ItemTypeId = g.Key, Qty = g.Sum(o => o.Quantity) })
+                .ToDictionaryAsync(x => x.ItemTypeId, x => x.Qty);
+
+            var onHandByItem = new Dictionary<int, decimal>();
+            foreach (var m in perItemMovements) onHandByItem[m.ItemTypeId] = m.OnHand;
+            foreach (var o in openingsByItem)
+                onHandByItem[o.Key] = onHandByItem.GetValueOrDefault(o.Key) + o.Value;
+
             // Average cost per item — pull from PurchaseItems for items
             // that have purchases. Items without any purchases get cost=0
             // (stock value contribution = 0 — fine, they're typically
@@ -677,12 +695,13 @@ namespace MyApp.Api.Services.Implementations
             decimal totalStockValue = 0m;
             int trackedItemCount = 0;
             int lowStockCount = 0;
-            foreach (var m in perItemMovements)
+            foreach (var kv in onHandByItem)
             {
+                var onHand = kv.Value;
                 trackedItemCount++;
-                if (m.OnHand <= 0) lowStockCount++;
-                if (costMap.TryGetValue(m.ItemTypeId, out var avgCost))
-                    totalStockValue += m.OnHand * avgCost;
+                if (onHand <= 0) lowStockCount++;
+                if (costMap.TryGetValue(kv.Key, out var avgCost))
+                    totalStockValue += onHand * avgCost;
             }
 
             // Top 5 items by movement volume in the last 30 days — most
