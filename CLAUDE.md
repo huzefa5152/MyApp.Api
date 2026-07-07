@@ -187,15 +187,34 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
-| Stock item-type reflow | `python scripts/test_stock_itemtype_reflow.py` | `52/52 checks passed` |
-| Division isolation | `python scripts/test_division_isolation.py` | `43/43 checks passed` |
+| Stock item-type reflow (V1) | `python scripts/test_stock_itemtype_reflow.py` | `76/76 checks passed` |
+| Inventory V2 lifecycle | `python scripts/test_stock_v2_lifecycle.py` | `29/29 checks passed` |
+| Division isolation | `python scripts/test_division_isolation.py` | `all checks passed` |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 
 If you add a new endpoint that takes `companyId`, add a tenant-isolation
 case to `scripts/test_tenant_isolation.py`. If you touch invoice/bill
 math, add the case to `scripts/test_basic_flows.py`. If you touch stock
 movement reflow (purchase/invoice/challan edits, StockService), add the
-case to `scripts/test_stock_itemtype_reflow.py`.
+case to `scripts/test_stock_itemtype_reflow.py` (V1 semantics — keep it
+byte-identical, it pins the legacy HS-gated polarity). If you touch the
+**Inventory V2** engine (InventoryReadService buckets, SalesOrder reservation
+guard, invoice lineage/oversell guard, the V2 flow-version toggle, StockLock),
+add the case to `scripts/test_stock_v2_lifecycle.py` — the V2 benchmark that
+pins the reserve→deliver→bill lifecycle, over-commit hard-block (409), and the
+race-free concurrent guard. See `INVENTORY_FLOW_AUDIT_2026_07_05.md` for the
+full design + decisions.
+
+**Inventory V2 (2026-07):** tracking has a per-company version —
+`Company.InventoryFlowVersion` (1 = legacy: only HS-coded items tracked;
+2 = standard: ALL item types are inventory, HS code is FBR metadata only).
+Default 1, so existing tenants are untouched. Flip via
+`POST /api/stock/company/{id}/flow-version` (permission `stock.policy.manage`,
+reversible + audited; turning on V2 defaults `StockGuardHardBlock` on). The
+logical buckets (Committed / To-Deliver / Delivered / Incoming) are a DERIVED
+read model — never persisted, computed from live documents by
+`InventoryReadService`, so nothing can drift. Per-item opt-outs live in
+`CompanyItemTypeSettings` (never on the global `ItemType`).
 
 The basic-flow script covers (see `scripts/test_basic_flows.py` for detail):
 - Challan creation
