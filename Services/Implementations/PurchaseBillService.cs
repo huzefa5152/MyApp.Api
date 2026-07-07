@@ -394,30 +394,6 @@ namespace MyApp.Api.Services.Implementations
                 .FirstOrDefaultAsync(p => p.Id == id);
             if (bill == null) return null;
 
-            // Audit M-2 (2026-05-13): capture the ORIGINAL bill.Date
-            // into a local before any mutation. The reversal OUT must
-            // carry the date the OUTs were originally posted on, not the
-            // post-edit date. Today the reversal happens before the
-            // mutation so the bug doesn't fire, but making the intent
-            // explicit prevents a refactor from silently breaking it.
-            var originalBillDate = bill.Date;
-
-            // Reverse exactly what this bill actually posted to the stock
-            // ledger (read back from StockMovements), then re-emit from the
-            // new line set below. Fix 2026-06-29: the old logic synthesized
-            // compensating OUTs from the *current* line set, gated on each
-            // ItemType's *current* HSCode. When an ItemType was unclassified
-            // at create time (no Stock IN recorded) and classified later,
-            // editing the bill reversed an IN that never happened — leaving a
-            // phantom negative on-hand (e.g. item "Valve" 8481.1000 showing
-            // +170/-170 → 0 instead of +170). Reversing the bill's own posted
-            // net is symmetric with whatever was actually recorded, and it
-            // self-heals bills already corrupted by the old behaviour (their
-            // net is 0, so no reversal is emitted and the fresh IN restores
-            // the right balance).
-            await ReversePostedStockAsync(bill, originalBillDate,
-                $"Reversal — Purchase Bill #{bill.PurchaseBillNumber} edited");
-
             // Apply header changes
             if (dto.Date.HasValue) bill.Date = dto.Date.Value.Date;
             // Capture the old IRN BEFORE we overwrite it — the
@@ -488,25 +464,15 @@ namespace MyApp.Api.Services.Implementations
 
             await _context.SaveChangesAsync();
 
-            // Re-emit Stock IN for the new line set.
-            // 2026-05-13: symmetric gate on HSCode — un-classified
-            // ItemTypes don't move stock either direction.
-            var trackedNew = await _stock.GetStockTrackedItemTypeIdsAsync(
-                newItems.Where(n => n.ItemTypeId.HasValue).Select(n => n.ItemTypeId!.Value));
-            foreach (var ni in newItems)
-            {
-                if (!ni.ItemTypeId.HasValue || ni.Quantity <= 0) continue;
-                if (!trackedNew.Contains(ni.ItemTypeId.Value)) continue;
-                await _stock.RecordMovementAsync(
-                    companyId: bill.CompanyId,
-                    itemTypeId: ni.ItemTypeId.Value,
-                    direction: StockMovementDirection.In,
-                    quantity: ni.Quantity,
-                    sourceType: StockMovementSourceType.PurchaseBill,
-                    sourceId: bill.Id,
-                    movementDate: bill.Date,
-                    notes: $"Purchase Bill #{bill.PurchaseBillNumber} (edited)");
-            }
+            // Reconcile stock to the new line set by DELTA only: compare what
+            // this bill already posted (per ItemType, from the ledger) with
+            // what the new lines should post, and emit just the difference.
+            // A no-op edit — or any edit that doesn't change a tracked item's
+            // quantity/type — moves NO stock (fixes the phantom reversal+IN
+            // churn that used to inflate Total In / Total Out on every save).
+            // It also self-heals bills corrupted by older logic: a posted net
+            // of 0 against a desired qty yields a single IN of that qty.
+            await ReconcileStockToLinesAsync(bill, newItems);
 
             await tx.CommitAsync();
             return await GetByIdAsync(bill.Id);
@@ -537,6 +503,63 @@ namespace MyApp.Api.Services.Implementations
         /// No-op when inventory tracking is off (RecordMovementAsync gates
         /// on it) or when nothing net-positive is outstanding.
         /// </summary>
+        /// <summary>
+        /// Reconciles the bill's posted stock to its current line set by
+        /// emitting only the per-ItemType DELTA (desired − posted). Desired is
+        /// the net IN the tracked, classified lines should hold; posted is the
+        /// bill's current net (IN − OUT) read from the ledger. Emits an IN for
+        /// a positive delta, an OUT for a negative one, and nothing when they
+        /// match — so an edit that leaves every tracked item's quantity/type
+        /// unchanged records no movement at all.
+        /// </summary>
+        private async Task ReconcileStockToLinesAsync(PurchaseBill bill, List<PurchaseItem> newItems)
+        {
+            // Desired net IN per tracked ItemType from the new lines
+            // (symmetric HSCode gate — un-classified ItemTypes don't move).
+            var trackedNew = await _stock.GetStockTrackedItemTypeIdsAsync(
+                newItems.Where(n => n.ItemTypeId.HasValue).Select(n => n.ItemTypeId!.Value));
+            var desired = new Dictionary<int, decimal>();
+            foreach (var ni in newItems)
+            {
+                if (!ni.ItemTypeId.HasValue || ni.Quantity <= 0) continue;
+                if (!trackedNew.Contains(ni.ItemTypeId.Value)) continue;
+                desired.TryGetValue(ni.ItemTypeId.Value, out var cur);
+                desired[ni.ItemTypeId.Value] = cur + ni.Quantity;
+            }
+
+            // Currently posted net per ItemType, read back from the ledger.
+            var posted = (await _context.StockMovements
+                    .Where(m => m.CompanyId == bill.CompanyId
+                             && m.SourceType == StockMovementSourceType.PurchaseBill
+                             && m.SourceId == bill.Id)
+                    .GroupBy(m => m.ItemTypeId)
+                    .Select(g => new
+                    {
+                        ItemTypeId = g.Key,
+                        Net = g.Sum(m => m.Direction == StockMovementDirection.In ? m.Quantity : -m.Quantity),
+                    })
+                    .ToListAsync())
+                .ToDictionary(x => x.ItemTypeId, x => x.Net);
+
+            // Emit only the difference.
+            foreach (var itemTypeId in desired.Keys.Union(posted.Keys))
+            {
+                desired.TryGetValue(itemTypeId, out var want);
+                posted.TryGetValue(itemTypeId, out var have);
+                var delta = want - have;
+                if (delta == 0m) continue;
+                await _stock.RecordMovementAsync(
+                    companyId: bill.CompanyId,
+                    itemTypeId: itemTypeId,
+                    direction: delta > 0m ? StockMovementDirection.In : StockMovementDirection.Out,
+                    quantity: Math.Abs(delta),
+                    sourceType: StockMovementSourceType.PurchaseBill,
+                    sourceId: bill.Id,
+                    movementDate: bill.Date,
+                    notes: $"Purchase Bill #{bill.PurchaseBillNumber} (edit — stock {(delta > 0m ? "increased" : "decreased")} by {Math.Abs(delta):0.####})");
+            }
+        }
+
         private async Task ReversePostedStockAsync(PurchaseBill bill, DateTime movementDate, string notes)
         {
             var posted = await _context.StockMovements

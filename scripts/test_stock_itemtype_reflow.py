@@ -229,6 +229,35 @@ def onhand(base, token, cid, item_id) -> float:
     return 0.0
 
 
+def grid_row(base, token, cid, item_id) -> dict:
+    """Full on-hand grid row for an item: onHand + totalIn + totalOut."""
+    status, rows = http("GET", f"/api/stock/company/{cid}/onhand", base, token=token)
+    if status == 200 and isinstance(rows, list):
+        for r in rows:
+            if r.get("itemTypeId") == item_id:
+                return {"onHand": float(r.get("onHand") or 0),
+                        "totalIn": float(r.get("totalIn") or 0),
+                        "totalOut": float(r.get("totalOut") or 0)}
+    return {"onHand": 0.0, "totalIn": 0.0, "totalOut": 0.0}
+
+
+def move_count(base, token, cid, item_id) -> int:
+    """How many stock movements exist for an item (via the audit feed)."""
+    status, page = http("GET", f"/api/stock/company/{cid}/movements?itemTypeId={item_id}&pageSize=200",
+                        base, token=token)
+    if status == 200 and isinstance(page, dict):
+        return int(page.get("totalCount") or 0)
+    return -1
+
+
+def in_grid(base, token, cid, item_id) -> bool:
+    """True if the item type appears as a row on the on-hand grid at all."""
+    status, rows = http("GET", f"/api/stock/company/{cid}/onhand", base, token=token)
+    if status == 200 and isinstance(rows, list):
+        return any(r.get("itemTypeId") == item_id for r in rows)
+    return False
+
+
 def create_pb(base, token, cid, supplier_id, items) -> tuple[int, Any]:
     return http("POST", "/api/purchasebills", base, token=token, body={
         "date": TODAY, "companyId": cid, "supplierId": supplier_id,
@@ -553,6 +582,145 @@ def suite_challan_reflow(base, token, cid, client, supplier, suffix):
           f"got {onhand(base, token, cid, A['id'])}")
 
 
+# ── Suite 6 — No-op / delta edit produces no stock churn ───────────
+# Regression for 2026-07-07: editing a purchase bill (or invoice) and
+# saving without changing any tracked item's quantity/type must record
+# NO stock movement. Previously the purchase path reversed the whole
+# posted net and re-emitted it on every save, inflating Total In/Out;
+# the invoice path re-inserted identical rows, churning the audit feed.
+def suite_noop_delta(base, token, cid, client, supplier, suffix):
+    s = "6. No-op / delta edit (no churn)"
+    print(f"\n=== {s} ===")
+    A = make_item_type(base, token, f"NC_A_{suffix}", hs=next_hs())
+    if not A:
+        check(s, "item type created", False, "creation failed"); return
+    aid = A["id"]
+
+    # 6.1 create PB(A,100) → in=100, out=0, on-hand=100, exactly 1 movement
+    st, bill = create_pb(base, token, cid, supplier["id"], [
+        {"itemTypeId": aid, "description": "valve", "quantity": 100, "unitPrice": 10}])
+    check(s, "6.1 create PB(A,100) ok", st in (200, 201), f"{st} {bill}")
+    if st not in (200, 201):
+        return
+    bid = bill["id"]
+    lid = bill["items"][0]["id"]
+    row = grid_row(base, token, cid, aid)
+    check(s, "6.1 in=100 out=0 on-hand=100",
+          approx(row["totalIn"], 100) and approx(row["totalOut"], 0) and approx(row["onHand"], 100), str(row))
+    check(s, "6.1 exactly 1 movement", move_count(base, token, cid, aid) == 1,
+          f"count={move_count(base, token, cid, aid)}")
+
+    # 6.2 NO-OP edit — resend the identical line → NO new movement
+    st, upd = update_pb(base, token, bid, [
+        {"id": lid, "itemTypeId": aid, "description": "valve", "quantity": 100, "unitPrice": 10}])
+    check(s, "6.2 no-op edit ok", st == 200, f"{st} {upd}")
+    row = grid_row(base, token, cid, aid)
+    mc = move_count(base, token, cid, aid)
+    check(s, "6.2 in=100 out=0 UNCHANGED (no reversal+IN churn)",
+          approx(row["totalIn"], 100) and approx(row["totalOut"], 0), str(row))
+    check(s, "6.2 still exactly 1 movement", mc == 1, f"count={mc}")
+
+    # 6.3 qty 100→150 → single IN delta of 50
+    lid = upd["items"][0]["id"]
+    st, upd = update_pb(base, token, bid, [
+        {"id": lid, "itemTypeId": aid, "description": "valve", "quantity": 150, "unitPrice": 10}])
+    check(s, "6.3 qty up edit ok", st == 200, f"{st}")
+    row = grid_row(base, token, cid, aid)
+    mc = move_count(base, token, cid, aid)
+    check(s, "6.3 in=150 out=0 on-hand=150 (delta IN 50)",
+          approx(row["totalIn"], 150) and approx(row["totalOut"], 0) and approx(row["onHand"], 150), str(row))
+    check(s, "6.3 exactly 2 movements", mc == 2, f"count={mc}")
+
+    # 6.4 qty 150→120 → single OUT delta of 30
+    lid = upd["items"][0]["id"]
+    st, upd = update_pb(base, token, bid, [
+        {"id": lid, "itemTypeId": aid, "description": "valve", "quantity": 120, "unitPrice": 10}])
+    check(s, "6.4 qty down edit ok", st == 200, f"{st}")
+    row = grid_row(base, token, cid, aid)
+    mc = move_count(base, token, cid, aid)
+    check(s, "6.4 in=150 out=30 on-hand=120 (delta OUT 30)",
+          approx(row["totalIn"], 150) and approx(row["totalOut"], 30) and approx(row["onHand"], 120), str(row))
+    check(s, "6.4 exactly 3 movements", mc == 3, f"count={mc}")
+
+    # 6.5 no-op again → still 3 movements
+    lid = upd["items"][0]["id"]
+    update_pb(base, token, bid, [
+        {"id": lid, "itemTypeId": aid, "description": "valve", "quantity": 120, "unitPrice": 10}])
+    check(s, "6.5 no-op again → still 3 movements, on-hand=120",
+          move_count(base, token, cid, aid) == 3 and approx(onhand(base, token, cid, aid), 120),
+          f"count={move_count(base, token, cid, aid)}")
+
+    # ── Invoice side ──
+    B = make_item_type(base, token, f"NC_B_{suffix}", hs=next_hs())
+    if not B:
+        check(s, "B created", False, ""); return
+    bid2 = B["id"]
+    prestock(base, token, cid, supplier["id"], [(B, 100)])
+    st, inv = create_standalone(base, token, cid, client["id"], [
+        {"itemTypeId": bid2, "description": "sell B", "quantity": 40, "uom": "Pcs", "unitPrice": 50}])
+    check(s, "6.6 sell B×40 ok", st in (200, 201), f"{st} {inv}")
+    if st not in (200, 201):
+        return
+    iid = inv["id"]
+    iline = inv["items"][0]["id"]
+    row = grid_row(base, token, cid, bid2)
+    base_mc = move_count(base, token, cid, bid2)
+    check(s, "6.6 B out=40 on-hand=60", approx(row["totalOut"], 40) and approx(row["onHand"], 60), str(row))
+
+    # 6.7 NO-OP invoice edit → no OUT churn, movement count unchanged
+    st, upd = http("PUT", f"/api/invoices/{iid}", base, token=token, body={
+        "gstRate": 18, "items": [
+            {"id": iline, "itemTypeId": bid2, "description": "sell B", "quantity": 40, "uom": "Pcs", "unitPrice": 50}]})
+    check(s, "6.7 no-op invoice edit ok", st == 200, f"{st} {upd}")
+    row = grid_row(base, token, cid, bid2)
+    mc = move_count(base, token, cid, bid2)
+    check(s, "6.7 B out=40 UNCHANGED, on-hand=60",
+          approx(row["totalOut"], 40) and approx(row["onHand"], 60), str(row))
+    check(s, "6.7 movement count unchanged (no churn)", mc == base_mc, f"before={base_mc} after={mc}")
+
+    # 6.8 invoice qty 40→25 → OUT reflows to 25
+    st, upd = http("PUT", f"/api/invoices/{iid}", base, token=token, body={
+        "gstRate": 18, "items": [
+            {"id": upd["items"][0]["id"], "itemTypeId": bid2, "description": "sell B", "quantity": 25, "uom": "Pcs", "unitPrice": 50}]})
+    check(s, "6.8 invoice qty edit ok", st == 200, f"{st}")
+    row = grid_row(base, token, cid, bid2)
+    check(s, "6.8 B out=25 on-hand=75 (reflowed)",
+          approx(row["totalOut"], 25) and approx(row["onHand"], 75), str(row))
+
+
+# ── Suite 7 — Soft-deleted item type drops off the on-hand grid ────
+# Regression for 2026-07-07: an ItemType delete is a soft-delete and does
+# NOT purge its StockMovements (purchase movements don't block delete), so
+# StockController.GetOnHand must filter IsDeleted or the deleted item keeps
+# showing on the dashboard.
+def suite_deleted_item_hidden(base, token, cid, supplier, suffix):
+    s = "7. Soft-deleted item hidden from grid"
+    print(f"\n=== {s} ===")
+    E = make_item_type(base, token, f"DEL_E_{suffix}", hs=next_hs())
+    if not E:
+        check(s, "item type created", False, "creation failed"); return
+    eid = E["id"]
+
+    # 7.1 stock it via a purchase bill → shows on the grid
+    st, bill = create_pb(base, token, cid, supplier["id"], [
+        {"itemTypeId": eid, "description": "to delete", "quantity": 50, "unitPrice": 10}])
+    check(s, "7.1 create PB(E,50) ok", st in (200, 201), f"{st} {bill}")
+    if st not in (200, 201):
+        return
+    check(s, "7.1 E on grid, on-hand=50",
+          in_grid(base, token, cid, eid) and approx(onhand(base, token, cid, eid), 50),
+          f"in_grid={in_grid(base, token, cid, eid)} onHand={onhand(base, token, cid, eid)}")
+
+    # 7.2 soft-delete the item type (allowed — only a purchase movement refs it)
+    st, _ = http("DELETE", f"/api/itemtypes/{eid}", base, token=token)
+    check(s, "7.2 delete item type ok", st in (200, 204), f"{st}")
+
+    # 7.3 it must disappear from the on-hand grid even though its movement
+    #     row still exists in the ledger.
+    check(s, "7.3 E ABSENT from on-hand grid after delete",
+          not in_grid(base, token, cid, eid), "still showing on grid")
+
+
 # ── Reporter ───────────────────────────────────────────────────────
 def print_report() -> int:
     by_suite: dict[str, list[tuple[str, str]]] = {}
@@ -595,6 +763,8 @@ def main() -> int:
         suite_invoice_narrow_reflow(args.base, token, cid, client, supplier, suffix)
         suite_invoice_full_reflow(args.base, token, cid, client, supplier, suffix)
         suite_challan_reflow(args.base, token, cid, client, supplier, suffix)
+        suite_noop_delta(args.base, token, cid, client, supplier, suffix)
+        suite_deleted_item_hidden(args.base, token, cid, supplier, suffix)
     finally:
         teardown(args.base, token, company, args.keep)
 

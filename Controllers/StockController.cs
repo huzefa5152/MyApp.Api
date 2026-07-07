@@ -63,8 +63,13 @@ namespace MyApp.Api.Controllers
             var ids = movItemIds.Union(openItemIds).Distinct().ToList();
             if (ids.Count == 0) return Ok(new List<StockOnHandRowDto>());
 
+            // Exclude soft-deleted item types: a deleted catalog row keeps its
+            // StockMovements (delete doesn't block on movements — see
+            // ItemTypeService.DeleteAsync), so without this filter a deleted
+            // item still surfaced on the on-hand grid. Missing ids fall through
+            // to `it == null → continue` below and drop out of the dashboard.
             var itemTypes = await _context.ItemTypes
-                .Where(it => ids.Contains(it.Id))
+                .Where(it => ids.Contains(it.Id) && !it.IsDeleted)
                 .ToDictionaryAsync(it => it.Id);
 
             var openings = await _context.OpeningStockBalances
