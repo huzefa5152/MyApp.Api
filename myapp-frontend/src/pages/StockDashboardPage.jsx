@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
-import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight } from "react-icons/md";
-import { getStockOnHand, getStockMovements, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock } from "../api/stockApi";
+import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdSyncAlt } from "react-icons/md";
+import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock } from "../api/stockApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getAllUnits } from "../api/unitsApi";
 import { dropdownStyles } from "../theme";
@@ -25,15 +25,20 @@ const colors = {
 };
 
 export default function StockDashboardPage() {
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const { companies, selectedCompany, setSelectedCompany, refreshCompanies, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
   const confirm = useConfirm();
   const canManageOpening = has("stock.opening.manage");
   const canAdjust = has("stock.adjust.create");
   const canViewMovements = has("stock.movements.view");
+  const canManagePolicy = has("stock.policy.manage");
+  const flowVersion = Number(selectedCompany?.inventoryFlowVersion) === 2 ? 2 : 1;
 
   const [tab, setTab] = useState("onhand");
   const [onhand, setOnhand] = useState([]);
+  // V2 derived inventory buckets (Available/Committed/ToDeliver/Delivered/
+  // Incoming) per item — empty on V1 companies with no reservation activity.
+  const [summary, setSummary] = useState([]);
   const [movements, setMovements] = useState([]);
   const [movPage, setMovPage] = useState(1);
   const [movTotal, setMovTotal] = useState(0);
@@ -65,8 +70,9 @@ export default function StockDashboardPage() {
     if (!selectedCompany) return;
     setLoading(true);
     try {
-      const [oh, op, it, mov] = await Promise.all([
+      const [oh, sm, op, it, mov] = await Promise.all([
         getStockOnHand(selectedCompany.id),
+        getInventorySummary(selectedCompany.id).catch(() => ({ data: [] })),
         canManageOpening ? getOpeningBalances(selectedCompany.id) : Promise.resolve({ data: [] }),
         getItemTypes(),
         // 2026-05-12: also pull the movements first page on initial load
@@ -79,6 +85,7 @@ export default function StockDashboardPage() {
           : Promise.resolve({ data: { items: [], totalCount: 0, pageSize: 0 } }),
       ]);
       setOnhand(oh.data || []);
+      setSummary(sm.data || []);
       setOpenings(op.data || []);
       setItemTypes(it.data || []);
       setMovements(mov.data?.items || []);
@@ -124,6 +131,35 @@ export default function StockDashboardPage() {
     !search || r.itemTypeName.toLowerCase().includes(search.toLowerCase()) ||
     (r.hsCode || "").toLowerCase().includes(search.toLowerCase())
   );
+
+  const filteredSummary = summary.filter(r =>
+    !search || r.itemTypeName.toLowerCase().includes(search.toLowerCase()) ||
+    (r.hsCode || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  // Switch the selected company between V1 (legacy HS-gated) and V2 (standard
+  // inventory). Reversible + audited server-side. Refresh the company list so
+  // the badge + selectedCompany.inventoryFlowVersion update, then refetch.
+  const switchVersion = async () => {
+    if (!selectedCompany) return;
+    const target = flowVersion === 2 ? 1 : 2;
+    const ok = await confirm({
+      title: `Switch to ${target === 2 ? "V2 (Standard Inventory)" : "V1 (Legacy)"}`,
+      message: target === 2
+        ? "Switch this company to V2 (Standard Inventory)? ALL item types become inventory (HS code becomes FBR metadata only), and over-commit / oversell will be hard-blocked. Reversible."
+        : "Switch this company back to V1 (Legacy)? Only HS-coded item types will be stock-tracked, as before. Reversible.",
+      confirmText: "Switch",
+    });
+    if (!ok) return;
+    try {
+      await setInventoryFlowVersion(selectedCompany.id, target);
+      await refreshCompanies?.();
+      await fetchAll();
+      notify(`Company switched to ${target === 2 ? "V2 (Standard Inventory)" : "V1 (Legacy)"}.`, "success");
+    } catch (e) {
+      notify(e?.response?.data?.error || "Could not switch inventory version.", "error");
+    }
+  };
 
   const submitOpening = async (e) => {
     e.preventDefault();
@@ -271,7 +307,26 @@ export default function StockDashboardPage() {
             </p>
           </div>
         </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+          {selectedCompany && (
+            <span
+              style={flowVersion === 2 ? styles.verPillV2 : styles.verPillV1}
+              title={flowVersion === 2
+                ? "V2 Standard Inventory — all item types are tracked; HS code is FBR metadata only."
+                : "V1 Legacy — only HS-coded item types are stock-tracked."}
+            >
+              {flowVersion === 2 ? "Inventory V2 · Standard" : "Inventory V1 · Legacy"}
+            </span>
+          )}
+          {canManagePolicy && selectedCompany && (
+            <button
+              style={styles.altBtn}
+              onClick={switchVersion}
+              title={flowVersion === 2 ? "Switch back to legacy tracking" : "Switch to standard inventory (V2)"}
+            >
+              <MdSyncAlt size={16} /> {flowVersion === 2 ? "Switch to V1" : "Switch to V2"}
+            </button>
+          )}
           {canManageOpening && (
             <button style={styles.altBtn} onClick={() => setShowOpening(true)}>
               <MdTune size={16} /> Opening Balance
@@ -308,6 +363,7 @@ export default function StockDashboardPage() {
 
           <div style={styles.tabs}>
             <TabBtn active={tab === "onhand"} onClick={() => setTab("onhand")}>On-Hand ({onhand.length})</TabBtn>
+            {summary.length > 0 && <TabBtn active={tab === "inventory"} onClick={() => setTab("inventory")}>Inventory ({summary.length})</TabBtn>}
             {canManageOpening && <TabBtn active={tab === "opening"} onClick={() => setTab("opening")}>Opening Balances ({openings.length})</TabBtn>}
             {canViewMovements && <TabBtn active={tab === "movements"} onClick={() => setTab("movements")}>Movements ({movTotal})</TabBtn>}
           </div>
@@ -482,6 +538,77 @@ export default function StockDashboardPage() {
                     })}
                   </div>
                 </>
+              )}
+            </>
+          )}
+
+          {tab === "inventory" && (
+            <>
+              {summary.length > 0 && (
+                <div style={styles.searchWrap}>
+                  <MdSearch style={styles.searchIcon} />
+                  <input type="text" placeholder="Search item or HS code..." value={search} onChange={e => setSearch(e.target.value)} style={styles.searchInput} />
+                  {search && (
+                    <button type="button" style={styles.searchClear} onClick={() => setSearch("")} title="Clear search">
+                      <MdClose size={16} />
+                    </button>
+                  )}
+                </div>
+              )}
+              {loading ? (
+                <div style={styles.loading}><div style={styles.spinner} /></div>
+              ) : filteredSummary.length === 0 ? (
+                <div style={styles.empty}>
+                  <MdInventory size={40} color={colors.cardBorder} />
+                  <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
+                    {search ? `No items match "${search}".` : "No inventory activity yet."}
+                  </p>
+                </div>
+              ) : (
+                <div className="stock-table" style={styles.tableWrap}>
+                  <table style={styles.table}>
+                    <thead>
+                      <tr>
+                        <th style={styles.th}>Item</th>
+                        <th style={{ ...styles.th, textAlign: "right" }} title="Physical stock in hand">In Stock</th>
+                        <th style={{ ...styles.th, textAlign: "right" }} title="Free to sell = In Stock - Committed">Available</th>
+                        <th style={{ ...styles.th, textAlign: "right" }} title="Reserved to customers = To Deliver + Delivered">Committed</th>
+                        <th style={{ ...styles.th, textAlign: "right" }} title="Ordered, not yet delivered">To Deliver</th>
+                        <th style={{ ...styles.th, textAlign: "right" }} title="Delivered on a challan, not yet billed">Delivered</th>
+                        <th style={{ ...styles.th, textAlign: "right" }} title="On un-billed goods receipts">Incoming</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSummary.map((r, idx) => (
+                        <tr key={r.itemTypeId} style={idx % 2 ? { background: colors.rowAlt } : undefined}>
+                          <td style={styles.td}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                              <span style={{ fontWeight: 600 }}>{r.itemTypeName}</span>
+                              {!r.tracked && (
+                                <span style={styles.fbrBadge} title="FBR-reporting item — not tracked as inventory">FBR-only</span>
+                              )}
+                              {r.reorderLevel != null && r.available <= r.reorderLevel && (
+                                <span style={styles.lowBadge} title={`At/below reorder level ${r.reorderLevel}`}>Low</span>
+                              )}
+                            </div>
+                          </td>
+                          {r.tracked ? (
+                            <>
+                              <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: r.onHand < 0 ? "#c62828" : colors.blue }}>{r.onHand.toLocaleString()}</td>
+                              <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: r.available < 0 ? "#c62828" : colors.teal }}>{r.available.toLocaleString()}</td>
+                              <td style={{ ...styles.td, textAlign: "right" }}>{r.committed.toLocaleString()}</td>
+                              <td style={{ ...styles.td, textAlign: "right" }}>{r.toDeliver.toLocaleString()}</td>
+                              <td style={{ ...styles.td, textAlign: "right" }}>{r.delivered.toLocaleString()}</td>
+                              <td style={{ ...styles.td, textAlign: "right" }}>{r.incoming.toLocaleString()}</td>
+                            </>
+                          ) : (
+                            <td style={{ ...styles.td, textAlign: "center", color: colors.textSecondary }} colSpan={6}>—</td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </>
           )}
@@ -859,6 +986,10 @@ const styles = {
   empty: { display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary },
   warnBanner: { padding: "0.65rem 0.95rem", marginBottom: "1rem", backgroundColor: "#fff8e1", border: "1px solid #ffcc80", borderRadius: 8, color: "#bf360c", fontSize: "0.85rem" },
   tabs: { display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" },
+  verPillV2: { fontSize: "0.74rem", fontWeight: 700, color: "#00695c", backgroundColor: "#e0f2f1", border: "1px solid #b2dfdb", padding: "0.3rem 0.6rem", borderRadius: 999 },
+  verPillV1: { fontSize: "0.74rem", fontWeight: 700, color: "#5f6d7e", backgroundColor: "#eef2f7", border: "1px solid #d0d7e2", padding: "0.3rem 0.6rem", borderRadius: 999 },
+  fbrBadge: { fontSize: "0.68rem", fontWeight: 700, color: "#6a1b9a", backgroundColor: "#f3e5f5", padding: "0.1rem 0.4rem", borderRadius: 5 },
+  lowBadge: { fontSize: "0.68rem", fontWeight: 700, color: "#c62828", backgroundColor: "#ffebee", padding: "0.1rem 0.4rem", borderRadius: 5 },
   searchWrap: { position: "relative", marginBottom: "1rem", maxWidth: 360 },
   searchIcon: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" },
   searchInput: { width: "100%", padding: "0.55rem 2.4rem 0.55rem 2.3rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 10, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none" },

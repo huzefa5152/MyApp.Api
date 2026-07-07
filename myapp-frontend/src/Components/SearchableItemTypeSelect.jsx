@@ -13,7 +13,7 @@ import { MdArrowDropDown, MdSearch, MdStar } from "react-icons/md";
  *   onChange   — (newId, pickedItemType) ⇒ void
  *   placeholder, style — passthroughs
  */
-export default function SearchableItemTypeSelect({ items, value, onChange, placeholder, style }) {
+export default function SearchableItemTypeSelect({ items, value, onChange, placeholder, style, disabled = false }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightIdx, setHighlightIdx] = useState(-1);
@@ -160,10 +160,14 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
       <button
         type="button"
         ref={triggerRef}
-        onClick={() => setOpen((v) => !v)}
-        style={{ ...styles.trigger, ...style }}
+        disabled={disabled}
+        onClick={() => !disabled && setOpen((v) => !v)}
+        style={{ ...styles.trigger, ...(disabled ? styles.triggerDisabled : null), ...style }}
       >
-        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left" }}>
+        {/* 2-line clamp (NOT nowrap+ellipsis) so similar-prefix names like
+            "MEKO FABRICS" / "MEKO DENIM" don't collapse to an identical row
+            (CLAUDE.md §3 / dashboard incident 2026-05-13). */}
+        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", wordBreak: "break-word", textAlign: "left" }}>
           {selected ? (
             <>
               {selected.isFavorite && <MdStar size={12} color="#f59f00" style={{ verticalAlign: "middle", marginRight: 3 }} />}
@@ -288,6 +292,7 @@ const styles = {
     gap: "0.25rem",
     width: "100%",
     padding: "0.45rem 0.55rem",
+    minHeight: 44,          // 44px tap target (CLAUDE.md §3 mobile rule)
     border: "1px solid #d0d7e2",
     borderRadius: 6,
     backgroundColor: "#fff",
@@ -296,6 +301,7 @@ const styles = {
     cursor: "pointer",
     textAlign: "left",
   },
+  triggerDisabled: { backgroundColor: "#f1f5f9", color: "#94a3b8", cursor: "not-allowed" },
   placeholder: { color: "#94a3b8" },
   clearBtn: {
     fontSize: "1rem",
@@ -313,12 +319,16 @@ const styles = {
     const spaceBelow = window.innerHeight - rect.bottom;
     const listHeight = 420;
     const flipAbove = spaceBelow < 240 && rect.top > spaceBelow;
+    // Clamp width + left to the viewport so the portaled list never runs off
+    // the right edge on a 375px phone (PR-26 mobile fix).
+    const width = Math.min(Math.max(rect.width, 280), window.innerWidth - 16);
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
     return {
       position: "fixed",
       top: flipAbove ? undefined : rect.bottom + 2,
       bottom: flipAbove ? window.innerHeight - rect.top + 2 : undefined,
-      left: rect.left,
-      width: Math.max(rect.width, 360),
+      left,
+      width,
       maxHeight: flipAbove ? Math.min(listHeight, rect.top - 10) : Math.min(listHeight, spaceBelow - 10),
       backgroundColor: "#fff",
       border: "1px solid #d0d7e2",

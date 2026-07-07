@@ -71,6 +71,8 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         // Inventory module — off by default. Operator turns it on once
         // they've recorded opening balances and are ready to track stock.
         inventoryTrackingEnabled: false,
+        // Hard-block over-commit/oversell (409) when tracking is on (Q4).
+        stockGuardHardBlock: false,
         // Billing workflow — off by default so existing tenants bill as before.
         // ON forces every bill to come from a Sales Order.
         requireSalesOrderForBilling: false,
@@ -139,6 +141,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 fbrDefaultPaymentModeRegistered: freshCompany.fbrDefaultPaymentModeRegistered || "",
                 fbrDefaultPaymentModeUnregistered: freshCompany.fbrDefaultPaymentModeUnregistered || "",
                 inventoryTrackingEnabled: !!freshCompany.inventoryTrackingEnabled,
+                stockGuardHardBlock: !!freshCompany.stockGuardHardBlock,
                 requireSalesOrderForBilling: !!freshCompany.requireSalesOrderForBilling,
                 startingPurchaseBillNumber: freshCompany.startingPurchaseBillNumber || 0,
                 startingGoodsReceiptNumber: freshCompany.startingGoodsReceiptNumber || 0,
@@ -467,15 +470,26 @@ export default function CompanyForm({ company, onClose, onSaved }) {
 
                         {/* ── INVENTORY ───────────────────────────────────── */}
                         {activeTab === "inventory" && (
-                            <label style={{ ...toggleCard, marginTop: 0 }}>
-                                <input type="checkbox" name="inventoryTrackingEnabled" checked={!!form.inventoryTrackingEnabled} onChange={handleChange} style={{ marginTop: "0.15rem", flexShrink: 0 }} />
-                                <span style={{ fontSize: "0.86rem", color: "#1a2332", lineHeight: 1.4 }}>
-                                    <strong style={{ display: "block" }}>Enable inventory tracking</strong>
-                                    <span style={{ fontSize: "0.76rem", color: "#5f6d7e" }}>
-                                        Stock IN moves on Purchase Bill save, Stock OUT moves on FBR submission. Pre-check blocks FBR submit when oversold. Leave OFF until you've recorded opening balances.
+                            <>
+                                <label style={{ ...toggleCard, marginTop: 0 }}>
+                                    <input type="checkbox" name="inventoryTrackingEnabled" checked={!!form.inventoryTrackingEnabled} onChange={handleChange} style={{ marginTop: "0.15rem", flexShrink: 0 }} />
+                                    <span style={{ fontSize: "0.86rem", color: "#1a2332", lineHeight: 1.4 }}>
+                                        <strong style={{ display: "block" }}>Enable inventory tracking</strong>
+                                        <span style={{ fontSize: "0.76rem", color: "#5f6d7e" }}>
+                                            Stock IN moves on Purchase Bill save, Stock OUT on invoice/bill save. Leave OFF until you've recorded opening balances.
+                                        </span>
                                     </span>
-                                </span>
-                            </label>
+                                </label>
+                                <label style={toggleCard}>
+                                    <input type="checkbox" name="stockGuardHardBlock" checked={!!form.stockGuardHardBlock} onChange={handleChange} style={{ marginTop: "0.15rem", flexShrink: 0 }} />
+                                    <span style={{ fontSize: "0.86rem", color: "#1a2332", lineHeight: 1.4 }}>
+                                        <strong style={{ display: "block" }}>Hard-block over-commit / oversell</strong>
+                                        <span style={{ fontSize: "0.76rem", color: "#5f6d7e" }}>
+                                            ON — refuse a sales order or bill (409) when there isn't enough available stock. OFF — allow it with a soft warning. Enabled automatically when a company is switched to V2 inventory.
+                                        </span>
+                                    </span>
+                                </label>
+                            </>
                         )}
 
                         {/* ── ACCESS ──────────────────────────────────────── */}
