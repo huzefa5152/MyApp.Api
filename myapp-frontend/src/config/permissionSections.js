@@ -59,6 +59,13 @@ export const PERMISSION_SECTIONS = [
     ],
   },
   {
+    section: "Reports",
+    modules: [
+      // Module string in PermissionCatalog.cs is "Reports".
+      { key: "Reports", label: "Sales Report" },
+    ],
+  },
+  {
     section: "Configuration",
     modules: [
       { key: "Companies" },
