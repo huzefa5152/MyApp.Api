@@ -13,6 +13,8 @@ namespace MyApp.Api.Services.Interfaces
             DateTime? dateFrom = null, DateTime? dateTo = null,
             int? divisionId = null, HashSet<int>? allowedDivisionIds = null);
         Task<PurchaseBillDto?> GetByIdAsync(int id);
+        /// <summary>Flat merge-data payload for the PurchaseBill print templates.</summary>
+        Task<PrintPurchaseBillDto?> GetPrintDataAsync(int id);
         Task<PurchaseBillDto> CreateAsync(CreatePurchaseBillDto dto);
         Task<PurchaseBillDto?> UpdateAsync(int id, UpdatePurchaseBillDto dto);
         /// <summary>Set (or clear, when null) the bill's payment due date —

@@ -22,7 +22,8 @@ namespace MyApp.Api.Data
     public static class DivisionMergeFieldSeeder
     {
         private static readonly string[] TemplateTypes =
-            { "Challan", "Bill", "TaxInvoice", "SalesQuote", "SalesOrder" };
+            { "Challan", "Bill", "TaxInvoice", "SalesQuote", "SalesOrder",
+              "DebitNote", "CreditNote", "PurchaseBill", "GoodsReceipt" };
 
         private static IEnumerable<MergeField> FieldsFor(string type) => new[]
         {

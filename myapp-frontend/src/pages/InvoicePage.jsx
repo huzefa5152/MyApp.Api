@@ -25,6 +25,9 @@ import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplate
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
 import { defaultBillTemplate, defaultTaxInvoiceTemplate } from "../utils/defaultTemplates";
+import { defaultCreditNoteTemplate, defaultDebitNoteTemplate } from "../utils/purchaseNoteDocTemplates";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { exportToPdf } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { notify } from "../utils/notify";
@@ -113,6 +116,32 @@ export default function InvoicePage({ mode = "invoices" }) {
   const canPrintBill = has("bills.print.view");
   const canPrintTax  = has("invoices.print.view");
   const canPrint = isBillsMode ? canPrintBill : canPrintTax;
+  // Each tab prints with its own template type: Bills → Bill, Invoices →
+  // TaxInvoice, note tabs → CreditNote / DebitNote (notes previously reused
+  // the TaxInvoice template; they now have their own type + starter set).
+  const printTemplateType = isBillsMode ? "Bill"
+    : noteDocType === 9 ? "DebitNote"
+    : noteDocType === 10 ? "CreditNote"
+    : "TaxInvoice";
+  const tplPicker = usePrintTemplates(printTemplateType);
+  const printFallbackTemplate = isBillsMode ? defaultBillTemplate
+    : noteDocType === 9 ? defaultDebitNoteTemplate
+    : noteDocType === 10 ? defaultCreditNoteTemplate
+    : defaultTaxInvoiceTemplate;
+  // Explicit dropdown pick wins; else the company default from the loaded
+  // list; if the list couldn't load (no template perm / fetch error) fall
+  // back to the legacy per-click default fetch, then the built-in template.
+  const resolvePrintTemplate = async (inv) => {
+    const picked = tplPicker.resolveTemplate(inv);
+    if (picked?.htmlContent) return picked.htmlContent;
+    if (!tplPicker.templatesLoaded) {
+      try {
+        const res = await getTemplate(selectedCompany.id, printTemplateType);
+        if (res.data?.htmlContent) return res.data.htmlContent;
+      } catch { /* use default */ }
+    }
+    return printFallbackTemplate;
+  };
   // Two granular FBR perms — operator can be allowed to dry-run without
   // being trusted to commit. canFbrAny is just for showing the bulk bar.
   // FBR actions are gated by the company-level master switch IN ADDITION to
@@ -309,11 +338,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     w.document.write("<p>Loading bill...</p>");
     try {
       const { data } = await getInvoicePrintBill(inv.id);
-      let template = defaultBillTemplate;
-      try {
-        const res = await getTemplate(selectedCompany.id, "Bill");
-        if (res.data?.htmlContent) template = res.data.htmlContent;
-      } catch { /* use default */ }
+      const template = await resolvePrintTemplate(inv);
       const html = mergeTemplate(template, data);
       writeAndPrint(w, html);
     } catch { w.close(); notify("Failed to load bill data.", "error"); }
@@ -325,11 +350,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     w.document.write("<p>Loading tax invoice...</p>");
     try {
       const { data } = await getInvoicePrintTaxInvoice(inv.id);
-      let template = defaultTaxInvoiceTemplate;
-      try {
-        const res = await getTemplate(selectedCompany.id, "TaxInvoice");
-        if (res.data?.htmlContent) template = res.data.htmlContent;
-      } catch { /* use default */ }
+      const template = await resolvePrintTemplate(inv);
       const html = mergeTemplate(template, data);
       writeAndPrint(w, html);
     } catch { w.close(); notify("Failed to load tax invoice data.", "error"); }
@@ -340,11 +361,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     setExportingId(inv.id + "-bill-pdf");
     try {
       const { data } = await getInvoicePrintBill(inv.id);
-      let template = defaultBillTemplate;
-      try {
-        const res = await getTemplate(selectedCompany.id, "Bill");
-        if (res.data?.htmlContent) template = res.data.htmlContent;
-      } catch { /* use default */ }
+      const template = await resolvePrintTemplate(inv);
       const html = mergeTemplate(template, data);
       await exportToPdf(html, `Bill # ${data.invoiceNumber} ${data.clientName}`);
     } catch { notify("Failed to export Bill PDF.", "error"); }
@@ -367,15 +384,13 @@ export default function InvoicePage({ mode = "invoices" }) {
     setExportingId(inv.id + "-tax-pdf");
     try {
       const { data } = await getInvoicePrintTaxInvoice(inv.id);
-      let template = defaultTaxInvoiceTemplate;
-      try {
-        const res = await getTemplate(selectedCompany.id, "TaxInvoice");
-        if (res.data?.htmlContent) template = res.data.htmlContent;
-      } catch { /* use default */ }
+      const template = await resolvePrintTemplate(inv);
       const html = mergeTemplate(template, data);
       // Tax invoice uses "INVOICE # ..." prefix to distinguish from the non-tax
-      // Bill exports (which keep the "Bill # ..." prefix on lines 160 + 171 above).
-      await exportToPdf(html, `INVOICE # ${data.invoiceNumber} ${data.buyerName || data.clientName}`);
+      // Bill exports (which keep the "Bill # ..." prefix). Note tabs name the
+      // file after the note kind ("CREDIT NOTE # 3 ...").
+      const pdfLabel = isNotesMode ? noteLabel.toUpperCase() : "INVOICE";
+      await exportToPdf(html, `${pdfLabel} # ${data.invoiceNumber} ${data.buyerName || data.clientName}`);
     } catch { notify("Failed to export Tax Invoice PDF.", "error"); }
     finally { setExportingId(null); }
   };
@@ -385,11 +400,15 @@ export default function InvoicePage({ mode = "invoices" }) {
     setExportingId(inv.id + "-tax-excel");
     try {
       const { data } = await getInvoicePrintTaxInvoice(inv.id);
+      // Note tabs reuse the TaxInvoice Excel template (notes have no Excel
+      // template of their own) but name the file after the note kind so a
+      // credit/debit note export isn't mistaken for a sales invoice — same
+      // convention as the PDF tax export above.
       const res = await exportExcel(selectedCompany.id, "TaxInvoice", data);
-      // Same "INVOICE # ..." convention as the PDF tax export above.
       // saveAs() overrides the server's Content-Disposition filename, so the
       // prefix MUST be correct on this line — fixing only the backend wasn't enough.
-      saveAs(res.data, `INVOICE # ${data.invoiceNumber} ${data.buyerName || data.clientName}.xlsx`);
+      const xlsLabel = isNotesMode ? noteLabel.toUpperCase() : "INVOICE";
+      saveAs(res.data, `${xlsLabel} # ${data.invoiceNumber} ${data.buyerName || data.clientName}.xlsx`);
     } catch { notify("Failed to export Tax Invoice Excel.", "error"); }
     finally { setExportingId(null); }
   };
@@ -881,6 +900,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               {hasFilters && (
                 <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>
               )}
+              <PrintTemplateSelect picker={tplPicker} />
               {isBigScreen && (
                 <div style={{ marginLeft: "auto" }}>
                   <ViewModeToggle

@@ -289,6 +289,7 @@ namespace MyApp.Api.Helpers
             new("goodsreceipts.manage.create", "GoodsReceipts", "Manage", "Create", "Create a goods-receipt note"),
             new("goodsreceipts.manage.update", "GoodsReceipts", "Manage", "Update", "Edit a goods-receipt note"),
             new("goodsreceipts.manage.delete", "GoodsReceipts", "Manage", "Delete", "Delete a goods-receipt note"),
+            new("goodsreceipts.print.view",    "GoodsReceipts", "Print",  "View",   "Print or download goods-receipt notes"),
 
             // ── Inventory / Stock ───────────────────────────────────────────
             new("stock.dashboard.view",     "Inventory", "Dashboard",       "View",   "View on-hand stock dashboard"),

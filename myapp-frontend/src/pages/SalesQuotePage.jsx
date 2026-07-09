@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdEdit, MdDelete, MdSwapHoriz, MdAttachFile, MdVisibility } from "react-icons/md";
+import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdSwapHoriz, MdAttachFile, MdVisibility } from "react-icons/md";
 import SalesQuoteForm from "../Components/SalesQuoteForm";
 import SalesQuoteDetailModal from "../Components/SalesQuoteDetailModal";
 import {
@@ -7,11 +7,13 @@ import {
   deleteSalesQuote, convertQuoteToOrder, getSalesQuotePrintData,
 } from "../api/salesQuoteApi";
 import { getEntityAttachmentCounts } from "../api/attachmentApi";
-import { getTemplatesByCompany } from "../api/printTemplateApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
+import { exportToPdf } from "../utils/exportUtils";
 import { defaultQuoteTemplate } from "../utils/salesDocTemplates";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { dropdownStyles } from "../theme";
 import DivisionSelect from "../Components/DivisionSelect";
 import SearchableSelect from "../Components/SearchableSelect";
@@ -37,12 +39,14 @@ export default function SalesQuotePage() {
   const canPrint = has("salesquotes.print.view");
   const canConvert = has("salesorders.manage.create");
   const canSeeAttachments = has("attachments.list.view");
-  const canViewTemplates = has("printtemplates.manage.view");
+
+  // Shared template-picker state: division-aware auto resolution (division
+  // quotes need a division template) + operator-pinned explicit choice.
+  const tplPicker = usePrintTemplates("SalesQuote", { divisionAware: true });
+  const { templatesLoaded } = tplPicker;
 
   const [quotes, setQuotes] = useState([]);
   const [attachCounts, setAttachCounts] = useState({}); // { quoteId: attachmentCount }
-  const [quoteTemplates, setQuoteTemplates] = useState([]); // SalesQuote print templates for the company
-  const [templatesLoaded, setTemplatesLoaded] = useState(false);
   const [viewQuote, setViewQuote] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -86,16 +90,7 @@ export default function SalesQuotePage() {
     setPage(1); setSearch(""); setStatusFilter(""); setDivisionFilter(""); setClientFilter("");
     if (selectedCompany) {
       getClientsByCompany(selectedCompany.id).then(({ data }) => setClients(data || [])).catch(() => setClients([]));
-      // Load SalesQuote print templates (with division + default) so printing can
-      // pick the division's default — and so we can hide Print for a division
-      // quote that has no template. Needs printtemplates.manage.view; without it
-      // we fall back to legacy behavior (built-in default, Print always shown).
-      if (canViewTemplates) {
-        getTemplatesByCompany(selectedCompany.id)
-          .then(({ data }) => { setQuoteTemplates((data || []).filter((t) => t.templateType === "SalesQuote")); setTemplatesLoaded(true); })
-          .catch(() => { setQuoteTemplates([]); setTemplatesLoaded(false); });
-      } else { setQuoteTemplates([]); setTemplatesLoaded(false); }
-    } else { setClients([]); setQuotes([]); setQuoteTemplates([]); setTemplatesLoaded(false); }
+    } else { setClients([]); setQuotes([]); }
   }, [selectedCompany]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch whenever the company, page, or any filter changes.
@@ -106,22 +101,15 @@ export default function SalesQuotePage() {
 
   const reload = () => selectedCompany && fetchQuotes(selectedCompany.id, page);
 
-  // Resolve the print template for a quote: a division quote uses its division's
-  // default; a company-level quote uses the company default. Returns null when a
-  // division quote has no template for its division.
-  const resolveQuoteTemplate = (q) => {
-    if (q.divisionId) {
-      const inDiv = quoteTemplates.filter((t) => t.divisionId === q.divisionId);
-      if (inDiv.length === 0) return null;
-      return inDiv.find((t) => t.isDefault) || inDiv[0];
-    }
-    const companyLevel = quoteTemplates.filter((t) => !t.divisionId);
-    return companyLevel.find((t) => t.isDefault) || companyLevel[0] || null;
-  };
+  // Resolve the print template for a quote: an explicit dropdown pick wins;
+  // otherwise a division quote uses its division's default and a company-level
+  // quote the company default (null when a division quote has no template).
+  const resolveQuoteTemplate = (q) => tplPicker.resolveTemplate(q);
 
   // Show Print only when it can produce something: division quotes need a
-  // division template; company-level quotes always can (built-in default
-  // fallback). If templates couldn't load (no perm), keep legacy behavior.
+  // division template (or an explicit pick); company-level quotes always can
+  // (built-in default fallback). If templates couldn't load (no perm), keep
+  // legacy behavior.
   const canPrintQuote = (q) => {
     if (!canPrint) return false;
     if (!templatesLoaded) return true;
@@ -186,6 +174,24 @@ export default function SalesQuotePage() {
     } catch { w.close(); notify("Failed to load print data.", "error"); }
   };
 
+  const [exportingId, setExportingId] = useState(null);
+  const handleExportPdf = async (q) => {
+    if (templatesLoaded && q.divisionId && !resolveQuoteTemplate(q)) {
+      notify("No print template is set for this division.", "warning");
+      return;
+    }
+    if (exportingId) return;
+    setExportingId(q.id);
+    try {
+      const { data } = await getSalesQuotePrintData(q.id);
+      const tpl = resolveQuoteTemplate(q);
+      const template = tpl?.htmlContent || defaultQuoteTemplate;
+      const html = mergeTemplate(template, data);
+      await exportToPdf(html, `Quote # ${q.quoteNumber} ${q.clientName}`);
+    } catch { notify("Failed to export PDF.", "error"); }
+    finally { setExportingId(null); }
+  };
+
   return (
     <div>
       <div style={st.header}>
@@ -228,6 +234,7 @@ export default function SalesQuotePage() {
                   placeholder="All Clients"
                 />
               </div>
+              <PrintTemplateSelect picker={tplPicker} />
             </div>
           )}
         </>
@@ -259,6 +266,7 @@ export default function SalesQuotePage() {
                   <button style={st.actBtn} onClick={() => setViewQuote(q)} title="View"><MdVisibility size={16} /></button>
                   {canUpdate && q.isEditable && <button style={st.actBtn} onClick={() => { setEditQuote(q); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
                   {canPrintQuote(q) && <button style={st.actBtn} onClick={() => handlePrint(q)} title="Print"><MdPrint size={16} /></button>}
+                  {canPrintQuote(q) && <button style={{ ...st.actBtn, opacity: exportingId === q.id ? 0.5 : 1 }} onClick={() => handleExportPdf(q)} disabled={!!exportingId} title="Download PDF"><MdPictureAsPdf size={16} /></button>}
                   {canConvert && q.status !== "Accepted" && <button style={{ ...st.actBtn, color: colors.teal }} onClick={() => handleConvert(q)} title="Convert to Sales Order"><MdSwapHoriz size={16} /></button>}
                   {canDelete && <button style={{ ...st.actBtn, color: "#dc3545" }} onClick={() => handleDelete(q)} title="Delete"><MdDelete size={16} /></button>}
                 </div>

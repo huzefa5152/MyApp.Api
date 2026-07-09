@@ -159,6 +159,86 @@ namespace MyApp.Api.Services.Implementations
             return pb == null ? null : ToDto(pb);
         }
 
+        public async Task<PrintPurchaseBillDto?> GetPrintDataAsync(int id)
+        {
+            var pb = await _context.PurchaseBills
+                .AsNoTracking()
+                .Include(p => p.Company)
+                .Include(p => p.Supplier)
+                .Include(p => p.Items)
+                    .ThenInclude(pi => pi.ItemType)
+                .Include(p => p.Items)
+                    .ThenInclude(pi => pi.SourceLines)
+                        .ThenInclude(sl => sl.InvoiceItem!)
+                            .ThenInclude(ii => ii.Invoice)
+                .Include(p => p.Division)
+                .FirstOrDefaultAsync(p => p.Id == id);
+            if (pb == null) return null;
+
+            var grNumbers = await _context.GoodsReceipts
+                .AsNoTracking()
+                .Where(g => g.PurchaseBillId == id)
+                .OrderBy(g => g.GoodsReceiptNumber)
+                .Select(g => g.GoodsReceiptNumber)
+                .ToListAsync();
+
+            var sNo = 0;
+            return new PrintPurchaseBillDto
+            {
+                CompanyBrandName = pb.Company?.BrandName ?? pb.Company?.Name ?? "",
+                CompanyLogoPath = pb.Company?.LogoPath,
+                CompanyAddress = pb.Company?.FullAddress,
+                CompanyPhone = pb.Company?.Phone,
+                CompanyNTN = pb.Company?.NTN,
+                CompanySTRN = pb.Company?.STRN,
+                DivisionName = pb.Division?.Name,
+                DivisionBrandName = pb.Division?.BrandName,
+                DivisionLogoPath = pb.Division?.LogoPath,
+                DivisionAddress = pb.Division?.FullAddress,
+                DivisionPhone = pb.Division?.Phone,
+                DivisionNTN = pb.Division?.NTN,
+                DivisionSTRN = pb.Division?.STRN,
+                DivisionEmail = pb.Division?.Email,
+                SupplierName = pb.Supplier?.Name ?? "",
+                SupplierAddress = pb.Supplier?.Address,
+                SupplierPhone = pb.Supplier?.Phone,
+                SupplierNTN = pb.Supplier?.NTN,
+                SupplierSTRN = pb.Supplier?.STRN,
+                PurchaseBillNumber = pb.PurchaseBillNumber,
+                Date = pb.Date,
+                SupplierBillNumber = pb.SupplierBillNumber,
+                SupplierIRN = pb.SupplierIRN,
+                PaymentTerms = pb.PaymentTerms,
+                DueDate = pb.DueDate,
+                GoodsReceiptNumbers = grNumbers,
+                LinkedSaleBillNumbers = pb.Items?
+                    .SelectMany(i => i.SourceLines ?? new List<PurchaseItemSourceLine>())
+                    .Where(sl => sl.InvoiceItem?.Invoice != null)
+                    .Select(sl => sl.InvoiceItem!.Invoice!.InvoiceNumber)
+                    .Distinct()
+                    .OrderBy(n => n)
+                    .ToList() ?? new(),
+                Subtotal = pb.Subtotal,
+                GSTRate = pb.GSTRate,
+                GSTAmount = pb.GSTAmount,
+                // Whole-rupee display total in sync with the in-words line —
+                // same print-only transformation as PrintBillDto.
+                GrandTotal = NumberToWordsConverter.RoundForDisplay(pb.GrandTotal),
+                AmountInWords = NumberToWordsConverter.Convert(pb.GrandTotal),
+                Items = pb.Items?.Select(i => new PrintPurchaseBillItemDto
+                {
+                    SNo = ++sNo,
+                    ItemTypeName = i.ItemType?.Name ?? i.ItemTypeName,
+                    Description = i.Description,
+                    Quantity = i.Quantity,
+                    UOM = i.UOM,
+                    UnitPrice = i.UnitPrice,
+                    LineTotal = i.LineTotal,
+                    HSCode = i.HSCode,
+                }).ToList() ?? new(),
+            };
+        }
+
         public async Task<PurchaseBillDto?> SetDueDateAsync(int id, DateTime? dueDate)
         {
             var pb = await _context.PurchaseBills

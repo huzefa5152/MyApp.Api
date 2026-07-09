@@ -225,9 +225,11 @@ def check_phase_c() -> None:
         flags=re.DOTALL)
     record(phase, "C13 Polly Retry.ShouldHandle returns false for POST", ok, where)
 
-    # C14 — stock availability wired into invoice save
+    # C14 — stock availability wired into invoice save. The Inventory V2
+    # refactor (2026-07-07) renamed the argument from dto.CompanyId to a
+    # companyId local — accept either spelling, the guard is what matters.
     ok, where = grep(["Services/Implementations/InvoiceService.cs"],
-        r"_stock\.CheckAvailabilityAsync\(dto\.CompanyId, requirements\)")
+        r"_stock\.CheckAvailabilityAsync\((dto\.CompanyId|companyId), requirements\)")
     record(phase, "C14 InvoiceService invokes CheckAvailabilityAsync on save", ok, where)
 
     # M2 — Purchase bill edit reconciles stock by DELTA (2026-07-07).

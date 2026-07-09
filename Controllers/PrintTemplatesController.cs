@@ -21,7 +21,7 @@ namespace MyApp.Api.Controllers
     // carry [AuthorizeCompany]; id-based actions load the row and assert access manually.
     public class PrintTemplatesController : ControllerBase
     {
-        private static readonly string[] ValidTypes = { "Challan", "Bill", "TaxInvoice", "SalesQuote", "SalesOrder" };
+        private static readonly string[] ValidTypes = PrintTemplateTypes.All;
 
         private readonly IPrintTemplateRepository _repo;
         private readonly ICompanyAccessGuard _access;
@@ -115,7 +115,7 @@ namespace MyApp.Api.Controllers
         public async Task<IActionResult> Upsert(int companyId, string templateType, [FromBody] UpsertPrintTemplateDto dto)
         {
             if (!ValidTypes.Contains(templateType))
-                return BadRequest(new { error = "Invalid template type. Use: Challan, Bill, TaxInvoice, SalesQuote, or SalesOrder" });
+                return BadRequest(new { error = $"Invalid template type. Use one of: {PrintTemplateTypes.AllForDisplay}" });
 
             // Division RBAC: this writes the company-level default — restricted
             // users may not overwrite it (write-assert rejects null, policy D2).

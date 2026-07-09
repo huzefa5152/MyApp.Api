@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdEdit, MdDelete, MdLocalShipping, MdUploadFile, MdVisibility, MdReceiptLong } from "react-icons/md";
+import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdUploadFile, MdVisibility, MdReceiptLong } from "react-icons/md";
 import SalesOrderForm from "../Components/SalesOrderForm";
 import CreateChallanFromOrderModal from "../Components/CreateChallanFromOrderModal";
 import SalesOrderDetailModal from "../Components/SalesOrderDetailModal";
@@ -12,7 +12,10 @@ import {
 import { getTemplate } from "../api/printTemplateApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
+import { exportToPdf } from "../utils/exportUtils";
 import { defaultOrderTemplate } from "../utils/salesDocTemplates";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { richTextToPlain } from "../utils/richText";
 import { dropdownStyles } from "../theme";
 import DivisionSelect from "../Components/DivisionSelect";
@@ -43,7 +46,11 @@ export default function SalesOrderPage() {
   const canBill = has("bills.manage.create");
   const canImportPo = canCreate && has("poformats.import.create");
 
+  // Shared template-picker state (dropdown + Print/PDF resolution).
+  const tplPicker = usePrintTemplates("SalesOrder");
+
   const [orders, setOrders] = useState([]);
+  const [exportingId, setExportingId] = useState(null);
   const [showImport, setShowImport] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -113,17 +120,41 @@ export default function SalesOrderPage() {
     catch (err) { notify(err.response?.data?.error || "Failed to delete.", "error"); }
   };
 
+  // Resolve the template for an order: explicit dropdown pick, else the
+  // company default from the loaded list; if the list couldn't load (no
+  // template perm / fetch error) fall back to the legacy per-click default
+  // fetch, and finally to the built-in template.
+  const resolveOrderTemplate = async (o) => {
+    const picked = tplPicker.resolveTemplate(o);
+    if (picked?.htmlContent) return picked.htmlContent;
+    if (!tplPicker.templatesLoaded) {
+      try { const res = await getTemplate(selectedCompany.id, "SalesOrder"); if (res.data?.htmlContent) return res.data.htmlContent; } catch { /* default */ }
+    }
+    return defaultOrderTemplate;
+  };
+
   const handlePrint = async (o) => {
     const w = window.open("", "_blank");
     if (!w) { notify("Popup blocked. Allow popups for this site.", "warning"); return; }
     w.document.write("<p>Loading order...</p>");
     try {
       const { data } = await getSalesOrderPrintData(o.id);
-      let template = defaultOrderTemplate;
-      try { const res = await getTemplate(selectedCompany.id, "SalesOrder"); if (res.data?.htmlContent) template = res.data.htmlContent; } catch { /* default */ }
+      const template = await resolveOrderTemplate(o);
       const html = mergeTemplate(template, data);
       writeAndPrint(w, html);
     } catch { w.close(); notify("Failed to load print data.", "error"); }
+  };
+
+  const handleExportPdf = async (o) => {
+    if (exportingId) return;
+    setExportingId(o.id);
+    try {
+      const { data } = await getSalesOrderPrintData(o.id);
+      const template = await resolveOrderTemplate(o);
+      const html = mergeTemplate(template, data);
+      await exportToPdf(html, `SO # ${o.salesOrderNumber} ${o.clientName}`);
+    } catch { notify("Failed to export PDF.", "error"); }
+    finally { setExportingId(null); }
   };
 
   const onChallanCreated = (challan) => {
@@ -197,6 +228,7 @@ export default function SalesOrderPage() {
                 <option value="">All Status</option>
                 {["Open", "Closed", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}
               </select>
+              <PrintTemplateSelect picker={tplPicker} />
             </div>
           )}
         </>
@@ -247,6 +279,7 @@ export default function SalesOrderPage() {
                     {canDeliver && <button style={st.deliverBtn} onClick={() => setDeliverOrder(o)}><MdLocalShipping size={15} /> Deliver</button>}
                     {canUpdate && o.isEditable && <button style={st.actBtn} onClick={() => { setEditOrder(o); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
                     {canPrint && <button style={st.actBtn} onClick={() => handlePrint(o)} title="Print"><MdPrint size={16} /></button>}
+                    {canPrint && <button style={{ ...st.actBtn, opacity: exportingId === o.id ? 0.5 : 1 }} onClick={() => handleExportPdf(o)} disabled={!!exportingId} title="Download PDF"><MdPictureAsPdf size={16} /></button>}
                     {canBill && o.billableChallanCount > 0 && <button style={st.billBtn} onClick={() => handleGenerateBill(o)} title="Generate bill from delivered challans"><MdReceiptLong size={15} /> Bill</button>}
                     {canUpdate && o.status !== "Cancelled" && (
                       <select style={st.statusSelect} value={o.status} onChange={(e) => handleStatus(o, e.target.value)} title="Set status">
@@ -280,7 +313,7 @@ export default function SalesOrderPage() {
           order={viewOrder}
           canDeliver={canMakeChallan && viewOrder.status === "Open" && viewOrder.fulfillmentStatus !== "Fully Delivered" && viewOrder.fulfillmentStatus !== "Over Delivered"}
           onClose={() => setViewOrder(null)}
-          onPrint={handlePrint}
+          onPrint={canPrint ? handlePrint : undefined}
           onEdit={canUpdate ? (o) => { setEditOrder(o); setShowForm(true); } : undefined}
           onDeliver={canMakeChallan ? (o) => setDeliverOrder(o) : undefined}
           onGenerateBill={canBill ? (o) => handleGenerateBill(o) : undefined}

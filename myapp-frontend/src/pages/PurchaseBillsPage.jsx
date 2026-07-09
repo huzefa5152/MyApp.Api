@@ -1,7 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight, MdReceipt, MdClose, MdPayments, MdAssignment } from "react-icons/md";
-import { getPurchaseBillsByCompanyPaged, deletePurchaseBill } from "../api/purchaseBillApi";
+import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight, MdReceipt, MdClose, MdPayments, MdAssignment, MdPrint, MdPictureAsPdf } from "react-icons/md";
+import { getPurchaseBillsByCompanyPaged, deletePurchaseBill, getPurchaseBillPrintData } from "../api/purchaseBillApi";
+import { mergeTemplate } from "../utils/templateEngine";
+import { writeAndPrint } from "../utils/printDocument";
+import { exportToPdf } from "../utils/exportUtils";
+import { defaultPurchaseBillTemplate } from "../utils/purchaseNoteDocTemplates";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getAwaitingPurchase } from "../api/invoiceApi";
 import { getOpenSalesOrdersByCompany } from "../api/salesOrderApi";
@@ -46,6 +52,9 @@ export default function PurchaseBillsPage() {
   const canCreate = has("purchasebills.manage.create");
   const canUpdate = has("purchasebills.manage.update");
   const canDelete = has("purchasebills.manage.delete");
+  const canPrint = has("purchasebills.print.view");
+  // Shared template-picker state (dropdown + Print/PDF resolution).
+  const tplPicker = usePrintTemplates("PurchaseBill");
   // Shortcut to record a payment (money out) straight from a purchase bill —
   // opens the PaymentForm pre-filled with this supplier + this bill.
   const canRecordPayment = has("accounting.payments.create");
@@ -230,6 +239,34 @@ export default function PurchaseBillsPage() {
     }
   };
 
+  const [exportingId, setExportingId] = useState(null);
+
+  // Explicit dropdown pick wins; else the company default; else the built-in.
+  const resolveBillTemplate = (b) =>
+    tplPicker.resolveTemplate(b)?.htmlContent || defaultPurchaseBillTemplate;
+
+  const handlePrint = async (b) => {
+    const w = window.open("", "_blank");
+    if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
+    w.document.write("<p>Loading purchase bill...</p>");
+    try {
+      const { data } = await getPurchaseBillPrintData(b.id);
+      const html = mergeTemplate(resolveBillTemplate(b), data);
+      writeAndPrint(w, html);
+    } catch { w.close(); notify("Failed to load print data.", "error"); }
+  };
+
+  const handleExportPdf = async (b) => {
+    if (exportingId) return;
+    setExportingId(b.id);
+    try {
+      const { data } = await getPurchaseBillPrintData(b.id);
+      const html = mergeTemplate(resolveBillTemplate(b), data);
+      await exportToPdf(html, `PB # ${data.purchaseBillNumber} ${data.supplierName}`);
+    } catch { notify("Failed to export PDF.", "error"); }
+    finally { setExportingId(null); }
+  };
+
   return (
     <div>
       <div style={styles.pageHeader}>
@@ -316,6 +353,7 @@ export default function PurchaseBillsPage() {
                 <input type="date" className="filter-date-input" value={dateTo} onChange={onFilterChange(setDateTo)} title="To" />
               </div>
               {hasFilters && <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>}
+              <PrintTemplateSelect picker={tplPicker} />
               {isBigScreen && (
                 <div style={{ marginLeft: "auto" }}>
                   <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Purchase bills view mode" />
@@ -338,12 +376,15 @@ export default function PurchaseBillsPage() {
               {viewMode === "table" ? (
                 <PurchaseBillTable
                   bills={bills}
-                  perms={{ canUpdate, canDelete, canRecordPayment, canViewPayments }}
+                  perms={{ canUpdate, canDelete, canRecordPayment, canViewPayments, canPrint }}
                   onView={(b) => { setEditingId(b.id); setViewOnly(true); setShowForm(true); }}
                   onEdit={(b) => { setEditingId(b.id); setViewOnly(false); setShowForm(true); }}
                   onDelete={handleDelete}
                   onRecordPayment={(b) => setPaymentPreset({ contactId: b.supplierId, documentId: b.id, divisionId: b.divisionId })}
                   onShowPayments={(b) => setPaymentHistoryDoc(b)}
+                  onPrint={handlePrint}
+                  onExportPdf={handleExportPdf}
+                  exportingId={exportingId}
                 />
               ) : (
               <div className="card-grid">
@@ -389,6 +430,16 @@ export default function PurchaseBillsPage() {
                         <button style={btnView} onClick={() => { setEditingId(b.id); setViewOnly(true); setShowForm(true); }}>
                           <MdVisibility size={14} /> View
                         </button>
+                        {canPrint && (
+                          <button style={btnPrint} onClick={() => handlePrint(b)} title="Print purchase bill">
+                            <MdPrint size={14} /> Print
+                          </button>
+                        )}
+                        {canPrint && (
+                          <button style={{ ...btnPdf, opacity: exportingId === b.id ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportPdf(b)} title="Download PDF">
+                            <MdPictureAsPdf size={14} /> PDF
+                          </button>
+                        )}
                         {canRecordPayment && (
                           <button style={btnPayment} onClick={() => setPaymentPreset({ contactId: b.supplierId, documentId: b.id, divisionId: b.divisionId })} title="Record a payment (money paid) against this bill">
                             <MdPayments size={14} /> Payment
@@ -682,6 +733,8 @@ const styles = {
 };
 const baseBtn = { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer" };
 const btnView = { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" };
+const btnPrint = { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0", border: "1px solid #b39ddb" };
+const btnPdf = { ...baseBtn, backgroundColor: "#fce4ec", color: "#ad1457", border: "1px solid #f48fb1" };
 const btnPayment = { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20", border: "1px solid #a5d6a7" };
 const btnEdit = { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" };
 const btnDelete = { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" };

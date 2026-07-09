@@ -2520,6 +2520,17 @@ namespace MyApp.Api.Services.Implementations
                 // pulled https://quickchart.io which broke under strict CSP /
                 // air-gapped networks and leaked the IRN to a third party).
                 FbrQrPngDataUrl = FbrQrCodeGenerator.BuildVerifyQrDataUrl(inv.FbrIRN),
+                // Credit/Debit note context — null on ordinary sales invoices,
+                // so existing TaxInvoice templates see no change. Note rows
+                // (NoteKind 1 = Debit, 2 = Credit) print through their own
+                // CreditNote/DebitNote template types which bind these fields.
+                NoteKindLabel = inv.NoteKind == 1 ? "Debit Note"
+                              : inv.NoteKind == 2 ? "Credit Note" : null,
+                OriginalInvoiceNumber = inv.OriginalInvoice?.InvoiceNumber,
+                OriginalInvoiceDate = inv.OriginalInvoice?.Date,
+                OriginalInvoiceRefIRN = inv.OriginalInvoiceRefIRN,
+                NoteReason = inv.NoteKind != 0 ? inv.NoteReason : null,
+                NoteReasonRemarks = inv.NoteKind != 0 ? inv.NoteReasonRemarks : null,
                 // 2026-05-29: Tax Invoice print reads the
                 // InvoiceItemAdjustment overlay for Quantity / UnitPrice /
                 // LineTotal — same fallback shape FbrService uses when it

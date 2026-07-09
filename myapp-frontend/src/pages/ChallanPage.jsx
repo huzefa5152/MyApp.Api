@@ -22,6 +22,8 @@ import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplate
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
 import { defaultChallanTemplate } from "../utils/defaultTemplates";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { renderRichTextHtml } from "../utils/richText";
 import { exportToPdf } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
@@ -51,6 +53,8 @@ export default function ChallanPage() {
   const canUpdate = has("challans.manage.update");
   const canDelete = has("challans.manage.delete");
   const canPrint = has("challans.print.view");
+  // Shared template-picker state (dropdown + Print/PDF resolution).
+  const tplPicker = usePrintTemplates("Challan");
   // Client-filter dropdown calls GET /api/clients/company/{id} which is
   // gated by clients.manage.view. View-only roles (e.g. tax consultant
   // with just challans.list.view) would 403 on that call AND see an
@@ -198,6 +202,21 @@ export default function ChallanPage() {
     }
   };
 
+  // Explicit dropdown pick wins; else the company default from the loaded
+  // list; if the list couldn't load, the legacy per-click default fetch;
+  // finally the built-in template.
+  const resolveChallanTemplate = async (challan) => {
+    const picked = tplPicker.resolveTemplate(challan);
+    if (picked?.htmlContent) return picked.htmlContent;
+    if (!tplPicker.templatesLoaded) {
+      try {
+        const res = await getTemplate(selectedCompany.id, "Challan");
+        if (res.data?.htmlContent) return res.data.htmlContent;
+      } catch { /* use default */ }
+    }
+    return defaultChallanTemplate;
+  };
+
   const handlePrint = async (challan) => {
     if (!selectedCompany) { notify("No company selected.", "error"); return; }
     const w = window.open("", "_blank");
@@ -205,11 +224,7 @@ export default function ChallanPage() {
     w.document.write("<p>Loading challan...</p>");
     try {
       const { data } = await getChallanPrintData(challan.id);
-      let template = defaultChallanTemplate;
-      try {
-        const res = await getTemplate(selectedCompany.id, "Challan");
-        if (res.data?.htmlContent) template = res.data.htmlContent;
-      } catch { /* use default */ }
+      const template = await resolveChallanTemplate(challan);
       const html = mergeTemplate(template, data);
       writeAndPrint(w, html);
     } catch {
@@ -273,11 +288,7 @@ export default function ChallanPage() {
     setExportingId(challan.id + "-pdf");
     try {
       const { data } = await getChallanPrintData(challan.id);
-      let template = defaultChallanTemplate;
-      try {
-        const res = await getTemplate(selectedCompany.id, "Challan");
-        if (res.data?.htmlContent) template = res.data.htmlContent;
-      } catch { /* use default */ }
+      const template = await resolveChallanTemplate(challan);
       const html = mergeTemplate(template, data);
       const name = `DC # ${data.challanNumber} ${data.clientName}`;
       await exportToPdf(html, name);
@@ -399,6 +410,7 @@ export default function ChallanPage() {
               {hasFilters && (
                 <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>
               )}
+              <PrintTemplateSelect picker={tplPicker} />
               {isBigScreen && (
                 <div style={{ marginLeft: "auto" }}>
                   <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Delivery challan view mode" />

@@ -1,8 +1,8 @@
-import { MdVisibility, MdEdit, MdDelete } from "react-icons/md";
+import { MdVisibility, MdEdit, MdDelete, MdPrint, MdPictureAsPdf } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 
-export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onDelete }) {
+export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onDelete, onPrint, onExportPdf, exportingId }) {
   const columns = [
     {
       key: "goodsReceiptNumber",
@@ -57,6 +57,16 @@ export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onD
       <button style={btn.view} onClick={() => onView?.(g)} title="View">
         <MdVisibility size={14} />
       </button>
+      {perms.canPrint && onPrint && (
+        <button style={btn.print} onClick={() => onPrint(g)} title="Print goods receipt">
+          <MdPrint size={14} />
+        </button>
+      )}
+      {perms.canPrint && onExportPdf && (
+        <button style={{ ...btn.pdf, opacity: exportingId === g.id ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => onExportPdf(g)} title="Download PDF">
+          <MdPictureAsPdf size={14} />
+        </button>
+      )}
       {perms.canUpdate && (
         <button style={btn.edit} onClick={() => onEdit?.(g)} title="Edit">
           <MdEdit size={14} />
@@ -96,6 +106,8 @@ const baseBtn = {
 };
 const btn = {
   view:   { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" },
+  print:  { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0", border: "1px solid #b39ddb" },
+  pdf:    { ...baseBtn, backgroundColor: "#fce4ec", color: "#ad1457", border: "1px solid #f48fb1" },
   edit:   { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
   delete: { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
 };

@@ -1,4 +1,4 @@
-import { MdVisibility, MdEdit, MdDelete, MdPayments } from "react-icons/md";
+import { MdVisibility, MdEdit, MdDelete, MdPayments, MdPrint, MdPictureAsPdf } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 
@@ -11,7 +11,7 @@ function paymentStatusBadge(b) {
   return <StatusBadge tone="neutral">Unpaid</StatusBadge>;
 }
 
-export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete, onRecordPayment, onShowPayments }) {
+export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete, onRecordPayment, onShowPayments, onPrint, onExportPdf, exportingId }) {
   const columns = [
     {
       key: "purchaseBillNumber",
@@ -97,6 +97,16 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       <button style={btn.view} onClick={() => onView?.(b)} title="View">
         <MdVisibility size={14} />
       </button>
+      {perms.canPrint && onPrint && (
+        <button style={btn.print} onClick={() => onPrint(b)} title="Print purchase bill">
+          <MdPrint size={14} />
+        </button>
+      )}
+      {perms.canPrint && onExportPdf && (
+        <button style={{ ...btn.pdf, opacity: exportingId === b.id ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => onExportPdf(b)} title="Download PDF">
+          <MdPictureAsPdf size={14} />
+        </button>
+      )}
       {perms.canRecordPayment && (
         <button style={btn.payment} onClick={() => onRecordPayment?.(b)} title="Record a payment (money paid) against this bill">
           <MdPayments size={14} />
@@ -144,6 +154,8 @@ const baseBtn = {
 };
 const btn = {
   view:    { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" },
+  print:   { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0", border: "1px solid #b39ddb" },
+  pdf:     { ...baseBtn, backgroundColor: "#fce4ec", color: "#ad1457", border: "1px solid #f48fb1" },
   payment: { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20", border: "1px solid #a5d6a7" },
   edit:   { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
   delete: { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },

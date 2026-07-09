@@ -10,7 +10,7 @@ namespace MyApp.Api.Models
         // no divisions only ever has company-level (null) templates.
         public int? DivisionId { get; set; }
 
-        public string TemplateType { get; set; } = ""; // Challan, Bill, TaxInvoice, SalesQuote, SalesOrder
+        public string TemplateType { get; set; } = ""; // See Helpers/PrintTemplateTypes.All (Challan, Bill, TaxInvoice, SalesQuote, SalesOrder, DebitNote, CreditNote, PurchaseBill, GoodsReceipt)
 
         // Operator-facing name distinguishing multiple templates of the same type
         // within one scope (e.g. "Default", "Modern Letterhead").

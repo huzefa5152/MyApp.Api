@@ -15,6 +15,10 @@ import { billStarters } from "./starters/bill";
 import { taxInvoiceStarters } from "./starters/taxInvoice";
 import { quoteStarters } from "./starters/quote";
 import { orderStarters } from "./starters/order";
+import { creditNoteStarters } from "./starters/creditNote";
+import { debitNoteStarters } from "./starters/debitNote";
+import { purchaseBillStarters } from "./starters/purchaseBill";
+import { goodsReceiptStarters } from "./starters/goodsReceipt";
 
 export const STARTER_TEMPLATES = [
   ...challanStarters,
@@ -22,4 +26,8 @@ export const STARTER_TEMPLATES = [
   ...taxInvoiceStarters,
   ...quoteStarters,
   ...orderStarters,
+  ...creditNoteStarters,
+  ...debitNoteStarters,
+  ...purchaseBillStarters,
+  ...goodsReceiptStarters,
 ];
