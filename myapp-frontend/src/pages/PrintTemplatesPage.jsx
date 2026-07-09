@@ -20,7 +20,7 @@ import {
 } from "../utils/templateSampleData";
 import StarterGallery from "../Components/templateEditor/StarterGallery";
 import ApplyStarterModal from "../Components/templateEditor/ApplyStarterModal";
-import PreviewPane from "../Components/templateEditor/PreviewPane";
+import A4PreviewFrame from "../Components/templateEditor/A4PreviewFrame";
 
 const colors = { blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBorder: "#d0d7e2" };
 const fmtDate = (d) => { if (!d) return ""; const dt = new Date(d); const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return `${String(dt.getDate()).padStart(2,"0")}-${m[dt.getMonth()]}-${String(dt.getFullYear()).slice(-2)}`; };
@@ -54,6 +54,7 @@ export default function PrintTemplatesPage() {
 
   const [applyTarget, setApplyTarget] = useState(null); // template to apply a starter onto
   const [previewTarget, setPreviewTarget] = useState(null); // template to preview
+  const [starterToCreate, setStarterToCreate] = useState(null); // starter awaiting a scope choice
   const excelUploadRef = useRef(null);
   const excelTargetIdRef = useRef(null);
 
@@ -141,11 +142,18 @@ export default function PrintTemplatesPage() {
   };
 
   // ── Starter-tab: create a NEW template from a starter ──
-  const createFromStarter = async (starter) => {
+  // If the company has divisions, ask whether the new template is company-wide
+  // or scoped to a division before creating; otherwise create company-wide.
+  const onStarterChosen = (starter) => {
+    if (divisions.length > 0) setStarterToCreate(starter);
+    else createFromStarter(starter, null);
+  };
+  const createFromStarter = async (starter, divisionId) => {
+    setStarterToCreate(null);
     setBusy(true);
     try {
       const { data } = await createTemplate(selectedCompany.id, {
-        templateType: starter.type, divisionId: null,
+        templateType: starter.type, divisionId: divisionId ?? null,
         name: starter.name, htmlContent: starter.html, isDefault: false,
       });
       notify(`Created "${data.name}" from starter. Opening editor…`, "success");
@@ -292,7 +300,7 @@ export default function PrintTemplatesPage() {
 
           {/* ── Tab: Starter Templates ── */}
           {tab === "starter" && (
-            <StarterGallery embedded selectLabel="Create template" onSelect={createFromStarter} />
+            <StarterGallery embedded selectLabel="Create template" onSelect={onStarterChosen} />
           )}
 
           {/* ── Tab: Excel Templates ── */}
@@ -346,6 +354,35 @@ export default function PrintTemplatesPage() {
         />
       )}
 
+      {/* Scope chooser for a new template created from a starter */}
+      {starterToCreate && (
+        <div style={st.scopeOverlay} onClick={() => setStarterToCreate(null)}>
+          <div style={st.scopeModal} onClick={(e) => e.stopPropagation()}>
+            <div style={st.scopeHead}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: colors.textPrimary }}>Create “{starterToCreate.name}”</h3>
+                <p style={{ margin: "0.2rem 0 0", fontSize: "0.82rem", color: colors.textSecondary }}>
+                  Where should this {TEMPLATE_TYPE_LABEL[starterToCreate.type] || starterToCreate.type} template live?
+                </p>
+              </div>
+              <button style={st.closeBtn} onClick={() => setStarterToCreate(null)} aria-label="Close"><MdClose size={20} /></button>
+            </div>
+            <div style={st.scopeList}>
+              <button style={st.scopeBtn} disabled={busy} onClick={() => createFromStarter(starterToCreate, null)}>
+                <MdBusiness size={18} color={colors.blue} />
+                <span><strong>Company-wide</strong><br /><span style={st.scopeHintTxt}>Used across {selectedCompany?.brandName || selectedCompany?.name} unless a division overrides it</span></span>
+              </button>
+              {divisions.map((d) => (
+                <button key={d.id} style={st.scopeBtn} disabled={busy} onClick={() => createFromStarter(starterToCreate, d.id)}>
+                  <MdDescription size={18} color={colors.teal} />
+                  <span><strong>{d.name}</strong><br /><span style={st.scopeHintTxt}>Only for the {d.name} division</span></span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Full preview */}
       {previewTarget && (
         <div style={st.previewOverlay} onClick={() => setPreviewTarget(null)}>
@@ -355,12 +392,12 @@ export default function PrintTemplatesPage() {
               <button style={st.closeBtn} onClick={() => setPreviewTarget(null)} aria-label="Close"><MdClose size={20} /></button>
             </div>
             <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
-              <PreviewPane
+              <A4PreviewFrame
                 html={buildTemplatePreviewHtml(previewTarget.templateType, previewTarget.htmlContent || "", {
                   company: selectedCompany,
                   division: previewTarget.divisionId != null ? divisionById[previewTarget.divisionId] : null,
                 })}
-                isMobile={false}
+                title={`Preview of ${previewTarget.name}`}
               />
             </div>
           </div>
@@ -407,4 +444,10 @@ const st = {
   previewModal: { background: "#e8e8e8", borderRadius: 14, width: "min(860px, 96vw)", height: "94vh", display: "flex", flexDirection: "column", overflow: "hidden" },
   previewHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", padding: "0.7rem 1rem", background: "#fff", borderBottom: `1px solid ${colors.cardBorder}` },
   closeBtn: { border: "none", background: "transparent", cursor: "pointer", color: "#8a94a6", padding: 4, display: "inline-flex" },
+  scopeOverlay: { position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1320, padding: "1rem" },
+  scopeModal: { background: "#fff", borderRadius: 14, width: "min(460px, 96vw)", maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" },
+  scopeHead: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "1rem 1.1rem 0.75rem", borderBottom: `1px solid ${colors.cardBorder}` },
+  scopeList: { display: "flex", flexDirection: "column", gap: "0.5rem", padding: "0.9rem 1.1rem", overflow: "auto" },
+  scopeBtn: { display: "flex", alignItems: "center", gap: "0.6rem", textAlign: "left", border: `1px solid ${colors.inputBorder}`, background: "#fff", borderRadius: 10, padding: "0.7rem 0.85rem", cursor: "pointer", fontSize: "0.88rem", color: colors.textPrimary },
+  scopeHintTxt: { fontSize: "0.74rem", color: colors.textSecondary, fontWeight: 400 },
 };

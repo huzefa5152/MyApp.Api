@@ -3,15 +3,26 @@ import { MdSearch, MdClose, MdVisibility, MdCheckCircle } from "react-icons/md";
 import { STARTER_TEMPLATES } from "../../utils/starterTemplates";
 import { TEMPLATE_TYPES, TEMPLATE_TYPE_LABEL, buildTemplatePreviewHtml } from "../../utils/templateSampleData";
 import { useCompany } from "../../contexts/CompanyContext";
+import A4PreviewFrame from "./A4PreviewFrame";
 
 const PREVIEW_H = 200;
-const PREVIEW_SCALE = 0.34;
+const PREVIEW_ZOOM = 0.30; // shrink the A4 page INSIDE the frame to fit the card
 
-// A scaled, non-interactive live render of a starter (merged with sample data).
-// Wrapped so the A4 page shrinks into a thumbnail box without clipping oddly.
+// Inject a zoom into the merged document so the whole A4 page fits the card.
+// Scaling happens INSIDE the iframe (on <html>), leaving the iframe ELEMENT at
+// natural size — so it paints on mount like any normal frame. Scaling the
+// iframe element itself (CSS transform/zoom) is a Chromium compositor scale
+// that stays blank until a reflow is forced, which is why thumbnails used to
+// appear only after a search keystroke.
+function injectZoom(html) {
+  const tag = `<style>html{zoom:${PREVIEW_ZOOM};}body{margin:0;}</style>`;
+  return html.includes("</head>") ? html.replace("</head>", tag + "</head>") : tag + html;
+}
+
+// A non-interactive live render of a starter merged with sample data.
 function LivePreview({ starter, company }) {
   const html = useMemo(
-    () => buildTemplatePreviewHtml(starter.type, starter.html, { company }),
+    () => injectZoom(buildTemplatePreviewHtml(starter.type, starter.html, { company })),
     [starter, company]
   );
   return (
@@ -23,13 +34,7 @@ function LivePreview({ starter, company }) {
         aria-hidden="true"
         tabIndex={-1}
         scrolling="no"
-        style={{
-          width: `${100 / PREVIEW_SCALE}%`,
-          height: `${PREVIEW_H / PREVIEW_SCALE}px`,
-          border: "none",
-          transform: `scale(${PREVIEW_SCALE})`,
-          transformOrigin: "top left",
-        }}
+        style={{ width: "100%", height: PREVIEW_H, border: "none", display: "block", background: "#fff" }}
       />
     </div>
   );
@@ -168,11 +173,9 @@ export default function StarterGallery({ lockType = null, selectLabel = "Use thi
             <button style={s.closeBtn} onClick={() => setPreviewStarter(null)} aria-label="Close preview"><MdClose size={20} /></button>
           </div>
         </div>
-        <iframe
-          srcDoc={buildTemplatePreviewHtml(previewStarter.type, previewStarter.html, { company: selectedCompany })}
+        <A4PreviewFrame
+          html={buildTemplatePreviewHtml(previewStarter.type, previewStarter.html, { company: selectedCompany })}
           title="Starter preview"
-          sandbox="allow-same-origin"
-          style={s.previewFrame}
         />
       </div>
     </div>
@@ -214,6 +217,11 @@ const s = {
   grid: {
     display: "grid", gap: "0.9rem", padding: "1rem 1.25rem", overflow: "auto",
     gridTemplateColumns: "repeat(auto-fill, minmax(min(240px, 100%), 1fr))",
+    // Size each row to its tallest card. Without this, the grid sits inside a
+    // height-constrained flex column (the modal / embedded wrapper) and its
+    // implicit "auto" rows collapse to min-content — the card's iframe + flex
+    // children can all shrink to ~0, clipping the name and the select button.
+    gridAutoRows: "max-content",
   },
   empty: { gridColumn: "1 / -1", textAlign: "center", padding: "2.5rem", color: "#5f6d7e", fontSize: "0.9rem" },
   card: { border: "1px solid #e6eaf0", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column", background: "#fff", transition: "box-shadow .15s, transform .15s" },
@@ -234,7 +242,6 @@ const s = {
   },
   useBtnSm: { display: "inline-flex", alignItems: "center", gap: "0.3rem", border: "none", background: "#0d47a1", color: "#fff", borderRadius: 8, padding: "0.4rem 0.75rem", fontSize: "0.82rem", fontWeight: 700, cursor: "pointer" },
   previewOverlay: { position: "fixed", inset: 0, background: "rgba(15,23,42,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1300, padding: "1rem" },
-  previewModal: { background: "#e8e8e8", borderRadius: 14, width: "min(860px, 96vw)", maxHeight: "94vh", display: "flex", flexDirection: "column", overflow: "hidden" },
+  previewModal: { background: "#e8e8e8", borderRadius: 14, width: "min(920px, 96vw)", height: "94vh", display: "flex", flexDirection: "column", overflow: "hidden" },
   previewHead: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.75rem 1rem", background: "#fff", borderBottom: "1px solid #eef1f6" },
-  previewFrame: { flex: 1, width: "100%", border: "none", background: "#fff" },
 };

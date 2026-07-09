@@ -120,6 +120,11 @@ export function usePrintTemplates(templateType, { divisionAware = false } = {}) 
     resolveAuto,
     resolveTemplate,
     divisionAware,
-    canChoose: canViewTemplates && templates.length > 0,
+    // Show the selector whenever the operator can view templates — even before
+    // any custom template of this type exists (it then offers just "Default",
+    // the built-in). This keeps the control consistent across every document
+    // screen; without it, a doc type with no saved templates (e.g. a fresh
+    // Goods Receipt) silently had no picker at all.
+    canChoose: canViewTemplates,
   };
 }
