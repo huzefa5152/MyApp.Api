@@ -28,6 +28,10 @@
         public int? ClientGroupId { get; set; }
         public ClientGroup? ClientGroup { get; set; }
 
+        /// <summary>Source-system key for data migration (legacy "trader:{id}"),
+        /// so the ETL is idempotent and traceable. Null for hand-entered clients.</summary>
+        public string? ExternalRef { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation

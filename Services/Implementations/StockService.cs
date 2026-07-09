@@ -26,29 +26,76 @@ namespace MyApp.Api.Services.Implementations
         }
 
         /// <summary>
-        /// True iff the ItemType has a non-empty HSCode. Un-classified
-        /// ItemTypes (no HSCode) are placeholders / drafts and live
-        /// **outside** the stock-tracking system on both the IN and OUT
-        /// side — buy or sell of an un-classified ItemType does NOT
-        /// move inventory.
+        /// Returns the subset of the supplied ItemType ids that are
+        /// stock-tracked for <paramref name="companyId"/>, per the company's
+        /// InventoryFlowVersion:
         ///
-        /// 2026-05-13: the gate was added symmetrically to prevent
-        /// "phantom inventory" where IN would record but OUT wouldn't
-        /// (or vice-versa), drifting on-hand away from physical reality.
-        /// Once the operator adds an HSCode to the ItemType, the next
-        /// invoice/purchase save starts moving inventory.
+        ///   • V1 (legacy, default): tracked iff the ItemType has a non-empty
+        ///     HSCode. Un-classified ItemTypes (no HSCode) are drafts and live
+        ///     outside stock tracking on both the IN and OUT side. This is the
+        ///     exact pre-2026-07 predicate — with no CompanyItemTypeSetting
+        ///     override rows it is byte-identical, so the pinned reflow suite
+        ///     and the two live tenants are unaffected.
+        ///   • V2 (redesign): ALL non-deleted ItemTypes are inventory (HS code
+        ///     is FBR metadata only), minus any the company marks FbrOnly.
+        ///
+        /// A per-company CompanyItemTypeSetting override wins in either version
+        /// (Tracked forces in, FbrOnly forces out). Policy is loaded here so no
+        /// caller can mis-gate by passing a mismatched company.
+        ///
+        /// 2026-05-13: the HS gate was added symmetrically to prevent phantom
+        /// inventory (IN recording while OUT didn't, or vice-versa). 2026-07:
+        /// generalised to the per-company flow version.
         /// </summary>
-        public async Task<HashSet<int>> GetStockTrackedItemTypeIdsAsync(IEnumerable<int> itemTypeIds)
+        public async Task<HashSet<int>> GetStockTrackedItemTypeIdsAsync(int companyId, IEnumerable<int> itemTypeIds)
         {
             var ids = itemTypeIds?.Where(i => i > 0).Distinct().ToList() ?? new List<int>();
             if (ids.Count == 0) return new HashSet<int>();
-            return (await _context.ItemTypes
-                .Where(it => ids.Contains(it.Id)
-                          && it.HSCode != null
-                          && it.HSCode != "")
-                .Select(it => it.Id)
-                .ToListAsync())
-                .ToHashSet();
+
+            var flowVersion = await _context.Companies
+                .Where(c => c.Id == companyId)
+                .Select(c => c.InventoryFlowVersion)
+                .FirstOrDefaultAsync(); // 0 for a missing company → V1 predicate below
+
+            // Per-company overrides (honoured by both versions). Empty for the
+            // reflow suite's ephemeral company, which is what keeps V1 identical.
+            var overrides = await _context.CompanyItemTypeSettings
+                .Where(s => s.CompanyId == companyId
+                         && ids.Contains(s.ItemTypeId)
+                         && s.Mode != InventoryItemMode.Default)
+                .Select(s => new { s.ItemTypeId, s.Mode })
+                .ToListAsync();
+            var forcedTracked = overrides.Where(o => o.Mode == InventoryItemMode.Tracked)
+                                         .Select(o => o.ItemTypeId).ToHashSet();
+            var forcedFbrOnly = overrides.Where(o => o.Mode == InventoryItemMode.FbrOnly)
+                                         .Select(o => o.ItemTypeId).ToHashSet();
+
+            HashSet<int> tracked;
+            if (flowVersion >= (byte)InventoryFlowVersion.V2Standard)
+            {
+                // V2: every non-deleted item type is inventory.
+                tracked = (await _context.ItemTypes
+                        .Where(it => ids.Contains(it.Id) && !it.IsDeleted)
+                        .Select(it => it.Id)
+                        .ToListAsync())
+                    .ToHashSet();
+            }
+            else
+            {
+                // V1: only HS-coded item types (verbatim the old query — no
+                // IsDeleted filter, so byte-identical to pre-redesign).
+                tracked = (await _context.ItemTypes
+                        .Where(it => ids.Contains(it.Id)
+                                  && it.HSCode != null
+                                  && it.HSCode != "")
+                        .Select(it => it.Id)
+                        .ToListAsync())
+                    .ToHashSet();
+            }
+
+            tracked.UnionWith(forcedTracked);
+            tracked.ExceptWith(forcedFbrOnly);
+            return tracked;
         }
 
         /// <summary>
@@ -72,7 +119,8 @@ namespace MyApp.Api.Services.Implementations
             StockMovementSourceType sourceType,
             int? sourceId,
             DateTime movementDate,
-            string? notes = null)
+            string? notes = null,
+            int? divisionId = null)
         {
             if (quantity <= 0m) return;
             if (!await IsTrackingEnabledAsync(companyId)) return;
@@ -80,6 +128,7 @@ namespace MyApp.Api.Services.Implementations
             _context.StockMovements.Add(new StockMovement
             {
                 CompanyId = companyId,
+                DivisionId = divisionId,
                 ItemTypeId = itemTypeId,
                 Direction = direction,
                 Quantity = quantity,
@@ -106,16 +155,18 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
-        public async Task<decimal> GetOnHandAsync(int companyId, int itemTypeId, DateTime? asOfDate = null)
+        public async Task<decimal> GetOnHandAsync(int companyId, int itemTypeId, DateTime? asOfDate = null,
+            HashSet<int>? allowedDivisionIds = null)
         {
-            var dict = await GetOnHandBulkAsync(companyId, new[] { itemTypeId }, asOfDate);
+            var dict = await GetOnHandBulkAsync(companyId, new[] { itemTypeId }, asOfDate, allowedDivisionIds);
             return dict.TryGetValue(itemTypeId, out var qty) ? qty : 0m;
         }
 
         public async Task<Dictionary<int, decimal>> GetOnHandBulkAcrossCompaniesAsync(
             IEnumerable<int> companyIds,
             IEnumerable<int> itemTypeIds,
-            DateTime? asOfDate = null)
+            DateTime? asOfDate = null,
+            Dictionary<int, HashSet<int>>? divisionRestrictionsByCompany = null)
         {
             var cids = companyIds?.Distinct().ToList() ?? new List<int>();
             var iids = itemTypeIds?.Distinct().ToList() ?? new List<int>();
@@ -135,6 +186,7 @@ namespace MyApp.Api.Services.Implementations
 
             // Single SQL trip each for opening balances and movements,
             // grouped by ItemTypeId across the tracked-company subset.
+            // Openings are company-level and never division-filtered (D1).
             var openingQ = _context.OpeningStockBalances
                 .Where(o => trackedCids.Contains(o.CompanyId) && iids.Contains(o.ItemTypeId));
             if (asOfDate.HasValue)
@@ -144,14 +196,40 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new { ItemTypeId = g.Key, Qty = g.Sum(o => o.Quantity) })
                 .ToDictionaryAsync(x => x.ItemTypeId, x => x.Qty);
 
-            var movQ = _context.StockMovements
-                .Where(m => trackedCids.Contains(m.CompanyId) && iids.Contains(m.ItemTypeId));
-            if (asOfDate.HasValue)
-                movQ = movQ.Where(m => m.MovementDate <= asOfDate.Value);
-            var moves = await movQ
-                .GroupBy(m => new { m.ItemTypeId, m.Direction })
-                .Select(g => new { g.Key.ItemTypeId, g.Key.Direction, Qty = g.Sum(m => m.Quantity) })
-                .ToListAsync();
+            // Movements: companies where the caller is division-restricted
+            // need a per-company division filter, which one grouped query
+            // can't express — split them out (one extra query per restricted
+            // company; the common case has zero).
+            var restrictions = divisionRestrictionsByCompany ?? new Dictionary<int, HashSet<int>>();
+            var openCids = trackedCids.Where(c => !restrictions.ContainsKey(c)).ToList();
+            var moves = new List<(int ItemTypeId, StockMovementDirection Direction, decimal Qty)>();
+
+            if (openCids.Count > 0)
+            {
+                var movQ = _context.StockMovements
+                    .Where(m => openCids.Contains(m.CompanyId) && iids.Contains(m.ItemTypeId));
+                if (asOfDate.HasValue)
+                    movQ = movQ.Where(m => m.MovementDate <= asOfDate.Value);
+                moves.AddRange((await movQ
+                    .GroupBy(m => new { m.ItemTypeId, m.Direction })
+                    .Select(g => new { g.Key.ItemTypeId, g.Key.Direction, Qty = g.Sum(m => m.Quantity) })
+                    .ToListAsync())
+                    .Select(x => (x.ItemTypeId, x.Direction, x.Qty)));
+            }
+            foreach (var cid in trackedCids.Where(restrictions.ContainsKey))
+            {
+                var allowed = restrictions[cid];
+                var movQ = _context.StockMovements
+                    .Where(m => m.CompanyId == cid && iids.Contains(m.ItemTypeId)
+                             && (m.DivisionId == null || allowed.Contains(m.DivisionId.Value)));
+                if (asOfDate.HasValue)
+                    movQ = movQ.Where(m => m.MovementDate <= asOfDate.Value);
+                moves.AddRange((await movQ
+                    .GroupBy(m => new { m.ItemTypeId, m.Direction })
+                    .Select(g => new { g.Key.ItemTypeId, g.Key.Direction, Qty = g.Sum(m => m.Quantity) })
+                    .ToListAsync())
+                    .Select(x => (x.ItemTypeId, x.Direction, x.Qty)));
+            }
 
             var result = new Dictionary<int, decimal>();
             foreach (var id in iids)
@@ -169,7 +247,8 @@ namespace MyApp.Api.Services.Implementations
         public async Task<Dictionary<int, decimal>> GetOnHandBulkAsync(
             int companyId,
             IEnumerable<int> itemTypeIds,
-            DateTime? asOfDate = null)
+            DateTime? asOfDate = null,
+            HashSet<int>? allowedDivisionIds = null)
         {
             var ids = itemTypeIds?.Distinct().ToList() ?? new List<int>();
             if (ids.Count == 0) return new Dictionary<int, decimal>();
@@ -178,6 +257,8 @@ namespace MyApp.Api.Services.Implementations
             // they exist independent of tracking-enabled. The flag only gates
             // *writes*, not reads, so the dashboard works the moment a company
             // turns tracking on (given the opening balances are already entered).
+            // Opening balances are company-level by design and stay visible to
+            // division-restricted users (policy D1) — no division filter here.
             var openingQ = _context.OpeningStockBalances
                 .Where(o => o.CompanyId == companyId && ids.Contains(o.ItemTypeId));
             if (asOfDate.HasValue)
@@ -187,9 +268,13 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new { ItemTypeId = g.Key, Qty = g.Sum(o => o.Quantity) })
                 .ToDictionaryAsync(x => x.ItemTypeId, x => x.Qty);
 
-            // Net of In − Out from the movement log.
+            // Net of In − Out from the movement log. Division-RBAC scope:
+            // restricted callers see company-level movements plus their own
+            // divisions' — other divisions' traffic is excluded from the sum.
             var movQ = _context.StockMovements
                 .Where(m => m.CompanyId == companyId && ids.Contains(m.ItemTypeId));
+            if (allowedDivisionIds != null)
+                movQ = movQ.Where(m => m.DivisionId == null || allowedDivisionIds.Contains(m.DivisionId.Value));
             if (asOfDate.HasValue)
                 movQ = movQ.Where(m => m.MovementDate <= asOfDate.Value);
             var moves = await movQ
@@ -215,34 +300,75 @@ namespace MyApp.Api.Services.Implementations
             if (invoice == null) return;
             if (!await IsTrackingEnabledAsync(invoice.CompanyId)) return;
 
-            // Delete any prior Out movements emitted for this invoice. The
-            // re-insert below uses the current Items, so any item-line
-            // qty change, item-type swap, or line deletion since the
-            // last save is automatically reflected.
-            //
-            // Append-only-log purity is sacrificed here intentionally —
-            // an invoice's edit history is already captured in
-            // AuditLog.Invoice.NarrowEdit / Invoice.Update entries, so
-            // we don't need a second audit trail in StockMovements.
-            // Keeping movements scoped 1:1 with the invoice's *current*
-            // state keeps on-hand math simple and avoids stale rows
-            // accumulating per edit.
-            var stale = await _context.StockMovements
-                .Where(m => m.CompanyId  == invoice.CompanyId
-                         && m.SourceType == StockMovementSourceType.Invoice
-                         && m.SourceId   == invoice.Id
-                         && m.Direction  == StockMovementDirection.Out)
-                .ToListAsync();
-            if (stale.Count > 0)
+            // 2026-07-02: an FBR-EXCLUDED document must hold NO stock
+            // movements — exclusion marks the bill as not a real supply
+            // (internal sample, duplicate, retained-but-void record), so any
+            // deduction it made is reversed here. Re-including the bill runs
+            // this sync again and re-inserts the movements below (only for
+            // classified item types with quantity, per the tracked-item gate).
+            // Cancelled bills are handled the same way defensively —
+            // CancelAsync purges too, but this keeps the invariant local.
+            if (invoice.IsFbrExcluded || invoice.IsCancelled)
             {
-                _context.StockMovements.RemoveRange(stale);
+                var purge = await _context.StockMovements
+                    .Where(m => m.CompanyId  == invoice.CompanyId
+                             && m.SourceType == StockMovementSourceType.Invoice
+                             && m.SourceId   == invoice.Id)
+                    .ToListAsync();
+                if (purge.Count > 0)
+                {
+                    _context.StockMovements.RemoveRange(purge);
+                    await _context.SaveChangesAsync();
+                }
+                return;
             }
 
-            // Skip demo (sandbox) bills — they exist purely to validate
-            // FBR scenarios and don't represent real shipments.
+            // Notes move goods ONLY when NoteAffectsStock is set (industry
+            // pattern: physical return is separate from the financial
+            // adjustment — a discount/rate-change note must not touch
+            // inventory). A value-only note is purged like an excluded bill.
+            var isNote = invoice.DocumentType == 9 || invoice.DocumentType == 10;
+            if (isNote && invoice.NoteAffectsStock != true)
+            {
+                var valueOnly = await _context.StockMovements
+                    .Where(m => m.CompanyId  == invoice.CompanyId
+                             && m.SourceType == StockMovementSourceType.Invoice
+                             && m.SourceId   == invoice.Id)
+                    .ToListAsync();
+                if (valueOnly.Count > 0)
+                {
+                    _context.StockMovements.RemoveRange(valueOnly);
+                    await _context.SaveChangesAsync();
+                }
+                return;
+            }
+
+            // Direction depends on the document type:
+            //   • Sale Invoice (4/null) → OUT (goods leave)
+            //   • Credit Note (10)      → IN  (a sales return — goods come back)
+            //   • Debit Note (9)        → OUT (extra goods shipped beyond the
+            //     original invoice — the upward-adjustment case with goods)
+            // Notes reuse SourceType.Invoice + SourceId=note.Id so the existing
+            // cancel/delete purges (which filter by SourceId) clean them up.
+            var dir = invoice.DocumentType == 10
+                ? StockMovementDirection.In
+                : StockMovementDirection.Out;
+
+            // Demo (sandbox) bills never represent real shipments — make sure
+            // they hold no movements for this direction, then stop.
             if (invoice.IsDemo)
             {
-                await _context.SaveChangesAsync();
+                var demoStale = await _context.StockMovements
+                    .Where(m => m.CompanyId  == invoice.CompanyId
+                             && m.SourceType == StockMovementSourceType.Invoice
+                             && m.SourceId   == invoice.Id
+                             && m.Direction  == dir)
+                    .ToListAsync();
+                if (demoStale.Count > 0)
+                {
+                    _context.StockMovements.RemoveRange(demoStale);
+                    await _context.SaveChangesAsync();
+                }
                 return;
             }
 
@@ -266,7 +392,57 @@ namespace MyApp.Api.Services.Implementations
             // saving a bill against one must not decrement inventory.
             // See GetStockTrackedItemTypeIdsAsync for the policy.
             var trackedItemTypeIds = await GetStockTrackedItemTypeIdsAsync(
+                invoice.CompanyId,
                 invoice.Items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
+
+            // Desired net per ItemType from the current lines (overlay-aware,
+            // classified-only) — exactly what the movements below would hold.
+            var desired = new Dictionary<int, decimal>();
+            foreach (var item in invoice.Items)
+            {
+                if (!item.ItemTypeId.HasValue) continue;
+                if (!trackedItemTypeIds.Contains(item.ItemTypeId.Value)) continue;
+                var q = overlayQtyByItemId.TryGetValue(item.Id, out var adjQty) ? adjQty : item.Quantity;
+                if (q <= 0m) continue;
+                desired.TryGetValue(item.ItemTypeId.Value, out var cur);
+                desired[item.ItemTypeId.Value] = cur + q;
+            }
+
+            // What this invoice already posted (this direction), per ItemType.
+            var posted = (await _context.StockMovements
+                    .Where(m => m.CompanyId  == invoice.CompanyId
+                             && m.SourceType == StockMovementSourceType.Invoice
+                             && m.SourceId   == invoice.Id
+                             && m.Direction  == dir)
+                    .GroupBy(m => m.ItemTypeId)
+                    .Select(g => new { ItemTypeId = g.Key, Qty = g.Sum(m => m.Quantity) })
+                    .ToListAsync())
+                .ToDictionary(x => x.ItemTypeId, x => x.Qty);
+
+            // No-op guard: if the current lines would post exactly what's
+            // already on the ledger, leave the movements untouched. An edit
+            // that changes no tracked item's quantity/type moves no stock and
+            // doesn't churn movement dates/timestamps or the audit feed.
+            if (desired.Count == posted.Count
+                && desired.All(kv => posted.TryGetValue(kv.Key, out var q) && q == kv.Value))
+            {
+                return;
+            }
+
+            // Something changed — rebuild this invoice's movements 1:1 with the
+            // current lines: delete the prior set (this direction) and re-insert
+            // fresh. Keeping movements scoped to the invoice's current state
+            // keeps on-hand math simple and avoids stale rows accumulating.
+            var stale = await _context.StockMovements
+                .Where(m => m.CompanyId  == invoice.CompanyId
+                         && m.SourceType == StockMovementSourceType.Invoice
+                         && m.SourceId   == invoice.Id
+                         && m.Direction  == dir)
+                .ToListAsync();
+            if (stale.Count > 0)
+            {
+                _context.StockMovements.RemoveRange(stale);
+            }
 
             foreach (var item in invoice.Items)
             {
@@ -278,11 +454,15 @@ namespace MyApp.Api.Services.Implementations
                 if (effectiveQty <= 0) continue;
 
                 var hasOverlay = overlayQtyByItemId.ContainsKey(item.Id);
+                var docLabel = invoice.DocumentType == 10 ? "Credit Note"
+                             : invoice.DocumentType == 9  ? "Debit Note"
+                             : "Bill";
                 _context.StockMovements.Add(new StockMovement
                 {
                     CompanyId    = invoice.CompanyId,
+                    DivisionId   = invoice.DivisionId,
                     ItemTypeId   = item.ItemTypeId.Value,
-                    Direction    = StockMovementDirection.Out,
+                    Direction    = dir,
                     // 2026-05-12: stored at full decimal(18,4) precision.
                     // Previously truncated to int (lost fractional KG /
                     // Liter / Carat sales).
@@ -291,8 +471,8 @@ namespace MyApp.Api.Services.Implementations
                     SourceId     = invoice.Id,
                     MovementDate = invoice.Date,
                     Notes        = hasOverlay
-                        ? $"Bill #{invoice.InvoiceNumber} saved (FBR-adjusted qty {effectiveQty:0.####}, bill row qty {item.Quantity:0.####})"
-                        : $"Bill #{invoice.InvoiceNumber} saved",
+                        ? $"{docLabel} #{invoice.InvoiceNumber} saved (FBR-adjusted qty {effectiveQty:0.####}, row qty {item.Quantity:0.####})"
+                        : $"{docLabel} #{invoice.InvoiceNumber} saved",
                     CreatedAt    = DateTime.UtcNow,
                 });
             }
@@ -340,7 +520,7 @@ namespace MyApp.Api.Services.Implementations
             // SyncInvoiceStockMovementsAsync), so it would be wrong to
             // block the save on an availability check that the save
             // itself won't honor.
-            var tracked = await GetStockTrackedItemTypeIdsAsync(demand.Select(d => d.ItemTypeId));
+            var tracked = await GetStockTrackedItemTypeIdsAsync(companyId, demand.Select(d => d.ItemTypeId));
             demand = demand.Where(d => tracked.Contains(d.ItemTypeId)).ToList();
             if (demand.Count == 0) return new List<StockShortage>();
 

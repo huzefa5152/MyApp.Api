@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { MdSearch, MdCheck, MdInfo, MdLock, MdAdd, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { getPendingChallansByCompany } from "../api/challanApi";
+import { getSalesOrdersForPicker } from "../api/salesOrderApi";
 import { createInvoice, getLastRatesForChallan } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getItemTypes } from "../api/itemTypeApi";
@@ -12,6 +13,8 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import ClientForm from "./ClientForm";
+import DivisionSelect from "./DivisionSelect";
+import SearchableSelect from "./SearchableSelect";
 import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 // 2026-05-08: Same UOM autocomplete the ChallanForm uses, hooked up
@@ -19,6 +22,7 @@ import PermissionLackedHint from "./PermissionLackedHint";
 // cell so operators get the saved-units suggestions instead of having
 // to retype "Pcs" / "KG" / etc. each line.
 import LookupAutocomplete from "./LookupAutocomplete";
+import AttachmentManager from "./AttachmentManager";
 
 const colors = {
   blue: "#0d47a1",
@@ -72,18 +76,23 @@ const SCENARIO_META = {
   SN028: { buyerKind: "walk-in" },
 };
 
-export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId, billsMode = false }) {
+export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId, prefillChallanIds, billsMode = false, defaultDivisionId }) {
   // billsMode: true when this form is mounted from the Bills tab. Hides
-  // every FBR-classification control — Item Type column + picker, "+ New
-  // Item Type" button, bulk-apply toolbar, HS Code column, Sale Type
-  // column, FBR scenario picker. The challan items still flow through and
-  // their auto-detected FBR fields (HSCode/UOM/SaleType inherited from
-  // the catalog) are sent to the API; they're just not editable here.
-  // Item-Type classification happens on the Invoices tab. Description
+  // the HS Code and Sale Type columns — those stay Invoice-tab concerns.
+  // Item Type affordances (per-row picker, bulk-apply toolbar, "+ New
+  // Item Type") are VISIBLE in Bills mode too, and stay optional: a type
+  // picked at bill time persists on the line (itemTypeId in the payload)
+  // and shows later on the Invoices tab. Picking one still auto-fills the
+  // hidden per-item HS/UOM/SaleType state from the catalog entry so the
+  // bill lands classified; those values ride along invisibly to the API.
+  // The FBR scenario picker is separately fbrEnabled-gated. Description
   // stays the existing challan-style SmartItemAutocomplete.
   const { has } = usePermissions();
   const canCreateClient   = has("clients.manage.create");
   const canCreateItemType = has("itemtypes.manage.create");
+  // FBR integration toggle (company-level). When off, the bill is a plain
+  // non-FBR bill: no scenario step, editable GST, no scenario saved.
+  const fbrEnabled = company?.fbrEnabled !== false;
 
   const [clients, setClients] = useState([]);
   // Inline create modals — same affordances StandaloneInvoiceForm has
@@ -103,9 +112,20 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // slice rolled the calendar day back by one for PKT operators billing
   // before 5am.
   const [invoiceDate, setInvoiceDate] = useState(todayYmd());
+  const canViewDivisions = has("divisions.manage.view");
+  // New bills default to the division currently being filtered on the page
+  // (so "filter to a division → New Bill" lands in that division).
+  const [divisionId, setDivisionId] = useState(defaultDivisionId ? String(defaultDivisionId) : "");
+  // FBR-off flow: optional "start from a Sales Order" picker — selecting one
+  // fills the buyer + division and ticks every unbilled challan attached to
+  // the order.
+  const [salesOrders, setSalesOrders] = useState([]);
+  const [salesOrderId, setSalesOrderId] = useState("");
+  const [soPickMsg, setSoPickMsg] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const attachmentRef = useRef(null);
 
   // ── FBR optional fields (per item + invoice-level) ──
   // Document Type is locked to Sale Invoice (4) on the new-bill flow.
@@ -218,9 +238,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           getPendingChallansByCompany(companyId),
           getClientsByCompany(companyId),
           getItemTypes().catch(() => ({ data: [] })),
-          getFbrApplicableScenarios(companyId).catch(() => ({ data: { scenarios: [] } })),
+          fbrEnabled
+            ? getFbrApplicableScenarios(companyId).catch(() => ({ data: { scenarios: [] } }))
+            : Promise.resolve({ data: { scenarios: [] } }),
         ]);
-        setAllChallans(challanRes.data);
+        // SO-mandatory billing (company flag): only offer challans linked to a
+        // Sales Order. The backend rejects billing an unlinked challan anyway,
+        // so this keeps the picker honest.
+        const billableChallans = company?.requireSalesOrderForBilling
+          ? (challanRes.data || []).filter((c) => c.salesOrderId != null)
+          : challanRes.data;
+        setAllChallans(billableChallans);
         setClients(clientRes.data);
         setItemTypes(typesRes.data || []);
         setScenarios(scenarioRes.data?.scenarios || []);
@@ -233,11 +261,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         // Bills > New Bill flow when the operator ticks a challan manually.
         // If the challan is no longer in the pending list (someone else
         // billed it in between) we fall back to the empty state silently.
-        if (prefillChallanId) {
-          const dc = challanRes.data.find((c) => c.id === prefillChallanId);
-          if (dc) {
-            setSelectedClientId(String(dc.clientId));
-            setSelectedIds([dc.id]);
+        // One challan (Generate Bill on the Challans page) OR many (Generate
+        // Bill on a Sales Order — all its unbilled challans at once). Only
+        // pre-ticks challans still in the pending/unbilled list; the client is
+        // taken from the first match. If none match (billed since), fall back
+        // to the empty state silently.
+        const prefillIds = (prefillChallanIds && prefillChallanIds.length)
+          ? prefillChallanIds
+          : (prefillChallanId ? [prefillChallanId] : []);
+        if (prefillIds.length) {
+          const matched = billableChallans.filter((c) => prefillIds.includes(c.id));
+          if (matched.length) {
+            setSelectedClientId(String(matched[0].clientId));
+            setSelectedIds(matched.map((c) => c.id));
           }
         }
       } catch {
@@ -247,7 +283,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       }
     };
     load();
-  }, [companyId, prefillChallanId]);
+  }, [companyId, prefillChallanId, prefillChallanIds]);
+
+  // Load sales orders once for the "start from an order" picker — offered
+  // in both FBR modes. NO status filter: fully-delivered orders auto-close,
+  // so an unbilled-but-delivered order is typically "Closed" by billing
+  // time — the options memo below decides what's offerable. Page-walking
+  // helper: the server clamps pageSize at 100.
+  useEffect(() => {
+    getSalesOrdersForPicker(companyId)
+      .then((items) => setSalesOrders(items))
+      .catch(() => setSalesOrders([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId]);
 
   // Whenever a challan gets newly ticked (either via the Generate-Bill
   // prefill or a manual click in the Bills > New Bill flow), fetch the
@@ -411,6 +459,65 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     setFetchedRateChallanIds(new Set());
   };
 
+  // Orders offered by the picker: delivery must be COMPLETE ("Fully
+  // Delivered" / "Over Delivered" — both mean nothing left to deliver;
+  // partially/not-delivered orders are excluded per the operator's rule:
+  // bill only what has fully shipped) AND the order must still have at
+  // least one unbilled challan. Cancelled orders never show. Narrowed to
+  // the form's division when one is picked; the label carries the
+  // unbilled-challan count so the operator sees what there is to bill.
+  const salesOrderOptions = useMemo(() => {
+    const list = divisionId
+      ? salesOrders.filter((o) => o.divisionId === parseInt(divisionId))
+      : salesOrders;
+    return list
+      .map((o) => ({ o, pending: allChallans.filter((c) => c.salesOrderId === o.id).length }))
+      .filter(({ o, pending }) =>
+        pending > 0
+        && o.status !== "Cancelled"
+        && (o.fulfillmentStatus === "Fully Delivered" || o.fulfillmentStatus === "Over Delivered"))
+      .map(({ o, pending }) => ({
+        ...o,
+        _label: `SO #${o.salesOrderNumber} — ${o.clientName} (${pending} unbilled DC${pending !== 1 ? "s" : ""})${o.divisionName ? ` · ${o.divisionName}` : ""}`,
+      }));
+  }, [salesOrders, allChallans, divisionId]);
+
+  // Everything a Sales Order pick populates, back to a blank form. Also
+  // runs when the picker is CLEARED — the operator asked for a clean slate
+  // when the order is removed, not a half-populated leftover.
+  const resetSalesOrderDetails = () => {
+    setSelectedClientId("");
+    setDivisionId(defaultDivisionId ? String(defaultDivisionId) : "");
+    setSelectedIds([]);
+    setItemPrices({});
+    setItemDescriptions({});
+    setCommonPoDate("");
+    setDcSearch("");
+    setError("");
+    setLastRates({});
+    setAutoFilledFromHistory(false);
+    setFetchedRateChallanIds(new Set());
+  };
+
+  // Picking a Sales Order = pick its buyer + tick every unbilled challan
+  // attached to the order in one shot. Same reset semantics as a manual
+  // client change — including fetchedRateChallanIds, so last-billed rates
+  // refetch and prefill prices for the newly ticked challans.
+  const handleSalesOrderPick = (id) => {
+    setSalesOrderId(id ? String(id) : "");
+    if (!id) { setSoPickMsg(""); resetSalesOrderDetails(); return; }
+    const so = salesOrders.find((o) => String(o.id) === String(id));
+    if (!so) return;
+    const soChallans = allChallans.filter((c) => c.salesOrderId === so.id);
+    resetSalesOrderDetails();
+    setSelectedClientId(so.clientId ? String(so.clientId) : "");
+    setDivisionId(so.divisionId ? String(so.divisionId) : "");
+    setSelectedIds(soChallans.map((c) => c.id));
+    setSoPickMsg(soChallans.length
+      ? `Selected ${soChallans.length} unbilled challan${soChallans.length !== 1 ? "s" : ""} from Sales Order #${so.salesOrderNumber}.`
+      : `Sales Order #${so.salesOrderNumber} has no unbilled challans — create a challan for it first, or tick challans manually below.`);
+  };
+
 
   const toggleChallan = (id) => {
     setSelectedIds((prev) =>
@@ -493,9 +600,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         ? `[${scenarioCode}] ${paymentTerms || chosenScenario?.description || ""}`.trim()
         : (paymentTerms || null);
 
-      await createInvoice({
+      const { data: created } = await createInvoice({
         date: new Date(invoiceDate).toISOString(),
         companyId,
+        divisionId: divisionId ? parseInt(divisionId) : null,
         clientId: parseInt(selectedClientId),
         gstRate: parseFloat(gstRate),
         paymentTerms: paymentTermsToSave,
@@ -551,6 +659,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         });
       await Promise.all(rememberPromises);
 
+      // Upload attachments staged before the bill had an id. Best-effort —
+      // the bill is already saved.
+      try {
+        if (created?.id) await attachmentRef.current?.flush(created.id);
+      } catch { /* attachments are best-effort */ }
+
       onSaved();
     } catch (err) {
       setError(err.response?.data?.error || "Failed to create invoice.");
@@ -559,9 +673,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     }
   };
 
-  // Clients that have at least one pending challan
+  // Clients that have at least one billable challan. The buyer picked via
+  // the Sales-Order shortcut stays visible even with zero — the operator
+  // must SEE the buyer land; the picker hint explains what's missing.
   const clientsWithChallans = clients.filter((cl) =>
     allChallans.some((ch) => ch.clientId === cl.id)
+    || String(cl.id) === String(selectedClientId)
   );
 
   // Apply the scenario's buyer-kind filter on top of the with-challan
@@ -570,15 +687,26 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   //   b2b-unregistered → only Unregistered clients
   //   walk-in          → only Unregistered clients (counter sale, rare with challans)
   //   either           → no filter
+  // The currently-selected buyer always stays visible even when it doesn't
+  // match the scenario's buyer kind (e.g. seeded by the Sales-Order pick) —
+  // hiding it would make the pick look like it silently failed; FBR
+  // validation still catches a genuine scenario/buyer mismatch at submit.
   const clientsForScenario = useMemo(() => {
-    if (!chosenScenario) return clientsWithChallans;
-    const k = chosenScenario.meta.buyerKind;
-    if (k === "b2b-registered")
-      return clientsWithChallans.filter((c) => (c.registrationType || "").toLowerCase() === "registered");
-    if (k === "b2b-unregistered" || k === "walk-in")
-      return clientsWithChallans.filter((c) => (c.registrationType || "").toLowerCase() !== "registered");
-    return clientsWithChallans;
-  }, [clientsWithChallans, chosenScenario]);
+    const base = (() => {
+      if (!chosenScenario) return clientsWithChallans;
+      const k = chosenScenario.meta.buyerKind;
+      if (k === "b2b-registered")
+        return clientsWithChallans.filter((c) => (c.registrationType || "").toLowerCase() === "registered");
+      if (k === "b2b-unregistered" || k === "walk-in")
+        return clientsWithChallans.filter((c) => (c.registrationType || "").toLowerCase() !== "registered");
+      return clientsWithChallans;
+    })();
+    if (selectedClientId && !base.some((c) => String(c.id) === String(selectedClientId))) {
+      const sel = clientsWithChallans.find((c) => String(c.id) === String(selectedClientId));
+      if (sel) return [sel, ...base];
+    }
+    return base;
+  }, [clientsWithChallans, chosenScenario, selectedClientId]);
 
   // Re-fetchers for inline creates so the new buyer / item type lands
   // in the dropdowns immediately. Keep the original useEffect for first
@@ -628,11 +756,37 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
               <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading...</div>
             ) : (
               <>
+                {/* Optional "start from a Sales Order" (both FBR modes) —
+                    fills the buyer + division and ticks every unbilled
+                    challan attached to the order. Clearing it resets those
+                    details. */}
+                <div style={{ marginBottom: "1rem" }}>
+                  <label style={styles.label}>
+                    Sales Order <span style={{ fontWeight: 400, color: colors.textSecondary }}>(optional — fills the buyer and selects its challans)</span>
+                  </label>
+                  {salesOrderOptions.length === 0 ? (
+                    <p style={{ color: colors.textSecondary, fontSize: "0.82rem", margin: 0 }}>
+                      No fully-delivered sales orders with unbilled challans{divisionId ? " in this division" : ""} — pick a buyer and challans below.
+                    </p>
+                  ) : (
+                    <SearchableSelect
+                      items={salesOrderOptions}
+                      value={salesOrderId}
+                      onChange={handleSalesOrderPick}
+                      labelKey="_label"
+                      searchKeys={["salesOrderNumber", "clientName", "customerPoNumber"]}
+                      placeholder="— Start from a sales order —"
+                    />
+                  )}
+                  {soPickMsg && <div style={{ fontSize: "0.78rem", color: colors.teal, fontWeight: 600, marginTop: 4 }}>{soPickMsg}</div>}
+                </div>
+
                 {/* Step 1 — Pick FBR scenario. Collapsed by default —
                     operator sees a one-line summary of the auto-defaulted
                     scenario and can expand to switch. Auto-collapses on
                     pick so the form scrolls back into Buyer / Items.
                     Same UX as StandaloneInvoiceForm. */}
+                {fbrEnabled && (
                 <div style={{ marginBottom: "1rem" }}>
                   <button
                     type="button"
@@ -714,11 +868,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Step 2 — Pick a client. Collapsible — expanded by
                     default. Filtered by scenario.buyerKind + "has at least
                     one pending challan". Inline "+ New Buyer" button. */}
-                {chosenScenario && (() => {
+                {(chosenScenario || !fbrEnabled) && (() => {
                   const selectedBuyer = clientsForScenario.find((c) => String(c.id) === String(selectedClientId));
                   const pendingCount = selectedBuyer ? allChallans.filter((ch) => ch.clientId === selectedBuyer.id).length : 0;
                   return (
@@ -730,7 +885,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                       >
                         <span style={styles.stepNum}>2</span>
                         <span style={styles.scenarioCollapseTitle}>
-                          {chosenScenario.meta.buyerKind === "walk-in" ? "Walk-in Buyer" : "Buyer"}
+                          {chosenScenario?.meta.buyerKind === "walk-in" ? "Walk-in Buyer" : "Buyer"}
                         </span>
                         {selectedBuyer ? (
                           <span style={styles.scenarioCollapseSummary}>
@@ -757,28 +912,26 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               <div style={{ ...styles.warnAlert, flex: 1 }}>
                                 <MdInfo size={16} />
                                 No matching{" "}
-                                {chosenScenario.meta.buyerKind === "b2b-registered" ? "Registered"
-                                  : chosenScenario.meta.buyerKind === "b2b-unregistered" ? "Unregistered"
-                                  : chosenScenario.meta.buyerKind === "walk-in" ? "Unregistered (Walk-in)" : ""}{" "}
+                                {chosenScenario?.meta.buyerKind === "b2b-registered" ? "Registered"
+                                  : chosenScenario?.meta.buyerKind === "b2b-unregistered" ? "Unregistered"
+                                  : chosenScenario?.meta.buyerKind === "walk-in" ? "Unregistered (Walk-in)" : ""}{" "}
                                 clients with pending challans.
                                 {canCreateClient ? " Add a buyer below." : " Switch scenarios or ask an admin to add one."}
                               </div>
                             ) : (
-                              <select
-                                style={{ ...styles.select, flex: 1 }}
-                                value={selectedClientId}
-                                onChange={handleClientChange}
-                              >
-                                <option value="">— Choose a buyer —</option>
-                                {clientsForScenario.map((cl) => {
-                                  const count = allChallans.filter((ch) => ch.clientId === cl.id).length;
-                                  return (
-                                    <option key={cl.id} value={cl.id}>
-                                      {cl.name} ({count} pending DC{count !== 1 ? "s" : ""})
-                                    </option>
-                                  );
-                                })}
-                              </select>
+                              <div style={{ flex: 1 }}>
+                                <SearchableSelect
+                                  items={clientsForScenario.map((cl) => {
+                                    const count = allChallans.filter((ch) => ch.clientId === cl.id).length;
+                                    return { ...cl, _label: `${cl.name} (${count} pending DC${count !== 1 ? "s" : ""})` };
+                                  })}
+                                  value={selectedClientId}
+                                  onChange={(id) => handleClientChange({ target: { value: id ? String(id) : "" } })}
+                                  labelKey="_label"
+                                  searchKeys={["name", "ntn"]}
+                                  placeholder="— Choose a buyer —"
+                                />
+                              </div>
                             )}
                             {canCreateClient ? (
                               <button
@@ -813,7 +966,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     DC selection + items. Same UX as StandaloneInvoiceForm:
                     the inputs row is collapsible (default open) so the
                     operator can free vertical space for the items grid. */}
-                {chosenScenario && selectedClientId && company?.startingInvoiceNumber > 0 && (
+                {(chosenScenario || !fbrEnabled) && selectedClientId && company?.startingInvoiceNumber > 0 && (
                   <>
                     <div style={{ marginBottom: "0.75rem" }}>
                       <button
@@ -842,6 +995,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                       {billHeaderOpen && (
                         <div style={{ ...styles.scenarioCollapseBody, marginBottom: 0 }}>
                           <div style={styles.row}>
+                            {canViewDivisions && (
+                              <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 140 }} />
+                            )}
                             <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Bill Date</label>
                               <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
@@ -1006,11 +1162,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             Items ({allItems.length})
                           </label>
                           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                            {/* Bills mode hides all item-type-management
-                                controls — the catalog "+ New Item Type"
-                                button, the FBR-tip pill. Operators classify
-                                items on the Invoices tab; the Bills tab is
-                                financial entry only. */}
                             {/* 2026-05-13: previously hidden when billsMode
                                 was true (Bills tab). Operators asked for
                                 the shortcut on every bill-creation flow,
@@ -1029,12 +1180,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             ) : (
                               <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
                             )}
-                            {!billsMode && (
-                              <div style={styles.hintRow}>
-                                <span style={styles.hintPill}>Tip</span>
-                                Pick from <b>SAVED</b> (remembered defaults) or <b>FBR catalog</b> to auto-fill HS Code & UOM.
-                              </div>
-                            )}
+                            <div style={styles.hintRow}>
+                              <span style={styles.hintPill}>Tip</span>
+                              Pick from <b>SAVED</b> (remembered defaults) or <b>FBR catalog</b> to auto-fill HS Code & UOM.
+                            </div>
                           </div>
                         </div>
 
@@ -1056,8 +1205,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         {/* Bulk Item Type apply — single dropdown sets the
                             same catalog row across all lines. Saves 20+
                             picks when every item on the bill is the same
-                            FBR category. Hidden in Bills mode. */}
-                        {!billsMode && allItems.length > 1 && (
+                            FBR category. Visible in Bills mode too — a type
+                            picked at bill time persists to the Invoices tab. */}
+                        {allItems.length > 1 && (
                           <div style={{
                             display: "flex", alignItems: "center", gap: "0.65rem",
                             flexWrap: "wrap", padding: "0.55rem 0.85rem",
@@ -1112,9 +1262,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             <thead>
                               <tr style={styles.unifiedThead}>
                                 <th style={{ ...styles.unifiedTh, width: "4%" }}>DC#</th>
-                                {!billsMode && (
-                                  <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type (FBR)</th>
-                                )}
+                                <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type (FBR)</th>
                                 <th style={{ ...styles.unifiedTh, width: "16%" }}>Description</th>
                                 <th style={{ ...styles.unifiedTh, width: "9%" }}>Qty</th>
                                 <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
@@ -1126,7 +1274,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 {!billsMode && (
                                   <th style={{ ...styles.unifiedTh, width: "10%" }}>HS Code</th>
                                 )}
-                                {/* Sale Type is FBR-only data — same gating as Item Type / HS Code.
+                                {/* Sale Type is FBR-only data — same gating as HS Code.
                                     2026-05-08: was visible in both modes, which broke the symmetry
                                     with EditBillForm's Bills view. */}
                                 {!billsMode && (
@@ -1143,7 +1291,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                     <td style={{ ...styles.unifiedTd, fontSize: "0.76rem", color: colors.textSecondary }}>
                                       {item.challanNumber}
                                     </td>
-                                    {!billsMode && (
                                     <td style={styles.unifiedTd}>
                                       {/* Picking an ItemType auto-fills HS Code, UOM, SaleType,
                                           FbrUOMId on this row — identical behaviour to EditBillForm.
@@ -1181,7 +1328,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                         style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                                       />
                                     </td>
-                                    )}
                                     <td style={styles.unifiedTd}>
                                       {/* Description is locked to the picked Item Type's name when
                                           one is set — same rule as the no-challan form. Clearing the
@@ -1189,10 +1335,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                           search saved items, pick from the FBR catalog, or type
                                           freely. The challan's original description still seeds the
                                           field on first load via the `?? item.description` fallback. */}
-                                      {/* Bills mode never has Item Type set on a row (column is hidden),
-                                          so the description always renders as SmartItemAutocomplete.
-                                          Invoices mode keeps the existing locked-to-itemTypeName branch. */}
-                                      {(!billsMode && itemTypeIds[item.id]) ? (
+                                      {/* Applies in Bills mode too — the Item Type column is visible
+                                          there now, so a picked type locks the description the same
+                                          way and the operator sees which type the row carries. */}
+                                      {itemTypeIds[item.id] ? (
                                         <input
                                           type="text"
                                           readOnly
@@ -1214,6 +1360,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                           onPick={(picked) => handleItemPick(item.id, picked)}
                                           style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                           placeholder="Search or type item…"
+                                          multiline
                                         />
                                       )}
                                     </td>
@@ -1364,6 +1511,16 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     )}
                   </>
                 )}
+
+                {/* Attachments — staged client-side until the bill is created,
+                    then flushed against the new id (see handleSubmit). */}
+                <AttachmentManager
+                  ref={attachmentRef}
+                  companyId={companyId}
+                  entityType="Invoice"
+                  entityId={null}
+                  mode="edit"
+                />
               </>
             )}
           </div>
@@ -1393,6 +1550,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           client={null}
           companyId={companyId}
           companies={[]}
+          fbrEnabled={company?.fbrEnabled !== false}
           onClose={() => setShowAddClient(false)}
           onSaved={(created) => onClientCreated(created)}
         />

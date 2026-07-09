@@ -4,11 +4,22 @@ namespace MyApp.Api.Services.Interfaces
 {
     public interface IInvoiceService
     {
-        Task<List<InvoiceDto>> GetByCompanyAsync(int companyId);
+        /// <param name="allowedDivisionIds">Division-RBAC scope from
+        /// IDivisionAccessGuard: non-null = restricted user, return only rows in
+        /// these divisions or with no division (policy D1). Null = unrestricted.</param>
+        Task<List<InvoiceDto>> GetByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
+        /// <summary>
+        /// Paged list. <paramref name="noteType"/> selects the document group:
+        /// null (default) = sale bills only; 9 = Debit Notes; 10 = Credit
+        /// Notes. The three groups run separate numbering sequences and are
+        /// never mixed in one list.
+        /// </summary>
         Task<PagedResult<InvoiceDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
-            DateTime? dateFrom = null, DateTime? dateTo = null);
+            DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? noteType = null, int? divisionId = null,
+            HashSet<int>? allowedDivisionIds = null);
         Task<InvoiceDto?> GetByIdAsync(int id);
         Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto);
         /// <summary>
@@ -36,15 +47,55 @@ namespace MyApp.Api.Services.Interfaces
         Task<InvoiceDto?> UpdateItemTypesAsync(int id, UpdateInvoiceItemTypesDto dto, bool allowQuantityEdit = false, string? actorUserName = null);
         Task<bool> DeleteAsync(int id);
         /// <summary>
+        /// Void (cancel) a bill that has NOT been submitted to FBR. The bill
+        /// keeps its InvoiceNumber (so the sequence stays gap-free), is
+        /// flagged cancelled (excluded from KPIs, locked from edits/FBR), and
+        /// its linked delivery challans are released back to a billable state
+        /// so they can be re-billed. Throws if the bill is already submitted
+        /// to FBR (use a Credit Note instead) or already cancelled. Returns
+        /// the updated bill, or null if not found.
+        /// </summary>
+        Task<InvoiceDto?> CancelAsync(int id, string? reason, string? actorUserName = null);
+        /// <summary>
+        /// Reverse an FBR-SUBMITTED invoice by auto-generating the correct
+        /// adjustment note as a new, UNSUBMITTED invoice row:
+        ///   • Credit Note (DocumentType 10) for a return/reversal — the usual
+        ///     case, reduces output tax — or Debit Note (9) when
+        ///     <paramref name="documentTypeOverride"/> forces an upward
+        ///     correction.
+        /// The note copies the original's buyer, GST rate, and line items,
+        /// references the original's IRN (OriginalInvoiceRefIRN), and lands in
+        /// the Bills list so the operator can Validate then Submit it to FBR
+        /// exactly like an ordinary invoice.
+        ///
+        /// Throws InvalidOperationException if the original isn't FBR-submitted,
+        /// has no IRN, or already has a live (non-cancelled) note against it
+        /// (FBR 0064 — one credit note per invoice). Returns null if not found.
+        /// </summary>
+        Task<InvoiceDto?> CreateReversalNoteAsync(int originalInvoiceId, string? reason, string? remarks, int? documentTypeOverride = null, string? actorUserName = null);
+        /// <summary>
+        /// General Credit/Debit Note creation referencing an FBR-submitted
+        /// invoice. Supports PARTIAL notes (a subset of lines / reduced
+        /// quantities) via <see cref="CreateNoteDto.Lines"/>; an empty line list
+        /// means a full reversal. Same guards and FBR flow as
+        /// <see cref="CreateReversalNoteAsync"/> (which delegates here).
+        /// </summary>
+        Task<InvoiceDto?> CreateNoteAsync(CreateNoteDto dto, string? actorUserName = null);
+        /// <summary>
         /// Flip the IsFbrExcluded flag. Excluded bills are skipped by the
         /// bulk Validate All / Submit All endpoints; per-bill validate and
         /// submit still work. Returns the updated bill or null if not found.
         /// </summary>
         Task<InvoiceDto?> SetFbrExcludedAsync(int id, bool excluded);
+        /// <summary>Set (or clear, when null) the invoice's payment due date —
+        /// drives the Overdue/Coming-due status (design §11.5). Returns the
+        /// updated invoice or null if not found.</summary>
+        Task<InvoiceDto?> SetDueDateAsync(int id, DateTime? dueDate);
         Task<PrintBillDto?> GetPrintBillAsync(int invoiceId);
         Task<PrintTaxInvoiceDto?> GetPrintTaxInvoiceAsync(int invoiceId);
         Task<int> GetTotalCountAsync();
-        Task<int> GetCountByCompanyAsync(int companyId);
+        Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
+        Task<Dictionary<int, int>> GetInvoiceCountsByClientAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
         /// <summary>
         /// Flat InvoiceItem search across a company's billing history. Powers
         /// the Item Rate History page — given an item (by catalog id or free
@@ -56,7 +107,8 @@ namespace MyApp.Api.Services.Interfaces
         Task<ItemRateHistoryResultDto> GetItemRateHistoryAsync(
             int companyId, int page, int pageSize,
             int? itemTypeId, string? search,
-            int? clientId, DateTime? dateFrom, DateTime? dateTo);
+            int? clientId, DateTime? dateFrom, DateTime? dateTo,
+            HashSet<int>? allowedDivisionIds = null);
 
         /// <summary>
         /// For each item in the given challan, look up the most-recent
@@ -75,7 +127,7 @@ namespace MyApp.Api.Services.Interfaces
         /// remaining qty to procure. Drives the "pick a sale bill" step of
         /// the Purchase Against Sale Bill flow.
         /// </summary>
-        Task<List<AwaitingPurchaseInvoiceDto>> GetAwaitingPurchaseAsync(int companyId);
+        Task<List<AwaitingPurchaseInvoiceDto>> GetAwaitingPurchaseAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
 
         /// <summary>
         /// Per-line procurement template for one sale bill — the lines

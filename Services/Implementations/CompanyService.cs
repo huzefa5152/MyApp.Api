@@ -39,7 +39,8 @@ namespace MyApp.Api.Services.Implementations
             _access = access;
         }
 
-        private static CompanyDto ToDto(Company c, bool hasChallans = false, bool hasInvoices = false) => new()
+        private static CompanyDto ToDto(Company c, bool hasChallans = false, bool hasInvoices = false,
+            bool hasSalesQuotes = false, bool hasSalesOrders = false) => new()
         {
             Id = c.Id,
             Name = c.Name,
@@ -54,7 +55,19 @@ namespace MyApp.Api.Services.Implementations
             CurrentChallanNumber = c.CurrentChallanNumber,
             StartingInvoiceNumber = c.StartingInvoiceNumber,
             CurrentInvoiceNumber = c.CurrentInvoiceNumber,
+            StartingDebitNoteNumber = c.StartingDebitNoteNumber > 0 ? c.StartingDebitNoteNumber : 1,
+            CurrentDebitNoteNumber = c.CurrentDebitNoteNumber,
+            StartingCreditNoteNumber = c.StartingCreditNoteNumber > 0 ? c.StartingCreditNoteNumber : 1,
+            CurrentCreditNoteNumber = c.CurrentCreditNoteNumber,
             InvoiceNumberPrefix = c.InvoiceNumberPrefix,
+            StartingSalesQuoteNumber = c.StartingSalesQuoteNumber,
+            CurrentSalesQuoteNumber = c.CurrentSalesQuoteNumber,
+            StartingSalesOrderNumber = c.StartingSalesOrderNumber,
+            CurrentSalesOrderNumber = c.CurrentSalesOrderNumber,
+            HasSalesQuotes = hasSalesQuotes,
+            HasSalesOrders = hasSalesOrders,
+            FbrEnabled = c.FbrEnabled,
+            RequireSalesOrderForBilling = c.RequireSalesOrderForBilling,
             FbrProvinceCode = c.FbrProvinceCode,
             FbrBusinessActivity = c.FbrBusinessActivity,
             FbrSector = c.FbrSector,
@@ -67,6 +80,8 @@ namespace MyApp.Api.Services.Implementations
             FbrDefaultPaymentModeRegistered = c.FbrDefaultPaymentModeRegistered,
             FbrDefaultPaymentModeUnregistered = c.FbrDefaultPaymentModeUnregistered,
             InventoryTrackingEnabled = c.InventoryTrackingEnabled,
+            StockGuardHardBlock = c.StockGuardHardBlock,
+            InventoryFlowVersion = c.InventoryFlowVersion,
             StartingPurchaseBillNumber = c.StartingPurchaseBillNumber,
             CurrentPurchaseBillNumber = c.CurrentPurchaseBillNumber,
             StartingGoodsReceiptNumber = c.StartingGoodsReceiptNumber,
@@ -92,19 +107,37 @@ namespace MyApp.Api.Services.Implementations
                 .Distinct()
                 .ToListAsync();
 
+            var companiesWithQuotes = await _context.SalesQuotes
+                .Where(q => companyIds.Contains(q.CompanyId))
+                .Select(q => q.CompanyId).Distinct().ToListAsync();
+            var companiesWithOrders = await _context.SalesOrders
+                .Where(o => companyIds.Contains(o.CompanyId))
+                .Select(o => o.CompanyId).Distinct().ToListAsync();
+
             var challanSet = new HashSet<int>(companiesWithChallans);
             var invoiceSet = new HashSet<int>(companiesWithInvoices);
+            var quoteSet = new HashSet<int>(companiesWithQuotes);
+            var orderSet = new HashSet<int>(companiesWithOrders);
 
-            return companies.Select(c => ToDto(c, challanSet.Contains(c.Id), invoiceSet.Contains(c.Id))).ToList();
+            return companies.Select(c => ToDto(c, challanSet.Contains(c.Id), invoiceSet.Contains(c.Id),
+                quoteSet.Contains(c.Id), orderSet.Contains(c.Id))).ToList();
         }
 
         public async Task<CompanyDto?> GetByIdAsync(int id)
         {
             var company = await _repository.GetByIdAsync(id);
             if (company == null) return null;
-            var hasChallans = await _challanRepo.HasChallansForCompanyAsync(company.Id);
-            var hasInvoices = await _invoiceRepo.HasInvoicesForCompanyAsync(company.Id);
-            return ToDto(company, hasChallans, hasInvoices);
+            // The COMPANY starting numbers seed the company-level (no-division)
+            // sequence only, so they lock only when a company-level document of
+            // that type exists. Division-tagged docs have their own per-division
+            // sequences (locked on the division), so they must NOT lock the
+            // company field — otherwise a division-only company shows its
+            // company numbers needlessly frozen at 0.
+            var hasChallans = await _context.DeliveryChallans.AnyAsync(c => c.CompanyId == company.Id && c.DivisionId == null);
+            var hasInvoices = await _context.Invoices.AnyAsync(i => i.CompanyId == company.Id && i.DivisionId == null);
+            var hasSalesQuotes = await _context.SalesQuotes.AnyAsync(q => q.CompanyId == company.Id && q.DivisionId == null);
+            var hasSalesOrders = await _context.SalesOrders.AnyAsync(o => o.CompanyId == company.Id && o.DivisionId == null);
+            return ToDto(company, hasChallans, hasInvoices, hasSalesQuotes, hasSalesOrders);
         }
 
         public async Task<CompanyDto> CreateAsync(CreateCompanyDto dto)
@@ -125,7 +158,17 @@ namespace MyApp.Api.Services.Implementations
                 CurrentChallanNumber = 0,
                 StartingInvoiceNumber = dto.StartingInvoiceNumber,
                 CurrentInvoiceNumber = 0,
+                StartingSalesQuoteNumber = dto.StartingSalesQuoteNumber,
+                CurrentSalesQuoteNumber = 0,
+                StartingSalesOrderNumber = dto.StartingSalesOrderNumber,
+                CurrentSalesOrderNumber = 0,
+                StartingDebitNoteNumber = dto.StartingDebitNoteNumber > 0 ? dto.StartingDebitNoteNumber : 1,
+                CurrentDebitNoteNumber = 0,
+                StartingCreditNoteNumber = dto.StartingCreditNoteNumber > 0 ? dto.StartingCreditNoteNumber : 1,
+                CurrentCreditNoteNumber = 0,
                 InvoiceNumberPrefix = dto.InvoiceNumberPrefix,
+                FbrEnabled = dto.FbrEnabled,
+                RequireSalesOrderForBilling = dto.RequireSalesOrderForBilling,
                 FbrProvinceCode = dto.FbrProvinceCode,
                 FbrBusinessActivity = dto.FbrBusinessActivity,
                 FbrSector = dto.FbrSector,
@@ -136,6 +179,7 @@ namespace MyApp.Api.Services.Implementations
                 FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered,
                 FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered,
                 InventoryTrackingEnabled = dto.InventoryTrackingEnabled,
+                StockGuardHardBlock = dto.StockGuardHardBlock,
                 StartingPurchaseBillNumber = dto.StartingPurchaseBillNumber,
                 CurrentPurchaseBillNumber = 0,
                 StartingGoodsReceiptNumber = dto.StartingGoodsReceiptNumber,
@@ -166,6 +210,8 @@ namespace MyApp.Api.Services.Implementations
             if (dto.LogoPath != null) company.LogoPath = dto.LogoPath;
 
             // FBR fields (always updatable)
+            company.FbrEnabled = dto.FbrEnabled;
+            company.RequireSalesOrderForBilling = dto.RequireSalesOrderForBilling;
             company.InvoiceNumberPrefix = dto.InvoiceNumberPrefix;
             company.FbrProvinceCode = dto.FbrProvinceCode;
             company.FbrBusinessActivity = dto.FbrBusinessActivity;
@@ -188,6 +234,7 @@ namespace MyApp.Api.Services.Implementations
             // only apply if no purchase docs exist yet (same rule as the
             // sales-side starting numbers).
             company.InventoryTrackingEnabled = dto.InventoryTrackingEnabled;
+            company.StockGuardHardBlock = dto.StockGuardHardBlock;
             var hasPurchaseBills = await _context.PurchaseBills.AnyAsync(p => p.CompanyId == id);
             if (!hasPurchaseBills)
             {
@@ -201,20 +248,50 @@ namespace MyApp.Api.Services.Implementations
                 company.CurrentGoodsReceiptNumber = 0;
             }
 
-            // Only allow changing starting challan number if no challans exist
-            var hasChallans = await _challanRepo.HasChallansForCompanyAsync(id);
+            // Company starting numbers seed the company-level (no-division)
+            // sequence, so they're only locked once a COMPANY-LEVEL document of
+            // that type exists. Division-tagged docs use their division's own
+            // sequence and don't freeze the company field.
+            var hasChallans = await _context.DeliveryChallans.AnyAsync(c => c.CompanyId == id && c.DivisionId == null);
             if (!hasChallans)
             {
                 company.StartingChallanNumber = dto.StartingChallanNumber;
                 company.CurrentChallanNumber = 0;
             }
 
-            // Only allow changing starting invoice number if no invoices exist
-            var hasInvoices = await _invoiceRepo.HasInvoicesForCompanyAsync(id);
+            var hasInvoices = await _context.Invoices.AnyAsync(i => i.CompanyId == id && i.DivisionId == null);
             if (!hasInvoices)
             {
                 company.StartingInvoiceNumber = dto.StartingInvoiceNumber;
                 company.CurrentInvoiceNumber = 0;
+            }
+
+            var hasSalesQuotes = await _context.SalesQuotes.AnyAsync(q => q.CompanyId == id && q.DivisionId == null);
+            if (!hasSalesQuotes)
+            {
+                company.StartingSalesQuoteNumber = dto.StartingSalesQuoteNumber;
+                company.CurrentSalesQuoteNumber = 0;
+            }
+            var hasSalesOrders = await _context.SalesOrders.AnyAsync(o => o.CompanyId == id && o.DivisionId == null);
+            if (!hasSalesOrders)
+            {
+                company.StartingSalesOrderNumber = dto.StartingSalesOrderNumber;
+                company.CurrentSalesOrderNumber = 0;
+            }
+
+            // Note sequences — same lock per type: changeable only while the
+            // company has no notes of that type yet (mirrors invoices/challans).
+            var hasDebitNotes = await _invoiceRepo.HasNotesForCompanyAsync(id, 9);
+            if (!hasDebitNotes)
+            {
+                company.StartingDebitNoteNumber = dto.StartingDebitNoteNumber > 0 ? dto.StartingDebitNoteNumber : 1;
+                company.CurrentDebitNoteNumber = 0;
+            }
+            var hasCreditNotes = await _invoiceRepo.HasNotesForCompanyAsync(id, 10);
+            if (!hasCreditNotes)
+            {
+                company.StartingCreditNoteNumber = dto.StartingCreditNoteNumber > 0 ? dto.StartingCreditNoteNumber : 1;
+                company.CurrentCreditNoteNumber = 0;
             }
 
             var updated = await _repository.UpdateAsync(company);
@@ -246,6 +323,18 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                // 0. Payments/Receipts (AR/AP subledger). Allocation lines
+                //    reference Invoices/PurchaseBills via Restrict FKs, so they
+                //    MUST go before the invoice/bill deletes below. Allocations
+                //    cascade with their Payment, but delete them explicitly first
+                //    so the Restrict FK to invoices/bills is clear.
+                var paymentIds = await _context.Payments.Where(p => p.CompanyId == id).Select(p => p.Id).ToListAsync();
+                if (paymentIds.Count > 0)
+                {
+                    await _context.PaymentAllocations.Where(a => paymentIds.Contains(a.PaymentId)).ExecuteDeleteAsync();
+                    await _context.Payments.Where(p => p.CompanyId == id).ExecuteDeleteAsync();
+                }
+
                 // 1. Unlink challans from invoices
                 await _context.DeliveryChallans
                     .Where(dc => dc.CompanyId == id && dc.InvoiceId != null)
@@ -265,6 +354,32 @@ namespace MyApp.Api.Services.Implementations
                 {
                     await _context.DeliveryItems.Where(di => challanIds.Contains(di.DeliveryChallanId)).ExecuteDeleteAsync();
                     await _context.DeliveryChallans.Where(dc => dc.CompanyId == id).ExecuteDeleteAsync();
+                }
+
+                // 3b. Sales quotes + sales orders reference Client (Restrict) and
+                //     Division, and cross-reference each other (SalesOrder.SalesQuoteId,
+                //     SalesQuote.ConvertedToSalesOrderId). They MUST go before Clients,
+                //     and the cross-links are nulled first so the two deletes don't
+                //     trip each other's FK. (These tables postdated the original
+                //     cascade, so a company with quotes/orders — e.g. a migrated one —
+                //     used to be undeletable: FK_SalesQuotes_Clients_ClientId.)
+                var quoteIds = await _context.SalesQuotes.Where(q => q.CompanyId == id).Select(q => q.Id).ToListAsync();
+                var orderIds = await _context.SalesOrders.Where(o => o.CompanyId == id).Select(o => o.Id).ToListAsync();
+                if (orderIds.Count > 0)
+                    await _context.SalesOrders.Where(o => o.CompanyId == id)
+                        .ExecuteUpdateAsync(s => s.SetProperty(o => o.SalesQuoteId, (int?)null));
+                if (quoteIds.Count > 0)
+                    await _context.SalesQuotes.Where(q => q.CompanyId == id)
+                        .ExecuteUpdateAsync(s => s.SetProperty(q => q.ConvertedToSalesOrderId, (int?)null));
+                if (orderIds.Count > 0)
+                {
+                    await _context.SalesOrderItems.Where(oi => orderIds.Contains(oi.SalesOrderId)).ExecuteDeleteAsync();
+                    await _context.SalesOrders.Where(o => o.CompanyId == id).ExecuteDeleteAsync();
+                }
+                if (quoteIds.Count > 0)
+                {
+                    await _context.SalesQuoteItems.Where(qi => quoteIds.Contains(qi.SalesQuoteId)).ExecuteDeleteAsync();
+                    await _context.SalesQuotes.Where(q => q.CompanyId == id).ExecuteDeleteAsync();
                 }
 
                 // 4. Delete clients
@@ -321,6 +436,21 @@ namespace MyApp.Api.Services.Implementations
                 //    becomes undeleteable.
                 await _context.FbrCommunicationLogs.Where(l => l.CompanyId == id).ExecuteDeleteAsync();
                 await _context.UserCompanies.Where(uc => uc.CompanyId == id).ExecuteDeleteAsync();
+
+                // 7b. Chart of Accounts. Account -> AccountGroup is Restrict, so
+                //     accounts go first; AccountGroup self-FK is satisfied by the
+                //     set-based delete (all the company's groups go at once).
+                await _context.Accounts.Where(a => a.CompanyId == id).ExecuteDeleteAsync();
+                await _context.AccountGroups.Where(g => g.CompanyId == id).ExecuteDeleteAsync();
+
+                // 7c. Attachments + folders. Attachment -> Company is Restrict and
+                //     Attachment -> Division is NoAction, so these rows MUST go
+                //     before the company row (whose delete cascades Divisions).
+                //     Without this, any company that ever had an upload was
+                //     undeletable. Bytes on disk are left for the attachment
+                //     reconciler — same data-only stance as the rest of the cascade.
+                await _context.Attachments.Where(a => a.CompanyId == id).ExecuteDeleteAsync();
+                await _context.Folders.Where(f => f.CompanyId == id).ExecuteDeleteAsync();
 
                 // 8. Delete the company
                 await _repository.DeleteAsync(company);

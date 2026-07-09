@@ -3,7 +3,9 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 
@@ -22,15 +24,21 @@ namespace MyApp.Api.Controllers
     {
         private readonly IFbrPurchaseImportService _import;
         private readonly ICompanyAccessGuard _access;
+        private readonly IDivisionAccessGuard _divisionAccess;
+        private readonly AppDbContext _db;
         private readonly ILogger<FbrPurchaseImportController> _logger;
 
         public FbrPurchaseImportController(
             IFbrPurchaseImportService import,
             ICompanyAccessGuard access,
+            IDivisionAccessGuard divisionAccess,
+            AppDbContext db,
             ILogger<FbrPurchaseImportController> logger)
         {
             _import = import;
             _access = access;
+            _divisionAccess = divisionAccess;
+            _db = db;
             _logger = logger;
         }
 
@@ -100,7 +108,8 @@ namespace MyApp.Api.Controllers
         [EnableRateLimiting("import")]
         public async Task<IActionResult> Commit(
             [FromForm] IFormFile file,
-            [FromForm] int companyId)
+            [FromForm] int companyId,
+            [FromForm] int? divisionId = null)
         {
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file uploaded." });
@@ -112,6 +121,14 @@ namespace MyApp.Api.Controllers
             if (userId == null) return Unauthorized();
             await _access.AssertAccessAsync(userId.Value, companyId);
 
+            // Division→company integrity (400 on mismatch), then the write
+            // assert — the commit bypasses PurchaseBillsController's guards,
+            // so it must enforce division RBAC itself. Restricted users are
+            // also rejected for divisionId == null (a company-level bulk
+            // import would sidestep their restriction — policy D2).
+            await DivisionNumbering.ResolveAsync(_db, companyId, divisionId);
+            await _divisionAccess.AssertWriteAccessAsync(userId.Value, companyId, divisionId);
+
             var name = (file.FileName ?? "").ToLowerInvariant();
             if (!name.EndsWith(".xls") && !name.EndsWith(".xlsx"))
                 return BadRequest(new { error = "Only .xls or .xlsx files are supported." });
@@ -119,7 +136,7 @@ namespace MyApp.Api.Controllers
             try
             {
                 using var stream = file.OpenReadStream();
-                var response = await _import.CommitAsync(stream, file.FileName!, companyId, userId);
+                var response = await _import.CommitAsync(stream, file.FileName!, companyId, userId, divisionId);
                 return Ok(response);
             }
             catch (Exception ex)

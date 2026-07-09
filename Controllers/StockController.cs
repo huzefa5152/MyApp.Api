@@ -23,14 +23,22 @@ namespace MyApp.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IStockService _stock;
+        private readonly IInventoryReadService _inventory;
+        private readonly IAuditLogService _audit;
         private readonly ICompanyAccessGuard _access;
+        private readonly IDivisionAccessGuard _divisionAccess;
         private readonly int _defaultPageSize;
 
-        public StockController(AppDbContext context, IStockService stock, ICompanyAccessGuard access, IConfiguration configuration)
+        public StockController(AppDbContext context, IStockService stock, IInventoryReadService inventory,
+            IAuditLogService audit, ICompanyAccessGuard access,
+            IDivisionAccessGuard divisionAccess, IConfiguration configuration)
         {
             _context = context;
             _stock = stock;
+            _inventory = inventory;
+            _audit = audit;
             _access = access;
+            _divisionAccess = divisionAccess;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
 
@@ -49,9 +57,19 @@ namespace MyApp.Api.Controllers
         [AuthorizeCompany]
         public async Task<ActionResult<List<StockOnHandRowDto>>> GetOnHand(int companyId)
         {
+            // Division RBAC: restricted users see company-level movements plus
+            // their divisions' (policy D1); other divisions' traffic is
+            // excluded from every aggregate below. Openings stay unfiltered —
+            // they're company-level by design.
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            IQueryable<StockMovement> ScopedMovements() =>
+                divScope == null
+                    ? _context.StockMovements.Where(m => m.CompanyId == companyId)
+                    : _context.StockMovements.Where(m => m.CompanyId == companyId
+                        && (m.DivisionId == null || divScope.Contains(m.DivisionId.Value)));
+
             // Items that have ever moved or have an opening balance.
-            var movItemIds = await _context.StockMovements
-                .Where(m => m.CompanyId == companyId)
+            var movItemIds = await ScopedMovements()
                 .Select(m => m.ItemTypeId)
                 .Distinct()
                 .ToListAsync();
@@ -63,8 +81,13 @@ namespace MyApp.Api.Controllers
             var ids = movItemIds.Union(openItemIds).Distinct().ToList();
             if (ids.Count == 0) return Ok(new List<StockOnHandRowDto>());
 
+            // Exclude soft-deleted item types: a deleted catalog row keeps its
+            // StockMovements (delete doesn't block on movements — see
+            // ItemTypeService.DeleteAsync), so without this filter a deleted
+            // item still surfaced on the on-hand grid. Missing ids fall through
+            // to `it == null → continue` below and drop out of the dashboard.
             var itemTypes = await _context.ItemTypes
-                .Where(it => ids.Contains(it.Id))
+                .Where(it => ids.Contains(it.Id) && !it.IsDeleted)
                 .ToDictionaryAsync(it => it.Id);
 
             var openings = await _context.OpeningStockBalances
@@ -73,14 +96,14 @@ namespace MyApp.Api.Controllers
                 .Select(g => new { ItemTypeId = g.Key, Qty = g.Sum(o => o.Quantity) })
                 .ToDictionaryAsync(x => x.ItemTypeId, x => x.Qty);
 
-            var moveAggs = await _context.StockMovements
-                .Where(m => m.CompanyId == companyId && ids.Contains(m.ItemTypeId))
+            var moveAggs = await ScopedMovements()
+                .Where(m => ids.Contains(m.ItemTypeId))
                 .GroupBy(m => new { m.ItemTypeId, m.Direction })
                 .Select(g => new { g.Key.ItemTypeId, g.Key.Direction, Qty = g.Sum(m => m.Quantity) })
                 .ToListAsync();
 
-            var lastDates = await _context.StockMovements
-                .Where(m => m.CompanyId == companyId && ids.Contains(m.ItemTypeId))
+            var lastDates = await ScopedMovements()
+                .Where(m => ids.Contains(m.ItemTypeId))
                 .GroupBy(m => m.ItemTypeId)
                 .Select(g => new { ItemTypeId = g.Key, Last = g.Max(m => m.MovementDate) })
                 .ToDictionaryAsync(x => x.ItemTypeId, x => x.Last);
@@ -135,6 +158,11 @@ namespace MyApp.Api.Controllers
             var q = _context.StockMovements
                 .Include(m => m.ItemType)
                 .Where(m => m.CompanyId == companyId);
+            // Division RBAC: restricted users only see company-level movements
+            // plus their own divisions' (policy D1).
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            if (divScope != null)
+                q = q.Where(m => m.DivisionId == null || divScope.Contains(m.DivisionId.Value));
             if (itemTypeId.HasValue) q = q.Where(m => m.ItemTypeId == itemTypeId.Value);
             if (!string.IsNullOrWhiteSpace(sourceType)
                 && Enum.TryParse<StockMovementSourceType>(sourceType, true, out var src))
@@ -163,6 +191,42 @@ namespace MyApp.Api.Controllers
                     Notes = m.Notes,
                 })
                 .ToListAsync();
+
+            // Resolve human-facing document numbers for the source rows.
+            // SourceId is the internal PK (e.g. Invoice.Id) — operators need
+            // the InvoiceNumber / PurchaseBillNumber / GoodsReceiptNumber.
+            // Batched per source type so the page is at most 3 extra queries.
+            var invoiceIds = rows.Where(r => r.SourceType == nameof(StockMovementSourceType.Invoice) && r.SourceId.HasValue)
+                                 .Select(r => r.SourceId!.Value).Distinct().ToList();
+            var billIds = rows.Where(r => r.SourceType == nameof(StockMovementSourceType.PurchaseBill) && r.SourceId.HasValue)
+                              .Select(r => r.SourceId!.Value).Distinct().ToList();
+            var grIds = rows.Where(r => r.SourceType == nameof(StockMovementSourceType.GoodsReceipt) && r.SourceId.HasValue)
+                            .Select(r => r.SourceId!.Value).Distinct().ToList();
+
+            var invNums = invoiceIds.Count == 0 ? new Dictionary<int, int>()
+                : await _context.Invoices.Where(i => invoiceIds.Contains(i.Id))
+                    .Select(i => new { i.Id, i.InvoiceNumber })
+                    .ToDictionaryAsync(x => x.Id, x => x.InvoiceNumber);
+            var billNums = billIds.Count == 0 ? new Dictionary<int, int>()
+                : await _context.PurchaseBills.Where(p => billIds.Contains(p.Id))
+                    .Select(p => new { p.Id, p.PurchaseBillNumber })
+                    .ToDictionaryAsync(x => x.Id, x => x.PurchaseBillNumber);
+            var grNums = grIds.Count == 0 ? new Dictionary<int, int>()
+                : await _context.GoodsReceipts.Where(g => grIds.Contains(g.Id))
+                    .Select(g => new { g.Id, g.GoodsReceiptNumber })
+                    .ToDictionaryAsync(x => x.Id, x => x.GoodsReceiptNumber);
+
+            foreach (var r in rows)
+            {
+                if (!r.SourceId.HasValue) continue;
+                if (r.SourceType == nameof(StockMovementSourceType.Invoice) && invNums.TryGetValue(r.SourceId.Value, out var iNo))
+                    r.SourceDocNumber = iNo.ToString();
+                else if (r.SourceType == nameof(StockMovementSourceType.PurchaseBill) && billNums.TryGetValue(r.SourceId.Value, out var pNo))
+                    r.SourceDocNumber = pNo.ToString();
+                else if (r.SourceType == nameof(StockMovementSourceType.GoodsReceipt) && grNums.TryGetValue(r.SourceId.Value, out var gNo))
+                    r.SourceDocNumber = gNo.ToString();
+            }
+
             return Ok(new PagedResult<StockMovementRowDto>
             {
                 Items = rows,
@@ -209,6 +273,9 @@ namespace MyApp.Api.Controllers
             [FromBody] UpsertOpeningBalanceDto dto)
         {
             await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
+            // Opening balances are company-level inventory state — a
+            // division-restricted user may not write that scope (policy D2).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, null);
             var existing = await _context.OpeningStockBalances
                 .FirstOrDefaultAsync(o => o.CompanyId == dto.CompanyId && o.ItemTypeId == dto.ItemTypeId);
             if (existing == null)
@@ -252,6 +319,7 @@ namespace MyApp.Api.Controllers
             var row = await _context.OpeningStockBalances.FindAsync(id);
             if (row == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, row.CompanyId);
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, row.CompanyId, null);
             _context.OpeningStockBalances.Remove(row);
             await _context.SaveChangesAsync();
             return NoContent();
@@ -270,6 +338,9 @@ namespace MyApp.Api.Controllers
         {
             if (dto.Delta == 0) return BadRequest(new { error = "Delta cannot be zero." });
             await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
+            // Adjustments correct company-level inventory — blocked for
+            // division-restricted users (policy D2).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, null);
 
             // Negative deltas can't drive stock below zero. The previous
             // version of this endpoint allowed any signed delta — useful
@@ -308,5 +379,116 @@ namespace MyApp.Api.Controllers
             await _context.SaveChangesAsync();
             return Ok(new { message = "Adjustment recorded." });
         }
+
+        /// <summary>
+        /// Inventory summary (V2 derived read model): one row per item type with
+        /// OnHand / Committed / ToDeliver / Delivered / Available / Incoming,
+        /// computed live from documents. Backs the central inventory summary on
+        /// the Item Types screen and the stock dashboard buckets.
+        /// </summary>
+        [HttpGet("company/{companyId}/summary")]
+        [HasPermission("stock.dashboard.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<List<InventoryBucketRow>>> GetInventorySummary(int companyId)
+        {
+            // Division RBAC scope (policy D1) — same shape the on-hand grid uses.
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            var rows = await _inventory.GetBucketsAsync(companyId, null, divScope);
+            return Ok(rows);
+        }
+
+        /// <summary>
+        /// Switch a company between inventory tracking versions:
+        /// 1 = V1 legacy (only HS-coded item types tracked) and 2 = V2
+        /// (all item types are inventory; HS code is FBR metadata only).
+        /// Reversible and audited — safe because the derived read model
+        /// persists no bucket snapshots, so a flip requires no data migration
+        /// or cleanup (Q8). Gated by stock.policy.manage (admin).
+        /// </summary>
+        [HttpPost("company/{companyId}/flow-version")]
+        [HasPermission("stock.policy.manage")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> SetFlowVersion(int companyId, [FromBody] SetInventoryFlowVersionRequest req)
+        {
+            if (req == null || (req.Version != 1 && req.Version != 2))
+                return BadRequest(new { error = "Version must be 1 (legacy HS-gated) or 2 (standard inventory)." });
+
+            var company = await _context.Companies.FirstOrDefaultAsync(c => c.Id == companyId);
+            if (company == null) return NotFound();
+
+            var previous = company.InventoryFlowVersion;
+            if (previous == req.Version)
+                return Ok(new { companyId, inventoryFlowVersion = previous, changed = false });
+
+            company.InventoryFlowVersion = req.Version;
+            // Q4: over-commit/oversell is hard-blocked by default under V2.
+            // Turning V2 on enables the guard; operators can still switch it to
+            // soft mode afterwards via the company update. Leaving V2 keeps the
+            // operator's current setting (no forced change on the way back).
+            if (req.Version == (byte)InventoryFlowVersion.V2Standard && !company.StockGuardHardBlock)
+                company.StockGuardHardBlock = true;
+            await _context.SaveChangesAsync();
+
+            await _audit.LogAsync(new AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                Level = "Information",
+                UserName = User.Identity?.Name,
+                HttpMethod = "POST",
+                RequestPath = $"/api/stock/company/{companyId}/flow-version",
+                StatusCode = 200,
+                ExceptionType = "INVENTORY_POLICY_CHANGE",
+                Message = $"Inventory flow version changed {previous} → {req.Version} for company {companyId}",
+                CompanyId = companyId,
+            });
+
+            return Ok(new { companyId, inventoryFlowVersion = req.Version, changed = true, previous });
+        }
+
+        /// <summary>
+        /// Set (upsert) a per-company inventory policy override for one item
+        /// type: Mode (0 = follow the company default, 1 = force-tracked,
+        /// 2 = FBR-only / excluded from inventory) and an optional reorder
+        /// level. Since ItemType is a global catalog, this per-company override
+        /// is the only place tracking can be tuned per item. Gated by
+        /// stock.policy.manage.
+        /// </summary>
+        [HttpPost("company/{companyId}/itemtype-policy")]
+        [HasPermission("stock.policy.manage")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> SetItemTypePolicy(int companyId, [FromBody] SetItemTypePolicyRequest req)
+        {
+            if (req == null || req.ItemTypeId <= 0)
+                return BadRequest(new { error = "itemTypeId is required." });
+            if (req.Mode > 2)
+                return BadRequest(new { error = "mode must be 0 (default), 1 (tracked) or 2 (FBR-only)." });
+            if (!await _context.ItemTypes.AnyAsync(it => it.Id == req.ItemTypeId))
+                return NotFound(new { error = "Item type not found." });
+
+            var setting = await _context.CompanyItemTypeSettings
+                .FirstOrDefaultAsync(s => s.CompanyId == companyId && s.ItemTypeId == req.ItemTypeId);
+            if (setting == null)
+            {
+                setting = new CompanyItemTypeSetting
+                {
+                    CompanyId = companyId,
+                    ItemTypeId = req.ItemTypeId,
+                    CreatedAt = DateTime.UtcNow,
+                };
+                _context.CompanyItemTypeSettings.Add(setting);
+            }
+            setting.Mode = (InventoryItemMode)req.Mode;
+            setting.ReorderLevel = req.ReorderLevel;
+            setting.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { companyId, itemTypeId = req.ItemTypeId, mode = req.Mode, reorderLevel = req.ReorderLevel });
+        }
     }
+
+    /// <summary>Request body for POST company/{id}/flow-version.</summary>
+    public record SetInventoryFlowVersionRequest(byte Version);
+
+    /// <summary>Request body for POST company/{id}/itemtype-policy.</summary>
+    public record SetItemTypePolicyRequest(int ItemTypeId, byte Mode, decimal? ReorderLevel);
 }

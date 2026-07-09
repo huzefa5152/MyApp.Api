@@ -27,7 +27,7 @@ Cleans up the test rows it created on success; leaves them on failure
 so you can inspect.
 """
 from __future__ import annotations
-import json, sys, urllib.request, urllib.error
+import json, sys, uuid, urllib.request, urllib.error
 from typing import Any
 
 BASE = "http://localhost:5134"
@@ -48,6 +48,50 @@ def request(method: str, path: str, token: str | None = None, body: Any = None) 
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=20) as r:
+            raw = r.read().decode("utf-8")
+            return r.status, json.loads(raw) if raw else None
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8") if e.fp else ""
+        try:
+            payload = json.loads(raw) if raw else None
+        except Exception:
+            payload = raw
+        return e.code, payload
+
+
+def request_bytes(method: str, path: str, token: str | None = None) -> tuple[int, bytes]:
+    """Like request() but returns raw bytes — for binary downloads and the
+    static-file 404 probe (which must not be JSON-decoded)."""
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(BASE + path, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, (e.read() if e.fp else b"")
+
+
+def upload_file(path: str, token: str | None, filename: str, content: bytes,
+                content_type: str, fields: dict | None = None) -> tuple[int, Any]:
+    """multipart/form-data POST of a single 'file' field plus optional form
+    fields (folderId / entityType / entityId)."""
+    boundary = "----pyform" + uuid.uuid4().hex
+    chunks: list[bytes] = []
+    for k, v in (fields or {}).items():
+        chunks.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode())
+    chunks.append(
+        (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n"
+         f"Content-Type: {content_type}\r\n\r\n").encode() + content + b"\r\n")
+    chunks.append(f"--{boundary}--\r\n".encode())
+    body = b"".join(chunks)
+    headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(BASE + path, data=body, method="POST", headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
             raw = r.read().decode("utf-8")
             return r.status, json.loads(raw) if raw else None
     except urllib.error.HTTPError as e:
@@ -252,6 +296,9 @@ endpoints_to_test = [
     ("GET",  "/api/purchasebills/count?companyId={cid}"),
     ("GET",  "/api/purchasebills/company/{cid}/paged"),
     ("GET",  "/api/goodsreceipts/company/{cid}/paged"),
+    ("GET",  "/api/salesquotes/company/{cid}/paged"),
+    ("GET",  "/api/salesorders/company/{cid}/paged"),
+    ("GET",  "/api/salesorders/company/{cid}/open"),
     ("GET",  "/api/stock/company/{cid}/onhand"),
     ("GET",  "/api/stock/company/{cid}/movements"),
     ("GET",  "/api/stock/company/{cid}/opening"),
@@ -259,6 +306,15 @@ endpoints_to_test = [
     ("GET",  "/api/fbr/scenarios/applicable/{cid}"),
     ("GET",  "/api/fbr/uom/{cid}"),
     ("GET",  "/api/printtemplates/company/{cid}"),
+    ("GET",  "/api/folders/company/{cid}"),
+    ("GET",  "/api/folders/company/{cid}/paged"),
+    ("GET",  "/api/attachments/company/{cid}/entity/SalesQuote/1"),
+    ("GET",  "/api/attachments/company/{cid}/folder/1"),
+    # Payments / Receipts (AR/AP subledger — design §11.5).
+    ("GET",  "/api/payments/receipts/company/{cid}/paged"),
+    ("GET",  "/api/payments/payments/company/{cid}/paged"),
+    ("GET",  "/api/payments/company/{cid}/by-invoice/1"),
+    ("GET",  "/api/payments/company/{cid}/by-bill/1"),
 ]
 for username, forbidden in forbidden_for.items():
     if not forbidden:
@@ -384,6 +440,139 @@ check("Cross-tenant ClientId guard",
 
 # Cleanup the seed Beta client
 request("DELETE", f"/api/clients/{beta_client['id']}", token=admin)
+
+# Suite 7: id-based print-template endpoints — a user cannot touch another
+# tenant's template by id. [AuthorizeCompany] only guards the {companyId}
+# routes; the {id} routes load the row and assert via ICompanyAccessGuard,
+# which throws -> 403. Also covers the cross-tenant DivisionId link guard.
+# Added 2026-06-14 with the multiple-templates-per-company/division feature.
+print("\n  Suite 7 — id-based print-template tenant guard")
+suite = "id-based print-template guard"
+# admin seeds a Beta-scoped (company-level) Challan template
+status, beta_tpl = request("POST", f"/api/printtemplates/company/{beta['id']}", token=admin, body={
+    "templateType": "Challan",
+    "name": "Beta DC",
+    "htmlContent": "<p>{{challanNumber}}</p>",
+    "isDefault": True,
+})
+assert status in (200, 201), f"seed beta template: {status} {beta_tpl}"
+btid = beta_tpl["id"]
+# alice (Alpha only) is blocked on every id-based verb against Beta's template
+s, _ = request("GET", f"/api/printtemplates/{btid}", token=tokens["alice"])
+status_check(suite, "alice GET /printtemplates/{betaId}", s, 403)
+s, _ = request("PUT", f"/api/printtemplates/{btid}", token=tokens["alice"], body={"name": "hacked", "htmlContent": "x"})
+status_check(suite, "alice PUT /printtemplates/{betaId}", s, 403)
+s, _ = request("PUT", f"/api/printtemplates/{btid}/default", token=tokens["alice"])
+status_check(suite, "alice PUT /printtemplates/{betaId}/default", s, 403)
+s, _ = request("DELETE", f"/api/printtemplates/{btid}", token=tokens["alice"])
+status_check(suite, "alice DELETE /printtemplates/{betaId}", s, 403)
+
+# Cross-tenant DivisionId link guard: alice (Alpha) tries to create a template
+# under Alpha but scoped to a Beta-owned division -> 400.
+status, beta_div = request("POST", f"/api/divisions/company/{beta['id']}", token=admin, body={"name": "Beta Div"})
+assert status in (200, 201), f"seed beta division: {status} {beta_div}"
+s, _ = request("POST", f"/api/printtemplates/company/{alpha['id']}", token=tokens["alice"], body={
+    "templateType": "Challan",
+    "divisionId": beta_div["id"],
+    "name": "cross-tenant",
+    "htmlContent": "<p>x</p>",
+})
+status_check(suite, "alice POST /printtemplates (alpha + beta-owned division)", s, 400)
+
+# Seed template is cascade-cleaned when Beta is deleted, but remove it now too.
+request("DELETE", f"/api/printtemplates/{btid}", token=admin)
+
+
+# Suite 8: Folders + Attachments — id-based tenant guard + upload validation +
+# the security rule that stored bytes are NOT publicly served. Added with the
+# unified attachment/folder feature (2026-06-16). admin (seed) performs the
+# allowed writes; alice (Alpha only, Administrator RBAC) proves the tenant
+# guard on Beta-owned rows.
+print("\n  Suite 8 — folders + attachments tenant guard + validation")
+suite8 = "folders + attachments"
+
+status, beta_folder = request("POST", f"/api/folders/company/{beta['id']}", token=admin,
+                              body={"name": "Beta Docs", "description": "iso test"})
+status_check(suite8, "admin create Beta folder", status, 201)
+bfid = beta_folder["id"] if isinstance(beta_folder, dict) else None
+
+# alice (Alpha only) is blocked on Beta's folder by id (load-then-assert path)
+s, _ = request("GET", f"/api/folders/{bfid}", token=tokens["alice"]); status_check(suite8, "alice GET /folders/{betaId}", s, 403)
+s, _ = request("PUT", f"/api/folders/{bfid}", token=tokens["alice"], body={"name": "hacked"}); status_check(suite8, "alice PUT /folders/{betaId}", s, 403)
+s, _ = request("DELETE", f"/api/folders/{bfid}", token=tokens["alice"]); status_check(suite8, "alice DELETE /folders/{betaId}", s, 403)
+
+# alice cannot upload into Beta (companyId-route guard)
+s, _ = upload_file(f"/api/attachments/company/{beta['id']}", tokens["alice"], "x.pdf", b"%PDF-1.4 x", "application/pdf", {"folderId": bfid})
+status_check(suite8, "alice upload into Beta", s, 403)
+
+# admin uploads a valid PDF into the Beta folder
+s, att = upload_file(f"/api/attachments/company/{beta['id']}", admin, "spec.pdf", b"%PDF-1.4\n% minimal pdf\n", "application/pdf", {"folderId": bfid})
+status_check(suite8, "admin upload valid PDF", s, 200)
+aid = att["id"] if isinstance(att, dict) else None
+
+# Validator: blocked extension + magic-byte mismatch must 400
+s, _ = upload_file(f"/api/attachments/company/{beta['id']}", admin, "evil.exe", b"MZ\x90\x00", "application/octet-stream")
+status_check(suite8, "reject .exe (extension)", s, 400)
+s, _ = upload_file(f"/api/attachments/company/{beta['id']}", admin, "page.html", b"<html></html>", "text/html")
+status_check(suite8, "reject .html (extension)", s, 400)
+s, _ = upload_file(f"/api/attachments/company/{beta['id']}", admin, "fake.pdf", b"NOT-A-PDF-AT-ALL", "application/pdf")
+status_check(suite8, "reject .pdf with wrong magic bytes", s, 400)
+
+# Listing returns exactly the one valid upload
+s, lst = request("GET", f"/api/attachments/company/{beta['id']}/folder/{bfid}", token=admin)
+check(suite8, "admin list folder attachments == 1", s == 200 and isinstance(lst, list) and len(lst) == 1, f"status {s}, body {lst}")
+
+if aid:
+    # id-based guards: alice 403 on download + delete of Beta's attachment
+    s, _ = request("GET", f"/api/attachments/{aid}/download", token=tokens["alice"]); status_check(suite8, "alice download Beta attachment", s, 403)
+    s, _ = request("DELETE", f"/api/attachments/{aid}", token=tokens["alice"]); status_check(suite8, "alice delete Beta attachment", s, 403)
+    # admin downloads it: 200 + real PDF bytes
+    s, raw = request_bytes("GET", f"/api/attachments/{aid}/download", admin)
+    check(suite8, "admin download (200 + %PDF bytes)", s == 200 and raw[:4] == b"%PDF", f"status {s}, head {raw[:8]!r}")
+
+# Security: stored bytes must NOT be reachable via the public /data static provider
+s, _ = request_bytes("GET", "/data/attachments/1/2026/06/whatever.pdf")
+status_check(suite8, "/data/attachments static path blocked", s, 404)
+
+# Cleanup (Attachment->Company is Restrict, so remove the attachment + folder
+# before the company-cleanup loop below can delete Beta).
+if aid:
+    request("DELETE", f"/api/attachments/{aid}", token=admin)
+if bfid:
+    request("DELETE", f"/api/folders/{bfid}", token=admin)
+
+
+# Suite 9: sales-order invoice-prefill — id-based tenant guard. Added
+# 2026-07-03 with the "bill from sales order" prefill feature. The route
+# loads the order, then asserts access against its stored CompanyId, so a
+# user must not be able to read another tenant's order header + price
+# history by guessing ids.
+print("\n  Suite 9 — sales-order invoice-prefill tenant guard")
+suite9 = "salesorder invoice-prefill guard"
+status, so_client = request("POST", "/api/clients", token=admin, body={
+    "companyId": beta["id"], "name": "Beta SO Client", "phone": "+92-00-0000000",
+    "site": "Karachi", "ntn": "0000002", "cnic": "0000002000002",
+    "strn": "0000002000002", "registrationType": "Registered",
+})
+assert status in (200, 201), f"seed beta so client: {status} {so_client}"
+status, beta_so = request("POST", f"/api/salesorders/company/{beta['id']}", token=admin, body={
+    "clientId": so_client["id"],
+    "orderDate": "2026-07-03",
+    "items": [{"id": 0, "description": "Prefill Bait", "quantity": 5, "unit": "Numbers, pieces, units"}],
+})
+assert status in (200, 201), f"seed beta sales order: {status} {beta_so}"
+# alice (Alpha only, Administrator RBAC) — RBAC passes, tenant guard must 403
+s, _ = request("GET", f"/api/salesorders/{beta_so['id']}/invoice-prefill", token=tokens["alice"])
+status_check(suite9, "alice GET /salesorders/{betaId}/invoice-prefill", s, 403)
+# admin sees the prefill with the order's line (unit price resolves to 0 —
+# no quote, no billing history on a fresh company)
+s, prefill = request("GET", f"/api/salesorders/{beta_so['id']}/invoice-prefill", token=admin)
+check(suite9, "admin prefill 200 + 1 line",
+      s == 200 and isinstance(prefill, dict) and len(prefill.get("lines") or []) == 1,
+      f"status {s}, body {prefill}")
+# cleanup: order first (client delete would otherwise be restricted)
+request("DELETE", f"/api/salesorders/{beta_so['id']}", token=admin)
+request("DELETE", f"/api/clients/{so_client['id']}", token=admin)
 
 
 # ── Cleanup (test fails → keep rows for inspection) ──────────

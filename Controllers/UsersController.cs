@@ -209,6 +209,12 @@ namespace MyApp.Api.Controllers
             if (user.Username == currentUsername)
                 return BadRequest(new { message = "You cannot delete your own account" });
 
+            // Attachment.UploadedByUserId is a NoAction FK — detach the uploader
+            // audit trail or a user who ever uploaded a file can't be deleted.
+            await _context.Attachments
+                .Where(a => a.UploadedByUserId == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(a => a.UploadedByUserId, (int?)null));
+
             _context.Users.Remove(user);
             await _context.SaveChangesAsync();
 

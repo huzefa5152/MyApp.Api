@@ -7,6 +7,7 @@ import { getClientsByCompany } from "../api/clientApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
 import { formStyles, modalSizes } from "../theme";
+import AttachmentManager from "./AttachmentManager";
 
 const colors = {
   textPrimary: "#1a2332",
@@ -315,6 +316,23 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                   disabled={isDuplicate}
                 />
               </div>
+              {/* Division is intentionally NOT editable — the challan number
+                  is allocated from the division's own sequence at create time. */}
+              {challan.divisionName && (
+                <div style={{ flex: 1, minWidth: 150 }}>
+                  <label style={styles.label}>
+                    Division
+                    <span style={styles.labelHint}> (fixed — numbering is per division)</span>
+                  </label>
+                  <input
+                    type="text"
+                    style={{ ...styles.input, ...styles.lockedInput }}
+                    value={challan.divisionName}
+                    disabled
+                    readOnly
+                  />
+                </div>
+              )}
             </div>
 
             {/* ── PO row: Number (clearable) + Date + Indent No ──
@@ -415,6 +433,14 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
             <button type="button" style={styles.addItemBtn} onClick={addItem}>
               <MdAdd size={16} /> Add Item
             </button>
+
+            {/* Saved record — uploads attach to the challan immediately. */}
+            <AttachmentManager
+              companyId={challan.companyId}
+              entityType="DeliveryChallan"
+              entityId={challan.id}
+              mode="edit"
+            />
           </div>
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>

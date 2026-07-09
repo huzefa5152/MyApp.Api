@@ -39,10 +39,13 @@ namespace MyApp.Api.Services.Implementations
         /// outcome to roll up at the caller. Suppliers and ItemTypes
         /// created during this call are reported via the out counters
         /// so the caller can surface them on the result page.
+        /// divisionId (validated + write-asserted upstream) is stamped
+        /// on the PurchaseBill and its StockMovements; null = company-level.
         /// </summary>
         Task<FbrImportCommitInvoiceResult> CommitOneInvoiceAsync(
             int companyId,
             int? userId,
+            int? divisionId,
             FbrImportPreviewInvoiceDto invoice,
             FbrImportCommitCounts runningCounts);
     }
@@ -69,6 +72,7 @@ namespace MyApp.Api.Services.Implementations
         public async Task<FbrImportCommitInvoiceResult> CommitOneInvoiceAsync(
             int companyId,
             int? userId,
+            int? divisionId,
             FbrImportPreviewInvoiceDto invoice,
             FbrImportCommitCounts runningCounts)
         {
@@ -148,6 +152,7 @@ namespace MyApp.Api.Services.Implementations
                 var bill = new PurchaseBill
                 {
                     CompanyId = companyId,
+                    DivisionId = divisionId,
                     SupplierId = supplier.Id,
                     PurchaseBillNumber = nextNumber,
                     Date = invoice.InvoiceDate ?? DateTime.UtcNow.Date,
@@ -217,7 +222,8 @@ namespace MyApp.Api.Services.Implementations
                         sourceType: StockMovementSourceType.PurchaseBill,
                         sourceId: bill.Id,
                         movementDate: bill.Date,
-                        notes: $"FBR Import: {invoice.SupplierName} #{invoice.InvoiceNo}");
+                        notes: $"FBR Import: {invoice.SupplierName} #{invoice.InvoiceNo}",
+                        divisionId: divisionId);
                     runningCounts.StockMovementsRecorded++;
                 }
 
@@ -321,26 +327,29 @@ namespace MyApp.Api.Services.Implementations
             {
                 var hs = grp.Key.Trim();
                 var first = grp.First();
-                // The committer's identity for an item is (Name, HSCode)
-                // since the unique-index move on 2026-05-16. An existing
-                // "Hardware Items" with NULL HSCode in the catalog must
-                // NOT capture an FBR-import "Hardware Items" line with
-                // a real HS code — those are intentionally two separate
-                // rows now (the no-HS-code row stays as the operator's
-                // un-classified draft).
+
+                // Match on HS CODE ALONE — if any catalog item already
+                // carries this HS code, reuse it and never mint a twin.
+                // (2026-07-07) Earlier this matched on (Name, HSCode), so a
+                // real-HS line whose FBR description didn't equal the
+                // operator's curated name — e.g. "Chemical Products" vs a
+                // blank description falling back to "HS 3824.9980" — spawned
+                // a duplicate item type for the same HS. The import must not
+                // decide identity from the seller's free-text description.
+                // A NULL-HSCode catalog row still can't be captured here:
+                // `it.HSCode == hs` (hs is a real, non-empty code) never
+                // matches NULL, so the operator's un-classified draft is
+                // left untouched. When two legacy twins share this HS, the
+                // oldest (lowest Id) wins so we settle onto the original.
+                int? itemTypeId = await _context.ItemTypes
+                    .Where(it => !it.IsDeleted && it.HSCode == hs)
+                    .OrderBy(it => it.Id)
+                    .Select(it => (int?)it.Id)
+                    .FirstOrDefaultAsync();
+
                 var fallbackName = string.IsNullOrWhiteSpace(first.Description)
                     ? $"HS {hs}"
                     : first.Description;
-
-                // Re-check existence inside the tx — the preview's
-                // matcher ran against a snapshot; another commit in
-                // flight may have created the same row already.
-                int? itemTypeId = await _context.ItemTypes
-                    .Where(it => !it.IsDeleted
-                              && it.HSCode == hs
-                              && it.Name == fallbackName)
-                    .Select(it => (int?)it.Id)
-                    .FirstOrDefaultAsync();
 
                 if (!itemTypeId.HasValue)
                 {

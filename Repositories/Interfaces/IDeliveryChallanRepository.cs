@@ -4,20 +4,28 @@ namespace MyApp.Api.Repositories.Interfaces
 {
     public interface IDeliveryChallanRepository
     {
-        Task<List<DeliveryChallan>> GetDeliveryChallansByCompanyAsync(int companyId);
+        /// <param name="allowedDivisionIds">Division-RBAC scope: when non-null the
+        /// caller is division-restricted and only rows tagged with one of these
+        /// divisions (or no division — company-level rows stay shared, policy D1)
+        /// are returned. Null = unrestricted, no filter.</param>
+        Task<List<DeliveryChallan>> GetDeliveryChallansByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
         Task<(List<DeliveryChallan> Items, int TotalCount)> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
-            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null);
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? divisionId = null, HashSet<int>? allowedDivisionIds = null);
         Task<DeliveryChallan?> GetByIdAsync(int id);
         Task<DeliveryChallan> CreateDeliveryChallanAsync(DeliveryChallan deliveryChallan);
         Task<DeliveryChallan> UpdateAsync(DeliveryChallan deliveryChallan);
         Task DeleteAsync(DeliveryChallan deliveryChallan);
         Task DeleteItemAsync(DeliveryItem item);
         Task<DeliveryItem?> GetItemByIdAsync(int itemId);
-        Task<List<DeliveryChallan>> GetPendingChallansByCompanyAsync(int companyId);
+        /// <summary>Billable challans: "Pending" + "Imported", plus "No PO" when
+        /// <paramref name="includeNoPo"/> (FBR-off companies don't require a
+        /// customer PO to bill).</summary>
+        Task<List<DeliveryChallan>> GetPendingChallansByCompanyAsync(int companyId, bool includeNoPo = false, HashSet<int>? allowedDivisionIds = null);
         Task<int> GetTotalCountAsync();
-        Task<int> GetCountByCompanyAsync(int companyId);
+        Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
         Task<bool> HasChallansForCompanyAsync(int companyId);
         Task<List<DeliveryChallan>> GetSetupRequiredChallansAsync(int companyId, int? clientId = null);
 

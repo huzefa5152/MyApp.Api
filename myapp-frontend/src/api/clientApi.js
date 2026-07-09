@@ -19,6 +19,8 @@ export const copyClientToCompanies = (id, companyIds) =>
   http.post(`/clients/${id}/copy`, { companyIds });
 export const updateClient = (id, payload) => http.put(`/clients/${id}`, payload);
 export const deleteClient = (id) => http.delete(`/clients/${id}`);
+// What a client wipe will cascade-delete (+ whether FBR-submitted bills block it).
+export const getClientDeleteImpact = (id) => http.get(`/clients/${id}/delete-impact`);
 export const getClientsCount = (companyId) =>
   http.get("/clients/count", { params: companyId ? { companyId } : {} });
 

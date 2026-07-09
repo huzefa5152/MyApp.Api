@@ -3,6 +3,9 @@ namespace MyApp.Api.DTOs
     // Data for printing a Delivery Challan
     public class PrintChallanDto
     {
+        // The document's division (null = company-level). Carried so the Excel
+        // export can resolve a division-scoped template, falling back to company.
+        public int? DivisionId { get; set; }
         public string CompanyBrandName { get; set; } = "";
         public string? CompanyLogoPath { get; set; }
         public string? CompanyAddress { get; set; }
@@ -28,6 +31,8 @@ namespace MyApp.Api.DTOs
     // Data for printing a Bill (Invoice)
     public class PrintBillDto
     {
+        // See PrintChallanDto.DivisionId — drives division-aware Excel export.
+        public int? DivisionId { get; set; }
         public string CompanyBrandName { get; set; } = "";
         public string? CompanyLogoPath { get; set; }
         public string? CompanyAddress { get; set; }
@@ -68,6 +73,8 @@ namespace MyApp.Api.DTOs
     // Data for printing a Sales Tax Invoice
     public class PrintTaxInvoiceDto
     {
+        // See PrintChallanDto.DivisionId — drives division-aware Excel export.
+        public int? DivisionId { get; set; }
         // Supplier (company) details
         public string SupplierName { get; set; } = "";
         public string? SupplierAddress { get; set; }
@@ -113,6 +120,18 @@ namespace MyApp.Api.DTOs
         /// </summary>
         public string FbrLogoUrl { get; set; } = "/images/fbr-logo.png";
 
+        // ── Credit / Debit note fields ───────────────────────────────────
+        // Populated only when the printed row is a note (DocumentType 9/10);
+        // null on ordinary sales invoices so existing TaxInvoice templates
+        // are unaffected. CreditNote/DebitNote templates bind these via
+        // {{originalInvoiceNumber}}, {{noteReason}}, {{noteKindLabel}}, etc.
+        public string? NoteKindLabel { get; set; }        // "Credit Note" | "Debit Note"
+        public int? OriginalInvoiceNumber { get; set; }
+        public DateTime? OriginalInvoiceDate { get; set; }
+        public string? OriginalInvoiceRefIRN { get; set; }
+        public string? NoteReason { get; set; }
+        public string? NoteReasonRemarks { get; set; }
+
         public List<PrintTaxItemDto> Items { get; set; } = new();
     }
 
@@ -137,5 +156,180 @@ namespace MyApp.Api.DTOs
         /// {{this.description}}{{else}}{{this.description}}{{/if}}).
         /// </summary>
         public string? HSCode { get; set; }
+    }
+
+    // Data for printing a Sales Quote (priced — mirrors PrintBillDto)
+    public class PrintQuoteDto
+    {
+        public string CompanyBrandName { get; set; } = "";
+        public string? CompanyLogoPath { get; set; }
+        public string? CompanyAddress { get; set; }
+        public string? CompanyPhone { get; set; }
+        public string? CompanyNTN { get; set; }
+        public string? CompanySTRN { get; set; }
+        // Division ("sub-company") branding — filled from the quote's Division
+        // when one is tagged; null for company-level quotes (templates can fall
+        // back to the company fields via {{#if divisionLogoPath}}…{{else}}…).
+        public string? DivisionName { get; set; }
+        public string? DivisionBrandName { get; set; }
+        public string? DivisionLogoPath { get; set; }
+        public string? DivisionAddress { get; set; }
+        public string? DivisionPhone { get; set; }
+        public string? DivisionNTN { get; set; }
+        public string? DivisionSTRN { get; set; }
+        public string? DivisionEmail { get; set; }
+        public int QuoteNumber { get; set; }
+        public DateTime Date { get; set; }
+        public DateTime? ValidUntil { get; set; }
+        public string? CustomerEnquiryRef { get; set; }
+        public DateTime? EnquiryDate { get; set; }
+        public string ClientName { get; set; } = "";
+        public string? ClientAddress { get; set; }
+        public string? ClientNTN { get; set; }
+        public string? ClientSTRN { get; set; }
+        public decimal Subtotal { get; set; }
+        public decimal GSTRate { get; set; }
+        public decimal GSTAmount { get; set; }
+        public decimal GrandTotal { get; set; }
+        public string AmountInWords { get; set; } = "";
+        public string? Notes { get; set; }
+        public List<PrintQuoteItemDto> Items { get; set; } = new();
+    }
+
+    public class PrintQuoteItemDto
+    {
+        public int SNo { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        public string Description { get; set; } = "";
+        public decimal Quantity { get; set; }
+        // Named "Uom" (not "UOM") so the default camelCase JSON key is a clean
+        // "uom" — matching the {{this.uom}} merge token in the templates.
+        public string Uom { get; set; } = "";
+        public decimal UnitPrice { get; set; }
+        public decimal LineTotal { get; set; }
+    }
+
+    // Data for printing a Sales Order (quantity-only — mirrors PrintChallanDto
+    // plus the delivered/remaining fulfilment columns)
+    public class PrintOrderDto
+    {
+        public string CompanyBrandName { get; set; } = "";
+        public string? CompanyLogoPath { get; set; }
+        public string? CompanyAddress { get; set; }
+        public string? CompanyPhone { get; set; }
+        public int SalesOrderNumber { get; set; }
+        public DateTime OrderDate { get; set; }
+        public DateTime? RequiredDate { get; set; }
+        public string? CustomerPoNumber { get; set; }
+        public DateTime? CustomerPoDate { get; set; }
+        /// <summary>Fulfilment roll-up shown on the printed order ({{status}}).</summary>
+        public string Status { get; set; } = "";
+        public string ClientName { get; set; } = "";
+        public string? ClientAddress { get; set; }
+        public string? Site { get; set; }
+        public List<PrintOrderItemDto> Items { get; set; } = new();
+    }
+
+    public class PrintOrderItemDto
+    {
+        public int SNo { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        public string Description { get; set; } = "";
+        public decimal Quantity { get; set; }
+        // See PrintQuoteItemDto.Uom — clean camelCase "uom" key.
+        public string Uom { get; set; } = "";
+        public decimal DeliveredQuantity { get; set; }
+        public decimal RemainingQuantity { get; set; }
+    }
+
+    // Data for printing a Purchase Bill (priced — the tenant company is the
+    // BUYER; supplier* fields carry the vendor party, company* the tenant)
+    public class PrintPurchaseBillDto
+    {
+        public string CompanyBrandName { get; set; } = "";
+        public string? CompanyLogoPath { get; set; }
+        public string? CompanyAddress { get; set; }
+        public string? CompanyPhone { get; set; }
+        public string? CompanyNTN { get; set; }
+        public string? CompanySTRN { get; set; }
+        // Division ("sub-company") branding — null for company-level bills.
+        public string? DivisionName { get; set; }
+        public string? DivisionBrandName { get; set; }
+        public string? DivisionLogoPath { get; set; }
+        public string? DivisionAddress { get; set; }
+        public string? DivisionPhone { get; set; }
+        public string? DivisionNTN { get; set; }
+        public string? DivisionSTRN { get; set; }
+        public string? DivisionEmail { get; set; }
+        public string SupplierName { get; set; } = "";
+        public string? SupplierAddress { get; set; }
+        public string? SupplierPhone { get; set; }
+        public string? SupplierNTN { get; set; }
+        public string? SupplierSTRN { get; set; }
+        public int PurchaseBillNumber { get; set; }
+        public DateTime Date { get; set; }
+        public string? SupplierBillNumber { get; set; }
+        public string? SupplierIRN { get; set; }
+        public string? PaymentTerms { get; set; }
+        public DateTime? DueDate { get; set; }
+        public List<int> GoodsReceiptNumbers { get; set; } = new();
+        public List<int> LinkedSaleBillNumbers { get; set; } = new();
+        public decimal Subtotal { get; set; }
+        public decimal GSTRate { get; set; }
+        public decimal GSTAmount { get; set; }
+        public decimal GrandTotal { get; set; }
+        public string AmountInWords { get; set; } = "";
+        public List<PrintPurchaseBillItemDto> Items { get; set; } = new();
+    }
+
+    public class PrintPurchaseBillItemDto
+    {
+        public int SNo { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        public string Description { get; set; } = "";
+        public decimal Quantity { get; set; }
+        public string UOM { get; set; } = "";
+        public decimal UnitPrice { get; set; }
+        public decimal LineTotal { get; set; }
+        public string? HSCode { get; set; }
+    }
+
+    // Data for printing a Goods Receipt Note (quantity-only — mirrors
+    // PrintChallanDto on the purchase side)
+    public class PrintGoodsReceiptDto
+    {
+        public string CompanyBrandName { get; set; } = "";
+        public string? CompanyLogoPath { get; set; }
+        public string? CompanyAddress { get; set; }
+        public string? CompanyPhone { get; set; }
+        // Division ("sub-company") branding — null for company-level receipts.
+        public string? DivisionName { get; set; }
+        public string? DivisionBrandName { get; set; }
+        public string? DivisionLogoPath { get; set; }
+        public string? DivisionAddress { get; set; }
+        public string? DivisionPhone { get; set; }
+        public string? DivisionNTN { get; set; }
+        public string? DivisionSTRN { get; set; }
+        public string? DivisionEmail { get; set; }
+        public string SupplierName { get; set; } = "";
+        public string? SupplierAddress { get; set; }
+        public string? SupplierPhone { get; set; }
+        public int GoodsReceiptNumber { get; set; }
+        public DateTime ReceiptDate { get; set; }
+        public string? SupplierChallanNumber { get; set; }
+        public int? PurchaseBillNumber { get; set; }
+        public string? Site { get; set; }
+        public string Status { get; set; } = "";
+        public List<PrintGoodsReceiptItemDto> Items { get; set; } = new();
+    }
+
+    public class PrintGoodsReceiptItemDto
+    {
+        public int SNo { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        public string Description { get; set; } = "";
+        public int Quantity { get; set; }
+        // Matches the Challan item convention — templates bind {{this.unit}}.
+        public string Unit { get; set; } = "";
     }
 }

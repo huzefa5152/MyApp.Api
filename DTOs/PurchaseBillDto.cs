@@ -7,6 +7,8 @@ namespace MyApp.Api.DTOs
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public string CompanyName { get; set; } = "";
+        public int? DivisionId { get; set; }
+        public string? DivisionName { get; set; }
         public int SupplierId { get; set; }
         public string SupplierName { get; set; } = "";
         public string? SupplierBillNumber { get; set; }
@@ -17,6 +19,15 @@ namespace MyApp.Api.DTOs
         public decimal GrandTotal { get; set; }
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }
+
+        // ── Payments (design §11.5) — mirror of InvoiceDto. PaymentStatus is
+        // "Unpaid" | "PartiallyPaid" | "Paid" | "Overdue", derived at read time.
+        public DateTime? DueDate { get; set; }
+        public decimal AmountPaid { get; set; }
+        public decimal BalanceDue { get; set; }
+        public string PaymentStatus { get; set; } = "Unpaid";
+        public int DaysOverdue { get; set; }
+
         public int? DocumentType { get; set; }
         public string? PaymentMode { get; set; }
         public string ReconciliationStatus { get; set; } = "Pending";
@@ -65,6 +76,7 @@ namespace MyApp.Api.DTOs
     {
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
+        public int? DivisionId { get; set; }
         public int SupplierId { get; set; }
         public string? SupplierBillNumber { get; set; }
         public string? SupplierIRN { get; set; }

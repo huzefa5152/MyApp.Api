@@ -237,6 +237,13 @@ builder.Services.AddRateLimiter(options =>
 // Register Repositories
 builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<IDeliveryChallanRepository, DeliveryChallanRepository>();
+builder.Services.AddScoped<ISalesQuoteRepository, SalesQuoteRepository>();
+builder.Services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
+builder.Services.AddScoped<IFolderRepository, FolderRepository>();
+builder.Services.AddScoped<IAttachmentRepository, AttachmentRepository>();
+builder.Services.AddScoped<IDivisionRepository, DivisionRepository>();
+builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
+builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IClientRepository, ClientRepository>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
@@ -248,6 +255,29 @@ builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 // Register Services
 builder.Services.AddScoped<ICompanyService, CompanyService>();
 builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
+// Sales Quote (priced) + Sales Order (quantity-only). SalesQuoteService
+// depends on ISalesOrderService (quote→order conversion); SalesOrderService
+// depends on IDeliveryChallanService (create-challan-from-order). No cycle.
+builder.Services.AddScoped<ISalesQuoteService, SalesQuoteService>();
+builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
+// Unified attachments + document folders. AttachmentStorage is stateless
+// (just the disk root) so it's a singleton; the services are scoped.
+builder.Services.AddScoped<IFolderService, FolderService>();
+builder.Services.AddScoped<IAttachmentService, AttachmentService>();
+builder.Services.AddSingleton<MyApp.Api.Helpers.AttachmentStorage>();
+builder.Services.AddScoped<IDivisionService, DivisionService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<ICoaPresetSeeder, CoaPresetSeeder>();
+// General Ledger (Phase B): the posting engine, GL admin/reports/summary,
+// manual journal entries and inter-account transfers. All scoped — the
+// posting service shares the request's DbContext so it joins the caller's
+// transaction.
+builder.Services.AddScoped<IPostingService, PostingService>();
+builder.Services.AddScoped<IGeneralLedgerService, GeneralLedgerService>();
+builder.Services.AddScoped<IJournalEntryService, JournalEntryService>();
+builder.Services.AddScoped<IAccountTransferService, AccountTransferService>();
+builder.Services.AddScoped<ILegacyImportService, LegacyImportService>();
 builder.Services.AddScoped<IClientService, ClientService>();
 // "Common Clients" grouping — the same legal entity (matched by NTN, then
 // fallback to normalised name) shared across multiple companies. Sits
@@ -272,6 +302,12 @@ builder.Services.AddScoped<IFbrLookupService, FbrLookupService>();
 // All write operations are no-ops when Company.InventoryTrackingEnabled
 // is false, so existing tenants keep working unchanged.
 builder.Services.AddScoped<IStockService, StockService>();
+// Derived inventory read model (V2): computes Committed/ToDeliver/Delivered/
+// Incoming buckets from live document state (nothing persisted, so nothing
+// drifts). Read-only; used by the inventory summary + availability guard.
+builder.Services.AddScoped<IInventoryReadService, InventoryReadService>();
+// Reporting module (read-only, company-scoped reports for the Reports navbar).
+builder.Services.AddScoped<IReportService, ReportService>();
 // Tax mapping engine: single source of truth for HS_UOM, SaleTypeToRate
 // and scenario rules. Used by ItemType save (auto-pick UOM) and FBR
 // pre-validate (combination check before submitting).
@@ -400,6 +436,12 @@ builder.Services.AddScoped<IPermissionService, PermissionService>();
 // through otherwise (preserves Hakimi/Roshan behaviour).
 builder.Services.AddScoped<ICompanyAccessGuard, CompanyAccessGuard>();
 
+// Division-scope guard — the layer below the company guard: within a
+// company, users flagged RestrictToDivisions on their UserCompany row
+// only reach the divisions granted in UserDivisions. Default (flag off)
+// is unrestricted, so existing users see no behaviour change.
+builder.Services.AddScoped<IDivisionAccessGuard, DivisionAccessGuard>();
+
 // CORS — origins read from configuration (Cors:AllowedOrigins, comma-
 // separated). Empty / missing collapses to "no cross-origin allowed",
 // which is correct when the SPA is served from the same host as the
@@ -485,62 +527,64 @@ using (var scope = app.Services.CreateScope())
     // — we log a clear AuditLog row and leave the legacy non-unique
     // index in place. Operators have to dedupe first; the system stays
     // working in the meantime.
+    // 2026-07-02: the Invoice uniqueness is now scoped per document kind —
+    // the SplitCreditDebitNoteSeries migration owns
+    // UNIQUE (CompanyId, NoteKind, InvoiceNumber), which lets Credit Note #1,
+    // Debit Note #1 and sale bill #1 coexist while still catching concurrent
+    // MAX+1 collisions within each sequence (the C-8 guarantee). The legacy
+    // unscoped index this backfill used to (re)create must therefore be
+    // RETIRED — recreating it would make note #1 collide with bill #1.
     db.Database.ExecuteSqlRaw(@"
+        -- Invoice numbering is scoped per (CompanyId, DivisionId, NoteKind,
+        -- InvoiceNumber) — the migration chain owns that index. This guard
+        -- only retires superseded runtime-created indexes on drifted DBs.
         BEGIN TRY
-            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices') AND is_unique = 0)
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices'))
             BEGIN
                 DROP INDEX [IX_Invoices_CompanyId_InvoiceNumber] ON [Invoices];
-                CREATE UNIQUE INDEX [IX_Invoices_CompanyId_InvoiceNumber] ON [Invoices] ([CompanyId], [InvoiceNumber]);
             END
-            ELSE IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices'))
+            -- MERGED 2026-07-03: invoice numbering is now scoped per
+            -- (CompanyId, DivisionId, NoteKind, InvoiceNumber) — owned by the
+            -- SyncNoteAndDivisionNumbering migration. The narrower 3-col
+            -- division index (previously created here at runtime) would make
+            -- Credit/Debit Note #1 collide with sale bill #1, so it is
+            -- retired the same way as the legacy 2-col one above.
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_DivisionId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices'))
             BEGIN
-                CREATE UNIQUE INDEX [IX_Invoices_CompanyId_InvoiceNumber] ON [Invoices] ([CompanyId], [InvoiceNumber]);
+                DROP INDEX [IX_Invoices_CompanyId_DivisionId_InvoiceNumber] ON [Invoices];
             END
         END TRY
         BEGIN CATCH
-            -- Duplicate data prevents the unique index. Leave the existing
-            -- index in place; the service-layer retry on save still helps,
-            -- but operators must dedupe before full protection lands.
             INSERT INTO AuditLogs (Timestamp, Level, UserName, HttpMethod, RequestPath, StatusCode, ExceptionType, Message)
             VALUES (SYSUTCDATETIME(), 'Warning', 'system', 'SEED', '/migrations/unique-invoice-number', 500,
-                    'INVOICE_UNIQUE_INDEX_BLOCKED',
-                    CONCAT('Could not enforce UNIQUE (CompanyId, InvoiceNumber): ', ERROR_MESSAGE()));
+                    'INVOICE_LEGACY_INDEX_DROP_BLOCKED',
+                    CONCAT('Could not drop legacy invoice-number index: ', ERROR_MESSAGE()));
         END CATCH;
 
         BEGIN TRY
-            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_PurchaseBills_CompanyId_PurchaseBillNumber' AND object_id = OBJECT_ID('PurchaseBills') AND is_unique = 0)
-            BEGIN
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_PurchaseBills_CompanyId_PurchaseBillNumber' AND object_id = OBJECT_ID('PurchaseBills'))
                 DROP INDEX [IX_PurchaseBills_CompanyId_PurchaseBillNumber] ON [PurchaseBills];
-                CREATE UNIQUE INDEX [IX_PurchaseBills_CompanyId_PurchaseBillNumber] ON [PurchaseBills] ([CompanyId], [PurchaseBillNumber]);
-            END
-            ELSE IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_PurchaseBills_CompanyId_PurchaseBillNumber' AND object_id = OBJECT_ID('PurchaseBills'))
-            BEGIN
-                CREATE UNIQUE INDEX [IX_PurchaseBills_CompanyId_PurchaseBillNumber] ON [PurchaseBills] ([CompanyId], [PurchaseBillNumber]);
-            END
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_PurchaseBills_CompanyId_DivisionId_PurchaseBillNumber' AND object_id = OBJECT_ID('PurchaseBills'))
+                CREATE UNIQUE INDEX [IX_PurchaseBills_CompanyId_DivisionId_PurchaseBillNumber] ON [PurchaseBills] ([CompanyId], [DivisionId], [PurchaseBillNumber]);
         END TRY
         BEGIN CATCH
             INSERT INTO AuditLogs (Timestamp, Level, UserName, HttpMethod, RequestPath, StatusCode, ExceptionType, Message)
             VALUES (SYSUTCDATETIME(), 'Warning', 'system', 'SEED', '/migrations/unique-purchasebill-number', 500,
                     'PURCHASEBILL_UNIQUE_INDEX_BLOCKED',
-                    CONCAT('Could not enforce UNIQUE (CompanyId, PurchaseBillNumber): ', ERROR_MESSAGE()));
+                    CONCAT('Could not enforce UNIQUE (CompanyId, DivisionId, PurchaseBillNumber): ', ERROR_MESSAGE()));
         END CATCH;
 
         BEGIN TRY
-            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_GoodsReceipts_CompanyId_GoodsReceiptNumber' AND object_id = OBJECT_ID('GoodsReceipts') AND is_unique = 0)
-            BEGIN
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_GoodsReceipts_CompanyId_GoodsReceiptNumber' AND object_id = OBJECT_ID('GoodsReceipts'))
                 DROP INDEX [IX_GoodsReceipts_CompanyId_GoodsReceiptNumber] ON [GoodsReceipts];
-                CREATE UNIQUE INDEX [IX_GoodsReceipts_CompanyId_GoodsReceiptNumber] ON [GoodsReceipts] ([CompanyId], [GoodsReceiptNumber]);
-            END
-            ELSE IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_GoodsReceipts_CompanyId_GoodsReceiptNumber' AND object_id = OBJECT_ID('GoodsReceipts'))
-            BEGIN
-                CREATE UNIQUE INDEX [IX_GoodsReceipts_CompanyId_GoodsReceiptNumber] ON [GoodsReceipts] ([CompanyId], [GoodsReceiptNumber]);
-            END
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_GoodsReceipts_CompanyId_DivisionId_GoodsReceiptNumber' AND object_id = OBJECT_ID('GoodsReceipts'))
+                CREATE UNIQUE INDEX [IX_GoodsReceipts_CompanyId_DivisionId_GoodsReceiptNumber] ON [GoodsReceipts] ([CompanyId], [DivisionId], [GoodsReceiptNumber]);
         END TRY
         BEGIN CATCH
             INSERT INTO AuditLogs (Timestamp, Level, UserName, HttpMethod, RequestPath, StatusCode, ExceptionType, Message)
             VALUES (SYSUTCDATETIME(), 'Warning', 'system', 'SEED', '/migrations/unique-goodsreceipt-number', 500,
                     'GOODSRECEIPT_UNIQUE_INDEX_BLOCKED',
-                    CONCAT('Could not enforce UNIQUE (CompanyId, GoodsReceiptNumber): ', ERROR_MESSAGE()));
+                    CONCAT('Could not enforce UNIQUE (CompanyId, DivisionId, GoodsReceiptNumber): ', ERROR_MESSAGE()));
         END CATCH;
     ");
 
@@ -630,6 +674,19 @@ using (var scope = app.Services.CreateScope())
     // Seed the starter catalog of FBR-mapped item types (idempotent — skips
     // any HS code / name already present, so it's safe to run on every boot)
     await MyApp.Api.Data.ItemTypeSeeder.SeedAsync(db);
+
+    // Sales Quote / Sales Order template merge fields — idempotent runtime
+    // seed (keyed by TemplateType+FieldExpression). Not HasData: hard-coded
+    // seed ids collide with operator-added merge fields on drifted databases.
+    await MyApp.Api.Data.SalesMergeFieldSeeder.SeedAsync(db);
+
+    // Credit/Debit Note + Purchase Bill + Goods Receipt template merge
+    // fields — same idempotent runtime-seed contract.
+    await MyApp.Api.Data.NoteAndPurchaseMergeFieldSeeder.SeedAsync(db);
+
+    // Division (sub-company) merge fields across all template types — same
+    // idempotent runtime-seed contract.
+    await MyApp.Api.Data.DivisionMergeFieldSeeder.SeedAsync(db);
 
     // Demo-environment data seeder. Runs ONLY when ASPNETCORE_ENVIRONMENT
     // is "Demo" (set by scripts/run-demo.ps1 which also points the
@@ -1675,6 +1732,134 @@ using (var scope = app.Services.CreateScope())
                 INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (@adminRoleId, @supplierCopyId);
         END
     ");
+
+    // ── 2026-06-17: flatten attachment on-disk layout ─────────────────────
+    // Earlier builds stored files under {companyId}/{yyyy}/{MM}/. The layout is
+    // now flat by folder name (or "Uncategorized") to mirror what the operator
+    // sees. Re-home any rows still on the old layout, update their StoragePath,
+    // then prune the emptied legacy directories. Idempotent: gated by an
+    // AuditLog marker, and each row moves only when its path doesn't already
+    // match the target. No-op in prod (no attachments exist yet).
+    if (!db.AuditLogs.Any(a => a.ExceptionType == "ATTACHMENT_STORAGE_FLATTEN_V1"))
+    {
+        try
+        {
+            var storage = scope.ServiceProvider.GetRequiredService<MyApp.Api.Helpers.AttachmentStorage>();
+            var moved = 0;
+            foreach (var att in db.Attachments.Include(a => a.Folder).ToList())
+            {
+                var targetDir = MyApp.Api.Helpers.AttachmentStorage.DirName(att.Folder?.Name);
+                var targetPath = $"{targetDir}/{att.StoredFileName}";
+                if (string.Equals(att.StoragePath, targetPath, StringComparison.OrdinalIgnoreCase)) continue;
+
+                var oldAbs = Path.Combine(storage.Root, att.StoragePath.Replace('/', Path.DirectorySeparatorChar));
+                var newAbs = Path.Combine(storage.Root, targetDir, att.StoredFileName);
+                Directory.CreateDirectory(Path.GetDirectoryName(newAbs)!);
+                if (System.IO.File.Exists(oldAbs) && !System.IO.File.Exists(newAbs))
+                    System.IO.File.Move(oldAbs, newAbs);
+                att.StoragePath = targetPath;
+                moved++;
+            }
+            if (moved > 0) db.SaveChanges();
+
+            // Prune now-empty legacy directories (deepest first) under the root.
+            if (Directory.Exists(storage.Root))
+            {
+                foreach (var dir in Directory.GetDirectories(storage.Root, "*", System.IO.SearchOption.AllDirectories)
+                                             .OrderByDescending(d => d.Length))
+                {
+                    try { if (!Directory.EnumerateFileSystemEntries(dir).Any()) Directory.Delete(dir); }
+                    catch { /* ignore — best-effort cleanup */ }
+                }
+            }
+
+            db.Database.ExecuteSqlRaw(
+                "INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp]) " +
+                "VALUES ('Info', 'ATTACHMENT_STORAGE_FLATTEN_V1', {0}, 'STARTUP', '/seed/attachments/flatten', 200, SYSUTCDATETIME())",
+                $"Attachment storage flattened: {moved} file(s) re-homed to the folder-name layout.");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Attachment storage flatten backfill failed (non-fatal).");
+        }
+    }
+
+    // Division RBAC: Attachments now denormalize their linked document's
+    // DivisionId (stamped at upload for new rows). Backfill existing rows from
+    // the entity each one points at — company-matched join so a corrupt link
+    // can never pull a foreign division. Folder-only rows stay NULL. Idempotent
+    // via the AuditLog marker.
+    if (!db.AuditLogs.Any(a => a.ExceptionType == "ATTACHMENT_DIVISION_BACKFILL_V1"))
+    {
+        try
+        {
+            var tables = new (string EntityType, string Table)[]
+            {
+                ("SalesQuote", "SalesQuotes"),
+                ("SalesOrder", "SalesOrders"),
+                ("DeliveryChallan", "DeliveryChallans"),
+                ("Invoice", "Invoices"),
+                ("PurchaseBill", "PurchaseBills"),
+                ("GoodsReceipt", "GoodsReceipts"),
+            };
+            var stamped = 0;
+            foreach (var (entityType, table) in tables)
+            {
+                stamped += db.Database.ExecuteSqlRaw(
+                    $"UPDATE a SET a.DivisionId = d.DivisionId FROM Attachments a " +
+                    $"JOIN {table} d ON d.Id = a.EntityId AND d.CompanyId = a.CompanyId " +
+                    $"WHERE a.EntityType = {{0}} AND a.DivisionId IS NULL AND d.DivisionId IS NOT NULL",
+                    entityType);
+            }
+
+            db.Database.ExecuteSqlRaw(
+                "INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp]) " +
+                "VALUES ('Info', 'ATTACHMENT_DIVISION_BACKFILL_V1', {0}, 'STARTUP', '/seed/attachments/division', 200, SYSUTCDATETIME())",
+                $"Attachment DivisionId backfilled from linked documents: {stamped} row(s) stamped.");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Attachment division backfill failed (non-fatal).");
+        }
+    }
+
+    // Division RBAC (Phase 4): StockMovements now denormalize the source
+    // document's DivisionId (stamped at record time for new rows). Backfill
+    // existing rows from their source Invoice / PurchaseBill / GoodsReceipt —
+    // company-matched join, same defensive stance as the attachment backfill.
+    // Opening balances and adjustments stay NULL (company-level, policy D1).
+    // SourceType ints per StockMovementSourceType: PurchaseBill=1, Invoice=2,
+    // GoodsReceipt=4.
+    if (!db.AuditLogs.Any(a => a.ExceptionType == "STOCKMOVEMENT_DIVISION_BACKFILL_V1"))
+    {
+        try
+        {
+            var sources = new (int SourceType, string Table)[]
+            {
+                (1, "PurchaseBills"),
+                (2, "Invoices"),
+                (4, "GoodsReceipts"),
+            };
+            var stamped = 0;
+            foreach (var (sourceType, table) in sources)
+            {
+                stamped += db.Database.ExecuteSqlRaw(
+                    $"UPDATE m SET m.DivisionId = d.DivisionId FROM StockMovements m " +
+                    $"JOIN {table} d ON d.Id = m.SourceId AND d.CompanyId = m.CompanyId " +
+                    $"WHERE m.SourceType = {{0}} AND m.DivisionId IS NULL AND d.DivisionId IS NOT NULL",
+                    sourceType);
+            }
+
+            db.Database.ExecuteSqlRaw(
+                "INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp]) " +
+                "VALUES ('Info', 'STOCKMOVEMENT_DIVISION_BACKFILL_V1', {0}, 'STARTUP', '/seed/stock/division', 200, SYSUTCDATETIME())",
+                $"StockMovement DivisionId backfilled from source documents: {stamped} row(s) stamped.");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "StockMovement division backfill failed (non-fatal).");
+        }
+    }
 }
 
 // Configure the HTTP request pipeline.
@@ -1804,6 +1989,24 @@ app.UseStaticFiles();
 // Serve user-uploaded files (logos, avatars) from persistent data/ folder
 var dataPath = Path.Combine(app.Environment.ContentRootPath, "data");
 Directory.CreateDirectory(dataPath);
+// Attachment bytes live under data/attachments (created up-front so the very
+// first upload doesn't race the directory into existence).
+Directory.CreateDirectory(Path.Combine(dataPath, "attachments"));
+
+// SECURITY: attachments are tenant-isolated business documents and must NOT be
+// reachable via the public /data static provider (logos/avatars are fine —
+// low-sensitivity). 404 any direct /data/attachments/* hit here, BEFORE the
+// static middleware below; downloads go through the authenticated
+// /api/attachments/{id}/download endpoint, which asserts company access.
+app.Use(async (ctx, next) =>
+{
+    if (ctx.Request.Path.StartsWithSegments("/data/attachments", StringComparison.OrdinalIgnoreCase))
+    {
+        ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+    await next();
+});
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(dataPath),

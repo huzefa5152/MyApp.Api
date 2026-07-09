@@ -2,11 +2,16 @@ import { useState, useRef, useEffect } from "react";
 import { MdAdd, MdClose, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
+import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import SelectDropdown from "./SelectDropdown";
+import DivisionSelect from "./DivisionSelect";
 import QuantityInput from "./QuantityInput";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
+import { getItemTypes } from "../api/itemTypeApi";
 import { formStyles, modalSizes } from "../theme";
+import AttachmentManager from "./AttachmentManager";
 
 const colors = {
   blue: "#0d47a1",
@@ -22,16 +27,21 @@ const colors = {
   success: "#28a745",
 };
 
-export default function ChallanForm({ onClose, onSaved, companyId }) {
+export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisionId }) {
   const [client, setClient] = useState(null);
   const [site, setSite] = useState("");
   const [poNumber, setPoNumber] = useState("");
   const [poDate, setPoDate] = useState("");
   const [indentNo, setIndentNo] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
+  const { has } = usePermissions();
+  // New challans default to the division the page is currently filtered to
+  // (so "filter to a division → New Challan" lands in that division).
+  const [divisionId, setDivisionId] = useState(defaultDivisionId ? String(defaultDivisionId) : "");
   const [items, setItems] = useState([
-    { description: "", quantity: 1, unit: "" },
+    { description: "", quantity: 1, unit: "", itemTypeId: null },
   ]);
+  const [itemTypes, setItemTypes] = useState([]);
   // Units list with the AllowsDecimalQuantity flag — drives whether each
   // row's quantity input accepts decimals or only whole numbers. Loaded
   // once on mount; cheap (≤50 rows) and the operator can flip flags via
@@ -40,10 +50,23 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const itemsContainerRef = useRef(null);
+  const attachmentRef = useRef(null);
 
   useEffect(() => {
     getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
   }, []);
+  useEffect(() => {
+    getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([]));
+  }, [companyId]);
+
+  // Picking an item type only TAGS the challan line (records ItemTypeId); it must
+  // NOT overwrite the typed description/unit. Description auto-fill from an item
+  // type is reserved for Invoice (FBR-classification) mode.
+  const pickItemType = (index, newId) => {
+    const next = [...items];
+    next[index].itemTypeId = newId ? parseInt(newId) : null;
+    setItems(next);
+  };
 
   useEffect(() => {
     if (itemsContainerRef.current) {
@@ -86,7 +109,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       return;
     }
     setError("");
-    setItems([...items, { description: "", quantity: 1, unit: "" }]);
+    setItems([...items, { description: "", quantity: 1, unit: "", itemTypeId: null }]);
   };
 
   const removeItem = (index) => setItems(items.filter((_, i) => i !== index));
@@ -108,8 +131,9 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
     setSaving(true);
     try {
-      await onSaved({
+      const saved = await onSaved({
         clientId: client.id,
+        divisionId: divisionId ? parseInt(divisionId) : null,
         clientName: client.label,
         site: site || null,
         poNumber: poNumber.trim(),
@@ -118,16 +142,21 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
         deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : null,
         items: validItems.map((i) => ({
           ...i,
-          // Item Type isn't captured on the challan side anymore — that
-          // happens on the Invoices tab during FBR classification. Send
-          // null so the backend stores DeliveryItem.ItemTypeId=null.
-          itemTypeId: null,
+          // Item Type is optional on a challan line. When the operator picks
+          // one it persists on DeliveryItem.ItemTypeId; otherwise null and FBR
+          // classification can still happen later on the Invoices tab.
+          itemTypeId: i.itemTypeId || null,
           // parseFloat preserves decimals (12.5 KG, 0.0004 Carat). The
           // QuantityInput already coerces correctly per UOM, this is just
           // defensive in case a string slips through.
           quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
         })),
       });
+      // Upload any attachments staged before the challan had an id — must run
+      // BEFORE onClose() unmounts this form (and its staged files with it).
+      try {
+        if (saved?.id) await attachmentRef.current?.flush(saved.id);
+      } catch { /* attachments are best-effort — the challan is already saved */ }
       onClose();
     } catch (err) {
       // Server-supplied user-friendly message wins; otherwise show a
@@ -207,6 +236,9 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                 <label style={styles.label}>Delivery Date</label>
                 <input type="date" style={styles.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
               </div>
+              {has("divisions.manage.view") && (
+                <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ color: "#5f6d7e", fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 150 }} />
+              )}
             </div>
 
             {/* PO row: Number + Date + Indent No — flex weights match
@@ -237,14 +269,24 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
             <div style={{ marginTop: "0.25rem" }}>
               <label style={{ ...styles.label, marginBottom: "0.5rem" }}>Items</label>
 
-              {/* Item Type lives on the Invoices tab now — challans capture
-                  description / qty / unit only. Operators classify each line
-                  by Item Type when preparing the bill for FBR submission. */}
+              {/* Each line has an optional Item Type (its own column), then
+                  description / qty / unit. Item Type can still be (re)classified
+                  on the Invoices tab when preparing the bill for FBR. */}
 
               <div ref={itemsContainerRef} style={styles.itemsContainer}>
                 {items.map((item, idx) => (
                   <div key={idx} style={styles.itemRow}>
                     <div style={styles.itemIndex}>{idx + 1}</div>
+
+                    <div style={{ width: 190, flexShrink: 0 }}>
+                      <SearchableItemTypeSelect
+                        items={itemTypes}
+                        value={item.itemTypeId || ""}
+                        onChange={(newId, picked) => pickItemType(idx, newId, picked)}
+                        placeholder="— item type (optional) —"
+                        style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                      />
+                    </div>
 
                     <div style={{ flex: 2, minWidth: 0 }}>
                       <LookupAutocomplete
@@ -252,6 +294,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                         endpoint="/lookup/items"
                         value={item.description}
                         onChange={(val) => handleItemChange(idx, "description", val)}
+                        multiline
                       />
                     </div>
 
@@ -284,6 +327,16 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
               <button type="button" style={styles.addItemBtn} onClick={addItem}><MdAdd size={16} /> Add Item</button>
             </div>
+
+            {/* entityId=null — files are staged client-side and flushed against
+                the new challan id after save (this form is create-only). */}
+            <AttachmentManager
+              ref={attachmentRef}
+              companyId={companyId}
+              entityType="DeliveryChallan"
+              entityId={null}
+              mode="edit"
+            />
           </div>
 
           <div style={formStyles.footer}>

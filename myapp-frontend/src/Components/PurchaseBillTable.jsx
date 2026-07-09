@@ -1,8 +1,17 @@
-import { MdVisibility, MdEdit, MdDelete } from "react-icons/md";
+import { MdVisibility, MdEdit, MdDelete, MdPayments, MdPrint, MdPictureAsPdf } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 
-export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete }) {
+// Payment-status pill (mirror of InvoiceTable's): Paid / Partial / Overdue / Unpaid.
+function paymentStatusBadge(b) {
+  const s = b.paymentStatus;
+  if (s === "Paid") return <StatusBadge tone="success">Paid</StatusBadge>;
+  if (s === "Overdue") return <StatusBadge tone="danger" title={b.daysOverdue ? `${b.daysOverdue} day(s) overdue` : undefined}>Overdue{b.daysOverdue ? ` ${b.daysOverdue}d` : ""}</StatusBadge>;
+  if (s === "PartiallyPaid") return <StatusBadge tone="info">Partial</StatusBadge>;
+  return <StatusBadge tone="neutral">Unpaid</StatusBadge>;
+}
+
+export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete, onRecordPayment, onShowPayments, onPrint, onExportPdf, exportingId }) {
   const columns = [
     {
       key: "purchaseBillNumber",
@@ -14,7 +23,12 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
     {
       key: "supplierName",
       header: "Supplier",
-      render: (b) => b.supplierName || "—",
+      render: (b) => (
+        <>
+          {b.supplierName || "—"}
+          {b.divisionName && <span style={divisionChip}>{b.divisionName}</span>}
+        </>
+      ),
     },
     {
       key: "date",
@@ -40,6 +54,26 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       render: (b) => `Rs. ${(b.grandTotal ?? 0).toLocaleString()}`,
     },
     {
+      key: "balanceDue",
+      header: "Balance Due",
+      width: 130,
+      align: "right",
+      accessor: (b) => b.balanceDue ?? 0,
+      render: (b) => `Rs. ${(b.balanceDue ?? 0).toLocaleString()}`,
+    },
+    {
+      key: "paymentStatus",
+      header: "Payment",
+      width: 110,
+      accessor: (b) => b.paymentStatus || "",
+      render: (b) => (perms.canViewPayments && onShowPayments) ? (
+        <button type="button" onClick={() => onShowPayments(b)} title="View payments & balance"
+          style={{ all: "unset", cursor: "pointer" }}>
+          {paymentStatusBadge(b)}
+        </button>
+      ) : paymentStatusBadge(b),
+    },
+    {
       key: "reconciliationStatus",
       header: "Status",
       width: 130,
@@ -63,6 +97,21 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       <button style={btn.view} onClick={() => onView?.(b)} title="View">
         <MdVisibility size={14} />
       </button>
+      {perms.canPrint && onPrint && (
+        <button style={btn.print} onClick={() => onPrint(b)} title="Print purchase bill">
+          <MdPrint size={14} />
+        </button>
+      )}
+      {perms.canPrint && onExportPdf && (
+        <button style={{ ...btn.pdf, opacity: exportingId === b.id ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => onExportPdf(b)} title="Download PDF">
+          <MdPictureAsPdf size={14} />
+        </button>
+      )}
+      {perms.canRecordPayment && (
+        <button style={btn.payment} onClick={() => onRecordPayment?.(b)} title="Record a payment (money paid) against this bill">
+          <MdPayments size={14} />
+        </button>
+      )}
       {perms.canUpdate && (
         <button style={btn.edit} onClick={() => onEdit?.(b)} title="Edit">
           <MdEdit size={14} />
@@ -89,6 +138,9 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
   );
 }
 
+// Subtle per-row division tag (mirrors SalesQuotePage's card chip).
+const divisionChip = { display: "inline-block", marginLeft: 6, fontSize: "0.7rem", fontWeight: 700, color: "#0d47a1", background: "#e3f0ff", padding: "0.1rem 0.5rem", borderRadius: 6 };
+
 const baseBtn = {
   display: "inline-flex",
   alignItems: "center",
@@ -101,7 +153,10 @@ const baseBtn = {
   padding: 0,
 };
 const btn = {
-  view:   { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" },
+  view:    { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" },
+  print:   { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0", border: "1px solid #b39ddb" },
+  pdf:     { ...baseBtn, backgroundColor: "#fce4ec", color: "#ad1457", border: "1px solid #f48fb1" },
+  payment: { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20", border: "1px solid #a5d6a7" },
   edit:   { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
   delete: { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
 };

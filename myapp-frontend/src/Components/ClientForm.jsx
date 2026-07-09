@@ -38,7 +38,7 @@ const {
  *                 Optional — when omitted, multi-company picker is
  *                 hidden.
  */
-export default function ClientForm({ client, companyId, companies = [], onClose, onSaved }) {
+export default function ClientForm({ client, companyId, companies = [], fbrEnabled, onClose, onSaved }) {
   const [formData, setFormData] = useState(
     client
       ? { ...client, ntn: client.ntn || "", strn: client.strn || "", site: client.site || "", registrationType: client.registrationType || "", cnic: client.cnic || "", fbrProvinceCode: client.fbrProvinceCode ?? "" }
@@ -75,6 +75,22 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
     );
   };
 
+  // FBR identity fields are required only when this client will belong to at
+  // least one company that has FBR integration enabled. Callers that pass a
+  // `companies` list (the Clients page) let us derive it from the target
+  // company/companies; callers without that list (the inline add-client in
+  // the invoice forms) pass an explicit `fbrEnabled` instead. Unknown → keep
+  // it required, so turning the flag off is the only thing that relaxes it.
+  const fbrTargetIds = isCreate
+    ? (showCompanyPicker ? selectedCompanyIds : (companyId != null ? [Number(companyId)] : []))
+    : (companyId != null ? [Number(companyId)] : []);
+  const fbrRequired = typeof fbrEnabled === "boolean"
+    ? fbrEnabled
+    : (() => {
+        const known = (companies || []).filter((c) => fbrTargetIds.includes(Number(c.id)));
+        return known.length === 0 ? true : known.some((c) => c.fbrEnabled !== false);
+      })();
+
   useEffect(() => {
     if (client) setFormData({ ...client, ntn: client.ntn || "", strn: client.strn || "", site: client.site || "", registrationType: client.registrationType || "", cnic: client.cnic || "", fbrProvinceCode: client.fbrProvinceCode ?? "" });
   }, [client]);
@@ -106,21 +122,28 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
   const showNtn  = regType === "Registered" || regType === "FTN";
   const showStrn = regType === "Registered"; // STRN truly required only for Registered
   const showCnic = regType === "Unregistered" || regType === "CNIC";
-  const ntnLabel = regType === "FTN" ? "FTN *" : "NTN *";
+  const star = fbrRequired ? " *" : "";
+  const ntnLabel = (regType === "FTN" ? "FTN" : "NTN") + star;
 
   const validate = () => {
     const newErrors = {};
     if (!formData.name.trim()) newErrors.name = "Name is required";
-    if (!formData.registrationType) newErrors.registrationType = "Registration Type is required";
-    if (!formData.fbrProvinceCode && formData.fbrProvinceCode !== 0) newErrors.fbrProvinceCode = "Province is required";
 
-    // NTN/STRN: required only for Registered and (NTN only) FTN. The
-    // form-level fields are still in state — if the operator switched
-    // type they get blanked on switch, so this stays in sync.
-    if (showNtn && !formData.ntn.trim()) newErrors.ntn = regType === "FTN" ? "FTN is required" : "NTN is required";
-    if (showStrn && !formData.strn.trim()) newErrors.strn = "STRN is required";
-    if (showCnic && !formData.cnic.trim()) newErrors.cnic = "CNIC is required for this registration type";
-    // CNIC must be 13 digits when present (Pakistan ID format).
+    // FBR identity is enforced only when this client will live on an
+    // FBR-enabled company. With the company's FBR integration off the
+    // operator may still record these details, but none are mandatory.
+    if (fbrRequired) {
+      if (!formData.registrationType) newErrors.registrationType = "Registration Type is required";
+      if (!formData.fbrProvinceCode && formData.fbrProvinceCode !== 0) newErrors.fbrProvinceCode = "Province is required";
+      // NTN/STRN: required only for Registered and (NTN only) FTN. The
+      // form-level fields are still in state — if the operator switched
+      // type they get blanked on switch, so this stays in sync.
+      if (showNtn && !formData.ntn.trim()) newErrors.ntn = regType === "FTN" ? "FTN is required" : "NTN is required";
+      if (showStrn && !formData.strn.trim()) newErrors.strn = "STRN is required";
+      if (showCnic && !formData.cnic.trim()) newErrors.cnic = "CNIC is required for this registration type";
+    }
+    // CNIC must be 13 digits whenever one is entered (Pakistan ID format) —
+    // checked even when FBR is off, so a typo never gets saved.
     if (showCnic && formData.cnic.trim() && formData.cnic.replace(/\D/g, "").length !== 13) {
       newErrors.cnic = "CNIC must be 13 digits";
     }
@@ -287,9 +310,14 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                 Pakistan FBR convention.  */}
             <div style={{ marginTop: "0.5rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #0d47a130", backgroundColor: "#e3f2fd" }}>
               <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#0d47a1" }}>FBR Details</p>
+              {!fbrRequired && (
+                <p style={{ margin: "0 0 0.6rem", fontSize: "0.76rem", color: "#5f6d7e" }}>
+                  FBR integration is off for the selected company — these details are optional.
+                </p>
+              )}
               <div className="form-grid-2col">
                 <div style={formGroup}>
-                  <label style={label}>Registration Type *</label>
+                  <label style={label}>Registration Type{star}</label>
                   <select name="registrationType" value={formData.registrationType} onChange={handleChange} style={{ ...input, ...fieldError("registrationType") }}>
                     <option value="">Select...</option>
                     {regTypes.map((rt) => (
@@ -299,7 +327,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                   {errorMsg("registrationType")}
                 </div>
                 <div style={formGroup}>
-                  <label style={label}>Province *</label>
+                  <label style={label}>Province{star}</label>
                   <select name="fbrProvinceCode" value={formData.fbrProvinceCode} onChange={handleChange} style={{ ...input, ...fieldError("fbrProvinceCode") }}>
                     <option value="">Select...</option>
                     {provinces.map((p) => (
@@ -335,7 +363,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                   )}
                   {showStrn && (
                     <div style={formGroup}>
-                      <label style={label}>STRN *</label>
+                      <label style={label}>STRN{star}</label>
                       <input
                         type="text"
                         name="strn"
@@ -352,7 +380,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
 
               {showCnic && (
                 <div style={{ ...formGroup, marginTop: "0.5rem" }}>
-                  <label style={label}>CNIC (13 digits) *</label>
+                  <label style={label}>CNIC (13 digits){star}</label>
                   <input
                     type="text"
                     name="cnic"

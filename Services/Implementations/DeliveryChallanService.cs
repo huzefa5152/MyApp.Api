@@ -13,12 +13,14 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly IDeliveryChallanRepository _repository;
         private readonly AppDbContext _context;
+        private readonly IStockService _stock;
         private readonly ILogger<DeliveryChallanService> _logger;
 
-        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context, ILogger<DeliveryChallanService> logger)
+        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context, IStockService stock, ILogger<DeliveryChallanService> logger)
         {
             _repository = repository;
             _context = context;
+            _stock = stock;
             _logger = logger;
         }
 
@@ -68,6 +70,12 @@ namespace MyApp.Api.Services.Implementations
         /// <summary>Check if company+client have all required FBR fields filled.</summary>
         private static bool IsFbrReady(Company company, Client client)
         {
+            // FBR disabled for this company → nothing to set up. Treat as
+            // "ready" so challans settle at Pending / No PO instead of the
+            // FBR-gated "Setup Required" state. (company FbrEnabled is the
+            // master switch — see Company.FbrEnabled.)
+            if (!company.FbrEnabled) return true;
+
             // Company fields
             if (string.IsNullOrWhiteSpace(company.NTN)) return false;
             if (string.IsNullOrWhiteSpace(company.STRN)) return false;
@@ -96,6 +104,8 @@ namespace MyApp.Api.Services.Implementations
                 Id = dc.Id,
                 ChallanNumber = dc.ChallanNumber,
                 CompanyId = dc.CompanyId,
+                DivisionId = dc.DivisionId,
+                DivisionName = dc.Division?.Name,
                 ClientId = dc.ClientId,
                 ClientName = dc.Client?.Name ?? "",
                 PoNumber = dc.PoNumber,
@@ -110,6 +120,8 @@ namespace MyApp.Api.Services.Implementations
                 IsImported = dc.IsImported,
                 DuplicatedFromId = dc.DuplicatedFromId,
                 DuplicatedFromChallanNumber = dc.DuplicatedFrom?.ChallanNumber,
+                SalesOrderId = dc.SalesOrderId,
+                SalesOrderNumber = dc.SalesOrder?.SalesOrderNumber,
                 Items = dc.Items.Select(i => new DeliveryItemDto
                 {
                     Id = i.Id,
@@ -117,14 +129,17 @@ namespace MyApp.Api.Services.Implementations
                     ItemTypeName = i.ItemType?.Name ?? "",
                     Description = i.Description,
                     Quantity = i.Quantity,
-                    Unit = i.Unit
+                    Unit = i.Unit,
+                    SalesOrderItemId = i.SalesOrderItemId
                 }).ToList()
             };
 
-            // Compute warnings for missing FBR fields
+            // Compute warnings for missing FBR fields — only when FBR is
+            // enabled for the company. A non-FBR company shouldn't be nagged
+            // about missing NTN/STRN/token it will never use.
             var company = dc.Company;
             var client = dc.Client;
-            if (company != null)
+            if (company != null && company.FbrEnabled)
             {
                 if (string.IsNullOrWhiteSpace(company.NTN)) dto.Warnings.Add("Company NTN missing");
                 if (string.IsNullOrWhiteSpace(company.STRN)) dto.Warnings.Add("Company STRN missing");
@@ -134,7 +149,7 @@ namespace MyApp.Api.Services.Implementations
                 if (string.IsNullOrWhiteSpace(company.FbrToken)) dto.Warnings.Add("Company FBR Token missing");
                 if (string.IsNullOrWhiteSpace(company.FbrEnvironment)) dto.Warnings.Add("Company FBR Environment missing");
             }
-            if (client != null)
+            if (client != null && company != null && company.FbrEnabled)
             {
                 if (string.IsNullOrWhiteSpace(client.NTN)) dto.Warnings.Add("Client NTN missing");
                 if (string.IsNullOrWhiteSpace(client.STRN)) dto.Warnings.Add("Client STRN missing");
@@ -195,22 +210,23 @@ namespace MyApp.Api.Services.Implementations
             return "Pending";
         }
 
-        public async Task<List<DeliveryChallanDto>> GetDeliveryChallansByCompanyAsync(int companyId)
+        public async Task<List<DeliveryChallanDto>> GetDeliveryChallansByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            var challans = await _repository.GetDeliveryChallansByCompanyAsync(companyId);
+            var challans = await _repository.GetDeliveryChallansByCompanyAsync(companyId, allowedDivisionIds);
             return challans.Select(ToDto).ToList();
         }
 
         public async Task<PagedResult<DeliveryChallanDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
-            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null)
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? divisionId = null, HashSet<int>? allowedDivisionIds = null)
         {
             // Auto-clear "Setup Required" challans where FBR is now ready (runs once per page load)
             await ReEvaluateSetupRequiredAsync(companyId);
 
             var (items, totalCount) = await _repository.GetPagedByCompanyAsync(
-                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo);
+                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, divisionId, allowedDivisionIds);
 
             // Gate the Delete button client-side — only the highest-numbered
             // challan for this company is deletable.
@@ -262,6 +278,38 @@ namespace MyApp.Api.Services.Implementations
                 throw new KeyNotFoundException("Client not found.");
             if (client.CompanyId != companyId)
                 throw new InvalidOperationException("Client does not belong to this company.");
+            // Division guard — same rationale as the client guard above. Every
+            // other document create validates via DivisionNumbering.ResolveAsync;
+            // without it a forged dto.DivisionId could tag this challan with
+            // another tenant's division and print with that division's branding.
+            await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, companyId, dto.DivisionId);
+
+            // Cross-tenant link guard (PR-04): the Sales Order fulfilment links
+            // feed the derived committed/delivered metrics, so a forged
+            // dto.SalesOrderId / line SalesOrderItemId from another tenant must
+            // never be persisted. Validate the SO belongs to this company and
+            // every line link belongs to that SO.
+            if (dto.SalesOrderId.HasValue)
+            {
+                var linkedSo = await _context.SalesOrders
+                    .Where(o => o.Id == dto.SalesOrderId.Value && o.CompanyId == companyId)
+                    .Select(o => new { o.Id, ItemIds = o.Items.Select(it => it.Id).ToList() })
+                    .FirstOrDefaultAsync();
+                if (linkedSo == null)
+                    throw new InvalidOperationException("The linked sales order was not found for this company.");
+                var validItemIds = linkedSo.ItemIds.ToHashSet();
+                foreach (var line in dto.Items ?? Enumerable.Empty<DeliveryItemDto>())
+                {
+                    if (line.SalesOrderItemId.HasValue && !validItemIds.Contains(line.SalesOrderItemId.Value))
+                        throw new InvalidOperationException("A challan line references a sales-order line that does not belong to the linked order.");
+                }
+            }
+            else if ((dto.Items ?? Enumerable.Empty<DeliveryItemDto>()).Any(i => i.SalesOrderItemId.HasValue))
+            {
+                // Line-level SO link without a header link is inconsistent/forged.
+                throw new InvalidOperationException("Challan lines carry sales-order links but no sales order is linked.");
+            }
+
             var fbrReady = company != null && IsFbrReady(company, client);
 
             string status;
@@ -275,6 +323,7 @@ namespace MyApp.Api.Services.Implementations
             var deliveryChallan = new DeliveryChallan
             {
                 CompanyId = companyId,
+                DivisionId = dto.DivisionId,
                 ClientId = dto.ClientId,
                 Site = dto.Site,
                 PoNumber = dto.PoNumber?.Trim() ?? "",
@@ -282,12 +331,16 @@ namespace MyApp.Api.Services.Implementations
                 IndentNo = string.IsNullOrWhiteSpace(dto.IndentNo) ? null : dto.IndentNo.Trim(),
                 DeliveryDate = dto.DeliveryDate,
                 Status = status,
+                // Optional Sales Order link (set only by the "Create Challan
+                // from Sales Order" flow; null for every standalone challan).
+                SalesOrderId = dto.SalesOrderId,
                 Items = dto.Items.Select(i => new DeliveryItem
                 {
                     ItemTypeId = i.ItemTypeId,
                     Description = i.Description,
                     Quantity = i.Quantity,
-                    Unit = i.Unit
+                    Unit = i.Unit,
+                    SalesOrderItemId = i.SalesOrderItemId
                 }).ToList()
             };
 
@@ -585,6 +638,18 @@ namespace MyApp.Api.Services.Implementations
             }
 
             await _context.SaveChangesAsync();
+
+            // Re-sync the bill's stock OUT movements to its new line set.
+            // Fix 2026-06-29: removing or re-qty-ing a line on the challan
+            // (the only way to add/remove lines on a billed invoice — see
+            // InvoiceService.UpdateAsync) used to delete/update the linked
+            // InvoiceItem here but never touched StockMovements, so the OUT
+            // for a removed sale lingered on the ledger and on-hand was
+            // never restored. SyncInvoiceStockMovementsAsync deletes the
+            // invoice's prior OUT rows and re-inserts from current items,
+            // so removals, qty changes, and additions all reflow. No-op
+            // when inventory tracking is off or the bill is a demo.
+            await _stock.SyncInvoiceStockMovementsAsync(invoice);
         }
 
         public async Task<bool> CancelAsync(int challanId)
@@ -669,15 +734,16 @@ namespace MyApp.Api.Services.Implementations
             return true;
         }
 
-        public async Task<int?> GetCompanyForItemAsync(int itemId)
+        public async Task<(int CompanyId, int? DivisionId)?> GetCompanyForItemAsync(int itemId)
         {
-            // Lightweight lookup used by the controller for tenant
+            // Lightweight lookup used by the controller for tenant + division
             // authorization before delete (audit H-2). Returns null when
             // the item doesn't exist.
             var item = await _repository.GetItemByIdAsync(itemId);
             if (item == null) return null;
             var dc = await _repository.GetByIdAsync(item.DeliveryChallanId);
-            return dc?.CompanyId;
+            if (dc == null) return null;
+            return (dc.CompanyId, dc.DivisionId);
         }
 
         public async Task<bool> DeleteItemAsync(int itemId)
@@ -873,9 +939,13 @@ namespace MyApp.Api.Services.Implementations
             return reloaded == null ? null : ToDto(reloaded);
         }
 
-        public async Task<List<DeliveryChallanDto>> GetPendingChallansByCompanyAsync(int companyId)
+        public async Task<List<DeliveryChallanDto>> GetPendingChallansByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            var challans = await _repository.GetPendingChallansByCompanyAsync(companyId);
+            // FBR-off companies don't require a customer PO to bill — their
+            // "No PO" challans are billable too (see repository comment).
+            var company = await _context.Companies.FindAsync(companyId);
+            var includeNoPo = company != null && !company.FbrEnabled;
+            var challans = await _repository.GetPendingChallansByCompanyAsync(companyId, includeNoPo, allowedDivisionIds);
             return challans.Select(ToDto).ToList();
         }
 
@@ -886,6 +956,7 @@ namespace MyApp.Api.Services.Implementations
 
             return new PrintChallanDto
             {
+                DivisionId = dc.DivisionId,
                 CompanyBrandName = dc.Company?.BrandName ?? dc.Company?.Name ?? "",
                 CompanyLogoPath = dc.Company?.LogoPath,
                 CompanyAddress = dc.Company?.FullAddress,
@@ -912,9 +983,9 @@ namespace MyApp.Api.Services.Implementations
             return await _repository.GetTotalCountAsync();
         }
 
-        public async Task<int> GetCountByCompanyAsync(int companyId)
+        public async Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            return await _repository.GetCountByCompanyAsync(companyId);
+            return await _repository.GetCountByCompanyAsync(companyId, allowedDivisionIds);
         }
 
         public async Task<int> ReEvaluateSetupRequiredAsync(int companyId, int? clientId = null)
@@ -937,7 +1008,7 @@ namespace MyApp.Api.Services.Implementations
             return transitioned;
         }
 
-        public async Task<ChallanImportResultDto> ImportHistoricalAsync(int companyId, ChallanImportPreviewDto dto)
+        public async Task<ChallanImportResultDto> ImportHistoricalAsync(int companyId, ChallanImportPreviewDto dto, int? divisionId = null)
         {
             var result = new ChallanImportResultDto
             {
@@ -947,6 +1018,19 @@ namespace MyApp.Api.Services.Implementations
             };
 
             // ── Validation ───────────────────────────────────────────────────
+            // Division→company integrity — surfaced as a per-row error (this
+            // method reports via result.Error, not exceptions) even though the
+            // whole batch shares one target division.
+            try
+            {
+                await DivisionNumbering.ResolveAsync(_context, companyId, divisionId);
+            }
+            catch (InvalidOperationException ex)
+            {
+                result.Error = ex.Message;
+                return result;
+            }
+
             if (dto.ChallanNumber <= 0)
             {
                 result.Error = "Challan number is missing or invalid.";
@@ -990,6 +1074,7 @@ namespace MyApp.Api.Services.Implementations
             var challan = new DeliveryChallan
             {
                 CompanyId = companyId,
+                DivisionId = divisionId,
                 ClientId = dto.ClientId.Value,
                 ChallanNumber = dto.ChallanNumber,
                 Site = string.IsNullOrWhiteSpace(dto.Site) ? null : dto.Site.Trim(),

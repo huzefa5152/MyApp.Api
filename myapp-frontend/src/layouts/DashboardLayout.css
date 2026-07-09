@@ -823,6 +823,16 @@ body.dl-body--locked {
     width: 100%;
   }
 
+  /* Print-template picker: full-width on phones (CLAUDE.md picker rule).
+     The select carries an inline max-width:260 for the desktop cap, so the
+     override needs !important to win on mobile; the wrapper stretches too. */
+  .print-template-picker {
+    width: 100%;
+  }
+  .print-template-picker .filter-select {
+    max-width: none !important;
+  }
+
   .filter-date-group {
     width: 100%;
   }

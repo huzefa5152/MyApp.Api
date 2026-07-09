@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { MdUploadFile, MdTextSnippet, MdAdd, MdDelete, MdWarning, MdCheckCircle, MdArrowBack, MdArrowForward, MdVerified, MdErrorOutline } from "react-icons/md";
 import { parsePdf, parseText, ensureLookups } from "../api/poImportApi";
 import { getClientsByCompany, getClientById } from "../api/clientApi";
-import { createDeliveryChallan } from "../api/challanApi";
+import { createSalesOrder } from "../api/salesOrderApi";
+import { getSalesQuotesForPicker } from "../api/salesQuoteApi";
 import { getAllUnits } from "../api/unitsApi";
 import { formStyles, modalSizes } from "../theme";
 import { todayYmd } from "../utils/dateInput";
@@ -40,6 +41,8 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
   const [deliveryDate, setDeliveryDate] = useState(todayYmd());
   const [selectedClientId, setSelectedClientId] = useState("");
   const [site, setSite] = useState("");
+  const [salesQuoteId, setSalesQuoteId] = useState("");
+  const [quotes, setQuotes] = useState([]);
   const [items, setItems] = useState([]);
   const [rawText, setRawText] = useState("");
 
@@ -65,12 +68,15 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const [clientRes, unitsRes] = await Promise.all([
+        const [clientRes, unitsRes, quoteItems] = await Promise.all([
           getClientsByCompany(companyId),
           getAllUnits().catch(() => ({ data: [] })),
+          // Page-walking helper: the server clamps pageSize at 100.
+          getSalesQuotesForPicker(companyId).catch(() => []),
         ]);
         setClients(clientRes.data);
         setUnits(unitsRes.data || []);
+        setQuotes(quoteItems || []);
       } catch { /* ignore */ }
     };
     load();
@@ -106,6 +112,12 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
       }
 
       const data = res.data;
+      // A fresh parse is a fresh PO — drop any quote link chosen for a
+      // previous preview. Without this, re-parsing a PO that matches a
+      // different client keeps the old quote id in state while the picker
+      // shows "— not linked —" (its option list narrowed to the new
+      // client), silently linking the order to another client's quote.
+      setSalesQuoteId("");
       setPoNumber(data.poNumber || "");
       setPoDate(data.poDate ? data.poDate.split("T")[0] : "");
       setItems(data.items?.map((item, idx) => ({
@@ -171,6 +183,28 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
 
   const selectedClient = clients.find((c) => c.id === parseInt(selectedClientId));
   const clientSites = selectedClient?.site ? selectedClient.site.split(";").map((s) => s.trim()).filter(Boolean) : [];
+  // Quote status on the paged list is DERIVED server-side — Active /
+  // Accepted / Expired, never the stored Draft/Sent. Active + Accepted are
+  // candidates for linking an imported PO (Expired isn't); Draft/Sent kept
+  // defensively should the API ever surface stored statuses. Before a
+  // client is picked the list spans the whole company (option labels carry
+  // client + division so it stays readable); once a client is set —
+  // manually or via quote pick — it narrows to that client's quotes.
+  const linkableQuotes = quotes.filter((q) =>
+    (q.status === "Active" || q.status === "Accepted" || q.status === "Draft" || q.status === "Sent")
+    && (!selectedClientId || String(q.clientId) === String(selectedClientId)));
+
+  // Picking a quote first auto-fills the client from it (same pre-select path
+  // as a matched POFormat), so the operator isn't asked for the client twice.
+  const handleQuotePick = async (quoteId) => {
+    setSalesQuoteId(quoteId);
+    if (!quoteId) return;
+    const q = quotes.find((x) => String(x.id) === String(quoteId));
+    if (!q?.clientId || String(q.clientId) === String(selectedClientId)) return;
+    if (!clients.some((c) => c.id === q.clientId)) await ensureClientInList(q.clientId);
+    setSelectedClientId(String(q.clientId));
+    setSite(""); // site belongs to the previous client
+  };
 
   const canSubmit = selectedClientId && deliveryDate && items.length > 0 &&
     items.every((i) => i.description.trim() && i.quantity > 0);
@@ -183,33 +217,41 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
     try {
       // Auto-create missing lookup entries
       const descriptions = items.map((i) => i.description.trim()).filter(Boolean);
-      const units = items.map((i) => i.unit.trim()).filter(Boolean);
-      await ensureLookups(descriptions, units);
+      const unitNames = items.map((i) => i.unit.trim()).filter(Boolean);
+      await ensureLookups(descriptions, unitNames);
 
-      // Create the delivery challan
+      // Create a Sales Order from the parsed PO (quantity-only). The customer's
+      // PO number/date carry onto the order; delivery challans are raised
+      // against this order afterwards to track fulfilment.
+      const linkedQuote = salesQuoteId
+        ? quotes.find((x) => String(x.id) === String(salesQuoteId))
+        : null;
       const payload = {
         clientId: parseInt(selectedClientId),
-        clientName: selectedClient?.name || "",
+        salesQuoteId: salesQuoteId ? parseInt(salesQuoteId) : null,
+        // The order lives in its source quote's division — same inheritance
+        // the convert-to-order flow applies, so the imported order numbers
+        // from the quote's division sequence and prints with its branding.
+        divisionId: linkedQuote?.divisionId ?? null,
+        customerPoNumber: poNumber.trim() || null,
+        customerPoDate: poDate ? new Date(poDate).toISOString() : null,
+        orderDate: new Date(deliveryDate).toISOString(),
         site: site || null,
-        poNumber: poNumber.trim(),
-        poDate: poDate ? new Date(poDate).toISOString() : null,
-        indentNo: indentNo.trim() || null,
-        deliveryDate: new Date(deliveryDate).toISOString(),
+        isImported: true,
         items: items.map((i) => ({
           description: i.description.trim(),
-          quantity: parseInt(i.quantity),
+          // Preserve fractional quantities (KG, Litre) — Sales Order lines
+          // carry the same decimal contract as challan/invoice lines.
+          quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
           unit: i.unit.trim() || "Pcs",
-          // Item Type lives on the Invoices tab now — challans don't capture
-          // it. Operators classify each line by Item Type when preparing
-          // the bill for FBR submission.
           itemTypeId: null,
         })),
       };
 
-      await createDeliveryChallan(companyId, payload);
+      await createSalesOrder(companyId, payload);
       onSaved();
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to create challan.");
+      setError(err.response?.data?.error || "Failed to create sales order.");
     } finally {
       setSaving(false);
     }
@@ -222,7 +264,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
       <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>
-            {step === 1 ? "Import Purchase Order" : "Review & Create Challan"}
+            {step === 1 ? "Import Purchase Order" : "Review & Create Sales Order"}
           </h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
@@ -314,13 +356,29 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                 </div>
               )}
 
+              {/* Quote link is asked FIRST — picking one auto-fills the client
+                  below. Optional; the list narrows once a client is set. */}
+              <div style={styles.row}>
+                <div style={{ flex: 1, minWidth: 220 }}>
+                  <label style={styles.label}>Sales Quote (optional)</label>
+                  <select style={styles.select} value={salesQuoteId} onChange={(e) => handleQuotePick(e.target.value)}>
+                    <option value="">— not linked —</option>
+                    {linkableQuotes.map((q) => (
+                      <option key={q.id} value={q.id}>
+                        Quote #{q.quoteNumber} · {q.clientName}{q.divisionName ? ` · ${q.divisionName}` : ""}{q.status ? ` · ${q.status}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               {/* Header row: Client / Site / Delivery Date — same 2/1.5/1
                   layout as Add and Edit Challan so the import preview feels
                   identical to the regular create flow. */}
               <div style={styles.row}>
                 <div style={{ flex: 2, minWidth: 220 }}>
                   <label style={styles.label}>Client *</label>
-                  <select style={styles.select} value={selectedClientId} onChange={(e) => { setSelectedClientId(e.target.value); setSite(""); }}>
+                  <select style={styles.select} value={selectedClientId} onChange={(e) => { setSelectedClientId(e.target.value); setSite(""); setSalesQuoteId(""); }}>
                     <option value="">— Select Client —</option>
                     {clients.map((cl) => (
                       <option key={cl.id} value={cl.id}>{cl.name}</option>
@@ -348,13 +406,13 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                   )}
                 </div>
                 <div style={{ flex: 1, minWidth: 150 }}>
-                  <label style={styles.label}>Delivery Date *</label>
+                  <label style={styles.label}>Order Date *</label>
                   <input type="date" style={styles.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
                 </div>
               </div>
 
-              {/* PO row: Number + Date + Indent No — same 1/1/1 (180/140/180)
-                  layout as Add and Edit Challan. */}
+              {/* PO row: Number + Date — same field sizing as Add and Edit
+                  Challan (the quote link moved to the top row above). */}
               <div style={styles.row}>
                 <div style={{ flex: 1, minWidth: 180 }}>
                   <label style={styles.label}>PO Number</label>
@@ -363,12 +421,6 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                 <div style={{ flex: 1, minWidth: 140 }}>
                   <label style={styles.label}>PO Date</label>
                   <input type="date" style={styles.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
-                </div>
-                <div style={{ flex: 1, minWidth: 180 }}>
-                  <label style={styles.label}>
-                    Indent No <span style={{ color: "#5f6d7e", fontWeight: 400 }}>(optional)</span>
-                  </label>
-                  <input style={styles.input} value={indentNo} onChange={(e) => setIndentNo(e.target.value)} placeholder="Leave blank if not used" />
                 </div>
               </div>
 
@@ -414,6 +466,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                             onChange={(val) => handleItemChange(idx, "description", val)}
                             inputClassName=""
                             inputStyle={{ ...styles.input, padding: "0.35rem 0.5rem", fontSize: "0.85rem" }}
+                            multiline
                           />
                         </div>
                         {/* Wider so 4-place decimals (0.0004, 1234.5678)
@@ -500,7 +553,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
               disabled={!canSubmit || saving}
               onClick={handleSubmit}
             >
-              {saving ? "Creating..." : "Create Challan"}
+              {saving ? "Creating..." : "Create Sales Order"}
             </button>
           )}
         </div>

@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -29,6 +31,7 @@ namespace MyApp.Api.Controllers
         private readonly IChallanExcelImporter _importer;
         private readonly IDeliveryChallanService _challanService;
         private readonly IDeliveryChallanRepository _challanRepo;
+        private readonly IDivisionAccessGuard _divisionAccess;
         private readonly new ILogger<DeliveryChallanImportController> _logger;
 
         public DeliveryChallanImportController(
@@ -37,6 +40,7 @@ namespace MyApp.Api.Controllers
             IChallanExcelImporter importer,
             IDeliveryChallanService challanService,
             IDeliveryChallanRepository challanRepo,
+            IDivisionAccessGuard divisionAccess,
             ILogger<DeliveryChallanImportController> logger) : base(logger)
         {
             _templateRepo = templateRepo;
@@ -44,8 +48,14 @@ namespace MyApp.Api.Controllers
             _importer = importer;
             _challanService = challanService;
             _challanRepo = challanRepo;
+            _divisionAccess = divisionAccess;
             _logger = logger;
         }
+
+        private int CurrentUserId =>
+            int.TryParse(
+                User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
+                out var id) ? id : 0;
 
         [HttpPost("company/{companyId}/import-excel/preview")]
         [RequestSizeLimit(MaxFilesPerRequest * MaxFileBytes)]
@@ -171,17 +181,25 @@ namespace MyApp.Api.Controllers
         [HttpPost("company/{companyId}/import-excel/commit")]
         [AuthorizeCompany]
         [EnableRateLimiting("import")]
-        public async Task<IActionResult> Commit(int companyId, [FromBody] List<ChallanImportPreviewDto> rows)
+        public async Task<IActionResult> Commit(int companyId, [FromBody] List<ChallanImportPreviewDto> rows, [FromQuery] int? divisionId = null)
         {
             if (rows == null || rows.Count == 0)
                 return BadRequest(new { error = "No rows to commit." });
+
+            // Division RBAC: the whole batch lands in one target division
+            // (null = company-level). Write-assert rejects foreign divisions
+            // AND null for division-restricted users (policy D2) — they can't
+            // bulk-write company scope. No-op for unrestricted users.
+            // Division→company integrity is validated per-row inside
+            // ImportHistoricalAsync (the service owns the db access).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, companyId, divisionId);
 
             var results = new List<ChallanImportResultDto>();
             foreach (var row in rows)
             {
                 try
                 {
-                    var r = await _challanService.ImportHistoricalAsync(companyId, row);
+                    var r = await _challanService.ImportHistoricalAsync(companyId, row, divisionId);
                     results.Add(r);
                 }
                 catch (Exception ex)

@@ -1,13 +1,19 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { MdAdd, MdDelete, MdReceipt } from "react-icons/md";
 import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById } from "../api/purchaseBillApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getPurchaseTemplate } from "../api/invoiceApi";
+import { getAllUnits } from "../api/unitsApi";
 import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import SearchableSelect from "./SearchableSelect";
+import DivisionSelect from "./DivisionSelect";
+import AttachmentManager from "./AttachmentManager";
+import { usePermissions } from "../contexts/PermissionsContext";
+import QuantityInput from "./QuantityInput";
 
 const colors = {
   blue: "#0d47a1",
@@ -19,12 +25,25 @@ const colors = {
   inputBorder: "#d0d7e2",
 };
 
-export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, readOnly = false }) {
+export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, prefillItems = null, prefillSourceLabel = null, readOnly = false, defaultDivisionId = null }) {
   const isEdit = !!billId;
   const isAgainstSale = !!prefillFromInvoiceId;
+  // "Purchase Against Sales Order(s)" prefill — plain lines (NOT the FBR
+  // item-type-binding flow); the operator picks the supplier and unit prices.
+  const isFromOrders = Array.isArray(prefillItems) && prefillItems.length > 0;
   const [suppliers, setSuppliers] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
+  // Units list — gates each row's quantity input on the picked UOM
+  // (decimal allowed for KG/Liter/etc., integer-only for Pcs/SET/etc.),
+  // same behaviour as the sales bill form.
+  const [units, setUnits] = useState([]);
   const [supplierId, setSupplierId] = useState("");
+  const { has } = usePermissions();
+  const canViewDivisions = has("divisions.manage.view");
+  // New bills default to the division the list is filtered to; edits hydrate
+  // their stored division from the loaded bill below.
+  const [divisionId, setDivisionId] = useState(
+    !isEdit && defaultDivisionId ? String(defaultDivisionId) : "");
   const [date, setDate] = useState(todayYmd());
   const [supplierBillNumber, setSupplierBillNumber] = useState("");
   const [supplierIRN, setSupplierIRN] = useState("");
@@ -36,6 +55,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [saving, setSaving] = useState(false);
   // Source-bill metadata when in "Purchase Against Sale" mode
   const [sourceBill, setSourceBill] = useState(null);
+  const attachmentRef = useRef(null);
 
   function newRow() {
     return {
@@ -59,12 +79,14 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   useEffect(() => {
     (async () => {
       try {
-        const [sRes, tRes] = await Promise.all([
+        const [sRes, tRes, uRes] = await Promise.all([
           getSuppliersByCompany(companyId),
           getItemTypes(),
+          getAllUnits(),
         ]);
         setSuppliers(sRes.data || []);
         setItemTypes(tRes.data || []);
+        setUnits(uRes.data || []);
       } catch {
         setError("Failed to load suppliers or item types.");
       }
@@ -77,6 +99,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       try {
         const { data } = await getPurchaseBillById(billId);
         setSupplierId(String(data.supplierId));
+        setDivisionId(data.divisionId ? String(data.divisionId) : "");
         setDate(data.date.slice(0, 10));
         setSupplierBillNumber(data.supplierBillNumber || "");
         setSupplierIRN(data.supplierIRN || "");
@@ -139,6 +162,21 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     })();
   }, [prefillFromInvoiceId]);
 
+  // "Purchase Against Sales Order(s)" — seed plain lines from the merged order
+  // items. Unit prices start at 0 (orders carry no pricing); operator fills them.
+  useEffect(() => {
+    if (!isFromOrders) return;
+    setItems(prefillItems.map(p => ({
+      ...newRow(),
+      itemTypeId: p.itemTypeId || null,
+      description: p.description || "",
+      quantity: p.quantity || 0,
+      unitPrice: p.unitPrice || 0,
+      uom: p.uom || "",
+    })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const subtotal = useMemo(
     () => items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0), 0),
     [items]
@@ -181,7 +219,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     if (!supplierId) return setError("Select a supplier.");
     if (items.length === 0) return setError("Add at least one item.");
     if (items.some(i => !i.description?.trim())) return setError("Every line needs a description.");
-    if (items.some(i => !(parseInt(i.quantity) > 0))) return setError("Quantity must be greater than zero on every line.");
+    if (items.some(i => !(parseFloat(i.quantity) > 0))) return setError("Quantity must be greater than zero on every line.");
     if (items.some(i => parseFloat(i.unitPrice) < 0)) return setError("Unit price cannot be negative.");
     if (isAgainstSale) {
       // In the "Purchase Against Sale" flow every row MUST have an
@@ -196,6 +234,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       const payload = {
         date,
         companyId,
+        divisionId: divisionId ? parseInt(divisionId) : null,
         supplierId: parseInt(supplierId),
         supplierBillNumber: supplierBillNumber || null,
         supplierIRN: supplierIRN || null,
@@ -206,7 +245,9 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
           description: i.description?.trim(),
-          quantity: parseInt(i.quantity),
+          // parseFloat preserves decimals (12.5 KG, 0.0004 Carat) — same as
+          // the sales bill form; the server clamps/validates per UOM.
+          quantity: parseFloat(i.quantity) || 0,
           unitPrice: parseFloat(i.unitPrice),
           uom: i.uom || null,
           hsCode: i.hsCode || null,
@@ -217,6 +258,12 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       const res = isEdit
         ? await updatePurchaseBill(billId, payload)
         : await createPurchaseBill(payload);
+      // Upload any attachments staged before the bill had an id. No-op in
+      // edit mode (there they upload immediately) and when nothing's staged.
+      try {
+        const savedId = res.data?.id ?? billId;
+        if (savedId) await attachmentRef.current?.flush(savedId);
+      } catch { /* attachments are best-effort — the bill is already saved */ }
       notify(`Purchase bill ${isEdit ? "updated" : "created"}.`, "success");
       onSaved(res.data);
       onClose();
@@ -235,8 +282,8 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+          <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
             {error && <div style={formStyles.error}>{error}</div>}
 
             {sourceBill && (
@@ -260,18 +307,43 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               </div>
             )}
 
+            {isFromOrders && prefillSourceLabel && (
+              <div style={{
+                display: "flex", alignItems: "flex-start", gap: "0.65rem",
+                padding: "0.7rem 0.95rem", marginBottom: "0.85rem",
+                backgroundColor: "#e8f5e9", border: "1px solid #a5d6a7",
+                borderRadius: 8,
+              }}>
+                <MdReceipt size={20} color="#1b5e20" style={{ flexShrink: 0, marginTop: 1 }} />
+                <div style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.4 }}>
+                  <strong>Purchasing for Sales Order {prefillSourceLabel}</strong>
+                  <div style={{ fontSize: "0.76rem", color: "#5f6d7e", marginTop: 2 }}>
+                    Lines are prefilled with the outstanding (undelivered) quantities. Pick a supplier
+                    and enter unit prices. Quantities and lines are editable.
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "0.75rem" }}>
-              <div style={formStyles.formGroup}>
+              <div style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
                 <label style={formStyles.label}>Supplier *</label>
-                <select style={formStyles.input} value={supplierId} onChange={e => setSupplierId(e.target.value)}>
-                  <option value="">Select supplier...</option>
-                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                <SearchableSelect
+                  items={suppliers}
+                  value={supplierId}
+                  onChange={(id) => setSupplierId(id ? String(id) : "")}
+                  placeholder="Select supplier…"
+                />
               </div>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Bill Date *</label>
                 <input type="date" style={formStyles.input} value={date} onChange={e => setDate(e.target.value)} />
               </div>
+              {canViewDivisions && (
+                <div style={formStyles.formGroup}>
+                  <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={formStyles.label} style={formStyles.input} />
+                </div>
+              )}
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>GST Rate (%)</label>
                 <input type="number" min={0} step={0.01} style={formStyles.input} value={gstRate} onChange={e => setGstRate(e.target.value)} />
@@ -352,10 +424,16 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                             )}
                           </td>
                           <td style={td}>
-                            <input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
+                            <textarea rows={2} style={{ ...cellInput, resize: "vertical", minHeight: 38, lineHeight: 1.4 }} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
                           </td>
                           <td style={td}>
-                            <input type="number" min={1} style={{ ...cellInput, textAlign: "right" }} value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} />
+                            <QuantityInput
+                              value={it.quantity}
+                              onChange={val => updateItem(idx, "quantity", val)}
+                              unit={it.uom}
+                              units={units}
+                              style={{ ...cellInput, textAlign: "right" }}
+                            />
                           </td>
                           <td style={td}>
                             <input type="number" min={0} step={0.01} style={{ ...cellInput, textAlign: "right" }} value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
@@ -390,8 +468,17 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               <span></span>
               <strong style={{ fontSize: "1.05rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
             </div>
-          </div>
           </fieldset>
+
+            {/* Outside the disabled fieldset so preview/download stay clickable in view mode. */}
+            <AttachmentManager
+              ref={attachmentRef}
+              companyId={companyId}
+              entityType="PurchaseBill"
+              entityId={billId ?? null}
+              mode={readOnly ? "view" : "edit"}
+            />
+          </div>
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>{readOnly ? "Close" : "Cancel"}</button>
             {!readOnly && (

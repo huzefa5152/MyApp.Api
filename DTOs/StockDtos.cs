@@ -34,6 +34,12 @@ namespace MyApp.Api.DTOs
         public decimal Quantity { get; set; }
         public string SourceType { get; set; } = ""; // PurchaseBill, Invoice, OpeningBalance, ...
         public int? SourceId { get; set; }
+        // Human-facing document number for the source (InvoiceNumber /
+        // PurchaseBillNumber / GoodsReceiptNumber). SourceId is the internal
+        // row id and must NOT be shown to operators — resolve to this. Null
+        // for sources without a number (Adjustment / OpeningBalance) or when
+        // the source row was since deleted.
+        public string? SourceDocNumber { get; set; }
         public DateTime MovementDate { get; set; }
         public string? Notes { get; set; }
     }

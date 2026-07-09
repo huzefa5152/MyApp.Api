@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
 import { createGoodsReceipt, updateGoodsReceipt, getGoodsReceiptById } from "../api/goodsReceiptApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
@@ -8,9 +8,19 @@ import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import SearchableSelect from "./SearchableSelect";
+import DivisionSelect from "./DivisionSelect";
+import AttachmentManager from "./AttachmentManager";
+import { usePermissions } from "../contexts/PermissionsContext";
 
-export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSaved }) {
+export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSaved, defaultDivisionId }) {
   const isEdit = !!receiptId;
+  const { has } = usePermissions();
+  const canViewDivisions = has("divisions.manage.view");
+  // New receipts default to the division currently being filtered (so "filter
+  // to a division → New Receipt" lands in that division); edits hydrate from
+  // the loaded receipt below.
+  const [divisionId, setDivisionId] = useState(!isEdit && defaultDivisionId ? String(defaultDivisionId) : "");
   const [suppliers, setSuppliers] = useState([]);
   const [bills, setBills] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -24,6 +34,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   const [items, setItems] = useState([{ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const attachmentRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -46,6 +57,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
       try {
         const { data } = await getGoodsReceiptById(receiptId);
         setSupplierId(String(data.supplierId));
+        setDivisionId(data.divisionId ? String(data.divisionId) : "");
         setPurchaseBillId(data.purchaseBillId ? String(data.purchaseBillId) : "");
         setReceiptDate(data.receiptDate.slice(0, 10));
         setSupplierChallanNumber(data.supplierChallanNumber || "");
@@ -75,6 +87,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
       const payload = {
         receiptDate,
         companyId,
+        divisionId: divisionId ? parseInt(divisionId) : null,
         supplierId: parseInt(supplierId),
         purchaseBillId: purchaseBillId ? parseInt(purchaseBillId) : null,
         supplierChallanNumber: supplierChallanNumber || null,
@@ -90,6 +103,12 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
       const res = isEdit
         ? await updateGoodsReceipt(receiptId, { ...payload, status: undefined })
         : await createGoodsReceipt(payload);
+      // Upload any attachments staged before the receipt had an id. No-op in
+      // edit mode (there they upload immediately) and when nothing's staged.
+      try {
+        const savedId = res.data?.id ?? receiptId;
+        if (savedId) await attachmentRef.current?.flush(savedId);
+      } catch { /* attachments are best-effort — the receipt is already saved */ }
       notify(`Goods Receipt ${isEdit ? "updated" : "created"}.`, "success");
       onSaved(res.data);
       onClose();
@@ -111,17 +130,24 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
             {error && <div style={formStyles.error}>{error}</div>}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
-              <div style={formStyles.formGroup}>
+              <div style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
                 <label style={formStyles.label}>Supplier *</label>
-                <select style={formStyles.input} value={supplierId} onChange={e => setSupplierId(e.target.value)}>
-                  <option value="">Select...</option>
-                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                <SearchableSelect
+                  items={suppliers}
+                  value={supplierId}
+                  onChange={(id) => setSupplierId(id ? String(id) : "")}
+                  placeholder="Select supplier…"
+                />
               </div>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Receipt Date *</label>
                 <input type="date" style={formStyles.input} value={receiptDate} onChange={e => setReceiptDate(e.target.value)} />
               </div>
+              {canViewDivisions && (
+                <div style={formStyles.formGroup}>
+                  <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={formStyles.label} style={formStyles.input} />
+                </div>
+              )}
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Linked Purchase Bill</label>
                 <select style={formStyles.input} value={purchaseBillId} onChange={e => setPurchaseBillId(e.target.value)}>
@@ -176,7 +202,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                           style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                         />
                       </td>
-                      <td style={td}><input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} /></td>
+                      <td style={td}><textarea rows={2} style={{ ...cellInput, resize: "vertical", minHeight: 38, lineHeight: 1.4 }} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} /></td>
                       <td style={td}><input type="number" min={1} style={{ ...cellInput, textAlign: "right" }} value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} /></td>
                       <td style={td}><input type="text" style={cellInput} value={it.unit} onChange={e => updateItem(idx, "unit", e.target.value)} /></td>
                       <td style={td}>
@@ -191,6 +217,14 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                 </tbody>
               </table>
             </div>
+
+            <AttachmentManager
+              ref={attachmentRef}
+              companyId={companyId}
+              entityType="GoodsReceipt"
+              entityId={receiptId ?? null}
+              mode="edit"
+            />
           </div>
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>

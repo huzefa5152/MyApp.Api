@@ -6,6 +6,10 @@ export const getInvoicesByCompany = (companyId) =>
 export const getPagedInvoicesByCompany = (companyId, params = {}) =>
   httpClient.get(`/invoices/company/${companyId}/paged`, { params });
 
+// Sales-invoice count per client (clientId -> count) for the Clients page chip.
+export const getInvoiceCountsByClient = (companyId) =>
+  httpClient.get(`/invoices/company/${companyId}/counts-by-client`);
+
 export const getInvoiceById = (id) =>
   httpClient.get(`/invoices/${id}`);
 
@@ -45,6 +49,34 @@ export const updateInvoiceItemTypesAndQty = (id, items, writeMode = "bill") =>
 
 export const deleteInvoice = (id) =>
   httpClient.delete(`/invoices/${id}`);
+
+// Void (cancel) a non-FBR-submitted bill. Unlike delete (trailing bill only,
+// removes the row), cancel works on ANY non-submitted bill: it keeps the bill
+// number so the sequence stays gap-free, flags the bill cancelled, and reverts
+// its linked delivery challans back to Pending so they can be re-billed.
+// Gated server-side by `bills.manage.delete`.
+export const cancelInvoice = (id, reason) =>
+  httpClient.post(`/invoices/${id}/cancel`, { reason: reason ?? null });
+
+// Reverse an FBR-SUBMITTED bill. The server auto-generates the correct
+// adjustment note — a Credit Note (return/reversal, the default) or a Debit
+// Note (upward correction, docType=9) — as a new UNSUBMITTED bill that then
+// flows through the normal Validate → Submit-to-FBR path. Returns the new note.
+// Gated server-side by `invoices.note.create`.
+export const reverseInvoice = (id, { reason, remarks, documentType } = {}) =>
+  httpClient.post(`/invoices/${id}/reverse`, {
+    reason: reason ?? null,
+    remarks: remarks ?? null,
+    documentType: documentType ?? null,
+  });
+
+// Manually create a Credit/Debit Note referencing an FBR-submitted invoice,
+// with optional PARTIAL line selection. Powers the Credit/Debit Note screen.
+// payload: { originalInvoiceId, documentType (9|10), reason, remarks, date?,
+//            lines: [{ invoiceItemId, quantity }] }  (empty lines = full reversal)
+// Gated server-side by `invoices.note.create`.
+export const createNote = (payload) =>
+  httpClient.post("/invoices/notes", payload);
 
 // Toggle the "exclude from FBR bulk actions" flag on a bill.
 // When excluded=true, Validate All / Submit All skip this bill.

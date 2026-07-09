@@ -98,6 +98,43 @@ namespace MyApp.Api.Data
             new Seed("Cables & Wires",            "8544.4210", "Meter",                  48, "Goods at Standard Rate (default)", "Insulated wire, industrial cables"),
         };
 
+        // One-time (audit-marker gated) removal of the shipped seed catalog,
+        // invoked at the first legacy migration so a migrated company isn't
+        // cluttered by the starter item types (the migration keeps free-text
+        // line descriptions and doesn't link ItemTypes). Soft-delete keeps FK
+        // integrity and hides them from the picker (which filters IsDeleted).
+        private const string MigrationSeedRemovedKey = "MIGRATION_SEED_ITEMTYPES_REMOVED_V1";
+
+        public static async Task<int> RemoveSeedItemTypesAsync(AppDbContext ctx)
+        {
+            if (await ctx.AuditLogs.AsNoTracking().AnyAsync(a => a.ExceptionType == MigrationSeedRemovedKey))
+                return 0;
+
+            static string Norm(string? s) => (s ?? "").Trim().ToLowerInvariant();
+            var seedKeys = new HashSet<(string, string)>(
+                Defaults.Select(d => (Norm(d.Name), Norm(d.HSCode)))
+                    .Concat(LegacySeedRows.Select(l => (Norm(l.Name), Norm(l.HSCode)))));
+
+            var rows = await ctx.ItemTypes.Where(it => !it.IsDeleted).ToListAsync();
+            int removed = 0;
+            foreach (var it in rows)
+            {
+                if (seedKeys.Contains((Norm(it.Name), Norm(it.HSCode)))) { it.IsDeleted = true; removed++; }
+            }
+
+            ctx.AuditLogs.Add(new Models.AuditLog
+            {
+                Level = "Info",
+                ExceptionType = MigrationSeedRemovedKey,
+                Message = $"Removed {removed} seed item type(s) at first migration.",
+                HttpMethod = "MIGRATION",
+                RequestPath = "/seed/itemtypes/remove",
+                StatusCode = 200,
+            });
+            await ctx.SaveChangesAsync();
+            return removed;
+        }
+
         public static async Task SeedAsync(AppDbContext ctx)
         {
             // 0) One-time cleanup of legacy seed rows. The marker check

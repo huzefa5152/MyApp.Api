@@ -1,11 +1,11 @@
-import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete, MdContentCopy } from "react-icons/md";
+import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete, MdContentCopy, MdShoppingCart } from "react-icons/md";
 import { deleteSupplier } from "../api/supplierApi";
 import { cardStyles, cardHover } from "../theme";
 import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 
-export default function SupplierList({ suppliers, onEdit, onCopy, fetchSuppliers }) {
+export default function SupplierList({ suppliers, onEdit, onCopy, fetchSuppliers, billCounts = {}, onShowBills }) {
   const confirm = useConfirm();
   const { has } = usePermissions();
   const canUpdate = has("suppliers.manage.update");
@@ -49,6 +49,17 @@ export default function SupplierList({ suppliers, onEdit, onCopy, fetchSuppliers
           <div style={cardStyles.cardContent}>
             <div>
               <h5 style={cardStyles.title}>{supplier.name}</h5>
+              {onShowBills && (
+                <button
+                  type="button"
+                  onClick={() => onShowBills(supplier)}
+                  title="View this supplier's purchase bills"
+                  style={countChip}
+                >
+                  <MdShoppingCart size={13} />
+                  {billCounts[supplier.id] || 0} purchase bill{(billCounts[supplier.id] || 0) !== 1 ? "s" : ""}
+                </button>
+              )}
               {supplier.email && (
                 <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
                   <MdEmail style={{ color: "#0d47a1", flexShrink: 0 }} /> {supplier.email}
@@ -79,7 +90,10 @@ export default function SupplierList({ suppliers, onEdit, onCopy, fetchSuppliers
                   <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>Type:</strong> {supplier.registrationType}
                 </p>
               )}
-              {supplier.hasPurchaseBills && (
+              {/* The clickable purchase-bill count above replaces the old
+                  static "has purchase bills" hint; fall back to it only when
+                  the count chip isn't shown (operator lacks bill-view perm). */}
+              {!onShowBills && supplier.hasPurchaseBills && (
                 <p style={{ ...cardStyles.text, fontSize: "0.74rem", color: "#00695c", marginTop: "0.25rem" }}>
                   has purchase bills
                 </p>
@@ -126,3 +140,10 @@ export default function SupplierList({ suppliers, onEdit, onCopy, fetchSuppliers
     </div>
   );
 }
+
+const countChip = {
+  display: "inline-flex", alignItems: "center", gap: 4,
+  margin: "0.3rem 0 0.1rem", padding: "0.2rem 0.55rem",
+  borderRadius: 14, border: "1px solid #ce93d8", background: "#f3e5f5",
+  color: "#6a1b9a", fontSize: "0.74rem", fontWeight: 700, cursor: "pointer",
+};

@@ -1,0 +1,44 @@
+﻿namespace MyApp.Api.DTOs
+{
+    /// <summary>Wire shape for a company division ("sub-company"). Used for
+    /// read + create/update (Id ignored on create; CompanyId comes from the
+    /// route). Carries the division's own branding/contact details and its
+    /// Sales Quote starting number. LogoPath is read-only here — it is set
+    /// via the dedicated POST /divisions/{id}/logo upload endpoint.</summary>
+    public class DivisionDto
+    {
+        public int Id { get; set; }
+        public int CompanyId { get; set; }
+        public string Name { get; set; } = "";
+
+        // Sub-company "Personal Details"
+        public string? BrandName { get; set; }
+        public string? LogoPath { get; set; }
+        public string? FullAddress { get; set; }
+        public string? Phone { get; set; }
+        public string? NTN { get; set; }
+        public string? CNIC { get; set; }
+        public string? STRN { get; set; }
+        public string? Email { get; set; }
+
+        // Per-division document numbering (mirror of the Company counters).
+        // Starting* is operator-editable to seed each sequence; Current* is
+        // read-only (advanced by the create flows / migration).
+        public int StartingSalesQuoteNumber { get; set; }
+        public int CurrentSalesQuoteNumber { get; set; }
+        public int StartingSalesOrderNumber { get; set; }
+        public int CurrentSalesOrderNumber { get; set; }
+        public int StartingChallanNumber { get; set; }
+        public int CurrentChallanNumber { get; set; }
+        public int StartingInvoiceNumber { get; set; }
+        public int CurrentInvoiceNumber { get; set; }
+        public int StartingPurchaseBillNumber { get; set; }
+        public int CurrentPurchaseBillNumber { get; set; }
+        public int StartingGoodsReceiptNumber { get; set; }
+        public int CurrentGoodsReceiptNumber { get; set; }
+        public int StartingCreditNoteNumber { get; set; }
+        public int CurrentCreditNoteNumber { get; set; }
+        public int StartingDebitNoteNumber { get; set; }
+        public int CurrentDebitNoteNumber { get; set; }
+    }
+}

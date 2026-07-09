@@ -17,6 +17,16 @@ export default defineConfig({
         target: 'http://localhost:5134',
         changeOrigin: true,
       },
+      // Uploaded files (company/division logos, avatars) live under /data and
+      // are served by the backend, NOT by Vite. Without this, the dev server's
+      // SPA fallback returns index.html for /data/... so <img src="/data/…">
+      // (e.g. {{companyLogoPath}} / {{divisionLogoPath}} in print templates)
+      // renders blank in dev. Production serves the SPA + /data from the same
+      // origin, so this only matters for the dev server.
+      '/data': {
+        target: 'http://localhost:5134',
+        changeOrigin: true,
+      },
     },
   },
 })

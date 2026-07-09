@@ -49,10 +49,13 @@ export function CompanyProvider({ children }) {
     const list = res.data;
     setCompanies(list);
     if (selectedCompany) {
+      // Re-point selectedCompany at the FRESH object so callers see updated
+      // fields (e.g. inventoryFlowVersion after a V1/V2 switch), not the stale
+      // reference. Falls back to the first company if it was removed.
       const still = list.find((c) => c.id === selectedCompany.id);
-      if (!still) setSelectedCompany(list[0] || null);
+      setSelectedCompanyState(still || list[0] || null);
     }
-  }, [selectedCompany, setSelectedCompany]);
+  }, [selectedCompany]);
 
   return (
     <CompanyContext.Provider

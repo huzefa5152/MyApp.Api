@@ -2,13 +2,14 @@
 Basic-flow regression tests for the ERP — must pass before any push that
 touches challan / bill / invoice / tax-calculation code.
 
-Covers the six golden paths Hakimi and Roshan rely on every day:
+Covers the golden paths Hakimi and Roshan rely on every day:
   1. Challan creation               (challans.manage.create)
   2. Bill creation FROM a challan   (bills.manage.create)
   3. Bill creation WITHOUT a challan / standalone   (bills.manage.create.standalone)
   4. Invoice update                 (bills.manage.update)
   5. Item Rate History              (quantity / unit-price suggestion source)
   6. Tax calculation correctness    (GST 18 %, GST exempt 0 %, 3rd Schedule retail)
+  7. FBR [0043] future-date guard   (today-in-Pakistan accepted, future rejected)
 
 Each test runs against a fresh ephemeral company + client created at
 test-start and torn down at the end. Production data is never touched.
@@ -36,6 +37,23 @@ from typing import Any
 PASS = "PASS"
 FAIL = "FAIL"
 results: list[tuple[str, str, str]] = []  # (suite, name, status)
+
+# Pakistan Standard Time (UTC+5, no DST). Our operators are in Pakistan, and
+# the bill forms send the operator's LOCAL calendar date as midnight UTC
+# (an <input type="date"> "YYYY-MM-DD" → new Date(v).toISOString()). So "today"
+# for a real user is today's date in Karachi, NOT the server's UTC date. Dating
+# bills this way mirrors production exactly and exercises FBR rule [0043] the
+# same way the frontend does — including the window (19:00–23:59 UTC) where the
+# old guards wrongly rejected a bill dated "today" because the server was still
+# on the previous UTC calendar day.
+PKT = timezone(timedelta(hours=5))
+
+
+def pkt_date_iso(day_offset: int = 0) -> str:
+    """Karachi calendar date (optionally offset by N days) as midnight-UTC ISO —
+    exactly the shape the bill forms submit for a date the operator picks."""
+    d = (datetime.now(PKT) + timedelta(days=day_offset)).date()
+    return d.strftime("%Y-%m-%dT00:00:00Z")
 
 
 # ── HTTP helper ────────────────────────────────────────────────────
@@ -207,7 +225,7 @@ def test_challan_creation(base: str, token: str, company: dict, client: dict,
 def test_bill_from_challan(base: str, token: str, company: dict, client: dict, challan: dict) -> dict | None:
     suite = "2. Bill creation FROM a challan"
     print(f"\n=== {suite} ===")
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+    today = pkt_date_iso()  # date as a Karachi operator's bill form would send it
     items = [
         {"deliveryItemId": challan["items"][0]["id"], "unitPrice": 100,
          "description": "Hardware Item A"},
@@ -246,7 +264,7 @@ def test_bill_from_challan(base: str, token: str, company: dict, client: dict, c
 def test_standalone_bill(base: str, token: str, company: dict, client: dict) -> dict | None:
     suite = "3. Bill creation WITHOUT a challan"
     print(f"\n=== {suite} ===")
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+    today = pkt_date_iso()  # date as a Karachi operator's bill form would send it
     payload = {
         "date": today,
         "companyId": company["id"],
@@ -337,7 +355,7 @@ def test_item_rate_history(base: str, token: str, company: dict, classified: dic
 def test_tax_calculations(base: str, token: str, company: dict, client: dict) -> None:
     suite = "6. Tax calculation correctness"
     print(f"\n=== {suite} ===")
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+    today = pkt_date_iso()  # date as a Karachi operator's bill form would send it
 
     # 6a — Exempt 0 %. Subtotal 1000, GST 0, grand 1000.
     status, b = http("POST", "/api/invoices/standalone", base, token=token, body={
@@ -409,6 +427,59 @@ def test_tax_calculations(base: str, token: str, company: dict, client: dict) ->
               f"got {b.get('gstAmount')}")
 
 
+# ── Suite 7: FBR [0043] future-date guard (Pakistan timezone) ──────
+def test_future_date_guard(base: str, token: str, company: dict, client: dict,
+                           challan: dict | None) -> None:
+    """Regression for the timezone bug: a bill dated TODAY in Pakistan must be
+    accepted even when the server's UTC clock is still on the previous calendar
+    day, while a genuinely future date must still be rejected with [FBR 0043].
+    Covers both the standalone and the from-challan create paths."""
+    suite = "7. FBR 0043 future-date guard (PKT)"
+    print(f"\n=== {suite} ===")
+
+    def cites_0043(body: Any) -> bool:
+        return "0043" in (body if isinstance(body, str) else json.dumps(body))
+
+    # 7a — Bill dated TODAY in Karachi is accepted. Before the fix this was
+    # rejected during the 19:00–23:59 UTC window (server still on "yesterday"
+    # in UTC while it's already "today" in PKT). After the fix it's accepted
+    # 24/7 because the guard compares calendar dates in PKT, not raw UTC.
+    status, b = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "date": pkt_date_iso(0),
+        "companyId": company["id"], "clientId": client["id"], "gstRate": 18,
+        "items": [{"description": "Same-day Service", "quantity": 1,
+                   "uom": "Pcs", "unitPrice": 100}],
+    })
+    check(suite, "7a standalone bill dated today (PKT) accepted",
+          status in (200, 201), f"got {status} {b}")
+
+    # 7b — A clearly future bill (PKT today + 2 days) is still rejected, with
+    # the 0043 code, proving the guard wasn't simply loosened away.
+    status, b = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "date": pkt_date_iso(2),
+        "companyId": company["id"], "clientId": client["id"], "gstRate": 18,
+        "items": [{"description": "Future Service", "quantity": 1,
+                   "uom": "Pcs", "unitPrice": 100}],
+    })
+    check(suite, "7b standalone future bill rejected (400)", status == 400, f"got {status} {b}")
+    check(suite, "7b rejection cites [FBR 0043]", cites_0043(b), f"body = {b}")
+
+    # 7c — Same guard on the FROM-challan path. The future-date check runs
+    # before challan billable-status validation, so any challan id for this
+    # company reaches it (the suite-2 challan is fine even after it's invoiced).
+    if challan:
+        status, b = http("POST", "/api/invoices", base, token=token, body={
+            "date": pkt_date_iso(2),
+            "companyId": company["id"], "clientId": client["id"], "gstRate": 18,
+            "challanIds": [challan["id"]],
+            "items": [{"deliveryItemId": challan["items"][0]["id"], "unitPrice": 100}],
+        })
+        check(suite, "7c from-challan future bill rejected (400)", status == 400, f"got {status} {b}")
+        check(suite, "7c rejection cites [FBR 0043]", cites_0043(b), f"body = {b}")
+    else:
+        check(suite, "7c from-challan future guard — skipped (no challan)", True)
+
+
 # ── Reporter ───────────────────────────────────────────────────────
 def print_report() -> int:
     by_suite: dict[str, list[tuple[str, str]]] = {}
@@ -462,6 +533,7 @@ def main() -> int:
         test_invoice_update(args.base, token, standalone)
         test_item_rate_history(args.base, token, company, classified)
         test_tax_calculations(args.base, token, company, client)
+        test_future_date_guard(args.base, token, company, client, challan)
     finally:
         teardown(args.base, token, company, args.keep)
 

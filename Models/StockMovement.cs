@@ -34,6 +34,18 @@ namespace MyApp.Api.Models
     {
         public int Id { get; set; }
         public int CompanyId { get; set; }
+
+        /// <summary>
+        /// Denormalized from the source document at record time (Invoice /
+        /// PurchaseBill / GoodsReceipt DivisionId) so division-restricted
+        /// on-hand and movement views don't need per-source joins. Null for
+        /// company-level documents, opening balances, and adjustments —
+        /// those stay visible to every company member (policy D1). NoAction
+        /// FK; unlinked in app code by DivisionService.DeleteAsync. Existing
+        /// rows backfilled once by STOCKMOVEMENT_DIVISION_BACKFILL_V1.
+        /// </summary>
+        public int? DivisionId { get; set; }
+
         public int ItemTypeId { get; set; }
 
         public StockMovementDirection Direction { get; set; }
@@ -71,6 +83,7 @@ namespace MyApp.Api.Models
 
         // Navigation
         public Company Company { get; set; } = null!;
+        public Division? Division { get; set; }
         public ItemType ItemType { get; set; } = null!;
     }
 }

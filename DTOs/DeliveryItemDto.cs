@@ -12,5 +12,13 @@
         // 0.09 as "0.09" — never "0.0900".
         public decimal Quantity { get; set; }
         public string Unit { get; set; } = "";
+
+        /// <summary>
+        /// Optional link to the Sales Order line this challan line fulfils.
+        /// Set only when the challan was created from a Sales Order; null for
+        /// every standalone / imported / duplicated challan line. Additive —
+        /// existing flows never set it.
+        /// </summary>
+        public int? SalesOrderItemId { get; set; }
     }
 }

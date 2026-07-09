@@ -153,6 +153,7 @@ namespace MyApp.Api.Middleware
             // returns directly).
             var statusCode = ex switch
             {
+                MyApp.Api.Helpers.StockShortageException => (int)HttpStatusCode.Conflict,
                 KeyNotFoundException => (int)HttpStatusCode.NotFound,
                 InvalidOperationException => (int)HttpStatusCode.BadRequest,
                 UnauthorizedAccessException => (int)HttpStatusCode.Forbidden,

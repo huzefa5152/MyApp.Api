@@ -32,6 +32,8 @@ namespace MyApp.Api.Services.Implementations
             GoodsReceiptNumber = gr.GoodsReceiptNumber,
             ReceiptDate = gr.ReceiptDate,
             CompanyId = gr.CompanyId,
+            DivisionId = gr.DivisionId,
+            DivisionName = gr.Division?.Name,
             SupplierId = gr.SupplierId,
             SupplierName = gr.Supplier?.Name ?? "",
             PurchaseBillId = gr.PurchaseBillId,
@@ -55,15 +57,23 @@ namespace MyApp.Api.Services.Implementations
             int companyId, int page, int pageSize,
             string? search = null, int? supplierId = null,
             string? status = null,
-            DateTime? dateFrom = null, DateTime? dateTo = null)
+            DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? divisionId = null, HashSet<int>? allowedDivisionIds = null)
         {
             var q = _context.GoodsReceipts
                 .Include(gr => gr.Supplier)
                 .Include(gr => gr.PurchaseBill)
                 .Include(gr => gr.Items)
                     .ThenInclude(it => it.ItemType)
+                .Include(gr => gr.Division)
                 .Where(gr => gr.CompanyId == companyId);
+            // Division-RBAC scope first (null = unrestricted); the operator's
+            // explicit divisionId FILTER below is a view preference layered on
+            // top — the controller asserts it against the same allowed set.
+            if (allowedDivisionIds != null)
+                q = q.Where(gr => gr.DivisionId == null || allowedDivisionIds.Contains(gr.DivisionId.Value));
             if (supplierId.HasValue) q = q.Where(gr => gr.SupplierId == supplierId.Value);
+            if (divisionId.HasValue) q = q.Where(gr => gr.DivisionId == divisionId.Value);
             if (!string.IsNullOrWhiteSpace(status)) q = q.Where(gr => gr.Status == status);
             if (dateFrom.HasValue) q = q.Where(gr => gr.ReceiptDate >= dateFrom.Value);
             if (dateTo.HasValue) q = q.Where(gr => gr.ReceiptDate <= dateTo.Value);
@@ -99,8 +109,57 @@ namespace MyApp.Api.Services.Implementations
                 .Include(g => g.PurchaseBill)
                 .Include(g => g.Items)
                     .ThenInclude(it => it.ItemType)
+                .Include(g => g.Division)
                 .FirstOrDefaultAsync(g => g.Id == id);
             return gr == null ? null : ToDto(gr);
+        }
+
+        public async Task<PrintGoodsReceiptDto?> GetPrintDataAsync(int id)
+        {
+            var gr = await _context.GoodsReceipts
+                .AsNoTracking()
+                .Include(g => g.Company)
+                .Include(g => g.Supplier)
+                .Include(g => g.PurchaseBill)
+                .Include(g => g.Items)
+                    .ThenInclude(it => it.ItemType)
+                .Include(g => g.Division)
+                .FirstOrDefaultAsync(g => g.Id == id);
+            if (gr == null) return null;
+
+            var sNo = 0;
+            return new PrintGoodsReceiptDto
+            {
+                CompanyBrandName = gr.Company?.BrandName ?? gr.Company?.Name ?? "",
+                CompanyLogoPath = gr.Company?.LogoPath,
+                CompanyAddress = gr.Company?.FullAddress,
+                CompanyPhone = gr.Company?.Phone,
+                DivisionName = gr.Division?.Name,
+                DivisionBrandName = gr.Division?.BrandName,
+                DivisionLogoPath = gr.Division?.LogoPath,
+                DivisionAddress = gr.Division?.FullAddress,
+                DivisionPhone = gr.Division?.Phone,
+                DivisionNTN = gr.Division?.NTN,
+                DivisionSTRN = gr.Division?.STRN,
+                DivisionEmail = gr.Division?.Email,
+                SupplierName = gr.Supplier?.Name ?? "",
+                SupplierAddress = gr.Supplier?.Address,
+                SupplierPhone = gr.Supplier?.Phone,
+                GoodsReceiptNumber = gr.GoodsReceiptNumber,
+                ReceiptDate = gr.ReceiptDate,
+                SupplierChallanNumber = gr.SupplierChallanNumber,
+                PurchaseBillNumber = gr.PurchaseBill?.PurchaseBillNumber,
+                Site = gr.Site,
+                Status = gr.Status,
+                Items = gr.Items?.Select(i => new PrintGoodsReceiptItemDto
+                {
+                    SNo = ++sNo,
+                    ItemTypeName = i.ItemType?.Name ?? "",
+                    Description = i.Description,
+                    Quantity = i.Quantity,
+                    Unit = i.Unit,
+                }).ToList() ?? new(),
+            };
         }
 
         public async Task<GoodsReceiptDto> CreateAsync(CreateGoodsReceiptDto dto)
@@ -138,19 +197,25 @@ namespace MyApp.Api.Services.Implementations
                 if (dto.Items == null || dto.Items.Count == 0)
                     throw new InvalidOperationException("At least one item is required.");
 
-                // Number allocation, mirror PurchaseBill numbering.
-                var maxNumber = await _context.GoodsReceipts
-                    .Where(g => g.CompanyId == dto.CompanyId)
-                    .Select(g => (int?)g.GoodsReceiptNumber)
-                    .MaxAsync() ?? 0;
-                var nextNumber = Math.Max(maxNumber + 1, company.StartingGoodsReceiptNumber);
-                company.CurrentGoodsReceiptNumber = nextNumber;
+                // Per-division numbering: a division-tagged GRN draws from the
+                // division's own sequence; otherwise the company's (mirror SalesQuote).
+                var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, dto.CompanyId, dto.DivisionId);
+                var maxQuery = _context.GoodsReceipts.Where(g => g.CompanyId == dto.CompanyId);
+                maxQuery = dto.DivisionId.HasValue
+                    ? maxQuery.Where(g => g.DivisionId == dto.DivisionId.Value)
+                    : maxQuery.Where(g => g.DivisionId == null);
+                var maxNumber = await maxQuery.Select(g => (int?)g.GoodsReceiptNumber).MaxAsync() ?? 0;
+                var seed = division != null ? division.StartingGoodsReceiptNumber : company.StartingGoodsReceiptNumber;
+                var nextNumber = MyApp.Api.Helpers.DivisionNumbering.Next(maxNumber, seed);
+                if (division != null) division.CurrentGoodsReceiptNumber = nextNumber;
+                else company.CurrentGoodsReceiptNumber = nextNumber;
 
                 var receipt = new GoodsReceipt
                 {
                     GoodsReceiptNumber = nextNumber,
                     ReceiptDate = dto.ReceiptDate.Date,
                     CompanyId = dto.CompanyId,
+                    DivisionId = dto.DivisionId,
                     SupplierId = dto.SupplierId,
                     PurchaseBillId = dto.PurchaseBillId,
                     SupplierChallanNumber = dto.SupplierChallanNumber?.Trim(),

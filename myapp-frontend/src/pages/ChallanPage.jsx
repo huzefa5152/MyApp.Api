@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { MdDescription, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
 import ChallanTable from "../Components/ChallanTable";
+import SearchableSelect from "../Components/SearchableSelect";
 import ChallanForm from "../Components/ChallanForm";
 import ChallanEditForm from "../Components/ChallanEditForm";
-import POImportForm from "../Components/POImportForm";
+import DivisionSelect from "../Components/DivisionSelect";
 import InvoiceForm from "../Components/InvoiceForm";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
@@ -19,7 +20,11 @@ import {
 import { getClientsByCompany } from "../api/clientApi";
 import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import { mergeTemplate } from "../utils/templateEngine";
+import { writeAndPrint } from "../utils/printDocument";
 import { defaultChallanTemplate } from "../utils/defaultTemplates";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
+import { renderRichTextHtml } from "../utils/richText";
 import { exportToPdf } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { dropdownStyles } from "../theme";
@@ -48,6 +53,8 @@ export default function ChallanPage() {
   const canUpdate = has("challans.manage.update");
   const canDelete = has("challans.manage.delete");
   const canPrint = has("challans.print.view");
+  // Shared template-picker state (dropdown + Print/PDF resolution).
+  const tplPicker = usePrintTemplates("Challan");
   // Client-filter dropdown calls GET /api/clients/company/{id} which is
   // gated by clients.manage.view. View-only roles (e.g. tax consultant
   // with just challans.list.view) would 403 on that call AND see an
@@ -57,7 +64,6 @@ export default function ChallanPage() {
   const [clients, setClients] = useState([]);
   const [challans, setChallans] = useState([]);
   const [showModal, setShowModal] = useState(false);
-  const [showImport, setShowImport] = useState(false);
   const [editChallan, setEditChallan] = useState(null);
   const [loadingChallans, setLoadingChallans] = useState(false);
   // Generate-Bill shortcut: holds the challanId to prefill into InvoiceForm
@@ -71,6 +77,7 @@ export default function ChallanPage() {
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [divisionFilter, setDivisionFilter] = useState("");
   const [clientFilter, setClientFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -104,6 +111,7 @@ export default function ChallanPage() {
       const params = { page: pg || page };
       if (search) params.search = search;
       if (statusFilter) params.status = statusFilter;
+      if (divisionFilter) params.divisionId = divisionFilter;
       if (clientFilter) params.clientId = clientFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
@@ -119,13 +127,18 @@ export default function ChallanPage() {
     } finally {
       setLoadingChallans(false);
     }
-  }, [page, search, statusFilter, clientFilter, dateFrom, dateTo]);
+  }, [page, search, statusFilter, divisionFilter, clientFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (selectedCompany) {
       fetchClients(selectedCompany.id);
       setPage(1);
-      fetchChallans(selectedCompany.id, 1);
+      // Division ids are per-company — a stale filter would blank the list.
+      // Resetting it retriggers the filter effect below, so only fetch
+      // directly when there's no reset to piggyback on (avoids a stale-
+      // division request racing the corrected one).
+      if (divisionFilter) setDivisionFilter("");
+      else fetchChallans(selectedCompany.id, 1);
       hasExcelTemplate(selectedCompany.id, "Challan")
         .then(r => setHasExcelTpl(r.data.hasExcelTemplate))
         .catch(() => setHasExcelTpl(false));
@@ -139,11 +152,12 @@ export default function ChallanPage() {
   // Re-fetch when filters or page change
   useEffect(() => {
     if (selectedCompany) fetchChallans(selectedCompany.id, page);
-  }, [page, search, statusFilter, clientFilter, dateFrom, dateTo]);
+  }, [page, search, statusFilter, divisionFilter, clientFilter, dateFrom, dateTo]);
 
   const resetFilters = () => {
     setSearch("");
     setStatusFilter("");
+    setDivisionFilter("");
     setClientFilter("");
     setDateFrom("");
     setDateTo("");
@@ -159,9 +173,11 @@ export default function ChallanPage() {
 
   const handleSaveChallan = async (payload) => {
     if (!selectedCompany) return;
-    await createDeliveryChallan(selectedCompany.id, payload);
+    // Return the created challan so the form can flush staged attachments
+    // against the new id. The form closes itself (after the flush) via onClose.
+    const res = await createDeliveryChallan(selectedCompany.id, payload);
     fetchChallans(selectedCompany.id, page);
-    setShowModal(false);
+    return res.data;
   };
 
   const handleCancel = async (challan) => {
@@ -186,6 +202,21 @@ export default function ChallanPage() {
     }
   };
 
+  // Explicit dropdown pick wins; else the company default from the loaded
+  // list; if the list couldn't load, the legacy per-click default fetch;
+  // finally the built-in template.
+  const resolveChallanTemplate = async (challan) => {
+    const picked = tplPicker.resolveTemplate(challan);
+    if (picked?.htmlContent) return picked.htmlContent;
+    if (!tplPicker.templatesLoaded) {
+      try {
+        const res = await getTemplate(selectedCompany.id, "Challan");
+        if (res.data?.htmlContent) return res.data.htmlContent;
+      } catch { /* use default */ }
+    }
+    return defaultChallanTemplate;
+  };
+
   const handlePrint = async (challan) => {
     if (!selectedCompany) { notify("No company selected.", "error"); return; }
     const w = window.open("", "_blank");
@@ -193,18 +224,9 @@ export default function ChallanPage() {
     w.document.write("<p>Loading challan...</p>");
     try {
       const { data } = await getChallanPrintData(challan.id);
-      let template = defaultChallanTemplate;
-      try {
-        const res = await getTemplate(selectedCompany.id, "Challan");
-        if (res.data?.htmlContent) template = res.data.htmlContent;
-      } catch { /* use default */ }
+      const template = await resolveChallanTemplate(challan);
       const html = mergeTemplate(template, data);
-      w.document.open();
-      w.document.write(html);
-      w.document.close();
-      w.focus();
-      w.onafterprint = () => w.close();
-      w.print();
+      writeAndPrint(w, html);
     } catch {
       w.close();
       notify("Failed to load print data.", "error");
@@ -266,11 +288,7 @@ export default function ChallanPage() {
     setExportingId(challan.id + "-pdf");
     try {
       const { data } = await getChallanPrintData(challan.id);
-      let template = defaultChallanTemplate;
-      try {
-        const res = await getTemplate(selectedCompany.id, "Challan");
-        if (res.data?.htmlContent) template = res.data.htmlContent;
-      } catch { /* use default */ }
+      const template = await resolveChallanTemplate(challan);
       const html = mergeTemplate(template, data);
       const name = `DC # ${data.challanNumber} ${data.clientName}`;
       await exportToPdf(html, name);
@@ -295,7 +313,7 @@ export default function ChallanPage() {
     }
   };
 
-  const hasFilters = search || statusFilter || clientFilter || dateFrom || dateTo;
+  const hasFilters = search || statusFilter || divisionFilter || clientFilter || dateFrom || dateTo;
 
   return (
     <div>
@@ -318,11 +336,6 @@ export default function ChallanPage() {
             {canCreate && (
               <button style={styles.addBtn} onClick={handleAddChallan}>
                 <MdAdd size={18} /> New Challan
-              </button>
-            )}
-            {canCreate && has("poformats.import.create") && (
-              <button style={{ ...styles.addBtn, backgroundColor: "#00897b" }} onClick={() => selectedCompany && setShowImport(true)}>
-                <MdUploadFile size={18} /> Import PO
               </button>
             )}
           </div>
@@ -373,11 +386,21 @@ export default function ChallanPage() {
                 <option value="Invoiced">Billed</option>
                 <option value="Cancelled">Cancelled</option>
               </select>
+              <DivisionSelect
+                companyId={selectedCompany.id}
+                value={divisionFilter}
+                onChange={(v) => { setDivisionFilter(v); setPage(1); }}
+                className="filter-select"
+              />
               {canViewClients && (
-                <select className="filter-select" value={clientFilter} onChange={handleFilterChange(setClientFilter)}>
-                  <option value="">All Clients</option>
-                  {clients.map((cl) => <option key={cl.id} value={cl.id}>{cl.name}</option>)}
-                </select>
+                <div style={{ minWidth: 220, maxWidth: 340 }}>
+                  <SearchableSelect
+                    items={clients}
+                    value={clientFilter}
+                    onChange={(id) => handleFilterChange(setClientFilter)({ target: { value: id ? String(id) : "" } })}
+                    placeholder="All Clients"
+                  />
+                </div>
               )}
               <div className="filter-date-group">
                 <input type="date" className="filter-date-input" value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" />
@@ -387,6 +410,7 @@ export default function ChallanPage() {
               {hasFilters && (
                 <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>
               )}
+              <PrintTemplateSelect picker={tplPicker} />
               {isBigScreen && (
                 <div style={{ marginLeft: "auto" }}>
                   <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Delivery challan view mode" />
@@ -473,16 +497,9 @@ export default function ChallanPage() {
       {showModal && selectedCompany && (
         <ChallanForm
           companyId={selectedCompany.id}
+          defaultDivisionId={divisionFilter}
           onClose={() => setShowModal(false)}
           onSaved={handleSaveChallan}
-        />
-      )}
-
-      {showImport && selectedCompany && (
-        <POImportForm
-          companyId={selectedCompany.id}
-          onClose={() => setShowImport(false)}
-          onSaved={() => { setShowImport(false); fetchChallans(selectedCompany.id, page); }}
         />
       )}
 
@@ -545,7 +562,7 @@ function buildChallanPrintHtml(data) {
   let itemRows = data.items.map((item) =>
     `<tr>
       <td class="cell qty">${item.quantity}</td>
-      <td class="cell item">${item.description}</td>
+      <td class="cell item">${renderRichTextHtml(item.description)}</td>
     </tr>`
   ).join("");
 

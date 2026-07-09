@@ -11,18 +11,25 @@ const PermissionsContext = createContext(null);
  * circuits to a yes-to-everything answer because the backend grants them
  * every key anyway.
  *
+ * Also carries per-company division restrictions
+ * (`divisionRestrictions: { [companyId]: number[] }` — key present only when
+ * the user is division-restricted in that company) with lookup helpers
+ * `isDivisionRestricted`, `getAccessibleDivisions`, `canAccessDivision`.
+ *
  * Refreshes whenever the authenticated user changes.
  */
 export function PermissionsProvider({ children }) {
   const { user, isAuthenticated } = useAuth();
   const [permissions, setPermissions] = useState(new Set());
   const [isSeedAdmin, setIsSeedAdmin] = useState(false);
+  const [divisionRestrictions, setDivisionRestrictions] = useState({});
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (!isAuthenticated) {
       setPermissions(new Set());
       setIsSeedAdmin(false);
+      setDivisionRestrictions({});
       setLoading(false);
       return;
     }
@@ -31,9 +38,11 @@ export function PermissionsProvider({ children }) {
       const res = await getMyPermissions();
       setPermissions(new Set(res.data.permissions || []));
       setIsSeedAdmin(res.data.isSeedAdmin === true);
+      setDivisionRestrictions(res.data.divisionRestrictions || {});
     } catch {
       setPermissions(new Set());
       setIsSeedAdmin(false);
+      setDivisionRestrictions({});
     } finally {
       setLoading(false);
     }
@@ -68,9 +77,43 @@ export function PermissionsProvider({ children }) {
     [permissions, isSeedAdmin]
   );
 
+  // A company key is present only when the user is division-restricted there.
+  // JSON object keys arrive as strings, so coerce the caller's companyId.
+  const isDivisionRestricted = useCallback(
+    (companyId) => {
+      if (isSeedAdmin || companyId == null || companyId === "") return false;
+      return Object.prototype.hasOwnProperty.call(divisionRestrictions, String(companyId));
+    },
+    [divisionRestrictions, isSeedAdmin]
+  );
+
+  // Returns the allowed division ids for the company, or null when unrestricted.
+  const getAccessibleDivisions = useCallback(
+    (companyId) => {
+      if (isSeedAdmin || companyId == null || companyId === "") return null;
+      const list = divisionRestrictions[String(companyId)];
+      return Array.isArray(list) ? list : null;
+    },
+    [divisionRestrictions, isSeedAdmin]
+  );
+
+  const canAccessDivision = useCallback(
+    (companyId, divisionId) => {
+      const list = getAccessibleDivisions(companyId);
+      if (list == null) return true;
+      return list.some((id) => Number(id) === Number(divisionId));
+    },
+    [getAccessibleDivisions]
+  );
+
   const value = useMemo(
-    () => ({ permissions, isSeedAdmin, loading, has, hasAny, hasAll, reload: load }),
-    [permissions, isSeedAdmin, loading, has, hasAny, hasAll, load]
+    () => ({
+      permissions, isSeedAdmin, loading, has, hasAny, hasAll,
+      divisionRestrictions, isDivisionRestricted, getAccessibleDivisions, canAccessDivision,
+      reload: load,
+    }),
+    [permissions, isSeedAdmin, loading, has, hasAny, hasAll,
+     divisionRestrictions, isDivisionRestricted, getAccessibleDivisions, canAccessDivision, load]
   );
 
   return (

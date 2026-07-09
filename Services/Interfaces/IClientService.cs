@@ -32,5 +32,7 @@ namespace MyApp.Api.Services.Interfaces
 
         Task<ClientDto> UpdateAsync(ClientDto dto);
         Task DeleteAsync(int id);
+        /// <summary>Counts of what a client wipe will cascade-delete (+ FBR-submitted, which blocks it).</summary>
+        Task<ClientDeleteImpactDto> GetDeleteImpactAsync(int id);
     }
 }

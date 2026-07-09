@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { MdPeople, MdAdd, MdSearch, MdBusiness } from "react-icons/md";
 import ClientList from "../Components/ClientList";
 import ClientForm from "../Components/ClientForm";
@@ -6,6 +7,7 @@ import CommonClientsPanel from "../Components/CommonClientsPanel";
 import CommonClientForm from "../Components/CommonClientForm";
 import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
 import { getClientsByCompany, getCommonClients, copyClientToCompanies } from "../api/clientApi";
+import { getInvoiceCountsByClient } from "../api/invoiceApi";
 import { notify } from "../utils/notify";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
@@ -20,10 +22,15 @@ const colors = {
 };
 
 export default function ClientsPage() {
+  const navigate = useNavigate();
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
   const canCreate = has("clients.manage.create");
+  // Whether the operator may open the Invoices list (gates the clickable count).
+  const canViewInvoices = has("invoices.list.view") || has("bills.list.view");
   const [clients, setClients] = useState([]);
+  // clientId -> sales-invoice count, for the clickable chip on each card.
+  const [invoiceCounts, setInvoiceCounts] = useState({});
   const [selectedClient, setSelectedClient] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
@@ -82,6 +89,19 @@ export default function ClientsPage() {
     if (selectedCompany) fetchClients(selectedCompany.id);
     else setClients([]);
   }, [selectedCompany]);
+
+  // Sales-invoice counts per client (one GROUP BY call). Best-effort: a
+  // view-only role without invoice access just gets no chips.
+  useEffect(() => {
+    if (!selectedCompany || !canViewInvoices) { setInvoiceCounts({}); return; }
+    let cancelled = false;
+    getInvoiceCountsByClient(selectedCompany.id)
+      // Guard: only accept a plain object map. If the endpoint is missing the
+      // SPA fallback returns HTML with a 200, which must NOT become "counts".
+      .then(({ data }) => { if (!cancelled) setInvoiceCounts(data && typeof data === "object" && !Array.isArray(data) ? data : {}); })
+      .catch(() => { if (!cancelled) setInvoiceCounts({}); });
+    return () => { cancelled = true; };
+  }, [selectedCompany, canViewInvoices]);
 
   const handleEdit = (client) => {
     setSelectedClient(client);
@@ -208,6 +228,8 @@ export default function ClientsPage() {
           onEdit={handleEdit}
           onCopy={(client) => setCopyingClient(client)}
           fetchClients={() => fetchClients(selectedCompany?.id)}
+          invoiceCounts={invoiceCounts}
+          onShowInvoices={canViewInvoices ? (c) => navigate(`/invoices?clientId=${c.id}`) : null}
         />
       )}
 

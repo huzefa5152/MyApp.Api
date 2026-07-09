@@ -16,13 +16,16 @@ namespace MyApp.Api.Controllers
     {
         private readonly IDeliveryChallanService _service;
         private readonly ICompanyAccessGuard _access;
+        private readonly IDivisionAccessGuard _divisionAccess;
         private readonly int _defaultPageSize;
         private readonly ILogger<DeliveryChallansController> _logger;
 
-        public DeliveryChallansController(IDeliveryChallanService service, ICompanyAccessGuard access, IConfiguration configuration, ILogger<DeliveryChallansController> logger)
+        public DeliveryChallansController(IDeliveryChallanService service, ICompanyAccessGuard access,
+            IDivisionAccessGuard divisionAccess, IConfiguration configuration, ILogger<DeliveryChallansController> logger)
         {
             _service = service;
             _access = access;
+            _divisionAccess = divisionAccess;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
             _logger = logger;
         }
@@ -39,7 +42,8 @@ namespace MyApp.Api.Controllers
             if (companyId.HasValue)
             {
                 await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
-                return Ok(await _service.GetCountByCompanyAsync(companyId.Value));
+                var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId.Value);
+                return Ok(await _service.GetCountByCompanyAsync(companyId.Value, divScope));
             }
             // Total across companies — narrow to caller's accessible set so a
             // tenant-scoped user doesn't see "you have N challans" rolled up
@@ -47,7 +51,10 @@ namespace MyApp.Api.Controllers
             var allowed = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
             var total = 0;
             foreach (var cid in allowed)
-                total += await _service.GetCountByCompanyAsync(cid);
+            {
+                var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, cid);
+                total += await _service.GetCountByCompanyAsync(cid, divScope);
+            }
             return Ok(total);
         }
 
@@ -56,7 +63,8 @@ namespace MyApp.Api.Controllers
         [AuthorizeCompany]
         public async Task<ActionResult<List<DeliveryChallanDto>>> GetByCompany(int companyId)
         {
-            var challans = await _service.GetDeliveryChallansByCompanyAsync(companyId);
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            var challans = await _service.GetDeliveryChallansByCompanyAsync(companyId, divScope);
             return Ok(challans);
         }
 
@@ -71,12 +79,19 @@ namespace MyApp.Api.Controllers
             [FromQuery] string? status = null,
             [FromQuery] int? clientId = null,
             [FromQuery] DateTime? dateFrom = null,
-            [FromQuery] DateTime? dateTo = null)
+            [FromQuery] DateTime? dateTo = null,
+            [FromQuery] int? divisionId = null)
         {
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
+            // Division RBAC: an explicit divisionId filter must be one the
+            // caller can access; without a filter, restricted users get their
+            // scope applied inside the query (company-level rows included).
+            if (divisionId.HasValue)
+                await _divisionAccess.AssertAccessAsync(CurrentUserId, companyId, divisionId.Value);
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
             var result = await _service.GetPagedByCompanyAsync(
-                companyId, clampedPage, size, search, status, clientId, dateFrom, dateTo);
+                companyId, clampedPage, size, search, status, clientId, dateFrom, dateTo, divisionId, divScope);
             return Ok(result);
         }
 
@@ -85,7 +100,8 @@ namespace MyApp.Api.Controllers
         [AuthorizeCompany]
         public async Task<ActionResult<List<DeliveryChallanDto>>> GetPendingByCompany(int companyId)
         {
-            var challans = await _service.GetPendingChallansByCompanyAsync(companyId);
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            var challans = await _service.GetPendingChallansByCompanyAsync(companyId, divScope);
             return Ok(challans);
         }
 
@@ -96,6 +112,7 @@ namespace MyApp.Api.Controllers
             var challan = await _service.GetByIdAsync(id);
             if (challan == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, challan.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, challan.CompanyId, challan.DivisionId);
             return Ok(challan);
         }
 
@@ -104,6 +121,9 @@ namespace MyApp.Api.Controllers
         [AuthorizeCompany]
         public async Task<ActionResult<DeliveryChallanDto>> Create(int companyId, [FromBody] DeliveryChallanDto dto)
         {
+            // Division-restricted users must tag the challan with one of their
+            // divisions (write-assert also rejects null — policy D2).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, companyId, dto.DivisionId);
             try
             {
                 if (dto.ClientId <= 0)
@@ -145,6 +165,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             try
             {
                 var updated = await _service.UpdateItemsAsync(id, items);
@@ -164,6 +185,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             try
             {
                 if (string.IsNullOrWhiteSpace(dto.PoNumber))
@@ -191,6 +213,9 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            // Division is immutable on update (UpdateChallanAsync never assigns
+            // dto.DivisionId), so the read-assert on the stored tag suffices.
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             try
             {
                 // Items must still contain at least one row and have valid data.
@@ -231,6 +256,9 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            // The clone inherits the source's division, so read access to the
+            // source's division is the right gate for duplication.
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             try
             {
                 // 2026-05-08: count parameter — operator picks "create N copies"
@@ -258,6 +286,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             try
             {
                 var result = await _service.CancelAsync(id);
@@ -277,6 +306,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             try
             {
                 var result = await _service.DeleteAsync(id);
@@ -299,7 +329,8 @@ namespace MyApp.Api.Controllers
             // challan's CompanyId and gate access first.
             var parent = await _service.GetCompanyForItemAsync(itemId);
             if (parent == null) return NotFound();
-            await _access.AssertAccessAsync(CurrentUserId, parent.Value);
+            await _access.AssertAccessAsync(CurrentUserId, parent.Value.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, parent.Value.CompanyId, parent.Value.DivisionId);
 
             try
             {
@@ -320,6 +351,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
             var dto = await _service.GetPrintDataAsync(id);
             if (dto == null) return NotFound();
             return Ok(dto);

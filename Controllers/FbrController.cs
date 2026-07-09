@@ -19,12 +19,15 @@ namespace MyApp.Api.Controllers
         private readonly IFbrService _fbrService;
         private readonly AppDbContext _db;
         private readonly ICompanyAccessGuard _access;
+        private readonly IDivisionAccessGuard _divisionAccess;
 
-        public FbrController(IFbrService fbrService, AppDbContext db, ICompanyAccessGuard access)
+        public FbrController(IFbrService fbrService, AppDbContext db, ICompanyAccessGuard access,
+            IDivisionAccessGuard divisionAccess)
         {
             _fbrService = fbrService;
             _db = db;
             _access = access;
+            _divisionAccess = divisionAccess;
         }
 
         private int CurrentUserId =>
@@ -32,16 +35,18 @@ namespace MyApp.Api.Controllers
                 User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
                 out var id) ? id : 0;
 
-        // Look up the invoice's company and assert the caller has tenant
-        // access to it. Used by every {invoiceId}/* endpoint below.
+        // Look up the invoice's company + division and assert the caller has
+        // tenant access to the company AND read access to the division scope.
+        // Used by every {invoiceId}/* endpoint below.
         private async Task<IActionResult?> AssertAccessForInvoice(int invoiceId)
         {
-            var companyId = await _db.Invoices
+            var inv = await _db.Invoices
                 .Where(i => i.Id == invoiceId)
-                .Select(i => (int?)i.CompanyId)
+                .Select(i => new { i.CompanyId, i.DivisionId })
                 .FirstOrDefaultAsync();
-            if (companyId == null) return NotFound(new { message = "Invoice not found." });
-            await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+            if (inv == null) return NotFound(new { message = "Invoice not found." });
+            await _access.AssertAccessAsync(CurrentUserId, inv.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, inv.CompanyId, inv.DivisionId);
             return null;
         }
 

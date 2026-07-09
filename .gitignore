@@ -385,8 +385,18 @@ FodyWeavers.xsd
 publish-ftp/
 migration.sql
 
-# User-uploaded files (logos, avatars)
-data/
+# Runtime artifacts under Data/ (uploaded logos/avatars, generated Excel
+# templates, attachments, PO-audit logs, DataProtection key ring). NOTE: on
+# this case-insensitive filesystem the source folder "Data/" (EF context +
+# seeders) and the runtime "data/" dir are the SAME folder, so a blanket
+# "data/" rule silently swallows new C# source files in Data/. Ignore the
+# runtime SUBDIRECTORIES only — never the whole folder.
+Data/attachments/
+Data/excel-templates/
+Data/images/
+Data/po-audit/
+Data/uploads/
+Data/keys/
 
 # Claude Code user-local state
 .claude/

@@ -18,12 +18,17 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly AppDbContext _context;
         private readonly IStockService _stock;
+        // Phase B: bill saves/deletes re-sync the bill's GL journal entry
+        // (no-op unless the company enabled GL posting).
+        private readonly IPostingService _posting;
         private readonly ILogger<PurchaseBillService> _logger;
 
-        public PurchaseBillService(AppDbContext context, IStockService stock, ILogger<PurchaseBillService> logger)
+        public PurchaseBillService(AppDbContext context, IStockService stock,
+            IPostingService posting, ILogger<PurchaseBillService> logger)
         {
             _context = context;
             _stock = stock;
+            _posting = posting;
             _logger = logger;
         }
 
@@ -34,6 +39,8 @@ namespace MyApp.Api.Services.Implementations
             Date = pb.Date,
             CompanyId = pb.CompanyId,
             CompanyName = pb.Company?.Name ?? "",
+            DivisionId = pb.DivisionId,
+            DivisionName = pb.Division?.Name,
             SupplierId = pb.SupplierId,
             SupplierName = pb.Supplier?.Name ?? "",
             SupplierBillNumber = pb.SupplierBillNumber,
@@ -44,6 +51,11 @@ namespace MyApp.Api.Services.Implementations
             GrandTotal = pb.GrandTotal,
             AmountInWords = pb.AmountInWords,
             PaymentTerms = pb.PaymentTerms,
+            DueDate = pb.DueDate,
+            AmountPaid = pb.AmountPaid,
+            BalanceDue = PaymentStatusCalculator.BalanceDue(pb.GrandTotal, pb.AmountPaid),
+            PaymentStatus = PaymentStatusCalculator.Status(pb.GrandTotal, pb.AmountPaid, pb.DueDate).ToString(),
+            DaysOverdue = PaymentStatusCalculator.DaysOverdue(pb.GrandTotal, pb.AmountPaid, pb.DueDate),
             DocumentType = pb.DocumentType,
             PaymentMode = pb.PaymentMode,
             ReconciliationStatus = pb.ReconciliationStatus,
@@ -79,7 +91,8 @@ namespace MyApp.Api.Services.Implementations
         public async Task<PagedResult<PurchaseBillDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, int? supplierId = null,
-            DateTime? dateFrom = null, DateTime? dateTo = null)
+            DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? divisionId = null, HashSet<int>? allowedDivisionIds = null)
         {
             var q = _context.PurchaseBills
                 .Include(pb => pb.Supplier)
@@ -89,9 +102,17 @@ namespace MyApp.Api.Services.Implementations
                     .ThenInclude(pi => pi.SourceLines)
                         .ThenInclude(sl => sl.InvoiceItem!)
                             .ThenInclude(ii => ii.Invoice)
+                .Include(pb => pb.Division)
                 .Where(pb => pb.CompanyId == companyId);
+            // Division-RBAC scope first (null = unrestricted); the operator's
+            // explicit divisionId FILTER below is a view preference layered on
+            // top — the controller asserts it against the same allowed set.
+            if (allowedDivisionIds != null)
+                q = q.Where(pb => pb.DivisionId == null || allowedDivisionIds.Contains(pb.DivisionId.Value));
             if (supplierId.HasValue)
                 q = q.Where(pb => pb.SupplierId == supplierId.Value);
+            if (divisionId.HasValue)
+                q = q.Where(pb => pb.DivisionId == divisionId.Value);
             if (dateFrom.HasValue)
                 q = q.Where(pb => pb.Date >= dateFrom.Value);
             if (dateTo.HasValue)
@@ -133,8 +154,104 @@ namespace MyApp.Api.Services.Implementations
                     .ThenInclude(pi => pi.SourceLines)
                         .ThenInclude(sl => sl.InvoiceItem!)
                             .ThenInclude(ii => ii.Invoice)
+                .Include(p => p.Division)
                 .FirstOrDefaultAsync(p => p.Id == id);
             return pb == null ? null : ToDto(pb);
+        }
+
+        public async Task<PrintPurchaseBillDto?> GetPrintDataAsync(int id)
+        {
+            var pb = await _context.PurchaseBills
+                .AsNoTracking()
+                .Include(p => p.Company)
+                .Include(p => p.Supplier)
+                .Include(p => p.Items)
+                    .ThenInclude(pi => pi.ItemType)
+                .Include(p => p.Items)
+                    .ThenInclude(pi => pi.SourceLines)
+                        .ThenInclude(sl => sl.InvoiceItem!)
+                            .ThenInclude(ii => ii.Invoice)
+                .Include(p => p.Division)
+                .FirstOrDefaultAsync(p => p.Id == id);
+            if (pb == null) return null;
+
+            var grNumbers = await _context.GoodsReceipts
+                .AsNoTracking()
+                .Where(g => g.PurchaseBillId == id)
+                .OrderBy(g => g.GoodsReceiptNumber)
+                .Select(g => g.GoodsReceiptNumber)
+                .ToListAsync();
+
+            var sNo = 0;
+            return new PrintPurchaseBillDto
+            {
+                CompanyBrandName = pb.Company?.BrandName ?? pb.Company?.Name ?? "",
+                CompanyLogoPath = pb.Company?.LogoPath,
+                CompanyAddress = pb.Company?.FullAddress,
+                CompanyPhone = pb.Company?.Phone,
+                CompanyNTN = pb.Company?.NTN,
+                CompanySTRN = pb.Company?.STRN,
+                DivisionName = pb.Division?.Name,
+                DivisionBrandName = pb.Division?.BrandName,
+                DivisionLogoPath = pb.Division?.LogoPath,
+                DivisionAddress = pb.Division?.FullAddress,
+                DivisionPhone = pb.Division?.Phone,
+                DivisionNTN = pb.Division?.NTN,
+                DivisionSTRN = pb.Division?.STRN,
+                DivisionEmail = pb.Division?.Email,
+                SupplierName = pb.Supplier?.Name ?? "",
+                SupplierAddress = pb.Supplier?.Address,
+                SupplierPhone = pb.Supplier?.Phone,
+                SupplierNTN = pb.Supplier?.NTN,
+                SupplierSTRN = pb.Supplier?.STRN,
+                PurchaseBillNumber = pb.PurchaseBillNumber,
+                Date = pb.Date,
+                SupplierBillNumber = pb.SupplierBillNumber,
+                SupplierIRN = pb.SupplierIRN,
+                PaymentTerms = pb.PaymentTerms,
+                DueDate = pb.DueDate,
+                GoodsReceiptNumbers = grNumbers,
+                LinkedSaleBillNumbers = pb.Items?
+                    .SelectMany(i => i.SourceLines ?? new List<PurchaseItemSourceLine>())
+                    .Where(sl => sl.InvoiceItem?.Invoice != null)
+                    .Select(sl => sl.InvoiceItem!.Invoice!.InvoiceNumber)
+                    .Distinct()
+                    .OrderBy(n => n)
+                    .ToList() ?? new(),
+                Subtotal = pb.Subtotal,
+                GSTRate = pb.GSTRate,
+                GSTAmount = pb.GSTAmount,
+                // Whole-rupee display total in sync with the in-words line —
+                // same print-only transformation as PrintBillDto.
+                GrandTotal = NumberToWordsConverter.RoundForDisplay(pb.GrandTotal),
+                AmountInWords = NumberToWordsConverter.Convert(pb.GrandTotal),
+                Items = pb.Items?.Select(i => new PrintPurchaseBillItemDto
+                {
+                    SNo = ++sNo,
+                    ItemTypeName = i.ItemType?.Name ?? i.ItemTypeName,
+                    Description = i.Description,
+                    Quantity = i.Quantity,
+                    UOM = i.UOM,
+                    UnitPrice = i.UnitPrice,
+                    LineTotal = i.LineTotal,
+                    HSCode = i.HSCode,
+                }).ToList() ?? new(),
+            };
+        }
+
+        public async Task<PurchaseBillDto?> SetDueDateAsync(int id, DateTime? dueDate)
+        {
+            var pb = await _context.PurchaseBills
+                .Include(p => p.Company)
+                .Include(p => p.Supplier)
+                .Include(p => p.Items).ThenInclude(pi => pi.ItemType)
+                .Include(p => p.Items).ThenInclude(pi => pi.SourceLines)
+                    .ThenInclude(sl => sl.InvoiceItem!).ThenInclude(ii => ii.Invoice)
+                .FirstOrDefaultAsync(p => p.Id == id);
+            if (pb == null) return null;
+            pb.DueDate = dueDate?.Date;
+            await _context.SaveChangesAsync();
+            return ToDto(pb);
         }
 
         public async Task<PurchaseBillDto> CreateAsync(CreatePurchaseBillDto dto)
@@ -168,14 +285,18 @@ namespace MyApp.Api.Services.Implementations
             if (dto.Items.Any(i => i.UnitPrice < 0))
                 throw new InvalidOperationException("Unit price cannot be negative.");
 
-            // Allocate next purchase-bill number — independent of the
-            // sales-side InvoiceNumber sequence.
-            var maxNumber = await _context.PurchaseBills
-                .Where(p => p.CompanyId == dto.CompanyId)
-                .Select(p => (int?)p.PurchaseBillNumber)
-                .MaxAsync() ?? 0;
-            var nextNumber = Math.Max(maxNumber + 1, company.StartingPurchaseBillNumber);
-            company.CurrentPurchaseBillNumber = nextNumber;
+            // Allocate next purchase-bill number — independent of the sales-side
+            // sequence, and scoped per division when the bill is tagged with one.
+            var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, dto.CompanyId, dto.DivisionId);
+            var maxQuery = _context.PurchaseBills.Where(p => p.CompanyId == dto.CompanyId);
+            maxQuery = dto.DivisionId.HasValue
+                ? maxQuery.Where(p => p.DivisionId == dto.DivisionId.Value)
+                : maxQuery.Where(p => p.DivisionId == null);
+            var maxNumber = await maxQuery.Select(p => (int?)p.PurchaseBillNumber).MaxAsync() ?? 0;
+            var seed = division != null ? division.StartingPurchaseBillNumber : company.StartingPurchaseBillNumber;
+            var nextNumber = MyApp.Api.Helpers.DivisionNumbering.Next(maxNumber, seed);
+            if (division != null) division.CurrentPurchaseBillNumber = nextNumber;
+            else company.CurrentPurchaseBillNumber = nextNumber;
 
             // Validate "Purchase Against Sale Bill" lines BEFORE we touch
             // anything. Any line with SourceInvoiceItemIds:
@@ -267,6 +388,7 @@ namespace MyApp.Api.Services.Implementations
                 PurchaseBillNumber = nextNumber,
                 Date = dto.Date.Date,
                 CompanyId = dto.CompanyId,
+                DivisionId = dto.DivisionId,
                 SupplierId = dto.SupplierId,
                 SupplierBillNumber = dto.SupplierBillNumber?.Trim(),
                 SupplierIRN = dto.SupplierIRN?.Trim(),
@@ -334,6 +456,7 @@ namespace MyApp.Api.Services.Implementations
             // system. Symmetric with the OUT-side gate in
             // StockService.SyncInvoiceStockMovementsAsync.
             var trackedOnCreate = await _stock.GetStockTrackedItemTypeIdsAsync(
+                bill.CompanyId,
                 items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
             foreach (var it in items)
             {
@@ -350,9 +473,12 @@ namespace MyApp.Api.Services.Implementations
                     sourceType: StockMovementSourceType.PurchaseBill,
                     sourceId: bill.Id,
                     movementDate: bill.Date,
-                    notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplier.Name}");
+                    notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplier.Name}",
+                    divisionId: bill.DivisionId);
             }
 
+            // GL posting (Dr Inventory/Purchases + Input tax / Cr AP) — same tx.
+            await _posting.PostPurchaseBillAsync(bill);
             await tx.CommitAsync();
             return (await GetByIdAsync(bill.Id))!;
             }
@@ -393,38 +519,6 @@ namespace MyApp.Api.Services.Implementations
                 .Include(p => p.Items)
                 .FirstOrDefaultAsync(p => p.Id == id);
             if (bill == null) return null;
-
-            // Audit M-2 (2026-05-13): capture the ORIGINAL bill.Date
-            // into a local before any mutation. The reversal OUT must
-            // carry the date the OUTs were originally posted on, not the
-            // post-edit date. Today the reversal happens before the
-            // mutation so the bug doesn't fire, but making the intent
-            // explicit prevents a refactor from silently breaking it.
-            var originalBillDate = bill.Date;
-
-            // Reverse previously emitted Stock IN before applying changes,
-            // then re-emit using the new line set. Simpler than diff-by-line
-            // and the StockMovement log preserves the audit trail (compensating
-            // OUT entries are inserted, not the IN rows mutated).
-            // 2026-05-13: skip lines whose ItemType has no HSCode — they
-            // were never moved in (gate is symmetric on create).
-            var oldItems = bill.Items.ToList();
-            var trackedOld = await _stock.GetStockTrackedItemTypeIdsAsync(
-                oldItems.Where(o => o.ItemTypeId.HasValue).Select(o => o.ItemTypeId!.Value));
-            foreach (var oi in oldItems)
-            {
-                if (!oi.ItemTypeId.HasValue || oi.Quantity <= 0) continue;
-                if (!trackedOld.Contains(oi.ItemTypeId.Value)) continue;
-                await _stock.RecordMovementAsync(
-                    companyId: bill.CompanyId,
-                    itemTypeId: oi.ItemTypeId.Value,
-                    direction: StockMovementDirection.Out,
-                    quantity: oi.Quantity,
-                    sourceType: StockMovementSourceType.PurchaseBill,
-                    sourceId: bill.Id,
-                    movementDate: originalBillDate,
-                    notes: $"Reversal — Purchase Bill #{bill.PurchaseBillNumber} edited");
-            }
 
             // Apply header changes
             if (dto.Date.HasValue) bill.Date = dto.Date.Value.Date;
@@ -496,26 +590,18 @@ namespace MyApp.Api.Services.Implementations
 
             await _context.SaveChangesAsync();
 
-            // Re-emit Stock IN for the new line set.
-            // 2026-05-13: symmetric gate on HSCode — un-classified
-            // ItemTypes don't move stock either direction.
-            var trackedNew = await _stock.GetStockTrackedItemTypeIdsAsync(
-                newItems.Where(n => n.ItemTypeId.HasValue).Select(n => n.ItemTypeId!.Value));
-            foreach (var ni in newItems)
-            {
-                if (!ni.ItemTypeId.HasValue || ni.Quantity <= 0) continue;
-                if (!trackedNew.Contains(ni.ItemTypeId.Value)) continue;
-                await _stock.RecordMovementAsync(
-                    companyId: bill.CompanyId,
-                    itemTypeId: ni.ItemTypeId.Value,
-                    direction: StockMovementDirection.In,
-                    quantity: ni.Quantity,
-                    sourceType: StockMovementSourceType.PurchaseBill,
-                    sourceId: bill.Id,
-                    movementDate: bill.Date,
-                    notes: $"Purchase Bill #{bill.PurchaseBillNumber} (edited)");
-            }
+            // Reconcile stock to the new line set by DELTA only: compare what
+            // this bill already posted (per ItemType, from the ledger) with
+            // what the new lines should post, and emit just the difference.
+            // A no-op edit — or any edit that doesn't change a tracked item's
+            // quantity/type — moves NO stock (fixes the phantom reversal+IN
+            // churn that used to inflate Total In / Total Out on every save).
+            // It also self-heals bills corrupted by older logic: a posted net
+            // of 0 against a desired qty yields a single IN of that qty.
+            await ReconcileStockToLinesAsync(bill, newItems);
 
+            // GL re-post: totals changed → replace the bill's journal entry.
+            await _posting.PostPurchaseBillAsync(bill);
             await tx.CommitAsync();
             return await GetByIdAsync(bill.Id);
             }
@@ -524,6 +610,113 @@ namespace MyApp.Api.Services.Implementations
                 _logger.LogError(ex, "PurchaseBillService: transaction rolled back");
                 await tx.RollbackAsync();
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// Emits compensating OUT movements that reverse exactly what this
+        /// purchase bill has actually posted to the stock ledger so far —
+        /// its net (IN − OUT) per ItemType, read back from StockMovements —
+        /// rather than synthesizing OUTs from the bill's current line set.
+        ///
+        /// Why net-from-ledger instead of from-lines: the HSCode tracking
+        /// gate is evaluated at write time. A bill created against an
+        /// unclassified ItemType records no IN; if that ItemType is later
+        /// classified, reversing "the current lines" would fabricate an OUT
+        /// for an IN that never existed. Reading the bill's own posted net
+        /// is symmetric with whatever was recorded — and a bill already
+        /// corrupted by the old logic has net 0, so this emits nothing and
+        /// the caller's re-emit restores the correct on-hand (self-heal).
+        ///
+        /// No-op when inventory tracking is off (RecordMovementAsync gates
+        /// on it) or when nothing net-positive is outstanding.
+        /// </summary>
+        /// <summary>
+        /// Reconciles the bill's posted stock to its current line set by
+        /// emitting only the per-ItemType DELTA (desired − posted). Desired is
+        /// the net IN the tracked, classified lines should hold; posted is the
+        /// bill's current net (IN − OUT) read from the ledger. Emits an IN for
+        /// a positive delta, an OUT for a negative one, and nothing when they
+        /// match — so an edit that leaves every tracked item's quantity/type
+        /// unchanged records no movement at all.
+        /// </summary>
+        private async Task ReconcileStockToLinesAsync(PurchaseBill bill, List<PurchaseItem> newItems)
+        {
+            // Desired net IN per tracked ItemType from the new lines
+            // (symmetric HSCode gate — un-classified ItemTypes don't move).
+            var trackedNew = await _stock.GetStockTrackedItemTypeIdsAsync(
+                bill.CompanyId,
+                newItems.Where(n => n.ItemTypeId.HasValue).Select(n => n.ItemTypeId!.Value));
+            var desired = new Dictionary<int, decimal>();
+            foreach (var ni in newItems)
+            {
+                if (!ni.ItemTypeId.HasValue || ni.Quantity <= 0) continue;
+                if (!trackedNew.Contains(ni.ItemTypeId.Value)) continue;
+                desired.TryGetValue(ni.ItemTypeId.Value, out var cur);
+                desired[ni.ItemTypeId.Value] = cur + ni.Quantity;
+            }
+
+            // Currently posted net per ItemType, read back from the ledger.
+            var posted = (await _context.StockMovements
+                    .Where(m => m.CompanyId == bill.CompanyId
+                             && m.SourceType == StockMovementSourceType.PurchaseBill
+                             && m.SourceId == bill.Id)
+                    .GroupBy(m => m.ItemTypeId)
+                    .Select(g => new
+                    {
+                        ItemTypeId = g.Key,
+                        Net = g.Sum(m => m.Direction == StockMovementDirection.In ? m.Quantity : -m.Quantity),
+                    })
+                    .ToListAsync())
+                .ToDictionary(x => x.ItemTypeId, x => x.Net);
+
+            // Emit only the difference.
+            foreach (var itemTypeId in desired.Keys.Union(posted.Keys))
+            {
+                desired.TryGetValue(itemTypeId, out var want);
+                posted.TryGetValue(itemTypeId, out var have);
+                var delta = want - have;
+                if (delta == 0m) continue;
+                await _stock.RecordMovementAsync(
+                    companyId: bill.CompanyId,
+                    itemTypeId: itemTypeId,
+                    direction: delta > 0m ? StockMovementDirection.In : StockMovementDirection.Out,
+                    quantity: Math.Abs(delta),
+                    sourceType: StockMovementSourceType.PurchaseBill,
+                    sourceId: bill.Id,
+                    movementDate: bill.Date,
+                    notes: $"Purchase Bill #{bill.PurchaseBillNumber} (edit — stock {(delta > 0m ? "increased" : "decreased")} by {Math.Abs(delta):0.####})",
+                    divisionId: bill.DivisionId);
+            }
+        }
+
+        private async Task ReversePostedStockAsync(PurchaseBill bill, DateTime movementDate, string notes)
+        {
+            var posted = await _context.StockMovements
+                .Where(m => m.CompanyId == bill.CompanyId
+                         && m.SourceType == StockMovementSourceType.PurchaseBill
+                         && m.SourceId == bill.Id)
+                .GroupBy(m => m.ItemTypeId)
+                .Select(g => new
+                {
+                    ItemTypeId = g.Key,
+                    Net = g.Sum(m => m.Direction == StockMovementDirection.In ? m.Quantity : -m.Quantity),
+                })
+                .ToListAsync();
+
+            foreach (var p in posted)
+            {
+                if (p.Net <= 0m) continue;
+                await _stock.RecordMovementAsync(
+                    companyId: bill.CompanyId,
+                    itemTypeId: p.ItemTypeId,
+                    direction: StockMovementDirection.Out,
+                    quantity: p.Net,
+                    sourceType: StockMovementSourceType.PurchaseBill,
+                    sourceId: bill.Id,
+                    movementDate: movementDate,
+                    notes: notes,
+                    divisionId: bill.DivisionId);
             }
         }
 
@@ -537,28 +730,20 @@ namespace MyApp.Api.Services.Implementations
                 .FirstOrDefaultAsync(p => p.Id == id);
             if (bill == null) return false;
 
-            // Reverse Stock IN before deleting the bill rows. Compensating
-            // OUT entries are written rather than the original IN rows
-            // being deleted — keeps the movement log immutable.
-            // 2026-05-13: skip lines whose ItemType has no HSCode —
-            // gate is symmetric with create / update.
-            var trackedOnDelete = await _stock.GetStockTrackedItemTypeIdsAsync(
-                bill.Items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
-            foreach (var it in bill.Items)
-            {
-                if (!it.ItemTypeId.HasValue || it.Quantity <= 0) continue;
-                if (!trackedOnDelete.Contains(it.ItemTypeId.Value)) continue;
-                await _stock.RecordMovementAsync(
-                    companyId: bill.CompanyId,
-                    itemTypeId: it.ItemTypeId.Value,
-                    direction: StockMovementDirection.Out,
-                    // 2026-05-12: decimal qty now flows through cleanly.
-                    quantity: it.Quantity,
-                    sourceType: StockMovementSourceType.PurchaseBill,
-                    sourceId: bill.Id,
-                    movementDate: bill.Date,
-                    notes: $"Reversal — Purchase Bill #{bill.PurchaseBillNumber} deleted");
-            }
+            // Period-close guard: a locked bill can't be deleted.
+            await _posting.AssertPeriodOpenAsync(bill.CompanyId, bill.Date);
+
+            // Reverse the bill's actual posted stock before deleting its rows.
+            // Compensating OUT entries are written rather than the IN rows
+            // being deleted — keeps the movement log immutable. Reverses the
+            // bill's own posted net (see ReversePostedStockAsync) so a bill
+            // whose ItemType was classified after creation isn't over-reversed.
+            await ReversePostedStockAsync(bill, bill.Date,
+                $"Reversal — Purchase Bill #{bill.PurchaseBillNumber} deleted");
+
+            // The ledger entry dies with its document.
+            await _posting.RemoveForSourceAsync(bill.CompanyId,
+                Models.Accounting.SourceDocType.PurchaseBill, bill.Id);
 
             _context.PurchaseBills.Remove(bill);
             await _context.SaveChangesAsync();
@@ -573,7 +758,25 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
-        public async Task<int> GetCountByCompanyAsync(int companyId) =>
-            await _context.PurchaseBills.CountAsync(p => p.CompanyId == companyId);
+        public async Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
+        {
+            var q = _context.PurchaseBills.Where(p => p.CompanyId == companyId);
+            if (allowedDivisionIds != null)
+                q = q.Where(p => p.DivisionId == null || allowedDivisionIds.Contains(p.DivisionId.Value));
+            return await q.CountAsync();
+        }
+
+        // Purchase-bill count per supplier for a company — powers the clickable
+        // "N purchase bills" chip on the Suppliers page. Single GROUP BY.
+        public async Task<Dictionary<int, int>> GetCountsBySupplierAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
+        {
+            var q = _context.PurchaseBills.Where(p => p.CompanyId == companyId);
+            if (allowedDivisionIds != null)
+                q = q.Where(p => p.DivisionId == null || allowedDivisionIds.Contains(p.DivisionId.Value));
+            return await q
+                .GroupBy(p => p.SupplierId)
+                .Select(g => new { SupplierId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.SupplierId, x => x.Count);
+        }
     }
 }

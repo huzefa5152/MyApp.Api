@@ -42,13 +42,21 @@ namespace MyApp.Api.Services.Implementations
         Task<ItemTypeLookup> LoadItemTypesAsync(int companyId);
 
         /// <summary>
-        /// Given a base invoice number + supplier NTN + date + gross
-        /// total, find a matching PurchaseBill in this company.
-        /// Returns null when nothing matches. Tolerates ±1 PKR on the
-        /// gross.
+        /// Decide whether an FBR purchase invoice is already in our system.
+        /// Takes the supplier id the orchestrator already resolved (by NTN
+        /// then name) — the SAME id the committer attaches the bill to — so
+        /// dedup and commit never disagree. Matches on the FBR invoice
+        /// number against BOTH stored identifiers — SupplierBillNumber
+        /// (where the FBR importer writes it) and SupplierIRN (where a
+        /// manually-keyed bill often carries it). A unique IRN-style
+        /// invoice number is accepted on the string match alone; a short
+        /// numeric bill number additionally needs date or ±1 PKR gross
+        /// corroboration to avoid false "already exists". Returns the
+        /// matching PurchaseBill id, or null when nothing matches.
         /// </summary>
         Task<int?> FindMatchingPurchaseBillIdAsync(
-            int companyId, string supplierNtn, string baseInvoiceNo, DateTime invoiceDate, decimal grossTotal);
+            int companyId, int supplierId, string baseInvoiceNo, string rawInvoiceNo,
+            DateTime invoiceDate, decimal grossTotal);
 
         /// <summary>
         /// Strip line-item suffixes ("…-1", "…-2") from FBR's invoice
@@ -136,38 +144,48 @@ namespace MyApp.Api.Services.Implementations
         }
 
         public async Task<int?> FindMatchingPurchaseBillIdAsync(
-            int companyId, string supplierNtn, string baseInvoiceNo, DateTime invoiceDate, decimal grossTotal)
+            int companyId, int supplierId, string baseInvoiceNo, string rawInvoiceNo,
+            DateTime invoiceDate, decimal grossTotal)
         {
-            // Two-stage match:
-            //   stage 1 — narrow by Supplier (NTN match in this company)
-            //   stage 2 — among those, find a bill whose
-            //             SupplierBillNumber == baseInvoiceNo AND Date
-            //             matches AND |GrandTotal - grossTotal| ≤ 1.
-            //
-            // We can't put the |Δ| ≤ 1 in the SQL WHERE cleanly without
-            // arithmetic surprises in EF, so we do the date+number filter
-            // in SQL and the ±1 PKR check in memory. Cardinality on the
-            // SQL side is small (one supplier × one number → at most a
-            // handful of rows).
+            // The caller resolved the supplier (NTN then name) and only
+            // calls us when that succeeded — if the supplier isn't in our
+            // system, the bill can't be either, so the row is genuinely new.
+            if (supplierId <= 0) return null;
 
-            var supplierId = await _context.Suppliers
-                .Where(s => s.CompanyId == companyId && s.NTN == supplierNtn)
-                .Select(s => (int?)s.Id)
-                .FirstOrDefaultAsync();
-            if (supplierId == null) return null;
+            var baseNo = (baseInvoiceNo ?? "").Trim();
+            var rawNo = (rawInvoiceNo ?? "").Trim();
+            if (baseNo.Length == 0 && rawNo.Length == 0) return null;
 
-            var dateOnly = invoiceDate.Date;
+            // Pull this supplier's bills whose stored invoice identifier
+            // (SupplierBillNumber OR SupplierIRN) string-matches the FBR
+            // invoice number, on either the base (suffix-stripped) or raw
+            // form. Cardinality is tiny (one supplier × one number).
             var candidates = await _context.PurchaseBills
                 .Where(pb => pb.CompanyId == companyId
-                          && pb.SupplierId == supplierId.Value
-                          && pb.SupplierBillNumber == baseInvoiceNo
-                          && pb.Date.Date == dateOnly)
-                .Select(pb => new { pb.Id, pb.GrandTotal })
+                          && pb.SupplierId == supplierId
+                          && (pb.SupplierBillNumber == baseNo
+                           || pb.SupplierBillNumber == rawNo
+                           || pb.SupplierIRN == baseNo
+                           || pb.SupplierIRN == rawNo))
+                .Select(pb => new { pb.Id, pb.GrandTotal, pb.Date })
                 .ToListAsync();
+            if (candidates.Count == 0) return null;
 
+            // An FBR/IRN-style invoice number contains non-digit characters
+            // and is globally unique, so a string hit alone is a confident
+            // "already in system" — no date/total corroboration needed.
+            var invoiceNoIsUnique = baseNo.Any(ch => !char.IsDigit(ch))
+                                 || rawNo.Any(ch => !char.IsDigit(ch));
+            if (invoiceNoIsUnique) return candidates[0].Id;
+
+            // Short numeric bill numbers (e.g. "120") can repeat across
+            // suppliers/periods, so require date OR ±1 PKR gross
+            // corroboration before declaring a duplicate.
+            var dateOnly = invoiceDate.Date;
             foreach (var c in candidates)
             {
-                if (Math.Abs(c.GrandTotal - grossTotal) <= 1m) return c.Id;
+                if (dateOnly != DateTime.MinValue.Date && c.Date.Date == dateOnly) return c.Id;
+                if (grossTotal > 0m && Math.Abs(c.GrandTotal - grossTotal) <= 1m) return c.Id;
             }
             return null;
         }

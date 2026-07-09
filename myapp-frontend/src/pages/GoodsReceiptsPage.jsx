@@ -1,11 +1,19 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdInventory2, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight } from "react-icons/md";
-import { getGoodsReceiptsByCompanyPaged, deleteGoodsReceipt } from "../api/goodsReceiptApi";
+import { MdInventory2, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf } from "react-icons/md";
+import { getGoodsReceiptsByCompanyPaged, deleteGoodsReceipt, getGoodsReceiptPrintData } from "../api/goodsReceiptApi";
+import { mergeTemplate } from "../utils/templateEngine";
+import { writeAndPrint } from "../utils/printDocument";
+import { exportToPdf } from "../utils/exportUtils";
+import { defaultGoodsReceiptTemplate } from "../utils/purchaseNoteDocTemplates";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
+import SearchableSelect from "../Components/SearchableSelect";
+import DivisionSelect from "../Components/DivisionSelect";
 import { notify } from "../utils/notify";
 import GoodsReceiptForm from "../Components/GoodsReceiptForm";
 import GoodsReceiptTable from "../Components/GoodsReceiptTable";
@@ -28,6 +36,9 @@ export default function GoodsReceiptsPage() {
   const canCreate = has("goodsreceipts.manage.create");
   const canUpdate = has("goodsreceipts.manage.update");
   const canDelete = has("goodsreceipts.manage.delete");
+  const canPrint = has("goodsreceipts.print.view");
+  // Shared template-picker state (dropdown + Print/PDF resolution).
+  const tplPicker = usePrintTemplates("GoodsReceipt");
   const [viewMode, setViewMode, isBigScreen] = useListViewMode("goodsReceipts");
 
   const [receipts, setReceipts] = useState([]);
@@ -38,6 +49,7 @@ export default function GoodsReceiptsPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [search, setSearch] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("");
+  const [divisionFilter, setDivisionFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
@@ -48,6 +60,7 @@ export default function GoodsReceiptsPage() {
       const params = { page: pg || page };
       if (search) params.search = search;
       if (supplierFilter) params.supplierId = supplierFilter;
+      if (divisionFilter) params.divisionId = divisionFilter;
       const { data } = await getGoodsReceiptsByCompanyPaged(selectedCompany.id, params);
       setReceipts(data.items || []);
       setTotalCount(data.totalCount || 0);
@@ -57,17 +70,23 @@ export default function GoodsReceiptsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany, page, search, supplierFilter]);
+  }, [selectedCompany, page, search, supplierFilter, divisionFilter]);
 
   useEffect(() => {
     if (selectedCompany) {
       getSuppliersByCompany(selectedCompany.id).then(r => setSuppliers(r.data || [])).catch(() => setSuppliers([]));
       setPage(1);
-      fetchReceipts(1);
+      // Division ids are per-company — a stale filter would blank the list.
+      // Resetting it retriggers the filter effect below, so only fetch
+      // directly when there's no reset to piggyback on (avoids a stale-
+      // division request racing the corrected one).
+      if (divisionFilter) setDivisionFilter("");
+      else fetchReceipts(1);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany]);
 
-  useEffect(() => { if (selectedCompany) fetchReceipts(page); }, [page, search, supplierFilter]);
+  useEffect(() => { if (selectedCompany) fetchReceipts(page); }, [page, search, supplierFilter, divisionFilter]);
 
   const onFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
   const handleDelete = async (gr) => {
@@ -80,6 +99,34 @@ export default function GoodsReceiptsPage() {
     } catch {
       notify("Failed to delete receipt.", "error");
     }
+  };
+
+  const [exportingId, setExportingId] = useState(null);
+
+  // Explicit dropdown pick wins; else the company default; else the built-in.
+  const resolveReceiptTemplate = (gr) =>
+    tplPicker.resolveTemplate(gr)?.htmlContent || defaultGoodsReceiptTemplate;
+
+  const handlePrint = async (gr) => {
+    const w = window.open("", "_blank");
+    if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
+    w.document.write("<p>Loading goods receipt...</p>");
+    try {
+      const { data } = await getGoodsReceiptPrintData(gr.id);
+      const html = mergeTemplate(resolveReceiptTemplate(gr), data);
+      writeAndPrint(w, html);
+    } catch { w.close(); notify("Failed to load print data.", "error"); }
+  };
+
+  const handleExportPdf = async (gr) => {
+    if (exportingId) return;
+    setExportingId(gr.id);
+    try {
+      const { data } = await getGoodsReceiptPrintData(gr.id);
+      const html = mergeTemplate(resolveReceiptTemplate(gr), data);
+      await exportToPdf(html, `GRN # ${data.goodsReceiptNumber} ${data.supplierName}`);
+    } catch { notify("Failed to export PDF.", "error"); }
+    finally { setExportingId(null); }
   };
 
   return (
@@ -120,10 +167,16 @@ export default function GoodsReceiptsPage() {
                 <MdSearch size={15} className="filter-search-icon" />
                 <input type="text" placeholder="Search GR#, supplier, item..." className="filter-search-input" value={search} onChange={onFilterChange(setSearch)} />
               </div>
-              <select className="filter-select" value={supplierFilter} onChange={onFilterChange(setSupplierFilter)}>
-                <option value="">All Suppliers</option>
-                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <div style={{ minWidth: 220, maxWidth: 340 }}>
+                <SearchableSelect
+                  items={suppliers}
+                  value={supplierFilter}
+                  onChange={(id) => onFilterChange(setSupplierFilter)({ target: { value: id ? String(id) : "" } })}
+                  placeholder="All Suppliers"
+                />
+              </div>
+              <DivisionSelect companyId={selectedCompany.id} value={divisionFilter} onChange={(v) => { setDivisionFilter(v); setPage(1); }} className="filter-select" />
+              <PrintTemplateSelect picker={tplPicker} />
               {isBigScreen && (
                 <div style={{ marginLeft: "auto" }}>
                   <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Goods receipts view mode" />
@@ -144,10 +197,13 @@ export default function GoodsReceiptsPage() {
               {viewMode === "table" ? (
                 <GoodsReceiptTable
                   receipts={receipts}
-                  perms={{ canUpdate, canDelete }}
+                  perms={{ canUpdate, canDelete, canPrint }}
                   onView={(g) => { setEditingId(g.id); setShowForm(true); }}
                   onEdit={(g) => { setEditingId(g.id); setShowForm(true); }}
                   onDelete={handleDelete}
+                  onPrint={handlePrint}
+                  onExportPdf={handleExportPdf}
+                  exportingId={exportingId}
                 />
               ) : (
               <div className="card-grid">
@@ -165,10 +221,13 @@ export default function GoodsReceiptsPage() {
                         <p style={cardStyles.text}><strong>Date:</strong> {new Date(gr.receiptDate).toLocaleDateString()}</p>
                         {gr.purchaseBillNumber && <p style={cardStyles.text}><strong>Linked PB:</strong> #{gr.purchaseBillNumber}</p>}
                         {gr.supplierChallanNumber && <p style={cardStyles.text}><strong>Supplier DC:</strong> {gr.supplierChallanNumber}</p>}
+                        {gr.divisionName && <span style={styles.divisionChip}>{gr.divisionName}</span>}
                         <p style={{ ...cardStyles.text, fontSize: "0.74rem" }}>{gr.items?.length || 0} items · {gr.status}</p>
                       </div>
                       <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
                         <button style={btnView} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdVisibility size={14} /> View</button>
+                        {canPrint && <button style={btnPrint} onClick={() => handlePrint(gr)} title="Print goods receipt"><MdPrint size={14} /> Print</button>}
+                        {canPrint && <button style={{ ...btnPdf, opacity: exportingId === gr.id ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportPdf(gr)} title="Download PDF"><MdPictureAsPdf size={14} /> PDF</button>}
                         {canUpdate && <button style={btnEdit} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdEdit size={14} /> Edit</button>}
                         {canDelete && <button style={btnDelete} onClick={() => handleDelete(gr)}><MdDelete size={14} /> Delete</button>}
                       </div>
@@ -193,6 +252,7 @@ export default function GoodsReceiptsPage() {
         <GoodsReceiptForm
           companyId={selectedCompany.id}
           receiptId={editingId}
+          defaultDivisionId={editingId ? null : divisionFilter}
           onClose={() => { setShowForm(false); setEditingId(null); }}
           onSaved={() => { setShowForm(false); setEditingId(null); fetchReceipts(page); }}
         />
@@ -210,11 +270,14 @@ const styles = {
   loading: { display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem 0" },
   spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
   empty: { display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary },
+  divisionChip: { display: "inline-block", marginTop: "0.1rem", marginBottom: "0.35rem", fontSize: "0.72rem", fontWeight: 700, color: colors.blue, background: "#e3f0ff", padding: "0.12rem 0.55rem", borderRadius: 6 },
   pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", padding: "1rem 0", marginTop: "0.5rem" },
   pageBtn: { display: "inline-flex", alignItems: "center", gap: "0.2rem", padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
   pageInfo: { fontSize: "0.82rem", color: colors.textSecondary, fontWeight: 500 },
 };
 const baseBtn = { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer" };
 const btnView = { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" };
+const btnPrint = { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0", border: "1px solid #b39ddb" };
+const btnPdf = { ...baseBtn, backgroundColor: "#fce4ec", color: "#ad1457", border: "1px solid #f48fb1" };
 const btnEdit = { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" };
 const btnDelete = { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" };

@@ -100,6 +100,14 @@ const { has } = usePermissions();
 Action buttons that the user can't activate **must not render**. Don't show a
 button that 403s on click.
 
+**Permission-module grouping (user rule, 2026-07-04):** every `Module` string
+in `PermissionCatalog.cs` **must** be mapped to its navbar section in
+`myapp-frontend/src/config/permissionSections.js` — nothing may fall into the
+role editor's "Other" bucket. When a new feature adds a permission module,
+add the mapping in the same change, under the section where the feature lives
+in the sidebar. `python scripts/verify_permission_sections.py` enforces this
+(fails on unmapped or stale modules) — run it whenever the catalog changes.
+
 ### 3. Mobile-first UI
 
 - Grids: `gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))"` — collapses to one column on phones with no media queries
@@ -179,10 +187,34 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
+| Stock item-type reflow (V1) | `python scripts/test_stock_itemtype_reflow.py` | `76/76 checks passed` |
+| Inventory V2 lifecycle | `python scripts/test_stock_v2_lifecycle.py` | `29/29 checks passed` |
+| Division isolation | `python scripts/test_division_isolation.py` | `all checks passed` |
+| Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 
 If you add a new endpoint that takes `companyId`, add a tenant-isolation
 case to `scripts/test_tenant_isolation.py`. If you touch invoice/bill
-math, add the case to `scripts/test_basic_flows.py`.
+math, add the case to `scripts/test_basic_flows.py`. If you touch stock
+movement reflow (purchase/invoice/challan edits, StockService), add the
+case to `scripts/test_stock_itemtype_reflow.py` (V1 semantics — keep it
+byte-identical, it pins the legacy HS-gated polarity). If you touch the
+**Inventory V2** engine (InventoryReadService buckets, SalesOrder reservation
+guard, invoice lineage/oversell guard, the V2 flow-version toggle, StockLock),
+add the case to `scripts/test_stock_v2_lifecycle.py` — the V2 benchmark that
+pins the reserve→deliver→bill lifecycle, over-commit hard-block (409), and the
+race-free concurrent guard. See `INVENTORY_FLOW_AUDIT_2026_07_05.md` for the
+full design + decisions.
+
+**Inventory V2 (2026-07):** tracking has a per-company version —
+`Company.InventoryFlowVersion` (1 = legacy: only HS-coded items tracked;
+2 = standard: ALL item types are inventory, HS code is FBR metadata only).
+Default 1, so existing tenants are untouched. Flip via
+`POST /api/stock/company/{id}/flow-version` (permission `stock.policy.manage`,
+reversible + audited; turning on V2 defaults `StockGuardHardBlock` on). The
+logical buckets (Committed / To-Deliver / Delivered / Incoming) are a DERIVED
+read model — never persisted, computed from live documents by
+`InventoryReadService`, so nothing can drift. Per-item opt-outs live in
+`CompanyItemTypeSettings` (never on the global `ItemType`).
 
 The basic-flow script covers (see `scripts/test_basic_flows.py` for detail):
 - Challan creation
@@ -191,6 +223,13 @@ The basic-flow script covers (see `scripts/test_basic_flows.py` for detail):
 - Invoice update (description / qty / unit-price → totals reflow)
 - Item Rate History (quantity-suggestion source on bill form)
 - Tax calculation correctness (standard 18% GST, exempt 0%, 3rd Schedule retail price)
+
+The stock-reflow script (`scripts/test_stock_itemtype_reflow.py`) proves
+inventory stays settled when item types change — it spins up an ephemeral
+tracking-enabled company and asserts on-hand after each edit:
+- Purchase bill: create IN, change item type (reverse old + add new), change qty, switch to an un-classified (no-HS) item (no IN), delete (reverse).
+- Classify-after-create **phantom guard**: a bill created against a no-HS item records no IN; classifying the item then editing must NOT fabricate a negative reversal.
+- Invoice OUT via **narrow** item-type edit (`PATCH /itemtypes`), **full** edit (`PUT /{id}`), and the **challan-driven** add/remove/qty path — each reverses the old item's OUT and re-records on the new, restores on clear/remove, and reverses on delete.
 
 ---
 

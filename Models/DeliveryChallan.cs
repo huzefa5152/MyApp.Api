@@ -4,6 +4,9 @@
     {
         public int Id { get; set; }
         public int CompanyId { get; set; }
+        /// <summary>Optional division ("sub-company"); when set the challan numbers
+        /// from the division's own sequence. Null = company-level.</summary>
+        public int? DivisionId { get; set; }
         public int ChallanNumber { get; set; }
 
         // Replace old ClientName with ClientId foreign key
@@ -20,6 +23,14 @@
         public string? Site { get; set; }
         public string Status { get; set; } = "Pending";
         public int? InvoiceId { get; set; }
+
+        // Optional link to the Sales Order this challan fulfils. Null for
+        // standalone challans, imported/legacy challans, and any challan
+        // created before the Sales Order module — so this is purely additive
+        // and never disturbs the existing challan flow. When set, the
+        // challan's delivered quantities roll up against the order's ordered
+        // quantities for fulfilment tracking.
+        public int? SalesOrderId { get; set; }
 
         // Flag for challans created via the historical Excel import flow.
         // Informational only — MUST NOT gate billing or any core flow; imported
@@ -42,8 +53,10 @@
 
         // Navigation
         public Company Company { get; set; } = null!;
+        public Division? Division { get; set; }
         public Client Client { get; set; } = null!;
         public Invoice? Invoice { get; set; }
+        public SalesOrder? SalesOrder { get; set; }
         public DeliveryChallan? DuplicatedFrom { get; set; }
         public ICollection<DeliveryItem> Items { get; set; } = new List<DeliveryItem>();
     }

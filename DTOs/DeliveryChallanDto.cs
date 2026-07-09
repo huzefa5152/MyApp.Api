@@ -5,6 +5,9 @@
         public int Id { get; set; }
         public int ChallanNumber { get; set; }
         public int CompanyId { get; set; }
+        /// <summary>Optional division ("sub-company"); drives per-division numbering.</summary>
+        public int? DivisionId { get; set; }
+        public string? DivisionName { get; set; }
         public int ClientId { get; set; }
         public string ClientName { get; set; } = "";
         public string PoNumber { get; set; } = "";
@@ -48,6 +51,13 @@
         /// ("Duplicate of #1042") without the frontend having to re-fetch.
         /// </summary>
         public int? DuplicatedFromChallanNumber { get; set; }
+        /// <summary>
+        /// Set when this challan was created from a Sales Order (the
+        /// fulfilment flow). Null for every other challan. Lets the UI show a
+        /// "from SO #N" pill and link back to the order.
+        /// </summary>
+        public int? SalesOrderId { get; set; }
+        public int? SalesOrderNumber { get; set; }
         public List<DeliveryItemDto> Items { get; set; } = new();
         public List<string> Warnings { get; set; } = new();
     }

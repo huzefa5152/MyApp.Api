@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +24,11 @@ namespace MyApp.Api.Services.Implementations
     // already validated that the caller belongs to that company; we trust
     // that and don't re-check.
     //
+    // Division scope: resolved ONCE per request via IDivisionAccessGuard
+    // (null = unrestricted fast path). Restricted users see KPIs computed
+    // only from their granted divisions plus company-level rows
+    // (DivisionId == null) — policy D1.
+    //
     // Demo invoices (IsDemo = true) are excluded from EVERY KPI so the
     // FBR Sandbox feature doesn't pollute the home screen — same rule the
     // Bills/Invoices pages already use.
@@ -32,11 +37,16 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly AppDbContext _context;
         private readonly IPermissionService _permissions;
+        private readonly IDivisionAccessGuard _divisionAccess;
 
-        public DashboardService(AppDbContext context, IPermissionService permissions)
+        public DashboardService(
+            AppDbContext context,
+            IPermissionService permissions,
+            IDivisionAccessGuard divisionAccess)
         {
             _context = context;
             _permissions = permissions;
+            _divisionAccess = divisionAccess;
         }
 
         public async Task<DashboardKpisResponse> GetKpisAsync(
@@ -55,6 +65,13 @@ namespace MyApp.Api.Services.Implementations
             bool canFbr        = perms.Contains("dashboard.kpi.fbr.view");
             bool canInventory  = perms.Contains("dashboard.kpi.inventory.view");
             bool canHero       = canSales || canPurchases;  // Hero needs ≥1 of these
+
+            // Division-RBAC scope, resolved once (null = unrestricted).
+            // Every section query threads through it; company-level rows
+            // (DivisionId == null) stay included — policy D1.
+            var divScope = userId.HasValue
+                ? await _divisionAccess.GetAccessibleDivisionIdsAsync(userId.Value, companyId)
+                : null;
 
             var period = BuildPeriod(periodCode);
             var company = await _context.Companies
@@ -81,7 +98,7 @@ namespace MyApp.Api.Services.Implementations
             // (so a sales-only role still sees Total Sales as a hero
             // KPI; we just zero out the sections they can't see).
             if (canHero)
-                response.Hero = await ComputeHeroAsync(companyId, period, canSales, canPurchases);
+                response.Hero = await ComputeHeroAsync(companyId, period, canSales, canPurchases, divScope);
 
             // Run section queries in parallel — they share an
             // AppDbContext but EF Core 9's pooled context handles
@@ -89,10 +106,10 @@ namespace MyApp.Api.Services.Implementations
             // for the 4-section case anyway. Sequential here for
             // simplicity and to avoid the "second operation started
             // before previous completed" pitfall on AppDbContext.
-            if (canSales)      response.Sales      = await ComputeSalesAsync(companyId, period);
-            if (canPurchases)  response.Purchases  = await ComputePurchasesAsync(companyId, period);
-            if (canFbr)        response.Fbr        = await ComputeFbrAsync(companyId, period);
-            if (canInventory)  response.Inventory  = await ComputeInventoryAsync(companyId);
+            if (canSales)      response.Sales      = await ComputeSalesAsync(companyId, period, divScope);
+            if (canPurchases)  response.Purchases  = await ComputePurchasesAsync(companyId, period, divScope);
+            if (canFbr)        response.Fbr        = await ComputeFbrAsync(companyId, period, divScope);
+            if (canInventory)  response.Inventory  = await ComputeInventoryAsync(companyId, divScope);
 
             return response;
         }
@@ -198,30 +215,31 @@ namespace MyApp.Api.Services.Implementations
         // ── Hero KPIs ───────────────────────────────────────────────────
 
         private async Task<DashboardHeroKpis> ComputeHeroAsync(
-            int companyId, DashboardPeriod period, bool canSales, bool canPurchases)
+            int companyId, DashboardPeriod period, bool canSales, bool canPurchases,
+            HashSet<int>? divScope)
         {
             var hero = new DashboardHeroKpis();
 
             if (canSales)
             {
-                var (totalSales, gstOutput) = await SumInvoicesAsync(companyId, period.From, period.To);
+                var (totalSales, gstOutput) = await SumInvoicesAsync(companyId, period.From, period.To, divScope);
                 hero.TotalSales = totalSales;
                 hero.GstOutput = gstOutput;
                 if (period.PreviousFrom.HasValue)
                 {
-                    var (prevSales, _) = await SumInvoicesAsync(companyId, period.PreviousFrom, period.PreviousTo);
+                    var (prevSales, _) = await SumInvoicesAsync(companyId, period.PreviousFrom, period.PreviousTo, divScope);
                     hero.TotalSalesPrev = prevSales;
                 }
             }
 
             if (canPurchases)
             {
-                var (totalPurchases, gstInput) = await SumPurchasesAsync(companyId, period.From, period.To);
+                var (totalPurchases, gstInput) = await SumPurchasesAsync(companyId, period.From, period.To, divScope);
                 hero.TotalPurchases = totalPurchases;
                 hero.GstInput = gstInput;
                 if (period.PreviousFrom.HasValue)
                 {
-                    var (prevPurchases, _) = await SumPurchasesAsync(companyId, period.PreviousFrom, period.PreviousTo);
+                    var (prevPurchases, _) = await SumPurchasesAsync(companyId, period.PreviousFrom, period.PreviousTo, divScope);
                     hero.TotalPurchasesPrev = prevPurchases;
                 }
             }
@@ -235,8 +253,8 @@ namespace MyApp.Api.Services.Implementations
                 // sums — leave null when we computed only one side.
                 if (canSales && canPurchases)
                 {
-                    var (_, prevGstOutput) = await SumInvoicesAsync(companyId, period.PreviousFrom, period.PreviousTo);
-                    var (_, prevGstInput)  = await SumPurchasesAsync(companyId, period.PreviousFrom, period.PreviousTo);
+                    var (_, prevGstOutput) = await SumInvoicesAsync(companyId, period.PreviousFrom, period.PreviousTo, divScope);
+                    var (_, prevGstInput)  = await SumPurchasesAsync(companyId, period.PreviousFrom, period.PreviousTo, divScope);
                     hero.GstNetPrev = prevGstOutput - prevGstInput;
                 }
             }
@@ -245,11 +263,17 @@ namespace MyApp.Api.Services.Implementations
         }
 
         private async Task<(decimal TotalGross, decimal GstAmount)> SumInvoicesAsync(
-            int companyId, DateTime? from, DateTime? to)
+            int companyId, DateTime? from, DateTime? to, HashSet<int>? divScope)
         {
             var q = _context.Invoices
                 .AsNoTracking()
-                .Where(i => i.CompanyId == companyId && !i.IsDemo);
+                // Debit/Credit Notes (DocumentType 9/10) are REVERSALS, not
+                // sales — including them would double-count a reversed sale
+                // instead of netting it. Excluded from every sales KPI.
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                         && i.DocumentType != 9 && i.DocumentType != 10);
+            if (divScope != null)
+                q = q.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
             if (from.HasValue) q = q.Where(i => i.Date >= from.Value);
             if (to.HasValue)   q = q.Where(i => i.Date < to.Value);
             var agg = await q
@@ -264,11 +288,13 @@ namespace MyApp.Api.Services.Implementations
         }
 
         private async Task<(decimal TotalGross, decimal GstAmount)> SumPurchasesAsync(
-            int companyId, DateTime? from, DateTime? to)
+            int companyId, DateTime? from, DateTime? to, HashSet<int>? divScope)
         {
             var q = _context.PurchaseBills
                 .AsNoTracking()
                 .Where(pb => pb.CompanyId == companyId);
+            if (divScope != null)
+                q = q.Where(pb => pb.DivisionId == null || divScope.Contains(pb.DivisionId.Value));
             if (from.HasValue) q = q.Where(pb => pb.Date >= from.Value);
             if (to.HasValue)   q = q.Where(pb => pb.Date < to.Value);
             var agg = await q
@@ -284,11 +310,20 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Sales section ───────────────────────────────────────────────
 
-        private async Task<DashboardSalesKpis> ComputeSalesAsync(int companyId, DashboardPeriod period)
+        private async Task<DashboardSalesKpis> ComputeSalesAsync(
+            int companyId, DashboardPeriod period, HashSet<int>? divScope)
         {
             var q = _context.Invoices
                 .AsNoTracking()
-                .Where(i => i.CompanyId == companyId && !i.IsDemo);
+                // Debit/Credit Notes (DocumentType 9/10) are REVERSALS, not
+                // sales — including them would double-count a reversed sale
+                // instead of netting it. Excluded from every sales KPI.
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                         && i.DocumentType != 9 && i.DocumentType != 10);
+            // Division-RBAC scope (null = unrestricted); company-level rows
+            // (DivisionId == null) stay visible — policy D1.
+            if (divScope != null)
+                q = q.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
             if (period.From.HasValue) q = q.Where(i => i.Date >= period.From.Value);
             if (period.To.HasValue)   q = q.Where(i => i.Date < period.To.Value);
 
@@ -359,7 +394,7 @@ namespace MyApp.Api.Services.Implementations
                 TotalSales = totalSales,
                 InvoiceCount = count,
                 AverageInvoiceValue = Math.Round(avg, 2),
-                Trend12m = await Trend12mInvoicesAsync(companyId),
+                Trend12m = await Trend12mInvoicesAsync(companyId, divScope),
                 TopClients = topClients,
                 RecentInvoices = recent,
             };
@@ -368,16 +403,22 @@ namespace MyApp.Api.Services.Implementations
         // 12-point monthly trend always shows the last 12 months of data
         // regardless of the operator's selected period — gives a stable
         // visual axis. Anchored on the first of the current month.
-        private async Task<List<DashboardTrendPoint>> Trend12mInvoicesAsync(int companyId)
+        private async Task<List<DashboardTrendPoint>> Trend12mInvoicesAsync(
+            int companyId, HashSet<int>? divScope)
         {
             var now = DateTime.Now;
             var anchor = new DateTime(now.Year, now.Month, 1);
             var earliest = anchor.AddMonths(-11);  // 12 buckets total
 
-            var rows = await _context.Invoices
+            var q = _context.Invoices
                 .AsNoTracking()
-                .Where(i => i.CompanyId == companyId && !i.IsDemo
-                         && i.Date >= earliest && i.Date < anchor.AddMonths(1))
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                         && i.DocumentType != 9 && i.DocumentType != 10
+                         && i.Date >= earliest && i.Date < anchor.AddMonths(1));
+            if (divScope != null)
+                q = q.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
+
+            var rows = await q
                 .GroupBy(i => new { i.Date.Year, i.Date.Month })
                 .Select(g => new
                 {
@@ -392,11 +433,16 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Purchases section ───────────────────────────────────────────
 
-        private async Task<DashboardPurchaseKpis> ComputePurchasesAsync(int companyId, DashboardPeriod period)
+        private async Task<DashboardPurchaseKpis> ComputePurchasesAsync(
+            int companyId, DashboardPeriod period, HashSet<int>? divScope)
         {
             var q = _context.PurchaseBills
                 .AsNoTracking()
                 .Where(pb => pb.CompanyId == companyId);
+            // Division-RBAC scope (null = unrestricted); company-level rows
+            // (DivisionId == null) stay visible — policy D1.
+            if (divScope != null)
+                q = q.Where(pb => pb.DivisionId == null || divScope.Contains(pb.DivisionId.Value));
             if (period.From.HasValue) q = q.Where(pb => pb.Date >= period.From.Value);
             if (period.To.HasValue)   q = q.Where(pb => pb.Date < period.To.Value);
 
@@ -450,22 +496,27 @@ namespace MyApp.Api.Services.Implementations
                 TotalPurchases = totalPurchases,
                 BillCount = count,
                 AverageBillValue = Math.Round(avg, 2),
-                Trend12m = await Trend12mPurchasesAsync(companyId),
+                Trend12m = await Trend12mPurchasesAsync(companyId, divScope),
                 TopSuppliers = topSuppliers,
                 RecentBills = recent,
             };
         }
 
-        private async Task<List<DashboardTrendPoint>> Trend12mPurchasesAsync(int companyId)
+        private async Task<List<DashboardTrendPoint>> Trend12mPurchasesAsync(
+            int companyId, HashSet<int>? divScope)
         {
             var now = DateTime.Now;
             var anchor = new DateTime(now.Year, now.Month, 1);
             var earliest = anchor.AddMonths(-11);
 
-            var rows = await _context.PurchaseBills
+            var q = _context.PurchaseBills
                 .AsNoTracking()
                 .Where(pb => pb.CompanyId == companyId
-                          && pb.Date >= earliest && pb.Date < anchor.AddMonths(1))
+                          && pb.Date >= earliest && pb.Date < anchor.AddMonths(1));
+            if (divScope != null)
+                q = q.Where(pb => pb.DivisionId == null || divScope.Contains(pb.DivisionId.Value));
+
+            var rows = await q
                 .GroupBy(pb => new { pb.Date.Year, pb.Date.Month })
                 .Select(g => new
                 {
@@ -503,11 +554,20 @@ namespace MyApp.Api.Services.Implementations
 
         // ── FBR / Compliance section ────────────────────────────────────
 
-        private async Task<DashboardFbrKpis> ComputeFbrAsync(int companyId, DashboardPeriod period)
+        private async Task<DashboardFbrKpis> ComputeFbrAsync(
+            int companyId, DashboardPeriod period, HashSet<int>? divScope)
         {
             var q = _context.Invoices
                 .AsNoTracking()
-                .Where(i => i.CompanyId == companyId && !i.IsDemo);
+                // Debit/Credit Notes (DocumentType 9/10) are REVERSALS, not
+                // sales — including them would double-count a reversed sale
+                // instead of netting it. Excluded from every sales KPI.
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                         && i.DocumentType != 9 && i.DocumentType != 10);
+            // Division-RBAC scope (null = unrestricted); company-level rows
+            // (DivisionId == null) stay visible — policy D1.
+            if (divScope != null)
+                q = q.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
             if (period.From.HasValue) q = q.Where(i => i.Date >= period.From.Value);
             if (period.To.HasValue)   q = q.Where(i => i.Date < period.To.Value);
 
@@ -531,6 +591,8 @@ namespace MyApp.Api.Services.Implementations
             var pbq = _context.PurchaseBills
                 .AsNoTracking()
                 .Where(pb => pb.CompanyId == companyId);
+            if (divScope != null)
+                pbq = pbq.Where(pb => pb.DivisionId == null || divScope.Contains(pb.DivisionId.Value));
             if (period.From.HasValue) pbq = pbq.Where(pb => pb.Date >= period.From.Value);
             if (period.To.HasValue)   pbq = pbq.Where(pb => pb.Date < period.To.Value);
 
@@ -554,7 +616,8 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Inventory section ───────────────────────────────────────────
 
-        private async Task<DashboardInventoryKpis> ComputeInventoryAsync(int companyId)
+        private async Task<DashboardInventoryKpis> ComputeInventoryAsync(
+            int companyId, HashSet<int>? divScope)
         {
             // Stock value at cost = Σ (on-hand × avg unit cost). Heavy if
             // we computed it per-item with N+1; instead we do it as a
@@ -567,9 +630,17 @@ namespace MyApp.Api.Services.Implementations
             // Both per-item, then summed over all items in the company.
             // We do it in two queries (cheap) and join in memory.
 
-            var perItemMovements = await _context.StockMovements
+            // Shared scoped base for the three movement queries below.
+            // Division-RBAC scope (null = unrestricted); movements stamped
+            // from company-level documents (DivisionId == null) stay
+            // visible — policy D1.
+            var movementsQ = _context.StockMovements
                 .AsNoTracking()
-                .Where(sm => sm.CompanyId == companyId)
+                .Where(sm => sm.CompanyId == companyId);
+            if (divScope != null)
+                movementsQ = movementsQ.Where(sm => sm.DivisionId == null || divScope.Contains(sm.DivisionId.Value));
+
+            var perItemMovements = await movementsQ
                 .GroupBy(sm => sm.ItemTypeId)
                 .Select(g => new
                 {
@@ -578,13 +649,37 @@ namespace MyApp.Api.Services.Implementations
                 })
                 .ToListAsync();
 
+            // Opening balances are company-level (not division-scoped — policy
+            // D1) and are the base of on-hand. Fix 2026-07 (PR-16): the KPI
+            // previously summed movements ONLY, so it disagreed with the Stock
+            // Dashboard (StockService.GetOnHandBulkAsync includes openings) for
+            // any company with opening balances. Merge them here so the two
+            // agree, and so an item with only an opening balance still counts.
+            var openingsByItem = await _context.OpeningStockBalances
+                .AsNoTracking()
+                .Where(o => o.CompanyId == companyId)
+                .GroupBy(o => o.ItemTypeId)
+                .Select(g => new { ItemTypeId = g.Key, Qty = g.Sum(o => o.Quantity) })
+                .ToDictionaryAsync(x => x.ItemTypeId, x => x.Qty);
+
+            var onHandByItem = new Dictionary<int, decimal>();
+            foreach (var m in perItemMovements) onHandByItem[m.ItemTypeId] = m.OnHand;
+            foreach (var o in openingsByItem)
+                onHandByItem[o.Key] = onHandByItem.GetValueOrDefault(o.Key) + o.Value;
+
             // Average cost per item — pull from PurchaseItems for items
             // that have purchases. Items without any purchases get cost=0
             // (stock value contribution = 0 — fine, they're typically
             // pre-existing inventory adjustments).
-            var perItemCosts = await _context.PurchaseItems
+            var costsQ = _context.PurchaseItems
                 .AsNoTracking()
-                .Where(pi => pi.PurchaseBill.CompanyId == companyId && pi.ItemTypeId.HasValue && pi.Quantity > 0)
+                .Where(pi => pi.PurchaseBill.CompanyId == companyId && pi.ItemTypeId.HasValue && pi.Quantity > 0);
+            // Cost basis rides on the parent bill's division tag — scope it
+            // the same way so a restricted user's stock value derives only
+            // from bills they can see.
+            if (divScope != null)
+                costsQ = costsQ.Where(pi => pi.PurchaseBill.DivisionId == null || divScope.Contains(pi.PurchaseBill.DivisionId.Value));
+            var perItemCosts = await costsQ
                 .GroupBy(pi => pi.ItemTypeId!.Value)
                 .Select(g => new
                 {
@@ -600,12 +695,13 @@ namespace MyApp.Api.Services.Implementations
             decimal totalStockValue = 0m;
             int trackedItemCount = 0;
             int lowStockCount = 0;
-            foreach (var m in perItemMovements)
+            foreach (var kv in onHandByItem)
             {
+                var onHand = kv.Value;
                 trackedItemCount++;
-                if (m.OnHand <= 0) lowStockCount++;
-                if (costMap.TryGetValue(m.ItemTypeId, out var avgCost))
-                    totalStockValue += m.OnHand * avgCost;
+                if (onHand <= 0) lowStockCount++;
+                if (costMap.TryGetValue(kv.Key, out var avgCost))
+                    totalStockValue += onHand * avgCost;
             }
 
             // Top 5 items by movement volume in the last 30 days — most
@@ -613,9 +709,8 @@ namespace MyApp.Api.Services.Implementations
             // matter here (purchases or sales — anything that moves
             // stock counts as movement).
             var thirty = DateTime.Now.AddDays(-30);
-            var topItems = await _context.StockMovements
-                .AsNoTracking()
-                .Where(sm => sm.CompanyId == companyId && sm.MovementDate >= thirty)
+            var topItems = await movementsQ
+                .Where(sm => sm.MovementDate >= thirty)
                 .GroupBy(sm => new { sm.ItemTypeId, sm.ItemType!.Name })
                 .Select(g => new DashboardTopEntity
                 {
@@ -631,9 +726,7 @@ namespace MyApp.Api.Services.Implementations
                 .Take(20)
                 .ToListAsync();
 
-            var recentMovements = await _context.StockMovements
-                .AsNoTracking()
-                .Where(sm => sm.CompanyId == companyId)
+            var recentMovements = await movementsQ
                 .OrderByDescending(sm => sm.MovementDate)
                 .Take(5)
                 .Select(sm => new DashboardRecentMovement

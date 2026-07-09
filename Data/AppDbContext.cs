@@ -23,8 +23,46 @@ namespace MyApp.Api.Data
         }
 
         public DbSet<Company> Companies { get; set; }
+        public DbSet<Division> Divisions { get; set; }
         public DbSet<DeliveryChallan> DeliveryChallans { get; set; }
         public DbSet<DeliveryItem> DeliveryItems { get; set; }
+
+        // ── Sales Quote + Sales Order module (additive, pre-sale documents) ──
+        public DbSet<SalesQuote> SalesQuotes { get; set; }
+        public DbSet<SalesQuoteItem> SalesQuoteItems { get; set; }
+        public DbSet<SalesOrder> SalesOrders { get; set; }
+        public DbSet<SalesOrderItem> SalesOrderItems { get; set; }
+
+        // ── Payments / Receipts (AR/AP subledger — design §11.5, additive) ──
+        // Receipt (money in) + Payment (money out) documents and their
+        // allocation lines, which settle invoices/bills and drive balance-due +
+        // payment status. No GL dependency in Phase A.
+        public DbSet<MyApp.Api.Models.Accounting.Payment> Payments { get; set; }
+        public DbSet<MyApp.Api.Models.Accounting.PaymentAllocation> PaymentAllocations { get; set; }
+
+        // ── Chart of Accounts (design §4) — the account dimension postings land
+        // on. AccountGroup = structural container (statement tree); Account =
+        // postable / control account fed by a subledger.
+        public DbSet<MyApp.Api.Models.Accounting.AccountGroup> AccountGroups { get; set; }
+        public DbSet<MyApp.Api.Models.Accounting.Account> Accounts { get; set; }
+
+        // ── General Ledger (Phase B posting engine — design §11.1, additive) ──
+        // One balanced JournalEntry per source document (or manual journal),
+        // Dr/Cr detail in JournalLines. All account balances are live queries
+        // over these rows; nothing is denormalized.
+        public DbSet<MyApp.Api.Models.Accounting.JournalEntry> JournalEntries { get; set; }
+        public DbSet<MyApp.Api.Models.Accounting.JournalLine> JournalLines { get; set; }
+
+        // ── Inter-account transfers (bank↔cash movement, no contact) ──
+        public DbSet<MyApp.Api.Models.Accounting.AccountTransfer> AccountTransfers { get; set; }
+
+        // ── Unified attachments + document folders (additive) ──
+        // One Attachment row per uploaded file (bytes on disk). A Folder is a
+        // per-company named container; an attachment may also/instead be linked
+        // to a business document via (EntityType, EntityId). Used by both the
+        // Configuration → Folders library and the reusable attachment component.
+        public DbSet<Folder> Folders { get; set; }
+        public DbSet<Attachment> Attachments { get; set; }
 
         public DbSet<Client> Clients { get; set; } // ✅ add this
         public DbSet<ClientGroup> ClientGroups { get; set; }
@@ -38,6 +76,10 @@ namespace MyApp.Api.Data
         public DbSet<ItemDescription> ItemDescriptions { get; set; }
         public DbSet<Unit> Units { get; set; }
         public DbSet<ItemType> ItemTypes { get; set; }
+        // Per-(company, item-type) inventory policy overrides + reorder level
+        // (2026-07 inventory V2 redesign). ItemType is a global catalog with no
+        // CompanyId, so per-company tracking policy must live here.
+        public DbSet<CompanyItemTypeSetting> CompanyItemTypeSettings { get; set; }
         public DbSet<User> Users { get; set; }
         public DbSet<PrintTemplate> PrintTemplates { get; set; }
         public DbSet<MergeField> MergeFields { get; set; }
@@ -61,6 +103,7 @@ namespace MyApp.Api.Data
         public DbSet<RolePermission> RolePermissions { get; set; }
         public DbSet<UserRole> UserRoles { get; set; }
         public DbSet<UserCompany> UserCompanies { get; set; }
+        public DbSet<UserDivision> UserDivisions { get; set; }
 
         // Purchase + Inventory module
         public DbSet<Supplier> Suppliers { get; set; }
@@ -233,6 +276,15 @@ namespace MyApp.Api.Data
                 .HasForeignKey(i => i.ClientId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Invoice -> OriginalInvoice (self-reference for Credit/Debit Notes).
+            // NoAction: never cascade a delete from the original into its notes
+            // (and notes are the trailing rows anyway). Optional FK.
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.OriginalInvoice)
+                .WithMany()
+                .HasForeignKey(i => i.OriginalInvoiceId)
+                .OnDelete(DeleteBehavior.NoAction);
+
             // Invoice -> InvoiceItems (cascade)
             modelBuilder.Entity<InvoiceItem>()
                 .HasOne(ii => ii.Invoice)
@@ -246,6 +298,25 @@ namespace MyApp.Api.Data
                 .WithMany()
                 .HasForeignKey(ii => ii.DeliveryItemId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // ── Sales Order lineage on the bill (2026-07 inventory redesign) ──
+            // Header + line pointers to the Sales Order this bill fulfils.
+            // Both nullable, NoAction (no cascade path — SalesOrder->Company is
+            // Restrict, Invoice->Company is Restrict), keyless nav (query by the
+            // scalar FK). Enables the derived read model's "to deliver =
+            // ordered − delivered − directly-invoiced" and reservation release.
+            modelBuilder.Entity<Invoice>()
+                .HasOne<SalesOrder>()
+                .WithMany()
+                .HasForeignKey(i => i.SalesOrderId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvoiceItem>()
+                .HasOne<SalesOrderItem>()
+                .WithMany()
+                .HasForeignKey(ii => ii.SalesOrderItemId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
 
             // DeliveryChallan -> Client (optional FK, restrict delete)
             modelBuilder.Entity<DeliveryChallan>()
@@ -271,17 +342,61 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Invoice>()
                 .HasIndex(i => i.CompanyId);
 
-            // Composite index for paged invoice queries (WHERE CompanyId = X ORDER BY InvoiceNumber DESC).
-            // Audit C-8 (2026-05-13): unique on (CompanyId, InvoiceNumber)
-            // so two concurrent creates can't both land MAX(InvoiceNumber)+1
-            // — the loser gets a SQL 2601 / 2627 which the service catches
-            // and retries (next number is re-read in the retry loop).
+            // Credit Notes (10) and Debit Notes (9) each number from their
+            // OWN sequence, separate from sale invoices and from each other.
+            // NoteKind is a PERSISTED computed discriminator so the uniqueness
+            // below can be scoped per kind without SQL Server's filtered-index
+            // limitations (no IN/OR in filter predicates).
             modelBuilder.Entity<Invoice>()
-                .HasIndex(i => new { i.CompanyId, i.InvoiceNumber })
-                .IsUnique();
+                .Property(i => i.NoteKind)
+                .HasComputedColumnSql(
+                    "CASE WHEN [DocumentType] = 9 THEN CAST(1 AS tinyint) WHEN [DocumentType] = 10 THEN CAST(2 AS tinyint) ELSE CAST(0 AS tinyint) END",
+                    stored: true);
+
+            // Composite index for paged invoice queries (WHERE CompanyId = X ORDER BY InvoiceNumber DESC).
+            // Audit C-8 (2026-05-13): unique so two concurrent creates can't
+            // both land MAX+1 - the loser gets a SQL 2601 / 2627 which the
+            // service catches and retries (next number is re-read in the
+            // retry loop). MERGED 2026-07-03: numbering is scoped per
+            // (company, division, document kind) - a division-tagged bill
+            // draws from the division's own sequence ((X, NULL, 1) vs
+            // (X, div5, 1)), and Credit Note #1 / Debit Note #1 / sale bill #1
+            // coexist via NoteKind. HasFilter(null) keeps NULL-division rows
+            // covered by the unique guard too. Mirrors SalesQuote.
+            modelBuilder.Entity<Invoice>()
+                .HasIndex(i => new { i.CompanyId, i.DivisionId, i.NoteKind, i.InvoiceNumber })
+                .IsUnique()
+                .HasFilter(null);
+
+            // Invoice -> Division (optional).
+            // NoAction (not SetNull): several documents reach a division by more
+            // than one path (e.g. Division->Challan and Division->SalesOrder->Challan),
+            // which SQL Server rejects as multiple cascade paths (error 1785).
+            // DivisionService.DeleteAsync unlinks referencing documents in app code.
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.Division).WithMany()
+                .HasForeignKey(i => i.DivisionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            // One LIVE note PER TYPE per original invoice, enforced in the DB
+            // (the service's AnyAsync guard alone is check-then-insert racy —
+            // two concurrent Reverse clicks could both pass). A credit note
+            // (return) and a debit note (upward correction) may legitimately
+            // coexist on one invoice; two live credit notes may not (FBR 0064).
+            // Filtered to non-cancelled rows so voiding a note frees the slot.
+            modelBuilder.Entity<Invoice>()
+                .HasIndex(i => new { i.OriginalInvoiceId, i.DocumentType })
+                .IsUnique()
+                .HasFilter("[OriginalInvoiceId] IS NOT NULL AND [IsCancelled] = 0");
 
             modelBuilder.Entity<DeliveryChallan>()
                 .HasIndex(dc => dc.ClientId);
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasOne(dc => dc.Division).WithMany()
+                .HasForeignKey(dc => dc.DivisionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<DeliveryChallan>()
                 .HasIndex(dc => dc.CompanyId);
@@ -300,8 +415,11 @@ namespace MyApp.Api.Data
             // band, not from any source migration). The
             // 20260504*_DropLegacyUniqueChallanNumberIndex migration drops
             // that legacy index before this non-unique one is created.
+            // Includes DivisionId so the per-division challan sequence groups
+            // correctly. STILL NON-UNIQUE by design (Duplicate Challan emits
+            // same-number rows).
             modelBuilder.Entity<DeliveryChallan>()
-                .HasIndex(dc => new { dc.CompanyId, dc.ChallanNumber });
+                .HasIndex(dc => new { dc.CompanyId, dc.DivisionId, dc.ChallanNumber });
 
             modelBuilder.Entity<InvoiceItem>()
                 .HasIndex(ii => ii.InvoiceId);
@@ -349,6 +467,7 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Invoice>().Property(i => i.GSTRate).HasPrecision(5, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.GSTAmount).HasPrecision(18, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.GrandTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<Invoice>().Property(i => i.AmountPaid).HasPrecision(18, 2);
             modelBuilder.Entity<InvoiceItem>().Property(ii => ii.UnitPrice).HasPrecision(18, 2);
             modelBuilder.Entity<InvoiceItem>().Property(ii => ii.LineTotal).HasPrecision(18, 2);
 
@@ -382,16 +501,41 @@ namespace MyApp.Api.Data
                 .IsUnique()
                 .HasFilter("[IsDeleted] = 0");
 
-            // PrintTemplate: unique per (CompanyId, TemplateType)
+            // PrintTemplate: multiple templates per (CompanyId, TemplateType), each
+            // scoped to the company (DivisionId == null) or a division. Non-unique
+            // lookup index drives scope-filtered reads.
             modelBuilder.Entity<PrintTemplate>()
-                .HasIndex(pt => new { pt.CompanyId, pt.TemplateType })
-                .IsUnique();
+                .HasIndex(pt => new { pt.CompanyId, pt.TemplateType, pt.DivisionId });
+
+            // Exactly one default per (CompanyId, DivisionId, TemplateType) scope.
+            // Filtered to IsDefault = 1. SQL Server treats NULL as equal-to-NULL for
+            // unique purposes, so the company-level (DivisionId == null) scope is also
+            // held to a single default — same pattern as the ItemType (Name, HSCode)
+            // index above.
+            modelBuilder.Entity<PrintTemplate>()
+                .HasIndex(pt => new { pt.CompanyId, pt.DivisionId, pt.TemplateType })
+                .IsUnique()
+                .HasFilter("[IsDefault] = 1")
+                .HasDatabaseName("UX_PrintTemplates_DefaultPerScope");
 
             modelBuilder.Entity<PrintTemplate>()
                 .HasOne(pt => pt.Company)
                 .WithMany()
                 .HasForeignKey(pt => pt.CompanyId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Division scope FK. NoAction (not Cascade) is mandatory: Company->PrintTemplate
+            // (Cascade) + Company->Division (Cascade) + a cascading Division->PrintTemplate
+            // would be multiple cascade paths to PrintTemplates (SQL Server error 1785).
+            // DivisionService.DeleteAsync removes a division's templates in app code instead.
+            modelBuilder.Entity<PrintTemplate>()
+                .HasOne(pt => pt.Division)
+                .WithMany()
+                .HasForeignKey(pt => pt.DivisionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<PrintTemplate>().Property(pt => pt.Name).HasMaxLength(200);
 
             // DeliveryItem -> ItemType (optional, restrict)
             modelBuilder.Entity<DeliveryItem>()
@@ -400,6 +544,403 @@ namespace MyApp.Api.Data
                 .HasForeignKey(di => di.ItemTypeId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // ── Sales Quote + Sales Order module (additive) ──────────────────
+            // Pre-sale documents. Quote is priced; Order is quantity-only.
+            // Neither is an FBR document. Numbering is per-company (unique
+            // index below) mirroring Invoice's (CompanyId, *Number) contract.
+
+            // SalesQuote -> Company / Client (restrict — no cascade from masters)
+            modelBuilder.Entity<SalesQuote>()
+                .HasOne(q => q.Company).WithMany(c => c.SalesQuotes)
+                .HasForeignKey(q => q.CompanyId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SalesQuote>()
+                .HasOne(q => q.Client).WithMany()
+                .HasForeignKey(q => q.ClientId).OnDelete(DeleteBehavior.Restrict);
+            // Optional Division tag. SetNull is safe here (unlike PrintTemplate)
+            // because SalesQuote->Company is Restrict, so there's no second
+            // cascade path to SalesQuotes — deleting a division just un-tags
+            // its quotes (DivisionId -> null) rather than deleting them.
+            modelBuilder.Entity<SalesQuote>()
+                .HasOne(q => q.Division).WithMany()
+                .HasForeignKey(q => q.DivisionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<SalesQuoteItem>()
+                .HasOne(i => i.SalesQuote).WithMany(q => q.Items)
+                .HasForeignKey(i => i.SalesQuoteId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<SalesQuoteItem>()
+                .HasOne(i => i.ItemType).WithMany()
+                .HasForeignKey(i => i.ItemTypeId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+
+            // SalesOrder -> Company / Client (restrict)
+            modelBuilder.Entity<SalesOrder>()
+                .HasOne(o => o.Company).WithMany(c => c.SalesOrders)
+                .HasForeignKey(o => o.CompanyId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SalesOrder>()
+                .HasOne(o => o.Client).WithMany()
+                .HasForeignKey(o => o.ClientId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SalesOrder>()
+                .HasOne(o => o.Division).WithMany()
+                .HasForeignKey(o => o.DivisionId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SalesOrderItem>()
+                .HasOne(i => i.SalesOrder).WithMany(o => o.Items)
+                .HasForeignKey(i => i.SalesOrderId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<SalesOrderItem>()
+                .HasOne(i => i.ItemType).WithMany()
+                .HasForeignKey(i => i.ItemTypeId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+
+            // Quote <-> Order cross-links: two independent nullable FKs between
+            // the same pair of tables. Both NoAction to avoid a SET NULL /
+            // cascade cycle (SQL Server error 1785). The service clears these
+            // pointers before deleting either side.
+            modelBuilder.Entity<SalesOrder>()
+                .HasOne(o => o.SalesQuote).WithMany()
+                .HasForeignKey(o => o.SalesQuoteId)
+                .OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SalesQuote>()
+                .HasOne(q => q.ConvertedToSalesOrder).WithMany()
+                .HasForeignKey(q => q.ConvertedToSalesOrderId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            // DeliveryChallan -> SalesOrder (optional; restrict so an order with
+            // challans can't be deleted out from under them — the service guards
+            // this explicitly with a clear message).
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasOne(dc => dc.SalesOrder).WithMany(o => o.DeliveryChallans)
+                .HasForeignKey(dc => dc.SalesOrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // DeliveryItem -> SalesOrderItem (optional; restrict — a delivered
+            // ordered line can't be removed while challan lines reference it).
+            modelBuilder.Entity<DeliveryItem>()
+                .HasOne(di => di.SalesOrderItem).WithMany(soi => soi.DeliveryItems)
+                .HasForeignKey(di => di.SalesOrderItemId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Status defaults mirror DeliveryChallan's pattern.
+            modelBuilder.Entity<SalesQuote>().Property(q => q.Status).HasDefaultValue("Draft");
+            // MaxLength(50) so Status is indexable (see IX_SalesOrders_Co_Status).
+            // Statuses are short code words ("Open", "Partially Delivered", …).
+            modelBuilder.Entity<SalesOrder>().Property(o => o.Status).HasMaxLength(50).HasDefaultValue("Open");
+
+            // Decimal precision — money (18,2), GST rate (5,2), quantity (18,4).
+            modelBuilder.Entity<SalesQuote>().Property(q => q.Subtotal).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuote>().Property(q => q.GSTRate).HasPrecision(5, 2);
+            modelBuilder.Entity<SalesQuote>().Property(q => q.GSTAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuote>().Property(q => q.GrandTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.Quantity).HasPrecision(18, 4);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.UnitPrice).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.LineTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesOrderItem>().Property(i => i.Quantity).HasPrecision(18, 4);
+
+            // Unique numbering per (company, division). A division has its own
+            // Sales Quote sequence, so two divisions (or a division and the
+            // company-level scope) can legitimately reuse the same QuoteNumber —
+            // uniqueness is therefore scoped by DivisionId. Company-level quotes
+            // share DivisionId = NULL; SQL Server treats the tuple, so
+            // (X, NULL, 1) and (X, NULL, 2) are distinct while (X, NULL, 1) twice
+            // is blocked — exactly the per-scope numbering we want. Still guards
+            // the concurrent-create race (loser retries on the unique violation).
+            // HasFilter(null) overrides EF's default "WHERE [DivisionId] IS NOT
+            // NULL" filter for unique indexes on nullable columns. We WANT the
+            // index to cover company-level rows (DivisionId NULL) too, so that
+            // scope keeps its (CompanyId, QuoteNumber) uniqueness + race guard.
+            modelBuilder.Entity<SalesQuote>()
+                .HasIndex(q => new { q.CompanyId, q.DivisionId, q.QuoteNumber }).IsUnique()
+                .HasFilter(null);
+            modelBuilder.Entity<SalesQuote>().HasIndex(q => q.ClientId);
+            modelBuilder.Entity<SalesOrder>()
+                .HasIndex(o => new { o.CompanyId, o.DivisionId, o.SalesOrderNumber }).IsUnique()
+                .HasFilter(null);
+            modelBuilder.Entity<SalesOrder>().HasIndex(o => o.ClientId);
+            modelBuilder.Entity<DeliveryChallan>().HasIndex(dc => dc.SalesOrderId);
+            modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.SalesOrderItemId);
+
+            // ── Payments / Receipts (AR/AP subledger — design §11.5) ───────────
+            // Payment header → Company (Restrict: a company's payment history
+            // can't be cascade-wiped). Direction + ChequeStatus persist as int.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .HasOne(p => p.Company).WithMany()
+                .HasForeignKey(p => p.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.Amount).HasPrecision(18, 2);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.ContactType).HasMaxLength(20);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.Method).HasMaxLength(30);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.BankAccountName).HasMaxLength(120);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.ChequeNumber).HasMaxLength(50);
+            // Unique numbering per (company, direction): receipts and payments
+            // each get their own gap-free sequence, and the loser of a concurrent
+            // create retries on this violation (NumberAllocationRetry).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .HasIndex(p => new { p.CompanyId, p.Direction, p.Number }).IsUnique();
+            // Optional Division tag. NoAction (not SetNull/Cascade): Company->Payment
+            // is Restrict and Company->Division is Cascade, so a cascading
+            // Division->Payment path would create multiple cascade paths. The app
+            // (DivisionService.DeleteAsync) unlinks referencing rows instead.
+            // Mirrors PurchaseBill/GoodsReceipt's Division FK.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .HasOne(p => p.Division).WithMany()
+                .HasForeignKey(p => p.DivisionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            // Allocation line → Payment (Cascade: lines die with their document).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasOne(a => a.Payment).WithMany(p => p.Allocations)
+                .HasForeignKey(a => a.PaymentId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // → Invoice / PurchaseBill (optional; Restrict so a settled document
+            // can't be hard-deleted out from under its allocations — and to avoid
+            // multiple cascade paths from Company. Deleting a payment unlinks via
+            // the cascade above; the invoice/bill survives).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasOne(a => a.Invoice).WithMany()
+                .HasForeignKey(a => a.InvoiceId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasOne(a => a.PurchaseBill).WithMany()
+                .HasForeignKey(a => a.PurchaseBillId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .Property(a => a.Amount).HasPrecision(18, 2);
+            // AccountId (direct income/expense line) → Accounts, Restrict: an
+            // account referenced by allocation lines can't be hard-deleted
+            // (AccountService pre-checks and returns a friendly message). The
+            // migration NULLs any dangling values before adding the constraint.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasOne<MyApp.Api.Models.Accounting.Account>().WithMany()
+                .HasForeignKey(a => a.AccountId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Payment.BankAccountId → Accounts, Restrict (same rationale). The
+            // migration backfills it from BankAccountName ↔ Account.Code (the
+            // ETL stored the legacy GL code as the free-text name).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .HasOne<MyApp.Api.Models.Accounting.Account>().WithMany()
+                .HasForeignKey(p => p.BankAccountId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasIndex(a => a.InvoiceId);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasIndex(a => a.PurchaseBillId);
+
+            // ── Chart of Accounts (design §4) ──────────────────────────────────
+            // AccountGroup → Company (Restrict: a company's CoA can't be
+            // cascade-wiped) and a self-FK for nesting (Restrict — a parent with
+            // children is unlinked/emptied in app code, never cascade-deleted).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountGroup>()
+                .HasOne(g => g.Company).WithMany()
+                .HasForeignKey(g => g.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountGroup>()
+                .HasOne(g => g.ParentGroup).WithMany()
+                .HasForeignKey(g => g.ParentGroupId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountGroup>()
+                .Property(g => g.Name).HasMaxLength(150);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountGroup>()
+                .Property(g => g.ExternalRef).HasMaxLength(60);
+            // Ordering scope: a company's groups by statement + position.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountGroup>()
+                .HasIndex(g => new { g.CompanyId, g.Statement, g.Position });
+
+            // Account → Company (Restrict) and → AccountGroup (Restrict: can't
+            // drop a group that still holds accounts; move them first).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .HasOne(a => a.Company).WithMany()
+                .HasForeignKey(a => a.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .HasOne(a => a.AccountGroup).WithMany()
+                .HasForeignKey(a => a.AccountGroupId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .Property(a => a.Name).HasMaxLength(150);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .Property(a => a.Code).HasMaxLength(40);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .Property(a => a.ExternalRef).HasMaxLength(60);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .Property(a => a.OpeningBalance).HasPrecision(19, 4);
+            // Codes are optional but unique per company WHEN present (filtered
+            // index). NO unique-name index — account names legitimately repeat.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .HasIndex(a => new { a.CompanyId, a.Code })
+                .IsUnique()
+                .HasFilter("[Code] IS NOT NULL");
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .HasIndex(a => a.AccountGroupId);
+
+            // ── General Ledger (design §11.1) ──────────────────────────────────
+            // Entry → Company Restrict (ledger history can't cascade away).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .HasOne(e => e.Company).WithMany()
+                .HasForeignKey(e => e.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .Property(e => e.Narration).HasMaxLength(500);
+            // JE-#### sequence per company (NumberAllocationRetry on collision).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .HasIndex(e => new { e.CompanyId, e.EntryNo }).IsUnique();
+            // Idempotency: at most ONE entry per source document. Filtered so
+            // manual journals (SourceDocId null) are exempt.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .HasIndex(e => new { e.CompanyId, e.SourceDocType, e.SourceDocId })
+                .IsUnique()
+                .HasFilter("[SourceDocId] IS NOT NULL");
+            // Balance queries filter (company, date-range) then group by account.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .HasIndex(e => new { e.CompanyId, e.Date });
+
+            // Line → Entry Cascade (detail dies with its entry); → Account
+            // Restrict (an account with ledger history can't be hard-deleted —
+            // AccountService pre-checks for a friendly message).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasOne(l => l.JournalEntry).WithMany(e => e.Lines)
+                .HasForeignKey(l => l.JournalEntryId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasOne(l => l.Account).WithMany()
+                .HasForeignKey(l => l.AccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .Property(l => l.Debit).HasPrecision(19, 4);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .Property(l => l.Credit).HasPrecision(19, 4);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .Property(l => l.PartyType).HasMaxLength(20);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .Property(l => l.Description).HasMaxLength(300);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasIndex(l => l.AccountId);
+            // Party statements / control-account drill-down (soft refs, indexed).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasIndex(l => l.InvoiceId);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasIndex(l => l.PurchaseBillId);
+
+            // ── Inter-account transfers ────────────────────────────────────────
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountTransfer>()
+                .HasOne(t => t.Company).WithMany()
+                .HasForeignKey(t => t.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Both account FKs Restrict + NO nav cascade: a bank/cash account
+            // with transfer history can't be deleted (friendly pre-check in
+            // AccountService).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountTransfer>()
+                .HasOne(t => t.FromAccount).WithMany()
+                .HasForeignKey(t => t.FromAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountTransfer>()
+                .HasOne(t => t.ToAccount).WithMany()
+                .HasForeignKey(t => t.ToAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountTransfer>()
+                .Property(t => t.Amount).HasPrecision(18, 2);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountTransfer>()
+                .Property(t => t.Description).HasMaxLength(300);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountTransfer>()
+                .HasIndex(t => new { t.CompanyId, t.Number }).IsUnique();
+
+            // ── Data-migration traceability (design §13) ──────────────────────
+            // ExternalRef carries the legacy source key on imported masters so the
+            // ETL is idempotent (upsert/skip on re-run). Indexed per company.
+            modelBuilder.Entity<Client>().Property(c => c.ExternalRef).HasMaxLength(60);
+            modelBuilder.Entity<Client>().HasIndex(c => new { c.CompanyId, c.ExternalRef });
+            modelBuilder.Entity<Supplier>().Property(s => s.ExternalRef).HasMaxLength(60);
+            modelBuilder.Entity<Supplier>().HasIndex(s => new { s.CompanyId, s.ExternalRef });
+            modelBuilder.Entity<Invoice>().Property(i => i.ExternalRef).HasMaxLength(60);
+            modelBuilder.Entity<Invoice>().HasIndex(i => new { i.CompanyId, i.ExternalRef });
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.ExternalRef).HasMaxLength(60);
+            modelBuilder.Entity<PurchaseBill>().HasIndex(pb => new { pb.CompanyId, pb.ExternalRef });
+
+            // ── Unified attachments + document folders ──────────────────────
+            // A Folder is a per-company named container. An Attachment is one
+            // uploaded file (bytes on disk); it may belong to a folder and/or
+            // be linked to a business document via (EntityType, EntityId).
+
+            // Folder -> Company (cascade: a company's folders die with it).
+            modelBuilder.Entity<Folder>()
+                .HasOne(f => f.Company).WithMany()
+                .HasForeignKey(f => f.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Folder -> CreatedByUser (optional; NoAction so deleting a user
+            // doesn't cascade-delete their folders).
+            modelBuilder.Entity<Folder>()
+                .HasOne(f => f.CreatedByUser).WithMany()
+                .HasForeignKey(f => f.CreatedByUserId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Folder>().Property(f => f.Name).HasMaxLength(200);
+            modelBuilder.Entity<Folder>().Property(f => f.Description).HasMaxLength(1000);
+            // Folder names unique within a company (case-insensitive via the
+            // default SQL Server collation). Mirrors Division's (CompanyId, Name).
+            modelBuilder.Entity<Folder>()
+                .HasIndex(f => new { f.CompanyId, f.Name }).IsUnique();
+
+            // Attachment -> Company (restrict — never cascade business files
+            // away on a company delete; there's no other cascade path here so
+            // this also keeps SQL Server clear of multiple-cascade-path errors).
+            modelBuilder.Entity<Attachment>()
+                .HasOne(a => a.Company).WithMany()
+                .HasForeignKey(a => a.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Attachment -> Folder (optional; RESTRICT so FolderService.Delete
+            // decides each file's fate — entity-linked ones are un-linked,
+            // folder-only ones are deleted — rather than a blind DB cascade).
+            modelBuilder.Entity<Attachment>()
+                .HasOne(a => a.Folder).WithMany(f => f.Attachments)
+                .HasForeignKey(a => a.FolderId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Attachment -> UploadedByUser (optional; NoAction).
+            modelBuilder.Entity<Attachment>()
+                .HasOne(a => a.UploadedByUser).WithMany()
+                .HasForeignKey(a => a.UploadedByUserId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+            // Attachment -> Division (optional; NoAction — SetNull/Cascade would
+            // add a second cascade path from Company. DivisionService.DeleteAsync
+            // unlinks in app code, same as the document DivisionId columns).
+            modelBuilder.Entity<Attachment>()
+                .HasOne(a => a.Division).WithMany()
+                .HasForeignKey(a => a.DivisionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<Attachment>().Property(a => a.FileName).HasMaxLength(255);
+            modelBuilder.Entity<Attachment>().Property(a => a.StoredFileName).HasMaxLength(100);
+            modelBuilder.Entity<Attachment>().Property(a => a.StoragePath).HasMaxLength(500);
+            modelBuilder.Entity<Attachment>().Property(a => a.ContentType).HasMaxLength(150);
+            modelBuilder.Entity<Attachment>().Property(a => a.FileExtension).HasMaxLength(20);
+            modelBuilder.Entity<Attachment>().Property(a => a.ContentSha256).HasMaxLength(64);
+            modelBuilder.Entity<Attachment>().Property(a => a.EntityType).HasMaxLength(40);
+
+            // Lookup paths: "all attachments in folder X" (tenant-scoped) and
+            // "all attachments on SalesQuote 42".
+            modelBuilder.Entity<Attachment>().HasIndex(a => new { a.CompanyId, a.FolderId });
+            modelBuilder.Entity<Attachment>().HasIndex(a => new { a.EntityType, a.EntityId });
+
+            // ── Company Divisions ──────────────────────────────────────────
+            // Per-company named list (sub-brand / department). Cascade on
+            // company delete; names unique within a company.
+            modelBuilder.Entity<Division>()
+                .HasOne(d => d.Company).WithMany()
+                .HasForeignKey(d => d.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<Division>().Property(d => d.Name).HasMaxLength(200);
+            modelBuilder.Entity<Division>()
+                .HasIndex(d => new { d.CompanyId, d.Name }).IsUnique();
 
             // MergeField: unique per (TemplateType, FieldExpression)
             modelBuilder.Entity<MergeField>()
@@ -618,6 +1159,11 @@ namespace MyApp.Api.Data
                 new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{#if buyerNTN}}", Label = "If: Has Buyer NTN", Category = "Conditionals", SortOrder = 57 },
                 new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{else}}", Label = "Else", Category = "Conditionals", SortOrder = 58 },
                 new MergeField { Id = id++, TemplateType = "TaxInvoice", FieldExpression = "{{/if}}", Label = "End If", Category = "Conditionals", SortOrder = 59 }
+                // NOTE: SalesQuote / SalesOrder merge fields are seeded at
+                // RUNTIME (idempotent, keyed by TemplateType+FieldExpression)
+                // by SalesMergeFieldSeeder — NOT via HasData. Hard-coded HasData
+                // ids collide with operator-added merge-field rows on databases
+                // where the identity counter has advanced past the seed range.
             );
 
             // Seed FBR Lookup values
@@ -747,6 +1293,27 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<UserCompany>()
                 .HasIndex(uc => uc.CompanyId);
 
+            // ── Division-level access: UserDivision ──
+            // Composite PK on (UserId, DivisionId). Only consulted when the
+            // user's UserCompany.RestrictToDivisions flag is set for the
+            // division's company. Cascade from both sides is safe here (unlike
+            // the NoAction document→Division FKs): the only cascade path into
+            // this table from a Company delete is Company→Division→UserDivision.
+            modelBuilder.Entity<UserDivision>()
+                .HasKey(ud => new { ud.UserId, ud.DivisionId });
+            modelBuilder.Entity<UserDivision>()
+                .HasOne(ud => ud.User)
+                .WithMany()
+                .HasForeignKey(ud => ud.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UserDivision>()
+                .HasOne(ud => ud.Division)
+                .WithMany()
+                .HasForeignKey(ud => ud.DivisionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UserDivision>()
+                .HasIndex(ud => ud.DivisionId);
+
             // ── Purchase + Inventory module ────────────────────────────────
 
             // Supplier — mirror of Client
@@ -803,12 +1370,17 @@ namespace MyApp.Api.Data
                 .HasForeignKey(pb => pb.SupplierId)
                 .OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<PurchaseBill>()
-                .HasIndex(pb => pb.CompanyId);
-            // Audit C-8 (2026-05-13): unique (CompanyId, PurchaseBillNumber)
-            // so concurrent creates can't land the same number.
+                .HasOne(pb => pb.Division).WithMany()
+                .HasForeignKey(pb => pb.DivisionId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<PurchaseBill>()
-                .HasIndex(pb => new { pb.CompanyId, pb.PurchaseBillNumber })
-                .IsUnique();
+                .HasIndex(pb => pb.CompanyId);
+            // Audit C-8: unique numbering, now scoped per (company, division) so a
+            // division-tagged bill draws its own sequence. HasFilter(null) covers
+            // company-level rows (DivisionId NULL) too.
+            modelBuilder.Entity<PurchaseBill>()
+                .HasIndex(pb => new { pb.CompanyId, pb.DivisionId, pb.PurchaseBillNumber })
+                .IsUnique()
+                .HasFilter(null);
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => pb.SupplierId);
             modelBuilder.Entity<PurchaseBill>()
@@ -817,6 +1389,7 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.GSTRate).HasPrecision(5, 2);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.GSTAmount).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.GrandTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.AmountPaid).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.SupplierBillNumber).HasMaxLength(100);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.SupplierIRN).HasMaxLength(64);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.ReconciliationStatus).HasMaxLength(20).HasDefaultValue("Pending");
@@ -892,11 +1465,15 @@ namespace MyApp.Api.Data
                 .HasForeignKey(gr => gr.PurchaseBillId)
                 .OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<GoodsReceipt>()
-                .HasIndex(gr => gr.CompanyId);
-            // Audit C-8 (2026-05-13): unique (CompanyId, GoodsReceiptNumber).
+                .HasOne(gr => gr.Division).WithMany()
+                .HasForeignKey(gr => gr.DivisionId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<GoodsReceipt>()
-                .HasIndex(gr => new { gr.CompanyId, gr.GoodsReceiptNumber })
-                .IsUnique();
+                .HasIndex(gr => gr.CompanyId);
+            // Audit C-8: unique numbering scoped per (company, division).
+            modelBuilder.Entity<GoodsReceipt>()
+                .HasIndex(gr => new { gr.CompanyId, gr.DivisionId, gr.GoodsReceiptNumber })
+                .IsUnique()
+                .HasFilter(null);
             modelBuilder.Entity<GoodsReceipt>()
                 .HasIndex(gr => gr.SupplierId);
             modelBuilder.Entity<GoodsReceipt>()
@@ -928,6 +1505,15 @@ namespace MyApp.Api.Data
                 .WithMany()
                 .HasForeignKey(sm => sm.ItemTypeId)
                 .OnDelete(DeleteBehavior.Restrict);
+            // StockMovement -> Division (optional; NoAction — SetNull/Cascade
+            // would add a second cascade path from Company). Unlinked in app
+            // code by DivisionService.DeleteAsync, like the document columns.
+            modelBuilder.Entity<StockMovement>()
+                .HasOne(sm => sm.Division)
+                .WithMany()
+                .HasForeignKey(sm => sm.DivisionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
             // Composite index for the hot-path on-hand query:
             //   WHERE CompanyId = X AND ItemTypeId = Y
             //   then SUM(Direction == In ? Quantity : -Quantity)
@@ -961,6 +1547,63 @@ namespace MyApp.Api.Data
             // decimal(18,4).
             modelBuilder.Entity<StockMovement>().Property(sm => sm.Quantity).HasPrecision(18, 4);
             modelBuilder.Entity<OpeningStockBalance>().Property(osb => osb.Quantity).HasPrecision(18, 4);
+
+            // ── Inventory V2 foundation (2026-07 redesign) ─────────────────────
+            // Per-(company, item-type) tracking policy override + reorder level.
+            // Company delete cascades these away; ItemType (global catalog) is
+            // Restrict — no multiple-cascade path since ItemType has no company.
+            modelBuilder.Entity<CompanyItemTypeSetting>()
+                .HasOne(s => s.Company).WithMany()
+                .HasForeignKey(s => s.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CompanyItemTypeSetting>()
+                .HasOne(s => s.ItemType).WithMany()
+                .HasForeignKey(s => s.ItemTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<CompanyItemTypeSetting>()
+                .HasIndex(s => new { s.CompanyId, s.ItemTypeId }).IsUnique();
+            modelBuilder.Entity<CompanyItemTypeSetting>()
+                .Property(s => s.Mode).HasConversion<byte>();
+            modelBuilder.Entity<CompanyItemTypeSetting>()
+                .Property(s => s.ReorderLevel).HasPrecision(18, 4);
+
+            // Movement-history + running-balance index: keyed on
+            // (CompanyId, ItemTypeId, MovementDate, Id) so the dashboard feed
+            // (ORDER BY MovementDate, Id) and the per-item running-balance
+            // window function run index-ordered, with the signed-sum columns
+            // carried as INCLUDEs to keep it a covering seek.
+            modelBuilder.Entity<StockMovement>()
+                .HasIndex(sm => new { sm.CompanyId, sm.ItemTypeId, sm.MovementDate, sm.Id })
+                .IncludeProperties(sm => new { sm.Direction, sm.Quantity, sm.SourceType, sm.SourceId, sm.DivisionId })
+                .HasDatabaseName("IX_StockMovements_Co_Item_Date");
+            // Company-wide movement feed (no item filter), newest first.
+            modelBuilder.Entity<StockMovement>()
+                .HasIndex(sm => new { sm.CompanyId, sm.MovementDate })
+                .HasDatabaseName("IX_StockMovements_Co_Date");
+
+            // Derived read-model working-set indexes: the buckets scan only the
+            // OPEN documents, so filter to un-fulfilled rows.
+            //   • un-billed challans feed "Qty Delivered"
+            //   • un-billed goods receipts feed "Incoming Qty"
+            //   • open sales orders feed "Qty To Deliver" / "Committed"
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasIndex(dc => new { dc.CompanyId, dc.SalesOrderId })
+                .HasFilter("[InvoiceId] IS NULL")
+                .HasDatabaseName("IX_DeliveryChallans_Open");
+            // Named overload so this is a SEPARATE filtered index — it must not
+            // clobber the existing unfiltered IX_GoodsReceipts_CompanyId (EF
+            // treats same-column HasIndex calls as one index otherwise).
+            modelBuilder.Entity<GoodsReceipt>()
+                .HasIndex(new[] { nameof(GoodsReceipt.CompanyId) }, "IX_GoodsReceipts_Open")
+                .HasFilter("[PurchaseBillId] IS NULL");
+            modelBuilder.Entity<SalesOrder>()
+                .HasIndex(o => new { o.CompanyId, o.Status })
+                .HasDatabaseName("IX_SalesOrders_Co_Status");
+
+            // Existing companies (and new ones) default to V1 legacy tracking.
+            modelBuilder.Entity<Company>()
+                .Property(c => c.InventoryFlowVersion)
+                .HasDefaultValue((byte)1);
         }
 
     }

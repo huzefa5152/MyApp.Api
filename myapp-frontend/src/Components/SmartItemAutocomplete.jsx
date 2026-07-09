@@ -22,6 +22,7 @@ export default function SmartItemAutocomplete({
   onPick,
   style,
   placeholder,
+  multiline,
 }) {
   const [query, setQuery] = useState(value || "");
   const [localResults, setLocalResults] = useState([]);
@@ -156,8 +157,12 @@ export default function SmartItemAutocomplete({
       e.preventDefault();
       setHighlightIndex((i) => (i <= 0 ? all.length - 1 : i - 1));
     } else if (e.key === "Enter") {
+      if (highlightIndex < 0) {
+        if (multiline) return;   // let the textarea insert a newline
+        e.preventDefault();
+        return;
+      }
       e.preventDefault();
-      if (highlightIndex < 0) return;
       if (highlightIndex < localResults.length) {
         pickLocal(localResults[highlightIndex]);
       } else {
@@ -172,16 +177,29 @@ export default function SmartItemAutocomplete({
 
   return (
     <div ref={wrapperRef} style={{ position: "relative", width: "100%" }}>
-      <input
-        type="text"
-        style={style}
-        value={query}
-        placeholder={placeholder || "Search items or FBR catalog…"}
-        onChange={handleInputChange}
-        onFocus={() => { if (query) { setShowDropdown(true); fetchBoth(query); } }}
-        onKeyDown={handleKeyDown}
-        autoComplete="off"
-      />
+      {multiline ? (
+        <textarea
+          rows={2}
+          style={{ resize: "vertical", lineHeight: 1.4, ...style }}
+          value={query}
+          placeholder={placeholder || "Search items or FBR catalog…"}
+          onChange={handleInputChange}
+          onFocus={() => { if (query) { setShowDropdown(true); fetchBoth(query); } }}
+          onKeyDown={handleKeyDown}
+          autoComplete="off"
+        />
+      ) : (
+        <input
+          type="text"
+          style={style}
+          value={query}
+          placeholder={placeholder || "Search items or FBR catalog…"}
+          onChange={handleInputChange}
+          onFocus={() => { if (query) { setShowDropdown(true); fetchBoth(query); } }}
+          onKeyDown={handleKeyDown}
+          autoComplete="off"
+        />
+      )}
       {showDropdown && (
         createPortal(
           <ul style={styles.dropdown(wrapperRef.current)}>

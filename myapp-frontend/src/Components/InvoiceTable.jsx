@@ -2,13 +2,20 @@ import { useNavigate } from "react-router-dom";
 import {
   MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
-  MdEdit, MdDelete, MdOpenInNew,
+  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdPayments, MdUndo,
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 
 // Renders the FBR-status pill in compact form for the table.
-function fbrStatusBadge(inv, isBillsMode) {
+function fbrStatusBadge(inv, isBillsMode, fbrEnabled = true) {
+  if (inv.isCancelled) {
+    return (
+      <StatusBadge tone="danger" title={inv.cancelReason ? `Cancelled — ${inv.cancelReason}` : "This bill has been cancelled (voided)"}>
+        Cancelled
+      </StatusBadge>
+    );
+  }
   if (inv.fbrStatus === "Submitted") {
     return (
       <StatusBadge tone="submitted" title={inv.fbrIRN ? `IRN: ${inv.fbrIRN}` : undefined}>
@@ -16,6 +23,9 @@ function fbrStatusBadge(inv, isBillsMode) {
       </StatusBadge>
     );
   }
+  // FBR disabled for this company → no FBR status badge on unsubmitted bills
+  // (already-submitted bills above still show their status for accuracy).
+  if (!fbrEnabled) return null;
   if (isBillsMode) {
     return <StatusBadge tone="warning">Pending FBR</StatusBadge>;
   }
@@ -32,18 +42,34 @@ function fbrStatusBadge(inv, isBillsMode) {
   return <StatusBadge tone="ready">Ready</StatusBadge>;
 }
 
+// Renders the payment-status pill (balance due / paid / overdue).
+function paymentStatusBadge(inv) {
+  const s = inv.paymentStatus;
+  if (s === "Paid") return <StatusBadge tone="success">Paid</StatusBadge>;
+  if (s === "Overdue") return <StatusBadge tone="danger" title={inv.daysOverdue ? `${inv.daysOverdue} day(s) overdue` : undefined}>Overdue{inv.daysOverdue ? ` ${inv.daysOverdue}d` : ""}</StatusBadge>;
+  if (s === "PartiallyPaid") return <StatusBadge tone="info">Partial</StatusBadge>;
+  return <StatusBadge tone="neutral">Unpaid</StatusBadge>;
+}
+
 export default function InvoiceTable({
   invoices,
   isBillsMode,
+  // Note tabs — rows are Credit Notes or Debit Notes in their own
+  // numbering sequences; number column reads "Credit Note # / Debit Note #".
+  isReturnsMode = false,
+  noteDocType = null,
   perms,
   hasExcelBill,
   hasExcelTax,
   selectedCompanyHasFbrToken,
+  fbrEnabled = true,
   fbrValidated,
   fbrLoading,
   exportingId,
   // handlers (parent owns them; we just call them)
   onView,
+  onRecordReceipt,
+  onShowPayments,
   onPrintBill,
   onPrintTax,
   onExportBillPdf,
@@ -56,22 +82,84 @@ export default function InvoiceTable({
   onEdit,
   onToggleFbrExcluded,
   onDelete,
+  onVoid,
+  onReverse,
 }) {
   const navigate = useNavigate();
 
   const columns = [
     {
       key: "invoiceNumber",
-      header: isBillsMode ? "Bill #" : "Invoice #",
-      width: 110,
+      header: isReturnsMode ? (noteDocType === 10 ? "Credit Note #" : "Debit Note #") : isBillsMode ? "Bill #" : "Invoice #",
+      width: 130,
       accessor: (i) => Number(i.invoiceNumber) || i.invoiceNumber,
-      render: (i) => <strong>{i.invoiceNumber}</strong>,
+      render: (i) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <strong>{i.invoiceNumber}</strong>
+          {(i.documentType === 9 || i.documentType === 10) && (
+            <span
+              style={{
+                fontSize: 10, fontWeight: 700, lineHeight: 1.2,
+                color: i.documentType === 10 ? "#5e35b1" : "#00695c",
+              }}
+              title={i.originalInvoiceNumber ? `Against bill #${i.originalInvoiceNumber}${i.originalInvoiceRefIRN ? ` (IRN ${i.originalInvoiceRefIRN})` : ""}` : undefined}
+            >
+              {i.documentType === 10 ? "CREDIT NOTE" : "DEBIT NOTE"}
+              {i.originalInvoiceNumber ? ` ↩ #${i.originalInvoiceNumber}` : ""}
+            </span>
+          )}
+          {i.documentType !== 9 && i.documentType !== 10 && i.reversedByCreditNoteNumber && (
+            <span
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 3, alignSelf: "flex-start",
+                fontSize: 10, fontWeight: 700, lineHeight: 1.2, padding: "2px 6px",
+                borderRadius: 6, background: "#ede7f6", color: "#5e35b1", border: "1px solid #b39ddb",
+              }}
+              title={`A Credit Note (#${i.reversedByCreditNoteNumber}) has been created against this invoice — it reverses this sale.`}
+            >
+              <MdUndo size={11} /> REVERSED · CN #{i.reversedByCreditNoteNumber}
+            </span>
+          )}
+          {i.documentType !== 9 && i.documentType !== 10 && i.adjustedByDebitNoteNumber && (
+            <span
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 3, alignSelf: "flex-start",
+                fontSize: 10, fontWeight: 700, lineHeight: 1.2, padding: "2px 6px",
+                borderRadius: 6, background: "#e0f2f1", color: "#00695c", border: "1px solid #80cbc4",
+              }}
+              title={`A Debit Note (#${i.adjustedByDebitNoteNumber}) adjusts this invoice upward.`}
+            >
+              <MdUndo size={11} /> ADJUSTED · DN #{i.adjustedByDebitNoteNumber}
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       key: "clientName",
       header: "Client",
-      render: (i) => i.clientName || "—",
+      render: (i) => (
+        <span>
+          {i.clientName || "—"}
+          {i.divisionName && <span style={divisionChip}>{i.divisionName}</span>}
+        </span>
+      ),
     },
+    // Returns tab only: which invoice the note reverses + the FBR reason.
+    ...(isReturnsMode ? [{
+      key: "against",
+      header: "Against / Reason",
+      render: (i) => (
+        <div>
+          <div style={{ fontWeight: 600 }}>
+            Bill #{i.originalInvoiceNumber ?? "—"}
+          </div>
+          <div style={{ fontSize: "0.75rem", color: "#5f6d7e" }} title={i.noteReasonRemarks || undefined}>
+            {i.noteReason || "—"}
+          </div>
+        </div>
+      ),
+    }] : []),
     {
       key: "poNumber",
       header: "PO",
@@ -117,11 +205,39 @@ export default function InvoiceTable({
       render: (i) => `Rs. ${(i.grandTotal ?? 0).toLocaleString()}`,
     },
     {
+      key: "balanceDue",
+      header: "Balance Due",
+      width: 130,
+      align: "right",
+      accessor: (i) => i.balanceDue ?? 0,
+      render: (i) => `Rs. ${(i.balanceDue ?? 0).toLocaleString()}`,
+    },
+    {
+      key: "paymentStatus",
+      header: "Payment",
+      width: 110,
+      accessor: (i) => i.paymentStatus || "",
+      render: (i) => (perms.canViewReceipts && onShowPayments && !i.isCancelled) ? (
+        <button type="button" onClick={() => onShowPayments(i)} title="View receipts & balance"
+          style={{ all: "unset", cursor: "pointer" }}>
+          {paymentStatusBadge(i)}
+        </button>
+      ) : paymentStatusBadge(i),
+    },
+    {
+      key: "dueDate",
+      header: "Due Date",
+      width: 110,
+      defaultHidden: true,
+      accessor: (i) => i.dueDate ? new Date(i.dueDate).getTime() : 0,
+      render: (i) => i.dueDate ? new Date(i.dueDate).toLocaleDateString() : "—",
+    },
+    {
       key: "fbrStatus",
       header: isBillsMode ? "FBR" : "FBR Status",
       width: 140,
       accessor: (i) => i.fbrStatus || "",
-      render: (i) => fbrStatusBadge(i, isBillsMode),
+      render: (i) => fbrStatusBadge(i, isBillsMode, fbrEnabled),
     },
   ];
 
@@ -132,6 +248,11 @@ export default function InvoiceTable({
         {isBillsMode && (
           <button style={btn.view} onClick={() => onView?.(inv)} title="View bill">
             <MdVisibility size={14} />
+          </button>
+        )}
+        {perms.canRecordReceipt && !inv.isCancelled && (
+          <button style={btn.receipt} onClick={() => onRecordReceipt?.(inv)} title="Record a receipt (payment received) against this invoice">
+            <MdPayments size={14} />
           </button>
         )}
         {isBillsMode && (
@@ -198,7 +319,7 @@ export default function InvoiceTable({
             <MdVisibility size={14} />
           </button>
         )}
-        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && !isSubmitted && (
+        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && !isSubmitted && !inv.isCancelled && (
           <>
             {perms.canFbrValidate && (
               <button
@@ -239,7 +360,7 @@ export default function InvoiceTable({
             )}
           </>
         )}
-        {perms.canOpenEdit && !isSubmitted && (
+        {perms.canOpenEdit && !isSubmitted && !inv.isCancelled && (
           <button
             style={btn.edit}
             onClick={() => onEdit?.(inv)}
@@ -248,7 +369,7 @@ export default function InvoiceTable({
             <MdEdit size={14} />
           </button>
         )}
-        {!isBillsMode && perms.canFbrExclude && !isSubmitted && (
+        {!isBillsMode && perms.canFbrExclude && !isSubmitted && !inv.isCancelled && (
           <button
             style={{
               ...btn.neutral,
@@ -264,9 +385,28 @@ export default function InvoiceTable({
             {inv.isFbrExcluded ? <MdRestore size={14} /> : <MdBlock size={14} />}
           </button>
         )}
-        {isBillsMode && perms.canDelete && !isSubmitted && inv.isLatest && (
-          <button style={btn.delete} onClick={() => onDelete?.(inv)} title="Delete bill">
+        {(isBillsMode || isReturnsMode) && perms.canDelete && !isSubmitted && !inv.isCancelled && inv.isLatest && (
+          <button style={btn.delete} onClick={() => onDelete?.(inv)} title="Delete — only the latest document in its sequence, removes the row entirely.">
             <MdDelete size={14} />
+          </button>
+        )}
+        {(isBillsMode || isReturnsMode) && perms.canVoid && !isSubmitted && !inv.isCancelled && (
+          <button
+            style={btn.void}
+            onClick={() => onVoid?.(inv)}
+            title="Void bill — keeps the bill number (no gap), marks it cancelled and reverts its delivery challan(s) to Pending so they can be re-billed."
+          >
+            <MdCancel size={14} />
+          </button>
+        )}
+        {perms.canReverse && isSubmitted && !inv.isCancelled && !inv.reversedByCreditNoteNumber &&
+         inv.documentType !== 9 && inv.documentType !== 10 && (
+          <button
+            style={btn.reverse}
+            onClick={() => onReverse?.(inv)}
+            title="Reverse this FBR-submitted bill — opens the Credit Note screen prefilled with its lines (trim for a partial return)."
+          >
+            <MdUndo size={14} />
           </button>
         )}
       </>
@@ -285,6 +425,19 @@ export default function InvoiceTable({
     />
   );
 }
+
+// Same chip ChallanTable uses — wraps with the client name, no
+// nowrap/ellipsis, so long division names never mask each other.
+const divisionChip = {
+  display: "inline-block",
+  marginLeft: 6,
+  fontSize: "0.7rem",
+  fontWeight: 700,
+  color: "#0d47a1",
+  background: "#e3f0ff",
+  padding: "0.1rem 0.5rem",
+  borderRadius: 6,
+};
 
 const baseBtn = {
   display: "inline-flex",
@@ -306,6 +459,9 @@ const btn = {
   excel:       { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
   edit:        { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
   delete:      { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
+  void:        { ...baseBtn, backgroundColor: "#fff8e1", color: "#b26a00" },
+  receipt:     { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20" },
+  reverse:     { ...baseBtn, backgroundColor: "#ede7f6", color: "#5e35b1" },
   fbrValidate: { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
   fbrSubmit:   { ...baseBtn, backgroundColor: "#e8eaf6", color: "#1a237e" },
   neutral:     { ...baseBtn, backgroundColor: "#eceff1", color: "#546e7a" },

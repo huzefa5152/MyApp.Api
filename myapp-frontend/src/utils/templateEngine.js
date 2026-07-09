@@ -31,6 +31,18 @@ Handlebars.registerHelper("nl2br", (s) => {
   return new Handlebars.SafeString(escaped.replace(/\n/g, "<br>"));
 });
 
+// Like nl2br, but ALSO re-allows a safe subset of inline formatting tags
+// (<b>/<i>/<u>) so item descriptions can carry simple bold/italic plus line
+// breaks. Everything else stays HTML-escaped (XSS-safe). Mirrors the React
+// renderRichTextHtml() util. Use as {{{richText this.description}}}.
+Handlebars.registerHelper("richText", (s) => {
+  if (s == null) return "";
+  let out = Handlebars.Utils.escapeExpression(String(s));
+  out = out.replace(/&lt;(\/?)(b|i|u)&gt;/gi, (_m, slash, tag) => `<${slash}${tag.toLowerCase()}>`);
+  out = out.replace(/\n/g, "<br>");
+  return new Handlebars.SafeString(out);
+});
+
 Handlebars.registerHelper("join", (arr, sep) =>
   (arr || []).join(typeof sep === "string" ? sep : ", ")
 );
@@ -105,10 +117,26 @@ Handlebars.registerHelper("taxEmptyRows", (count) => {
 
 /**
  * Compile a Handlebars template and merge with data.
+ *
+ * Injects a <base> so relative asset URLs — notably the logo
+ * "/data/uploads/logos/…" from {{companyLogoPath}} / {{divisionLogoPath}} —
+ * resolve against the app origin. Printing opens an about:blank popup and
+ * document.write's this HTML; an about:blank document has no origin to resolve
+ * a path-absolute URL against, so without an explicit base the logo silently
+ * renders blank in the print/preview. Resolving against window.location.origin
+ * works in production (same origin serves /data) and in dev (the Vite server
+ * proxies /data to the backend).
  */
 export function mergeTemplate(htmlTemplate, data) {
   const compiled = Handlebars.compile(htmlTemplate);
-  return compiled(data);
+  const html = compiled(data);
+  if (typeof window !== "undefined" && window.location?.origin) {
+    const base = `<base href="${window.location.origin}/">`;
+    return /<head[^>]*>/i.test(html)
+      ? html.replace(/<head[^>]*>/i, (m) => m + base)
+      : base + html;
+  }
+  return html;
 }
 
 /**
@@ -131,7 +159,7 @@ export const MERGE_FIELDS = {
     { field: "{{#each items}}", label: "Loop: Items Start" },
     { field: "{{/each}}", label: "Loop: End" },
     { field: "{{this.quantity}}", label: "Item Quantity (in loop)" },
-    { field: "{{this.description}}", label: "Item Description (in loop)" },
+    { field: "{{{richText this.description}}}", label: "Item Description (in loop)" },
   ],
   Bill: [
     { field: "{{companyBrandName}}", label: "Company Brand Name" },
@@ -160,7 +188,7 @@ export const MERGE_FIELDS = {
     { field: "{{/each}}", label: "Loop: End" },
     { field: "{{this.sNo}}", label: "Item S# (in loop)" },
     { field: "{{this.quantity}}", label: "Item Quantity (in loop)" },
-    { field: "{{this.description}}", label: "Item Description (in loop)" },
+    { field: "{{{richText this.description}}}", label: "Item Description (in loop)" },
     { field: "{{this.itemTypeName}}", label: "Item Type Name (in loop)" },
     { field: "{{fmt this.unitPrice}}", label: "Item Unit Price (in loop)" },
     { field: "{{fmt this.lineTotal}}", label: "Item Line Total (in loop)" },
@@ -189,7 +217,7 @@ export const MERGE_FIELDS = {
     { field: "{{/each}}", label: "Loop: End" },
     { field: "{{this.quantity}}", label: "Item Quantity (in loop)" },
     { field: "{{this.uom}}", label: "Item UOM (in loop)" },
-    { field: "{{this.description}}", label: "Item Description (in loop)" },
+    { field: "{{{richText this.description}}}", label: "Item Description (in loop)" },
     { field: "{{fmtDec this.valueExclTax}}", label: "Value Excl Tax (in loop)" },
     { field: "{{this.gstRate}}", label: "GST Rate % (in loop)" },
     { field: "{{fmtDec this.gstAmount}}", label: "GST Amount (in loop)" },

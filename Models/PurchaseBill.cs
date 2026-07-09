@@ -14,6 +14,9 @@ namespace MyApp.Api.Models
         public int PurchaseBillNumber { get; set; }
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
+        /// <summary>Optional division ("sub-company"); when set the bill numbers
+        /// from the division's own sequence. Null = company-level.</summary>
+        public int? DivisionId { get; set; }
         public int SupplierId { get; set; }
 
         /// <summary>
@@ -40,6 +43,14 @@ namespace MyApp.Api.Models
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }
 
+        // ── Payments / Receipts (AP subledger — design §11.5) ──
+        // Mirror of Invoice: DueDate drives Overdue/Coming-due; AmountPaid is the
+        // Σ of payment allocations to this bill, synced in the allocation
+        // transaction. BalanceDue + status are derived at read time
+        // (PaymentStatusCalculator).
+        public DateTime? DueDate { get; set; }
+        public decimal AmountPaid { get; set; }
+
         // FBR digital-invoicing classification — copied from supplier's
         // invoice for completeness (informational; we don't post this).
         public int? DocumentType { get; set; }
@@ -65,10 +76,17 @@ namespace MyApp.Api.Models
         /// </summary>
         public string? Source { get; set; }
 
+        /// <summary>True when brought in by the legacy data migration
+        /// (historical). ExternalRef carries "pbill:{DocumentNumber}" for
+        /// idempotency.</summary>
+        public bool IsMigrated { get; set; }
+        public string? ExternalRef { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation
         public Company Company { get; set; } = null!;
+        public Division? Division { get; set; }
         public Supplier Supplier { get; set; } = null!;
         public ICollection<PurchaseItem> Items { get; set; } = new List<PurchaseItem>();
         public ICollection<GoodsReceipt> GoodsReceipts { get; set; } = new List<GoodsReceipt>();

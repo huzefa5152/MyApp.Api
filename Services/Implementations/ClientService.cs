@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Services.Interfaces;
@@ -15,14 +16,16 @@ namespace MyApp.Api.Services.Implementations
         private readonly IDeliveryChallanService _challanService;
         private readonly IClientGroupService _clientGroupService;
         private readonly AppDbContext _context;
+        private readonly AttachmentStorage _attachmentStorage;
         private readonly ILogger<ClientService> _logger;
-        public ClientService(IClientRepository repo, IInvoiceRepository invoiceRepo, IDeliveryChallanService challanService, IClientGroupService clientGroupService, AppDbContext context, ILogger<ClientService> logger)
+        public ClientService(IClientRepository repo, IInvoiceRepository invoiceRepo, IDeliveryChallanService challanService, IClientGroupService clientGroupService, AppDbContext context, AttachmentStorage attachmentStorage, ILogger<ClientService> logger)
         {
             _repo = repo;
             _invoiceRepo = invoiceRepo;
             _challanService = challanService;
             _clientGroupService = clientGroupService;
             _context = context;
+            _attachmentStorage = attachmentStorage;
             _logger = logger;
         }
 
@@ -300,37 +303,109 @@ namespace MyApp.Api.Services.Implementations
             return ToDto(client, hasInvoices);
         }
 
+        public async Task<ClientDeleteImpactDto> GetDeleteImpactAsync(int id)
+        {
+            return new ClientDeleteImpactDto
+            {
+                SalesQuotes = await _context.SalesQuotes.CountAsync(q => q.ClientId == id),
+                SalesOrders = await _context.SalesOrders.CountAsync(o => o.ClientId == id),
+                DeliveryChallans = await _context.DeliveryChallans.CountAsync(dc => dc.ClientId == id),
+                Invoices = await _context.Invoices.CountAsync(i => i.ClientId == id),
+                FbrSubmittedInvoices = await _context.Invoices.CountAsync(i => i.ClientId == id && i.FbrStatus == "Submitted"),
+            };
+        }
+
         public async Task DeleteAsync(int id)
         {
             var client = await _repo.GetByIdAsync(id);
             if (client == null) return;
 
-            // Cascade delete in a single transaction for atomicity
+            // Compliance guard: never wipe FBR-submitted bills (mirrors the
+            // single-bill guard in InvoiceService.DeleteAsync). Thrown before the
+            // transaction → controller maps to a clear 400, nothing is deleted.
+            var submitted = await _context.Invoices.CountAsync(i => i.ClientId == id && i.FbrStatus == "Submitted");
+            if (submitted > 0)
+                throw new InvalidOperationException(
+                    $"This client has {submitted} FBR-submitted bill{(submitted == 1 ? "" : "s")} that cannot be deleted. " +
+                    "Handle those in the Invoices tab first, then delete the client.");
+
+            var companyId = client.CompanyId;
+            var attachmentPaths = new List<string>();
+
+            // Full cascade in a single transaction for atomicity.
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // 1. Unlink challans from invoices for this client
-                await _context.DeliveryChallans
-                    .Where(dc => dc.ClientId == id && dc.InvoiceId != null)
+                // 0. Break the quote↔order cross-links (NoAction FKs) so both sides
+                //    can be deleted below.
+                await _context.SalesQuotes.Where(q => q.ClientId == id && q.ConvertedToSalesOrderId != null)
+                    .ExecuteUpdateAsync(s => s.SetProperty(q => q.ConvertedToSalesOrderId, (int?)null));
+                await _context.SalesOrders.Where(o => o.ClientId == id && o.SalesQuoteId != null)
+                    .ExecuteUpdateAsync(s => s.SetProperty(o => o.SalesQuoteId, (int?)null));
+
+                // 1. Unlink challans from invoices for this client.
+                await _context.DeliveryChallans.Where(dc => dc.ClientId == id && dc.InvoiceId != null)
                     .ExecuteUpdateAsync(s => s.SetProperty(dc => dc.InvoiceId, (int?)null));
 
-                // 2. Delete invoice items, then invoices
                 var invoiceIds = await _context.Invoices.Where(i => i.ClientId == id).Select(i => i.Id).ToListAsync();
+                var challanIds = await _context.DeliveryChallans.Where(dc => dc.ClientId == id).Select(dc => dc.Id).ToListAsync();
+                var orderIds = await _context.SalesOrders.Where(o => o.ClientId == id).Select(o => o.Id).ToListAsync();
+                var quoteIds = await _context.SalesQuotes.Where(q => q.ClientId == id).Select(q => q.Id).ToListAsync();
+
+                // 2. Remove attachments tied to any of this client's documents
+                //    (no FK, so they'd otherwise orphan + skew folder counts).
+                //    Collect on-disk paths to delete AFTER the commit succeeds.
+                if (invoiceIds.Count + challanIds.Count + orderIds.Count + quoteIds.Count > 0)
+                {
+                    var atts = await _context.Attachments
+                        .Where(a => a.CompanyId == companyId && a.EntityType != null && a.EntityId != null && (
+                            ((a.EntityType == "Invoice" || a.EntityType == "Bill") && invoiceIds.Contains(a.EntityId.Value)) ||
+                            (a.EntityType == "DeliveryChallan" && challanIds.Contains(a.EntityId.Value)) ||
+                            (a.EntityType == "SalesOrder" && orderIds.Contains(a.EntityId.Value)) ||
+                            (a.EntityType == "SalesQuote" && quoteIds.Contains(a.EntityId.Value))))
+                        .ToListAsync();
+                    if (atts.Count > 0)
+                    {
+                        attachmentPaths = atts.Select(a => a.StoragePath).Where(p => !string.IsNullOrEmpty(p)).ToList();
+                        _context.Attachments.RemoveRange(atts);
+                        await _context.SaveChangesAsync();
+                    }
+                }
+
+                // 3. Invoices: purge their stock movements (else on-hand skews),
+                //    then items, then the invoices.
                 if (invoiceIds.Count > 0)
                 {
+                    await _context.StockMovements
+                        .Where(m => m.CompanyId == companyId && m.SourceType == StockMovementSourceType.Invoice && m.SourceId != null && invoiceIds.Contains(m.SourceId.Value))
+                        .ExecuteDeleteAsync();
                     await _context.InvoiceItems.Where(ii => invoiceIds.Contains(ii.InvoiceId)).ExecuteDeleteAsync();
                     await _context.Invoices.Where(i => i.ClientId == id).ExecuteDeleteAsync();
                 }
 
-                // 3. Delete delivery items, then challans
-                var challanIds = await _context.DeliveryChallans.Where(dc => dc.ClientId == id).Select(dc => dc.Id).ToListAsync();
+                // 4. Delivery challans (+ their items). Done before sales orders,
+                //    which they reference (Restrict).
                 if (challanIds.Count > 0)
                 {
                     await _context.DeliveryItems.Where(di => challanIds.Contains(di.DeliveryChallanId)).ExecuteDeleteAsync();
                     await _context.DeliveryChallans.Where(dc => dc.ClientId == id).ExecuteDeleteAsync();
                 }
 
-                // 4. Delete the client
+                // 5. Sales orders (+ their items).
+                if (orderIds.Count > 0)
+                {
+                    await _context.SalesOrderItems.Where(soi => orderIds.Contains(soi.SalesOrderId)).ExecuteDeleteAsync();
+                    await _context.SalesOrders.Where(o => o.ClientId == id).ExecuteDeleteAsync();
+                }
+
+                // 6. Sales quotes (+ their items).
+                if (quoteIds.Count > 0)
+                {
+                    await _context.SalesQuoteItems.Where(sqi => quoteIds.Contains(sqi.SalesQuoteId)).ExecuteDeleteAsync();
+                    await _context.SalesQuotes.Where(q => q.ClientId == id).ExecuteDeleteAsync();
+                }
+
+                // 7. Finally the client (POFormat.ClientId is SetNull by the DB).
                 await _repo.DeleteAsync(client);
 
                 await transaction.CommitAsync();
@@ -341,6 +416,9 @@ namespace MyApp.Api.Services.Implementations
                 await transaction.RollbackAsync();
                 throw;
             }
+
+            // Best-effort file cleanup AFTER the DB commit (rows are already gone).
+            foreach (var p in attachmentPaths) _attachmentStorage.TryDelete(p);
         }
     }
 }

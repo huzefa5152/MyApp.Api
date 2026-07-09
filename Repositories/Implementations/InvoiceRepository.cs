@@ -14,15 +14,23 @@ namespace MyApp.Api.Repositories.Implementations
             _context = context;
         }
 
-        public async Task<List<Invoice>> GetByCompanyAsync(int companyId)
+        public async Task<List<Invoice>> GetByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
             // Default list excludes IsDemo bills — those are managed via the
-            // FBR Sandbox tab, not the regular Bills page.
-            return await _context.Invoices
+            // FBR Sandbox tab, not the regular Bills page — and Debit/Credit
+            // Notes (DocumentType 9/10), which live on the Return Invoices
+            // tab with their own numbering sequence.
+            var query = _context.Invoices
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans)
-                .Where(i => i.CompanyId == companyId && !i.IsDemo)
+                .Include(i => i.OriginalInvoice)
+                .Include(i => i.Division)
+                .Where(i => i.CompanyId == companyId && !i.IsDemo
+                         && i.DocumentType != 9 && i.DocumentType != 10);
+            if (allowedDivisionIds != null)
+                query = query.Where(i => i.DivisionId == null || allowedDivisionIds.Contains(i.DivisionId.Value));
+            return await query
                 .OrderByDescending(i => i.InvoiceNumber)
                 .ToListAsync();
         }
@@ -30,16 +38,34 @@ namespace MyApp.Api.Repositories.Implementations
         public async Task<(List<Invoice> Items, int TotalCount)> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
-            DateTime? dateFrom = null, DateTime? dateTo = null)
+            DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? noteType = null, int? divisionId = null,
+            HashSet<int>? allowedDivisionIds = null)
         {
+            // Three disjoint document groups, each with its own numbering
+            // sequence: sale bills (noteType null, default), Debit Notes
+            // (9) and Credit Notes (10). A row is never in two lists.
             var query = _context.Invoices
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans)
-                .Where(i => i.CompanyId == companyId && !i.IsDemo);
+                .Include(i => i.OriginalInvoice)
+                .Include(i => i.Division)
+                .Where(i => i.CompanyId == companyId && !i.IsDemo
+                         && (noteType == null
+                              ? (i.DocumentType != 9 && i.DocumentType != 10)
+                              : i.DocumentType == noteType));
+            // Division-RBAC scope first (null = unrestricted); the operator's
+            // explicit divisionId FILTER below is a view preference layered on
+            // top — the controller asserts it against the same allowed set.
+            if (allowedDivisionIds != null)
+                query = query.Where(i => i.DivisionId == null || allowedDivisionIds.Contains(i.DivisionId.Value));
 
             if (clientId.HasValue)
                 query = query.Where(i => i.ClientId == clientId.Value);
+
+            if (divisionId.HasValue)
+                query = query.Where(i => i.DivisionId == divisionId.Value);
 
             if (dateFrom.HasValue)
                 query = query.Where(i => i.Date >= dateFrom.Value);
@@ -87,6 +113,8 @@ namespace MyApp.Api.Repositories.Implementations
                     .ThenInclude(ii => ii.Adjustment)
                 .Include(i => i.DeliveryChallans)
                     .ThenInclude(dc => dc.Items)
+                .Include(i => i.OriginalInvoice)
+                .Include(i => i.Division)
                 .FirstOrDefaultAsync(i => i.Id == id);
         }
 
@@ -108,9 +136,12 @@ namespace MyApp.Api.Repositories.Implementations
             return await _context.Invoices.CountAsync(i => !i.IsDemo);
         }
 
-        public async Task<int> GetCountByCompanyAsync(int companyId)
+        public async Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            return await _context.Invoices.CountAsync(i => i.CompanyId == companyId && !i.IsDemo);
+            var query = _context.Invoices.Where(i => i.CompanyId == companyId && !i.IsDemo);
+            if (allowedDivisionIds != null)
+                query = query.Where(i => i.DivisionId == null || allowedDivisionIds.Contains(i.DivisionId.Value));
+            return await query.CountAsync();
         }
 
         public async Task<bool> HasInvoicesForClientAsync(int clientId)
@@ -121,6 +152,12 @@ namespace MyApp.Api.Repositories.Implementations
         public async Task<bool> HasInvoicesForCompanyAsync(int companyId)
         {
             return await _context.Invoices.AnyAsync(i => i.CompanyId == companyId);
+        }
+
+        public async Task<bool> HasNotesForCompanyAsync(int companyId, int docType)
+        {
+            return await _context.Invoices.AnyAsync(i =>
+                i.CompanyId == companyId && i.DocumentType == docType);
         }
 
         public async Task<Dictionary<int, bool>> HasInvoicesForClientsAsync(IEnumerable<int> clientIds)

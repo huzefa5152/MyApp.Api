@@ -47,6 +47,16 @@ namespace MyApp.Api.Helpers
             new("companies.manage.update", "Companies", "Manage", "Update", "Edit company details"),
             new("companies.manage.delete", "Companies", "Manage", "Delete", "Delete a company"),
 
+            // ── Divisions (per-company sub-brands / "sub-companies") ─────────
+            // A division carries its own branding (logo / brand / address) and
+            // its own Sales Quote numbering, managed from the Configuration →
+            // Divisions page. Dedicated keys (not companies.manage.*) so a role
+            // can be allowed to manage divisions without full company-edit rights.
+            new("divisions.manage.view",   "Divisions", "Manage", "View",   "View the divisions list"),
+            new("divisions.manage.create", "Divisions", "Manage", "Create", "Create a new division"),
+            new("divisions.manage.update", "Divisions", "Manage", "Update", "Edit a division and upload its logo"),
+            new("divisions.manage.delete", "Divisions", "Manage", "Delete", "Delete a division (referencing quotes/templates fall back to company-level)"),
+
             // ── Clients ─────────────────────────────────────────────────────
             new("clients.manage.view",     "Clients", "Manage", "View",   "View the clients list"),
             new("clients.manage.create",   "Clients", "Manage", "Create", "Create a new client"),
@@ -74,6 +84,80 @@ namespace MyApp.Api.Helpers
             new("challans.import.create",  "Challans", "Import", "Create", "Import challans from an Excel template"),
             new("challans.print.view",     "Challans", "Print",  "View",   "Print or download challans"),
 
+            // ── Sales Quotes (priced pre-sale quotation) ────────────────────
+            // Pre-sale documents — NOT FBR documents. A quote answers a
+            // customer enquiry with prices; it can be converted into a Sales
+            // Order (which then drives delivery challans).
+            new("salesquotes.list.view",     "SalesQuotes", "List",   "View",   "View the sales-quotes list"),
+            new("salesquotes.manage.create", "SalesQuotes", "Manage", "Create", "Create a sales quote"),
+            new("salesquotes.manage.update", "SalesQuotes", "Manage", "Update", "Edit a sales quote and change its status"),
+            new("salesquotes.manage.delete", "SalesQuotes", "Manage", "Delete", "Delete a sales quote"),
+            new("salesquotes.print.view",    "SalesQuotes", "Print",  "View",   "Print or download a sales quote"),
+
+            // ── Sales Orders (quantity-only confirmed order) ────────────────
+            // The internal representation of a customer PO. Delivery challans
+            // are raised against an order to track fulfilment. Converting a
+            // quote or importing a PO both create a Sales Order, so those
+            // actions are gated by salesorders.manage.create. Raising a challan
+            // from an order reuses challans.manage.create.
+            new("salesorders.list.view",     "SalesOrders", "List",   "View",   "View the sales-orders list"),
+            new("salesorders.manage.create", "SalesOrders", "Manage", "Create", "Create a sales order (incl. converting a quote or importing a PO)"),
+            new("salesorders.manage.update", "SalesOrders", "Manage", "Update", "Edit a sales order and change its status"),
+            new("salesorders.manage.delete", "SalesOrders", "Manage", "Delete", "Delete a sales order"),
+            new("salesorders.print.view",    "SalesOrders", "Print",  "View",   "Print or download a sales order"),
+
+            // ── Accounting: Receipts & Payments (AR/AP subledger) ───────────
+            // Money in (receipts → settle sales invoices) and money out
+            // (payments → settle purchase bills). Split namespaces so a role can
+            // record receipts WITHOUT being able to pay money out (separation of
+            // duties). These produce invoice/bill balance-due + payment status.
+            new("accounting.receipts.view",   "Accounting", "Receipts", "View",   "View receipts (money in) and an invoice's settled payments"),
+            new("accounting.receipts.create", "Accounting", "Receipts", "Create", "Record a receipt against one or more sales invoices"),
+            new("accounting.receipts.delete", "Accounting", "Receipts", "Delete", "Delete a receipt"),
+            new("accounting.payments.view",   "Accounting", "Payments", "View",   "View payments (money out) and a bill's settled payments"),
+            new("accounting.payments.create", "Accounting", "Payments", "Create", "Record a payment against one or more purchase bills"),
+            new("accounting.payments.delete", "Accounting", "Payments", "Delete", "Delete a payment"),
+
+            // Chart of Accounts (the account tree postings land on). View to read
+            // the tree; manage to add/edit/delete groups & accounts and seed a
+            // sector preset. Control accounts can't be deleted (subledger-backed).
+            new("accounting.coa.view",   "Accounting", "Chart of Accounts", "View",   "View the chart of accounts"),
+            new("accounting.coa.manage", "Accounting", "Chart of Accounts", "Manage", "Add/edit/delete accounts & groups and seed a sector preset"),
+
+            // General Ledger (Phase B). journal.* = manual journal entries
+            // (system-posted entries are read-only); transfers.* = inter-account
+            // bank/cash movements; gl.manage = enable/backfill/rebuild + lock
+            // date (period close) — an admin-grade switch, deliberately separate
+            // from coa.manage; reports/dashboard are read-only surfaces.
+            new("accounting.journal.view",    "Accounting", "Journal Entries", "View",   "View journal entries (manual and system-posted)"),
+            new("accounting.journal.create",  "Accounting", "Journal Entries", "Create", "Create and edit manual journal entries"),
+            new("accounting.journal.delete",  "Accounting", "Journal Entries", "Delete", "Delete manual journal entries"),
+            new("accounting.transfers.view",   "Accounting", "Account Transfers", "View",   "View inter-account (bank/cash) transfers"),
+            new("accounting.transfers.create", "Accounting", "Account Transfers", "Create", "Record and edit inter-account transfers"),
+            new("accounting.transfers.delete", "Accounting", "Account Transfers", "Delete", "Delete inter-account transfers"),
+            new("accounting.gl.manage",       "Accounting", "General Ledger", "Manage", "Enable GL posting, run backfill/rebuild and set the lock date"),
+            new("accounting.reports.view",    "Accounting", "Reports", "View", "View trial balance and AR/AP aging reports"),
+            new("accounting.dashboard.view",  "Accounting", "Dashboard", "View", "View the accounting summary dashboard"),
+
+            // Legacy data migration (admin/ops). Also gated by a non-Production
+            // environment + the LegacyDb connection string — never reachable in prod.
+            new("accounting.import.run", "Accounting", "Data Migration", "Run", "Run the legacy Data_2021 ETL into a company (non-prod only)"),
+
+            // ── Folders + Attachments (unified document management) ─────────
+            // One shared system powers the Configuration → Folders library AND
+            // the reusable attachment component on transaction modules. Folders
+            // are per-company; an attachment may sit in a folder and/or be
+            // linked to a business document (SalesQuote, Invoice, …). Download
+            // is gated by attachments.list.view — if you can list it, you can
+            // download it.
+            new("folders.list.view",          "Folders",     "List",   "View",   "View folders and their contents"),
+            new("folders.manage.create",      "Folders",     "Manage", "Create", "Create a folder"),
+            new("folders.manage.update",      "Folders",     "Manage", "Update", "Rename a folder"),
+            new("folders.manage.delete",      "Folders",     "Manage", "Delete", "Delete a folder (folder-only documents are removed)"),
+            new("attachments.list.view",      "Attachments", "List",   "View",   "View and download attachments"),
+            new("attachments.manage.upload",  "Attachments", "Manage", "Upload", "Upload an attachment"),
+            new("attachments.manage.delete",  "Attachments", "Manage", "Delete", "Delete an attachment"),
+
             // ── Bills (data entry — no FBR concerns) ────────────────────────
             // Sales is split across two screens that view the same underlying
             // bill data:
@@ -95,6 +179,12 @@ namespace MyApp.Api.Helpers
             new("bills.manage.create.standalone", "Bills", "Manage", "Create (No Challan)", "Create a bill directly without linking a delivery challan"),
             new("bills.manage.update",      "Bills", "Manage", "Update", "Edit a bill (all fields)"),
             new("bills.manage.delete",      "Bills", "Manage", "Delete", "Delete a bill"),
+            // Void is a distinct, less-destructive sibling of Delete: it keeps
+            // the bill (and its number, so the sequence stays gap-free) but
+            // marks it Cancelled and frees its challan(s) for re-billing.
+            // Separate key so a role can be allowed to void without also being
+            // trusted to hard-delete the trailing bill.
+            new("bills.manage.void",        "Bills", "Manage", "Void",   "Void (cancel) a non-submitted bill — keeps the number gap-free and reverts its delivery challan(s) to Pending"),
             new("bills.print.view",         "Bills", "Print",  "View",   "Print or download a Bill (Bill print, Bill PDF, Bill XLS)"),
 
             // ── Invoices (FBR classification + submission) ──────────────────
@@ -107,6 +197,12 @@ namespace MyApp.Api.Helpers
             // (and optionally Qty) become editable.
             new("invoices.manage.update.itemtype",     "Invoices", "Manage", "Update Item Type",       "Edit ONLY the Item Type column on a bill from the Invoices tab"),
             new("invoices.manage.update.itemtype.qty", "Invoices", "Manage", "Update Item Type + Qty", "Edit Item Type and Quantity columns on a bill from the Invoices tab"),
+            // Reverse an FBR-submitted invoice → auto-generate a Credit Note
+            // (return/reversal) or Debit Note (upward correction). The note is
+            // created unsubmitted so it can be validated then submitted like an
+            // ordinary bill. Distinct from create/void so the right to reverse a
+            // filed document is granted independently.
+            new("invoices.note.create",    "Invoices", "Manage", "Reverse (Credit/Debit Note)", "Reverse an FBR-submitted bill by generating a Credit/Debit Note (created unsubmitted, then validated + submitted to FBR)"),
             // Two granular FBR permissions — separating dry-run from real
             // submission so an operator can be allowed to validate without
             // being trusted to commit. A user with .submit but not .validate
@@ -147,6 +243,8 @@ namespace MyApp.Api.Helpers
             // pin (a low-risk, recoverable change) without also gaining
             // rights to re-upload or edit template bodies.
             new("printtemplates.manage.sheetpin", "PrintTemplates", "Manage", "Pin Data Sheet","Pin which Excel sheet the importer reads from a multi-sheet template"),
+            new("printtemplates.manage.delete",   "PrintTemplates", "Manage", "Delete",        "Delete a saved print template"),
+            new("printtemplates.starter.apply",   "PrintTemplates", "Manage", "Apply Starter", "Apply a starter design onto an existing template (replace its HTML or its whole layout)"),
 
             // ── FBR Configuration ───────────────────────────────────────────
             new("fbr.config.view",         "FBR", "Config", "View",   "View FBR configuration and credentials"),
@@ -192,12 +290,21 @@ namespace MyApp.Api.Helpers
             new("goodsreceipts.manage.create", "GoodsReceipts", "Manage", "Create", "Create a goods-receipt note"),
             new("goodsreceipts.manage.update", "GoodsReceipts", "Manage", "Update", "Edit a goods-receipt note"),
             new("goodsreceipts.manage.delete", "GoodsReceipts", "Manage", "Delete", "Delete a goods-receipt note"),
+            new("goodsreceipts.print.view",    "GoodsReceipts", "Print",  "View",   "Print or download goods-receipt notes"),
 
             // ── Inventory / Stock ───────────────────────────────────────────
             new("stock.dashboard.view",     "Inventory", "Dashboard",       "View",   "View on-hand stock dashboard"),
             new("stock.movements.view",     "Inventory", "Movements",       "View",   "View the stock-movement audit log"),
             new("stock.opening.manage",     "Inventory", "Opening Balance", "Manage", "Set or edit opening stock balance per item"),
             new("stock.adjust.create",      "Inventory", "Adjustment",      "Create", "Record a stock adjustment (count correction, write-off)"),
+            new("stock.policy.manage",      "Inventory", "Policy",          "Manage", "Switch a company's inventory tracking version (V1 legacy ⇄ V2) — reversible, audited"),
+            new("stock.overcommit.allow",   "Inventory", "Over-commit",     "Allow",  "Override the availability hard-block and knowingly over-commit / oversell stock"),
+
+            // ── Reports ─────────────────────────────────────────────────────
+            new("reports.sales.view",       "Reports", "Sales", "View",   "View the Sales report (FBR-submitted invoices grouped by date, monthly/yearly)"),
+            new("reports.sales.export",     "Reports", "Sales", "Export", "Export the Sales report to CSV/Excel"),
+            new("reports.taxsheet.view",    "Reports", "Tax Sheet", "View",   "View the Tax Sheet (invoice lines still missing a valid HS code, for the tax consultant)"),
+            new("reports.taxsheet.export",  "Reports", "Tax Sheet", "Export", "Export the Tax Sheet to Excel"),
 
             // ── Audit Logs ──────────────────────────────────────────────────
             new("auditlogs.view",          "AuditLogs", "View", "View", "View application audit/exception logs"),
@@ -221,6 +328,17 @@ namespace MyApp.Api.Helpers
                 "View user → company tenant-access assignments"),
             new("tenantaccess.manage.assign", "Tenant Access", "Manage", "Assign",
                 "Grant or revoke a user's access to specific companies"),
+            // ── Division Access (user → division assignments) ────────────────
+            // The layer below Tenant Access: within a company the user can
+            // reach, optionally restrict them to specific divisions
+            // (UserCompany.RestrictToDivisions + UserDivision rows, enforced
+            // by IDivisionAccessGuard). Separate keys from tenantaccess.* so a
+            // company-level admin role can delegate division assignment
+            // without the power to open whole companies.
+            new("divisionaccess.manage.view",   "Division Access", "Manage", "View",
+                "View user → division access assignments"),
+            new("divisionaccess.manage.assign", "Division Access", "Manage", "Assign",
+                "Restrict a user to specific divisions, or lift the restriction"),
             // Audit H-1 (2026-05-13): flipping Company.IsTenantIsolated
             // changes who passes the access guard for that company. Carve
             // it out from generic companies.manage.update so a regular

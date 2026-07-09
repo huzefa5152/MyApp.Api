@@ -1,110 +1,33 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+﻿import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   MdCode, MdBusiness, MdSave, MdRefresh, MdContentCopy,
   MdVisibility, MdEdit as MdEditIcon, MdBrush,
-  MdUploadFile, MdDelete, MdGridOn,
+  MdUploadFile, MdDelete, MdGridOn, MdDescription, MdArrowBack,
 } from "react-icons/md";
 import {
-  getTemplate, upsertTemplate, getMergeFields,
-  uploadExcelTemplate, deleteExcelTemplate, setExcelSheetName as setExcelSheetNameApi,
+  getMergeFields, getTemplatesByCompany,
+  createTemplate, updateTemplateById, setDefaultTemplate, deleteTemplate,
+  uploadExcelTemplateById, setExcelSheetNameById, deleteExcelTemplateById,
 } from "../api/printTemplateApi";
+import { getDivisionsByCompany } from "../api/divisionApi";
 import { useCompany } from "../contexts/CompanyContext";
-import { mergeTemplate } from "../utils/templateEngine";
 import {
-  defaultChallanTemplate, defaultBillTemplate, defaultTaxInvoiceTemplate,
-} from "../utils/defaultTemplates";
+  TEMPLATE_TYPES, DEFAULT_TEMPLATES, buildTemplatePreviewHtml,
+} from "../utils/templateSampleData";
 import { dropdownStyles } from "../theme";
 import CodeEditor from "../Components/templateEditor/CodeEditor";
 import MergeFieldSidebar from "../Components/templateEditor/MergeFieldSidebar";
 import PreviewPane from "../Components/templateEditor/PreviewPane";
 import SyncWarningModal from "../Components/templateEditor/SyncWarningModal";
 import VisualEditor from "../Components/templateEditor/VisualEditor";
-import StarterTemplatePicker from "../Components/templateEditor/StarterTemplatePicker";
+import StarterGallery from "../Components/templateEditor/StarterGallery";
+import ApplyStarterModal from "../Components/templateEditor/ApplyStarterModal";
+import SavedTemplatesManager from "../Components/templateEditor/SavedTemplatesManager";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { MdLock } from "react-icons/md";
 
-const TEMPLATE_TYPES = [
-  { value: "Challan", label: "Delivery Challan" },
-  { value: "Bill", label: "Bill / Invoice" },
-  { value: "TaxInvoice", label: "Sales Tax Invoice" },
-];
-
-const SAMPLE_DATA = {
-  Challan: {
-    companyBrandName: "SAMPLE COMPANY",
-    companyLogoPath: "",
-    companyAddress: "123 Business Street,\nCity, Country",
-    companyPhone: "Contact Person\n0300-1234567",
-    challanNumber: 1001,
-    deliveryDate: new Date().toISOString(),
-    clientName: "Sample Client Pvt Ltd",
-    clientAddress: "Client Address",
-    poNumber: "PO-2025-001",
-    items: [
-      { quantity: 10, description: "Sample Item One" },
-      { quantity: 5, description: "Sample Item Two" },
-      { quantity: 8, description: "Sample Item Three" },
-    ],
-  },
-  Bill: {
-    companyBrandName: "SAMPLE COMPANY",
-    companyLogoPath: "",
-    companyAddress: "123 Business Street, City",
-    companyPhone: "0300-1234567",
-    companyNTN: "1234567-8",
-    companySTRN: "1234567890123",
-    invoiceNumber: 501,
-    date: new Date().toISOString(),
-    challanNumbers: [1001, 1002],
-    challanDates: [new Date().toISOString()],
-    poNumber: "PO-2025-001",
-    poDate: new Date().toISOString(),
-    clientName: "Sample Client Pvt Ltd",
-    clientNTN: "9876543-2",
-    clientSTRN: "9876543210987",
-    concernDepartment: "Main Office",
-    subtotal: 150000,
-    gstRate: 18,
-    gstAmount: 27000,
-    grandTotal: 177000,
-    amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
-    items: [
-      { sNo: 1, quantity: 10, description: "Sample Item One", itemTypeName: "Pneumatic", unitPrice: 8000, lineTotal: 80000 },
-      { sNo: 2, quantity: 5, description: "Sample Item Two", itemTypeName: "Pneumatic", unitPrice: 14000, lineTotal: 70000 },
-    ],
-  },
-  TaxInvoice: {
-    supplierName: "SAMPLE COMPANY",
-    supplierAddress: "123 Business Street, City",
-    supplierPhone: "0300-1234567",
-    supplierNTN: "1234567-8",
-    supplierSTRN: "1234567890123",
-    buyerName: "Sample Client Pvt Ltd",
-    buyerAddress: "Client Address, City",
-    buyerNTN: "9876543-2",
-    buyerSTRN: "9876543210987",
-    invoiceNumber: 501,
-    date: new Date().toISOString(),
-    challanNumbers: [1001, 1002],
-    poNumber: "PO-2025-001",
-    subtotal: 150000,
-    gstRate: 18,
-    gstAmount: 27000,
-    grandTotal: 177000,
-    amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
-    items: [
-      { quantity: 10, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", valueExclTax: 80000, gstRate: 18, gstAmount: 14400, totalInclTax: 94400 },
-      { quantity: 5, uom: "Pcs", description: "Sample Item Two", itemTypeName: "Hydraulic", valueExclTax: 70000, gstRate: 18, gstAmount: 12600, totalInclTax: 82600 },
-    ],
-  },
-};
-
-const DEFAULT_TEMPLATES = {
-  Challan: defaultChallanTemplate,
-  Bill: defaultBillTemplate,
-  TaxInvoice: defaultTaxInvoiceTemplate,
-};
 
 const colors = {
   blue: "#0d47a1",
@@ -117,11 +40,15 @@ const colors = {
 
 export default function TemplateEditorPage() {
   const confirm = useConfirm();
+  const navigate = useNavigate();
   const { has } = usePermissions();
   const canManage = has("printtemplates.manage.update");
   const canSheetPin = has("printtemplates.manage.sheetpin");
+  const canDelete = has("printtemplates.manage.delete");
+  const canApplyStarter = has("printtemplates.starter.apply");
+  const [showApplyStarter, setShowApplyStarter] = useState(false);
   const { companies, selectedCompany, setSelectedCompany, loading } = useCompany();
-  const [templateType, setTemplateType] = useState("Challan");
+  const [templateType, setTemplateType] = useState(() => localStorage.getItem("te.type") || "Challan");
   const [htmlContent, setHtmlContent] = useState("");
   const [originalContent, setOriginalContent] = useState("");
   const [templateJson, setTemplateJson] = useState(null);
@@ -132,6 +59,16 @@ export default function TemplateEditorPage() {
   const [toast, setToast] = useState(null);
   const [showSyncWarning, setShowSyncWarning] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [showManager, setShowManager] = useState(false);
+  const [managerBusy, setManagerBusy] = useState(false);
+  // Scope = company-wide (scopeDivisionId === null) or a specific division.
+  const [divisions, setDivisions] = useState([]);
+  const [scopeDivisionId, setScopeDivisionId] = useState(null);
+  // Full template list for the company (each item carries its html/json/excel info,
+  // so the editor populates straight from here â€” no per-id fetch).
+  const [allTemplates, setAllTemplates] = useState([]);
+  const [currentTemplateId, setCurrentTemplateId] = useState(null);
+  const [currentTemplateName, setCurrentTemplateName] = useState("Default");
   const [fields, setFields] = useState([]);
   const [hasExcel, setHasExcel] = useState(false);
   const [excelUploading, setExcelUploading] = useState(false);
@@ -140,13 +77,28 @@ export default function TemplateEditorPage() {
   const [excelSheetName, setExcelSheetName] = useState(null);
   // All sheets present in the uploaded workbook (for the picker dropdown).
   const [excelSheetNames, setExcelSheetNames] = useState([]);
-  // Set while a POST to save the sheet pin is in flight — disables the
+  // Set while a POST to save the sheet pin is in flight â€” disables the
   // dropdown to prevent double-submits.
   const [sheetSaving, setSheetSaving] = useState(false);
   const excelInputRef = useRef(null);
   const htmlImportRef = useRef(null);
   const codeEditorRef = useRef(null);
   const visualEditorRef = useRef(null);
+  // Mirrors currentTemplateId for use inside async refresh callbacks without
+  // adding it as an effect dependency (avoids re-populate loops).
+  const currentTemplateIdRef = useRef(null);
+
+  // Captured ONCE at mount (before the persist effects below can overwrite
+  // localStorage) so a page reload restores the last scope + template. Restore
+  // is gated on the saved company matching the restored company, and is
+  // consumed after the first company-load â€” so a deliberate company switch
+  // resets to company-wide rather than restoring a stale division/template.
+  const initialRestoreRef = useRef({
+    companyId: Number(localStorage.getItem("te.companyId")) || null,
+    scope: (() => { const s = localStorage.getItem("te.scopeDivisionId"); return (s == null || s === "") ? null : Number(s); })(),
+    templateId: Number(localStorage.getItem("te.templateId")) || null,
+    consumed: false,
+  });
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -169,33 +121,134 @@ export default function TemplateEditorPage() {
     })();
   }, [templateType]);
 
-  // Fetch template when company/type changes
+  // Persist the editor's selections so a page reload restores them (the company
+  // is already restored globally by CompanyContext; these add type + scope +
+  // template on top). The restore reads via initialRestoreRef (captured at
+  // mount), so these writes can't clobber it.
+  useEffect(() => { localStorage.setItem("te.type", templateType); }, [templateType]);
   useEffect(() => {
     if (!selectedCompany) return;
+    localStorage.setItem("te.companyId", String(selectedCompany.id));
+    localStorage.setItem("te.scopeDivisionId", scopeDivisionId == null ? "" : String(scopeDivisionId));
+    if (currentTemplateId != null) localStorage.setItem("te.templateId", String(currentTemplateId));
+    else localStorage.removeItem("te.templateId");
+  }, [selectedCompany?.id, scopeDivisionId, currentTemplateId]);
+
+  // â”€â”€ Scope + multi-template helpers â”€â”€
+
+  // Populate the editor from a template DTO (or seed a blank default for an empty scope).
+  // keepTab leaves the Editor/Preview tab as-is (so switching templates while previewing
+  // keeps you in preview to compare); callers that change type/scope reset to the editor.
+  const populateEditor = (tpl, type, keepTab = false) => {
+    if (tpl) {
+      currentTemplateIdRef.current = tpl.id;
+      setCurrentTemplateId(tpl.id);
+      setCurrentTemplateName(tpl.name || "Default");
+      setHtmlContent(tpl.htmlContent || "");
+      setOriginalContent(tpl.htmlContent || "");
+      setTemplateJson(tpl.templateJson || null);
+      setOriginalJson(tpl.templateJson || null);
+      setEditorMode(tpl.editorMode || "code");
+      setHasExcel(tpl.hasExcelTemplate || false);
+      setExcelSheetName(tpl.excelSheetName || null);
+      setExcelSheetNames(tpl.excelSheetNames || []);
+    } else {
+      const def = DEFAULT_TEMPLATES[type] || "";
+      currentTemplateIdRef.current = null;
+      setCurrentTemplateId(null);
+      setCurrentTemplateName("Default");
+      setHtmlContent(def);
+      setOriginalContent("");   // empty scope â†’ show as unsaved so Save creates the first template
+      setTemplateJson(null);
+      setOriginalJson(null);
+      setEditorMode("code");
+      setHasExcel(false);
+      setExcelSheetName(null);
+      setExcelSheetNames([]);
+    }
+    if (!keepTab) setActiveTab("editor");
+  };
+
+  // Pick + load the right template for (type, scope): prefer a specific id, else the
+  // scope default, else the first, else seed a blank.
+  const loadScope = (list, type, divId, preferId = null) => {
+    const inScope = list.filter(
+      (t) => t.templateType === type && (t.divisionId ?? null) === (divId ?? null)
+    );
+    const pick =
+      (preferId != null && inScope.find((t) => t.id === preferId)) ||
+      inScope.find((t) => t.isDefault) ||
+      inScope[0] ||
+      null;
+    populateEditor(pick, type);
+  };
+
+  // Refetch the company's templates and re-load the current scope (used after
+  // create/duplicate/rename/delete/set-default so default badges stay accurate).
+  const refreshTemplates = async (preferId) => {
+    if (!selectedCompany) return [];
+    const { data } = await getTemplatesByCompany(selectedCompany.id);
+    const list = data || [];
+    setAllTemplates(list);
+    loadScope(list, templateType, scopeDivisionId,
+      preferId !== undefined ? preferId : currentTemplateIdRef.current);
+    return list;
+  };
+
+  // Load divisions + all templates when the company changes; reset to company-wide scope.
+  useEffect(() => {
+    if (!selectedCompany) return;
+    let cancelled = false;
     (async () => {
       try {
-        const { data } = await getTemplate(selectedCompany.id, templateType);
-        setHtmlContent(data.htmlContent);
-        setOriginalContent(data.htmlContent);
-        setTemplateJson(data.templateJson || null);
-        setOriginalJson(data.templateJson || null);
-        setEditorMode(data.editorMode || "code");
-        setHasExcel(data.hasExcelTemplate || false);
-        setExcelSheetName(data.excelSheetName || null);
-        setExcelSheetNames(data.excelSheetNames || []);
-        setActiveTab("editor");
+        const [tplRes, divRes] = await Promise.all([
+          getTemplatesByCompany(selectedCompany.id),
+          getDivisionsByCompany(selectedCompany.id).catch(() => ({ data: [] })),
+        ]);
+        if (cancelled) return;
+        const list = tplRes.data || [];
+        const divs = divRes.data || [];
+        setDivisions(divs);
+        setAllTemplates(list);
+        // Restore the last scope + template on a same-company reload; reset to
+        // company-wide on a deliberate company switch (ref consumed after the
+        // first company-load, and only honoured when the saved company matches).
+        let scope = null, preferId = null;
+        const r = initialRestoreRef.current;
+        if (!r.consumed && r.companyId === selectedCompany.id) {
+          if (r.scope != null && divs.some((d) => d.id === r.scope)) scope = r.scope;
+          if (r.templateId) preferId = r.templateId;
+        }
+        r.consumed = true;
+        setScopeDivisionId(scope);
+        loadScope(list, templateType, scope, preferId);
       } catch {
-        const def = DEFAULT_TEMPLATES[templateType] || "";
-        setHtmlContent(def);
-        setOriginalContent("");
-        setTemplateJson(null);
-        setOriginalJson(null);
-        setEditorMode("code");
-        setHasExcel(false);
-        setActiveTab("editor");
+        if (cancelled) return;
+        initialRestoreRef.current.consumed = true;
+        setDivisions([]);
+        setAllTemplates([]);
+        setScopeDivisionId(null);
+        populateEditor(null, templateType);
       }
     })();
-  }, [selectedCompany, templateType]);
+    return () => { cancelled = true; };
+    // templateType intentionally omitted â€” type changes are handled by handleTypeChange
+    // (no company refetch needed); only a company switch reloads the list here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCompany?.id]);
+
+  // Switch template type without refetching the company list.
+  const handleTypeChange = (newType) => {
+    setTemplateType(newType);
+    loadScope(allTemplates, newType, scopeDivisionId);
+  };
+
+  // Switch scope (company-wide / division) within the current type.
+  const handleScopeChange = (rawValue) => {
+    const divId = rawValue === "" || rawValue == null ? null : Number(rawValue);
+    setScopeDivisionId(divId);
+    loadScope(allTemplates, templateType, divId);
+  };
 
   const handleSave = async () => {
     if (!selectedCompany) return;
@@ -210,7 +263,25 @@ export default function TemplateEditorPage() {
         saveJson = JSON.stringify(visualEditorRef.current.getProjectData());
       }
 
-      await upsertTemplate(selectedCompany.id, templateType, saveHtml, saveJson, editorMode);
+      if (currentTemplateId) {
+        await updateTemplateById(currentTemplateId, {
+          name: currentTemplateName, htmlContent: saveHtml, templateJson: saveJson, editorMode,
+        });
+        // Keep the cached copy fresh so re-opening it from the manager shows latest content.
+        setAllTemplates((prev) => prev.map((t) =>
+          t.id === currentTemplateId ? { ...t, htmlContent: saveHtml, templateJson: saveJson, editorMode } : t));
+      } else {
+        // Empty scope â†’ create the first template (server forces it default).
+        const { data } = await createTemplate(selectedCompany.id, {
+          templateType, divisionId: scopeDivisionId, name: currentTemplateName || "Default",
+          htmlContent: saveHtml, templateJson: saveJson, editorMode, isDefault: true,
+        });
+        currentTemplateIdRef.current = data.id;
+        setCurrentTemplateId(data.id);
+        setCurrentTemplateName(data.name);
+        setAllTemplates((prev) => [...prev.filter((t) => t.id !== data.id), data]);
+      }
+
       setHtmlContent(saveHtml);
       setTemplateJson(saveJson);
       setOriginalContent(saveHtml);
@@ -259,39 +330,167 @@ export default function TemplateEditorPage() {
     setActiveTab("editor");
   };
 
-  const handleSelectStarter = async (template) => {
-    if (htmlContent && htmlContent !== DEFAULT_TEMPLATES[templateType]) {
-      const ok = await confirm({ title: "Replace Template?", message: "This will replace your current template. Any unsaved changes will be lost.", variant: "warning", confirmText: "Replace" });
-      if (!ok) return;
-    }
-    setHtmlContent(template.html);
-    setTemplateJson(null);
-    setEditorMode("code");
-    setActiveTab("editor");
+  // Starter pick â†’ create a NEW template in the current scope from the starter
+  // design (server forces default only when it's the first in the scope).
+  const handleSelectStarter = async (starter) => {
+    if (!selectedCompany) return;
     setShowTemplatePicker(false);
-    showToast(`Loaded "${template.name}" template`);
+    setManagerBusy(true);
+    try {
+      const { data } = await createTemplate(selectedCompany.id, {
+        templateType, divisionId: scopeDivisionId, name: starter.name,
+        htmlContent: starter.html, isDefault: false,
+      });
+      await refreshTemplates(data.id);
+      showToast(`Created "${data.name}" from starter`);
+    } catch {
+      showToast("Failed to create template from starter", "error");
+    } finally {
+      setManagerBusy(false);
+    }
+  };
+
+  // â”€â”€ Saved-templates manager actions â”€â”€
+
+  // Switch the active template (from the header dropdown or the manager). Guards
+  // unsaved edits, preserves the current Editor/Preview tab. Returns true if switched.
+  const handleTemplateSelect = async (id) => {
+    if (id === currentTemplateId) return true;
+    const tpl = allTemplates.find((t) => t.id === id);
+    if (!tpl) return false;
+    const dirty = htmlContent !== originalContent || templateJson !== originalJson;
+    if (dirty) {
+      const ok = await confirm({
+        title: "Switch template?",
+        message: "You have unsaved changes that will be discarded if you switch.",
+        variant: "warning",
+        confirmText: "Discard & switch",
+      });
+      if (!ok) return false;
+    }
+    populateEditor(tpl, templateType, true);
+    return true;
+  };
+
+  const handleManagerSelect = async (id) => {
+    const switched = await handleTemplateSelect(id);
+    if (switched) setShowManager(false);
+  };
+
+  const handleSetDefault = async (id) => {
+    setManagerBusy(true);
+    try {
+      await setDefaultTemplate(id);
+      await refreshTemplates(currentTemplateIdRef.current);
+      showToast("Default template updated");
+    } catch {
+      showToast("Failed to set default", "error");
+    } finally {
+      setManagerBusy(false);
+    }
+  };
+
+  const handleDuplicate = async (tpl) => {
+    setManagerBusy(true);
+    try {
+      const { data } = await createTemplate(selectedCompany.id, {
+        templateType, divisionId: scopeDivisionId, name: `${tpl.name} (copy)`,
+        htmlContent: tpl.htmlContent, templateJson: tpl.templateJson, editorMode: tpl.editorMode,
+        isDefault: false,
+      });
+      await refreshTemplates(data.id);
+      showToast("Template duplicated");
+    } catch {
+      showToast("Failed to duplicate template", "error");
+    } finally {
+      setManagerBusy(false);
+    }
+  };
+
+  const handleRename = async (id, name) => {
+    setManagerBusy(true);
+    try {
+      const tpl = allTemplates.find((t) => t.id === id);
+      await updateTemplateById(id, {
+        name, htmlContent: tpl?.htmlContent ?? "", templateJson: tpl?.templateJson, editorMode: tpl?.editorMode,
+      });
+      if (id === currentTemplateIdRef.current) setCurrentTemplateName(name);
+      await refreshTemplates(currentTemplateIdRef.current);
+      showToast("Template renamed");
+    } catch {
+      showToast("Failed to rename template", "error");
+    } finally {
+      setManagerBusy(false);
+    }
+  };
+
+  const handleManagerDelete = async (id) => {
+    const ok = await confirm({ title: "Delete Template?", message: "Delete this saved template? This cannot be undone.", variant: "danger", confirmText: "Delete" });
+    if (!ok) return;
+    setManagerBusy(true);
+    try {
+      await deleteTemplate(id);
+      // If we deleted the open one, let the scope re-pick its default/first.
+      const prefer = id === currentTemplateIdRef.current ? null : currentTemplateIdRef.current;
+      await refreshTemplates(prefer);
+      showToast("Template deleted");
+    } catch {
+      showToast("Failed to delete template", "error");
+    } finally {
+      setManagerBusy(false);
+    }
+  };
+
+  const handleNewBlank = async (name) => {
+    if (!selectedCompany) return;
+    setManagerBusy(true);
+    try {
+      const { data } = await createTemplate(selectedCompany.id, {
+        templateType, divisionId: scopeDivisionId, name,
+        htmlContent: DEFAULT_TEMPLATES[templateType] || "", isDefault: false,
+      });
+      await refreshTemplates(data.id);
+      setShowManager(false);
+      showToast(`Created "${data.name}"`);
+    } catch {
+      showToast("Failed to create template", "error");
+    } finally {
+      setManagerBusy(false);
+    }
+  };
+
+  const handleNewFromStarter = () => {
+    setShowManager(false);
+    setShowTemplatePicker(true);
   };
 
   // Upload the file as-is, no sheet pin. The vast majority of historical
   // challan exports are single-sheet, so forcing the operator to pick at
   // upload time would be friction for zero benefit. If the workbook has
   // multiple sheets, the post-upload dropdown on the Excel Template Bar
-  // lets the operator pin a specific sheet — the importer's smart
-  // resolver (sheet-name match → score-based → sheet 0) already handles
+  // lets the operator pin a specific sheet â€” the importer's smart
+  // resolver (sheet-name match â†’ score-based â†’ sheet 0) already handles
   // the common multi-sheet case automatically.
   const handleExcelUpload = async (e) => {
     const file = e.target.files?.[0];
     if (excelInputRef.current) excelInputRef.current.value = "";
     if (!file || !selectedCompany) return;
+    if (!currentTemplateId) {
+      showToast("Save this template first, then upload an Excel template.", "error");
+      return;
+    }
     setExcelUploading(true);
     try {
-      const { data } = await uploadExcelTemplate(selectedCompany.id, templateType, file, null);
+      const { data } = await uploadExcelTemplateById(currentTemplateId, file, null);
       setHasExcel(true);
       setExcelSheetName(data.excelSheetName || null);
       setExcelSheetNames(data.excelSheetNames || []);
+      setAllTemplates((prev) => prev.map((t) => t.id === currentTemplateId
+        ? { ...t, hasExcelTemplate: true, excelSheetName: data.excelSheetName || null, excelSheetNames: data.excelSheetNames || [] }
+        : t));
       const sheetCount = (data.excelSheetNames || []).length;
       if (sheetCount > 1) {
-        showToast(`Excel template uploaded — ${sheetCount} sheets detected, pin one in the Data sheet dropdown if needed.`);
+        showToast(`Excel template uploaded â€” ${sheetCount} sheets detected, pin one in the Data sheet dropdown if needed.`);
       } else {
         showToast("Excel template uploaded!");
       }
@@ -304,13 +503,13 @@ export default function TemplateEditorPage() {
 
   // Save a new sheet pin against an already-uploaded template.
   const handleSheetChange = async (next) => {
-    if (!selectedCompany) return;
+    if (!currentTemplateId) return;
     const value = next || null;
     setSheetSaving(true);
     try {
-      await setExcelSheetNameApi(selectedCompany.id, templateType, value);
+      await setExcelSheetNameById(currentTemplateId, value);
       setExcelSheetName(value);
-      showToast(value ? `Pinned sheet "${value}".` : "Sheet pin cleared — auto-detect on.");
+      showToast(value ? `Pinned sheet "${value}".` : "Sheet pin cleared â€” auto-detect on.");
     } catch (err) {
       showToast(err.response?.data?.error || "Failed to update sheet name.", "error");
     } finally {
@@ -319,12 +518,13 @@ export default function TemplateEditorPage() {
   };
 
   const handleExcelDelete = async () => {
-    if (!selectedCompany) return;
-    const ok = await confirm({ title: "Remove Excel Template?", message: "Remove the Excel template for this type? This cannot be undone.", variant: "danger", confirmText: "Remove" });
+    if (!currentTemplateId) return;
+    const ok = await confirm({ title: "Remove Excel Template?", message: "Remove the Excel template for this template? This cannot be undone.", variant: "danger", confirmText: "Remove" });
     if (!ok) return;
     try {
-      await deleteExcelTemplate(selectedCompany.id, templateType);
+      await deleteExcelTemplateById(currentTemplateId);
       setHasExcel(false);
+      setAllTemplates((prev) => prev.map((t) => t.id === currentTemplateId ? { ...t, hasExcelTemplate: false } : t));
       showToast("Excel template removed");
     } catch {
       showToast("Failed to remove Excel template", "error");
@@ -373,15 +573,16 @@ export default function TemplateEditorPage() {
     [htmlContent, editorMode]
   );
 
+  // Branding-enriched live preview via the shared builder (same merge the
+  // gallery + apply-starter comparison use, so previews match everywhere).
   const previewHtml = (() => {
-    try {
-      const src = editorMode === "visual" && visualEditorRef.current
-        ? visualEditorRef.current.getHtml()
-        : htmlContent;
-      return mergeTemplate(src, SAMPLE_DATA[templateType]);
-    } catch (e) {
-      return `<div style="color:red;padding:20px;font-family:sans-serif"><h3>Template Error</h3><pre>${e.message}</pre></div>`;
-    }
+    const src = editorMode === "visual" && visualEditorRef.current
+      ? visualEditorRef.current.getHtml()
+      : htmlContent;
+    const scopeDiv = scopeDivisionId != null
+      ? divisions.find((d) => d.id === scopeDivisionId)
+      : null;
+    return buildTemplatePreviewHtml(templateType, src, { company: selectedCompany, division: scopeDiv });
   })();
 
   const hasChanges = htmlContent !== originalContent || templateJson !== originalJson;
@@ -416,6 +617,15 @@ export default function TemplateEditorPage() {
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
+  // Templates in the current (type, scope) â€” drives the Saved-Templates manager.
+  const scopeTemplates = allTemplates.filter(
+    (t) => t.templateType === templateType && (t.divisionId ?? null) === (scopeDivisionId ?? null)
+  );
+  const scopeLabel = scopeDivisionId == null
+    ? "Company-wide"
+    : (divisions.find((d) => d.id === scopeDivisionId)?.name || "Division");
+  const templateTypeLabel = TEMPLATE_TYPES.find((t) => t.value === templateType)?.label || templateType;
+
   return (
     <div style={{ height: "calc(100vh - 80px)", display: "flex", flexDirection: "column", gap: "0" }}>
       {/* Toast */}
@@ -439,18 +649,66 @@ export default function TemplateEditorPage() {
         />
       )}
 
-      {/* Starter Template Picker */}
+      {/* Starter gallery — create a NEW template from a starter (manager's "From starter"). */}
       {showTemplatePicker && (
-        <StarterTemplatePicker
-          templateType={templateType}
-          onSelect={handleSelectStarter}
+        <StarterGallery
+          lockType={templateType}
+          selectLabel="Create from this"
+          onSelect={(starter) => { setShowTemplatePicker(false); handleSelectStarter(starter); }}
           onClose={() => setShowTemplatePicker(false)}
+        />
+      )}
+
+      {/* Apply a starter onto the CURRENTLY-OPEN template (replace HTML / everything). */}
+      {showApplyStarter && currentTemplateId && (
+        <ApplyStarterModal
+          template={{
+            id: currentTemplateId,
+            name: currentTemplateName,
+            templateType,
+            htmlContent,
+            divisionName: scopeDivisionId != null ? (divisions.find((d) => d.id === scopeDivisionId)?.name) : null,
+          }}
+          division={scopeDivisionId != null ? divisions.find((d) => d.id === scopeDivisionId) : null}
+          onClose={() => setShowApplyStarter(false)}
+          onApplied={async (updated) => {
+            setShowApplyStarter(false);
+            await refreshTemplates(updated.id);
+            populateEditor(updated, updated.templateType, false);
+          }}
+        />
+      )}
+
+      {/* Saved Templates Manager */}
+      {showManager && (
+        <SavedTemplatesManager
+          templateTypeLabel={templateTypeLabel}
+          scopeLabel={scopeLabel}
+          templates={scopeTemplates}
+          currentTemplateId={currentTemplateId}
+          canDelete={canDelete}
+          busy={managerBusy}
+          onSelect={handleManagerSelect}
+          onSetDefault={handleSetDefault}
+          onDuplicate={handleDuplicate}
+          onRename={handleRename}
+          onDelete={handleManagerDelete}
+          onNewBlank={handleNewBlank}
+          onNewFromStarter={handleNewFromStarter}
+          onClose={() => setShowManager(false)}
         />
       )}
 
       {/* Top Bar */}
       <div style={styles.topBar}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <button
+            onClick={() => navigate("/templates")}
+            title="Back to Print Templates"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, borderRadius: 8, padding: isMobile ? "0.3rem 0.5rem" : "0.4rem 0.7rem", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+          >
+            <MdArrowBack size={16} /> {isMobile ? "" : "Templates"}
+          </button>
           <div style={{ ...styles.headerIcon, ...(isMobile ? { width: 34, height: 34, borderRadius: 8 } : {}) }}>
             <MdCode size={isMobile ? 18 : 24} color="#fff" />
           </div>
@@ -467,25 +725,71 @@ export default function TemplateEditorPage() {
         </div>
 
         {isMobile ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", width: "100%" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <MdBusiness size={16} color={colors.blue} style={{ flexShrink: 0 }} />
-              <select
-                style={{ ...dropdownStyles.base, minWidth: 0, flex: 1, fontSize: "0.82rem" }}
-                value={selectedCompany?.id || ""}
-                onChange={(e) => setSelectedCompany(companies.find(c => c.id === parseInt(e.target.value)))}
-              >
-                {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-              </select>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", width: "100%" }}>
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Company</label>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <MdBusiness size={16} color={colors.blue} style={{ flexShrink: 0 }} />
+                <select
+                  style={{ ...dropdownStyles.base, minWidth: 0, flex: 1, fontSize: "0.82rem" }}
+                  value={selectedCompany?.id || ""}
+                  onChange={(e) => setSelectedCompany(companies.find(c => c.id === parseInt(e.target.value)))}
+                >
+                  {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
+              <div style={{ ...styles.fieldGroup, flex: 1, minWidth: 0 }}>
+                <label style={styles.fieldLabel}>Document Type</label>
+                <select
+                  style={{ ...dropdownStyles.base, minWidth: 0, width: "100%", fontSize: "0.82rem" }}
+                  value={templateType}
+                  onChange={(e) => handleTypeChange(e.target.value)}
+                >
+                  {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+              {divisions.length > 0 && (
+                <div style={{ ...styles.fieldGroup, flex: 1, minWidth: 0 }}>
+                  <label style={styles.fieldLabel}>Scope</label>
+                  <select
+                    style={{ ...dropdownStyles.base, minWidth: 0, width: "100%", fontSize: "0.82rem" }}
+                    value={scopeDivisionId ?? ""}
+                    onChange={(e) => handleScopeChange(e.target.value)}
+                    title="Template scope"
+                  >
+                    <option value="">Company-wide</option>
+                    {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Template</label>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <MdDescription size={15} color={colors.blue} style={{ flexShrink: 0 }} />
+                <select
+                  style={{ ...dropdownStyles.base, minWidth: 0, flex: 1, fontSize: "0.82rem" }}
+                  value={currentTemplateId ?? ""}
+                  onChange={(e) => { if (e.target.value) handleTemplateSelect(Number(e.target.value)); }}
+                  disabled={scopeTemplates.length === 0}
+                  title="Saved template"
+                >
+                  {scopeTemplates.length === 0 && <option value="">New template (unsaved)</option>}
+                  {scopeTemplates.map((t) => <option key={t.id} value={t.id}>{t.isDefault ? `â˜… ${t.name}` : t.name}</option>)}
+                </select>
+              </div>
             </div>
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <select
-                style={{ ...dropdownStyles.base, minWidth: 0, flex: 1, fontSize: "0.82rem" }}
-                value={templateType}
-                onChange={(e) => setTemplateType(e.target.value)}
-              >
-                {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+              <button style={{ ...styles.btn, ...styles.btnOutline, padding: "0.4rem 0.6rem", fontSize: "0.78rem", flex: 1, justifyContent: "center" }} onClick={() => setShowManager(true)} title="Saved templates">
+                <MdContentCopy size={14} /> Templates
+              </button>
+              {canApplyStarter && currentTemplateId && (
+                <button style={{ ...styles.btn, ...styles.btnOutline, padding: "0.4rem 0.6rem", fontSize: "0.78rem", flexShrink: 0 }} onClick={() => setShowApplyStarter(true)} title="Apply a starter design onto this template">
+                  <MdBrush size={14} /> Starter
+                </button>
+              )}
               <button style={{ ...styles.btn, ...styles.btnOutline, padding: "0.4rem 0.6rem", fontSize: "0.78rem", flexShrink: 0 }} onClick={handleReset} title="Reset to default">
                 <MdRefresh size={14} /> Reset
               </button>
@@ -500,24 +804,63 @@ export default function TemplateEditorPage() {
             {hasChanges && <span style={{ fontSize: "0.75rem", color: "#e65100", fontWeight: 600 }}>Unsaved changes</span>}
           </div>
         ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <MdBusiness size={18} color={colors.blue} />
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "0.75rem", flexWrap: "wrap" }}>
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Company</label>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <MdBusiness size={18} color={colors.blue} style={{ flexShrink: 0 }} />
+                <select
+                  style={{ ...dropdownStyles.base, minWidth: "180px" }}
+                  value={selectedCompany?.id || ""}
+                  onChange={(e) => setSelectedCompany(companies.find(c => c.id === parseInt(e.target.value)))}
+                >
+                  {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Document Type</label>
               <select
                 style={{ ...dropdownStyles.base, minWidth: "180px" }}
-                value={selectedCompany?.id || ""}
-                onChange={(e) => setSelectedCompany(companies.find(c => c.id === parseInt(e.target.value)))}
+                value={templateType}
+                onChange={(e) => handleTypeChange(e.target.value)}
               >
-                {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
+                {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
-            <select
-              style={{ ...dropdownStyles.base, minWidth: "180px" }}
-              value={templateType}
-              onChange={(e) => setTemplateType(e.target.value)}
-            >
-              {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
+
+            {divisions.length > 0 && (
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>Scope</label>
+                <select
+                  style={{ ...dropdownStyles.base, minWidth: "170px" }}
+                  value={scopeDivisionId ?? ""}
+                  onChange={(e) => handleScopeChange(e.target.value)}
+                  title="Template scope â€” Company-wide or a specific division"
+                >
+                  <option value="">Company-wide</option>
+                  {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+            )}
+
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Template</label>
+              {/* Saved-template selector â€” switch which template is loaded for preview/edit */}
+              <select
+                style={{ ...dropdownStyles.base, minWidth: "190px" }}
+                value={currentTemplateId ?? ""}
+                onChange={(e) => { if (e.target.value) handleTemplateSelect(Number(e.target.value)); }}
+                disabled={scopeTemplates.length === 0}
+                title="Saved template â€” switch to preview / edit another"
+              >
+                {scopeTemplates.length === 0 && <option value="">New template (unsaved)</option>}
+                {scopeTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>{t.isDefault ? `â˜… ${t.name}` : t.name}</option>
+                ))}
+              </select>
+            </div>
 
             {/* Mode Toggle */}
             <div style={styles.modeToggle}>
@@ -537,9 +880,14 @@ export default function TemplateEditorPage() {
               </button>
             </div>
 
-            <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={() => setShowTemplatePicker(true)} title="Start from a template">
+            <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={() => setShowManager(true)} title="Saved templates for this type & scope">
               <MdContentCopy size={16} /> Templates
             </button>
+            {canApplyStarter && currentTemplateId && (
+              <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={() => setShowApplyStarter(true)} title="Apply a starter design onto this template">
+                <MdBrush size={16} /> Import Starter
+              </button>
+            )}
             <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={() => htmlImportRef.current?.click()} title="Import HTML file">
               <MdUploadFile size={16} /> Import HTML
             </button>
@@ -584,7 +932,7 @@ export default function TemplateEditorPage() {
                     disabled={sheetSaving}
                     onChange={(e) => handleSheetChange(e.target.value)}
                     title={excelSheetNames.length === 1
-                      ? "Single-sheet template — Auto-detect handles this case. You can still pin the sheet name if your import files use a different layout."
+                      ? "Single-sheet template â€” Auto-detect handles this case. You can still pin the sheet name if your import files use a different layout."
                       : "Pin the sheet that holds the data on every uploaded file. Leave 'Auto-detect' to let the importer choose."}
                   >
                     <option value="">
@@ -610,7 +958,7 @@ export default function TemplateEditorPage() {
           ) : (
             <>
               <span style={{ fontSize: "0.8rem", color: colors.textSecondary }}>
-                No Excel template — Excel export button hidden on challan/invoice pages
+                No Excel template â€” Excel export button hidden on challan/invoice pages
               </span>
               <button
                 style={{ ...styles.btn, ...styles.btnOutline, padding: "0.3rem 0.6rem", fontSize: "0.78rem" }}
@@ -720,6 +1068,13 @@ export default function TemplateEditorPage() {
 }
 
 const styles = {
+  // Labeled dropdown groups in the toolbar â€” a small caption above each
+  // <select> so it's obvious what each control selects.
+  fieldGroup: { display: "flex", flexDirection: "column", gap: "0.18rem" },
+  fieldLabel: {
+    fontSize: "0.64rem", fontWeight: 700, textTransform: "uppercase",
+    letterSpacing: "0.05em", color: "#7a8696", paddingLeft: "0.15rem",
+  },
   topBar: {
     display: "flex",
     justifyContent: "space-between",
@@ -806,7 +1161,7 @@ const styles = {
   },
   tabActive: {
     color: colors.blue,
-    borderBottomColor: colors.blue,
+    borderBottom: `2px solid ${colors.blue}`,
     background: "#fff",
   },
   tabCopy: {

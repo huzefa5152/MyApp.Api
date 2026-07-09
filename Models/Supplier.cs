@@ -37,6 +37,10 @@ namespace MyApp.Api.Models
         public int? SupplierGroupId { get; set; }
         public SupplierGroup? SupplierGroup { get; set; }
 
+        /// <summary>Source-system key for data migration (legacy "trader:{id}"),
+        /// so the ETL is idempotent and traceable. Null for hand-entered suppliers.</summary>
+        public string? ExternalRef { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation

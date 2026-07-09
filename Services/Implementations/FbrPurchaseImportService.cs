@@ -35,7 +35,8 @@ namespace MyApp.Api.Services.Implementations
         }
 
         public async Task<FbrImportCommitResponse> CommitAsync(
-            Stream fileStream, string originalFileName, int companyId, int? userId)
+            Stream fileStream, string originalFileName, int companyId, int? userId,
+            int? divisionId = null)
         {
             // The commit path re-runs Preview's pipeline (parse → filter
             // → match → group). This is intentionally stateless: the
@@ -83,7 +84,7 @@ namespace MyApp.Api.Services.Implementations
                 }
 
                 var oneResult = await _committer.CommitOneInvoiceAsync(
-                    companyId, userId, inv, response.Counts);
+                    companyId, userId, divisionId, inv, response.Counts);
                 response.Invoices.Add(oneResult);
 
                 switch (oneResult.Outcome)
@@ -176,15 +177,18 @@ namespace MyApp.Api.Services.Implementations
                     matchedSupplierId = sIdByName;
                 }
 
+                // Dedup check ("already in our system?") runs whenever the
+                // supplier resolved (by NTN or name — the SAME id the
+                // committer uses) and we have an invoice number. Date/total
+                // are optional corroboration inside the matcher — a unique
+                // IRN-style invoice number matches on the string alone.
                 int? matchedPurchaseBillId = null;
-                if (!string.IsNullOrWhiteSpace(supplierNtn) &&
-                    !string.IsNullOrWhiteSpace(baseInvoiceNo) &&
-                    first.InvoiceDate.HasValue &&
-                    totalGross > 0m)
+                if (matchedSupplierId.HasValue &&
+                    !string.IsNullOrWhiteSpace(baseInvoiceNo))
                 {
                     matchedPurchaseBillId = await _matcher.FindMatchingPurchaseBillIdAsync(
-                        companyId, supplierNtn, baseInvoiceNo,
-                        first.InvoiceDate.Value, totalGross);
+                        companyId, matchedSupplierId.Value, baseInvoiceNo, (first.InvoiceNo ?? "").Trim(),
+                        first.InvoiceDate ?? DateTime.MinValue, totalGross);
                 }
 
                 var invoiceDto = new FbrImportPreviewInvoiceDto

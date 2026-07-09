@@ -12,8 +12,10 @@ import { formStyles, modalSizes } from "../theme";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useAuth } from "../contexts/AuthContext";
 import LookupAutocomplete from "./LookupAutocomplete";
+import RichText from "./RichText";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import ItemTypeForm from "./ItemTypeForm";
+import AttachmentManager from "./AttachmentManager";
 
 const colors = {
   blue: "#0d47a1",
@@ -42,7 +44,7 @@ const colors = {
  * Description and UOM use LookupAutocomplete with /api/lookup/items and /api/lookup/units,
  * matching the delivery challan form — picks existing values, creates new ones if needed.
  */
-export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = false, billsMode = false, forceItemTypeAndQty = false }) {
+export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = false, billsMode = false, forceItemTypeAndQty = false, fbrEnabled = true }) {
   // billsMode: true when this form is mounted from the Bills tab. Hides
   // the Item Type column + picker and the bulk-apply toolbar (item-type
   // classification is the Invoices tab's responsibility). Existing item-
@@ -231,9 +233,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
 
         // Lazy-load applicable scenarios for the bill's company.
         if (data.companyId) {
-          getFbrApplicableScenarios(data.companyId)
-            .then(({ data: sc }) => setScenarios(sc?.scenarios || []))
-            .catch(() => setScenarios([]));
+          // FBR scenarios only apply when the company has FBR integration on.
+          if (fbrEnabled) {
+            getFbrApplicableScenarios(data.companyId)
+              .then(({ data: sc }) => setScenarios(sc?.scenarios || []))
+              .catch(() => setScenarios([]));
+          }
           // Load the company's clients so the operator can reassign the
           // buyer on a standalone bill (challan-linked bills get the
           // same dropdown but disabled — see lockClient below).
@@ -999,7 +1004,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     can pick from. The narrow PATCH path doesn't persist
                     paymentTerms, so the [SNxxx] tag only updates on the
                     full-edit save path. */}
-                {scenarios.length > 0 && (
+                {fbrEnabled && scenarios.length > 0 && (
                   <div style={styles.row}>
                     <div style={{ flex: 1, minWidth: 280 }}>
                       <label style={styles.label}>
@@ -1061,6 +1066,20 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                       ))}
                     </select>
                   </div>
+                  {/* Division is set at creation time and never editable here —
+                      shown read-only so the operator can tell which division's
+                      sequence the bill belongs to. */}
+                  {invoice?.divisionName && (
+                    <div style={{ flex: 1, minWidth: 140 }}>
+                      <label style={styles.label}>Division</label>
+                      <input
+                        type="text"
+                        style={{ ...styles.input, ...styles.readOnlyInput }}
+                        value={invoice.divisionName}
+                        readOnly
+                      />
+                    </div>
+                  )}
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <label style={styles.label}>Bill Date</label>
                     <input
@@ -1280,10 +1299,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                         <th style={{ ...styles.th, width: 100, minWidth: 100 }}>Line Total</th>
                         {/* HS Code is FBR data — only relevant on the Invoices
                             tab. Bills mode is pre-FBR data entry, so hide it. */}
-                        {!billsMode && (
+                        {!billsMode && fbrEnabled && (
                           <th style={{ ...styles.th, width: 90, minWidth: 90 }}>HS Code</th>
                         )}
-                        <th style={{ ...styles.th, minWidth: 140 }}>Sale Type</th>
+                        {fbrEnabled && (
+                          <th style={{ ...styles.th, minWidth: 140 }}>Sale Type</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -1308,7 +1329,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                             )}
                             <td style={styles.td}>
                               {lockNonItemType ? (
-                                <div style={styles.readOnlyText}>{item.description || <span style={styles.muted}>—</span>}</div>
+                                <div style={styles.readOnlyText}>{item.description ? <RichText text={item.description} /> : <span style={styles.muted}>—</span>}</div>
                               ) : (
                                 <LookupAutocomplete
                                   label="Description"
@@ -1317,6 +1338,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                   onChange={(v) => updateItem(idx, "description", v)}
                                   inputClassName=""
                                   inputStyle={styles.tableInput}
+                                  multiline
                                 />
                               )}
                             </td>
@@ -1351,14 +1373,16 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                             <td style={{ ...styles.td, fontWeight: 600, color: colors.textPrimary, textAlign: "right" }}>
                               {(parseFloat(item.lineTotal) || 0).toLocaleString()}
                             </td>
-                            {!billsMode && (
+                            {!billsMode && fbrEnabled && (
                               <td style={{ ...styles.td, ...styles.readOnlyCell, fontFamily: "monospace" }} title="Comes from Item Type">
                                 {item.hsCode || <span style={styles.muted}>—</span>}
                               </td>
                             )}
-                            <td style={{ ...styles.td, ...styles.readOnlyCell, fontSize: "0.72rem" }} title="Comes from Item Type">
-                              {item.saleType || <span style={styles.muted}>—</span>}
-                            </td>
+                            {fbrEnabled && (
+                              <td style={{ ...styles.td, ...styles.readOnlyCell, fontSize: "0.72rem" }} title="Comes from Item Type">
+                                {item.saleType || <span style={styles.muted}>—</span>}
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
@@ -1429,6 +1453,19 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     ⓘ Editing this bill will clear its FBR validation status. You'll need to re-validate before submitting to FBR.
                   </div>
                 )}
+
+                {/* Attachments — the bill exists, so uploads bind immediately.
+                    Rendered in every tier (read-only view and the narrow
+                    item-type modes included): the component permission-gates
+                    its own upload / delete buttons. View tier renders
+                    mode="view" (no drop-zone / folder affordances) to match
+                    the other modules' view modals. */}
+                <AttachmentManager
+                  companyId={invoice.companyId}
+                  entityType="Invoice"
+                  entityId={invoice.id}
+                  mode={readOnly ? "view" : "edit"}
+                />
               </>
             )}
           </div>
