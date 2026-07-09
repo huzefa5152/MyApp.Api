@@ -956,6 +956,7 @@ namespace MyApp.Api.Services.Implementations
 
             return new PrintChallanDto
             {
+                DivisionId = dc.DivisionId,
                 CompanyBrandName = dc.Company?.BrandName ?? dc.Company?.Name ?? "",
                 CompanyLogoPath = dc.Company?.LogoPath,
                 CompanyAddress = dc.Company?.FullAddress,

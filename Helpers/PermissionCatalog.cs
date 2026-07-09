@@ -244,6 +244,7 @@ namespace MyApp.Api.Helpers
             // rights to re-upload or edit template bodies.
             new("printtemplates.manage.sheetpin", "PrintTemplates", "Manage", "Pin Data Sheet","Pin which Excel sheet the importer reads from a multi-sheet template"),
             new("printtemplates.manage.delete",   "PrintTemplates", "Manage", "Delete",        "Delete a saved print template"),
+            new("printtemplates.starter.apply",   "PrintTemplates", "Manage", "Apply Starter", "Apply a starter design onto an existing template (replace its HTML or its whole layout)"),
 
             // ── FBR Configuration ───────────────────────────────────────────
             new("fbr.config.view",         "FBR", "Config", "View",   "View FBR configuration and credentials"),

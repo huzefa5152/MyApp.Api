@@ -35,6 +35,7 @@ import UsersPage from "./pages/UsersPage";
 import RolesPage from "./pages/RolesPage";
 import TenantAccessPage from "./pages/TenantAccessPage";
 import TemplateEditorPage from "./pages/TemplateEditorPage";
+import PrintTemplatesPage from "./pages/PrintTemplatesPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import FbrSettingsPage from "./pages/FbrSettingsPage";
 import FbrSandboxPage from "./pages/FbrSandboxPage";
@@ -129,7 +130,8 @@ export default function App() {
           <Route path="/users" element={<UsersPage />} />
           <Route path="/roles" element={<RolesPage />} />
           <Route path="/tenant-access" element={<TenantAccessPage />} />
-          <Route path="/templates" element={<TemplateEditorPage />} />
+          <Route path="/templates" element={<PrintTemplatesPage />} />
+          <Route path="/templates/edit" element={<TemplateEditorPage />} />
           <Route path="/fbr-settings" element={<FbrSettingsPage />} />
           <Route path="/fbr-sandbox" element={<FbrSandboxPage />} />
           <Route path="/fbr-monitor" element={<FbrMonitorPage />} />

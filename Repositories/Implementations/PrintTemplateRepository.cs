@@ -34,6 +34,29 @@ namespace MyApp.Api.Repositories.Implementations
                 .FirstOrDefaultAsync();
         }
 
+        public async Task<PrintTemplate?> GetForExportAsync(int companyId, int? divisionId, string templateType)
+        {
+            // Prefer the document's division scope: its default first, oldest row
+            // as fallback. Only a template that actually has an Excel file on it
+            // counts for export resolution — a division may have an HTML-only
+            // template while its Excel layout still lives at company level.
+            if (divisionId.HasValue)
+            {
+                var div = await ScopeQuery(companyId, divisionId, templateType)
+                    .Where(pt => pt.ExcelTemplatePath != null)
+                    .OrderByDescending(pt => pt.IsDefault)
+                    .ThenBy(pt => pt.Id)
+                    .FirstOrDefaultAsync();
+                if (div != null) return div;
+            }
+            // Company-level fallback (mirrors GetByCompanyAndTypeAsync ordering).
+            return await ScopeQuery(companyId, null, templateType)
+                .Where(pt => pt.ExcelTemplatePath != null)
+                .OrderByDescending(pt => pt.IsDefault)
+                .ThenBy(pt => pt.Id)
+                .FirstOrDefaultAsync();
+        }
+
         public async Task<PrintTemplate> UpsertAsync(int companyId, string templateType, string htmlContent, string? templateJson = null, string? editorMode = null)
         {
             var existing = await GetByCompanyAndTypeAsync(companyId, templateType);

@@ -2430,6 +2430,7 @@ namespace MyApp.Api.Services.Implementations
 
             return new PrintBillDto
             {
+                DivisionId = inv.DivisionId,
                 CompanyBrandName = inv.Company?.BrandName ?? inv.Company?.Name ?? "",
                 CompanyLogoPath = inv.Company?.LogoPath,
                 CompanyAddress = inv.Company?.FullAddress,
@@ -2488,6 +2489,7 @@ namespace MyApp.Api.Services.Implementations
 
             return new PrintTaxInvoiceDto
             {
+                DivisionId = inv.DivisionId,
                 SupplierName = inv.Company?.BrandName ?? inv.Company?.Name ?? "",
                 SupplierAddress = inv.Company?.FullAddress,
                 SupplierNTN = inv.Company?.NTN,

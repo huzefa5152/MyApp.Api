@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+﻿import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   MdCode, MdBusiness, MdSave, MdRefresh, MdContentCopy,
   MdVisibility, MdEdit as MdEditIcon, MdBrush,
-  MdUploadFile, MdDelete, MdGridOn, MdDescription,
+  MdUploadFile, MdDelete, MdGridOn, MdDescription, MdArrowBack,
 } from "react-icons/md";
 import {
   getMergeFields, getTemplatesByCompany,
@@ -11,284 +12,22 @@ import {
 } from "../api/printTemplateApi";
 import { getDivisionsByCompany } from "../api/divisionApi";
 import { useCompany } from "../contexts/CompanyContext";
-import { mergeTemplate } from "../utils/templateEngine";
 import {
-  defaultChallanTemplate, defaultBillTemplate, defaultTaxInvoiceTemplate,
-} from "../utils/defaultTemplates";
-import { defaultQuoteTemplate, defaultOrderTemplate } from "../utils/salesDocTemplates";
-import {
-  defaultCreditNoteTemplate, defaultDebitNoteTemplate,
-  defaultPurchaseBillTemplate, defaultGoodsReceiptTemplate,
-} from "../utils/purchaseNoteDocTemplates";
+  TEMPLATE_TYPES, DEFAULT_TEMPLATES, buildTemplatePreviewHtml,
+} from "../utils/templateSampleData";
 import { dropdownStyles } from "../theme";
 import CodeEditor from "../Components/templateEditor/CodeEditor";
 import MergeFieldSidebar from "../Components/templateEditor/MergeFieldSidebar";
 import PreviewPane from "../Components/templateEditor/PreviewPane";
 import SyncWarningModal from "../Components/templateEditor/SyncWarningModal";
 import VisualEditor from "../Components/templateEditor/VisualEditor";
-import StarterTemplatePicker from "../Components/templateEditor/StarterTemplatePicker";
+import StarterGallery from "../Components/templateEditor/StarterGallery";
+import ApplyStarterModal from "../Components/templateEditor/ApplyStarterModal";
 import SavedTemplatesManager from "../Components/templateEditor/SavedTemplatesManager";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { MdLock } from "react-icons/md";
 
-const TEMPLATE_TYPES = [
-  { value: "Challan", label: "Delivery Challan" },
-  { value: "Bill", label: "Bill / Invoice" },
-  { value: "TaxInvoice", label: "Sales Tax Invoice" },
-  { value: "SalesQuote", label: "Sales Quote" },
-  { value: "SalesOrder", label: "Sales Order" },
-  { value: "CreditNote", label: "Credit Note" },
-  { value: "DebitNote", label: "Debit Note" },
-  { value: "PurchaseBill", label: "Purchase Bill" },
-  { value: "GoodsReceipt", label: "Goods Receipt" },
-];
-
-const SAMPLE_DATA = {
-  Challan: {
-    companyBrandName: "SAMPLE COMPANY",
-    companyLogoPath: "",
-    companyAddress: "123 Business Street,\nCity, Country",
-    companyPhone: "Contact Person\n0300-1234567",
-    challanNumber: 1001,
-    deliveryDate: new Date().toISOString(),
-    clientName: "Sample Client Pvt Ltd",
-    clientAddress: "Client Address",
-    poNumber: "PO-2025-001",
-    items: [
-      { quantity: 10, description: "Sample Item One" },
-      { quantity: 5, description: "Sample Item Two" },
-      { quantity: 8, description: "Sample Item Three" },
-    ],
-  },
-  Bill: {
-    companyBrandName: "SAMPLE COMPANY",
-    companyLogoPath: "",
-    companyAddress: "123 Business Street, City",
-    companyPhone: "0300-1234567",
-    companyNTN: "1234567-8",
-    companySTRN: "1234567890123",
-    invoiceNumber: 501,
-    date: new Date().toISOString(),
-    challanNumbers: [1001, 1002],
-    challanDates: [new Date().toISOString()],
-    poNumber: "PO-2025-001",
-    poDate: new Date().toISOString(),
-    clientName: "Sample Client Pvt Ltd",
-    clientNTN: "9876543-2",
-    clientSTRN: "9876543210987",
-    concernDepartment: "Main Office",
-    subtotal: 150000,
-    gstRate: 18,
-    gstAmount: 27000,
-    grandTotal: 177000,
-    amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
-    items: [
-      { sNo: 1, quantity: 10, description: "Sample Item One", itemTypeName: "Pneumatic", unitPrice: 8000, lineTotal: 80000 },
-      { sNo: 2, quantity: 5, description: "Sample Item Two", itemTypeName: "Pneumatic", unitPrice: 14000, lineTotal: 70000 },
-    ],
-  },
-  TaxInvoice: {
-    supplierName: "SAMPLE COMPANY",
-    supplierAddress: "123 Business Street, City",
-    supplierPhone: "0300-1234567",
-    supplierNTN: "1234567-8",
-    supplierSTRN: "1234567890123",
-    buyerName: "Sample Client Pvt Ltd",
-    buyerAddress: "Client Address, City",
-    buyerNTN: "9876543-2",
-    buyerSTRN: "9876543210987",
-    invoiceNumber: 501,
-    date: new Date().toISOString(),
-    challanNumbers: [1001, 1002],
-    poNumber: "PO-2025-001",
-    subtotal: 150000,
-    gstRate: 18,
-    gstAmount: 27000,
-    grandTotal: 177000,
-    amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
-    items: [
-      { quantity: 10, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", valueExclTax: 80000, gstRate: 18, gstAmount: 14400, totalInclTax: 94400 },
-      { quantity: 5, uom: "Pcs", description: "Sample Item Two", itemTypeName: "Hydraulic", valueExclTax: 70000, gstRate: 18, gstAmount: 12600, totalInclTax: 82600 },
-    ],
-  },
-  SalesQuote: {
-    companyBrandName: "SAMPLE COMPANY",
-    companyLogoPath: "",
-    companyAddress: "123 Business Street, City",
-    companyPhone: "0300-1234567",
-    companyNTN: "1234567-8",
-    companySTRN: "1234567890123",
-    divisionName: "NORTH DIVISION",
-    divisionBrandName: "NORTH DIVISION",
-    divisionLogoPath: "",
-    divisionAddress: "Division Office, City",
-    divisionPhone: "0300-7654321",
-    divisionNTN: "1112223-4",
-    divisionSTRN: "1112223334445",
-    divisionEmail: "sales@northdivision.example",
-    quoteNumber: 12,
-    date: new Date().toISOString(),
-    validUntil: new Date().toISOString(),
-    customerEnquiryRef: "RFQ-2026-045",
-    enquiryDate: new Date().toISOString(),
-    clientName: "Sample Client Pvt Ltd",
-    clientAddress: "Client Address, City",
-    clientNTN: "9876543-2",
-    clientSTRN: "9876543210987",
-    subtotal: 150000,
-    gstRate: 18,
-    gstAmount: 27000,
-    grandTotal: 177000,
-    amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
-    notes: "Prices valid for 15 days. Delivery within 2 weeks of confirmed order.",
-    items: [
-      { sNo: 1, description: "Sample Item One", quantity: 10, uom: "Pcs", unitPrice: 8000, lineTotal: 80000 },
-      { sNo: 2, description: "Sample Item Two", quantity: 5, uom: "Pcs", unitPrice: 14000, lineTotal: 70000 },
-    ],
-  },
-  SalesOrder: {
-    companyBrandName: "SAMPLE COMPANY",
-    companyLogoPath: "",
-    companyAddress: "123 Business Street, City",
-    companyPhone: "0300-1234567",
-    salesOrderNumber: 7,
-    orderDate: new Date().toISOString(),
-    requiredDate: new Date().toISOString(),
-    customerPoNumber: "PO-2026-001",
-    customerPoDate: new Date().toISOString(),
-    status: "Partially Delivered",
-    clientName: "Sample Client Pvt Ltd",
-    clientAddress: "Client Address, City",
-    site: "Main Warehouse",
-    items: [
-      { sNo: 1, description: "Sample Item One", quantity: 10, uom: "Pcs", deliveredQuantity: 6, remainingQuantity: 4 },
-      { sNo: 2, description: "Sample Item Two", quantity: 5, uom: "Pcs", deliveredQuantity: 5, remainingQuantity: 0 },
-    ],
-  },
-  CreditNote: {
-    supplierName: "SAMPLE COMPANY",
-    supplierAddress: "123 Business Street, City",
-    supplierPhone: "0300-1234567",
-    supplierNTN: "1234567-8",
-    supplierSTRN: "1234567890123",
-    supplierLogoPath: "",
-    buyerName: "Sample Client Pvt Ltd",
-    buyerAddress: "Client Address, City",
-    buyerPhone: "0300-8887766",
-    buyerNTN: "9876543-2",
-    buyerSTRN: "9876543210987",
-    invoiceNumber: 3,
-    date: new Date().toISOString(),
-    noteKindLabel: "Credit Note",
-    originalInvoiceNumber: 501,
-    originalInvoiceDate: new Date().toISOString(),
-    originalInvoiceRefIRN: "3541DI7500892DI21",
-    noteReason: "Goods returned by buyer",
-    noteReasonRemarks: "",
-    subtotal: 50000,
-    gstRate: 18,
-    gstAmount: 9000,
-    grandTotal: 59000,
-    amountInWords: "Fifty Nine Thousand Rupees Only",
-    fbrIRN: "",
-    items: [
-      { quantity: 5, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", hsCode: "8481.1000", valueExclTax: 40000, gstRate: 18, gstAmount: 7200, totalInclTax: 47200 },
-      { quantity: 2, uom: "Pcs", description: "Sample Item Two", itemTypeName: "Hydraulic", hsCode: "8412.2100", valueExclTax: 10000, gstRate: 18, gstAmount: 1800, totalInclTax: 11800 },
-    ],
-  },
-  DebitNote: {
-    supplierName: "SAMPLE COMPANY",
-    supplierAddress: "123 Business Street, City",
-    supplierPhone: "0300-1234567",
-    supplierNTN: "1234567-8",
-    supplierSTRN: "1234567890123",
-    supplierLogoPath: "",
-    buyerName: "Sample Client Pvt Ltd",
-    buyerAddress: "Client Address, City",
-    buyerPhone: "0300-8887766",
-    buyerNTN: "9876543-2",
-    buyerSTRN: "9876543210987",
-    invoiceNumber: 2,
-    date: new Date().toISOString(),
-    noteKindLabel: "Debit Note",
-    originalInvoiceNumber: 501,
-    originalInvoiceDate: new Date().toISOString(),
-    originalInvoiceRefIRN: "3541DI7500892DI21",
-    noteReason: "Price escalation per contract",
-    noteReasonRemarks: "",
-    subtotal: 25000,
-    gstRate: 18,
-    gstAmount: 4500,
-    grandTotal: 29500,
-    amountInWords: "Twenty Nine Thousand Five Hundred Rupees Only",
-    fbrIRN: "",
-    items: [
-      { quantity: 10, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", hsCode: "8481.1000", valueExclTax: 25000, gstRate: 18, gstAmount: 4500, totalInclTax: 29500 },
-    ],
-  },
-  PurchaseBill: {
-    companyBrandName: "SAMPLE COMPANY",
-    companyLogoPath: "",
-    companyAddress: "123 Business Street, City",
-    companyPhone: "0300-1234567",
-    companyNTN: "1234567-8",
-    companySTRN: "1234567890123",
-    supplierName: "Sample Supplier & Co",
-    supplierAddress: "Supplier Market, City",
-    supplierPhone: "0321-9876543",
-    supplierNTN: "5556667-8",
-    supplierSTRN: "5556667778889",
-    purchaseBillNumber: 42,
-    date: new Date().toISOString(),
-    supplierBillNumber: "INV-8834",
-    supplierIRN: "3541DI7500892DI21",
-    paymentTerms: "30 Days",
-    dueDate: new Date().toISOString(),
-    goodsReceiptNumbers: [15, 16],
-    linkedSaleBillNumbers: [501],
-    subtotal: 120000,
-    gstRate: 18,
-    gstAmount: 21600,
-    grandTotal: 141600,
-    amountInWords: "One Hundred Forty One Thousand Six Hundred Rupees Only",
-    items: [
-      { sNo: 1, itemTypeName: "Pneumatic", description: "Sample Item One", quantity: 20, uom: "Pcs", unitPrice: 4000, lineTotal: 80000, hsCode: "8481.1000" },
-      { sNo: 2, itemTypeName: "Hydraulic", description: "Sample Item Two", quantity: 10, uom: "Pcs", unitPrice: 4000, lineTotal: 40000, hsCode: "8412.2100" },
-    ],
-  },
-  GoodsReceipt: {
-    companyBrandName: "SAMPLE COMPANY",
-    companyLogoPath: "",
-    companyAddress: "123 Business Street, City",
-    companyPhone: "0300-1234567",
-    supplierName: "Sample Supplier & Co",
-    supplierAddress: "Supplier Market, City",
-    supplierPhone: "0321-9876543",
-    goodsReceiptNumber: 15,
-    receiptDate: new Date().toISOString(),
-    supplierChallanNumber: "DC-2291",
-    purchaseBillNumber: 42,
-    site: "Main Warehouse",
-    status: "Pending",
-    items: [
-      { sNo: 1, itemTypeName: "Pneumatic", description: "Sample Item One", quantity: 20, unit: "Pcs" },
-      { sNo: 2, itemTypeName: "Hydraulic", description: "Sample Item Two", quantity: 10, unit: "Pcs" },
-    ],
-  },
-};
-
-const DEFAULT_TEMPLATES = {
-  Challan: defaultChallanTemplate,
-  Bill: defaultBillTemplate,
-  TaxInvoice: defaultTaxInvoiceTemplate,
-  SalesQuote: defaultQuoteTemplate,
-  SalesOrder: defaultOrderTemplate,
-  CreditNote: defaultCreditNoteTemplate,
-  DebitNote: defaultDebitNoteTemplate,
-  PurchaseBill: defaultPurchaseBillTemplate,
-  GoodsReceipt: defaultGoodsReceiptTemplate,
-};
 
 const colors = {
   blue: "#0d47a1",
@@ -301,10 +40,13 @@ const colors = {
 
 export default function TemplateEditorPage() {
   const confirm = useConfirm();
+  const navigate = useNavigate();
   const { has } = usePermissions();
   const canManage = has("printtemplates.manage.update");
   const canSheetPin = has("printtemplates.manage.sheetpin");
   const canDelete = has("printtemplates.manage.delete");
+  const canApplyStarter = has("printtemplates.starter.apply");
+  const [showApplyStarter, setShowApplyStarter] = useState(false);
   const { companies, selectedCompany, setSelectedCompany, loading } = useCompany();
   const [templateType, setTemplateType] = useState(() => localStorage.getItem("te.type") || "Challan");
   const [htmlContent, setHtmlContent] = useState("");
@@ -323,7 +65,7 @@ export default function TemplateEditorPage() {
   const [divisions, setDivisions] = useState([]);
   const [scopeDivisionId, setScopeDivisionId] = useState(null);
   // Full template list for the company (each item carries its html/json/excel info,
-  // so the editor populates straight from here — no per-id fetch).
+  // so the editor populates straight from here â€” no per-id fetch).
   const [allTemplates, setAllTemplates] = useState([]);
   const [currentTemplateId, setCurrentTemplateId] = useState(null);
   const [currentTemplateName, setCurrentTemplateName] = useState("Default");
@@ -335,7 +77,7 @@ export default function TemplateEditorPage() {
   const [excelSheetName, setExcelSheetName] = useState(null);
   // All sheets present in the uploaded workbook (for the picker dropdown).
   const [excelSheetNames, setExcelSheetNames] = useState([]);
-  // Set while a POST to save the sheet pin is in flight — disables the
+  // Set while a POST to save the sheet pin is in flight â€” disables the
   // dropdown to prevent double-submits.
   const [sheetSaving, setSheetSaving] = useState(false);
   const excelInputRef = useRef(null);
@@ -349,7 +91,7 @@ export default function TemplateEditorPage() {
   // Captured ONCE at mount (before the persist effects below can overwrite
   // localStorage) so a page reload restores the last scope + template. Restore
   // is gated on the saved company matching the restored company, and is
-  // consumed after the first company-load — so a deliberate company switch
+  // consumed after the first company-load â€” so a deliberate company switch
   // resets to company-wide rather than restoring a stale division/template.
   const initialRestoreRef = useRef({
     companyId: Number(localStorage.getItem("te.companyId")) || null,
@@ -392,7 +134,7 @@ export default function TemplateEditorPage() {
     else localStorage.removeItem("te.templateId");
   }, [selectedCompany?.id, scopeDivisionId, currentTemplateId]);
 
-  // ── Scope + multi-template helpers ──
+  // â”€â”€ Scope + multi-template helpers â”€â”€
 
   // Populate the editor from a template DTO (or seed a blank default for an empty scope).
   // keepTab leaves the Editor/Preview tab as-is (so switching templates while previewing
@@ -416,7 +158,7 @@ export default function TemplateEditorPage() {
       setCurrentTemplateId(null);
       setCurrentTemplateName("Default");
       setHtmlContent(def);
-      setOriginalContent("");   // empty scope → show as unsaved so Save creates the first template
+      setOriginalContent("");   // empty scope â†’ show as unsaved so Save creates the first template
       setTemplateJson(null);
       setOriginalJson(null);
       setEditorMode("code");
@@ -490,7 +232,7 @@ export default function TemplateEditorPage() {
       }
     })();
     return () => { cancelled = true; };
-    // templateType intentionally omitted — type changes are handled by handleTypeChange
+    // templateType intentionally omitted â€” type changes are handled by handleTypeChange
     // (no company refetch needed); only a company switch reloads the list here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany?.id]);
@@ -529,7 +271,7 @@ export default function TemplateEditorPage() {
         setAllTemplates((prev) => prev.map((t) =>
           t.id === currentTemplateId ? { ...t, htmlContent: saveHtml, templateJson: saveJson, editorMode } : t));
       } else {
-        // Empty scope → create the first template (server forces it default).
+        // Empty scope â†’ create the first template (server forces it default).
         const { data } = await createTemplate(selectedCompany.id, {
           templateType, divisionId: scopeDivisionId, name: currentTemplateName || "Default",
           htmlContent: saveHtml, templateJson: saveJson, editorMode, isDefault: true,
@@ -588,7 +330,7 @@ export default function TemplateEditorPage() {
     setActiveTab("editor");
   };
 
-  // Starter pick → create a NEW template in the current scope from the starter
+  // Starter pick â†’ create a NEW template in the current scope from the starter
   // design (server forces default only when it's the first in the scope).
   const handleSelectStarter = async (starter) => {
     if (!selectedCompany) return;
@@ -608,7 +350,7 @@ export default function TemplateEditorPage() {
     }
   };
 
-  // ── Saved-templates manager actions ──
+  // â”€â”€ Saved-templates manager actions â”€â”€
 
   // Switch the active template (from the header dropdown or the manager). Guards
   // unsaved edits, preserves the current Editor/Preview tab. Returns true if switched.
@@ -726,8 +468,8 @@ export default function TemplateEditorPage() {
   // challan exports are single-sheet, so forcing the operator to pick at
   // upload time would be friction for zero benefit. If the workbook has
   // multiple sheets, the post-upload dropdown on the Excel Template Bar
-  // lets the operator pin a specific sheet — the importer's smart
-  // resolver (sheet-name match → score-based → sheet 0) already handles
+  // lets the operator pin a specific sheet â€” the importer's smart
+  // resolver (sheet-name match â†’ score-based â†’ sheet 0) already handles
   // the common multi-sheet case automatically.
   const handleExcelUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -748,7 +490,7 @@ export default function TemplateEditorPage() {
         : t));
       const sheetCount = (data.excelSheetNames || []).length;
       if (sheetCount > 1) {
-        showToast(`Excel template uploaded — ${sheetCount} sheets detected, pin one in the Data sheet dropdown if needed.`);
+        showToast(`Excel template uploaded â€” ${sheetCount} sheets detected, pin one in the Data sheet dropdown if needed.`);
       } else {
         showToast("Excel template uploaded!");
       }
@@ -767,7 +509,7 @@ export default function TemplateEditorPage() {
     try {
       await setExcelSheetNameById(currentTemplateId, value);
       setExcelSheetName(value);
-      showToast(value ? `Pinned sheet "${value}".` : "Sheet pin cleared — auto-detect on.");
+      showToast(value ? `Pinned sheet "${value}".` : "Sheet pin cleared â€” auto-detect on.");
     } catch (err) {
       showToast(err.response?.data?.error || "Failed to update sheet name.", "error");
     } finally {
@@ -831,42 +573,16 @@ export default function TemplateEditorPage() {
     [htmlContent, editorMode]
   );
 
+  // Branding-enriched live preview via the shared builder (same merge the
+  // gallery + apply-starter comparison use, so previews match everywhere).
   const previewHtml = (() => {
-    try {
-      const src = editorMode === "visual" && visualEditorRef.current
-        ? visualEditorRef.current.getHtml()
-        : htmlContent;
-      // Use the REAL company/division branding for the selected scope so the
-      // preview shows what will actually print. The static SAMPLE_DATA ships
-      // empty logo paths, which made every preview look logo-less even when a
-      // logo was uploaded (Jorbai Sales Quote bug 2026-06-27). For a division
-      // scope we use that division's logo; company-wide leaves division fields
-      // blank so the template falls back to the company logo/identity.
-      const base = SAMPLE_DATA[templateType];
-      const scopeDiv = scopeDivisionId != null
-        ? divisions.find((d) => d.id === scopeDivisionId)
-        : null;
-      const previewData = {
-        ...base,
-        companyBrandName: selectedCompany?.brandName || selectedCompany?.name || base.companyBrandName,
-        companyLogoPath: selectedCompany?.logoPath || "",
-        companyAddress: selectedCompany?.fullAddress || base.companyAddress,
-        companyPhone: selectedCompany?.phone || base.companyPhone,
-        companyNTN: selectedCompany?.ntn || base.companyNTN,
-        companySTRN: selectedCompany?.strn || base.companySTRN,
-        divisionName: scopeDiv?.name || "",
-        divisionBrandName: scopeDiv?.brandName || scopeDiv?.name || "",
-        divisionLogoPath: scopeDiv?.logoPath || "",
-        divisionAddress: scopeDiv?.fullAddress || "",
-        divisionPhone: scopeDiv?.phone || "",
-        divisionNTN: scopeDiv?.ntn || "",
-        divisionSTRN: scopeDiv?.strn || "",
-        divisionEmail: scopeDiv?.email || "",
-      };
-      return mergeTemplate(src, previewData);
-    } catch (e) {
-      return `<div style="color:red;padding:20px;font-family:sans-serif"><h3>Template Error</h3><pre>${e.message}</pre></div>`;
-    }
+    const src = editorMode === "visual" && visualEditorRef.current
+      ? visualEditorRef.current.getHtml()
+      : htmlContent;
+    const scopeDiv = scopeDivisionId != null
+      ? divisions.find((d) => d.id === scopeDivisionId)
+      : null;
+    return buildTemplatePreviewHtml(templateType, src, { company: selectedCompany, division: scopeDiv });
   })();
 
   const hasChanges = htmlContent !== originalContent || templateJson !== originalJson;
@@ -901,7 +617,7 @@ export default function TemplateEditorPage() {
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
-  // Templates in the current (type, scope) — drives the Saved-Templates manager.
+  // Templates in the current (type, scope) â€” drives the Saved-Templates manager.
   const scopeTemplates = allTemplates.filter(
     (t) => t.templateType === templateType && (t.divisionId ?? null) === (scopeDivisionId ?? null)
   );
@@ -933,12 +649,33 @@ export default function TemplateEditorPage() {
         />
       )}
 
-      {/* Starter Template Picker (reached via the manager's "From starter") */}
+      {/* Starter gallery — create a NEW template from a starter (manager's "From starter"). */}
       {showTemplatePicker && (
-        <StarterTemplatePicker
-          templateType={templateType}
-          onSelect={handleSelectStarter}
+        <StarterGallery
+          lockType={templateType}
+          selectLabel="Create from this"
+          onSelect={(starter) => { setShowTemplatePicker(false); handleSelectStarter(starter); }}
           onClose={() => setShowTemplatePicker(false)}
+        />
+      )}
+
+      {/* Apply a starter onto the CURRENTLY-OPEN template (replace HTML / everything). */}
+      {showApplyStarter && currentTemplateId && (
+        <ApplyStarterModal
+          template={{
+            id: currentTemplateId,
+            name: currentTemplateName,
+            templateType,
+            htmlContent,
+            divisionName: scopeDivisionId != null ? (divisions.find((d) => d.id === scopeDivisionId)?.name) : null,
+          }}
+          division={scopeDivisionId != null ? divisions.find((d) => d.id === scopeDivisionId) : null}
+          onClose={() => setShowApplyStarter(false)}
+          onApplied={async (updated) => {
+            setShowApplyStarter(false);
+            await refreshTemplates(updated.id);
+            populateEditor(updated, updated.templateType, false);
+          }}
         />
       )}
 
@@ -965,6 +702,13 @@ export default function TemplateEditorPage() {
       {/* Top Bar */}
       <div style={styles.topBar}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <button
+            onClick={() => navigate("/templates")}
+            title="Back to Print Templates"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, borderRadius: 8, padding: isMobile ? "0.3rem 0.5rem" : "0.4rem 0.7rem", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+          >
+            <MdArrowBack size={16} /> {isMobile ? "" : "Templates"}
+          </button>
           <div style={{ ...styles.headerIcon, ...(isMobile ? { width: 34, height: 34, borderRadius: 8 } : {}) }}>
             <MdCode size={isMobile ? 18 : 24} color="#fff" />
           </div>
@@ -1033,7 +777,7 @@ export default function TemplateEditorPage() {
                   title="Saved template"
                 >
                   {scopeTemplates.length === 0 && <option value="">New template (unsaved)</option>}
-                  {scopeTemplates.map((t) => <option key={t.id} value={t.id}>{t.isDefault ? `★ ${t.name}` : t.name}</option>)}
+                  {scopeTemplates.map((t) => <option key={t.id} value={t.id}>{t.isDefault ? `â˜… ${t.name}` : t.name}</option>)}
                 </select>
               </div>
             </div>
@@ -1041,6 +785,11 @@ export default function TemplateEditorPage() {
               <button style={{ ...styles.btn, ...styles.btnOutline, padding: "0.4rem 0.6rem", fontSize: "0.78rem", flex: 1, justifyContent: "center" }} onClick={() => setShowManager(true)} title="Saved templates">
                 <MdContentCopy size={14} /> Templates
               </button>
+              {canApplyStarter && currentTemplateId && (
+                <button style={{ ...styles.btn, ...styles.btnOutline, padding: "0.4rem 0.6rem", fontSize: "0.78rem", flexShrink: 0 }} onClick={() => setShowApplyStarter(true)} title="Apply a starter design onto this template">
+                  <MdBrush size={14} /> Starter
+                </button>
+              )}
               <button style={{ ...styles.btn, ...styles.btnOutline, padding: "0.4rem 0.6rem", fontSize: "0.78rem", flexShrink: 0 }} onClick={handleReset} title="Reset to default">
                 <MdRefresh size={14} /> Reset
               </button>
@@ -1088,7 +837,7 @@ export default function TemplateEditorPage() {
                   style={{ ...dropdownStyles.base, minWidth: "170px" }}
                   value={scopeDivisionId ?? ""}
                   onChange={(e) => handleScopeChange(e.target.value)}
-                  title="Template scope — Company-wide or a specific division"
+                  title="Template scope â€” Company-wide or a specific division"
                 >
                   <option value="">Company-wide</option>
                   {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
@@ -1098,17 +847,17 @@ export default function TemplateEditorPage() {
 
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Template</label>
-              {/* Saved-template selector — switch which template is loaded for preview/edit */}
+              {/* Saved-template selector â€” switch which template is loaded for preview/edit */}
               <select
                 style={{ ...dropdownStyles.base, minWidth: "190px" }}
                 value={currentTemplateId ?? ""}
                 onChange={(e) => { if (e.target.value) handleTemplateSelect(Number(e.target.value)); }}
                 disabled={scopeTemplates.length === 0}
-                title="Saved template — switch to preview / edit another"
+                title="Saved template â€” switch to preview / edit another"
               >
                 {scopeTemplates.length === 0 && <option value="">New template (unsaved)</option>}
                 {scopeTemplates.map((t) => (
-                  <option key={t.id} value={t.id}>{t.isDefault ? `★ ${t.name}` : t.name}</option>
+                  <option key={t.id} value={t.id}>{t.isDefault ? `â˜… ${t.name}` : t.name}</option>
                 ))}
               </select>
             </div>
@@ -1134,6 +883,11 @@ export default function TemplateEditorPage() {
             <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={() => setShowManager(true)} title="Saved templates for this type & scope">
               <MdContentCopy size={16} /> Templates
             </button>
+            {canApplyStarter && currentTemplateId && (
+              <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={() => setShowApplyStarter(true)} title="Apply a starter design onto this template">
+                <MdBrush size={16} /> Import Starter
+              </button>
+            )}
             <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={() => htmlImportRef.current?.click()} title="Import HTML file">
               <MdUploadFile size={16} /> Import HTML
             </button>
@@ -1178,7 +932,7 @@ export default function TemplateEditorPage() {
                     disabled={sheetSaving}
                     onChange={(e) => handleSheetChange(e.target.value)}
                     title={excelSheetNames.length === 1
-                      ? "Single-sheet template — Auto-detect handles this case. You can still pin the sheet name if your import files use a different layout."
+                      ? "Single-sheet template â€” Auto-detect handles this case. You can still pin the sheet name if your import files use a different layout."
                       : "Pin the sheet that holds the data on every uploaded file. Leave 'Auto-detect' to let the importer choose."}
                   >
                     <option value="">
@@ -1204,7 +958,7 @@ export default function TemplateEditorPage() {
           ) : (
             <>
               <span style={{ fontSize: "0.8rem", color: colors.textSecondary }}>
-                No Excel template — Excel export button hidden on challan/invoice pages
+                No Excel template â€” Excel export button hidden on challan/invoice pages
               </span>
               <button
                 style={{ ...styles.btn, ...styles.btnOutline, padding: "0.3rem 0.6rem", fontSize: "0.78rem" }}
@@ -1314,7 +1068,7 @@ export default function TemplateEditorPage() {
 }
 
 const styles = {
-  // Labeled dropdown groups in the toolbar — a small caption above each
+  // Labeled dropdown groups in the toolbar â€” a small caption above each
   // <select> so it's obvious what each control selects.
   fieldGroup: { display: "flex", flexDirection: "column", gap: "0.18rem" },
   fieldLabel: {

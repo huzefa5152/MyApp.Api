@@ -768,6 +768,7 @@ function getBreadcrumb(pathname) {
     "/users": "User Management",
     "/roles": "Roles & Permissions",
     "/templates": "Configuration / Print Templates",
+    "/templates/edit": "Configuration / Print Templates / Editor",
     "/po-formats": "Configuration / PO Formats",
     "/units": "Configuration / Units",
     "/fbr-settings": "Configuration / FBR Settings",

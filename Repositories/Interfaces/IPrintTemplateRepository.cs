@@ -16,6 +16,12 @@ namespace MyApp.Api.Repositories.Interfaces
         // Upsert the company-level default's Excel path (legacy upload shim).
         Task<PrintTemplate> UpsertExcelPathAsync(int companyId, string templateType, string excelPath, string? sheetName = null);
 
+        // Division-aware export resolver: when the document carries a division,
+        // prefer that division scope's default template; otherwise (or if the
+        // division has no template of this type) fall back to the company-level
+        // default. This is what division-aware Excel export keys off.
+        Task<PrintTemplate?> GetForExportAsync(int companyId, int? divisionId, string templateType);
+
         // ── Scoped (multi-template) operations ──
         Task<List<PrintTemplate>> GetByCompanyAsync(int companyId);
         Task<PrintTemplate?> GetByIdAsync(int id);

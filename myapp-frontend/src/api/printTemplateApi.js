@@ -43,6 +43,15 @@ export const setDefaultTemplate = (id) =>
 export const deleteTemplate = (id) =>
   httpClient.delete(`/printtemplates/${id}`);
 
+// Apply a starter design onto an EXISTING template.
+// mode: "html" (replace body HTML, keep layout+metadata) | "all" (replace layout too).
+export const applyStarterToTemplate = (id, { htmlContent, mode = "html", starterName }) =>
+  httpClient.post(`/printtemplates/${id}/apply-starter`, {
+    htmlContent: htmlContent ?? "",
+    mode,
+    starterName: starterName || null,
+  });
+
 export const getMergeFields = (templateType) =>
   httpClient.get(`/mergefields/${templateType}`);
 
