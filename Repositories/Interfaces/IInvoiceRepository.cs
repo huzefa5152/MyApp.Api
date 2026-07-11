@@ -10,7 +10,7 @@ namespace MyApp.Api.Repositories.Interfaces
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? noteType = null);
+            int? noteType = null, string? fbrFilter = null);
         Task<Invoice?> GetByIdAsync(int id);
         Task<Invoice> CreateAsync(Invoice invoice);
         Task UpdateAsync(Invoice invoice);

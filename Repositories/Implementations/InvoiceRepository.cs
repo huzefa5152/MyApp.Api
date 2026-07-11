@@ -35,7 +35,7 @@ namespace MyApp.Api.Repositories.Implementations
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? noteType = null)
+            int? noteType = null, string? fbrFilter = null)
         {
             // Three disjoint document groups, each with its own numbering
             // sequence: sale bills (noteType null, default), Debit Notes
@@ -70,6 +70,45 @@ namespace MyApp.Api.Repositories.Implementations
                                          (item.ItemType != null && item.ItemType.Name.ToLower().Contains(term))) ||
                     i.DeliveryChallans.Any(dc => dc.ChallanNumber.ToString().Contains(term) ||
                                                   (dc.PoNumber != null && dc.PoNumber.ToLower().Contains(term))));
+            }
+
+            // FBR workflow-status filter (server-side so pagination stays correct).
+            //   submitted    → already sent to FBR
+            //   ready        → FBR setup complete (every line has HS Code + Sale
+            //                  Type + a UOM + a positive unit price), not yet
+            //                  submitted — ready to validate/submit. Mirrors the
+            //                  in-memory FbrReady flag / ComputeFbrMissing, in SQL.
+            //   notadjusted  → not submitted and at least one line still missing
+            //                  an FBR field (HS Code / Sale Type / UOM / price) —
+            //                  i.e. qty/price/HS not adjusted for FBR yet.
+            if (!string.IsNullOrWhiteSpace(fbrFilter))
+            {
+                switch (fbrFilter.Trim().ToLowerInvariant())
+                {
+                    case "submitted":
+                        query = query.Where(i => i.FbrStatus == "Submitted");
+                        break;
+                    case "ready":
+                        query = query.Where(i =>
+                            i.FbrStatus != "Submitted" && !i.IsCancelled &&
+                            i.Items.Any() &&
+                            !i.Items.Any(it =>
+                                it.HSCode == null || it.HSCode == "" ||
+                                it.SaleType == null || it.SaleType == "" ||
+                                (it.FbrUOMId == null && (it.UOM == null || it.UOM == "")) ||
+                                it.UnitPrice <= 0));
+                        break;
+                    case "notadjusted":
+                        query = query.Where(i =>
+                            i.FbrStatus != "Submitted" && !i.IsCancelled &&
+                            (!i.Items.Any() ||
+                             i.Items.Any(it =>
+                                it.HSCode == null || it.HSCode == "" ||
+                                it.SaleType == null || it.SaleType == "" ||
+                                (it.FbrUOMId == null && (it.UOM == null || it.UOM == "")) ||
+                                it.UnitPrice <= 0)));
+                        break;
+                }
             }
 
             var totalCount = await query.CountAsync();

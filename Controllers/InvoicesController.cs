@@ -69,7 +69,10 @@ namespace MyApp.Api.Controllers
             [FromQuery] int? clientId = null,
             [FromQuery] DateTime? dateFrom = null,
             [FromQuery] DateTime? dateTo = null,
-            [FromQuery] string? type = null)
+            [FromQuery] string? type = null,
+            // FBR workflow status: "submitted" | "ready" | "notadjusted"
+            // (see InvoiceRepository.GetPagedByCompanyAsync). Empty → no filter.
+            [FromQuery] string? fbrFilter = null)
         {
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
@@ -80,7 +83,7 @@ namespace MyApp.Api.Controllers
                           : string.Equals(type, "creditnotes", StringComparison.OrdinalIgnoreCase) ? 10
                           : null;
             var result = await _service.GetPagedByCompanyAsync(
-                companyId, clampedPage, size, search, clientId, dateFrom, dateTo, noteType);
+                companyId, clampedPage, size, search, clientId, dateFrom, dateTo, noteType, fbrFilter);
             return Ok(result);
         }
 

@@ -170,6 +170,10 @@ export default function InvoicePage({ mode = "invoices" }) {
     setSearchParams(next, { replace: true });
   }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
   const [clientFilter, setClientFilter] = useState("");
+  // FBR workflow-status filter: "" (all) | "notadjusted" | "ready" | "submitted".
+  // Applied server-side (paged endpoint) so it paginates correctly. Shown on the
+  // Bills and Invoices tabs. See InvoiceRepository.GetPagedByCompanyAsync.
+  const [fbrFilter, setFbrFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [hasExcelBill, setHasExcelBill] = useState(false);
@@ -194,6 +198,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       const params = { page: pg || page };
       if (search) params.search = search;
       if (clientFilter) params.clientId = clientFilter;
+      if (fbrFilter) params.fbrFilter = fbrFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
       // Note tabs list ONLY their own type; other tabs get sale bills
@@ -222,7 +227,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       });
     } catch { setInvoices([]); setTotalCount(0); setTotalPages(0); }
     finally { setLoadingInvoices(false); }
-  }, [page, search, clientFilter, dateFrom, dateTo]);
+  }, [page, search, clientFilter, fbrFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -245,10 +250,10 @@ export default function InvoicePage({ mode = "invoices" }) {
 
   useEffect(() => {
     if (selectedCompany) fetchInvoices(selectedCompany.id, page);
-  }, [page, search, clientFilter, dateFrom, dateTo]);
+  }, [page, search, clientFilter, fbrFilter, dateFrom, dateTo]);
 
   const resetFilters = () => {
-    setSearch(""); setClientFilter(""); setDateFrom(""); setDateTo(""); setPage(1);
+    setSearch(""); setClientFilter(""); setFbrFilter(""); setDateFrom(""); setDateTo(""); setPage(1);
   };
 
   const handleFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
@@ -673,7 +678,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     setBulkResults({ open: true, action: "submit", items: results });
   };
 
-  const hasFilters = search || clientFilter || dateFrom || dateTo;
+  const hasFilters = search || clientFilter || fbrFilter || dateFrom || dateTo;
 
   return (
     <div>
@@ -824,6 +829,21 @@ export default function InvoicePage({ mode = "invoices" }) {
                 <select className="filter-select" value={clientFilter} onChange={handleFilterChange(setClientFilter)}>
                   <option value="">All Clients</option>
                   {clients.map((cl) => <option key={cl.id} value={cl.id}>{cl.name}</option>)}
+                </select>
+              )}
+              {/* FBR workflow-status filter — Bills & Invoices tabs (not the
+                  immutable note tabs). Server-side, so it paginates correctly. */}
+              {!isNotesMode && (
+                <select
+                  className="filter-select"
+                  value={fbrFilter}
+                  onChange={handleFilterChange(setFbrFilter)}
+                  title="Filter by FBR status"
+                >
+                  <option value="">All FBR statuses</option>
+                  <option value="notadjusted">Not adjusted (needs HS/qty/price)</option>
+                  <option value="ready">Ready to validate</option>
+                  <option value="submitted">Submitted to FBR</option>
                 </select>
               )}
               <div className="filter-date-group">
