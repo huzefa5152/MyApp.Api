@@ -284,14 +284,23 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       });
       return;
     }
-    updateRow(localId, {
-      itemTypeId: picked.id,
-      itemTypeName: picked.name || "",
-      hsCode: picked.hsCode || "",
-      uom: picked.uom || "",
-      fbrUOMId: picked.fbrUOMId || null,
-      saleType: picked.saleType || "",
-    });
+    // Item Type sets the FBR classification (HS Code / Sale Type) but leaves
+    // the Description exactly as typed, and keeps the operator's UOM if they
+    // entered one — the Item Type's UOM only fills an EMPTY unit (no issue
+    // there since there's no challan unit to preserve).
+    setRows((prev) => prev.map((r) => {
+      if (r.localId !== localId) return r;
+      const keepUom = !!r.uom?.trim();
+      return {
+        ...r,
+        itemTypeId: picked.id,
+        itemTypeName: picked.name || "",
+        hsCode: picked.hsCode || "",
+        saleType: picked.saleType || "",
+        uom: keepUom ? r.uom : (picked.uom || ""),
+        fbrUOMId: keepUom ? r.fbrUOMId : (picked.fbrUOMId || null),
+      };
+    }));
   };
 
   // Bulk-apply: stamp one Item Type onto every row (or only empty rows).
@@ -360,13 +369,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
   const rowErrors = (r) => {
     const errs = [];
-    // Bills mode: Item Type column is hidden, so the operator types
-    // description directly. Description is required either way.
-    if (billsMode) {
-      if (!r.description?.trim()) errs.push("description");
-    } else {
-      if (!r.itemTypeId) errs.push("itemType");
-    }
+    // Item Type is required on every bill (both tabs) so the invoice can
+    // always group its lines by Item Type — the same shape sent to FBR.
+    if (!r.itemTypeId) errs.push("itemType");
+    // Bills mode still carries a free-text description column alongside it.
+    if (billsMode && !r.description?.trim()) errs.push("description");
     const q = parseFloat(r.quantity);
     if (!(q > 0)) errs.push("qty>0");
     const p = parseFloat(r.unitPrice);
@@ -793,8 +800,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                           the operator picked the wrong category in bulk
                           and wants to start over. Only shown once there
                           are 2+ rows since both actions have no value at
-                          row count = 1. Hidden in Bills mode. */}
-                      {!billsMode && rows.length > 1 && (
+                          row count = 1. Shown in both tabs now that Item
+                          Type is required on every bill. */}
+                      {rows.length > 1 && (
                         <div style={styles.bulkApplyBar}>
                           <span style={{ fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 500 }}>
                             Apply same Item Type to:
@@ -834,9 +842,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         <table style={styles.unifiedTable}>
                           <thead>
                             <tr style={styles.unifiedThead}>
-                              {!billsMode && (
-                                <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "22%" : "26%" }}>Item Type *</th>
-                              )}
+                              {/* Item Type required on every bill (both tabs). */}
+                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "22%" : "26%" }}>Item Type *</th>
                               <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "16%" : "20%" }}>Description{billsMode ? " *" : ""}</th>
                               <th style={{ ...styles.unifiedTh, width: "7%" }}>Qty *</th>
                               <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
@@ -861,17 +868,18 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               const p = parseFloat(r.unitPrice) || 0;
                               return (
                                 <tr key={r.localId} style={styles.unifiedRow}>
-                                  {!billsMode && (
-                                    <td style={styles.unifiedTd}>
-                                      <SearchableItemTypeSelect
-                                        items={filteredItemTypes}
-                                        value={r.itemTypeId}
-                                        onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
-                                        placeholder="Pick from your catalog…"
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                      />
-                                    </td>
-                                  )}
+                                  <td style={styles.unifiedTd}>
+                                    <SearchableItemTypeSelect
+                                      items={filteredItemTypes}
+                                      value={r.itemTypeId}
+                                      onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
+                                      placeholder="Pick item… *"
+                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(r.itemTypeId ? {} : { borderColor: colors.warn }) }}
+                                    />
+                                    {!r.itemTypeId && (
+                                      <div style={{ marginTop: 2, fontSize: "0.62rem", color: colors.warn, fontWeight: 700 }}>Required</div>
+                                    )}
+                                  </td>
                                   {/* Description: in Invoices mode it stays locked to the
                                       picked item type's name (text display). In Bills mode
                                       it becomes a LookupAutocomplete tied to /lookup/items —

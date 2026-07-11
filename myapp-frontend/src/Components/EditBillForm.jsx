@@ -132,6 +132,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const [loading, setLoading] = useState(true);
   // Bulk-apply mode for the "Apply same Item Type to all rows" UX.
   const [bulkApplyMode, setBulkApplyMode] = useState("all");
+  // Invoice-mode view: "grouped" collapses every line sharing an Item Type
+  // into one editable row (summed qty + summed value) — the same shape FBR
+  // receives — while "lines" shows each bill line individually. Only used
+  // when the Item Type column is visible (!billsMode). Defaults to grouped
+  // so the operator edits the invoice at FBR granularity out of the box.
+  const [groupedView, setGroupedView] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -649,25 +655,32 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
     };
   };
 
-  // Apply a catalog row to one bill line. Sets ItemType + the inherited
-  // FBR fields (UOM, HS Code, Sale Type, FbrUOMId). Clearing the
-  // ItemType wipes the inherited fields so stale data doesn't ship to FBR.
+  // Apply a catalog row to one bill line. Sets ItemType + the inherited FBR
+  // fields (HS Code, Sale Type). The UOM (+ its FbrUOMId) is adopted from the
+  // Item Type ONLY in Invoice mode (the FBR-classification tab). In Bills mode
+  // the line keeps its own challan/physical UOM — picking an Item Type there
+  // must not change the unit. (Description is only filled when empty, never
+  // overwritten.)
   const _applyItemTypeToRow = (current, newId, pickedType) => {
     const next = { ...current };
     next.itemTypeId = newId || null;
     if (pickedType) {
       next.itemTypeName = pickedType.name || "";
-      next.uom = pickedType.uom || "";
-      next.fbrUOMId = pickedType.fbrUOMId || null;
       next.hsCode = pickedType.hsCode || "";
       next.saleType = pickedType.saleType || "";
+      if (!billsMode) {
+        next.uom = pickedType.uom || "";
+        next.fbrUOMId = pickedType.fbrUOMId || null;
+      }
       if (!next.description?.trim()) next.description = pickedType.name || "";
     } else {
       next.itemTypeName = "";
-      next.uom = "";
-      next.fbrUOMId = null;
       next.hsCode = "";
       next.saleType = "";
+      if (!billsMode) {
+        next.uom = "";
+        next.fbrUOMId = null;
+      }
     }
     return next;
   };
@@ -738,6 +751,170 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
       return nextRow;
     }));
   };
+
+  // ── Grouped-by-Item-Type view (invoice mode) ──────────────────────
+  // FBR submission + the Tax Invoice print collapse every line sharing an
+  // Item Type into ONE row (summed qty + summed value — see
+  // FbrService.PostInvoiceAsync / InvoiceService.GetPrintTaxInvoiceAsync).
+  // This view mirrors that exactly so the operator edits the invoice at
+  // the same granularity FBR receives: a bill of 10 lines (5 hardware + 5
+  // chemical) shows as 2 editable rows.
+  //
+  // Grouping is a PURE LENS over items[]: the group editors below write
+  // straight back into the underlying lines, so Save, the total-
+  // preservation guard, and the tax-claim panel all keep reading items[]
+  // untouched. Group key = itemTypeId (the name is derived from it); a
+  // line without an Item Type gets its own singleton group so nothing is
+  // ever hidden.
+  const itemGroups = useMemo(() => {
+    const map = new Map();
+    items.forEach((it, idx) => {
+      const key = it.itemTypeId ? `t${it.itemTypeId}` : `u${idx}`;
+      const g = map.get(key) || {
+        key,
+        itemTypeId: it.itemTypeId || null,
+        itemTypeName: it.itemTypeName || "",
+        uom: it.uom || "",
+        hsCode: it.hsCode || "",
+        saleType: it.saleType || "",
+        description: it.description || "",
+        lineIndices: [],
+        totalQty: 0,
+        totalValue: 0,
+      };
+      const qty = parseFloat(it.quantity) || 0;
+      const val = parseFloat(it.lineTotal) || qty * (parseFloat(it.unitPrice) || 0);
+      g.lineIndices.push(idx);
+      g.totalQty += qty;
+      g.totalValue += val;
+      // Prefer the most complete catalog-derived labels across the group's
+      // lines (they should all match, but be defensive against blanks).
+      if (it.itemTypeName) g.itemTypeName = it.itemTypeName;
+      if (it.hsCode) g.hsCode = it.hsCode;
+      if (it.saleType) g.saleType = it.saleType;
+      if (it.uom) g.uom = it.uom;
+      map.set(key, g);
+    });
+    return Array.from(map.values()).map((g) => {
+      // Round the running sums so float addition artefacts (0.1+0.2…) don't
+      // surface in the qty/value cells.
+      const totalQty = Math.round(g.totalQty * 10000) / 10000;
+      const totalValue = Math.round(g.totalValue * 100) / 100;
+      return {
+        ...g,
+        totalQty,
+        totalValue,
+        // Weighted-average unit price (Σvalue / Σqty). FBR itself never
+        // carries a grouped unit price — it takes summed qty + summed value —
+        // so this is a display/entry convenience only.
+        unitPrice: totalQty > 0 ? Math.round((totalValue / totalQty) * 100) / 100 : 0,
+      };
+    });
+  }, [items]);
+
+  // Every line carries an Item Type → the grouped view is a faithful mirror
+  // of the FBR payload. When some lines aren't classified yet the grouped
+  // view still renders (unclassified lines appear as their own rows).
+  const allClassified = items.length > 0 && items.every((it) => !!it.itemTypeId);
+  // Grouping only collapses anything when at least one Item Type spans
+  // multiple lines. If every line is already its own group, grouped and
+  // line views render identically.
+  const groupingCollapses = itemGroups.length < items.length;
+
+  // Set a uniform unit price on every line in a group and recompute each
+  // line total. Every line in an FBR group ships under one grouped price
+  // anyway, so a single per-line price is faithful to the submission.
+  const setGroupUnitPrice = (group, newPrice) => {
+    const parsed = parseFloat(newPrice);
+    const price = isNaN(parsed) ? 0 : parsed;
+    setItems((prev) => {
+      const next = [...prev];
+      group.lineIndices.forEach((i) => {
+        const qty = parseFloat(next[i].quantity) || 0;
+        next[i] = { ...next[i], unitPrice: price, lineTotal: Math.round(qty * price * 100) / 100 };
+      });
+      return next;
+    });
+  };
+
+  // Set a group's TOTAL quantity, distributed across its lines in
+  // proportion to each line's current quantity (equal split when the group
+  // currently sums to zero). Integer-only groups (every current line qty is
+  // a whole number — the Pcs / SET case) stay integer: shares are floored
+  // and the remainder handed out largest-fraction-first, so a "7" across
+  // two lines becomes 4 + 3, never 3.5 + 3.5 (which the backend rejects for
+  // integer UOMs). Fractional groups distribute to 4 dp with the last line
+  // absorbing rounding so the lines always re-sum to the entered total.
+  const setGroupQty = (group, newTotalQty) => {
+    const parsed = parseFloat(newTotalQty);
+    const target = isNaN(parsed) ? 0 : parsed;
+    setItems((prev) => {
+      const next = [...prev];
+      const idxs = group.lineIndices;
+      const curQtys = idxs.map((i) => parseFloat(next[i].quantity) || 0);
+      const curTotal = curQtys.reduce((s, q) => s + q, 0);
+      const integerGroup = Number.isInteger(target) && curQtys.every((q) => Number.isInteger(q));
+
+      let assigned;
+      if (integerGroup) {
+        const shares = curQtys.map((q) => (curTotal > 0 ? target * (q / curTotal) : target / idxs.length));
+        assigned = shares.map((s) => Math.floor(s));
+        let rem = target - assigned.reduce((a, b) => a + b, 0);
+        const order = shares
+          .map((s, k) => ({ k, frac: s - Math.floor(s) }))
+          .sort((a, b) => b.frac - a.frac);
+        for (let j = 0; j < order.length && rem > 0; j++) { assigned[order[j].k]++; rem--; }
+      } else {
+        assigned = [];
+        let remaining = target;
+        idxs.forEach((_i, k) => {
+          if (k === idxs.length - 1) {
+            assigned[k] = Math.round(Math.max(0, remaining) * 10000) / 10000;
+          } else {
+            const share = curTotal > 0 ? curQtys[k] / curTotal : 1 / idxs.length;
+            const q = Math.round(target * share * 10000) / 10000;
+            assigned[k] = q;
+            remaining -= q;
+          }
+        });
+      }
+
+      idxs.forEach((i, k) => {
+        const price = parseFloat(next[i].unitPrice) || 0;
+        const q = assigned[k];
+        next[i] = { ...next[i], quantity: q, lineTotal: Math.round(q * price * 100) / 100 };
+      });
+      return next;
+    });
+  };
+
+  // Reclassify an entire group to a different Item Type — applies to every
+  // line in the group. Reuses the per-row helper so UOM / HS Code / Sale
+  // Type inherit from the picked catalog row, and honours the same
+  // invoice-mode qty/price reset that updateItemType applies on HS change.
+  const updateGroupItemType = (group, newId, pickedType) => {
+    setItems((prev) => {
+      const next = [...prev];
+      group.lineIndices.forEach((i) => {
+        const oldHs = (next[i].hsCode || "").trim();
+        const newHs = (pickedType?.hsCode || "").trim();
+        const hsChanged = oldHs !== newHs;
+        next[i] = _applyItemTypeToRow(next[i], newId, pickedType);
+        if (!billsMode && hsChanged) {
+          const orig = originalItemsRef.current[i];
+          if (orig) {
+            next[i] = { ...next[i], quantity: orig.quantity, unitPrice: orig.unitPrice, lineTotal: orig.lineTotal };
+          }
+        }
+      });
+      return next;
+    });
+  };
+
+  // Grouped view is offered on the Invoices tab (Item Type column visible)
+  // and only actually renders grouped rows when grouping collapses lines.
+  const showGroupToggle = !billsMode && items.length > 1 && groupingCollapses;
+  const renderGrouped = showGroupToggle && groupedView;
 
   // Derived: what's the common Item Type across rows? Used to drive
   // the bulk picker's `value` so the dropdown actually reflects what's
@@ -815,6 +992,16 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
     e.preventDefault();
     setError("");
     if (items.length === 0) return setError("No items to save.");
+
+    // Item Type is required on every line so the invoice can always group
+    // by it (Bills + Invoices tabs alike). Guard every save path.
+    const unclassified = items.filter((i) => !i.itemTypeId).length;
+    if (unclassified > 0) {
+      return setError(
+        `Select an Item Type for every line — ${unclassified} line${unclassified === 1 ? "" : "s"} still missing one. ` +
+        `Use "Apply same Item Type to all" to classify in bulk.`
+      );
+    }
 
     setSaving(true);
     try {
@@ -1129,13 +1316,42 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
 
                 {/* Items table — no add/remove; only field edits */}
                 <div style={styles.sectionHeadingRow}>
-                  <h6 style={{ ...styles.sectionHeading, margin: 0 }}>Items ({items.length})</h6>
+                  <h6 style={{ ...styles.sectionHeading, margin: 0 }}>
+                    Items ({renderGrouped ? `${itemGroups.length} item ${itemGroups.length === 1 ? "type" : "types"} · ${items.length} lines` : items.length})
+                  </h6>
+                  {/* Grouped ⇄ Individual lines toggle. Grouped view sums qty
+                      + value per Item Type — the same shape FBR receives —
+                      so the operator edits at submission granularity. Switch
+                      to lines to re-classify individual rows or fine-tune a
+                      single line. */}
+                  {showGroupToggle && (
+                    <div style={styles.viewToggle} role="group" aria-label="Item view">
+                      <button
+                        type="button"
+                        onClick={() => setGroupedView(true)}
+                        style={{ ...styles.viewToggleBtn, ...(groupedView ? styles.viewToggleBtnActive : {}) }}
+                        aria-pressed={groupedView}
+                        title="Group lines by Item Type (summed qty + value) — matches the FBR submission"
+                      >
+                        Grouped by Item Type
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGroupedView(false)}
+                        style={{ ...styles.viewToggleBtn, ...(!groupedView ? styles.viewToggleBtnActive : {}) }}
+                        aria-pressed={!groupedView}
+                        title="Show every bill line individually"
+                      >
+                        Individual lines
+                      </button>
+                    </div>
+                  )}
                   {/* "+ New Item Type" fallback — single-item bills don't
                       render the bulk-apply bar, so the button lives here
                       for that case. Multi-item bills get the button
                       inside the bulk-apply row below. Same permission
                       gate (itemtypes.manage.create). */}
-                  {forceItemTypeAndQty && canCreateItemType && items.length <= 1 && (
+                  {!lockItemType && canCreateItemType && items.length <= 1 && (
                     <button
                       type="button"
                       onClick={() => setShowAddItemType(true)}
@@ -1147,10 +1363,18 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                   )}
                 </div>
 
-                {!readOnly && (
+                {!readOnly && !renderGrouped && (
                   <p style={styles.gridHint}>
                     Pick an <b>Item Type</b> — UOM, HS Code &amp; Sale Type auto-fill from the catalog and
                     <b> cannot be edited inline</b>. To change them, pick a different Item Type or edit the Item Type row on the catalog page.
+                  </p>
+                )}
+                {!readOnly && renderGrouped && (
+                  <p style={styles.gridHint}>
+                    Showing one row per <b>Item Type</b> — quantity and value are summed across all its lines
+                    (the same grouping sent to FBR). Editing <b>Qty</b> spreads the new total across the group's
+                    lines; editing <b>Unit Price</b> sets one price for the whole group. Switch to
+                    <b> Individual lines</b> to re-classify or fine-tune a single line.
                   </p>
                 )}
 
@@ -1180,8 +1404,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                       - "All rows": overwrites Item Type on every row
                       - "Empty rows only": fills only rows that don't have one
                     Available to narrow-perm users too — it's still just an
-                    Item Type pick. Hidden in Bills mode. */}
-                {!billsMode && !lockItemType && items.length > 1 && (
+                    Item Type pick. Shown in both tabs (Item Type is required
+                    on every bill); hidden only in grouped view (grouped rows
+                    carry their own per-Item-Type picker). */}
+                {!lockItemType && items.length > 1 && !renderGrouped && (
                   <div style={styles.bulkApplyBar}>
                     <span style={styles.bulkApplyLabel}>
                       Apply same Item Type to:
@@ -1253,7 +1479,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     {/* "+ New Item Type" — placed AFTER the item-type
                         picker so the operator's natural left-to-right
                         flow is "try to find it → can't → add it here". */}
-                    {forceItemTypeAndQty && canCreateItemType && (
+                    {canCreateItemType && (
                       <button
                         type="button"
                         onClick={() => setShowAddItemType(true)}
@@ -1270,9 +1496,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                   <table style={styles.table}>
                     <thead>
                       <tr style={styles.thead}>
-                        {!billsMode && (
-                          <th style={{ ...styles.th, width: 180, minWidth: 180 }}>Item Type (FBR)</th>
-                        )}
+                        {/* Item Type is now required on every bill (both
+                            tabs) so the invoice can always group by it —
+                            shown in Bills mode too, not just Invoices. */}
+                        <th style={{ ...styles.th, width: 180, minWidth: 180 }}>Item Type (FBR)</th>
                         <th style={{ ...styles.th, minWidth: 140 }}>Description</th>
                         <th style={{ ...styles.th, width: 120, minWidth: 120 }}>Qty</th>
                         <th style={{ ...styles.th, width: 110, minWidth: 110 }}>UOM</th>
@@ -1287,25 +1514,103 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((item, idx) => {
+                      {/* Grouped rows — one per Item Type, qty + value
+                          summed across its lines. Mirrors the FBR payload.
+                          Editing qty/price distributes back into the
+                          underlying items[] (see setGroupQty /
+                          setGroupUnitPrice); Save reads items[] as always. */}
+                      {renderGrouped && itemGroups.map((group) => {
+                        const multi = group.lineIndices.length > 1;
+                        return (
+                          <tr key={group.key} style={multi ? styles.groupedRow : undefined}>
+                            <td style={styles.td}>
+                              {lockItemType ? (
+                                <div style={styles.readOnlyText}>{group.itemTypeName || <span style={styles.muted}>—</span>}</div>
+                              ) : (
+                                <SearchableItemTypeSelect
+                                  items={filteredItemTypes}
+                                  value={group.itemTypeId || ""}
+                                  onChange={(newId, picked) => updateGroupItemType(group, newId ? parseInt(newId) : null, picked)}
+                                  placeholder="Pick item…"
+                                  style={styles.tableInput}
+                                />
+                              )}
+                            </td>
+                            <td style={styles.td}>
+                              <div style={styles.readOnlyText}>{group.itemTypeName || group.description || <span style={styles.muted}>—</span>}</div>
+                              {multi && (
+                                <div style={styles.groupMeta}>grouped from {group.lineIndices.length} lines</div>
+                              )}
+                            </td>
+                            <td style={styles.td}>
+                              {/* Summed quantity for the whole Item Type.
+                                  Editing redistributes across the group's
+                                  lines (integer-aware) — see setGroupQty. */}
+                              <QuantityInput
+                                value={group.totalQty}
+                                onChange={(val) => setGroupQty(group, val)}
+                                unit={group.uom}
+                                units={units}
+                                disabled={lockQty}
+                                readOnly={lockQty}
+                                style={{ ...styles.tableInput, ...(lockQty ? styles.readOnlyInput : {}), textAlign: "right" }}
+                              />
+                            </td>
+                            <td style={{ ...styles.td, ...styles.readOnlyCell }} title="Comes from Item Type">
+                              {group.uom || <span style={styles.muted}>—</span>}
+                            </td>
+                            <td style={styles.td}>
+                              {/* Weighted-average unit price. Editing sets a
+                                  single price across every line in the group. */}
+                              <input
+                                type="number"
+                                style={{ ...styles.tableInput, ...(lockPrice ? styles.readOnlyInput : {}), textAlign: "right" }}
+                                value={group.unitPrice}
+                                onChange={(e) => setGroupUnitPrice(group, e.target.value)}
+                                min={0}
+                                step={0.01}
+                                readOnly={lockPrice}
+                              />
+                              {multi && !lockPrice && (
+                                <div style={styles.groupMeta} title="Weighted average across the grouped lines. Editing sets one price for the whole group.">
+                                  avg · applies to all {group.lineIndices.length}
+                                </div>
+                              )}
+                            </td>
+                            <td style={{ ...styles.td, fontWeight: 600, color: colors.textPrimary, textAlign: "right" }}>
+                              {(Math.round(group.totalValue * 100) / 100).toLocaleString()}
+                            </td>
+                            <td style={{ ...styles.td, ...styles.readOnlyCell, fontFamily: "monospace" }} title="Comes from Item Type">
+                              {group.hsCode || <span style={styles.muted}>—</span>}
+                            </td>
+                            <td style={{ ...styles.td, ...styles.readOnlyCell, fontSize: "0.72rem" }} title="Comes from Item Type">
+                              {group.saleType || <span style={styles.muted}>—</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {!renderGrouped && items.map((item, idx) => {
                         const hasItemType = !!item.itemTypeId;
                         return (
                           <tr key={item.id || `new-${idx}`}>
-                            {!billsMode && (
-                              <td style={styles.td}>
-                                {lockItemType ? (
-                                  <div style={styles.readOnlyText}>{item.itemTypeName || <span style={styles.muted}>—</span>}</div>
-                                ) : (
+                            <td style={styles.td}>
+                              {lockItemType ? (
+                                <div style={styles.readOnlyText}>{item.itemTypeName || <span style={styles.muted}>—</span>}</div>
+                              ) : (
+                                <>
                                   <SearchableItemTypeSelect
                                     items={filteredItemTypes}
                                     value={item.itemTypeId || ""}
                                     onChange={(newId, picked) => updateItemType(idx, newId ? parseInt(newId) : null, picked)}
                                     placeholder="Pick item…"
-                                    style={styles.tableInput}
+                                    style={{ ...styles.tableInput, ...(hasItemType ? {} : { borderColor: colors.warn }) }}
                                   />
-                                )}
-                              </td>
-                            )}
+                                  {!hasItemType && (
+                                    <div style={styles.requiredHint}>Required</div>
+                                  )}
+                                </>
+                              )}
+                            </td>
                             <td style={styles.td}>
                               {lockNonItemType ? (
                                 <div style={styles.readOnlyText}>{item.description || <span style={styles.muted}>—</span>}</div>
@@ -2876,6 +3181,14 @@ const styles = {
     backgroundColor: "#f8faff",
   },
   bulkApplyLabel: { fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 500 },
+  // Grouped ⇄ Individual lines segmented toggle.
+  viewToggle: { display: "inline-flex", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, overflow: "hidden", backgroundColor: "#fff" },
+  viewToggleBtn: { padding: "0.35rem 0.7rem", fontSize: "0.76rem", fontWeight: 600, color: colors.textSecondary, backgroundColor: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap" },
+  viewToggleBtnActive: { backgroundColor: colors.blue, color: "#fff" },
+  // Grouped table affordances.
+  groupedRow: { backgroundColor: "#fbfcfe" },
+  groupMeta: { marginTop: 2, fontSize: "0.68rem", color: colors.textSecondary, fontStyle: "italic" },
+  requiredHint: { marginTop: 2, fontSize: "0.66rem", color: colors.warn, fontWeight: 700 },
   totalsBox: { marginTop: "1rem", padding: "0.75rem 1rem", backgroundColor: "#f5f7fa", borderRadius: 8, maxWidth: 360, marginLeft: "auto" },
   totalsRow: { display: "flex", justifyContent: "space-between", fontSize: "0.88rem", color: colors.textPrimary, padding: "0.2rem 0" },
 };

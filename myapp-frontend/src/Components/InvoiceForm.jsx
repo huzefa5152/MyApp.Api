@@ -158,28 +158,21 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (!newId || !picked) return;
     setItemTypeIds((prev) => {
       const next = { ...prev };
-      const newHs = {}, newSt = {}, newUom = {}, newFbrUom = {}, newDesc = {};
+      const newHs = {}, newSt = {};
       for (const item of allItems) {
         const id = item.id;
         if (mode === "empty" && next[id]) continue;
         next[id] = parseInt(newId);
         if (picked.hsCode) newHs[id] = picked.hsCode;
         if (picked.saleType) newSt[id] = picked.saleType;
-        if (picked.uom) newUom[id] = picked.uom;
-        if (picked.fbrUOMId) newFbrUom[id] = picked.fbrUOMId;
-        // Description ALWAYS becomes the item type's name now — the
-        // description input is read-only when an item type is set, so
-        // there's no preserved free-text edit to step on. Clearing the
-        // item type later will unlock the description for editing.
-        if (picked.name) newDesc[id] = picked.name;
+        // Description AND UOM are intentionally NOT touched — each row keeps
+        // its own challan product description + unit; Item Type only sets the
+        // FBR classification (HS Code / Sale Type).
       }
       // Apply the keyed updates outside this updater so each set runs.
       setTimeout(() => {
         if (Object.keys(newHs).length) setItemHsCodes(p => ({ ...p, ...newHs }));
         if (Object.keys(newSt).length) setItemSaleTypes(p => ({ ...p, ...newSt }));
-        if (Object.keys(newUom).length) setItemUoms(p => ({ ...p, ...newUom }));
-        if (Object.keys(newFbrUom).length) setItemFbrUomIds(p => ({ ...p, ...newFbrUom }));
-        if (Object.keys(newDesc).length) setItemDescriptions(p => ({ ...p, ...newDesc }));
       }, 0);
       return next;
     });
@@ -441,6 +434,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const grandTotal = subtotal + gstAmount;
 
   const allPricesValid = allItems.length > 0 && allItems.every((i) => itemPrices[i.id] && parseFloat(itemPrices[i.id]) > 0);
+  // Item Type is required on every line so the invoice can always group by
+  // it (5 hardware + 5 chemical lines → 2 grouped rows on the invoice).
+  const allItemTypesValid = allItems.length > 0 && allItems.every((i) => !!itemTypeIds[i.id]);
 
   const handlePriceChange = (itemId, value) => {
     setItemPrices((prev) => ({ ...prev, [itemId]: value }));
@@ -472,6 +468,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
     const missingPrices = allItems.filter((i) => !itemPrices[i.id] || parseFloat(itemPrices[i.id]) <= 0);
     if (missingPrices.length > 0) return setError("Enter unit price for all items.");
+
+    const missingItemTypes = allItems.filter((i) => !itemTypeIds[i.id]);
+    if (missingItemTypes.length > 0) return setError(
+      `Select an Item Type for every item — ${missingItemTypes.length} still missing. ` +
+      `Use "Apply same Item Type to all" to classify in bulk.`
+    );
 
     setSaving(true);
     try {
@@ -506,10 +508,14 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           deliveryItemId: item.id,
           unitPrice: parseFloat(itemPrices[item.id]),
           description: itemDescriptions[item.id] || item.description,
-          // ItemType link (new) — when set, backend re-derives HS/UOM/SaleType from catalog
+          // ItemType link (new) — when set, backend re-derives HS/SaleType from catalog
           itemTypeId: itemTypeIds[item.id] || null,
-          // Optional FBR fields — sent only if user filled them in (or auto-filled from picked ItemType)
-          uom: itemUoms[item.id]?.trim() || null,
+          // UOM stays the challan line's own unit (item.unit) unless the operator
+          // typed an override (itemUoms). Sending it explicitly makes the backend
+          // keep the challan UOM instead of substituting the Item Type's — the
+          // Item Type's UOM is only applied on the Invoices tab. Empty → backend
+          // falls back to the Item Type's UOM (fine when the challan had none).
+          uom: (itemUoms[item.id] ?? item.unit)?.trim() || null,
           fbrUOMId: itemFbrUomIds[item.id] || null,
           hsCode: itemHsCodes[item.id]?.trim() || null,
           // Sale Type: when a scenario is locked in, EVERY line ships the
@@ -1056,8 +1062,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         {/* Bulk Item Type apply — single dropdown sets the
                             same catalog row across all lines. Saves 20+
                             picks when every item on the bill is the same
-                            FBR category. Hidden in Bills mode. */}
-                        {!billsMode && allItems.length > 1 && (
+                            FBR category. Shown in both modes now that Item
+                            Type is required on every bill. */}
+                        {allItems.length > 1 && (
                           <div style={{
                             display: "flex", alignItems: "center", gap: "0.65rem",
                             flexWrap: "wrap", padding: "0.55rem 0.85rem",
@@ -1112,9 +1119,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             <thead>
                               <tr style={styles.unifiedThead}>
                                 <th style={{ ...styles.unifiedTh, width: "4%" }}>DC#</th>
-                                {!billsMode && (
-                                  <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type (FBR)</th>
-                                )}
+                                {/* Item Type is required on every bill so the
+                                    invoice can group by it — shown in both
+                                    Bills and Invoices modes. */}
+                                <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type (FBR) *</th>
                                 <th style={{ ...styles.unifiedTh, width: "16%" }}>Description</th>
                                 <th style={{ ...styles.unifiedTh, width: "9%" }}>Qty</th>
                                 <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
@@ -1143,7 +1151,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                     <td style={{ ...styles.unifiedTd, fontSize: "0.76rem", color: colors.textSecondary }}>
                                       {item.challanNumber}
                                     </td>
-                                    {!billsMode && (
                                     <td style={styles.unifiedTd}>
                                       {/* Picking an ItemType auto-fills HS Code, UOM, SaleType,
                                           FbrUOMId on this row — identical behaviour to EditBillForm.
@@ -1155,67 +1162,45 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                         onChange={(newId, picked) => {
                                           setItemTypeIds((p) => ({ ...p, [item.id]: newId ? parseInt(newId) : null }));
                                           if (picked) {
-                                            // Picking an ItemType binds these fields to the catalog row.
-                                            // Description switches to the item type's name and the
-                                            // input goes read-only — same UX as the no-challan form.
-                                            if (picked.name) setItemDescriptions((p) => ({ ...p, [item.id]: picked.name }));
+                                            // Picking an ItemType binds the FBR classification fields
+                                            // (HS Code, Sale Type). It deliberately does NOT touch the
+                                            // Description or the UOM — those stay the challan line's own
+                                            // values (the physical delivery). The Item Type's UOM is
+                                            // applied later on the Invoices tab, not here. If the challan
+                                            // line carries no UOM, the backend falls back to the Item
+                                            // Type's UOM on save (no issue).
                                             if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [item.id]: picked.hsCode }));
                                             if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [item.id]: picked.saleType }));
-                                            if (picked.uom) setItemUoms((p) => ({ ...p, [item.id]: picked.uom }));
-                                            if (picked.fbrUOMId) setItemFbrUomIds((p) => ({ ...p, [item.id]: picked.fbrUOMId }));
                                           } else {
-                                            // Clearing the ItemType also clears the bound HS Code,
-                                            // Sale Type and UOM — they were inherited from the
-                                            // catalog row, so removing the link should remove the
-                                            // values too. Otherwise stale FBR fields stay on the
-                                            // line and the operator silently ships wrong data.
-                                            // Description is left as-is so the operator can keep
-                                            // editing or clear via SmartItemAutocomplete.
+                                            // Clearing the ItemType clears the HS Code + Sale Type it
+                                            // inherited. Description AND UOM are left as-is — they're
+                                            // the challan line's own values, not the Item Type's, so
+                                            // removing the classification must not wipe them.
                                             setItemHsCodes((p) => ({ ...p, [item.id]: "" }));
                                             setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
-                                            setItemUoms((p) => ({ ...p, [item.id]: "" }));
-                                            setItemFbrUomIds((p) => ({ ...p, [item.id]: null }));
                                           }
                                         }}
-                                        placeholder="— optional —"
-                                        style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                                        placeholder="Pick item… *"
+                                        style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem", ...(itemTypeIds[item.id] ? {} : { borderColor: colors.warn }) }}
                                       />
-                                    </td>
-                                    )}
-                                    <td style={styles.unifiedTd}>
-                                      {/* Description is locked to the picked Item Type's name when
-                                          one is set — same rule as the no-challan form. Clearing the
-                                          Item Type unlocks SmartItemAutocomplete so the operator can
-                                          search saved items, pick from the FBR catalog, or type
-                                          freely. The challan's original description still seeds the
-                                          field on first load via the `?? item.description` fallback. */}
-                                      {/* Bills mode never has Item Type set on a row (column is hidden),
-                                          so the description always renders as SmartItemAutocomplete.
-                                          Invoices mode keeps the existing locked-to-itemTypeName branch. */}
-                                      {(!billsMode && itemTypeIds[item.id]) ? (
-                                        <input
-                                          type="text"
-                                          readOnly
-                                          value={itemDescriptions[item.id] ?? item.description ?? ""}
-                                          style={{
-                                            ...styles.input,
-                                            padding: "0.3rem 0.5rem",
-                                            fontSize: "0.8rem",
-                                            backgroundColor: "#eef5ff",
-                                            cursor: "not-allowed",
-                                          }}
-                                          title="Locked to the picked Item Type's name. Clear the Item Type to edit."
-                                        />
-                                      ) : (
-                                        <SmartItemAutocomplete
-                                          companyId={companyId}
-                                          value={itemDescriptions[item.id] ?? item.description}
-                                          onChange={(v) => handleDescriptionChange(item.id, v)}
-                                          onPick={(picked) => handleItemPick(item.id, picked)}
-                                          style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                          placeholder="Search or type item…"
-                                        />
+                                      {!itemTypeIds[item.id] && (
+                                        <div style={{ marginTop: 2, fontSize: "0.62rem", color: colors.warn, fontWeight: 700 }}>Required</div>
                                       )}
+                                    </td>
+                                    <td style={styles.unifiedTd}>
+                                      {/* Description stays the challan line's own product
+                                          description and remains editable regardless of the picked
+                                          Item Type. Item Type is only the FBR classification bucket —
+                                          it never overwrites or locks the description. The challan's
+                                          original description seeds the field via `?? item.description`. */}
+                                      <SmartItemAutocomplete
+                                        companyId={companyId}
+                                        value={itemDescriptions[item.id] ?? item.description}
+                                        onChange={(v) => handleDescriptionChange(item.id, v)}
+                                        onPick={(picked) => handleItemPick(item.id, picked)}
+                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                        placeholder="Search or type item…"
+                                      />
                                     </td>
                                     <td style={{ ...styles.unifiedTd, textAlign: "right", fontSize: "0.82rem", paddingRight: "0.5rem" }}>
                                       {/* Strip trailing zeros so 1.0000 → "1",
@@ -1373,11 +1358,16 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                 All items must have a unit price greater than 0.
               </span>
             )}
+            {allItems.length > 0 && allPricesValid && !allItemTypesValid && (
+              <span style={{ fontSize: "0.8rem", color: colors.warn, marginRight: "auto" }}>
+                Select an Item Type for every item (required for FBR grouping).
+              </span>
+            )}
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button
               type="submit"
-              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid ? 0.6 : 1 }}
-              disabled={saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid}
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid || !allItemTypesValid ? 0.6 : 1 }}
+              disabled={saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid || !allItemTypesValid}
             >
               {saving ? "Creating..." : "Create Bill"}
             </button>

@@ -1144,11 +1144,18 @@ namespace MyApp.Api.Services.Implementations
 
                     if (pickedType != null)
                     {
-                        // Item Type drives FBR fields — overwrite with catalog values
+                        // Item Type drives the FBR classification fields (HS Code,
+                        // Sale Type). The UOM, however, follows what the caller sent —
+                        // the bill's own challan/physical unit — and only falls back to
+                        // the Item Type's UOM when the caller left it blank. Picking an
+                        // Item Type on the Bills tab must NOT change the unit; the Item
+                        // Type's UOM is adopted on the Invoices tab (UpdateItemTypesAsync).
                         existing.ItemTypeId = pickedType.Id;
                         existing.ItemTypeName = pickedType.Name;
-                        existing.UOM = pickedType.UOM ?? "";
-                        existing.FbrUOMId = pickedType.FbrUOMId;
+                        existing.UOM = !string.IsNullOrWhiteSpace(itemDto.UOM)
+                            ? itemDto.UOM!
+                            : (pickedType.UOM ?? "");
+                        existing.FbrUOMId = itemDto.FbrUOMId ?? pickedType.FbrUOMId;
                         existing.HSCode = pickedType.HSCode;
                         existing.SaleType = pickedType.SaleType;
                     }
