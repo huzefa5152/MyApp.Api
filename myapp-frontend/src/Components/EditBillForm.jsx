@@ -7,6 +7,12 @@ import { getClientsByCompany } from "../api/clientApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getClaimSummary } from "../api/taxClaimApi";
 import QuantityInput from "./QuantityInput";
+import { isDecimalUnit } from "../utils/formatQuantity";
+
+// Tax Claim Snapshot temporarily HIDDEN (2026-07-11, user request). Everything
+// is left intact — flip this flag to true to bring the whole panel back
+// (and its per-edit /tax-claim/claim-summary fetch). No rebuild beyond this.
+const SHOW_TAX_CLAIM_PANEL = false;
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { formStyles, modalSizes } from "../theme";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -370,6 +376,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   }, [billHsAggregate.length, claimAutoOpened]);
 
   useEffect(() => {
+    if (!SHOW_TAX_CLAIM_PANEL) return;   // panel hidden → skip the per-edit fetch
     if (!forceItemTypeAndQty) return;
     if (!invoice?.companyId) return;
     if (billHsAggregate.length === 0) { setClaimSummary(null); return; }
@@ -837,27 +844,38 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
     });
   };
 
-  // Set a group's TOTAL quantity, distributed across its lines in
-  // proportion to each line's current quantity (equal split when the group
-  // currently sums to zero). Integer-only groups (every current line qty is
-  // a whole number — the Pcs / SET case) stay integer: shares are floored
-  // and the remainder handed out largest-fraction-first, so a "7" across
-  // two lines becomes 4 + 3, never 3.5 + 3.5 (which the backend rejects for
-  // integer UOMs). Fractional groups distribute to 4 dp with the last line
-  // absorbing rounding so the lines always re-sum to the entered total.
+  // Set a group's TOTAL quantity, distributed across its lines in proportion
+  // to each line's ORIGINAL bill quantity (a fixed, stable reference).
+  //
+  // Why original — not the live — quantities: the Qty field is a controlled
+  // input, so the operator clears + retypes it digit-by-digit. Distributing by
+  // the *live* line quantities was self-poisoning: clearing zeroed every line,
+  // the first keystroke dumped the whole remainder onto line 1, and every
+  // later proportional split then kept 100 % of the weight on line 1 — leaving
+  // the other lines stuck at 0, which the Save guard rejects (qty must be > 0).
+  // Original quantities never mutate, so the split is deterministic regardless
+  // of the typing sequence. Even split only when the bill genuinely had no
+  // quantities to weight by.
+  //
+  // Integer-only UOMs (Pcs / SET) stay whole: shares are floored and the
+  // remainder handed out largest-fraction-first (a "7" across two lines →
+  // 4 + 3, never 3.5 + 3.5, which the backend rejects). Decimal UOMs (KG,
+  // Liter, …) distribute to 4 dp with the last line absorbing the rounding so
+  // the lines always re-sum to the entered total.
   const setGroupQty = (group, newTotalQty) => {
     const parsed = parseFloat(newTotalQty);
     const target = isNaN(parsed) ? 0 : parsed;
     setItems((prev) => {
       const next = [...prev];
       const idxs = group.lineIndices;
-      const curQtys = idxs.map((i) => parseFloat(next[i].quantity) || 0);
-      const curTotal = curQtys.reduce((s, q) => s + q, 0);
-      const integerGroup = Number.isInteger(target) && curQtys.every((q) => Number.isInteger(q));
+      let weights = idxs.map((i) => parseFloat(originalItemsRef.current[i]?.quantity) || 0);
+      let weightTotal = weights.reduce((s, w) => s + w, 0);
+      if (weightTotal <= 0) { weights = idxs.map(() => 1); weightTotal = idxs.length; }
+      const allowDecimal = isDecimalUnit(group.uom, units);
 
       let assigned;
-      if (integerGroup) {
-        const shares = curQtys.map((q) => (curTotal > 0 ? target * (q / curTotal) : target / idxs.length));
+      if (!allowDecimal && Number.isInteger(target)) {
+        const shares = weights.map((w) => target * (w / weightTotal));
         assigned = shares.map((s) => Math.floor(s));
         let rem = target - assigned.reduce((a, b) => a + b, 0);
         const order = shares
@@ -871,8 +889,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           if (k === idxs.length - 1) {
             assigned[k] = Math.round(Math.max(0, remaining) * 10000) / 10000;
           } else {
-            const share = curTotal > 0 ? curQtys[k] / curTotal : 1 / idxs.length;
-            const q = Math.round(target * share * 10000) / 10000;
+            const q = Math.round(target * (weights[k] / weightTotal) * 10000) / 10000;
             assigned[k] = q;
             remaining -= q;
           }
@@ -1156,8 +1173,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                   </div>
                 )}
 
-                {/* Narrow-permission banner */}
-                {itemTypeOnlyMode && (
+                {/* Narrow-permission banner — describes edit rights, so hide
+                    it in the read-only View (forceItemTypeAndQty is also set
+                    there just to surface the adjusted invoice-mode values). */}
+                {!readOnly && itemTypeOnlyMode && (
                   <div style={styles.narrowPermissionBanner}>
                     <MdInfo size={16} style={{ color: colors.warn, flexShrink: 0, marginTop: 2 }} />
                     <div>
@@ -1167,7 +1186,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     </div>
                   </div>
                 )}
-                {itemTypeAndQtyMode && (
+                {!readOnly && itemTypeAndQtyMode && (
                   <div style={styles.narrowPermissionBanner}>
                     <MdInfo size={16} style={{ color: colors.warn, flexShrink: 0, marginTop: 2 }} />
                     <div>
@@ -1384,8 +1403,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     claimable totals, and a carry-forward proxy. Stays
                     informational — the operator can save the bill even
                     when a row reports "no purchase on record" and
-                    record the matching purchase later. */}
-                {forceItemTypeAndQty && billHsAggregate.length > 0 && (
+                    record the matching purchase later.
+                    HIDDEN 2026-07-11 via SHOW_TAX_CLAIM_PANEL — the items
+                    table follows straight after the grouped/lines toggle. */}
+                {SHOW_TAX_CLAIM_PANEL && forceItemTypeAndQty && billHsAggregate.length > 0 && (
                   <TaxClaimPanel
                     summary={claimSummary}
                     loading={claimLoading}

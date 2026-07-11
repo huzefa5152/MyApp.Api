@@ -1035,16 +1035,18 @@ export default function InvoicePage({ mode = "invoices" }) {
                   </div>
                   <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
                     {/* Bills card: View, Print Bill, Bill PDF, Bill XLS, Edit, Delete.
-                        Invoices card: Tax Print, Tax PDF, Tax XLS, View FBR, Validate, Submit. */}
-                    {isBillsMode && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
-                        onClick={() => setViewingId(inv.id)}
-                        title="View bill details (read-only)"
-                      >
-                        <MdVisibility size={14} /> View
-                      </button>
-                    )}
+                        Invoices card: View, Tax Print, Tax PDF, Tax XLS, View FBR, Validate, Submit. */}
+                    {/* Read-only View — shown on BOTH tabs. On the Invoices tab
+                        it opens the same read-only bill view so the operator can
+                        inspect the grouped-by-Item-Type and individual line
+                        items without switching to the Bills tab. */}
+                    <button
+                      style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
+                      onClick={() => setViewingId(inv.id)}
+                      title="View bill details (read-only) — grouped & individual line items"
+                    >
+                      <MdVisibility size={14} /> View
+                    </button>
                     {/* Cross-tab locator — Bills tab only. Navigates to
                         the Invoices tab with ?search=<billNumber> seeded;
                         the Invoices page reads the param on mount so the
@@ -1326,6 +1328,12 @@ export default function InvoicePage({ mode = "invoices" }) {
         <EditBillForm
           invoiceId={viewingId}
           readOnly
+          // Read-only View is tab-aware, mirroring the Edit forms: the Bills
+          // tab shows the original bill qty/price; the Invoices tab applies the
+          // dual-book adjustment overlay so it shows the SAVED invoice-mode
+          // qty/price (grouped + individual), not the underlying bill values.
+          billsMode={isBillsMode}
+          forceItemTypeAndQty={!isBillsMode}
           onClose={() => setViewingId(null)}
           onSaved={() => setViewingId(null)}
         />
