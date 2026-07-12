@@ -11,6 +11,7 @@ import { notify } from "../utils/notify";
 import { colors, dropdownStyles } from "../theme";
 import StatusBadge from "../Components/StatusBadge";
 import PaymentForm from "../Components/PaymentForm";
+import AttachmentManager from "../Components/AttachmentManager";
 import { getPagedPayments, deletePayment } from "../api/paymentApi";
 
 const fmtMoney = (n) =>
@@ -203,7 +204,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
       )}
 
       {viewing && (
-        <PaymentViewDialog p={viewing} accent={accent} docNoun={docNoun} onClose={() => setViewing(null)} />
+        <PaymentViewDialog p={viewing} companyId={companyId} accent={accent} docNoun={docNoun} onClose={() => setViewing(null)} />
       )}
     </div>
   );
@@ -332,7 +333,7 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, onDelete, onEdit, onV
 }
 
 /** Read-only detail view of a single receipt/payment (manager.io-style). */
-function PaymentViewDialog({ p, accent, docNoun, onClose }) {
+function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
   const allocs = p.allocations || [];
   const Row = ({ label, value }) => value == null || value === "" ? null : (
     <div style={vd.row}><span style={vd.k}>{label}</span><span style={vd.v}>{value}</span></div>
@@ -365,6 +366,11 @@ function PaymentViewDialog({ p, accent, docNoun, onClose }) {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+          {companyId && (
+            <div style={{ marginTop: "0.9rem" }}>
+              <AttachmentManager companyId={companyId} entityType="Payment" entityId={p.id} mode="view" />
             </div>
           )}
         </div>

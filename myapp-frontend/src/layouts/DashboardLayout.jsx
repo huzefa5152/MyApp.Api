@@ -177,6 +177,7 @@ export default function DashboardLayout() {
     "salesorders.list.view",
     "bills.list.view",
     "invoices.list.view",
+    "withholdingtax.list.view",
     "itemratehistory.view",
     "challans.list.view",
     "challans.import.create",
@@ -230,7 +231,7 @@ export default function DashboardLayout() {
   // recomputing on every render.
   const activeSection = useMemo(() => {
     const p = location.pathname.toLowerCase();
-    if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history") return "sales";
+    if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p.startsWith("/withholding-tax") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history") return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
     if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/transfers") || p.startsWith("/journal-entries") || p.startsWith("/accounting/")) return "accounting";
     if (p.startsWith("/reports")) return "reports";
@@ -387,6 +388,12 @@ export default function DashboardLayout() {
                 <NavLink to="/debit-notes" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdUndo className="dl-subitem__icon" aria-hidden="true" />
                   <span>Debit Notes</span>
+                </NavLink>
+              </Can>
+              <Can permission="withholdingtax.list.view">
+                <NavLink to="/withholding-tax" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdFactCheck className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Withholding Tax</span>
                 </NavLink>
               </Can>
               <Can permission="itemratehistory.view">
@@ -768,6 +775,7 @@ function getBreadcrumb(pathname) {
     "/invoices": "Sales / Invoices",
     "/credit-notes": "Sales / Credit Notes",
     "/debit-notes": "Sales / Debit Notes",
+    "/withholding-tax": "Sales / Withholding Tax Receipts",
     "/credit-debit-notes": "Sales / New Credit / Debit Note",
     "/item-rate-history": "Sales / Item Rate History",
     "/profile": "My Profile",

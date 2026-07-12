@@ -431,12 +431,12 @@ export default function PurchaseBillsPage() {
                           <MdVisibility size={14} /> View
                         </button>
                         {canPrint && (
-                          <button style={btnPrint} onClick={() => handlePrint(b)} title="Print purchase bill">
+                          <button style={{ ...btnPrint, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} onClick={() => handlePrint(b)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print purchase bill"}>
                             <MdPrint size={14} /> Print
                           </button>
                         )}
                         {canPrint && (
-                          <button style={{ ...btnPdf, opacity: exportingId === b.id ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportPdf(b)} title="Download PDF">
+                          <button style={{ ...btnPdf, opacity: (tplPicker.noTemplate || exportingId === b.id) ? 0.5 : 1, ...(tplPicker.noTemplate ? { cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate || !!exportingId} onClick={() => handleExportPdf(b)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}>
                             <MdPictureAsPdf size={14} /> PDF
                           </button>
                         )}

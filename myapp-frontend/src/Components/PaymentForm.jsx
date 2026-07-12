@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { MdClose } from "react-icons/md";
 import { formStyles, modalSizes, colors, dropdownStyles } from "../theme";
 import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
 import BankCashSelect from "./BankCashSelect";
+import AttachmentManager from "./AttachmentManager";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { createPayment, updatePayment } from "../api/paymentApi";
 import { getClientsByCompany } from "../api/clientApi";
@@ -59,6 +60,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const attachmentRef = useRef(null);
 
   // Load the contact list once.
   useEffect(() => {
@@ -183,8 +185,15 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
           amount: x.amount,
         })),
       };
-      if (isEdit) await updatePayment(dir, editPayment.id, payload);
-      else await createPayment(dir, companyId, payload);
+      const { data: saved } = isEdit
+        ? await updatePayment(dir, editPayment.id, payload)
+        : await createPayment(dir, companyId, payload);
+      // Upload any files staged before the record had an id (no-op in edit
+      // mode / when nothing was staged). Best-effort — the payment is saved.
+      try {
+        const savedId = saved?.id ?? editPayment?.id;
+        if (savedId) await attachmentRef.current?.flush(savedId);
+      } catch { /* attachments are best-effort — the payment is already saved */ }
       onSaved?.();
       onClose?.();
     } catch (err) {
@@ -319,6 +328,16 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", alignItems: "baseline", fontSize: "1.05rem", fontWeight: 700, color: colors.blue }}>
               <span style={{ color: colors.textSecondary, fontSize: "0.85rem", fontWeight: 600 }}>Total {isReceipt ? "received" : "paid"}:</span>
               <span>Rs {total.toLocaleString()}</span>
+            </div>
+
+            <div style={{ marginTop: "1rem" }}>
+              <AttachmentManager
+                ref={attachmentRef}
+                companyId={companyId}
+                entityType="Payment"
+                entityId={editPayment?.id ?? null}
+                mode="edit"
+              />
             </div>
           </div>
 

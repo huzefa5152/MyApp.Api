@@ -42,6 +42,7 @@ import FbrSettingsPage from "./pages/FbrSettingsPage";
 import FbrSandboxPage from "./pages/FbrSandboxPage";
 import FbrMonitorPage from "./pages/FbrMonitorPage";
 import NavigationMenuPage from "./pages/NavigationMenuPage";
+import WithholdingTaxReceiptsPage from "./pages/WithholdingTaxReceiptsPage";
 import LoginPage from "./pages/public/LoginPage";
 import LandingPage from "./pages/public/LandingPage";
 import ProtectedRoute from "./Components/ProtectedRoute";
@@ -97,6 +98,9 @@ export default function App() {
               challan fulfilment). Pre-sale documents; not FBR. */}
           <Route path="/sales-quotes" element={<SalesQuotePage />} />
           <Route path="/sales-orders" element={<SalesOrderPage />} />
+          {/* Withholding Tax Receipts — customer-issued tax certificates;
+              per-customer sum feeds the Customers screen's WHT-receivable. */}
+          <Route path="/withholding-tax" element={<WithholdingTaxReceiptsPage />} />
           {/* Credit Notes (returns/reversals) and Debit Notes (upward
               adjustments) — each tab lists ONLY its type, in its own
               numbering sequence. Never mixed with Bills or Invoices.

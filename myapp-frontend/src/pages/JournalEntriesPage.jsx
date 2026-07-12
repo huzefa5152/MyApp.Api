@@ -10,6 +10,7 @@ import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import { colors, formStyles, modalSizes, dropdownStyles } from "../theme";
 import StatusBadge from "../Components/StatusBadge";
+import AttachmentManager from "../Components/AttachmentManager";
 import {
   getJournalEntriesPaged, getJournalEntry, createJournalEntry,
   updateJournalEntry, deleteJournalEntry,
@@ -220,7 +221,7 @@ export default function JournalEntriesPage() {
       )}
 
       {viewing && (
-        <JournalViewDialog entry={viewing} onClose={() => setViewing(null)} />
+        <JournalViewDialog entry={viewing} companyId={companyId} onClose={() => setViewing(null)} />
       )}
     </div>
   );
@@ -298,7 +299,7 @@ function EntryRow({ entry: e, canEdit, canDelete, onView, onEdit, onDelete }) {
 }
 
 /** Read-only detail dialog — meta rows + full line table. */
-function JournalViewDialog({ entry: e, onClose }) {
+function JournalViewDialog({ entry: e, companyId, onClose }) {
   const src = sourceMeta(e.sourceDocType);
   const lines = e.lines || [];
   return (
@@ -355,6 +356,11 @@ function JournalViewDialog({ entry: e, onClose }) {
               </tfoot>
             </table>
           </div>
+          {companyId && (
+            <div style={{ marginTop: "1rem" }}>
+              <AttachmentManager companyId={companyId} entityType="JournalEntry" entityId={e.id} mode="view" />
+            </div>
+          )}
         </div>
         <div style={formStyles.footer}>
           <button style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
@@ -375,6 +381,7 @@ function JournalEntryForm({ companyId, entry, onClose, onSaved }) {
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const attachmentRef = useRef(null);
 
   // Postable accounts: active, and never bank/cash (those move only through
   // receipts / payments / transfers — server rejects them too).
@@ -438,8 +445,14 @@ function JournalEntryForm({ companyId, entry, onClose, onSaved }) {
           description: l.description.trim() || null,
         })),
       };
-      if (isEdit) await updateJournalEntry(entry.id, payload);
-      else await createJournalEntry(companyId, payload);
+      const { data: saved } = isEdit
+        ? await updateJournalEntry(entry.id, payload)
+        : await createJournalEntry(companyId, payload);
+      // Upload any files staged before the entry had an id (best-effort).
+      try {
+        const savedId = saved?.id ?? entry?.id;
+        if (savedId) await attachmentRef.current?.flush(savedId);
+      } catch { /* attachments are best-effort — the entry is already saved */ }
       onSaved();
     } catch (err) {
       setError(err.response?.data?.error || "Could not save the journal entry.");
@@ -542,6 +555,16 @@ function JournalEntryForm({ companyId, entry, onClose, onSaved }) {
                 Needs at least two lines — each with an account and a single debit or credit — and matching totals above zero.
               </div>
             )}
+
+            <div style={{ marginTop: "1rem" }}>
+              <AttachmentManager
+                ref={attachmentRef}
+                companyId={companyId}
+                entityType="JournalEntry"
+                entityId={entry?.id ?? null}
+                mode="edit"
+              />
+            </div>
           </div>
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>

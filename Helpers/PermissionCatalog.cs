@@ -106,6 +106,16 @@ namespace MyApp.Api.Helpers
             new("salesorders.manage.delete", "SalesOrders", "Manage", "Delete", "Delete a sales order"),
             new("salesorders.print.view",    "SalesOrders", "Print",  "View",   "Print or download a sales order"),
 
+            // ── Withholding Tax Receipts (customer-issued tax certificates) ──
+            // Records tax a customer withheld at source (and remitted on our
+            // behalf). The per-customer sum is the "Withholding tax receivable"
+            // figure on the Customers screen. NOT an FBR document. The read
+            // permission also gates the print/view of a single receipt.
+            new("withholdingtax.list.view",     "WithholdingTax", "List",   "View",   "View the withholding-tax-receipts list and a single receipt"),
+            new("withholdingtax.manage.create", "WithholdingTax", "Manage", "Create", "Record a withholding tax receipt"),
+            new("withholdingtax.manage.update", "WithholdingTax", "Manage", "Update", "Edit a withholding tax receipt"),
+            new("withholdingtax.manage.delete", "WithholdingTax", "Manage", "Delete", "Delete a withholding tax receipt"),
+
             // ── Accounting: Receipts & Payments (AR/AP subledger) ───────────
             // Money in (receipts → settle sales invoices) and money out
             // (payments → settle purchase bills). Split namespaces so a role can

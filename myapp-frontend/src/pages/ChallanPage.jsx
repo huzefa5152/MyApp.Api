@@ -449,6 +449,8 @@ export default function ChallanPage() {
               onEditItems={handleEditItems}
               onExportPdf={handleExportPdf}
               onExportExcel={hasExcelTpl ? handleExportExcel : null}
+              printDisabled={tplPicker.noTemplate}
+              printDisabledReason={tplPicker.noTemplateReason}
               onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
               onDuplicate={handleDuplicate}
               exportingId={exportingId}
@@ -463,6 +465,8 @@ export default function ChallanPage() {
               onEditItems={handleEditItems}
               onExportPdf={handleExportPdf}
               onExportExcel={hasExcelTpl ? handleExportExcel : null}
+              printDisabled={tplPicker.noTemplate}
+              printDisabledReason={tplPicker.noTemplateReason}
               onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
               onDuplicate={handleDuplicate}
               exportingId={exportingId}

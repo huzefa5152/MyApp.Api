@@ -19,7 +19,7 @@ const {
  * When `companies` is empty / single, the picker is hidden and the
  * legacy single-company POST /api/suppliers path is used.
  */
-export default function SupplierForm({ supplier, companyId, companies = [], onClose, onSaved }) {
+export default function SupplierForm({ supplier, companyId, companies = [], fbrEnabled, onClose, onSaved }) {
   const empty = {
     id: null, name: "", address: "", email: "", phone: "",
     ntn: "", strn: "", site: "", registrationType: "", cnic: "",
@@ -97,12 +97,30 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
   const showCnic = regType === "Unregistered" || regType === "CNIC";
   const ntnLabel = regType === "FTN" ? "FTN *" : "NTN *";
 
+  // FBR identity only matters when this supplier will belong to a company
+  // with FBR integration on. Mirrors ClientForm — derive from the target
+  // company/companies (or an explicit fbrEnabled prop). Unknown → keep it on,
+  // so only turning the flag off hides/relaxes the block.
+  const fbrTargetIds = isCreate
+    ? (showCompanyPicker ? selectedCompanyIds : (companyId != null ? [Number(companyId)] : []))
+    : (companyId != null ? [Number(companyId)] : []);
+  const fbrRequired = typeof fbrEnabled === "boolean"
+    ? fbrEnabled
+    : (() => {
+        const known = (companies || []).filter((c) => fbrTargetIds.includes(Number(c.id)));
+        return known.length === 0 ? true : known.some((c) => c.fbrEnabled !== false);
+      })();
+
   const validate = () => {
     const next = {};
     if (!formData.name.trim()) next.name = "Name is required";
-    if (showNtn && !formData.ntn.trim()) next.ntn = regType === "FTN" ? "FTN is required" : "NTN is required";
-    if (showStrn && !formData.strn.trim()) next.strn = "STRN is required";
-    if (showCnic && !formData.cnic.trim()) next.cnic = "CNIC is required for this registration type";
+    // FBR identity is enforced only when the target company has FBR on.
+    if (fbrRequired) {
+      if (showNtn && !formData.ntn.trim()) next.ntn = regType === "FTN" ? "FTN is required" : "NTN is required";
+      if (showStrn && !formData.strn.trim()) next.strn = "STRN is required";
+      if (showCnic && !formData.cnic.trim()) next.cnic = "CNIC is required for this registration type";
+    }
+    // CNIC format is validated whenever one is entered, even with FBR off.
     if (showCnic && formData.cnic.trim() && formData.cnic.replace(/\D/g, "").length !== 13) {
       next.cnic = "CNIC must be 13 digits";
     }
@@ -250,9 +268,9 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
               </div>
             </div>
 
-            {/* FBR identity — pick Registration Type first; identity
-                fields render below conditionally. Same model as
-                ClientForm.  */}
+            {/* FBR identity — hidden entirely when the target company's FBR
+                integration is off (user rule). Same model as ClientForm. */}
+            {fbrRequired && (
             <div style={{ marginTop: "0.5rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #00695c30", backgroundColor: "#e0f2f1" }}>
               <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#00695c" }}>FBR Details</p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
@@ -326,6 +344,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
                 </div>
               )}
             </div>
+            )}
           </div>
 
           <div style={footer}>

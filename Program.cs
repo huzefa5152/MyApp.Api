@@ -239,6 +239,7 @@ builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<IDeliveryChallanRepository, DeliveryChallanRepository>();
 builder.Services.AddScoped<ISalesQuoteRepository, SalesQuoteRepository>();
 builder.Services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
+builder.Services.AddScoped<IWithholdingTaxReceiptRepository, WithholdingTaxReceiptRepository>();
 builder.Services.AddScoped<IFolderRepository, FolderRepository>();
 builder.Services.AddScoped<IAttachmentRepository, AttachmentRepository>();
 builder.Services.AddScoped<IDivisionRepository, DivisionRepository>();
@@ -260,6 +261,7 @@ builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
 // depends on IDeliveryChallanService (create-challan-from-order). No cycle.
 builder.Services.AddScoped<ISalesQuoteService, SalesQuoteService>();
 builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
+builder.Services.AddScoped<IWithholdingTaxReceiptService, WithholdingTaxReceiptService>();
 // Unified attachments + document folders. AttachmentStorage is stateless
 // (just the disk root) so it's a singleton; the services are scoped.
 builder.Services.AddScoped<IFolderService, FolderService>();

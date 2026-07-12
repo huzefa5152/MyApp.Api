@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   MdAdd, MdDelete, MdChevronLeft, MdChevronRight, MdSwapHoriz, MdSearch,
   MdBusiness, MdCalendarToday, MdLabel, MdNotes, MdEdit, MdClose,
@@ -11,6 +11,7 @@ import { notify } from "../utils/notify";
 import { colors, dropdownStyles, formStyles, modalSizes } from "../theme";
 import BankCashSelect from "../Components/BankCashSelect";
 import DivisionSelect from "../Components/DivisionSelect";
+import AttachmentManager from "../Components/AttachmentManager";
 import { getTransfersPaged, createTransfer, updateTransfer, deleteTransfer } from "../api/accountingApi";
 
 const fmtMoney = (n) =>
@@ -276,6 +277,7 @@ function TransferForm({ companyId, editTransfer = null, onClose, onSaved }) {
 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const attachmentRef = useRef(null);
 
   const sameAccount = !!fromAccountId && fromAccountId === toAccountId;
   const amtNum = parseFloat(amount) || 0;
@@ -310,8 +312,14 @@ function TransferForm({ companyId, editTransfer = null, onClose, onSaved }) {
         description: description.trim() || null,
         divisionId: divisionId ? Number(divisionId) : null,
       };
-      if (isEdit) await updateTransfer(editTransfer.id, payload);
-      else await createTransfer(companyId, payload);
+      const { data: saved } = isEdit
+        ? await updateTransfer(editTransfer.id, payload)
+        : await createTransfer(companyId, payload);
+      // Upload any files staged before the record had an id (best-effort).
+      try {
+        const savedId = saved?.id ?? editTransfer?.id;
+        if (savedId) await attachmentRef.current?.flush(savedId);
+      } catch { /* attachments are best-effort — the transfer is already saved */ }
       onSaved?.();
       onClose?.();
     } catch (err) {
@@ -386,6 +394,16 @@ function TransferForm({ companyId, editTransfer = null, onClose, onSaved }) {
                 style={{ ...dropdownStyles.base, width: "100%" }}
               />
             )}
+
+            <div style={{ marginTop: "0.5rem" }}>
+              <AttachmentManager
+                ref={attachmentRef}
+                companyId={companyId}
+                entityType="AccountTransfer"
+                entityId={editTransfer?.id ?? null}
+                mode="edit"
+              />
+            </div>
           </div>
 
           <div style={formStyles.footer}>

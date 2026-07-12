@@ -1162,22 +1162,22 @@ export default function InvoicePage({ mode = "invoices" }) {
                       </button>
                     )}
                     {isBillsMode && canPrint && (
-                      <button style={styles.printBtn} onClick={() => handlePrintBill(inv)}>
+                      <button style={{ ...styles.printBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print bill"} onClick={() => handlePrintBill(inv)}>
                         <MdPrint size={14} /> Bill
                       </button>
                     )}
                     {!isBillsMode && canPrint && (
-                      <button style={styles.taxBtn} onClick={() => handlePrintTax(inv)}>
+                      <button style={{ ...styles.taxBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print tax invoice"} onClick={() => handlePrintTax(inv)}>
                         <MdDescription size={14} /> Tax Invoice
                       </button>
                     )}
                     {isBillsMode && canPrint && (
-                      <button style={{ ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportBillPdf(inv)}>
+                      <button style={{ ...styles.pdfBtn, opacity: (tplPicker.noTemplate || exportingId) ? 0.5 : 1, ...(tplPicker.noTemplate ? { cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download Bill PDF"} onClick={() => handleExportBillPdf(inv)}>
                         {exportingId === inv.id + "-bill-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Bill PDF
                       </button>
                     )}
                     {!isBillsMode && canPrint && (
-                      <button style={{ ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxPdf(inv)}>
+                      <button style={{ ...styles.pdfBtn, opacity: (tplPicker.noTemplate || exportingId) ? 0.5 : 1, ...(tplPicker.noTemplate ? { cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download Tax PDF"} onClick={() => handleExportTaxPdf(inv)}>
                         {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Tax PDF
                       </button>
                     )}

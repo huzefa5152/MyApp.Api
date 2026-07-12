@@ -226,8 +226,8 @@ export default function GoodsReceiptsPage() {
                       </div>
                       <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
                         <button style={btnView} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdVisibility size={14} /> View</button>
-                        {canPrint && <button style={btnPrint} onClick={() => handlePrint(gr)} title="Print goods receipt"><MdPrint size={14} /> Print</button>}
-                        {canPrint && <button style={{ ...btnPdf, opacity: exportingId === gr.id ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportPdf(gr)} title="Download PDF"><MdPictureAsPdf size={14} /> PDF</button>}
+                        {canPrint && <button style={{ ...btnPrint, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} onClick={() => handlePrint(gr)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print goods receipt"}><MdPrint size={14} /> Print</button>}
+                        {canPrint && <button style={{ ...btnPdf, ...((tplPicker.noTemplate || exportingId === gr.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate || !!exportingId} onClick={() => handleExportPdf(gr)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={14} /> PDF</button>}
                         {canUpdate && <button style={btnEdit} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdEdit size={14} /> Edit</button>}
                         {canDelete && <button style={btnDelete} onClick={() => handleDelete(gr)}><MdDelete size={14} /> Delete</button>}
                       </div>

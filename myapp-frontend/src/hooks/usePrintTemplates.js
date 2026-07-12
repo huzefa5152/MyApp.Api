@@ -64,6 +64,15 @@ export function usePrintTemplates(templateType, { divisionAware = false } = {}) 
     [allTemplates, templateType]
   );
 
+  // Gating signal for Print/PDF buttons: true only once we've CONFIRMED this
+  // company has zero templates of this type (and the operator can see
+  // templates). Print-only roles (no printtemplates.manage.view) can't load
+  // the list, so this stays false for them — they keep the built-in fallback
+  // rather than being locked out.
+  const noTemplate = canViewTemplates && templatesLoaded && templates.length === 0;
+  const noTemplateReason =
+    "No print template exists for this document type yet — add one on the Print Templates page (Configuration → Print Templates).";
+
   const setSelectedId = useCallback((id) => {
     const next = id == null ? "" : String(id);
     setSelectedIdState(next);
@@ -114,6 +123,8 @@ export function usePrintTemplates(templateType, { divisionAware = false } = {}) 
   return {
     templates,
     templatesLoaded,
+    noTemplate,
+    noTemplateReason,
     selectedId,
     setSelectedId,
     selectedTemplate,

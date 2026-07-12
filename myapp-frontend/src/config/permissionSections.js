@@ -47,6 +47,7 @@ export const PERMISSION_SECTIONS = [
       // an FBR officer role can hold invoices.* without bills.manage.*.
       { key: "Bills", label: "Bill" },
       { key: "Invoices" },
+      { key: "WithholdingTax", label: "Withholding Tax" },
       { key: "Item Rate History" },
     ],
   },

@@ -13,22 +13,24 @@ export default function SupplierList({ suppliers, onEdit, onCopy, fetchSuppliers
   const canCopy = has("suppliers.manage.copy");
 
   const handleDelete = async (s) => {
-    if (s.hasPurchaseBills) {
-      notify("Cannot delete — purchase bills exist for this supplier. Delete those first.", "error");
-      return;
-    }
+    // Supplier delete now cascades (parity with clients) — a supplier with
+    // purchase bills is deletable; warn that its documents go too.
+    const hasBills = s.hasPurchaseBills;
     const ok = await confirm({
       title: "Delete Supplier?",
-      message: "Are you sure you want to delete this supplier? This action cannot be undone.",
+      message: hasBills
+        ? `Deleting "${s.name}" will also permanently delete its purchase bills, goods receipts, payments, and the related stock movements. This cannot be undone.`
+        : `Are you sure you want to delete "${s.name}"? This cannot be undone.`,
       variant: "danger",
-      confirmText: "Delete",
+      confirmText: hasBills ? "Delete supplier + documents" : "Delete",
     });
     if (!ok) return;
     try {
       await deleteSupplier(s.id);
       fetchSuppliers();
+      notify("Supplier deleted.", "success");
     } catch (err) {
-      notify(err.response?.data?.message || "Failed to delete supplier.", "error");
+      notify(err.response?.data?.error || err.response?.data?.message || "Failed to delete supplier.", "error");
     }
   };
 
