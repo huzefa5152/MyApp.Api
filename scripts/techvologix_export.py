@@ -121,6 +121,14 @@ def _rows(payload: Any) -> list[Any]:
         for k in ("items", "data", "results", "value", "records"):
             if isinstance(payload.get(k), list):
                 return payload[k]
+        # Manager /api2 shape: {business, skip, pageSize, totalRecords, <entity>: [...]}
+        # — the record array lives under the entity-plural key, so pick the
+        # (single) list-valued property, ignoring the scalar/dict metadata.
+        list_vals = [v for k, v in payload.items() if isinstance(v, list)]
+        if len(list_vals) == 1:
+            return list_vals[0]
+        if len(list_vals) > 1:
+            return max(list_vals, key=len)  # ambiguous — take the longest
         # single object response
         return [payload]
     return []

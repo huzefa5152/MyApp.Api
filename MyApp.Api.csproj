@@ -9,13 +9,18 @@
     <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 
-  <!-- scripts/ contains standalone dev tools (PdfDumper) that must not be
-       compiled into the main web API assembly — each has its own .csproj. -->
+  <!-- scripts/ and tools/ contain standalone dev tools (PdfDumper, ManagerImport)
+       that must not be compiled into the main web API assembly — each has its
+       own .csproj. -->
   <ItemGroup>
     <Compile Remove="scripts/**/*.cs" />
     <Content Remove="scripts/**/*" />
     <None Remove="scripts/**/*" />
     <EmbeddedResource Remove="scripts/**/*" />
+    <Compile Remove="tools/**/*.cs" />
+    <Content Remove="tools/**/*" />
+    <None Remove="tools/**/*" />
+    <EmbeddedResource Remove="tools/**/*" />
   </ItemGroup>
 
   <ItemGroup>
