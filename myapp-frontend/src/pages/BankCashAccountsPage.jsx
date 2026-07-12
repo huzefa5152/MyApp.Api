@@ -7,6 +7,7 @@ import { colors, formStyles, modalSizes, dropdownStyles } from "../theme";
 import { getBankCashAccounts, createAccount, getCoaTree } from "../api/accountApi";
 import { getGlStatus } from "../api/accountingApi";
 import AccountLedgerDialog from "../Components/AccountLedgerDialog";
+import DivisionSelect from "../Components/DivisionSelect";
 
 // "- PKR 10,306,052.29" for negatives, "PKR 3,517,780.34" otherwise — matches
 // the reference product's bank-list convention.
@@ -39,6 +40,7 @@ export default function BankCashAccountsPage() {
   const { has } = usePermissions();
   const canView = has("accounting.coa.view");
   const canManage = has("accounting.coa.manage");
+  const canViewDivisions = has("divisions.manage.view");
   const companyId = selectedCompany?.id;
 
   const [accounts, setAccounts] = useState([]);
@@ -187,27 +189,28 @@ export default function BankCashAccountsPage() {
       {showCreate && (
         <CreateBankCashModal
           companyId={companyId}
+          canViewDivisions={canViewDivisions}
           assetGroups={assetGroups}
           defaultGroupId={defaultGroupId}
           onClose={() => setShowCreate(false)}
-          onCreated={() => { setShowCreate(false); load(); }}
+          onCreated={(keepOpen) => { if (!keepOpen) setShowCreate(false); load(); }}
         />
       )}
     </div>
   );
 }
 
-function CreateBankCashModal({ companyId, assetGroups, defaultGroupId, onClose, onCreated }) {
+function CreateBankCashModal({ companyId, canViewDivisions, assetGroups, defaultGroupId, onClose, onCreated }) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [groupId, setGroupId] = useState(defaultGroupId ? String(defaultGroupId) : "");
+  const [divisionId, setDivisionId] = useState("");
   const [opening, setOpening] = useState("");
   const [isDebit, setIsDebit] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const doCreate = async (addAnother) => {
     if (!name.trim()) { setError("Name is required."); return; }
     if (!groupId) { setError("Pick a group (an asset group in the Chart of Accounts)."); return; }
     setSaving(true); setError("");
@@ -220,9 +223,15 @@ function CreateBankCashModal({ companyId, assetGroups, defaultGroupId, onClose, 
         controlType: "BankCash",
         openingBalance: Number(opening) || 0,
         openingBalanceIsDebit: isDebit,
+        divisionId: divisionId ? Number(divisionId) : null,
       });
       notify("Bank / cash account created.", "success");
-      onCreated();
+      if (addAnother) {
+        setName(""); setCode(""); setOpening(""); setError(""); setSaving(false);
+        onCreated(true);   // refresh list, keep the modal open
+      } else {
+        onCreated(false);  // refresh list + close
+      }
     } catch (err) {
       setError(err?.response?.data?.error || "Could not create the account.");
       setSaving(false);
@@ -230,57 +239,74 @@ function CreateBankCashModal({ companyId, assetGroups, defaultGroupId, onClose, 
   };
 
   return (
-    <div style={st.overlay} onClick={onClose}>
-      <div style={{ ...modalSizes.small, ...st.modal }} onClick={(e) => e.stopPropagation()}>
-        <div style={st.modalHead}>
-          <h3 style={st.modalTitle}>New Bank / Cash Account</h3>
-          <button style={st.iconBtn} onClick={onClose} title="Close"><MdClose size={18} /></button>
+    <div style={formStyles.backdrop} onClick={onClose}>
+      <div style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
+        <div style={formStyles.header}>
+          <h3 style={formStyles.title}>New Bank / Cash Account</h3>
+          <button style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
         </div>
-        <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-          <div style={st.fieldRow}>
-            <div style={{ flex: 2, minWidth: 180 }}>
-              <label style={st.label}>Name *</label>
-              <input style={formStyles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. HBL — Current 0123" autoFocus />
-            </div>
-            <div style={{ flex: 1, minWidth: 110 }}>
-              <label style={st.label}>Code</label>
-              <input style={formStyles.input} value={code} onChange={(e) => setCode(e.target.value)} placeholder="Optional" />
-            </div>
-          </div>
 
-          <div>
-            <label style={st.label}>Group</label>
-            {assetGroups.length === 0 ? (
-              <div style={st.muted}>No account groups found — set up the Chart of Accounts first.</div>
-            ) : (
-              <select style={{ ...dropdownStyles.base, width: "100%" }} value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-                <option value="">Select a group…</option>
-                {assetGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-              </select>
+        <div style={formStyles.body}>
+          <form onSubmit={(e) => { e.preventDefault(); doCreate(false); }} style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+            <div style={st.fieldRow}>
+              <div style={{ flex: 2, minWidth: 180 }}>
+                <label style={st.label}>Name *</label>
+                <input style={formStyles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. HBL — Current 0123" autoFocus />
+              </div>
+              <div style={{ flex: 1, minWidth: 110 }}>
+                <label style={st.label}>Code</label>
+                <input style={formStyles.input} value={code} onChange={(e) => setCode(e.target.value)} placeholder="Optional" />
+              </div>
+            </div>
+
+            {canViewDivisions && (
+              <DivisionSelect
+                companyId={companyId}
+                value={divisionId}
+                onChange={setDivisionId}
+                mode="select"
+                noneLabel="— No division —"
+                label="Division (optional)"
+                labelStyle={st.label}
+                style={{ ...dropdownStyles.base, width: "100%" }}
+              />
             )}
-          </div>
 
-          <div style={st.fieldRow}>
-            <div style={{ flex: 1, minWidth: 140 }}>
-              <label style={st.label}>Opening Balance</label>
-              <input type="number" step="0.01" style={formStyles.input} value={opening} onChange={(e) => setOpening(e.target.value)} placeholder="0.00" />
+            <div>
+              <label style={st.label}>Group</label>
+              {assetGroups.length === 0 ? (
+                <div style={st.muted}>No account groups found — set up the Chart of Accounts first.</div>
+              ) : (
+                <select style={{ ...dropdownStyles.base, width: "100%" }} value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+                  <option value="">Select a group…</option>
+                  {assetGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+              )}
             </div>
-            <div style={{ flex: 1, minWidth: 140 }}>
-              <label style={st.label}>Balance is</label>
-              <select style={{ ...dropdownStyles.base, width: "100%" }} value={isDebit ? "debit" : "credit"} onChange={(e) => setIsDebit(e.target.value === "debit")}>
-                <option value="debit">Debit (money in the account)</option>
-                <option value="credit">Credit (overdrawn)</option>
-              </select>
+
+            <div style={st.fieldRow}>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <label style={st.label}>Opening Balance</label>
+                <input type="number" step="0.01" style={formStyles.input} value={opening} onChange={(e) => setOpening(e.target.value)} placeholder="0.00" />
+              </div>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <label style={st.label}>Balance is</label>
+                <select style={{ ...dropdownStyles.base, width: "100%" }} value={isDebit ? "debit" : "credit"} onChange={(e) => setIsDebit(e.target.value === "debit")}>
+                  <option value="debit">Debit (money in the account)</option>
+                  <option value="credit">Credit (overdrawn)</option>
+                </select>
+              </div>
             </div>
-          </div>
 
-          {error && <div style={st.error}>{error}</div>}
+            {error && <div style={st.error}>{error}</div>}
+          </form>
+        </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.6rem", marginTop: "0.3rem" }}>
-            <button type="button" style={st.secondaryBtn} onClick={onClose} disabled={saving}>Cancel</button>
-            <button type="submit" style={{ ...st.primaryBtn, opacity: saving ? 0.6 : 1 }} disabled={saving}>{saving ? "Creating…" : "Create"}</button>
-          </div>
-        </form>
+        <div style={st.footer}>
+          <button type="button" style={st.secondaryBtn} onClick={onClose} disabled={saving}>Cancel</button>
+          <button type="button" style={{ ...st.secondaryBtn, opacity: saving ? 0.6 : 1 }} onClick={() => doCreate(true)} disabled={saving}>Create &amp; add another</button>
+          <button type="button" style={{ ...st.primaryBtn, opacity: saving ? 0.6 : 1 }} onClick={() => doCreate(false)} disabled={saving}>{saving ? "Creating…" : "Create"}</button>
+        </div>
       </div>
     </div>
   );
@@ -308,10 +334,7 @@ const st = {
   muted: { color: colors.textSecondary, fontSize: "0.82rem" },
   iconBtn: { display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 8, border: "none", background: "transparent", color: colors.blue, cursor: "pointer" },
   empty: { padding: "2.5rem 1rem", textAlign: "center", color: colors.textSecondary, background: colors.cardBg, border: `1px dashed ${colors.inputBorder}`, borderRadius: 12 },
-  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "grid", placeItems: "center", padding: "1rem", zIndex: 1000 },
-  modal: { background: "#fff", borderRadius: 14, padding: "1.25rem", boxShadow: "0 12px 40px rgba(0,0,0,0.25)", width: "100%" },
-  modalHead: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" },
-  modalTitle: { margin: 0, fontSize: "1.1rem", color: colors.textPrimary },
+  footer: { display: "flex", justifyContent: "flex-end", gap: "0.6rem", flexWrap: "wrap", padding: "0.9rem clamp(1rem, 2vw, 1.5rem)", borderTop: `1px solid ${colors.cardBorder}`, flexShrink: 0 },
   fieldRow: { display: "flex", gap: "0.75rem", flexWrap: "wrap" },
   label: { display: "block", fontSize: "0.75rem", fontWeight: 700, color: colors.textSecondary, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.03em" },
   error: { color: "#b71c1c", fontSize: "0.82rem", background: "#ffebee", border: "1px solid #ffcdd2", borderRadius: 8, padding: "8px 12px" },
