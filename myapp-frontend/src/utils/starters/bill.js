@@ -1,11 +1,11 @@
 /**
- * Bill / Invoice starter templates â€” 15 archetypes for Pakistani FBR-compliant wholesale ERP.
+ * Bill / Invoice starter templates — 15 archetypes for Pakistani FBR-compliant wholesale ERP.
  * Renders via Handlebars, prints to A4.
  * ONLY registered helpers used: fmtDate, fmt, fmtDec, nl2br, join, joinDates, emptyRows, math, gt, eq, or, inc
  */
 
 export const billStarters = [
-  // â”€â”€ 1. Classic Serif â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 1. Classic Serif ─────────────────────────────────────────────────────
   {
     id: "bill-classic-serif",
     name: "Classic Serif",
@@ -109,7 +109,7 @@ table.items tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
 </body></html>`,
   },
 
-  // â”€â”€ 2. Modern Minimal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 2. Modern Minimal ────────────────────────────────────────────────────
   {
     id: "bill-modern-minimal",
     name: "Modern Minimal",
@@ -218,7 +218,7 @@ table.items th.c { text-align: center; }
 </body></html>`,
   },
 
-  // â”€â”€ 3. Corporate Navy Band â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 3. Corporate Navy Band ────────────────────────────────────────────────
   {
     id: "bill-corporate-navy",
     name: "Corporate Navy Band",
@@ -314,7 +314,7 @@ table.items tbody tr:nth-child(even) td { background: #f0f4f8 !important; }
 </body></html>`,
   },
 
-  // â”€â”€ 4. Bold Colored Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 4. Bold Colored Banner ────────────────────────────────────────────────
   {
     id: "bill-bold-banner",
     name: "Bold Colored Banner",
@@ -410,12 +410,12 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
 </body></html>`,
   },
 
-  // â”€â”€ 5. Monochrome Ink-Saver â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 5. Monochrome Ink-Saver ───────────────────────────────────────────────
   {
     id: "bill-monochrome-ink",
     name: "Monochrome Ink-Saver",
     type: "Bill",
-    description: "Pure black and white, no background fills â€” optimized for laser printing on plain paper",
+    description: "Pure black and white, no background fills — optimized for laser printing on plain paper",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 10mm 12mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -510,7 +510,7 @@ table.items th.l { text-align: left; }
 </body></html>`,
   },
 
-  // â”€â”€ 6. Elegant Premium (Charcoal + Gold) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 6. Elegant Premium (Charcoal + Gold) ─────────────────────────────────
   {
     id: "bill-elegant-premium",
     name: "Elegant Premium",
@@ -623,7 +623,7 @@ table.items tbody tr:nth-child(even) td { background: #f9f6ef !important; }
 </body></html>`,
   },
 
-  // â”€â”€ 7. Compact Dense â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 7. Compact Dense ─────────────────────────────────────────────────────
   {
     id: "bill-compact-dense",
     name: "Compact Dense",
@@ -712,7 +712,7 @@ table.items tbody tr:nth-child(even) td { background: #eef2fa !important; }
 </body></html>`,
   },
 
-  // â”€â”€ 8. Left Sidebar Strip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 8. Left Sidebar Strip ────────────────────────────────────────────────
   {
     id: "bill-left-sidebar",
     name: "Left Sidebar Strip",
@@ -823,12 +823,12 @@ table.items tbody tr:nth-child(even) td { background: #edf1f7 !important; }
 </body></html>`,
   },
 
-  // â”€â”€ 9. Boxed Traditional â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 9. Boxed Traditional ─────────────────────────────────────────────────
   {
     id: "bill-boxed-traditional",
     name: "Boxed Traditional",
     type: "Bill",
-    description: "Every section enclosed in a ruled box â€” classic Pakistani wholesale invoice look",
+    description: "Every section enclosed in a ruled box — classic Pakistani wholesale invoice look",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -932,12 +932,12 @@ table.items tbody tr:nth-child(even) td { background: #f4f4f4 !important; }
 </body></html>`,
   },
 
-  // â”€â”€ 10. Bismillah Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 10. Bismillah Header ─────────────────────────────────────────────────
   {
     id: "bill-bismillah",
     name: "Bismillah Header",
     type: "Bill",
-    description: "Opens with centered Arabic Bismillah calligraphy above the company header â€” traditional Islamic business stationery",
+    description: "Opens with centered Arabic Bismillah calligraphy above the company header — traditional Islamic business stationery",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1042,12 +1042,12 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
 </body></html>`,
   },
 
-  // â”€â”€ 11. Green & Gold â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 11. Green & Gold ─────────────────────────────────────────────────────
   {
     id: "bill-green-gold",
     name: "Green & Gold",
     type: "Bill",
-    description: "Forest green header with gold accents â€” popular palette for Pakistani textile traders",
+    description: "Forest green header with gold accents — popular palette for Pakistani textile traders",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 0; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1148,7 +1148,7 @@ table.items tbody tr:nth-child(even) td { background: #f7f7e8 !important; }
 </body></html>`,
   },
 
-  // â”€â”€ 12. Teal / Slate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 12. Teal / Slate ──────────────────────────────────────────────────────
   {
     id: "bill-teal-slate",
     name: "Teal / Slate",
@@ -1260,12 +1260,12 @@ table.items tbody tr:nth-child(even) td { background: #f0fdfa !important; }
 </body></html>`,
   },
 
-  // â”€â”€ 13. Big Letterhead â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 13. Big Letterhead ────────────────────────────────────────────────────
   {
     id: "bill-big-letterhead",
     name: "Big Letterhead",
     type: "Bill",
-    description: "Large centred logo + company name letterhead at top, then bill content below â€” for branded stationery",
+    description: "Large centred logo + company name letterhead at top, then bill content below — for branded stationery",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1360,7 +1360,7 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
 </body></html>`,
   },
 
-  // â”€â”€ 14. Centered / Watermark Title â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 14. Centered / Watermark Title ───────────────────────────────────────
   {
     id: "bill-centered-watermark",
     name: "Centered / Watermark Title",
@@ -1460,7 +1460,7 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
 </body></html>`,
   },
 
-  // â”€â”€ 15. Government-Form Grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 15. Government-Form Grid ──────────────────────────────────────────────
   {
     id: "bill-govt-form-grid",
     name: "Government-Form Grid",

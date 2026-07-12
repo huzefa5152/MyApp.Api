@@ -112,7 +112,7 @@ tbody tr:nth-child(even) td{background:#f5f5f5 !important;}
     id: "quote-modern-minimal",
     name: "Modern Minimal",
     type: "SalesQuote",
-    description: "Clean white space, light grey accents, sans-serif â€” contemporary minimal look.",
+    description: "Clean white space, light grey accents, sans-serif — contemporary minimal look.",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation #{{quoteNumber}}</title><style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 body{font-family:"Segoe UI",Arial,sans-serif;font-size:12px;color:#222;padding:4px;}
