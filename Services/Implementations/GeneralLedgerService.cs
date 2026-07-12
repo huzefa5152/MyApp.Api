@@ -67,13 +67,44 @@ namespace MyApp.Api.Services.Implementations
             if (!await _context.Accounts.AnyAsync(a => a.CompanyId == companyId))
                 seeded = await _seeder.SeedWholesaleAsync(companyId);
 
+            var wasEnabled = company.GlPostingEnabled;
             if (!company.GlPostingEnabled)
             {
                 company.GlPostingEnabled = true;
                 await _context.SaveChangesAsync();
             }
 
-            var result = await RebuildAsync(companyId);
+            GlEnableResultDto result;
+            try
+            {
+                result = await RebuildAsync(companyId);
+            }
+            catch (Exception ex)
+            {
+                // Don't leave the company half-enabled (flag on, backfill aborted)
+                // and — unlike before — leave a trace: the enable endpoint only
+                // audit-logged on success, so a failed backfill vanished from the
+                // audit log. Revert the flag (if we set it) and record the failure.
+                if (!wasEnabled)
+                {
+                    company.GlPostingEnabled = false;
+                    try { await _context.SaveChangesAsync(); } catch { /* best-effort revert */ }
+                }
+                try
+                {
+                    await _auditLog.LogAsync(new AuditLog
+                    {
+                        Level = "Error",
+                        HttpMethod = "POST",
+                        RequestPath = $"/accounting/gl/company/{companyId}/enable",
+                        StatusCode = 400,
+                        ExceptionType = "GL_ENABLE_FAILED_V1",
+                        Message = $"GL enable/backfill failed for company {companyId}: {ex.Message}",
+                    });
+                }
+                catch { /* audit must never mask the original failure */ }
+                throw;
+            }
             result.SeededAccounts = seeded;
 
             try

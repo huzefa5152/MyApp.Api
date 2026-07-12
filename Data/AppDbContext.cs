@@ -33,6 +33,11 @@ namespace MyApp.Api.Data
         public DbSet<SalesOrder> SalesOrders { get; set; }
         public DbSet<SalesOrderItem> SalesOrderItems { get; set; }
 
+        // ── Withholding Tax Receipts (customer-issued tax certificates) ──
+        // Single-amount sales-side document; per-customer sum feeds the
+        // "Withholding tax receivable" column on the Customers screen.
+        public DbSet<WithholdingTaxReceipt> WithholdingTaxReceipts { get; set; }
+
         // ── Payments / Receipts (AR/AP subledger — design §11.5, additive) ──
         // Receipt (money in) + Payment (money out) documents and their
         // allocation lines, which settle invoices/bills and drive balance-due +
@@ -656,6 +661,28 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<SalesOrder>().HasIndex(o => o.ClientId);
             modelBuilder.Entity<DeliveryChallan>().HasIndex(dc => dc.SalesOrderId);
             modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.SalesOrderItemId);
+
+            // ── Withholding Tax Receipts ────────────────────────────────────
+            // Company / Client restrict (a company or client with receipts
+            // can't be silently deleted out from under them — the client
+            // cascade unlinks them in app code). Division NoAction to avoid
+            // multiple-cascade-path (SQL Server 1785), matching the other docs.
+            modelBuilder.Entity<WithholdingTaxReceipt>()
+                .HasOne(r => r.Company).WithMany()
+                .HasForeignKey(r => r.CompanyId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<WithholdingTaxReceipt>()
+                .HasOne(r => r.Client).WithMany()
+                .HasForeignKey(r => r.ClientId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<WithholdingTaxReceipt>()
+                .HasOne(r => r.Division).WithMany()
+                .HasForeignKey(r => r.DivisionId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<WithholdingTaxReceipt>().Property(r => r.Amount).HasPrecision(18, 2);
+            // Unique numbering per (company, division) — a division has its own
+            // receipt sequence; HasFilter(null) so NULL divisions collide too.
+            modelBuilder.Entity<WithholdingTaxReceipt>()
+                .HasIndex(r => new { r.CompanyId, r.DivisionId, r.ReceiptNumber }).IsUnique()
+                .HasFilter(null);
+            modelBuilder.Entity<WithholdingTaxReceipt>().HasIndex(r => r.ClientId);
 
             // ── Payments / Receipts (AR/AP subledger — design §11.5) ───────────
             // Payment header → Company (Restrict: a company's payment history

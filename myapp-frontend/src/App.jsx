@@ -17,6 +17,7 @@ import TransfersPage from "./pages/TransfersPage";
 import AccountingDashboardPage from "./pages/AccountingDashboardPage";
 import AccountingReportsPage from "./pages/AccountingReportsPage";
 import DataMigrationPage from "./pages/DataMigrationPage";
+import ManagerImportPage from "./pages/ManagerImportPage";
 import CreditDebitNotePage from "./pages/CreditDebitNotePage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
 import PurchaseBillsPage from "./pages/PurchaseBillsPage";
@@ -118,6 +119,7 @@ export default function App() {
           <Route path="/accounting/dashboard" element={<AccountingDashboardPage />} />
           <Route path="/accounting/reports" element={<AccountingReportsPage />} />
           <Route path="/accounting/data-migration" element={<DataMigrationPage />} />
+          <Route path="/accounting/manager-import" element={<ManagerImportPage />} />
           <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
           <Route path="/goods-receipts" element={<GoodsReceiptsPage />} />
           <Route path="/stock" element={<StockDashboardPage />} />

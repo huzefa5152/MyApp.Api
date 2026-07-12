@@ -491,6 +491,12 @@ export default function DashboardLayout() {
                   <span>Data Migration</span>
                 </NavLink>
               </Can>
+              <Can permission="accounting.import.manager">
+                <NavLink to="/accounting/manager-import" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdCloudDownload className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Manager.io Import</span>
+                </NavLink>
+              </Can>
             </NavGroup>
           )}
 

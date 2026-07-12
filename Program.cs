@@ -278,6 +278,7 @@ builder.Services.AddScoped<IGeneralLedgerService, GeneralLedgerService>();
 builder.Services.AddScoped<IJournalEntryService, JournalEntryService>();
 builder.Services.AddScoped<IAccountTransferService, AccountTransferService>();
 builder.Services.AddScoped<ILegacyImportService, LegacyImportService>();
+builder.Services.AddScoped<IManagerImportService, ManagerImportService>();
 builder.Services.AddScoped<IClientService, ClientService>();
 // "Common Clients" grouping — the same legal entity (matched by NTN, then
 // fallback to normalised name) shared across multiple companies. Sits

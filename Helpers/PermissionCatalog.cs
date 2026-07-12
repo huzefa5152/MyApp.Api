@@ -142,6 +142,7 @@ namespace MyApp.Api.Helpers
             // Legacy data migration (admin/ops). Also gated by a non-Production
             // environment + the LegacyDb connection string — never reachable in prod.
             new("accounting.import.run", "Accounting", "Data Migration", "Run", "Run the legacy Data_2021 ETL into a company (non-prod only)"),
+            new("accounting.import.manager", "Accounting", "Data Migration", "Manager Import", "Import a Manager.io business export (.zip of JSON) into a company — works on the live server"),
 
             // ── Folders + Attachments (unified document management) ─────────
             // One shared system powers the Configuration → Folders library AND

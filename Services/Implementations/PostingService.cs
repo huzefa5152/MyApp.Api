@@ -112,6 +112,23 @@ namespace MyApp.Api.Services.Implementations
                 });
             }
 
+            // On-account remainder: money moved but not fully matched by settlement
+            // legs — an advance/prepayment, a receipt/payment on account, or a
+            // migrated document whose income/expense lines aren't mapped to
+            // accounts. Plug the difference to Suspense so the entry balances,
+            // honouring this engine's "unresolved amounts land on Suspense"
+            // contract. Without it the lone bank leg throws "unbalanced posting"
+            // and aborts a GL enable/rebuild.
+            var drSum = lines.Sum(l => l.Debit);
+            var crSum = lines.Sum(l => l.Credit);
+            if (drSum != crSum)
+            {
+                var suspense = await SuspenseAsync(payment.CompanyId, accounts);
+                var diff = drSum - crSum;   // > 0 → short a credit; < 0 → short a debit
+                AddLine(lines, suspense.Id, debit: diff < 0 ? -diff : 0m, credit: diff > 0 ? diff : 0m,
+                    payment.DivisionId, reference);
+            }
+
             await WriteEntryAsync(payment.CompanyId, SourceDocType.Payment, payment.Id,
                 payment.Date, Narration(reference, payment.Description), payment.DivisionId, lines);
         }
