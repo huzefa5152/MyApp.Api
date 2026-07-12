@@ -37,6 +37,7 @@ import {
   MdAddShoppingCart,
   MdAccountTree,
   MdAccountBalanceWallet,
+  MdAccountBalance,
   MdReceiptLong,
   MdPayments,
   MdCloudDownload,
@@ -233,7 +234,7 @@ export default function DashboardLayout() {
     const p = location.pathname.toLowerCase();
     if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p.startsWith("/withholding-tax") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history") return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
-    if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/transfers") || p.startsWith("/journal-entries") || p.startsWith("/accounting/")) return "accounting";
+    if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/bank-cash-accounts") || p.startsWith("/transfers") || p.startsWith("/journal-entries") || p.startsWith("/accounting/")) return "accounting";
     if (p.startsWith("/reports")) return "reports";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
@@ -454,6 +455,12 @@ export default function DashboardLayout() {
                 <NavLink to="/accounting/dashboard" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdInsights className="dl-subitem__icon" aria-hidden="true" />
                   <span>Dashboard</span>
+                </NavLink>
+              </Can>
+              <Can permission="accounting.coa.view">
+                <NavLink to="/bank-cash-accounts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdAccountBalance className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Bank &amp; Cash Accounts</span>
                 </NavLink>
               </Can>
               <Can permission="accounting.receipts.view">

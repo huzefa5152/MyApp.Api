@@ -12,6 +12,7 @@ import SalesOrderPage from "./pages/SalesOrderPage";
 import InvoicePage from "./pages/InvoicePage";
 import PaymentsPage from "./pages/PaymentsPage";
 import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
+import BankCashAccountsPage from "./pages/BankCashAccountsPage";
 import JournalEntriesPage from "./pages/JournalEntriesPage";
 import TransfersPage from "./pages/TransfersPage";
 import AccountingDashboardPage from "./pages/AccountingDashboardPage";
@@ -115,6 +116,7 @@ export default function App() {
           <Route path="/receipts" element={<PaymentsPage key="receipts" mode="receipts" />} />
           <Route path="/payments" element={<PaymentsPage key="payments" mode="payments" />} />
           <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />
+          <Route path="/bank-cash-accounts" element={<BankCashAccountsPage />} />
           {/* General Ledger (Phase B): transfers move money between own
               bank/cash accounts; journal entries are manual GL postings;
               the accounting dashboard + reports read the live ledger. */}
