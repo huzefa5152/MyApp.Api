@@ -115,6 +115,7 @@ namespace MyApp.Api.Helpers
             new("withholdingtax.manage.create", "WithholdingTax", "Manage", "Create", "Record a withholding tax receipt"),
             new("withholdingtax.manage.update", "WithholdingTax", "Manage", "Update", "Edit a withholding tax receipt"),
             new("withholdingtax.manage.delete", "WithholdingTax", "Manage", "Delete", "Delete a withholding tax receipt"),
+            new("withholdingtax.print.view",    "WithholdingTax", "Print",  "View",   "Print or download a withholding tax receipt"),
 
             // ── Accounting: Receipts & Payments (AR/AP subledger) ───────────
             // Money in (receipts → settle sales invoices) and money out
@@ -124,9 +125,11 @@ namespace MyApp.Api.Helpers
             new("accounting.receipts.view",   "Accounting", "Receipts", "View",   "View receipts (money in) and an invoice's settled payments"),
             new("accounting.receipts.create", "Accounting", "Receipts", "Create", "Record a receipt against one or more sales invoices"),
             new("accounting.receipts.delete", "Accounting", "Receipts", "Delete", "Delete a receipt"),
+            new("accounting.receipts.print",  "Accounting", "Receipts", "Print",  "Print or download a receipt voucher"),
             new("accounting.payments.view",   "Accounting", "Payments", "View",   "View payments (money out) and a bill's settled payments"),
             new("accounting.payments.create", "Accounting", "Payments", "Create", "Record a payment against one or more purchase bills"),
             new("accounting.payments.delete", "Accounting", "Payments", "Delete", "Delete a payment"),
+            new("accounting.payments.print",  "Accounting", "Payments", "Print",  "Print or download a payment voucher"),
 
             // Chart of Accounts (the account tree postings land on). View to read
             // the tree; manage to add/edit/delete groups & accounts and seed a
@@ -142,9 +145,11 @@ namespace MyApp.Api.Helpers
             new("accounting.journal.view",    "Accounting", "Journal Entries", "View",   "View journal entries (manual and system-posted)"),
             new("accounting.journal.create",  "Accounting", "Journal Entries", "Create", "Create and edit manual journal entries"),
             new("accounting.journal.delete",  "Accounting", "Journal Entries", "Delete", "Delete manual journal entries"),
+            new("accounting.journal.print",   "Accounting", "Journal Entries", "Print",  "Print or download a journal voucher"),
             new("accounting.transfers.view",   "Accounting", "Account Transfers", "View",   "View inter-account (bank/cash) transfers"),
             new("accounting.transfers.create", "Accounting", "Account Transfers", "Create", "Record and edit inter-account transfers"),
             new("accounting.transfers.delete", "Accounting", "Account Transfers", "Delete", "Delete inter-account transfers"),
+            new("accounting.transfers.print",  "Accounting", "Account Transfers", "Print",  "Print or download a transfer advice"),
             new("accounting.gl.manage",       "Accounting", "General Ledger", "Manage", "Enable GL posting, run backfill/rebuild and set the lock date"),
             new("accounting.reports.view",    "Accounting", "Reports", "View", "View trial balance and AR/AP aging reports"),
             new("accounting.dashboard.view",  "Accounting", "Dashboard", "View", "View the accounting summary dashboard"),

@@ -29,5 +29,7 @@ namespace MyApp.Api.Services.Interfaces
         /// <summary>Delete a transfer and its journal entry. Returns false if
         /// not found.</summary>
         Task<bool> DeleteAsync(int id);
+
+        Task<PrintTransferDto?> GetPrintDataAsync(int id);
     }
 }

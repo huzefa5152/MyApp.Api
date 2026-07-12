@@ -40,5 +40,7 @@ namespace MyApp.Api.Services.Interfaces
         /// <summary>Advance a cheque's lifecycle (Pending → Deposited → Cleared /
         /// Bounced) without a full document edit — the PDC register action.</summary>
         Task<PaymentDto?> SetChequeStatusAsync(int id, string status);
+
+        Task<PrintPaymentVoucherDto?> GetPrintDataAsync(int id);
     }
 }

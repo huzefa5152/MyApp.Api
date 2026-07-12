@@ -1,65 +1,29 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { MdFactCheck, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdPrint, MdVisibility } from "react-icons/md";
+import { MdFactCheck, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdPrint, MdVisibility, MdPictureAsPdf } from "react-icons/md";
 import {
   getWithholdingReceiptsByCompany, createWithholdingReceipt,
   updateWithholdingReceipt, deleteWithholdingReceipt,
+  getWithholdingReceiptPrintData,
 } from "../api/withholdingTaxApi";
-import { getClientById } from "../api/clientApi";
 import WithholdingTaxReceiptForm from "../Components/WithholdingTaxReceiptForm";
 import AttachmentManager from "../Components/AttachmentManager";
 import DivisionSelect from "../Components/DivisionSelect";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import { notify } from "../utils/notify";
 import { writeAndPrint } from "../utils/printDocument";
+import { mergeTemplate } from "../utils/templateEngine";
+import { exportToPdf } from "../utils/exportUtils";
+import { defaultWithholdingTaxTemplate } from "../utils/accountingDocTemplates";
 import { formStyles, modalSizes, dropdownStyles } from "../theme";
 
 const colors = { blue: "#0d47a1", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3" };
 
 const money = (n) => "Rs. " + (Number(n) || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("en-GB") : "");
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-
-// Build a standalone printable HTML doc for a single receipt. No template
-// engine — customer block (address/NTN/STRN) from the client record, company
-// block from context, plus the amount. Mirrors utils/printTemplates.js style.
-function buildReceiptHtml(receipt, client, company) {
-  const companyName = company?.brandName || company?.name || "";
-  const companyAddr = company?.fullAddress || company?.address || "";
-  const clientLines = [client?.address, client?.site].filter(Boolean).map(esc).join("<br>");
-  const clientTax = [client?.ntn ? `NTN: ${esc(client.ntn)}` : "", client?.strn ? `STRN: ${esc(client.strn)}` : ""].filter(Boolean).join(" &nbsp;|&nbsp; ");
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Withholding Tax Receipt #${esc(receipt.receiptNumber)}</title>
-<style>
-  *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif;color:#1a2332;margin:0;padding:32px;font-size:13px}
-  .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0d47a1;padding-bottom:14px;margin-bottom:22px}
-  .company{font-size:18px;font-weight:700;color:#0d47a1} .muted{color:#5f6d7e;font-size:12px;margin-top:4px;white-space:pre-line}
-  h1{font-size:16px;letter-spacing:.04em;text-transform:uppercase;margin:0 0 2px} .rno{color:#5f6d7e;font-size:12px}
-  .party{margin:18px 0} .party .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#5f6d7e;margin-bottom:4px}
-  .party .nm{font-weight:700;font-size:14px}
-  table{width:100%;border-collapse:collapse;margin-top:14px} th,td{border:1px solid #d0d7e2;padding:10px;text-align:left}
-  th{background:#f4f7fb;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:#5f6d7e}
-  td.amt,th.amt{text-align:right;white-space:nowrap} tfoot td{font-weight:700}
-  .foot{margin-top:40px;color:#94a3b8;font-size:11px;text-align:center}
-</style></head><body>
-  <div class="head">
-    <div><div class="company">${esc(companyName)}</div><div class="muted">${esc(companyAddr)}</div></div>
-    <div style="text-align:right"><h1>Withholding Tax Receipt</h1><div class="rno">#${esc(receipt.receiptNumber)} &nbsp;·&nbsp; ${esc(fmtDate(receipt.date))}</div></div>
-  </div>
-  <div class="party">
-    <div class="lbl">Customer</div>
-    <div class="nm">${esc(receipt.clientName)}</div>
-    ${clientLines ? `<div class="muted">${clientLines}</div>` : ""}
-    ${clientTax ? `<div class="muted">${clientTax}</div>` : ""}
-  </div>
-  <table>
-    <thead><tr><th>Description</th><th class="amt">Amount</th></tr></thead>
-    <tbody><tr><td>${esc(receipt.description || "Withholding tax deducted at source")}</td><td class="amt">${money(receipt.amount)}</td></tr></tbody>
-    <tfoot><tr><td>Total</td><td class="amt">${money(receipt.amount)}</td></tr></tfoot>
-  </table>
-  <div class="foot">Withholding tax receivable — retained as a tax credit.</div>
-</body></html>`;
-}
 
 export default function WithholdingTaxReceiptsPage() {
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
@@ -69,14 +33,21 @@ export default function WithholdingTaxReceiptsPage() {
   const canCreate = has("withholdingtax.manage.create");
   const canUpdate = has("withholdingtax.manage.update");
   const canDelete = has("withholdingtax.manage.delete");
+  const canPrint = has("withholdingtax.print.view");
+  // Shared template-picker state (dropdown + Print/PDF resolution).
+  const tplPicker = usePrintTemplates("WithholdingTaxReceipt");
 
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [exportingId, setExportingId] = useState(null);
   const [search, setSearch] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editReceipt, setEditReceipt] = useState(null);
   const [viewReceipt, setViewReceipt] = useState(null);
+
+  // Explicit dropdown pick wins; else the company default; else the built-in.
+  const resolveTpl = (r) => tplPicker.resolveTemplate(r)?.htmlContent || defaultWithholdingTaxTemplate;
 
   const fetchReceipts = useCallback(async (companyId) => {
     if (!companyId) return;
@@ -126,14 +97,26 @@ export default function WithholdingTaxReceiptsPage() {
     // Open the popup BEFORE any await so the pop-up blocker doesn't kill it.
     const w = window.open("", "_blank");
     if (!w) { notify("Popup blocked. Allow popups for this site to print.", "warning"); return; }
-    w.document.write("<p style='font-family:sans-serif;padding:24px'>Loading receipt…</p>");
+    w.document.write("<p style='font-family:sans-serif;padding:24px'>Loading certificate…</p>");
     try {
-      let client = null;
-      try { ({ data: client } = await getClientById(r.clientId)); } catch { /* print without client detail */ }
-      writeAndPrint(w, buildReceiptHtml(r, client, selectedCompany));
+      const { data } = await getWithholdingReceiptPrintData(r.id);
+      writeAndPrint(w, mergeTemplate(resolveTpl(r), data));
     } catch {
       w.close();
       notify("Failed to prepare the print view.", "error");
+    }
+  };
+
+  const handleExportPdf = async (r) => {
+    if (exportingId) return;
+    setExportingId(r.id);
+    try {
+      const { data } = await getWithholdingReceiptPrintData(r.id);
+      await exportToPdf(mergeTemplate(resolveTpl(r), data), `WHT Receipt ${data.receiptNumber || r.id}`);
+    } catch {
+      notify("Failed to export PDF.", "error");
+    } finally {
+      setExportingId(null);
     }
   };
 
@@ -196,6 +179,7 @@ export default function WithholdingTaxReceiptsPage() {
               <input type="text" placeholder="Search customer / description…" value={search} onChange={(e) => setSearch(e.target.value)} style={styles.searchInput} />
             </div>
           )}
+          {canPrint && tplPicker.canChoose && <PrintTemplateSelect picker={tplPicker} />}
         </div>
       ) : (
         <div style={styles.emptyState}><MdBusiness size={40} color={colors.cardBorder} /><p style={{ color: colors.textSecondary, marginTop: 8 }}>No companies available.</p></div>
@@ -285,9 +269,28 @@ export default function WithholdingTaxReceiptsPage() {
             </div>
             <div style={formStyles.footer}>
               <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setViewReceipt(null)}>Close</button>
-              <button type="button" style={{ ...formStyles.button, ...formStyles.submit, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => handlePrint(viewReceipt)}>
-                <MdPrint size={16} /> Print / PDF
-              </button>
+              {canPrint && (
+                <button
+                  type="button"
+                  disabled={tplPicker.noTemplate}
+                  title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print certificate"}
+                  style={{ ...formStyles.button, ...formStyles.submit, display: "inline-flex", alignItems: "center", gap: 6, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                  onClick={() => handlePrint(viewReceipt)}
+                >
+                  <MdPrint size={16} /> Print
+                </button>
+              )}
+              {canPrint && (
+                <button
+                  type="button"
+                  disabled={tplPicker.noTemplate || !!exportingId}
+                  title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}
+                  style={{ ...formStyles.button, ...formStyles.submit, display: "inline-flex", alignItems: "center", gap: 6, ...((tplPicker.noTemplate || exportingId) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                  onClick={() => handleExportPdf(viewReceipt)}
+                >
+                  <MdPictureAsPdf size={16} /> PDF
+                </button>
+              )}
             </div>
           </div>
         </div>

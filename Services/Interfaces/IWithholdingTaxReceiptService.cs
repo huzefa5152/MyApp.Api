@@ -10,5 +10,6 @@ namespace MyApp.Api.Services.Interfaces
         Task<WithholdingTaxReceiptDto?> UpdateAsync(int id, WithholdingTaxReceiptDto dto);
         Task<bool> DeleteAsync(int id);
         Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
+        Task<PrintWithholdingReceiptDto?> GetPrintDataAsync(int id);
     }
 }

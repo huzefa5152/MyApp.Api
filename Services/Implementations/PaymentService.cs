@@ -628,5 +628,77 @@ namespace MyApp.Api.Services.Implementations
             // No explicit status: a cheque number implies a pending cheque.
             return string.IsNullOrWhiteSpace(chequeNumber) ? ChequeStatus.None : ChequeStatus.Pending;
         }
+
+        public async Task<PrintPaymentVoucherDto?> GetPrintDataAsync(int id)
+        {
+            var p = await _context.Payments.AsNoTracking()
+                .Include(x => x.Company)
+                .Include(x => x.Division)
+                .Include(x => x.Allocations)
+                .FirstOrDefaultAsync(x => x.Id == id);
+            if (p == null) return null;
+
+            // Contact is a soft ref (ContactType + ContactId), resolve its name.
+            string contactName = "";
+            string? contactAddress = null, contactPhone = null;
+            if (p.ContactId.HasValue && p.ContactType == "Client")
+            {
+                var c = await _context.Clients.AsNoTracking().FirstOrDefaultAsync(x => x.Id == p.ContactId.Value);
+                contactName = c?.Name ?? ""; contactAddress = c?.Address; contactPhone = c?.Phone;
+            }
+            else if (p.ContactId.HasValue && p.ContactType == "Supplier")
+            {
+                var s = await _context.Suppliers.AsNoTracking().FirstOrDefaultAsync(x => x.Id == p.ContactId.Value);
+                contactName = s?.Name ?? ""; contactAddress = s?.Address; contactPhone = s?.Phone;
+            }
+
+            // Allocation document labels (invoice / bill numbers).
+            var invIds = p.Allocations.Where(a => a.InvoiceId != null).Select(a => a.InvoiceId!.Value).ToList();
+            var billIds = p.Allocations.Where(a => a.PurchaseBillId != null).Select(a => a.PurchaseBillId!.Value).ToList();
+            var invMap = invIds.Count == 0 ? new() : await _context.Invoices.AsNoTracking()
+                .Where(i => invIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, i => i.InvoiceNumber);
+            var billMap = billIds.Count == 0 ? new() : await _context.PurchaseBills.AsNoTracking()
+                .Where(b => billIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.PurchaseBillNumber);
+            var sNo = 0;
+            var allocs = p.Allocations.Select(a => new PrintPaymentAllocationDto
+            {
+                SNo = ++sNo,
+                DocumentLabel = a.InvoiceId != null ? $"Invoice #{invMap.GetValueOrDefault(a.InvoiceId.Value)}"
+                              : a.PurchaseBillId != null ? $"Bill #{billMap.GetValueOrDefault(a.PurchaseBillId.Value)}"
+                              : "Direct",
+                Amount = a.Amount,
+            }).ToList();
+
+            return new PrintPaymentVoucherDto
+            {
+                CompanyBrandName = p.Company?.BrandName ?? p.Company?.Name ?? "",
+                CompanyLogoPath = p.Company?.LogoPath,
+                CompanyAddress = p.Company?.FullAddress,
+                CompanyPhone = p.Company?.Phone,
+                DivisionName = p.Division?.Name,
+                DivisionBrandName = p.Division?.BrandName,
+                DivisionLogoPath = p.Division?.LogoPath,
+                DivisionAddress = p.Division?.FullAddress,
+                DivisionPhone = p.Division?.Phone,
+                DivisionNTN = p.Division?.NTN,
+                DivisionSTRN = p.Division?.STRN,
+                DivisionEmail = p.Division?.Email,
+                Direction = p.Direction.ToString(),
+                Reference = (p.Direction == PaymentDirection.Receipt ? "RCV-" : "PMT-") + p.Number,
+                Date = p.Date,
+                ContactType = p.ContactType,
+                ContactName = contactName,
+                ContactAddress = contactAddress,
+                ContactPhone = contactPhone,
+                Method = p.Method,
+                BankAccountName = p.BankAccountName,
+                ChequeNumber = p.ChequeNumber,
+                ChequeDate = p.ChequeDate,
+                Description = p.Description,
+                Amount = p.Amount,
+                AmountInWords = NumberToWordsConverter.Convert(p.Amount),
+                Allocations = allocs,
+            };
+        }
     }
 }

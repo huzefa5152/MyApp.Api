@@ -10,6 +10,10 @@ export const getWithholdingReceiptsByCompany = (companyId) =>
 export const getWithholdingReceiptById = (id) =>
   http.get(`/withholdingtaxreceipts/${id}`);
 
+// Print-ready certificate DTO (branding + customer NTN/STRN + amount-in-words).
+export const getWithholdingReceiptPrintData = (id) =>
+  http.get(`/withholdingtaxreceipts/${id}/print`);
+
 // Payload: { clientId, divisionId?, date, amount, description? }
 export const createWithholdingReceipt = (companyId, payload) =>
   http.post(`/withholdingtaxreceipts/company/${companyId}`, payload);

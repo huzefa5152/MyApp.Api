@@ -63,6 +63,17 @@ namespace MyApp.Api.Controllers
             return Ok(dto);
         }
 
+        [HttpGet("{id}/print")]
+        [HasPermission("accounting.transfers.print")]
+        public async Task<ActionResult<PrintTransferDto>> GetPrintData(int id)
+        {
+            var t = await _service.GetByIdAsync(id);
+            if (t == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, t.CompanyId);
+            var dto = await _service.GetPrintDataAsync(id);
+            return dto == null ? NotFound() : Ok(dto);
+        }
+
         [HttpPost("company/{companyId}")]
         [HasPermission("accounting.transfers.create")]
         [AuthorizeCompany]

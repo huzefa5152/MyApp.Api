@@ -76,6 +76,41 @@ namespace MyApp.Api.Services.Implementations
         public async Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null) =>
             await _repo.GetCountByCompanyAsync(companyId, allowedDivisionIds);
 
+        public async Task<PrintWithholdingReceiptDto?> GetPrintDataAsync(int id)
+        {
+            var r = await _context.WithholdingTaxReceipts.AsNoTracking()
+                .Include(x => x.Company)
+                .Include(x => x.Client)
+                .Include(x => x.Division)
+                .FirstOrDefaultAsync(x => x.Id == id);
+            if (r == null) return null;
+
+            return new PrintWithholdingReceiptDto
+            {
+                CompanyBrandName = r.Company?.BrandName ?? r.Company?.Name ?? "",
+                CompanyLogoPath = r.Company?.LogoPath,
+                CompanyAddress = r.Company?.FullAddress,
+                CompanyPhone = r.Company?.Phone,
+                DivisionName = r.Division?.Name,
+                DivisionBrandName = r.Division?.BrandName,
+                DivisionLogoPath = r.Division?.LogoPath,
+                DivisionAddress = r.Division?.FullAddress,
+                DivisionPhone = r.Division?.Phone,
+                DivisionNTN = r.Division?.NTN,
+                DivisionSTRN = r.Division?.STRN,
+                DivisionEmail = r.Division?.Email,
+                ReceiptNumber = r.ReceiptNumber,
+                Date = r.Date,
+                CustomerName = r.Client?.Name ?? "",
+                CustomerAddress = r.Client?.Address,
+                CustomerNTN = r.Client?.NTN,
+                CustomerSTRN = r.Client?.STRN,
+                Description = r.Description,
+                Amount = r.Amount,
+                AmountInWords = NumberToWordsConverter.Convert(r.Amount),
+            };
+        }
+
         public async Task<WithholdingTaxReceiptDto> CreateAsync(int companyId, WithholdingTaxReceiptDto dto)
         {
             await ValidateAsync(companyId, dto);

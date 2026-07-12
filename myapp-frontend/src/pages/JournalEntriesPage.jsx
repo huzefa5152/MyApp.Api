@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   MdAdd, MdDelete, MdEdit, MdVisibility, MdClose, MdChevronLeft, MdChevronRight,
-  MdSearch, MdBusiness, MdMenuBook, MdArrowDropDown,
+  MdSearch, MdBusiness, MdMenuBook, MdArrowDropDown, MdPrint, MdPictureAsPdf,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -13,9 +13,15 @@ import StatusBadge from "../Components/StatusBadge";
 import AttachmentManager from "../Components/AttachmentManager";
 import {
   getJournalEntriesPaged, getJournalEntry, createJournalEntry,
-  updateJournalEntry, deleteJournalEntry,
+  updateJournalEntry, deleteJournalEntry, getJournalEntryPrintData,
 } from "../api/accountingApi";
 import { getAccountsFlat } from "../api/accountApi";
+import { mergeTemplate } from "../utils/templateEngine";
+import { writeAndPrint } from "../utils/printDocument";
+import { exportToPdf } from "../utils/exportUtils";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
+import { defaultJournalEntryTemplate } from "../utils/accountingDocTemplates";
 
 const fmtMoney = (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -62,6 +68,33 @@ export default function JournalEntriesPage() {
   const canView = has("accounting.journal.view");
   const canCreate = has("accounting.journal.create");
   const canDelete = has("accounting.journal.delete");
+  const canPrintJournal = has("accounting.journal.print");
+  // Shared template-picker state (dropdown + Print/PDF resolution + no-template gating).
+  const tplPicker = usePrintTemplates("JournalEntry");
+  const [exportingId, setExportingId] = useState(null);
+
+  // Explicit dropdown pick wins; else the company default; else the built-in.
+  const resolveTpl = (je) => tplPicker.resolveTemplate(je)?.htmlContent || defaultJournalEntryTemplate;
+
+  const handlePrint = async (je) => {
+    const w = window.open("", "_blank");
+    if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
+    w.document.write("<p>Loading journal voucher...</p>");
+    try {
+      const { data } = await getJournalEntryPrintData(je.id);
+      writeAndPrint(w, mergeTemplate(resolveTpl(je), data));
+    } catch { w.close(); notify("Failed to load print data.", "error"); }
+  };
+
+  const handleExportPdf = async (je) => {
+    if (exportingId) return;
+    setExportingId(je.id);
+    try {
+      const { data } = await getJournalEntryPrintData(je.id);
+      await exportToPdf(mergeTemplate(resolveTpl(je), data), `Journal ${data.reference || je.id}`);
+    } catch { notify("Failed to export PDF.", "error"); }
+    finally { setExportingId(null); }
+  };
 
   const [rows, setRows] = useState([]);
   const [page, setPage] = useState(1);
@@ -162,6 +195,7 @@ export default function JournalEntriesPage() {
                 onKeyDown={(e) => { if (e.key === "Enter") { setPage(1); fetchRows(1); } }}
               />
             </div>
+            {tplPicker.canChoose && <PrintTemplateSelect picker={tplPicker} />}
             {rows.length > 0 && (
               <div style={st.pageSummary}>
                 <span style={st.pageSummaryCount}>{totalCount}</span> entr{totalCount === 1 ? "y" : "ies"}
@@ -181,9 +215,14 @@ export default function JournalEntriesPage() {
                   entry={e}
                   canEdit={canCreate}
                   canDelete={canDelete}
+                  canPrint={canPrintJournal}
+                  tplPicker={tplPicker}
+                  exportingId={exportingId}
                   onView={() => setViewing(e)}
                   onEdit={() => setEditing(e)}
                   onDelete={() => handleDelete(e)}
+                  onPrint={() => handlePrint(e)}
+                  onExportPdf={() => handleExportPdf(e)}
                 />
               ))}
             </div>
@@ -232,7 +271,7 @@ export default function JournalEntriesPage() {
  * desktop (reads like a table row), stacked one-per-line at 375px — no media
  * queries. Edit/Delete only on manual rows; system rows are view-only.
  */
-function EntryRow({ entry: e, canEdit, canDelete, onView, onEdit, onDelete }) {
+function EntryRow({ entry: e, canEdit, canDelete, canPrint, tplPicker, exportingId, onView, onEdit, onDelete, onPrint, onExportPdf }) {
   const src = sourceMeta(e.sourceDocType);
   const balanced = r2(e.totalDebit) === r2(e.totalCredit);
 
@@ -281,6 +320,26 @@ function EntryRow({ entry: e, canEdit, canDelete, onView, onEdit, onDelete }) {
             <button style={st.viewBtn} onClick={onView} title="View lines">
               <MdVisibility size={16} /> View
             </button>
+            {canPrint && (
+              <button
+                style={{ ...st.printBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                disabled={tplPicker.noTemplate}
+                title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print voucher"}
+                onClick={onPrint}
+              >
+                <MdPrint size={14} /> Print
+              </button>
+            )}
+            {canPrint && (
+              <button
+                style={{ ...st.pdfBtn, ...((tplPicker.noTemplate || exportingId === e.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                disabled={tplPicker.noTemplate || !!exportingId}
+                title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}
+                onClick={onExportPdf}
+              >
+                <MdPictureAsPdf size={14} /> PDF
+              </button>
+            )}
             {e.isManual && canEdit && (
               <button style={st.editBtn} onClick={onEdit} title="Edit">
                 <MdEdit size={16} /> Edit
@@ -737,6 +796,8 @@ const st = {
   rowActions: { display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", alignSelf: "center" },
   viewBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.blue, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
   editBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#e65100", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
+  printBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#4527a0", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
+  pdfBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#ad1457", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
   delBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
 
   pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", marginTop: "1.25rem" },

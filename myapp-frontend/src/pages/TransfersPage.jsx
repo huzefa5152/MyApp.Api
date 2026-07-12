@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   MdAdd, MdDelete, MdChevronLeft, MdChevronRight, MdSwapHoriz, MdSearch,
   MdBusiness, MdCalendarToday, MdLabel, MdNotes, MdEdit, MdClose,
-  MdArrowForward,
+  MdArrowForward, MdPrint, MdPictureAsPdf,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -12,7 +12,13 @@ import { colors, dropdownStyles, formStyles, modalSizes } from "../theme";
 import BankCashSelect from "../Components/BankCashSelect";
 import DivisionSelect from "../Components/DivisionSelect";
 import AttachmentManager from "../Components/AttachmentManager";
-import { getTransfersPaged, createTransfer, updateTransfer, deleteTransfer } from "../api/accountingApi";
+import { getTransfersPaged, createTransfer, updateTransfer, deleteTransfer, getTransferPrintData } from "../api/accountingApi";
+import { mergeTemplate } from "../utils/templateEngine";
+import { writeAndPrint } from "../utils/printDocument";
+import { exportToPdf } from "../utils/exportUtils";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
+import { defaultTransferTemplate } from "../utils/accountingDocTemplates";
 
 const fmtMoney = (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -35,6 +41,11 @@ export default function TransfersPage() {
   const canView = has("accounting.transfers.view");
   const canCreate = has("accounting.transfers.create");
   const canDelete = has("accounting.transfers.delete");
+  const canPrintTransfer = has("accounting.transfers.print");
+
+  // Shared template-picker state (dropdown + Print/PDF resolution).
+  const tplPicker = usePrintTemplates("Transfer");
+  const [exportingId, setExportingId] = useState(null);
 
   const [rows, setRows] = useState([]);
   const [page, setPage] = useState(1);
@@ -83,6 +94,29 @@ export default function TransfersPage() {
     } catch (err) {
       notify(err.response?.data?.error || "Failed to delete.", "error");
     }
+  };
+
+  // Explicit dropdown pick wins; else the company default; else the built-in.
+  const resolveTpl = (t) => tplPicker.resolveTemplate(t)?.htmlContent || defaultTransferTemplate;
+
+  const handlePrint = async (t) => {
+    const w = window.open("", "_blank");
+    if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
+    w.document.write("<p>Loading transfer voucher...</p>");
+    try {
+      const { data } = await getTransferPrintData(t.id);
+      writeAndPrint(w, mergeTemplate(resolveTpl(t), data));
+    } catch { w.close(); notify("Failed to load print data.", "error"); }
+  };
+
+  const handleExportPdf = async (t) => {
+    if (exportingId) return;
+    setExportingId(t.id);
+    try {
+      const { data } = await getTransferPrintData(t.id);
+      await exportToPdf(mergeTemplate(resolveTpl(t), data), `Transfer ${data.reference || t.id}`);
+    } catch { notify("Failed to export PDF.", "error"); }
+    finally { setExportingId(null); }
   };
 
   if (!canView) {
@@ -137,6 +171,7 @@ export default function TransfersPage() {
                 onKeyDown={(e) => { if (e.key === "Enter") { setPage(1); fetchRows(1); } }}
               />
             </div>
+            {canPrintTransfer && tplPicker.canChoose && <PrintTemplateSelect picker={tplPicker} />}
             {rows.length > 0 && (
               <div style={st.pageSummary}>
                 <span style={st.pageSummaryCount}>{totalCount} transfers</span>
@@ -158,8 +193,13 @@ export default function TransfersPage() {
                   t={t}
                   canEdit={canCreate}
                   canDelete={canDelete}
+                  canPrint={canPrintTransfer}
+                  tplPicker={tplPicker}
+                  exportingId={exportingId}
                   onEdit={() => setEditing(t)}
                   onDelete={() => handleDelete(t)}
+                  onPrint={() => handlePrint(t)}
+                  onExportPdf={() => handleExportPdf(t)}
                 />
               ))}
             </div>
@@ -200,7 +240,9 @@ export default function TransfersPage() {
 }
 
 /** One transfer card: reference, amount, from → to, date/division meta, description. */
-function TransferCard({ t, canEdit, canDelete, onEdit, onDelete }) {
+function TransferCard({ t, canEdit, canDelete, canPrint, tplPicker, exportingId, onEdit, onDelete, onPrint, onExportPdf }) {
+  const noTpl = tplPicker?.noTemplate;
+  const noTplReason = tplPicker?.noTemplateReason;
   return (
     <div style={st.card}>
       <div style={{ ...st.accentStrip, background: accent }} />
@@ -234,8 +276,28 @@ function TransferCard({ t, canEdit, canDelete, onEdit, onDelete }) {
           </div>
         )}
 
-        {(canEdit || canDelete) && (
+        {(canEdit || canDelete || canPrint) && (
           <div style={st.cardActions}>
+            {canPrint && (
+              <button
+                style={{ ...st.printBtn, ...(noTpl ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                disabled={noTpl}
+                title={noTpl ? noTplReason : "Print transfer"}
+                onClick={onPrint}
+              >
+                <MdPrint size={16} /> Print
+              </button>
+            )}
+            {canPrint && (
+              <button
+                style={{ ...st.pdfBtn, ...((noTpl || exportingId === t.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                disabled={noTpl || !!exportingId}
+                title={noTpl ? noTplReason : "Download PDF"}
+                onClick={onExportPdf}
+              >
+                <MdPictureAsPdf size={16} /> PDF
+              </button>
+            )}
             {canEdit && (
               <button style={st.editBtn} onClick={onEdit} title="Edit">
                 <MdEdit size={16} /> Edit
@@ -452,6 +514,8 @@ const st = {
   descText: { overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" },
 
   cardActions: { display: "flex", justifyContent: "flex-end", gap: 6, marginTop: 10, flexWrap: "wrap" },
+  printBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#4527a0", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
+  pdfBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#ad1457", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
   editBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#e65100", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
   delBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
 

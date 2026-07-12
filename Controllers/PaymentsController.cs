@@ -93,6 +93,14 @@ namespace MyApp.Api.Controllers
         [HasPermission("accounting.payments.view")]
         public Task<IActionResult> GetPayment(int id) => GetOne(id, PaymentDirection.Payment);
 
+        [HttpGet("receipts/{id}/print")]
+        [HasPermission("accounting.receipts.print")]
+        public Task<IActionResult> PrintReceipt(int id) => GetPrint(id, PaymentDirection.Receipt);
+
+        [HttpGet("payments/{id}/print")]
+        [HasPermission("accounting.payments.print")]
+        public Task<IActionResult> PrintPayment(int id) => GetPrint(id, PaymentDirection.Payment);
+
         [HttpGet("company/{companyId}/by-bill/{billId}")]
         [HasPermission("accounting.payments.view")]
         [AuthorizeCompany]
@@ -152,6 +160,15 @@ namespace MyApp.Api.Controllers
             if (dto == null || dto.Direction != direction.ToString()) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
             return Ok(dto);
+        }
+
+        private async Task<IActionResult> GetPrint(int id, PaymentDirection direction)
+        {
+            var dto = await _service.GetByIdAsync(id);
+            if (dto == null || dto.Direction != direction.ToString()) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
+            var print = await _service.GetPrintDataAsync(id);
+            return print == null ? NotFound() : Ok(print);
         }
 
         private async Task<IActionResult> Create(int companyId, CreatePaymentDto dto, PaymentDirection direction)

@@ -23,6 +23,9 @@ export const getJournalEntriesPaged = (companyId, params = {}) =>
 
 export const getJournalEntry = (id) => httpClient.get(`/journal-entries/${id}`);
 
+export const getJournalEntryPrintData = (id) =>
+  httpClient.get(`/journal-entries/${id}/print`);
+
 export const createJournalEntry = (companyId, payload) =>
   httpClient.post(`/journal-entries/company/${companyId}`, payload);
 
@@ -36,6 +39,9 @@ export const getTransfersPaged = (companyId, params = {}) =>
   httpClient.get(`/account-transfers/company/${companyId}/paged`, { params });
 
 export const getTransfer = (id) => httpClient.get(`/account-transfers/${id}`);
+
+export const getTransferPrintData = (id) =>
+  httpClient.get(`/account-transfers/${id}/print`);
 
 export const createTransfer = (companyId, payload) =>
   httpClient.post(`/account-transfers/company/${companyId}`, payload);

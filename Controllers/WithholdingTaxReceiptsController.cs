@@ -75,6 +75,18 @@ namespace MyApp.Api.Controllers
             return Ok(receipt);
         }
 
+        [HttpGet("{id}/print")]
+        [HasPermission("withholdingtax.print.view")]
+        public async Task<ActionResult<PrintWithholdingReceiptDto>> GetPrintData(int id)
+        {
+            var receipt = await _service.GetByIdAsync(id);
+            if (receipt == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, receipt.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, receipt.CompanyId, receipt.DivisionId);
+            var dto = await _service.GetPrintDataAsync(id);
+            return dto == null ? NotFound() : Ok(dto);
+        }
+
         [HttpPost("company/{companyId}")]
         [HasPermission("withholdingtax.manage.create")]
         [AuthorizeCompany]
