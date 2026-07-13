@@ -131,9 +131,17 @@ namespace MyApp.Api.Services.Implementations
             if (!await _posting.IsEnabledAsync(companyId))
                 throw new InvalidOperationException("Enable GL posting for this company first.");
 
-            // Wipe system-posted entries; manual journals survive a rebuild.
+            // Migration cutover: documents on/before GlLockDate are the imported
+            // history, whose GL is carried by frozen migration entries — don't
+            // delete or re-post them; only (re)derive documents AFTER the cutover.
+            var lockDate = await _context.Companies.AsNoTracking()
+                .Where(c => c.Id == companyId).Select(c => c.GlLockDate).FirstOrDefaultAsync();
+
+            // Wipe system-posted entries AFTER the cutover; manual journals AND
+            // pre-cutover (frozen migration) entries survive a rebuild.
             var removed = await _context.JournalEntries
-                .Where(e => e.CompanyId == companyId && e.SourceDocType != SourceDocType.ManualJournal)
+                .Where(e => e.CompanyId == companyId && e.SourceDocType != SourceDocType.ManualJournal
+                            && (lockDate == null || e.Date > lockDate))
                 .ExecuteDeleteAsync();
 
             var result = new GlEnableResultDto { Enabled = true, RemovedEntries = removed };
@@ -141,7 +149,8 @@ namespace MyApp.Api.Services.Implementations
             // Invoices (incl. credit/debit notes). Demo/cancelled/zero rows are
             // excluded here AND guarded inside PostInvoiceAsync.
             var invoiceIds = await _context.Invoices.AsNoTracking()
-                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled && i.GrandTotal != 0)
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled && i.GrandTotal != 0
+                            && (lockDate == null || i.Date > lockDate))
                 .OrderBy(i => i.Date).ThenBy(i => i.Id)
                 .Select(i => i.Id).ToListAsync();
             foreach (var chunk in Chunk(invoiceIds, 200))
@@ -153,7 +162,7 @@ namespace MyApp.Api.Services.Implementations
             }
 
             var billIds = await _context.PurchaseBills.AsNoTracking()
-                .Where(b => b.CompanyId == companyId && b.GrandTotal != 0)
+                .Where(b => b.CompanyId == companyId && b.GrandTotal != 0 && (lockDate == null || b.Date > lockDate))
                 .OrderBy(b => b.Date).ThenBy(b => b.Id)
                 .Select(b => b.Id).ToListAsync();
             foreach (var chunk in Chunk(billIds, 200))
@@ -165,7 +174,7 @@ namespace MyApp.Api.Services.Implementations
             }
 
             var paymentIds = await _context.Payments.AsNoTracking()
-                .Where(p => p.CompanyId == companyId && !p.IsCancelled && p.Amount != 0)
+                .Where(p => p.CompanyId == companyId && !p.IsCancelled && p.Amount != 0 && (lockDate == null || p.Date > lockDate))
                 .OrderBy(p => p.Date).ThenBy(p => p.Id)
                 .Select(p => p.Id).ToListAsync();
             foreach (var chunk in Chunk(paymentIds, 200))
@@ -178,7 +187,7 @@ namespace MyApp.Api.Services.Implementations
             }
 
             var transfers = await _context.AccountTransfers.AsNoTracking()
-                .Where(t => t.CompanyId == companyId)
+                .Where(t => t.CompanyId == companyId && (lockDate == null || t.Date > lockDate))
                 .OrderBy(t => t.Date).ThenBy(t => t.Id).ToListAsync();
             foreach (var t in transfers) { await _posting.PostTransferAsync(t); result.PostedTransfers++; }
             _context.ChangeTracker.Clear();

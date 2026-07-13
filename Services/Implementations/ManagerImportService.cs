@@ -18,7 +18,7 @@ namespace MyApp.Api.Services.Implementations
     /// journals/transfers are intentionally NOT imported (Manager exposes no
     /// account classification; MyApp derives the GL from documents instead).
     /// </summary>
-    public class ManagerImportService : IManagerImportService
+    public partial class ManagerImportService : IManagerImportService
     {
         private readonly AppDbContext _db;
         private readonly ILogger<ManagerImportService>? _logger;
@@ -434,8 +434,17 @@ namespace MyApp.Api.Services.Implementations
             return (created, unallocated);
         }
 
+        // Manager rolls its individual Bank & Cash Accounts up into one asset
+        // line on the balance sheet / trial balance. These are the labels that
+        // line uses (case-insensitive); the primary match is by amount (the
+        // bank/cash balances sum to the roll-up), this is only the fallback.
+        private static readonly HashSet<string> CashRollupNames = new(StringComparer.OrdinalIgnoreCase)
+        { "Cash & cash equivalents", "Cash and cash equivalents", "Cash and cash equivalent", "Cash and bank" };
+
         // ── Trial Balance → chart of accounts opening balances ──────────────────
-        public async Task<ManagerImportReport> ImportTrialBalanceAsync(int companyId, string trialBalanceText, bool dryRun)
+        public async Task<ManagerImportReport> ImportTrialBalanceAsync(
+            int companyId, string trialBalanceText, bool dryRun,
+            IReadOnlyDictionary<string, JsonDocument>? summaryDocs = null)
         {
             var company = await _db.Companies.FirstOrDefaultAsync(c => c.Id == companyId)
                 ?? throw new InvalidOperationException($"Company {companyId} not found.");
@@ -443,6 +452,24 @@ namespace MyApp.Api.Services.Implementations
 
             var rows = ParseTrialBalance(trialBalanceText);
             if (rows.Count == 0) throw new InvalidOperationException("No accounts parsed from the trial balance (expected a Manager tab-separated Trial Balance export).");
+
+            // Un-bake Retained earnings: a Manager Trial Balance carries RE
+            // INCLUSIVE of the current period's net profit. MyApp's balance sheet
+            // now shows that profit as a computed "Current-Year Earnings" equity
+            // line (AccountService.GetTreeAsync), so the stored RE must hold only
+            // the STARTING value or equity would double-count. new RE = TB RE −
+            // net profit (Income − Expenses).
+            decimal SignedSec(string s) => rows.Where(r => r.section == s).Sum(r => r.isDebit ? r.amount : -r.amount);
+            decimal netProfitCredit = -SignedSec("Income") - SignedSec("Expenses");  // profit → positive (a credit)
+            for (int i = 0; i < rows.Count; i++)
+            {
+                if (rows[i].section == "Equity" && rows[i].name.Equals("Retained earnings", StringComparison.OrdinalIgnoreCase))
+                {
+                    var signed = (rows[i].isDebit ? rows[i].amount : -rows[i].amount) + netProfitCredit;  // -164.6M + 151.8M = -12.8M
+                    rows[i] = (rows[i].section, rows[i].name, Math.Abs(signed), signed >= 0);
+                    break;
+                }
+            }
 
             var stmt = new Dictionary<string, FinancialStatement>
             { ["Assets"] = FinancialStatement.BalanceSheet, ["Liabilities"] = FinancialStatement.BalanceSheet, ["Equity"] = FinancialStatement.BalanceSheet, ["Income"] = FinancialStatement.ProfitAndLoss, ["Expenses"] = FinancialStatement.ProfitAndLoss };
@@ -471,8 +498,47 @@ namespace MyApp.Api.Services.Implementations
                     _db.AccountGroups.Add(g); await _db.SaveChangesAsync();
                     groupIdBySection[sec] = g.Id;
                 }
+                // ── Path A: expand Manager's rolled-up cash line into its real
+                //    Bank & Cash Accounts (each flagged ControlType.BankCash) so the
+                //    receipt/payment "Received in" dropdown is populated. The 13
+                //    balances sum to the single TB roll-up line, so swapping them in
+                //    is net-zero on total assets. Read from Manager's
+                //    "bank-and-cash-accounts" summary list (key/name/actualBalance).
+                var banks = new List<(string Key, string Name, decimal Balance)>();
+                if (summaryDocs != null
+                    && summaryDocs.TryGetValue("bank-and-cash-accounts", out var bcDoc)
+                    && bcDoc.RootElement.ValueKind == JsonValueKind.Array)
+                    foreach (var e in bcDoc.RootElement.EnumerateArray())
+                    {
+                        var key = Str(e, "key");
+                        if (!string.IsNullOrEmpty(key)) banks.Add((key!, Str(e, "name") ?? "", Money(e, "actualBalance")));
+                    }
+
+                // Identify the TB asset line that rolls the bank/cash balances up —
+                // primary match by signed amount (== Σ bank balances), fallback by
+                // name. rollupIdx < 0 ⇒ couldn't identify it (safe: keep the line,
+                // add banks at zero so the total never double-counts).
+                int rollupIdx = -1;
+                if (banks.Count > 0)
+                {
+                    decimal bankSum = banks.Sum(b => b.Balance);
+                    for (int i = 0; i < rows.Count; i++)
+                    {
+                        if (rows[i].section != "Assets") continue;
+                        var signed = rows[i].isDebit ? rows[i].amount : -rows[i].amount;
+                        if (Math.Abs(signed - bankSum) < 0.01m) { rollupIdx = i; break; }
+                    }
+                    if (rollupIdx < 0)
+                        for (int i = 0; i < rows.Count; i++)
+                            if (rows[i].section == "Assets" && CashRollupNames.Contains(rows[i].name)) { rollupIdx = i; break; }
+                }
+                bool rollupFound = rollupIdx >= 0;
+
                 int apos = 0;
-                foreach (var r in rows)
+                for (int i = 0; i < rows.Count; i++)
+                {
+                    if (i == rollupIdx) continue;   // replaced by the individual bank/cash accounts below
+                    var r = rows[i];
                     _db.Accounts.Add(new Account
                     {
                         CompanyId = companyId, Name = r.name, AccountGroupId = groupIdBySection[r.section],
@@ -480,7 +546,49 @@ namespace MyApp.Api.Services.Implementations
                         IsActive = true, Position = apos++, ControlType = ControlType.None,
                         ExternalRef = $"mgr-tbacct:{r.section}:{(r.name.Length > 40 ? r.name[..40] : r.name)}",
                     });
+                }
                 await _db.SaveChangesAsync();
+
+                int bankCount = 0;
+                if (banks.Count > 0)
+                {
+                    // Nest under Assets (create the group if the TB had no asset rows).
+                    if (!groupIdBySection.TryGetValue("Assets", out var assetsGroupId))
+                    {
+                        var ag = new AccountGroup { CompanyId = companyId, Name = "Assets", Statement = FinancialStatement.BalanceSheet, Position = pos++, ExternalRef = "mgr-tbgrp:Assets" };
+                        _db.AccountGroups.Add(ag); await _db.SaveChangesAsync();
+                        assetsGroupId = ag.Id; groupIdBySection["Assets"] = assetsGroupId;
+                    }
+                    var bankGroup = new AccountGroup { CompanyId = companyId, Name = "Bank & Cash Accounts", Statement = FinancialStatement.BalanceSheet, ParentGroupId = assetsGroupId, Position = pos++, ExternalRef = "mgr-bankcash-group" };
+                    _db.AccountGroups.Add(bankGroup); await _db.SaveChangesAsync();
+
+                    int bpos = 0;
+                    foreach (var b in banks)
+                    {
+                        // Real balance only when we could remove the roll-up (else the
+                        // cash total stays on its TB line — never double-count).
+                        decimal bal = rollupFound ? b.Balance : 0m;
+                        _db.Accounts.Add(new Account
+                        {
+                            CompanyId = companyId, Name = string.IsNullOrWhiteSpace(b.Name) ? "(unnamed account)" : b.Name,
+                            AccountGroupId = bankGroup.Id, AccountType = AccountType.Asset,
+                            OpeningBalance = Math.Abs(bal), OpeningBalanceIsDebit = bal >= 0,
+                            IsActive = true, Position = 1000 + bpos++, ControlType = ControlType.BankCash,
+                            ExternalRef = $"mgr-bankcash:{b.Key}",
+                        });
+                        bankCount++;
+                    }
+                    await _db.SaveChangesAsync();
+
+                    if (rollupFound)
+                    {
+                        var rr = rows[rollupIdx];
+                        report.Notes.Add($"Bank & Cash: created {bankCount} account(s) flagged BankCash, replacing the rolled-up cash line \"{rr.name}\" ({(rr.isDebit ? rr.amount : -rr.amount):N2}) — total assets unchanged; the receipt/payment dropdown is now populated.");
+                    }
+                    else
+                        report.Notes.Add($"Bank & Cash: created {bankCount} account(s) flagged BankCash at ZERO opening balance — could not identify the cash roll-up line in the trial balance, so the cash total stays on its TB line. Set individual balances / reconcile manually.");
+                }
+                report.Created["bankCashAccounts"] = bankCount;
 
                 // Opening-balance snapshot mode: turn document GL posting OFF so
                 // these balances stay authoritative (a "rebuild GL" would otherwise
@@ -489,8 +597,8 @@ namespace MyApp.Api.Services.Implementations
                 company.GlPostingEnabled = false;
                 await _db.SaveChangesAsync();
 
-                report.Created["coaGroups"] = groupIdBySection.Count;
-                report.Created["coaAccounts"] = rows.Count;
+                report.Created["coaGroups"] = groupIdBySection.Count + (bankCount > 0 ? 1 : 0);
+                report.Created["coaAccounts"] = rows.Count - (rollupFound ? 1 : 0) + bankCount;
 
                 // Reconciliation (debit-positive sums).
                 decimal Sec(string s) => rows.Where(r => r.section == s).Sum(r => r.isDebit ? r.amount : -r.amount);

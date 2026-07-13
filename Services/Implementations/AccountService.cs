@@ -85,11 +85,35 @@ namespace MyApp.Api.Services.Implementations
 
             var roots = groups.Where(g => g.ParentGroupId == null)
                 .OrderBy(g => g.Position).ThenBy(g => g.Id).ToList();
-            return new CoaTreeDto
+            var bs = roots.Where(g => g.Statement == FinancialStatement.BalanceSheet).Select(Build).ToList();
+            var pl = roots.Where(g => g.Statement == FinancialStatement.ProfitAndLoss).Select(Build).ToList();
+
+            // Roll the current period's net profit into equity as a synthetic
+            // "Current-Year Earnings" line — the standard balance-sheet
+            // presentation (and how Manager shows it). Net P&L (signed,
+            // debit-positive) = Σ of the P&L subtotals; a profit is a net credit
+            // (negative), which raises equity. Retained earnings is carried at its
+            // STARTING value (the TB import un-bakes it), so this doesn't double.
+            // Only injected when there IS P&L activity, so companies without a
+            // chart of accounts are unaffected.
+            decimal plBal = pl.Sum(n => n.BalanceTotal);
+            decimal plOpen = pl.Sum(n => n.OpeningBalanceTotal);
+            if (bs.Count > 0 && (plBal != 0m || plOpen != 0m))
             {
-                BalanceSheet = roots.Where(g => g.Statement == FinancialStatement.BalanceSheet).Select(Build).ToList(),
-                ProfitAndLoss = roots.Where(g => g.Statement == FinancialStatement.ProfitAndLoss).Select(Build).ToList(),
-            };
+                var equity = bs.FirstOrDefault(n => n.Name.Equals("Equity", StringComparison.OrdinalIgnoreCase)) ?? bs[^1];
+                equity.Accounts.Add(new AccountDto
+                {
+                    Id = 0, CompanyId = companyId, Name = "Current-Year Earnings",
+                    AccountType = AccountType.Equity.ToString(), Statement = "BalanceSheet",
+                    ControlType = "None", IsActive = true, Position = int.MaxValue,
+                    ExternalRef = "__current-year-earnings__",
+                    OpeningBalance = Math.Abs(plOpen), OpeningBalanceIsDebit = plOpen >= 0,
+                    Balance = plBal,
+                });
+                equity.OpeningBalanceTotal += plOpen;
+                equity.BalanceTotal += plBal;
+            }
+            return new CoaTreeDto { BalanceSheet = bs, ProfitAndLoss = pl };
         }
 
         public async Task<List<AccountDto>> GetAccountsFlatAsync(int companyId)

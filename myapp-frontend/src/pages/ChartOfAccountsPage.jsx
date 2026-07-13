@@ -110,11 +110,20 @@ export default function ChartOfAccountsPage() {
 
   if (!canView) return <div style={{ padding: "2rem", color: colors.textSecondary }}>You don't have permission to view the chart of accounts.</div>;
 
-  const renderNode = (node, depth = 0) => (
+  // Display in NATURAL sign (like the reference product): credit-normal sections
+  // (Liability/Equity/Income) show positive; a contra balance shows negative.
+  // Backend balances are debit-positive, so we flip the sign for credit-normal.
+  const isCreditNormal = (t) => t === "Liability" || t === "Equity" || t === "Income";
+  const firstAcctType = (node) => {
+    if (node.accounts?.length) return node.accounts[0].accountType;
+    for (const c of node.children || []) { const t = firstAcctType(c); if (t) return t; }
+    return null;
+  };
+  const renderNode = (node, depth = 0, creditNormal = false) => (
     <div key={node.id} style={{ marginLeft: depth ? 14 : 0, marginTop: depth ? 6 : 12 }}>
       <div style={st.groupHeader}>
         <span style={st.groupName}>{node.name}{node.isSystem && <MdLock size={12} style={{ marginLeft: 5, opacity: 0.5, verticalAlign: "middle" }} title="System group" />}</span>
-        <span style={st.groupTotal}>{money(node.balanceTotal ?? node.openingBalanceTotal ?? 0)}</span>
+        <span style={st.groupTotal}>{money((creditNormal ? -1 : 1) * (node.balanceTotal ?? node.openingBalanceTotal ?? 0))}</span>
         {canManage && !node.isSystem && (
           <button style={st.iconBtn} title="Delete group" onClick={() => handleDeleteGroup(node)}><MdDelete size={14} /></button>
         )}
@@ -133,7 +142,7 @@ export default function ChartOfAccountsPage() {
             {!a.isActive && <span style={{ ...st.ctrlBadge, background: "#eceff1", color: "#607d8b" }}>inactive</span>}
           </span>
           {/* Live balance (opening + GL movement, signed debit-positive); blank when zero */}
-          <span style={st.accAmt}>{a.balance ? money(a.balance) : ""}</span>
+          <span style={st.accAmt}>{a.balance ? money((isCreditNormal(a.accountType) ? -1 : 1) * a.balance) : ""}</span>
           {canManage && (
             <span style={st.rowActions}>
               <button style={st.iconBtn} title="Edit" onClick={(e) => { e.stopPropagation(); setForm({ kind: "account", ...a }); }}><MdEdit size={13} /></button>
@@ -142,14 +151,14 @@ export default function ChartOfAccountsPage() {
           )}
         </div>
       ))}
-      {node.children?.map((c) => renderNode(c, depth + 1))}
+      {node.children?.map((c) => renderNode(c, depth + 1, creditNormal))}
     </div>
   );
 
   const Column = ({ title, nodes }) => (
     <div style={st.column}>
       <div style={st.colHeader}>{title}</div>
-      {nodes?.length ? nodes.map((n) => renderNode(n)) : <div style={st.emptyCol}>No groups yet.</div>}
+      {nodes?.length ? nodes.map((n) => renderNode(n, 0, isCreditNormal(firstAcctType(n)))) : <div style={st.emptyCol}>No groups yet.</div>}
     </div>
   );
 

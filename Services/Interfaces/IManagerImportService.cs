@@ -35,13 +35,38 @@ namespace MyApp.Api.Services.Interfaces
         /// GL posting engine can stay off and the imported documents (which have
         /// no postings) don't double-count. Replaces any existing CoA for the
         /// company (idempotent). dryRun rolls back.
+        ///
+        /// When <paramref name="summaryDocs"/> carries Manager's
+        /// "bank-and-cash-accounts" list, the single rolled-up cash line in the
+        /// trial balance ("Cash &amp; cash equivalents") is replaced by the
+        /// individual bank/cash accounts, each flagged <c>ControlType.BankCash</c>
+        /// so the receipt/payment "Received in" dropdown is populated. The 13
+        /// balances sum to the roll-up, so total assets are unchanged.
         /// </summary>
-        Task<ManagerImportReport> ImportTrialBalanceAsync(int companyId, string trialBalanceText, bool dryRun);
+        Task<ManagerImportReport> ImportTrialBalanceAsync(
+            int companyId, string trialBalanceText, bool dryRun,
+            IReadOnlyDictionary<string, JsonDocument>? summaryDocs = null);
 
         /// <summary>Parse-only preview of a Trial Balance (no DB writes): returns
         /// the account count + the balance-sheet / P&L reconciliation. Used for a
         /// dry-run, where the document import rolls back and there's no company to
         /// load into yet.</summary>
         ManagerImportReport PreviewTrialBalance(string trialBalanceText);
+
+        /// <summary>
+        /// Perpetual-GL migration (FEATURE_PERPETUAL_GL_MIGRATION.md): rebuild the
+        /// company's chart of accounts keyed by Manager GUID with control types +
+        /// STARTING balances, and post every historical document as a faithful
+        /// balanced journal entry (ManualJournal) so each account carries a
+        /// Manager-style ledger and the balance sheet / P&amp;L reconcile.
+        /// <paramref name="refDocs"/> = chart-of-accounts + starting-balance lists +
+        /// resolved tax codes / non-inventory items. Replaces the company's CoA+GL.
+        /// </summary>
+        Task<ManagerImportReport> BuildPerpetualGlAsync(
+            int companyId, string trialBalanceText,
+            IReadOnlyDictionary<string, JsonDocument> summaryDocs,
+            IReadOnlyDictionary<string, JsonDocument> detailDocs,
+            IReadOnlyDictionary<string, JsonDocument> refDocs,
+            bool dryRun);
     }
 }

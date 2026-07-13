@@ -28,6 +28,8 @@ bool dryRun = args.Contains("--dry-run");
 bool fresh = args.Contains("--fresh");
 string companyName = GetOpt("--company-name") ?? "Al-Qahera Trading Co.";
 string? tbPath = GetOpt("--trial-balance");
+bool perpetual = args.Contains("--build-perpetual");
+string? refDir = GetOpt("--ref");
 
 string? GetOpt(string flag) { var i = Array.IndexOf(args, flag); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
 
@@ -51,14 +53,39 @@ try
 {
     MyApp.Api.DTOs.ManagerImportReport r;
 
-    if (tbPath != null)
+    if (perpetual)
+    {
+        // Perpetual GL: rebuild CoA (GUID-keyed) + post every doc as a JE on a
+        // bare company (created if missing). Needs the export (summary+detail),
+        // the ref dir (chart-of-accounts, starting balances, resolved tax/non-inv)
+        // and the trial balance (for account types).
+        var detailDir = Path.Combine(exportDir, "detail");
+        if (!Directory.Exists(detailDir)) { Console.Error.WriteLine($"detail dir not found: {detailDir}"); return 2; }
+        if (refDir == null || !Directory.Exists(refDir)) { Console.Error.WriteLine("--ref <perpetual dir> is required and must exist."); return 2; }
+        if (tbPath == null) { Console.Error.WriteLine("--trial-balance <path> is required for --build-perpetual."); return 2; }
+        var summary = Load(exportDir); var detail = Load(detailDir); var refd = Load(refDir);
+        var tbText = await File.ReadAllTextAsync(tbPath);
+        // 1) Load the documents (invoices/bills/receipts/payments/notes/quotes/…)
+        //    so every document screen is populated — always committed (the GL
+        //    build below needs the company + docs to exist).
+        Console.WriteLine($"== Perpetual GL — step 1: documents ==  company=\"{companyName}\"  (summary {summary.Count}, detail {detail.Count})");
+        var docs = await svc.RunAsync(summary, detail, companyName, targetCompanyId: null, dryRun: false, fresh: true, callerUserId: null);
+        Console.WriteLine($"   documents loaded into company id={docs.CompanyId}");
+        // 2) Build the perpetual GL (CoA + journal entries + transfers + cutover).
+        Console.WriteLine($"== Perpetual GL — step 2: chart of accounts + journal entries ==  dryRun={dryRun}  (ref {refd.Count})");
+        r = await svc.BuildPerpetualGlAsync(docs.CompanyId, tbText, summary, detail, refd, dryRun);
+    }
+    else if (tbPath != null)
     {
         // Trial-balance mode: load into the existing company's chart of accounts.
         var company = await db.Companies.FirstOrDefaultAsync(c => c.Name == companyName);
         if (company == null) { Console.Error.WriteLine($"Company \"{companyName}\" not found — run the document import first."); return 3; }
         Console.WriteLine($"== Trial Balance import ==  company=\"{companyName}\" (id {company.Id})  dryRun={dryRun}");
         var text = await File.ReadAllTextAsync(tbPath);
-        r = await svc.ImportTrialBalanceAsync(company.Id, text, dryRun);
+        // Load the summary lists (if the export dir is present) so the TB import
+        // can split Manager's rolled-up cash line into the real bank/cash accounts.
+        var summary = Directory.Exists(exportDir) ? Load(exportDir) : new Dictionary<string, JsonDocument>();
+        r = await svc.ImportTrialBalanceAsync(company.Id, text, dryRun, summary);
     }
     else
     {

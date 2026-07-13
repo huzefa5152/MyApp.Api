@@ -101,6 +101,9 @@ export default function JournalEntriesPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [search, setSearch] = useState("");
+  // Default to real journals only (Manager's "Journal Entries" tab) — the
+  // system-posted document/receipt/transfer entries live in the ledgers.
+  const [manualOnly, setManualOnly] = useState(true);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);   // manual entry being edited
@@ -114,6 +117,7 @@ export default function JournalEntriesPage() {
     try {
       const params = { page: pg || page };
       if (search.trim()) params.search = search.trim();
+      if (manualOnly) params.manualOnly = true;
       const { data } = await getJournalEntriesPaged(companyId, params);
       setRows(data.items || []);
       setTotalCount(data.totalCount || 0);
@@ -123,7 +127,7 @@ export default function JournalEntriesPage() {
     } finally {
       setLoading(false);
     }
-  }, [companyId, page, search]);
+  }, [companyId, page, search, manualOnly]);
 
   // Reset to page 1 on company switch.
   useEffect(() => { setPage(1); setSearch(""); }, [companyId]);
@@ -195,6 +199,10 @@ export default function JournalEntriesPage() {
                 onKeyDown={(e) => { if (e.key === "Enter") { setPage(1); fetchRows(1); } }}
               />
             </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", color: colors.textSecondary, cursor: "pointer", whiteSpace: "nowrap" }} title="Show only manual journals (like the reference product), hiding system-posted document/receipt/transfer entries">
+              <input type="checkbox" checked={manualOnly} onChange={(e) => { setManualOnly(e.target.checked); setPage(1); }} />
+              Manual journals only
+            </label>
             {tplPicker.canChoose && <PrintTemplateSelect picker={tplPicker} />}
             {rows.length > 0 && (
               <div style={st.pageSummary}>

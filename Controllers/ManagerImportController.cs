@@ -120,10 +120,14 @@ namespace MyApp.Api.Controllers
                         var preview = _import.PreviewTrialBalance(tbText);
                         foreach (var kv in preview.Created) report.Created[kv.Key] = kv.Value;
                         report.Notes.AddRange(preview.Notes);
+                        if (summary.TryGetValue("bank-and-cash-accounts", out var bc) && bc.RootElement.ValueKind == JsonValueKind.Array)
+                            report.Notes.Add($"{bc.RootElement.GetArrayLength()} bank/cash account(s) will be split out of the rolled-up cash line and flagged BankCash (populates the receipt/payment dropdown).");
                     }
                     else
                     {
-                        var tb = await _import.ImportTrialBalanceAsync(report.CompanyId, tbText, false);
+                        // Pass the summary docs so the TB import can split Manager's
+                        // rolled-up cash line into the individual bank/cash accounts.
+                        var tb = await _import.ImportTrialBalanceAsync(report.CompanyId, tbText, false, summary);
                         foreach (var kv in tb.Created) report.Created[kv.Key] = kv.Value;
                         report.Notes.AddRange(tb.Notes);
                     }
