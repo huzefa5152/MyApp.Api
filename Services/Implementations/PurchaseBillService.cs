@@ -363,6 +363,10 @@ namespace MyApp.Api.Services.Implementations
                 .ToDictionaryAsync(it => it.Id);
 
             await ValidateNonInvItemsAsync(dto.CompanyId, dto.Items.Select(i => i.NonInventoryItemId));
+            // Each purchase-bill line must be classified — an Item Type OR a Non-Inventory item.
+            if (dto.Items.Any(i => !i.ItemTypeId.HasValue && !i.NonInventoryItemId.HasValue))
+                throw new InvalidOperationException(
+                    "Every purchase-bill line must have an Item Type or a Non-Inventory item selected.");
 
             for (int idx = 0; idx < dto.Items.Count; idx++)
             {

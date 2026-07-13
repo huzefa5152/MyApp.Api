@@ -124,7 +124,10 @@ namespace MyApp.Api.Services.Implementations
             // sequence of historical lines stays intact.
             var used = await _context.InvoiceItems.AnyAsync(i => i.NonInventoryItemId == id)
                     || await _context.PurchaseItems.AnyAsync(p => p.NonInventoryItemId == id)
-                    || await _context.SalesQuoteItems.AnyAsync(q => q.NonInventoryItemId == id);
+                    || await _context.SalesQuoteItems.AnyAsync(q => q.NonInventoryItemId == id)
+                    || await _context.SalesOrderItems.AnyAsync(o => o.NonInventoryItemId == id)
+                    || await _context.DeliveryItems.AnyAsync(d => d.NonInventoryItemId == id)
+                    || await _context.GoodsReceiptItems.AnyAsync(g => g.NonInventoryItemId == id);
             if (used)
                 throw new InvalidOperationException(
                     "This non-inventory item is used on existing documents and can't be deleted. Deactivate it instead to hide it from new documents.");

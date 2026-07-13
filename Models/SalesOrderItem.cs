@@ -16,6 +16,10 @@ namespace MyApp.Api.Models
         /// <summary>Optional link to the FBR-mapped product catalog entry.</summary>
         public int? ItemTypeId { get; set; }
 
+        /// <summary>Optional link to a per-company NonInventoryItem (GL-account
+        /// shortcut line). Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
+
         public string Description { get; set; } = "";
         /// <summary>Ordered quantity. Same decimal(18,4) contract as DeliveryItem.</summary>
         public decimal Quantity { get; set; }
@@ -24,6 +28,7 @@ namespace MyApp.Api.Models
         // Navigation
         public SalesOrder SalesOrder { get; set; } = null!;
         public ItemType? ItemType { get; set; }
+        public NonInventoryItem? NonInventoryItem { get; set; }
         /// <summary>Challan lines that fulfil this ordered line (qty rolls up).</summary>
         public ICollection<DeliveryItem> DeliveryItems { get; set; } = new List<DeliveryItem>();
     }

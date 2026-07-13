@@ -3,6 +3,7 @@ import { MdAdd, MdDelete } from "react-icons/md";
 import { createGoodsReceipt, updateGoodsReceipt, getGoodsReceiptById } from "../api/goodsReceiptApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getItemTypes } from "../api/itemTypeApi";
+import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { getPurchaseBillsByCompanyPaged } from "../api/purchaseBillApi";
 import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
@@ -24,6 +25,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   const [suppliers, setSuppliers] = useState([]);
   const [bills, setBills] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
+  const [nonInvItems, setNonInvItems] = useState([]);
   const [supplierId, setSupplierId] = useState("");
   const [purchaseBillId, setPurchaseBillId] = useState("");
   // todayYmd() returns LOCAL "YYYY-MM-DD" so the date input doesn't pre-fill
@@ -31,7 +33,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   const [receiptDate, setReceiptDate] = useState(todayYmd());
   const [supplierChallanNumber, setSupplierChallanNumber] = useState("");
   const [site, setSite] = useState("");
-  const [items, setItems] = useState([{ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }]);
+  const [items, setItems] = useState([{ id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "" }]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
@@ -51,6 +53,13 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
     })();
   }, [companyId]);
 
+  // Per-company Non-Inventory Items (GL-account shortcut lines: Freight, Discount, …).
+  // A company with GL off / no items resolves to [] and the picker shows none.
+  useEffect(() => {
+    if (!companyId) { setNonInvItems([]); return; }
+    getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
+  }, [companyId]);
+
   useEffect(() => {
     if (!isEdit) return;
     (async () => {
@@ -62,7 +71,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         setReceiptDate(data.receiptDate.slice(0, 10));
         setSupplierChallanNumber(data.supplierChallanNumber || "");
         setSite(data.site || "");
-        setItems((data.items || []).map(i => ({ id: i.id, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit })));
+        setItems((data.items || []).map(i => ({ id: i.id, itemTypeId: i.itemTypeId, nonInventoryItemId: i.nonInventoryItemId ?? null, description: i.description, quantity: i.quantity, unit: i.unit })));
       } catch { setError("Failed to load receipt."); }
     })();
   }, [receiptId, isEdit]);
@@ -73,6 +82,20 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
     setItems(prev => {
       const next = [...prev]; next[idx] = { ...next[idx], [field]: value }; return next;
     });
+  };
+
+  // Non-Inventory pick — mutually exclusive with an item type. Records the
+  // non-inv id, clears any itemTypeId, and prefills description / unit only
+  // when empty (goods receipts are qty-only, so ignore price).
+  const pickNonInventory = (idx, n) => {
+    setItems(prev => prev.map((it, i) => {
+      if (i !== idx) return it;
+      if (!n) return { ...it, nonInventoryItemId: null };
+      const next = { ...it, nonInventoryItemId: n.id, itemTypeId: null };
+      if (!it.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
+      if (!it.unit?.trim()) next.unit = n.unitName || "";
+      return next;
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -95,6 +118,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         items: items.map(i => ({
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
+          nonInventoryItemId: i.nonInventoryItemId || null,
           description: i.description?.trim(),
           quantity: parseInt(i.quantity),
           unit: i.unit || "",
@@ -170,7 +194,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
             <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #e8edf3", backgroundColor: "#f8f9fb" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                 <strong>Items ({items.length})</strong>
-                <button type="button" onClick={() => setItems([...items, { id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }])} style={{ ...formStyles.button, padding: "0.3rem 0.65rem", fontSize: "0.8rem", display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "#e3f2fd", color: "#0d47a1", border: "none" }}>
+                <button type="button" onClick={() => setItems([...items, { id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "" }])} style={{ ...formStyles.button, padding: "0.3rem 0.65rem", fontSize: "0.8rem", display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "#e3f2fd", color: "#0d47a1", border: "none" }}>
                   <MdAdd size={14} /> Add line
                 </button>
               </div>
@@ -192,12 +216,17 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                           items={itemTypes}
                           value={it.itemTypeId || ""}
                           onChange={(newId, picked) => {
+                            // Picking an item type clears any non-inv binding (mutually exclusive).
+                            updateItem(idx, "nonInventoryItemId", null);
                             updateItem(idx, "itemTypeId", newId ? parseInt(newId) : null);
                             if (picked) {
                               if (!it.description?.trim()) updateItem(idx, "description", picked.name || "");
                               if (picked.uom) updateItem(idx, "unit", picked.uom);
                             }
                           }}
+                          nonInventoryItems={nonInvItems}
+                          nonInventoryValue={it.nonInventoryItemId || ""}
+                          onPickNonInventory={(n) => pickNonInventory(idx, n)}
                           placeholder="— optional —"
                           style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                         />

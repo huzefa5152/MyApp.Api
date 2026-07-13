@@ -573,6 +573,32 @@ namespace MyApp.Api.Data
                 .ToTable(t => t.HasCheckConstraint("CK_SalesQuoteItem_OneItemRef",
                     "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL"));
 
+            // Non-inventory refs on the remaining line entities (unified picker
+            // everywhere). Same contract: Restrict FK, index, both-set CHECK.
+            modelBuilder.Entity<SalesOrderItem>()
+                .HasOne(oi => oi.NonInventoryItem).WithMany()
+                .HasForeignKey(oi => oi.NonInventoryItemId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SalesOrderItem>().HasIndex(oi => oi.NonInventoryItemId);
+            modelBuilder.Entity<SalesOrderItem>()
+                .ToTable(t => t.HasCheckConstraint("CK_SalesOrderItem_OneItemRef",
+                    "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL"));
+
+            modelBuilder.Entity<DeliveryItem>()
+                .HasOne(di => di.NonInventoryItem).WithMany()
+                .HasForeignKey(di => di.NonInventoryItemId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.NonInventoryItemId);
+            modelBuilder.Entity<DeliveryItem>()
+                .ToTable(t => t.HasCheckConstraint("CK_DeliveryItem_OneItemRef",
+                    "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL"));
+
+            modelBuilder.Entity<GoodsReceiptItem>()
+                .HasOne(gi => gi.NonInventoryItem).WithMany()
+                .HasForeignKey(gi => gi.NonInventoryItemId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<GoodsReceiptItem>().HasIndex(gi => gi.NonInventoryItemId);
+            modelBuilder.Entity<GoodsReceiptItem>()
+                .ToTable(t => t.HasCheckConstraint("CK_GoodsReceiptItem_OneItemRef",
+                    "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL"));
+
             // PrintTemplate: multiple templates per (CompanyId, TemplateType), each
             // scoped to the company (DivisionId == null) or a division. Non-unique
             // lookup index drives scope-filtered reads.

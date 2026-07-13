@@ -9,6 +9,7 @@ import QuantityInput from "./QuantityInput";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
+import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { getSalesQuotesForPicker } from "../api/salesQuoteApi";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
@@ -18,7 +19,7 @@ const colors = {
   inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1", teal: "#00897b",
 };
 
-const blankItem = () => ({ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" });
+const blankItem = () => ({ id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "" });
 
 // Create + edit a Sales Order (quantity-only). Pass `order` to edit.
 export default function SalesOrderForm({ onClose, onSaved, companyId, order, defaultDivisionId }) {
@@ -32,11 +33,12 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
   const [notes, setNotes] = useState(order?.notes || "");
   const [items, setItems] = useState(
     order?.items?.length
-      ? order.items.map((i) => ({ id: i.id, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit, delivered: i.deliveredQuantity }))
+      ? order.items.map((i) => ({ id: i.id, itemTypeId: i.itemTypeId, nonInventoryItemId: i.nonInventoryItemId ?? null, description: i.description, quantity: i.quantity, unit: i.unit, delivered: i.deliveredQuantity }))
       : [blankItem()]
   );
   const [units, setUnits] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
+  const [nonInvItems, setNonInvItems] = useState([]);
   const { has } = usePermissions();
   // New orders default to the division currently being filtered (so "filter to
   // a division → New Order" lands in that division); edits keep their own.
@@ -51,10 +53,31 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
 
   useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
   useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
+  // Per-company Non-Inventory Items (GL-account shortcut lines: Freight, Discount, …).
+  // A company with GL off / no items resolves to [] and the picker shows none.
+  useEffect(() => {
+    if (!companyId) { setNonInvItems([]); return; }
+    getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
+  }, [companyId]);
 
   // Picking an item type only TAGS the line (records ItemTypeId); it must NOT
   // overwrite the operator's typed description/unit (that's Invoice-mode only).
-  const pickItemType = (idx, newId) => setItem(idx, { itemTypeId: newId ? parseInt(newId) : null });
+  // Mutually exclusive with a non-inventory item — clear any non-inv binding.
+  const pickItemType = (idx, newId) => setItem(idx, { itemTypeId: newId ? parseInt(newId) : null, nonInventoryItemId: null });
+
+  // Non-Inventory pick — mutually exclusive with an item type. Records the
+  // non-inv id, clears any itemTypeId, and prefills description / unit only
+  // when those fields are still empty (orders are qty-only, so ignore price).
+  const pickNonInventory = (idx, n) => {
+    if (!n) { setItem(idx, { nonInventoryItemId: null }); return; }
+    setItems((prev) => prev.map((it, i) => {
+      if (i !== idx) return it;
+      const next = { ...it, nonInventoryItemId: n.id, itemTypeId: null };
+      if (!it.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
+      if (!it.unit?.trim()) next.unit = n.unitName || "";
+      return next;
+    }));
+  };
   useEffect(() => {
     // Page-walking helper: the server clamps pageSize at 100, and the linked
     // quote must stay findable in edit mode even on quote-heavy companies.
@@ -91,7 +114,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
     if (q.clientId && (!client || client.id !== q.clientId)) setClient({ id: q.clientId, label: q.clientName });
     setDivisionId(q.divisionId ? String(q.divisionId) : "");
     if (q.items?.length) {
-      setItems(q.items.map((i) => ({ id: 0, itemTypeId: i.itemTypeId || null, description: i.description, quantity: i.quantity, unit: i.unit })));
+      setItems(q.items.map((i) => ({ id: 0, itemTypeId: i.itemTypeId || null, nonInventoryItemId: i.nonInventoryItemId || null, description: i.description, quantity: i.quantity, unit: i.unit })));
       setQuoteLoadedMsg(`Loaded ${q.items.length} item${q.items.length !== 1 ? "s" : ""} from Quote #${q.quoteNumber} — edit as needed.`);
     }
   };
@@ -127,6 +150,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
         items: valid.map((i) => ({
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
+          nonInventoryItemId: i.nonInventoryItemId || null,
           description: i.description.trim(),
           quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
           unit: i.unit,
@@ -234,6 +258,9 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
                             items={itemTypes}
                             value={item.itemTypeId || ""}
                             onChange={(newId, picked) => pickItemType(idx, newId, picked)}
+                            nonInventoryItems={nonInvItems}
+                            nonInventoryValue={item.nonInventoryItemId || ""}
+                            onPickNonInventory={(n) => pickNonInventory(idx, n)}
                             placeholder="— optional —"
                             style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                           />

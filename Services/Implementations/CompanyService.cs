@@ -456,6 +456,13 @@ namespace MyApp.Api.Services.Implementations
                     await _context.JournalEntries.Where(je => je.CompanyId == id).ExecuteDeleteAsync();
                 }
 
+                // 7a-ter. Non-Inventory Items. NonInventoryItem -> Company is
+                //     Restrict (would block the company row) and -> Account is
+                //     NoAction (would block the Accounts delete below). The line
+                //     items referencing them were already deleted above, so they
+                //     can go now — before the Accounts wipe.
+                await _context.NonInventoryItems.Where(n => n.CompanyId == id).ExecuteDeleteAsync();
+
                 // 7b. Chart of Accounts. Account -> AccountGroup is Restrict, so
                 //     accounts go first; AccountGroup self-FK is satisfied by the
                 //     set-based delete (all the company's groups go at once).

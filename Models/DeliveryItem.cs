@@ -8,6 +8,10 @@
 
         public int? ItemTypeId { get; set; }
 
+        /// <summary>Optional link to a per-company NonInventoryItem (GL-account
+        /// shortcut line, e.g. Freight). Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
+
         // Optional link to the Sales Order line this challan line fulfils.
         // Set only when the challan was created from a Sales Order; null for
         // every other challan (additive — existing rows stay null). The
@@ -27,6 +31,7 @@
 
         // Navigation
         public ItemType? ItemType { get; set; }
+        public NonInventoryItem? NonInventoryItem { get; set; }
         public SalesOrderItem? SalesOrderItem { get; set; }
     }
 }

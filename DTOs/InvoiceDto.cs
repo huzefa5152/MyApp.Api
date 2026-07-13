@@ -459,6 +459,9 @@ namespace MyApp.Api.DTOs
     {
         public int Id { get; set; }                  // existing InvoiceItem.Id
         public int? ItemTypeId { get; set; }         // null clears the link
+        /// <summary>Optional NonInventoryItem link (GL-account shortcut). Mutually
+        /// exclusive with ItemTypeId — setting it clears the item type + FBR fields.</summary>
+        public int? NonInventoryItemId { get; set; }
         /// <summary>
         /// Optional quantity update. Honoured ONLY when the controller
         /// is the .qty endpoint (gated by invoices.manage.update.itemtype.qty);

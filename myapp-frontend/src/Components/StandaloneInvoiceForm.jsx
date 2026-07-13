@@ -558,6 +558,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (!company || company.startingInvoiceNumber === 0)
       return setError("Starting bill number not set for this company. Configure it on the Companies page first.");
     if (fbrEnabled && !chosenScenario) return setError("Pick an FBR scenario first.");
+    // Every line on a bill must be classified — an Item Type OR a Non-Inventory item.
+    if (rows.some((r) => !r.itemTypeId && !r.nonInventoryItemId)) {
+      return setError("Every line must have an Item Type or Non-Inventory item selected.");
+    }
     if (!allRowsValid) {
       const missing = rows.flatMap(rowErrors);
       return setError(`Fill all required fields. Missing: ${[...new Set(missing)].join(", ")}.`);

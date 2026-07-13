@@ -10,6 +10,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
+import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
 
@@ -39,9 +40,10 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
   // (so "filter to a division → New Challan" lands in that division).
   const [divisionId, setDivisionId] = useState(defaultDivisionId ? String(defaultDivisionId) : "");
   const [items, setItems] = useState([
-    { description: "", quantity: 1, unit: "", itemTypeId: null },
+    { description: "", quantity: 1, unit: "", itemTypeId: null, nonInventoryItemId: null },
   ]);
   const [itemTypes, setItemTypes] = useState([]);
+  const [nonInvItems, setNonInvItems] = useState([]);
   // Units list with the AllowsDecimalQuantity flag — drives whether each
   // row's quantity input accepts decimals or only whole numbers. Loaded
   // once on mount; cheap (≤50 rows) and the operator can flip flags via
@@ -58,14 +60,35 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
   useEffect(() => {
     getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([]));
   }, [companyId]);
+  // Per-company Non-Inventory Items (GL-account shortcut lines: Freight, Discount, …).
+  // A company with GL off / no items resolves to [] and the picker shows none.
+  useEffect(() => {
+    if (!companyId) { setNonInvItems([]); return; }
+    getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
+  }, [companyId]);
 
   // Picking an item type only TAGS the challan line (records ItemTypeId); it must
   // NOT overwrite the typed description/unit. Description auto-fill from an item
-  // type is reserved for Invoice (FBR-classification) mode.
+  // type is reserved for Invoice (FBR-classification) mode. Mutually exclusive
+  // with a non-inventory item — clear any non-inv binding.
   const pickItemType = (index, newId) => {
     const next = [...items];
-    next[index].itemTypeId = newId ? parseInt(newId) : null;
+    next[index] = { ...next[index], itemTypeId: newId ? parseInt(newId) : null, nonInventoryItemId: null };
     setItems(next);
+  };
+
+  // Non-Inventory pick — mutually exclusive with an item type. Records the
+  // non-inv id, clears any itemTypeId, and prefills description / unit only
+  // when empty (challans are qty-only, so ignore price).
+  const pickNonInventory = (index, n) => {
+    setItems((prev) => prev.map((it, i) => {
+      if (i !== index) return it;
+      if (!n) return { ...it, nonInventoryItemId: null };
+      const next = { ...it, nonInventoryItemId: n.id, itemTypeId: null };
+      if (!it.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
+      if (!it.unit?.trim()) next.unit = n.unitName || "";
+      return next;
+    }));
   };
 
   useEffect(() => {
@@ -109,7 +132,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
       return;
     }
     setError("");
-    setItems([...items, { description: "", quantity: 1, unit: "", itemTypeId: null }]);
+    setItems([...items, { description: "", quantity: 1, unit: "", itemTypeId: null, nonInventoryItemId: null }]);
   };
 
   const removeItem = (index) => setItems(items.filter((_, i) => i !== index));
@@ -146,6 +169,9 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
           // one it persists on DeliveryItem.ItemTypeId; otherwise null and FBR
           // classification can still happen later on the Invoices tab.
           itemTypeId: i.itemTypeId || null,
+          // Non-Inventory line (Freight / Discount / …) — mutually exclusive
+          // with itemTypeId; optional.
+          nonInventoryItemId: i.nonInventoryItemId || null,
           // parseFloat preserves decimals (12.5 KG, 0.0004 Carat). The
           // QuantityInput already coerces correctly per UOM, this is just
           // defensive in case a string slips through.
@@ -283,6 +309,9 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                         items={itemTypes}
                         value={item.itemTypeId || ""}
                         onChange={(newId, picked) => pickItemType(idx, newId, picked)}
+                        nonInventoryItems={nonInvItems}
+                        nonInventoryValue={item.nonInventoryItemId || ""}
+                        onPickNonInventory={(n) => pickNonInventory(idx, n)}
                         placeholder="— item type (optional) —"
                         style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                       />

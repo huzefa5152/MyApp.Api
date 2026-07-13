@@ -3,6 +3,7 @@ import { toLocalYmd, todayYmd } from "../utils/dateInput";
 import { MdInfo, MdAdd, MdCheckCircle, MdWarning, MdInventory2, MdLightbulb, MdRefresh, MdError, MdExpandMore, MdExpandLess, MdAutoAwesome } from "react-icons/md";
 import { getInvoiceById, updateInvoice, updateInvoiceItemTypes, updateInvoiceItemTypesAndQty } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
+import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getClaimSummary } from "../api/taxClaimApi";
@@ -117,6 +118,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // load useEffect.
   const originalItemsRef = useRef([]);
   const [itemTypes, setItemTypes] = useState([]);
+  // Per-company Non-Inventory Items (GL-account shortcut lines: Freight, Discount, …).
+  // Loaded once the bill's company is known; a company with GL off / no items
+  // resolves to [] and the picker just shows item types.
+  const [nonInvItems, setNonInvItems] = useState([]);
   // Buyer reassignment — only meaningful for standalone bills (no
   // linked challan). Loaded lazily after the bill itself comes back so
   // we know which company's client list to pull. clientId starts as the
@@ -245,6 +250,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           getClientsByCompany(data.companyId)
             .then((res) => setClients(res.data || []))
             .catch(() => setClients([]));
+          // Per-company Non-Inventory Items for the unified item picker.
+          getNonInventoryItemsByCompany(data.companyId, true)
+            .then((res) => setNonInvItems(res.data || []))
+            .catch(() => setNonInvItems([]));
           // Round-2 refire: re-fetch item types WITH companyId so the
           // dropdown gets per-company AvailableQty + on-hand sort. This
           // is non-blocking; the legacy-sort list from Round 1 above is
@@ -660,6 +669,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const _applyItemTypeToRow = (current, newId, pickedType) => {
     const next = { ...current };
     next.itemTypeId = newId || null;
+    // An item type and a non-inventory item are mutually exclusive on a line.
+    if (newId) next.nonInventoryItemId = null;
     if (pickedType) {
       next.itemTypeName = pickedType.name || "";
       next.uom = pickedType.uom || "";
@@ -675,6 +686,29 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
       next.saleType = "";
     }
     return next;
+  };
+
+  // Non-Inventory pick — mutually exclusive with an item type. Records the
+  // non-inv id, clears the item-type binding + inherited FBR fields, and
+  // prefills description / UOM / price only when those are still empty
+  // (this is a sales bill, so use the item's defaultSalePrice).
+  const updateNonInventory = (index, n) => {
+    setItems((prev) => prev.map((row, i) => {
+      if (i !== index) return row;
+      if (!n) return { ...row, nonInventoryItemId: null };
+      const next = {
+        ...row,
+        nonInventoryItemId: n.id,
+        itemTypeId: null, itemTypeName: "", uom: row.uom, hsCode: "", saleType: "", fbrUOMId: null,
+      };
+      if (!row.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
+      if (!row.uom?.trim()) next.uom = n.unitName || "";
+      if ((!row.unitPrice || Number(row.unitPrice) === 0) && n.defaultSalePrice != null) {
+        next.unitPrice = n.defaultSalePrice;
+        next.lineTotal = Math.round((parseFloat(row.quantity) || 0) * n.defaultSalePrice * 100) / 100;
+      }
+      return next;
+    }));
   };
 
   const updateItemType = (index, newId, pickedType) => {
@@ -837,6 +871,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         // allowQuantityEdit=true so the service honours qty AND price.
         // Total-preservation guard: new Σ(qty × unitPrice) must equal
         // the original Subtotal within ±2 PKR (server-side enforced).
+        // Every line must be classified — an Item Type OR a Non-Inventory item.
+        if (items.some((i) => !i.itemTypeId && !i.nonInventoryItemId)) {
+          return setError("Every line must have an Item Type or Non-Inventory item selected.");
+        }
         if (items.some((i) => (parseFloat(i.quantity) || 0) <= 0)) {
           return setError("Quantity must be greater than 0.");
         }
@@ -862,6 +900,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           items.map((i) => ({
             id: i.id || 0,
             itemTypeId: i.itemTypeId || null,
+            // Forward-compatible: the narrow endpoint's DTO does not yet persist
+            // this, but sending it keeps the payload aligned with the full-edit
+            // path for when server support lands.
+            nonInventoryItemId: i.nonInventoryItemId || null,
             quantity: parseFloat(i.quantity) || 0,
             unitPrice: parseFloat(i.unitPrice) || 0,
           })),
@@ -872,6 +914,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         if (items.some((i) => !i.description?.trim())) return setError("All items must have a description.");
         if (items.some((i) => (parseFloat(i.quantity) || 0) <= 0)) return setError("Quantity must be greater than 0.");
         if (items.some((i) => (parseFloat(i.unitPrice) || 0) < 0)) return setError("Unit price cannot be negative.");
+        // Every line must be classified — an Item Type OR a Non-Inventory item.
+        // Only enforced when the Item Type column is available (Invoices-side
+        // full edit); Bills-mode hides the column and defers classification.
+        if (!billsMode && items.some((i) => !i.itemTypeId && !i.nonInventoryItemId))
+          return setError("Every line must have an Item Type or Non-Inventory item selected.");
 
         // Re-write paymentTerms to keep the [SNxxx] tag in sync with the
         // operator's scenario choice — same convention as the create form
@@ -896,6 +943,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
             deliveryItemId: i.deliveryItemId || null,
             // When ItemTypeId is set, backend re-derives HS/UOM/Sale Type from it.
             itemTypeId: i.itemTypeId || null,
+            // Non-Inventory line (Freight / Discount / …) — mutually exclusive
+            // with itemTypeId. Round-trips so existing bindings aren't wiped.
+            nonInventoryItemId: i.nonInventoryItemId || null,
             description: i.description,
             // parseFloat preserves decimals (12.5 KG, 0.0004 Carat).
             // Server-side validation rejects fractions for integer-only UOMs.
@@ -1321,6 +1371,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                     items={filteredItemTypes}
                                     value={item.itemTypeId || ""}
                                     onChange={(newId, picked) => updateItemType(idx, newId ? parseInt(newId) : null, picked)}
+                                    nonInventoryItems={nonInvItems}
+                                    nonInventoryValue={item.nonInventoryItemId || ""}
+                                    onPickNonInventory={(n) => updateNonInventory(idx, n)}
                                     placeholder="Pick item…"
                                     style={styles.tableInput}
                                   />

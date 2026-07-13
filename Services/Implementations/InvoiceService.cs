@@ -555,6 +555,18 @@ namespace MyApp.Api.Services.Implementations
                         ? itemType!.SaleType
                         : companyDefaultSaleType;
 
+                // Non-inventory: picked on the bill form OR inherited from the
+                // challan line. A non-inv line clears the item type + FBR fields.
+                var nonInvId = itemDto.NonInventoryItemId ?? deliveryItem.NonInventoryItemId;
+                var isNonInv = nonInvId.HasValue;
+                if (isNonInv) itemType = null;
+
+                // Each bill line must be classified — an inventory Item Type OR a
+                // Non-Inventory item (Freight/Discount). No unclassified lines.
+                if (!isNonInv && itemType == null)
+                    throw new InvalidOperationException(
+                        $"Line \"{description}\": pick an Item Type or a Non-Inventory item — every bill line must be classified.");
+
                 invoiceItems.Add(new InvoiceItem
                 {
                     DeliveryItemId = deliveryItem.Id,
@@ -564,16 +576,17 @@ namespace MyApp.Api.Services.Implementations
                     SalesOrderItemId = deliveryItem.SalesOrderItemId,
                     ItemTypeId = itemType?.Id,        // flow the catalog linkage through
                     ItemTypeName = itemType?.Name ?? "",
+                    NonInventoryItemId = nonInvId,
                     Description = description,
                     Quantity = deliveryItem.Quantity,
                     UOM = effectiveUOM,
                     UnitPrice = itemDto.UnitPrice,
                     LineTotal = lineTotal,
-                    HSCode = effectiveHSCode,
-                    FbrUOMId = effectiveFbrUOMId,
-                    SaleType = effectiveSaleType,
-                    RateId = itemDto.RateId,
-                    FixedNotifiedValueOrRetailPrice = itemDto.FixedNotifiedValueOrRetailPrice
+                    HSCode = isNonInv ? null : effectiveHSCode,
+                    FbrUOMId = isNonInv ? null : effectiveFbrUOMId,
+                    SaleType = isNonInv ? null : effectiveSaleType,
+                    RateId = isNonInv ? null : itemDto.RateId,
+                    FixedNotifiedValueOrRetailPrice = isNonInv ? null : itemDto.FixedNotifiedValueOrRetailPrice
                 });
 
                 // Bump usage counter on the ItemType so favorites dropdowns show
@@ -835,6 +848,10 @@ namespace MyApp.Api.Services.Implementations
             await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.UOM));
             await ValidateStandaloneItemDecimalQuantitiesAsync(dto.Items);
             await ValidateNonInvLinesAsync(company, dto.Items.Select(i => i.NonInventoryItemId));
+            // Each bill line must be classified — an Item Type OR a Non-Inventory item.
+            if (dto.Items.Any(i => !i.ItemTypeId.HasValue && !i.NonInventoryItemId.HasValue))
+                throw new InvalidOperationException(
+                    "Every bill line must have an Item Type or a Non-Inventory item selected.");
 
             // Preload referenced ItemTypes in a single round-trip
             var referencedTypeIds = dto.Items
@@ -1392,6 +1409,9 @@ namespace MyApp.Api.Services.Implementations
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("At least one item is required.");
 
+            // Cross-tenant + FBR guard for any non-inventory refs on the rows.
+            await ValidateNonInvLinesAsync(invoice.CompanyId, dto.Items.Select(r => r.NonInventoryItemId));
+
             // Restriction F: zero unit price not allowed when the .qty
             // path is active (operator is editing prices, not just
             // classifying). Negative is also blocked. Zero unit price on
@@ -1626,8 +1646,20 @@ namespace MyApp.Api.Services.Implementations
                     }
 
                     // ── Bill path (legacy) ──
-                    if (row.ItemTypeId.HasValue && typeMap.TryGetValue(row.ItemTypeId.Value, out var t2))
+                    if (row.NonInventoryItemId.HasValue)
                     {
+                        // Non-inventory line (Freight/Discount): GL-account
+                        // shortcut, no item type / HS / FBR classification.
+                        existing.NonInventoryItemId = row.NonInventoryItemId;
+                        existing.ItemTypeId = null;
+                        existing.ItemTypeName = "";
+                        existing.FbrUOMId = null;
+                        existing.HSCode = null;
+                        existing.SaleType = null;
+                    }
+                    else if (row.ItemTypeId.HasValue && typeMap.TryGetValue(row.ItemTypeId.Value, out var t2))
+                    {
+                        existing.NonInventoryItemId = null;   // item type + non-inv are exclusive
                         existing.ItemTypeId = t2.Id;
                         existing.ItemTypeName = t2.Name;
                         existing.UOM = t2.UOM ?? "";
@@ -1637,6 +1669,7 @@ namespace MyApp.Api.Services.Implementations
                     }
                     else if (!row.ItemTypeId.HasValue)
                     {
+                        existing.NonInventoryItemId = null;
                         // When the operator clears the Item Type, also blank
                         // the FBR-classification fields the catalog had been
                         // driving (HSCode, UOM, FbrUOMId, SaleType,

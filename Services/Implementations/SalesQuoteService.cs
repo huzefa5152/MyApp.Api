@@ -375,6 +375,7 @@ namespace MyApp.Api.Services.Implementations
                 Items = quote.Items.Select(i => new SalesOrderItemDto
                 {
                     ItemTypeId = i.ItemTypeId,
+                    NonInventoryItemId = i.NonInventoryItemId,
                     Description = i.Description,
                     Quantity = i.Quantity,
                     Unit = i.Unit

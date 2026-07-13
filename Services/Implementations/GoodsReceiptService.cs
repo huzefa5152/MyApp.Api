@@ -26,6 +26,18 @@ namespace MyApp.Api.Services.Implementations
             _logger = logger;
         }
 
+        // Cross-tenant link guard for non-inventory item refs on the lines.
+        private async Task ValidateNonInvAsync(int companyId, IEnumerable<int?> ids)
+        {
+            var wanted = ids.Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+            if (wanted.Count == 0) return;
+            var valid = await _context.NonInventoryItems.AsNoTracking()
+                .Where(n => n.CompanyId == companyId && wanted.Contains(n.Id))
+                .Select(n => n.Id).ToListAsync();
+            if (wanted.Any(w => !valid.Contains(w)))
+                throw new InvalidOperationException("A selected non-inventory item does not belong to this company.");
+        }
+
         private static GoodsReceiptDto ToDto(GoodsReceipt gr) => new()
         {
             Id = gr.Id,
@@ -47,6 +59,8 @@ namespace MyApp.Api.Services.Implementations
                 Id = i.Id,
                 ItemTypeId = i.ItemTypeId,
                 ItemTypeName = i.ItemType?.Name ?? "",
+                NonInventoryItemId = i.NonInventoryItemId,
+                NonInventoryItemName = i.NonInventoryItem?.Name,
                 Description = i.Description,
                 Quantity = i.Quantity,
                 Unit = i.Unit,
@@ -197,6 +211,9 @@ namespace MyApp.Api.Services.Implementations
                 if (dto.Items == null || dto.Items.Count == 0)
                     throw new InvalidOperationException("At least one item is required.");
 
+                // Cross-tenant link guard for non-inventory item refs on the lines.
+                await ValidateNonInvAsync(dto.CompanyId, dto.Items.Select(i => i.NonInventoryItemId));
+
                 // Per-division numbering: a division-tagged GRN draws from the
                 // division's own sequence; otherwise the company's (mirror SalesQuote).
                 var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, dto.CompanyId, dto.DivisionId);
@@ -224,7 +241,9 @@ namespace MyApp.Api.Services.Implementations
                     CreatedAt = DateTime.UtcNow,
                     Items = dto.Items.Select(i => new GoodsReceiptItem
                     {
-                        ItemTypeId = i.ItemTypeId,
+                        // Non-inventory line carries no item type (mutually exclusive).
+                        ItemTypeId = i.NonInventoryItemId.HasValue ? null : i.ItemTypeId,
+                        NonInventoryItemId = i.NonInventoryItemId,
                         Description = i.Description?.Trim() ?? "",
                         Quantity = i.Quantity,
                         Unit = i.Unit ?? "",
@@ -294,6 +313,10 @@ namespace MyApp.Api.Services.Implementations
             gr.Site = dto.Site;
             if (!string.IsNullOrWhiteSpace(dto.Status)) gr.Status = dto.Status;
 
+            // Cross-tenant link guard — validate against the STORED CompanyId,
+            // never anything from the incoming DTO.
+            await ValidateNonInvAsync(gr.CompanyId, dto.Items.Select(i => i.NonInventoryItemId));
+
             // Replace items wholesale (lighter than diff, fine for v1)
             _context.GoodsReceiptItems.RemoveRange(gr.Items);
             gr.Items.Clear();
@@ -301,7 +324,9 @@ namespace MyApp.Api.Services.Implementations
             {
                 gr.Items.Add(new GoodsReceiptItem
                 {
-                    ItemTypeId = i.ItemTypeId,
+                    // Non-inventory line carries no item type (mutually exclusive).
+                    ItemTypeId = i.NonInventoryItemId.HasValue ? null : i.ItemTypeId,
+                    NonInventoryItemId = i.NonInventoryItemId,
                     Description = i.Description?.Trim() ?? "",
                     Quantity = i.Quantity,
                     Unit = i.Unit ?? "",

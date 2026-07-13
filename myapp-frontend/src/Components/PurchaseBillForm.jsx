@@ -251,6 +251,8 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     if (!supplierId) return setError("Select a supplier.");
     if (items.length === 0) return setError("Add at least one item.");
     if (items.some(i => !i.description?.trim())) return setError("Every line needs a description.");
+    // Every line on a purchase bill must be classified — an Item Type OR a Non-Inventory item.
+    if (items.some(i => !i.itemTypeId && !i.nonInventoryItemId)) return setError("Every line must have an Item Type or Non-Inventory item selected.");
     if (items.some(i => !(parseFloat(i.quantity) > 0))) return setError("Quantity must be greater than zero on every line.");
     if (items.some(i => parseFloat(i.unitPrice) < 0)) return setError("Unit price cannot be negative.");
     if (isAgainstSale) {
