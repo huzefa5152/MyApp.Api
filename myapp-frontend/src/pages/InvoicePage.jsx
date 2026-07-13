@@ -477,7 +477,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     }
     const ok = await confirm({
       title: `Delete Bill #${inv.invoiceNumber}?`,
-      message: "Linked delivery challans will revert back to Pending and become billable again.",
+      message: "This permanently removes the bill, reverses its GL and inventory impact, and reverts its linked delivery challans to Pending (billable again). A gap is left in the numbering. To keep the number, use Void instead.",
       variant: "danger",
       confirmText: "Delete bill",
     });
@@ -947,6 +947,10 @@ export default function InvoicePage({ mode = "invoices" }) {
                 canRecordReceipt,
                 canViewReceipts,
                 canReverse,
+                // Block Print / PDF when no template resolves for this scope —
+                // mirrors the card view so the table can't silently no-op.
+                noTemplate: tplPicker.noTemplate,
+                noTemplateReason: tplPicker.noTemplateReason,
               }}
               hasExcelBill={hasExcelBill}
               hasExcelTax={hasExcelTax}
@@ -989,6 +993,12 @@ export default function InvoicePage({ mode = "invoices" }) {
                       {isNotesMode ? noteLabel : isBillsMode ? "Bill" : "Invoice"} #{inv.invoiceNumber}
                     </h5>
                     <p style={cardStyles.text}><strong>Client:</strong> {inv.clientName}</p>
+                    {inv.divisionName && (
+                      <p style={cardStyles.text}>
+                        <strong>Division:</strong>{" "}
+                        <span style={{ display: "inline-block", fontSize: "0.72rem", fontWeight: 700, color: "#4527a0", background: "#ede7f6", padding: "0.1rem 0.45rem", borderRadius: 8, verticalAlign: "middle" }}>{inv.divisionName}</span>
+                      </p>
+                    )}
                     {/* PO Number / Indent No / Site come from the linked
                         DeliveryChallans (aggregated server-side). All
                         three are optional — render only when present so
@@ -1136,11 +1146,11 @@ export default function InvoicePage({ mode = "invoices" }) {
                     )}
                     {/* Bills card: View, Print Bill, Bill PDF, Bill XLS, Edit, Delete.
                         Invoices card: Tax Print, Tax PDF, Tax XLS, View FBR, Validate, Submit. */}
-                    {isBillsMode && (
+                    {!isNotesMode && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
                         onClick={() => setViewingId(inv.id)}
-                        title="View bill details (read-only)"
+                        title={isBillsMode ? "View bill details (read-only)" : "View invoice details (read-only)"}
                       >
                         <MdVisibility size={14} /> View
                       </button>
@@ -1273,7 +1283,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         Type for each line. Everything else (items, prices,
                         qty, dates) is read-only and reflects whatever was
                         last saved on the Bills tab. Hidden once submitted. */}
-                    {!isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
+                    {!isBillsMode && fbrEnabled && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
@@ -1301,13 +1311,15 @@ export default function InvoicePage({ mode = "invoices" }) {
                         {inv.isFbrExcluded ? "Include in FBR" : "Exclude from FBR"}
                       </button>
                     )}
-                    {/* Delete: Bills tab only, last-created bill only,
-                        not FBR-submitted. Same gates as before plus Bills mode. */}
-                    {(isBillsMode || isNotesMode) && canDelete && inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.isLatest && (
+                    {/* Delete: any non-submitted, non-cancelled document (2026-07-14
+                        the latest-only rule was lifted). Removes the row entirely and
+                        reverts its GL + inventory impact and frees its challans; a gap
+                        is left in the numbering. Use Void instead to keep the number. */}
+                    {canDelete && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#ffebee", color: "#c62828", border: "1px solid #ef9a9a" }}
                         onClick={() => handleDeleteInvoice(inv)}
-                        title="Delete this document entirely — latest in its sequence only. Use Void to cancel an earlier one without leaving a gap."
+                        title="Delete this document entirely — reverts its GL + inventory impact and frees its challans (leaves a gap in the numbering). Use Void to keep the number."
                       >
                         <MdDelete size={14} /> Delete
                       </button>
@@ -1448,6 +1460,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         <EditBillForm
           invoiceId={viewingId}
           readOnly
+          billsMode={isBillsMode}
           fbrEnabled={fbrEnabled}
           onClose={() => setViewingId(null)}
           onSaved={() => setViewingId(null)}

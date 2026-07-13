@@ -245,8 +245,8 @@ export default function InvoiceTable({
     const isSubmitted = inv.fbrStatus === "Submitted";
     return (
       <>
-        {isBillsMode && (
-          <button style={btn.view} onClick={() => onView?.(inv)} title="View bill">
+        {!isReturnsMode && (
+          <button style={btn.view} onClick={() => onView?.(inv)} title={isBillsMode ? "View bill" : "View invoice (read-only)"}>
             <MdVisibility size={14} />
           </button>
         )}
@@ -265,31 +265,31 @@ export default function InvoiceTable({
           </button>
         )}
         {isBillsMode && perms.canPrint && (
-          <button style={btn.print} onClick={() => onPrintBill?.(inv)} title="Print bill">
+          <button style={{ ...btn.print, ...(perms.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={perms.noTemplate} onClick={() => onPrintBill?.(inv)} title={perms.noTemplate ? perms.noTemplateReason : "Print bill"}>
             <MdPrint size={14} />
           </button>
         )}
         {!isBillsMode && perms.canPrint && (
-          <button style={btn.tax} onClick={() => onPrintTax?.(inv)} title="Print tax invoice">
+          <button style={{ ...btn.tax, ...(perms.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={perms.noTemplate} onClick={() => onPrintTax?.(inv)} title={perms.noTemplate ? perms.noTemplateReason : "Print tax invoice"}>
             <MdDescription size={14} />
           </button>
         )}
         {isBillsMode && perms.canPrint && (
           <button
-            style={{ ...btn.pdf, opacity: exportingId ? 0.55 : 1 }}
-            disabled={!!exportingId}
+            style={{ ...btn.pdf, opacity: (exportingId || perms.noTemplate) ? 0.55 : 1, ...(perms.noTemplate ? { cursor: "not-allowed" } : {}) }}
+            disabled={!!exportingId || perms.noTemplate}
             onClick={() => onExportBillPdf?.(inv)}
-            title="Export Bill PDF"
+            title={perms.noTemplate ? perms.noTemplateReason : "Export Bill PDF"}
           >
             {exportingId === inv.id + "-bill-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />}
           </button>
         )}
         {!isBillsMode && perms.canPrint && (
           <button
-            style={{ ...btn.pdf, opacity: exportingId ? 0.55 : 1 }}
-            disabled={!!exportingId}
+            style={{ ...btn.pdf, opacity: (exportingId || perms.noTemplate) ? 0.55 : 1, ...(perms.noTemplate ? { cursor: "not-allowed" } : {}) }}
+            disabled={!!exportingId || perms.noTemplate}
             onClick={() => onExportTaxPdf?.(inv)}
-            title="Export Tax Invoice PDF"
+            title={perms.noTemplate ? perms.noTemplateReason : "Export Tax Invoice PDF"}
           >
             {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />}
           </button>
@@ -360,7 +360,7 @@ export default function InvoiceTable({
             )}
           </>
         )}
-        {perms.canOpenEdit && !isSubmitted && !inv.isCancelled && (
+        {perms.canOpenEdit && (isBillsMode || fbrEnabled) && !isSubmitted && !inv.isCancelled && (
           <button
             style={btn.edit}
             onClick={() => onEdit?.(inv)}
@@ -385,8 +385,8 @@ export default function InvoiceTable({
             {inv.isFbrExcluded ? <MdRestore size={14} /> : <MdBlock size={14} />}
           </button>
         )}
-        {(isBillsMode || isReturnsMode) && perms.canDelete && !isSubmitted && !inv.isCancelled && inv.isLatest && (
-          <button style={btn.delete} onClick={() => onDelete?.(inv)} title="Delete — only the latest document in its sequence, removes the row entirely.">
+        {perms.canDelete && !isSubmitted && !inv.isCancelled && (
+          <button style={btn.delete} onClick={() => onDelete?.(inv)} title="Delete — removes the row entirely, reverts its GL + inventory impact and frees its challans (leaves a numbering gap). Use Void to keep the number.">
             <MdDelete size={14} />
           </button>
         )}

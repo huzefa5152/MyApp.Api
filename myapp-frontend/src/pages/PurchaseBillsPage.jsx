@@ -385,6 +385,8 @@ export default function PurchaseBillsPage() {
                   onPrint={handlePrint}
                   onExportPdf={handleExportPdf}
                   exportingId={exportingId}
+                  printDisabled={tplPicker.noTemplate}
+                  printDisabledReason={tplPicker.noTemplateReason}
                 />
               ) : (
               <div className="card-grid">

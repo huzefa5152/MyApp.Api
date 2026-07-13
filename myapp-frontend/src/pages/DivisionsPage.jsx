@@ -131,9 +131,24 @@ export default function DivisionsPage() {
                 {(d.ntn || d.strn) && (
                   <div>{d.ntn ? `NTN: ${d.ntn}` : ""}{d.ntn && d.strn ? " · " : ""}{d.strn ? `STRN: ${d.strn}` : ""}</div>
                 )}
-                <div style={{ marginTop: 4 }}>
-                  Quote # starts at <strong>{d.startingSalesQuoteNumber || 1}</strong>
-                  {d.currentSalesQuoteNumber ? ` · last issued #${d.currentSalesQuoteNumber}` : ""}
+                {/* Every per-division document-number sequence — Starting seed and
+                    last-issued. A division numbers each document type separately. */}
+                <div style={{ marginTop: 6, display: "grid", gap: 2 }}>
+                  {[
+                    ["Sales Quote", d.startingSalesQuoteNumber, d.currentSalesQuoteNumber],
+                    ["Sales Order", d.startingSalesOrderNumber, d.currentSalesOrderNumber],
+                    ["Challan", d.startingChallanNumber, d.currentChallanNumber],
+                    ["Invoice", d.startingInvoiceNumber, d.currentInvoiceNumber],
+                    ["Purchase Bill", d.startingPurchaseBillNumber, d.currentPurchaseBillNumber],
+                    ["Goods Receipt", d.startingGoodsReceiptNumber, d.currentGoodsReceiptNumber],
+                    ["Credit Note", d.startingCreditNoteNumber, d.currentCreditNoteNumber],
+                    ["Debit Note", d.startingDebitNoteNumber, d.currentDebitNoteNumber],
+                  ].map(([label, start, current]) => (
+                    <div key={label}>
+                      {label} # starts at <strong>{start || 1}</strong>
+                      {current ? ` · last issued #${current}` : ""}
+                    </div>
+                  ))}
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
