@@ -80,6 +80,8 @@ namespace MyApp.Api.Services.Implementations
             {
                 CompanyId = companyId,
                 Date = date,
+                // Cleared-by-default (Manager-style) — see PaymentService.CreateAsync.
+                ReconciledDate = date,
                 FromAccountId = dto.FromAccountId,
                 ToAccountId = dto.ToAccountId,
                 Amount = dto.Amount,

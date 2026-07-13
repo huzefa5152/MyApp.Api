@@ -187,11 +187,15 @@ namespace MyApp.Api.Services.Implementations
                     divisionId = docDivisions[0];
             }
 
+            var paymentDate = dto.Date == default ? PakistanClock.Today : dto.Date;
             var payment = new Payment
             {
                 CompanyId = companyId,
                 Direction = direction,
-                Date = dto.Date == default ? PakistanClock.Today : dto.Date,
+                Date = paymentDate,
+                // Cleared-by-default (Manager-style): a new receipt/payment is
+                // reconciled as of its own date; "pending" is the opt-in exception.
+                ReconciledDate = paymentDate,
                 ContactType = string.IsNullOrWhiteSpace(dto.ContactType) ? "Other" : dto.ContactType.Trim(),
                 ContactId = dto.ContactId,
                 DivisionId = divisionId,
