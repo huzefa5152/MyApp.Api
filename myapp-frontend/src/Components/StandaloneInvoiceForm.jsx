@@ -175,6 +175,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [salesOrders, setSalesOrders] = useState([]);
   const [salesOrderId, setSalesOrderId] = useState("");
   const [soLoadedMsg, setSoLoadedMsg] = useState("");
+  // Customer PO — prefilled from a selected Sales Order, or typed manually.
+  const [poNumber, setPoNumber] = useState("");
+  const [poDate, setPoDate] = useState("");
 
   // Inline-create modals
   const [showAddClient, setShowAddClient] = useState(false);
@@ -257,6 +260,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       setDivisionId(defaultDivisionId ? String(defaultDivisionId) : "");
       setGstRate(18);
       setRows([blankRow()]);
+      setPoNumber("");
+      setPoDate("");
       setError("");
       return;
     }
@@ -291,6 +296,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         };
       });
       setRows(mapped.length ? mapped : [blankRow()]);
+      // Prefill the customer PO from the order (operator can still edit it).
+      setPoNumber(data.customerPoNumber || "");
+      setPoDate(data.customerPoDate ? String(data.customerPoDate).slice(0, 10) : "");
       setSoLoadedMsg(`Loaded ${mapped.length} item${mapped.length !== 1 ? "s" : ""} from Sales Order #${data.salesOrderNumber}`);
       setError("");
     } catch {
@@ -579,6 +587,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         scenarioId: scenarioCode || null,
         documentType: documentType || null,
         paymentMode: paymentMode || null,
+        salesOrderId: salesOrderId ? parseInt(salesOrderId) : null,
+        poNumber: poNumber.trim() || null,
+        poDate: poDate ? new Date(poDate).toISOString() : null,
         items: rows.map((r) => ({
           // Optional in Bills mode — when set, the backend re-derives
           // HS / UOM / Sale Type from the catalog for this line.
@@ -937,6 +948,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                             <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Payment Terms</label>
                               <input type="text" style={styles.input} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Optional" />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 140 }}>
+                              <label style={styles.label}>Customer PO # <span style={styles.optionalTag}>optional</span></label>
+                              <input type="text" style={styles.input} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="From order, or manual" />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 120 }}>
+                              <label style={styles.label}>PO Date</label>
+                              <input type="date" style={styles.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
                             </div>
                             <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Document Type <span style={styles.optionalTag}>FBR</span></label>

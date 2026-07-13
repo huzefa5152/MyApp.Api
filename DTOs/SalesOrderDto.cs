@@ -149,6 +149,7 @@ namespace MyApp.Api.DTOs
         public int ClientId { get; set; }
         public string ClientName { get; set; } = "";
         public string? CustomerPoNumber { get; set; }
+        public DateTime? CustomerPoDate { get; set; }
         public string? Site { get; set; }
         public int? SalesQuoteId { get; set; }
         /// <summary>GST rate of the source quote, when one is linked.</summary>

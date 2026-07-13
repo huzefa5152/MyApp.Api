@@ -106,6 +106,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [itemPrices, setItemPrices] = useState({});
   const [itemDescriptions, setItemDescriptions] = useState({});
   const [commonPoDate, setCommonPoDate] = useState("");
+  // Bill-level customer PO (number + date). Prefilled from the linked Sales
+  // Order / selected challans; editable, or typed manually when none exists.
+  const [billPoNumber, setBillPoNumber] = useState("");
+  const [billPoDate, setBillPoDate] = useState("");
   const [dcSearch, setDcSearch] = useState("");
   const [gstRate, setGstRate] = useState(18);
   const [paymentTerms, setPaymentTerms] = useState("");
@@ -472,6 +476,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     setItemPrices({});
     setItemDescriptions({});
     setCommonPoDate("");
+    setBillPoNumber("");
+    setBillPoDate("");
     setDcSearch("");
     setError("");
     // Also clear any leftover rate-history state so the warning banner and
@@ -515,6 +521,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     setItemPrices({});
     setItemDescriptions({});
     setCommonPoDate("");
+    setBillPoNumber("");
+    setBillPoDate("");
     setDcSearch("");
     setError("");
     setLastRates({});
@@ -536,6 +544,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     setSelectedClientId(so.clientId ? String(so.clientId) : "");
     setDivisionId(so.divisionId ? String(so.divisionId) : "");
     setSelectedIds(soChallans.map((c) => c.id));
+    // Prefill the bill's customer PO from the order (operator can still edit).
+    if (so.customerPoNumber) setBillPoNumber(so.customerPoNumber);
+    if (so.customerPoDate) setBillPoDate(String(so.customerPoDate).slice(0, 10));
     setSoPickMsg(soChallans.length
       ? `Selected ${soChallans.length} unbilled challan${soChallans.length !== 1 ? "s" : ""} from Sales Order #${so.salesOrderNumber}.`
       : `Sales Order #${so.salesOrderNumber} has no unbilled challans — create a challan for it first, or tick challans manually below.`);
@@ -562,6 +573,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const allItems = selectedChallans.flatMap((c) =>
     c.items.map((item) => ({ ...item, challanNumber: c.challanNumber }))
   );
+
+  // Prefill the bill PO from the selected challans (they carry the order's PO)
+  // when the operator hasn't set one yet — covers the "Generate Bill from order"
+  // path where challans are preselected without calling handleSalesOrderPick.
+  useEffect(() => {
+    const po = selectedChallans.map((c) => c.poNumber).find((p) => p && p.trim());
+    const pod = selectedChallans.map((c) => c.poDate).find((d) => d);
+    if (po) setBillPoNumber((prev) => prev || po);
+    if (pod) setBillPoDate((prev) => prev || String(pod).slice(0, 10));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIds]);
 
   const subtotal = allItems.reduce((sum, item) => {
     const price = parseFloat(itemPrices[item.id]) || 0;
@@ -630,10 +652,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
     setSaving(true);
     try {
-      // Build PO date updates for selected challans that don't have a PO date
+      // Backfill the PO date onto selected challans that don't have one, using
+      // the bill's PO date (the "PO Date" field the operator sees/edits).
       const poDateUpdates = {};
-      if (commonPoDate) {
-        const isoDate = new Date(commonPoDate).toISOString();
+      if (billPoDate) {
+        const isoDate = new Date(billPoDate).toISOString();
         for (const dc of selectedChallans) {
           if (!dc.poDate) {
             poDateUpdates[dc.id] = isoDate;
@@ -679,6 +702,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
             : (itemSaleTypes[item.id]?.trim() || null),
         })),
         poDateUpdates,
+        poNumber: billPoNumber.trim() || null,
+        poDate: billPoDate ? new Date(billPoDate).toISOString() : null,
       });
 
       // ── Remember FBR defaults per item description ──
@@ -1168,21 +1193,27 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               </label>
                             ))}
                           </div>
-                          {selectedIds.length > 0 && selectedChallans.find((c) => c.poDate) && (
-                            <div style={styles.poDateInfo}>
-                              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: colors.textSecondary }}>PO Date:</span>
-                              <span style={{ fontSize: "0.82rem", color: colors.textPrimary }}>{new Date(selectedChallans.find((c) => c.poDate).poDate).toLocaleDateString()}</span>
-                            </div>
-                          )}
-                          {selectedIds.length > 0 && !selectedChallans.find((c) => c.poDate) && (
-                            <div style={styles.poDateInfo}>
-                              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: colors.textSecondary }}>PO Date (for all selected DCs):</span>
-                              <input
-                                type="date"
-                                style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.82rem", width: "auto" }}
-                                value={commonPoDate}
-                                onChange={(e) => setCommonPoDate(e.target.value)}
-                              />
+                          {selectedIds.length > 0 && (
+                            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginTop: "0.6rem" }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem", flex: "1 1 180px" }}>
+                                <label style={{ fontSize: "0.82rem", fontWeight: 600, color: colors.textSecondary }}>Customer PO #</label>
+                                <input
+                                  type="text"
+                                  placeholder="From order, or enter manually"
+                                  style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.82rem" }}
+                                  value={billPoNumber}
+                                  onChange={(e) => setBillPoNumber(e.target.value)}
+                                />
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+                                <label style={{ fontSize: "0.82rem", fontWeight: 600, color: colors.textSecondary }}>PO Date</label>
+                                <input
+                                  type="date"
+                                  style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.82rem", width: "auto" }}
+                                  value={billPoDate}
+                                  onChange={(e) => setBillPoDate(e.target.value)}
+                                />
+                              </div>
                             </div>
                           )}
                         </>

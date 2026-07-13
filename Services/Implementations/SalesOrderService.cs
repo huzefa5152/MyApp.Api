@@ -762,6 +762,7 @@ namespace MyApp.Api.Services.Implementations
                 ClientId = order.ClientId,
                 ClientName = order.Client?.Name ?? "",
                 CustomerPoNumber = order.CustomerPoNumber,
+                CustomerPoDate = order.CustomerPoDate,
                 Site = order.Site,
                 SalesQuoteId = order.SalesQuoteId,
                 GstRate = gstRate,

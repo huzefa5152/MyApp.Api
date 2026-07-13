@@ -281,10 +281,16 @@ namespace MyApp.Api.Services.Implementations
             // Empty / whitespace-only entries are dropped before the
             // join so a single-challan bill with a blank PO doesn't
             // surface "" in the card.
-            PoNumber = string.Join("; ", inv.DeliveryChallans
-                .Select(dc => dc.PoNumber)
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Distinct()),
+            // Prefer the bill's own stored PO (set at create from the order /
+            // challan / manual entry); fall back to the challan-aggregated value
+            // for legacy bills saved before the invoice carried its own PO.
+            PoNumber = !string.IsNullOrWhiteSpace(inv.PoNumber)
+                ? inv.PoNumber
+                : string.Join("; ", inv.DeliveryChallans
+                    .Select(dc => dc.PoNumber)
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Distinct()),
+            PoDate = inv.PoDate ?? inv.DeliveryChallans.Select(dc => dc.PoDate).FirstOrDefault(d => d.HasValue),
             IndentNo = string.Join("; ", inv.DeliveryChallans
                 .Select(dc => dc.IndentNo)
                 .Where(s => !string.IsNullOrWhiteSpace(s))
@@ -628,6 +634,19 @@ namespace MyApp.Api.Services.Implementations
                                        .Select(c => c.SalesOrderId!.Value).Distinct().ToList();
             int? headerSalesOrderId = challanSoIds.Count == 1 ? challanSoIds[0] : (int?)null;
 
+            // Bill PO: what the operator typed on the form wins; else prefill from
+            // the linked Sales Order's customer PO; else the source challans' own
+            // PO (first non-blank). (Challans are loaded with .Include(SalesOrder).)
+            var headerSo = headerSalesOrderId.HasValue
+                ? challans.FirstOrDefault(c => c.SalesOrderId == headerSalesOrderId)?.SalesOrder
+                : null;
+            var billPoNumber = !string.IsNullOrWhiteSpace(dto.PoNumber) ? dto.PoNumber.Trim()
+                : !string.IsNullOrWhiteSpace(headerSo?.CustomerPoNumber) ? headerSo!.CustomerPoNumber!.Trim()
+                : challans.Select(c => c.PoNumber).FirstOrDefault(p => !string.IsNullOrWhiteSpace(p));
+            var billPoDate = dto.PoDate
+                ?? headerSo?.CustomerPoDate
+                ?? challans.Select(c => c.PoDate).FirstOrDefault(d => d.HasValue);
+
             string? effectivePaymentMode = dto.PaymentMode;
             if (string.IsNullOrWhiteSpace(effectivePaymentMode))
             {
@@ -703,6 +722,8 @@ namespace MyApp.Api.Services.Implementations
                     DocumentType = effectiveDocType,
                     PaymentMode = effectivePaymentMode,
                     SalesOrderId = headerSalesOrderId,
+                    PoNumber = billPoNumber,
+                    PoDate = billPoDate,
                     FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
                         ? nextInvoiceNumber.ToString()
                         : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
@@ -824,6 +845,22 @@ namespace MyApp.Api.Services.Implementations
             if (client == null) throw new KeyNotFoundException("Client not found.");
             if (client.CompanyId != dto.CompanyId)
                 throw new InvalidOperationException("Client does not belong to this company.");
+
+            // Optional Sales Order lineage for a standalone bill: validate it
+            // belongs to this company (never trust the DTO), then prefill the
+            // customer PO from it unless the operator typed one on the form.
+            SalesOrder? standaloneSo = null;
+            if (dto.SalesOrderId is int soId)
+            {
+                standaloneSo = await _context.SalesOrders.FirstOrDefaultAsync(o => o.Id == soId);
+                if (standaloneSo == null) throw new KeyNotFoundException("Sales Order not found.");
+                if (standaloneSo.CompanyId != dto.CompanyId)
+                    throw new InvalidOperationException("Sales Order does not belong to this company.");
+            }
+            var billPoNumber = !string.IsNullOrWhiteSpace(dto.PoNumber) ? dto.PoNumber.Trim()
+                : !string.IsNullOrWhiteSpace(standaloneSo?.CustomerPoNumber) ? standaloneSo!.CustomerPoNumber!.Trim()
+                : null;
+            var billPoDate = dto.PoDate ?? standaloneSo?.CustomerPoDate;
 
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("At least one item is required.");
@@ -1040,6 +1077,9 @@ namespace MyApp.Api.Services.Implementations
                     PaymentTerms = finalPaymentTerms,
                     DocumentType = effectiveDocType,
                     PaymentMode = effectivePaymentMode,
+                    SalesOrderId = standaloneSo?.Id,
+                    PoNumber = billPoNumber,
+                    PoDate = billPoDate,
                     FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
                         ? nextInvoiceNumber.ToString()
                         : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
@@ -2510,8 +2550,8 @@ namespace MyApp.Api.Services.Implementations
                 Date = inv.Date,
                 ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
                 ChallanDates = inv.DeliveryChallans.Select(dc => dc.DeliveryDate).ToList(),
-                PoNumber = string.Join(", ", poNumbers),
-                PoDate = inv.DeliveryChallans.Select(dc => dc.PoDate).FirstOrDefault(),
+                PoNumber = !string.IsNullOrWhiteSpace(inv.PoNumber) ? inv.PoNumber : string.Join(", ", poNumbers),
+                PoDate = inv.PoDate ?? inv.DeliveryChallans.Select(dc => dc.PoDate).FirstOrDefault(),
                 ClientName = inv.Client?.Name ?? "",
                 ClientAddress = inv.Client?.Address,
                 ConcernDepartment = string.Join(", ", inv.DeliveryChallans
@@ -2573,7 +2613,7 @@ namespace MyApp.Api.Services.Implementations
                 InvoiceNumber = inv.InvoiceNumber,
                 Date = inv.Date,
                 ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
-                PoNumber = string.Join(", ", poNumbers),
+                PoNumber = !string.IsNullOrWhiteSpace(inv.PoNumber) ? inv.PoNumber : string.Join(", ", poNumbers),
                 Subtotal = inv.Subtotal,
                 GSTRate = inv.GSTRate,
                 GSTAmount = inv.GSTAmount,

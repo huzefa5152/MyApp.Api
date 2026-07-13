@@ -105,6 +105,7 @@ namespace MyApp.Api.DTOs
         // exist across the linked challans (rare in practice — most
         // bills cover one challan).
         public string? PoNumber { get; set; }
+        public DateTime? PoDate { get; set; }
         public string? IndentNo { get; set; }
         public string? Site { get; set; }
     }
@@ -185,6 +186,13 @@ namespace MyApp.Api.DTOs
         public List<int> ChallanIds { get; set; } = new();
         public List<CreateInvoiceItemDto> Items { get; set; } = new();
         public Dictionary<int, DateTime> PoDateUpdates { get; set; } = new();
+        /// <summary>
+        /// Customer PO for the bill. When null/blank the server prefills it from
+        /// the linked Sales Order (CustomerPoNumber) or the source challan(s); a
+        /// value entered on the form overrides that prefill.
+        /// </summary>
+        public string? PoNumber { get; set; }
+        public DateTime? PoDate { get; set; }
     }
 
     public class CreateInvoiceItemDto
@@ -242,6 +250,15 @@ namespace MyApp.Api.DTOs
         /// items.
         /// </summary>
         public string? ScenarioId { get; set; }
+        /// <summary>
+        /// Optional Sales Order this bill fulfils. Company-validated server-side
+        /// (never trusted). When set, the bill's PO prefills from the order's
+        /// CustomerPoNumber/Date unless <see cref="PoNumber"/> is supplied.
+        /// </summary>
+        public int? SalesOrderId { get; set; }
+        /// <summary>Customer PO for the bill — manual entry, or prefilled from the linked order.</summary>
+        public string? PoNumber { get; set; }
+        public DateTime? PoDate { get; set; }
         public List<CreateStandaloneInvoiceItemDto> Items { get; set; } = new();
     }
 

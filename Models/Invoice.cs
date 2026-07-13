@@ -108,6 +108,17 @@ namespace MyApp.Api.Models
         public int? SalesOrderId { get; set; }
 
         /// <summary>
+        /// Customer purchase-order reference for this bill. Prefilled from the
+        /// linked Sales Order (CustomerPoNumber) or the source challan(s) at
+        /// create time, and editable on the bill form (manual entry when no
+        /// order/challan PO exists). Null when the customer supplied no PO.
+        /// The bill list/view/print prefer this over the challan-aggregated PO.
+        /// </summary>
+        public string? PoNumber { get; set; }
+        /// <summary>Date on the customer PO (see <see cref="PoNumber"/>). Optional.</summary>
+        public DateTime? PoDate { get; set; }
+
+        /// <summary>
         /// The ORIGINAL invoice's FBR IRN (22 digits NTN / 28 digits CNIC).
         /// Sent to FBR as `invoiceRefNo` for Debit/Credit Notes (FBR 0026).
         /// Distinct from <see cref="FbrIRN"/>, which is this note's own IRN.

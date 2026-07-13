@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
@@ -50,6 +51,36 @@ namespace MyApp.Api.Services.Implementations
                     if (prop.Value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(prop.Value.GetString()))
                         return prop.Value.GetString()!.Trim();
             return "";
+        }
+        // A Manager "classic custom field" named like a purchase-order reference
+        // (e.g. "PO No", "P.O Number", "Customer PO"). Matched by name — not a
+        // hardcoded guid — so the PO import works for any business's field set.
+        private static bool IsPoFieldName(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return false;
+            var n = new string(name.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+            return n.StartsWith("PO") || n.Contains("PURCHASEORDER") || n.Contains("CUSTOMERPO");
+        }
+        // Sales orders have no PO custom field — the customer PO is typed into the
+        // order Description ("PO# 4500033438", "PO11496", "VC-677"). Strip a leading
+        // PO/P.O label (followed by "#" or a digit) so the stored value matches the
+        // invoice/challan PO format; references without a PO prefix are kept whole.
+        private static readonly Regex _poPrefix = new(@"^\s*P\.?O\.?\s*(?:#\s*|(?=\d))", RegexOptions.IgnoreCase);
+        private static string? PoFromDescription(string? desc)
+        {
+            var s = desc?.Trim();
+            if (string.IsNullOrEmpty(s)) return null;
+            var stripped = _poPrefix.Replace(s, "", 1).Trim();
+            return stripped.Length > 0 ? stripped : s;
+        }
+        // Value of the first present classic custom field (by guid) on a document header.
+        private static string? Cf(JsonElement e, IEnumerable<string> guids)
+        {
+            if (!e.TryGetProperty("CustomFields", out var cf) || cf.ValueKind != JsonValueKind.Object) return null;
+            foreach (var g in guids)
+                if (cf.TryGetProperty(g, out var v) && v.ValueKind == JsonValueKind.String)
+                { var s = v.GetString(); if (!string.IsNullOrWhiteSpace(s)) return s.Trim(); }
+            return null;
         }
         private static (string? addr, string? ntn, string? strn) ParseAddr(string? billing)
         {
@@ -239,6 +270,46 @@ namespace MyApp.Api.Services.Implementations
 
                 var invAmountByGuid = Rows("sales-invoices", false).ToDictionary(e => Str(e, "key")!, e => (total: Money(e, "invoiceAmount"), balance: Money(e, "balanceDue")));
                 var billAmountByGuid = Rows("purchase-invoices", false).ToDictionary(e => Str(e, "key")!, e => (total: Money(e, "invoiceAmount"), balance: Money(e, "balanceDue")));
+                // Manager tracks a sales order's status as invoiceStatus ("Invoiced" /
+                // "Uninvoiced") on the summary list (there is no delivery/fulfillment
+                // status or order→doc link in the export). Map it to our Status.
+                var soInvStatus = Rows("sales-orders", false).Where(e => Str(e, "key") != null)
+                    .ToDictionary(e => Str(e, "key")!, e => Str(e, "invoiceStatus"));
+                var soDescByKey = Rows("sales-orders", false).Where(e => Str(e, "key") != null)
+                    .ToDictionary(e => Str(e, "key")!, e => Str(e, "description"));
+                // Quote expiry lives on the SUMMARY (real date); the detail form's
+                // ExpiryDate is a flag, not a date. MyApp derives quote status from
+                // ValidUntil (Expired when past), so carry the summary expiryDate.
+                var quoteExpiryByKey = Rows("sales-quotes", false).Where(e => Str(e, "key") != null)
+                    .ToDictionary(e => Str(e, "key")!, e => Date(e, "expiryDate"));
+
+                // Manager keeps the customer PO as a "classic custom field" (per-doc,
+                // guid-keyed) rather than a native field. Resolve the PO field guid(s)
+                // for Delivery Note placement from the field definitions (if exported)
+                // so we can carry the PO onto the imported challan's PoNumber.
+                var poFieldGuidsForDn = Rows("classic-custom-fields", false)
+                    .Where(f => IsPoFieldName(Str(f, "name"))
+                             && (Str(f, "placement") ?? "").Contains("Delivery Note", StringComparison.OrdinalIgnoreCase))
+                    .Select(f => Str(f, "key")).Where(k => !string.IsNullOrEmpty(k)).Cast<string>().ToList();
+                var poFieldGuidsForInv = Rows("classic-custom-fields", false)
+                    .Where(f => IsPoFieldName(Str(f, "name"))
+                             && (Str(f, "placement") ?? "").Contains("Sales Invoice", StringComparison.OrdinalIgnoreCase))
+                    .Select(f => Str(f, "key")).Where(k => !string.IsNullOrEmpty(k)).Cast<string>().ToList();
+
+                // Quotes / orders / delivery notes are non-financial. If a document's
+                // customer can't be resolved (deleted/merged in Manager), attach it to a
+                // per-company placeholder client instead of dropping it, so the counts
+                // match Manager. (Invoices / notes / WHT still skip — they'd affect AR.)
+                int? placeholderClientId = null;
+                async Task<int> ClientOrPlaceholderAsync(string? guid)
+                {
+                    if (guid != null && clientIdByGuid.TryGetValue(guid, out var id)) return id;
+                    if (placeholderClientId is int pid) return pid;
+                    var ph = await _db.Clients.FirstOrDefaultAsync(c => c.CompanyId == companyId && c.ExternalRef == "mgr-cust:__unknown__")
+                        ?? _db.Clients.Local.FirstOrDefault(c => c.CompanyId == companyId && c.ExternalRef == "mgr-cust:__unknown__");
+                    if (ph == null) { ph = new Client { CompanyId = companyId, Name = "(Unknown customer)", ExternalRef = "mgr-cust:__unknown__" }; _db.Clients.Add(ph); await _db.SaveChangesAsync(); }
+                    placeholderClientId = ph.Id; return ph.Id;
+                }
 
                 int? DivFromLines(JsonElement doc)
                 {
@@ -259,51 +330,118 @@ namespace MyApp.Api.Services.Implementations
 
                 // ── Sales quotes / orders / delivery notes ──────────────────────
                 int nQuote = 0;
+                int quoteExpired = 0;
                 foreach (var h in Rows("sales-quotes", true))
                 {
-                    if (Str(h, "Customer") is not { } cust || !clientIdByGuid.TryGetValue(cust, out var clientId)) continue;
+                    int clientId = await ClientOrPlaceholderAsync(Str(h, "Customer"));
                     int num = Alloc("quote:0", RefNum(h));
                     var items = new List<SalesQuoteItem>();
                     if (h.TryGetProperty("Lines", out var L) && L.ValueKind == JsonValueKind.Array)
                         foreach (var ln in L.EnumerateArray()) { var (qq, pp, dd, uu) = Line(ln, "SalesUnitPrice"); var niId = NonInvId(ln); var q = niId.HasValue && qq <= 0 ? 1m : qq; items.Add(new SalesQuoteItem { Description = dd, Quantity = q, Unit = uu, UnitPrice = pp, LineTotal = Math.Round(q * pp, 2), NonInventoryItemId = niId }); }
                     var sub = items.Sum(i => i.LineTotal);
-                    _db.SalesQuotes.Add(new SalesQuote { CompanyId = companyId, DivisionId = null, ClientId = clientId, QuoteNumber = num, Date = Date(h, "IssueDate") ?? DateTime.Today, Subtotal = sub, GSTRate = 0, GSTAmount = 0, GrandTotal = sub, AmountInWords = "", Status = "Sent", Items = items });
+                    // Import the quote's expiry so the app derives "Expired" (past
+                    // ValidUntil) vs "Active" — same date-based rule Manager uses.
+                    // (Quote status is DERIVED in MyApp, not stored: Expired/Active
+                    // from ValidUntil, Accepted from a linked Sales Order.)
+                    var qkey = Str(h, "Key") ?? Str(h, "id");
+                    var validUntil = qkey != null ? quoteExpiryByKey.GetValueOrDefault(qkey) : null;
+                    if (validUntil.HasValue && validUntil.Value.Date < DateTime.UtcNow.Date) quoteExpired++;
+                    _db.SalesQuotes.Add(new SalesQuote { CompanyId = companyId, DivisionId = null, ClientId = clientId, QuoteNumber = num, Date = Date(h, "IssueDate") ?? DateTime.Today, ValidUntil = validUntil, Subtotal = sub, GSTRate = 0, GSTAmount = 0, GrandTotal = sub, AmountInWords = "", Status = "Sent", Items = items });
                     nQuote++;
                 }
                 await _db.SaveChangesAsync(); _db.ChangeTracker.Clear();
                 report.Created["salesQuotes"] = nQuote;
+                if (quoteExpired > 0) Note($"{quoteExpired} quote(s) imported with a past expiry → derive as \"Expired\".");
 
-                int nSo = 0;
+                int nSo = 0, soWithPo = 0;
+                // Manager guid → the tracked SalesOrder, so we can read its DB-assigned
+                // Id + line Ids after SaveChanges (before ChangeTracker.Clear()) and wire
+                // the delivery notes back to their order for fulfillment tracking.
+                var soByGuid = new Dictionary<string, SalesOrder>();
                 foreach (var h in Rows("sales-orders", true))
                 {
-                    if (Str(h, "Customer") is not { } cust || !clientIdByGuid.TryGetValue(cust, out var clientId)) continue;
+                    int clientId = await ClientOrPlaceholderAsync(Str(h, "Customer"));
                     int num = Alloc("so:0", RefNum(h));
                     var items = new List<SalesOrderItem>();
                     if (h.TryGetProperty("Lines", out var L) && L.ValueKind == JsonValueKind.Array)
                         foreach (var ln in L.EnumerateArray()) { var (qq, _, dd, uu) = Line(ln, "SalesUnitPrice"); items.Add(new SalesOrderItem { Description = dd, Quantity = qq, Unit = uu }); }
-                    _db.SalesOrders.Add(new SalesOrder { CompanyId = companyId, DivisionId = null, ClientId = clientId, SalesOrderNumber = num, OrderDate = Date(h, "IssueDate") ?? DateTime.Today, Status = "Open", IsImported = true, Items = items });
+                    // Stored lifecycle status: Manager "Invoiced" → Closed, else Open.
+                    // (The delivery/fulfillment status is DERIVED by the app from the
+                    // linked challans — see the delivery-notes loop below.)
+                    var okey = Str(h, "Key") ?? Str(h, "id");
+                    var status = okey != null && soInvStatus.GetValueOrDefault(okey) == "Invoiced" ? "Closed" : "Open";
+                    // Customer PO lives in the order Description (orders have no PO field).
+                    var po = PoFromDescription(Str(h, "Description") ?? (okey != null ? soDescByKey.GetValueOrDefault(okey) : null));
+                    var so = new SalesOrder { CompanyId = companyId, DivisionId = null, ClientId = clientId, SalesOrderNumber = num, OrderDate = Date(h, "IssueDate") ?? DateTime.Today, Status = status, CustomerPoNumber = po, IsImported = true, Items = items };
+                    _db.SalesOrders.Add(so);
+                    if (okey != null) soByGuid[okey] = so;
+                    if (po != null) soWithPo++;
                     nSo++;
                 }
-                await _db.SaveChangesAsync(); _db.ChangeTracker.Clear();
+                await _db.SaveChangesAsync();
+                // Snapshot the generated ids for the delivery-note → order linkage.
+                var orderIdByGuid = new Dictionary<string, int>();
+                var orderItemsByGuid = new Dictionary<string, List<(int Id, string Desc, decimal Qty)>>();
+                foreach (var (guid, so) in soByGuid)
+                {
+                    orderIdByGuid[guid] = so.Id;
+                    orderItemsByGuid[guid] = so.Items.Select(i => (i.Id, i.Description ?? "", i.Quantity)).ToList();
+                }
+                _db.ChangeTracker.Clear();
                 report.Created["salesOrders"] = nSo;
+                if (soWithPo > 0) Note($"carried the customer PO (from the order description) onto {soWithPo} sales order(s).");
 
-                int nDc = 0;
+                int nDc = 0, dcLinked = 0, dcWithPo = 0;
+                // Manager delivery notes that were billed carry a SalesInvoice guid.
+                // Collect (challan, guid) here; once invoices are imported below we
+                // resolve the guid → invoice id and mark the challan Billed.
+                var challanBillRefs = new List<(DeliveryChallan Dc, string InvGuid)>();
                 foreach (var h in Rows("delivery-notes", true))
                 {
-                    if (Str(h, "Customer") is not { } cust || !clientIdByGuid.TryGetValue(cust, out var clientId)) continue;
+                    int clientId = await ClientOrPlaceholderAsync(Str(h, "Customer"));
                     int num = Alloc("dc:0", RefNum(h), unique: false);
+                    // Manager delivery notes carry a SalesOrder guid → link the challan
+                    // to its order and match each line to an order line (by description,
+                    // preferring an exact qty match) so the app derives the order's
+                    // delivered qty and Fulfillment status (Not/Partially/Fully Delivered).
+                    var soGuid = Str(h, "SalesOrder");
+                    int? soId = soGuid != null && orderIdByGuid.TryGetValue(soGuid, out var oid) ? oid : (int?)null;
+                    // A consumable copy of the order's lines so repeated descriptions map 1:1.
+                    List<(int Id, string Desc, decimal Qty)>? orderLines =
+                        soGuid != null && orderItemsByGuid.TryGetValue(soGuid, out var ol) ? new(ol) : null;
                     var items = new List<DeliveryItem>();
                     if (h.TryGetProperty("Lines", out var L) && L.ValueKind == JsonValueKind.Array)
-                        foreach (var ln in L.EnumerateArray()) { var (qq, _, dd, uu) = Line(ln, "SalesUnitPrice"); items.Add(new DeliveryItem { Description = dd, Quantity = qq, Unit = uu }); }
-                    _db.DeliveryChallans.Add(new DeliveryChallan { CompanyId = companyId, DivisionId = null, ClientId = clientId, ChallanNumber = num, PoNumber = "", DeliveryDate = Date(h, "DeliveryDate"), Status = "Imported", IsImported = true, Items = items });
+                        foreach (var ln in L.EnumerateArray())
+                        {
+                            var (qq, _, dd, uu) = Line(ln, "SalesUnitPrice");
+                            int? soItemId = null;
+                            if (orderLines != null)
+                            {
+                                var mi = orderLines.FindIndex(x => x.Desc == dd && x.Qty == qq);
+                                if (mi < 0) mi = orderLines.FindIndex(x => x.Desc == dd);
+                                if (mi >= 0) { soItemId = orderLines[mi].Id; orderLines.RemoveAt(mi); }
+                            }
+                            items.Add(new DeliveryItem { Description = dd, Quantity = qq, Unit = uu, SalesOrderItemId = soItemId });
+                        }
+                    var po = Cf(h, poFieldGuidsForDn) ?? "";
+                    var dc = new DeliveryChallan { CompanyId = companyId, DivisionId = null, ClientId = clientId, ChallanNumber = num, PoNumber = po, DeliveryDate = Date(h, "DeliveryDate"), Status = "Imported", IsImported = true, SalesOrderId = soId, Items = items };
+                    _db.DeliveryChallans.Add(dc);
+                    if (Str(h, "SalesInvoice") is { } siGuid) challanBillRefs.Add((dc, siGuid));
+                    if (soId != null) dcLinked++;
+                    if (po.Length > 0) dcWithPo++;
                     nDc++;
                 }
-                await _db.SaveChangesAsync(); _db.ChangeTracker.Clear();
+                await _db.SaveChangesAsync();
+                // Snapshot challan id → SalesInvoice guid before the tracker clear.
+                var challanInvGuidById = challanBillRefs.ToDictionary(x => x.Dc.Id, x => x.InvGuid);
+                _db.ChangeTracker.Clear();
                 report.Created["deliveryChallans"] = nDc;
+                if (dcLinked > 0) Note($"linked {dcLinked} delivery note(s) to their sales order → fulfillment status derived from delivered qty.");
+                if (dcWithPo > 0) Note($"carried the Manager PO number onto {dcWithPo} challan(s).");
 
                 // ── Sales invoices ──────────────────────────────────────────────
                 var invoiceIdByGuid = new Dictionary<string, int>();
-                int nInv = 0;
+                int nInv = 0, invWithPo = 0;
                 foreach (var h in Rows("sales-invoices", true))
                 {
                     var key = Str(h, "Key") ?? Str(h, "id")!;
@@ -315,7 +453,9 @@ namespace MyApp.Api.Services.Implementations
                     if (h.TryGetProperty("Lines", out var L) && L.ValueKind == JsonValueKind.Array)
                         foreach (var ln in L.EnumerateArray()) { var (qq, pp, dd, uu) = Line(ln, "SalesUnitPrice"); var niId = NonInvId(ln); var q = niId.HasValue && qq <= 0 ? 1m : qq; items.Add(new InvoiceItem { Description = dd, Quantity = q, UOM = uu, UnitPrice = pp, LineTotal = Math.Round(q * pp, 2), NonInventoryItemId = niId }); }
                     if (total <= 0) total = items.Sum(i => i.LineTotal);
-                    _db.Invoices.Add(new Invoice { CompanyId = companyId, ClientId = clientId, DivisionId = divId, InvoiceNumber = num, Date = Date(h, "IssueDate") ?? DateTime.Today, Subtotal = total, GSTRate = 0, GSTAmount = 0, GrandTotal = total, AmountInWords = "", IsMigrated = true, IsFbrExcluded = true, ExternalRef = $"mgr-sinv:{key}", Items = items });
+                    var invPo = Cf(h, poFieldGuidsForInv);
+                    _db.Invoices.Add(new Invoice { CompanyId = companyId, ClientId = clientId, DivisionId = divId, InvoiceNumber = num, Date = Date(h, "IssueDate") ?? DateTime.Today, Subtotal = total, GSTRate = 0, GSTAmount = 0, GrandTotal = total, AmountInWords = "", PoNumber = invPo, IsMigrated = true, IsFbrExcluded = true, ExternalRef = $"mgr-sinv:{key}", Items = items });
+                    if (invPo != null) invWithPo++;
                     nInv++;
                 }
                 await _db.SaveChangesAsync();
@@ -323,6 +463,27 @@ namespace MyApp.Api.Services.Implementations
                     if (inv.ExternalRef?.StartsWith("mgr-sinv:") == true) invoiceIdByGuid[inv.ExternalRef["mgr-sinv:".Length..]] = inv.Id;
                 _db.ChangeTracker.Clear();
                 report.Created["salesInvoices"] = nInv;
+                if (invWithPo > 0) Note($"carried the Manager PO number onto {invWithPo} sales invoice(s).");
+
+                // Mark challans that were invoiced in Manager as Billed. Manager's
+                // delivery note → invoice link (SalesInvoice guid) becomes the app's
+                // challan.InvoiceId + Status "Invoiced" (shown as "Billed"); challans
+                // whose invoice wasn't imported stay "Imported". Mirrors the native
+                // bill flow (InvoiceService sets the same two fields).
+                if (challanInvGuidById.Count > 0)
+                {
+                    var billMap = new Dictionary<int, int>();   // challanId → invoiceId
+                    foreach (var (cid, ig) in challanInvGuidById)
+                        if (invoiceIdByGuid.TryGetValue(ig, out var invId)) billMap[cid] = invId;
+                    if (billMap.Count > 0)
+                    {
+                        var challans = await _db.DeliveryChallans.Where(c => c.CompanyId == companyId).ToListAsync();
+                        foreach (var c in challans)
+                            if (billMap.TryGetValue(c.Id, out var invId)) { c.Status = "Invoiced"; c.InvoiceId = invId; }
+                        await _db.SaveChangesAsync(); _db.ChangeTracker.Clear();
+                    }
+                    Note($"marked {billMap.Count} imported challan(s) as Billed (linked to their Manager invoice); {challanInvGuidById.Count - billMap.Count} referenced an invoice not in the export.");
+                }
 
                 // ── Purchase bills ──────────────────────────────────────────────
                 var billIdByGuid = new Dictionary<string, int>();
@@ -763,12 +924,14 @@ namespace MyApp.Api.Services.Implementations
             await _db.PaymentAllocations.Where(a => a.Payment.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.Payments.Where(p => p.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.WithholdingTaxReceipts.Where(w => w.CompanyId == companyId).ExecuteDeleteAsync();
+            // Challans reference Invoices (challan.InvoiceId, set on billed imports) —
+            // delete challans BEFORE invoices so that FK doesn't block the invoice wipe.
+            await _db.DeliveryItems.Where(di => di.DeliveryChallan!.CompanyId == companyId).ExecuteDeleteAsync();
+            await _db.DeliveryChallans.Where(c => c.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.InvoiceItems.Where(ii => ii.Invoice!.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.Invoices.Where(i => i.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.PurchaseItems.Where(pi => pi.PurchaseBill!.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.PurchaseBills.Where(p => p.CompanyId == companyId).ExecuteDeleteAsync();
-            await _db.DeliveryItems.Where(di => di.DeliveryChallan!.CompanyId == companyId).ExecuteDeleteAsync();
-            await _db.DeliveryChallans.Where(c => c.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.SalesQuoteItems.Where(qi => qi.SalesQuote!.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.SalesQuotes.Where(q => q.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.SalesOrderItems.Where(oi => oi.SalesOrder!.CompanyId == companyId).ExecuteDeleteAsync();
@@ -781,6 +944,11 @@ namespace MyApp.Api.Services.Implementations
             await _db.NonInventoryItems.Where(n => n.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.Accounts.Where(a => a.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.AccountGroups.Where(g => g.CompanyId == companyId).ExecuteDeleteAsync();
+            // Division-scoped print templates block the Divisions delete
+            // (PrintTemplate -> Division is NoAction) and would be orphaned by the
+            // divisions recreated on reload anyway. Company-level templates
+            // (DivisionId null) don't reference a division, so they survive.
+            await _db.PrintTemplates.Where(pt => pt.CompanyId == companyId && pt.DivisionId != null).ExecuteDeleteAsync();
             await _db.Divisions.Where(d => d.CompanyId == companyId).ExecuteDeleteAsync();
         }
     }

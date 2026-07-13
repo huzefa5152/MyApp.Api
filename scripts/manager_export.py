@@ -38,6 +38,9 @@ LIST_ENTITIES = [
     "sales-quotes", "sales-orders", "delivery-notes", "sales-invoices", "credit-notes",
     "purchase-invoices", "debit-notes", "receipts", "payments",
     "inter-account-transfers", "withholding-tax-receipts", "journal-entries",
+    # Custom-field DEFINITIONS (name/placement per guid). Needed so the importer
+    # can resolve which per-document CustomFields guid holds the PO number, etc.
+    "classic-custom-fields",
 ]
 # entity -> its detail (-form) endpoint. Only these get a per-record detail pull.
 DETAIL_FORM = {
