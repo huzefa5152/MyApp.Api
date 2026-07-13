@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   MdAdd, MdDelete, MdChevronLeft, MdChevronRight, MdSwapHoriz, MdSearch,
   MdBusiness, MdCalendarToday, MdLabel, MdNotes, MdEdit, MdClose,
-  MdArrowForward, MdPrint, MdPictureAsPdf,
+  MdArrowForward, MdPrint, MdPictureAsPdf, MdVisibility,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -55,6 +55,7 @@ export default function TransfersPage() {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);   // transfer being edited
+  const [viewing, setViewing] = useState(null);   // transfer being viewed (read-only)
 
   const companyId = selectedCompany?.id;
 
@@ -196,6 +197,7 @@ export default function TransfersPage() {
                   canPrint={canPrintTransfer}
                   tplPicker={tplPicker}
                   exportingId={exportingId}
+                  onView={() => setViewing(t)}
                   onEdit={() => setEditing(t)}
                   onDelete={() => handleDelete(t)}
                   onPrint={() => handlePrint(t)}
@@ -235,12 +237,21 @@ export default function TransfersPage() {
           onSaved={() => { setEditing(null); fetchRows(page); notify("Transfer updated.", "success"); }}
         />
       )}
+
+      {viewing && (
+        <ViewTransferModal
+          t={viewing}
+          canEdit={canCreate}
+          onEdit={() => { setViewing(null); setEditing(viewing); }}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </div>
   );
 }
 
 /** One transfer card: reference, amount, from → to, date/division meta, description. */
-function TransferCard({ t, canEdit, canDelete, canPrint, tplPicker, exportingId, onEdit, onDelete, onPrint, onExportPdf }) {
+function TransferCard({ t, canEdit, canDelete, canPrint, tplPicker, exportingId, onView, onEdit, onDelete, onPrint, onExportPdf }) {
   const noTpl = tplPicker?.noTemplate;
   const noTplReason = tplPicker?.noTemplateReason;
   return (
@@ -276,8 +287,13 @@ function TransferCard({ t, canEdit, canDelete, canPrint, tplPicker, exportingId,
           </div>
         )}
 
-        {(canEdit || canDelete || canPrint) && (
+        {(onView || canEdit || canDelete || canPrint) && (
           <div style={st.cardActions}>
+            {onView && (
+              <button style={st.viewBtn} onClick={onView} title="View transfer">
+                <MdVisibility size={16} /> View
+              </button>
+            )}
             {canPrint && (
               <button
                 style={{ ...st.printBtn, ...(noTpl ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
@@ -310,6 +326,53 @@ function TransferCard({ t, canEdit, canDelete, canPrint, tplPicker, exportingId,
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Read-only detail view of an inter-account transfer. Mirrors the reference
+ * product's "View" action — full details without the edit affordances.
+ */
+function ViewTransferModal({ t, canEdit, onEdit, onClose }) {
+  const Row = ({ label, children }) => (
+    <div style={st.vRow}>
+      <span style={st.vLabel}>{label}</span>
+      <span style={st.vValue}>{children}</span>
+    </div>
+  );
+  return (
+    <div style={formStyles.backdrop} onClick={onClose}>
+      <div style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
+        <div style={formStyles.header}>
+          <h3 style={formStyles.title}>Transfer {t.reference}</h3>
+          <button style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
+        </div>
+        <div style={formStyles.body}>
+          <div style={{ ...st.amount, color: accent, marginBottom: "1rem" }}>
+            <span style={st.rs}>Rs</span> {fmtMoney(t.amount)}
+          </div>
+          <div style={st.accountsRow}>
+            <span style={st.accountName}>{t.fromAccountName || "—"}</span>
+            <MdArrowForward size={16} style={{ color: accent, flexShrink: 0 }} />
+            <span style={st.accountName}>{t.toAccountName || "—"}</span>
+          </div>
+          <div style={{ marginTop: "1rem" }}>
+            <Row label="Reference">{t.reference}</Row>
+            <Row label="Date">{fmtDate(t.date)}</Row>
+            <Row label="From account">{t.fromAccountName || "—"}</Row>
+            <Row label="To account">{t.toAccountName || "—"}</Row>
+            <Row label="Amount">Rs {fmtMoney(t.amount)}</Row>
+            {t.divisionName && <Row label="Division">{t.divisionName}</Row>}
+            {t.description && <Row label="Description">{t.description}</Row>}
+            {t.createdAt && <Row label="Created">{fmtDate(t.createdAt)}</Row>}
+          </div>
+        </div>
+        <div style={st.viewFooter}>
+          <button type="button" style={st.editBtn} onClick={onClose}>Close</button>
+          {canEdit && <button type="button" style={st.viewBtn} onClick={onEdit}><MdEdit size={16} /> Edit</button>}
+        </div>
       </div>
     </div>
   );
@@ -514,6 +577,11 @@ const st = {
   descText: { overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" },
 
   cardActions: { display: "flex", justifyContent: "flex-end", gap: 6, marginTop: 10, flexWrap: "wrap" },
+  viewBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.blue, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
+  viewFooter: { display: "flex", justifyContent: "flex-end", gap: "0.6rem", flexWrap: "wrap", padding: "0.9rem clamp(1rem, 2vw, 1.5rem)", borderTop: `1px solid ${colors.cardBorder}`, flexShrink: 0 },
+  vRow: { display: "flex", gap: "0.75rem", padding: "0.4rem 0", borderBottom: `1px solid ${colors.cardBorder}` },
+  vLabel: { flex: "0 0 130px", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary },
+  vValue: { flex: 1, fontSize: "0.9rem", color: colors.textPrimary, wordBreak: "break-word" },
   printBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#4527a0", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
   pdfBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#ad1457", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
   editBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#e65100", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
