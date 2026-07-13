@@ -5,7 +5,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import { colors, formStyles, modalSizes, dropdownStyles } from "../theme";
 import { getBankCashAccounts, createAccount, getCoaTree } from "../api/accountApi";
-import { getGlStatus } from "../api/accountingApi";
+import { getGlStatus, getBankReconSummary } from "../api/accountingApi";
 import AccountLedgerDialog from "../Components/AccountLedgerDialog";
 import DivisionSelect from "../Components/DivisionSelect";
 
@@ -41,6 +41,7 @@ export default function BankCashAccountsPage() {
   const canView = has("accounting.coa.view");
   const canManage = has("accounting.coa.manage");
   const canViewDivisions = has("divisions.manage.view");
+  const canReconcile = has("accounting.reconciliation.view");
   const companyId = selectedCompany?.id;
 
   const [accounts, setAccounts] = useState([]);
@@ -55,17 +56,27 @@ export default function BankCashAccountsPage() {
     if (!companyId) { setAccounts([]); setAssetGroups([]); return; }
     setLoading(true);
     try {
+      // With reconciliation permission, the summary endpoint gives actual +
+      // cleared + pending in one call; otherwise fall back to the plain
+      // bank/cash list (actual balance only).
       const [bankRes, treeRes, statusRes] = await Promise.all([
-        getBankCashAccounts(companyId),
+        canReconcile ? getBankReconSummary(companyId) : getBankCashAccounts(companyId),
         getCoaTree(companyId).catch(() => null),
         getGlStatus(companyId).catch(() => null),
       ]);
-      setAccounts(bankRes.data || []);
+      const rows = (bankRes.data || []).map((r) => canReconcile
+        ? {
+            id: r.accountId, name: r.name, code: r.code, balance: r.actualBalance,
+            clearedBalance: r.clearedBalance, pendingDeposits: r.pendingDeposits,
+            pendingWithdrawals: r.pendingWithdrawals,
+          }
+        : { id: r.id, name: r.name, code: r.code, balance: r.balance, accountGroupId: r.accountGroupId });
+      setAccounts(rows);
       setAssetGroups(flattenGroups(treeRes?.data?.balanceSheet));
       setGlOff(statusRes?.data ? statusRes.data.enabled === false : false);
     } catch { setAccounts([]); }
     finally { setLoading(false); }
-  }, [companyId]);
+  }, [companyId, canReconcile]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -146,25 +157,25 @@ export default function BankCashAccountsPage() {
             <thead>
               <tr>
                 <th style={st.th}>Name</th>
-                <th style={{ ...st.th, width: 110 }}>Code</th>
+                <th style={{ ...st.th, width: 100 }}>Code</th>
+                {canReconcile && <th style={{ ...st.th, textAlign: "right" }}>Cleared</th>}
+                {canReconcile && <th style={{ ...st.th, textAlign: "right" }}>Pending In</th>}
+                {canReconcile && <th style={{ ...st.th, textAlign: "right" }}>Pending Out</th>}
                 <th style={{ ...st.th, textAlign: "right" }}>Actual Balance</th>
-                <th style={{ ...st.th, width: 90, textAlign: "center" }}>Ledger</th>
+                <th style={{ ...st.th, width: 80, textAlign: "center" }}>Ledger</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((a) => (
                 <tr key={a.id} style={st.tr} onClick={() => setLedgerAccount({ id: a.id, name: a.name, code: a.code })} title="View transactions">
-                  <td style={st.td}>
-                    <span style={st.accName}>{a.name}</span>
-                  </td>
+                  <td style={st.td}><span style={st.accName}>{a.name}</span></td>
                   <td style={st.td}>{a.code ? <span style={st.code}>{a.code}</span> : <span style={st.muted}>—</span>}</td>
+                  {canReconcile && <td style={{ ...st.td, textAlign: "right", color: (Number(a.clearedBalance) || 0) < 0 ? "#b71c1c" : colors.textSecondary, whiteSpace: "nowrap" }}>{money(a.clearedBalance)}</td>}
+                  {canReconcile && <td style={{ ...st.td, textAlign: "right", color: a.pendingDeposits ? "#1b7a3d" : colors.textSecondary, whiteSpace: "nowrap" }}>{a.pendingDeposits ? money(a.pendingDeposits) : "—"}</td>}
+                  {canReconcile && <td style={{ ...st.td, textAlign: "right", color: a.pendingWithdrawals ? "#b71c1c" : colors.textSecondary, whiteSpace: "nowrap" }}>{a.pendingWithdrawals ? money(a.pendingWithdrawals) : "—"}</td>}
                   <td style={{ ...st.td, textAlign: "right", fontWeight: 700, color: (Number(a.balance) || 0) < 0 ? "#b71c1c" : colors.textPrimary, whiteSpace: "nowrap" }}>{money(a.balance)}</td>
                   <td style={{ ...st.td, textAlign: "center" }}>
-                    <button
-                      style={st.iconBtn}
-                      title="View ledger"
-                      onClick={(e) => { e.stopPropagation(); setLedgerAccount({ id: a.id, name: a.name, code: a.code }); }}
-                    >
+                    <button style={st.iconBtn} title="View ledger" onClick={(e) => { e.stopPropagation(); setLedgerAccount({ id: a.id, name: a.name, code: a.code }); }}>
                       <MdVisibility size={17} />
                     </button>
                   </td>
@@ -174,6 +185,9 @@ export default function BankCashAccountsPage() {
             <tfoot>
               <tr>
                 <td style={st.footTd} colSpan={2}>{filtered.length} account{filtered.length === 1 ? "" : "s"}</td>
+                {canReconcile && <td style={{ ...st.footTd, textAlign: "right", fontWeight: 800, whiteSpace: "nowrap" }}>{money(filtered.reduce((s, a) => s + (Number(a.clearedBalance) || 0), 0))}</td>}
+                {canReconcile && <td style={{ ...st.footTd, textAlign: "right", fontWeight: 800, whiteSpace: "nowrap" }}>{money(filtered.reduce((s, a) => s + (Number(a.pendingDeposits) || 0), 0))}</td>}
+                {canReconcile && <td style={{ ...st.footTd, textAlign: "right", fontWeight: 800, whiteSpace: "nowrap" }}>{money(filtered.reduce((s, a) => s + (Number(a.pendingWithdrawals) || 0), 0))}</td>}
                 <td style={{ ...st.footTd, textAlign: "right", fontWeight: 800, whiteSpace: "nowrap" }}>{money(total)}</td>
                 <td style={st.footTd} />
               </tr>

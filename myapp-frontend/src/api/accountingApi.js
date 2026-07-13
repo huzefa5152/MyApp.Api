@@ -43,6 +43,18 @@ export const getTransfer = (id) => httpClient.get(`/account-transfers/${id}`);
 export const getTransferPrintData = (id) =>
   httpClient.get(`/account-transfers/${id}/print`);
 
+// ── Bank reconciliation (BANK_RECONCILIATION_DESIGN.md) ──────────────────────
+// Per-account actual/cleared/pending summary + cleared-state toggles. Toggling
+// cleared is pure metadata — it never posts to the GL.
+export const getBankReconSummary = (companyId) =>
+  httpClient.get(`/bank-reconciliation/company/${companyId}/summary`);
+
+export const setPaymentCleared = (paymentId, cleared, clearedDate = null) =>
+  httpClient.post(`/bank-reconciliation/payment/${paymentId}/cleared`, { cleared, clearedDate });
+
+export const setTransferCleared = (transferId, cleared, clearedDate = null) =>
+  httpClient.post(`/bank-reconciliation/transfer/${transferId}/cleared`, { cleared, clearedDate });
+
 export const createTransfer = (companyId, payload) =>
   httpClient.post(`/account-transfers/company/${companyId}`, payload);
 

@@ -150,6 +150,8 @@ namespace MyApp.Api.Helpers
             new("accounting.transfers.create", "Accounting", "Account Transfers", "Create", "Record and edit inter-account transfers"),
             new("accounting.transfers.delete", "Accounting", "Account Transfers", "Delete", "Delete inter-account transfers"),
             new("accounting.transfers.print",  "Accounting", "Account Transfers", "Print",  "Print or download a transfer advice"),
+            new("accounting.reconciliation.view",   "Accounting", "Bank Reconciliation", "View",   "View bank/cash account balances and reconciliation status"),
+            new("accounting.reconciliation.manage", "Accounting", "Bank Reconciliation", "Manage", "Mark transactions cleared and reconcile a bank statement"),
             new("accounting.gl.manage",       "Accounting", "General Ledger", "Manage", "Enable GL posting, run backfill/rebuild and set the lock date"),
             new("accounting.reports.view",    "Accounting", "Reports", "View", "View trial balance and AR/AP aging reports"),
             new("accounting.dashboard.view",  "Accounting", "Dashboard", "View", "View the accounting summary dashboard"),

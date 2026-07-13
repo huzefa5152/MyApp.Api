@@ -279,6 +279,7 @@ builder.Services.AddScoped<IPostingService, PostingService>();
 builder.Services.AddScoped<IGeneralLedgerService, GeneralLedgerService>();
 builder.Services.AddScoped<IJournalEntryService, JournalEntryService>();
 builder.Services.AddScoped<IAccountTransferService, AccountTransferService>();
+builder.Services.AddScoped<IBankReconciliationService, BankReconciliationService>();
 builder.Services.AddScoped<ILegacyImportService, LegacyImportService>();
 builder.Services.AddScoped<IManagerImportService, ManagerImportService>();
 builder.Services.AddScoped<IClientService, ClientService>();
