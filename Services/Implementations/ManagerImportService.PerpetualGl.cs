@@ -124,6 +124,12 @@ namespace MyApp.Api.Services.Implementations
                 await _db.JournalLines.Where(l => l.JournalEntry.CompanyId == companyId).ExecuteDeleteAsync();
                 await _db.JournalEntries.Where(e => e.CompanyId == companyId).ExecuteDeleteAsync();
                 await _db.AccountTransfers.Where(t => t.CompanyId == companyId).ExecuteDeleteAsync();
+                // Unmap non-inventory items from the accounts about to be dropped
+                // (the FKs are NoAction, so the account wipe would otherwise fail).
+                // They're re-wired after the new CoA is built (see below).
+                await _db.NonInventoryItems.Where(n => n.CompanyId == companyId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(n => n.SaleAccountId, (int?)null)
+                                              .SetProperty(n => n.PurchaseAccountId, (int?)null));
                 await _db.Accounts.Where(a => a.CompanyId == companyId).ExecuteDeleteAsync();
                 await _db.AccountGroups.Where(g => g.CompanyId == companyId).ExecuteDeleteAsync();
 
@@ -195,6 +201,27 @@ namespace MyApp.Api.Services.Implementations
                 int suspenseId = acctId.TryGetValue(coaGuidByName.GetValueOrDefault("Suspense") ?? "", out var sid) ? sid
                     : await _db.Accounts.Where(a => a.CompanyId == companyId && a.ControlType == ControlType.Suspense).Select(a => a.Id).FirstAsync();
                 int Acct(string? guid) => guid != null && acctId.TryGetValue(guid, out var id) ? id : suspenseId;
+
+                // ── Wire Non-Inventory Item masters to their mapped accounts ──
+                // The masters were created during document import (RunAsync) with
+                // null account FKs (the CoA didn't exist yet). Now that the
+                // accounts do, resolve each item's Manager sale/purchase account
+                // GUID (from noninv-resolved) → the created account. Matched by the
+                // mgr-niitem:{guid} ExternalRef stamped at import. Unmapped → null
+                // (posting falls back to Suspense).
+                int niWired = 0;
+                var niMasters = await _db.NonInventoryItems
+                    .Where(n => n.CompanyId == companyId && n.ExternalRef != null).ToListAsync();
+                foreach (var ni in niMasters)
+                {
+                    if (ni.ExternalRef?.StartsWith("mgr-niitem:") != true) continue;
+                    var guid = ni.ExternalRef["mgr-niitem:".Length..];
+                    int? sale = noninvSale.TryGetValue(guid, out var sg) && sg != null && acctId.TryGetValue(sg, out var sid2) ? sid2 : (int?)null;
+                    int? purch = noninvPurch.TryGetValue(guid, out var pg) && pg != null && acctId.TryGetValue(pg, out var pid2) ? pid2 : (int?)null;
+                    if (ni.SaleAccountId != sale || ni.PurchaseAccountId != purch) { ni.SaleAccountId = sale; ni.PurchaseAccountId = purch; niWired++; }
+                }
+                if (niWired > 0) { await _db.SaveChangesAsync(); _db.ChangeTracker.Clear(); }
+                report.Created["nonInventoryItemsWired"] = niWired;
 
                 string? arGuid = coaGuidByName.GetValueOrDefault("Accounts receivable");
                 string? apGuid = coaGuidByName.GetValueOrDefault("Accounts payable");

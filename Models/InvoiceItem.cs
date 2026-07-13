@@ -25,6 +25,15 @@ namespace MyApp.Api.Models
         /// </summary>
         public int? ItemTypeId { get; set; }
 
+        /// <summary>
+        /// Optional link to a per-company <see cref="NonInventoryItem"/> (a GL
+        /// account shortcut like "Freight Charges" or "Discount"). A line has
+        /// AT MOST ONE of <see cref="ItemTypeId"/> (product/inventory/FBR) or
+        /// this (posts to a mapped account, moves no stock). Never both — the
+        /// guard lives in AppDbContext + the line services.
+        /// </summary>
+        public int? NonInventoryItemId { get; set; }
+
         public string ItemTypeName { get; set; } = "";
         public string Description { get; set; } = "";
         /// <summary>
@@ -73,6 +82,7 @@ namespace MyApp.Api.Models
         public Invoice Invoice { get; set; } = null!;
         public DeliveryItem? DeliveryItem { get; set; }
         public ItemType? ItemType { get; set; }
+        public NonInventoryItem? NonInventoryItem { get; set; }
         /// <summary>
         /// Optional dual-book overlay — when present, FBR submission and
         /// tax-claim math read the AdjustedXxx values instead of the ones

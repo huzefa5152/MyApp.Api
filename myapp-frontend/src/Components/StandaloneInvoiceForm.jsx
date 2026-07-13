@@ -4,6 +4,7 @@ import { createStandaloneInvoice } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { getItemTypes } from "../api/itemTypeApi";
+import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { getSalesOrdersForPicker, getSalesOrderInvoicePrefill } from "../api/salesOrderApi";
 import { formStyles, modalSizes } from "../theme";
 import { todayYmd } from "../utils/dateInput";
@@ -87,6 +88,9 @@ const blankRow = () => ({
   localId: Math.random().toString(36).slice(2, 10),
   itemTypeId: "",
   itemTypeName: "",       // mirrored from the picked ItemType for the read-only Description column
+  // Non-Inventory Item id (GL-account shortcut line: Freight / Discount / …).
+  // Mutually exclusive with itemTypeId — a line carries at most one.
+  nonInventoryItemId: "",
   // Free-text description used in Bills mode; picking an (optional)
   // Item Type seeds it when blank. In Invoices mode this stays empty
   // and the description derives from itemTypeName instead.
@@ -127,6 +131,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
   const [clients, setClients] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
+  const [nonInvItems, setNonInvItems] = useState([]);
   const [scenarios, setScenarios] = useState([]);
 
   const [selectedClientId, setSelectedClientId] = useState("");
@@ -219,6 +224,13 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       .then((items) => setSalesOrders(items))
       .catch(() => setSalesOrders([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId]);
+
+  // Per-company Non-Inventory Items (GL-account shortcut lines: Freight,
+  // Discount, …). A company with GL off / no items resolves to [] silently.
+  useEffect(() => {
+    if (!companyId) { setNonInvItems([]); return; }
+    getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
   }, [companyId]);
 
   // Picker options — narrowed to the form's selected division when one is
@@ -397,8 +409,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
   const handleItemTypePick = (localId, picked) => {
     if (!picked) {
+      // Clearing the item type also drops any non-inv binding (mutually exclusive).
       updateRow(localId, {
-        itemTypeId: "", itemTypeName: "", hsCode: "", uom: "", fbrUOMId: null, saleType: "",
+        itemTypeId: "", itemTypeName: "", hsCode: "", uom: "", fbrUOMId: null, saleType: "", nonInventoryItemId: "",
       });
       return;
     }
@@ -412,10 +425,31 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         uom: picked.uom || "",
         fbrUOMId: picked.fbrUOMId || null,
         saleType: picked.saleType || "",
+        // Picking an item type clears any non-inventory selection.
+        nonInventoryItemId: "",
         // Bills mode types the description directly — seed it from the
         // picked type's name only when the operator hasn't typed one yet.
         description: billsMode && !r.description?.trim() ? picked.name || "" : r.description,
       };
+    }));
+  };
+
+  // Non-Inventory pick — mutually exclusive with an item type. Clears the
+  // item-type binding + its FBR fields, records the non-inv id, and prefills
+  // description / UOM / sale price only when those fields are still empty.
+  const handleNonInventoryPick = (localId, n) => {
+    if (!n) { updateRow(localId, { nonInventoryItemId: "" }); return; }
+    setRows((prev) => prev.map((r) => {
+      if (r.localId !== localId) return r;
+      const next = {
+        ...r,
+        nonInventoryItemId: n.id,
+        itemTypeId: "", itemTypeName: "", hsCode: "", fbrUOMId: null, saleType: "",
+      };
+      if (!r.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
+      if (!r.uom?.trim()) next.uom = n.unitName || "";
+      if ((!r.unitPrice || Number(r.unitPrice) === 0) && n.defaultSalePrice != null) next.unitPrice = String(n.defaultSalePrice);
+      return next;
     }));
   };
 
@@ -434,6 +468,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         uom: picked.uom || "",
         fbrUOMId: picked.fbrUOMId || null,
         saleType: picked.saleType || "",
+        // Stamping an item type clears any non-inventory binding.
+        nonInventoryItemId: "",
         // Same Bills-mode seeding rule as the per-row pick.
         description: billsMode && !r.description?.trim() ? picked.name || "" : r.description,
       };
@@ -494,7 +530,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (billsMode) {
       if (!r.description?.trim()) errs.push("description");
     } else {
-      if (!r.itemTypeId) errs.push("itemType");
+      // A non-inventory line (Freight / Discount / …) legitimately has no
+      // item type / HS code — it's valid as long as it carries a non-inv id.
+      if (!r.itemTypeId && !r.nonInventoryItemId) errs.push("itemType");
     }
     const q = parseFloat(r.quantity);
     if (!(q > 0)) errs.push("qty>0");
@@ -541,11 +579,15 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           // Optional in Bills mode — when set, the backend re-derives
           // HS / UOM / Sale Type from the catalog for this line.
           itemTypeId: r.itemTypeId ? parseInt(r.itemTypeId) : null,
+          // Non-Inventory line (Freight / Discount / …) — mutually exclusive
+          // with itemTypeId; the backend sources GL accounts from it.
+          nonInventoryItemId: r.nonInventoryItemId ? parseInt(r.nonInventoryItemId) : null,
           // Description in Invoices mode is the item type's name (locked).
           // In Bills mode the operator types it directly into r.description
-          // (or an optional Item Type pick seeds it). Either way it lands
-          // on InvoiceItem.Description.
-          description: (billsMode ? r.description : r.itemTypeName)?.trim() || "",
+          // (or an optional Item Type pick seeds it). A non-inv line has no
+          // item type name, so fall back to its free-text description. Either
+          // way it lands on InvoiceItem.Description.
+          description: (billsMode ? r.description : (r.itemTypeName || r.description))?.trim() || "",
           quantity: parseFloat(r.quantity),
           uom: r.uom?.trim() || null,
           unitPrice: parseFloat(r.unitPrice),
@@ -1037,6 +1079,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       items={filteredItemTypes}
                                       value={r.itemTypeId}
                                       onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
+                                      nonInventoryItems={nonInvItems}
+                                      nonInventoryValue={r.nonInventoryItemId || ""}
+                                      onPickNonInventory={(n) => handleNonInventoryPick(r.localId, n)}
                                       placeholder={billsMode ? "Optional — pick from catalog…" : "Pick from your catalog…"}
                                       style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                     />
@@ -1058,11 +1103,16 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         multiline
                                       />
                                     </td>
-                                  ) : (
-                                    <td style={{ ...styles.unifiedTd, color: r.itemTypeName ? colors.textPrimary : colors.textSecondary, fontStyle: r.itemTypeName ? "normal" : "italic" }}>
-                                      {r.itemTypeName || "(pick an item type)"}
-                                    </td>
-                                  )}
+                                  ) : (() => {
+                                    // Invoices-mode description is read-only: the item type's
+                                    // name, or (for a non-inv charge line) its free-text description.
+                                    const display = r.itemTypeName || (r.nonInventoryItemId ? r.description : "");
+                                    return (
+                                      <td style={{ ...styles.unifiedTd, color: display ? colors.textPrimary : colors.textSecondary, fontStyle: display ? "normal" : "italic" }}>
+                                        {display || "(pick an item type)"}
+                                      </td>
+                                    );
+                                  })()}
                                   <td style={styles.unifiedTd}>
                                     <input
                                       type="number" min={0} step="any"

@@ -162,6 +162,20 @@ namespace MyApp.Api.Services.Implementations
             };
             var net = invoice.GrandTotal - invoice.GSTAmount;
 
+            // Non-inventory lines (Freight, Discount, …) split their net off the
+            // default Sales account onto their mapped SaleAccount (Suspense when
+            // unmapped/inactive). The remainder posts to Sales — the entry stays
+            // balanced because Σ(non-inv net) + salesNet == net.
+            var nonInvRaw = await (
+                from i in _context.InvoiceItems
+                where i.InvoiceId == invoice.Id && i.NonInventoryItemId != null
+                join n in _context.NonInventoryItems on i.NonInventoryItemId equals n.Id
+                group i.LineTotal by n.SaleAccountId into g
+                select new { AccountId = g.Key, Net = g.Sum() }).ToListAsync();
+            var nonInvByAccount = await ResolveNonInvNetAsync(
+                nonInvRaw.Select(x => (x.AccountId, x.Net)), accounts, invoice.CompanyId);
+            var salesNet = net - nonInvByAccount.Values.Sum();
+
             var lines = new List<JournalLine>();
             var arLine = new JournalLine
             {
@@ -175,8 +189,11 @@ namespace MyApp.Api.Services.Implementations
                 Description = label,
             };
             lines.Add(arLine);
-            AddLine(lines, sales.Id, debit: isCreditNote ? net : 0m,
-                credit: isCreditNote ? 0m : net, invoice.DivisionId, label);
+            AddLine(lines, sales.Id, debit: isCreditNote ? salesNet : 0m,
+                credit: isCreditNote ? 0m : salesNet, invoice.DivisionId, label);
+            foreach (var kv in nonInvByAccount)
+                AddLine(lines, kv.Key, debit: isCreditNote ? kv.Value : 0m,
+                    credit: isCreditNote ? 0m : kv.Value, invoice.DivisionId, label);
             if (outputTax != null)
                 AddLine(lines, outputTax.Id, debit: isCreditNote ? invoice.GSTAmount : 0m,
                     credit: isCreditNote ? 0m : invoice.GSTAmount, invoice.DivisionId, label);
@@ -206,8 +223,22 @@ namespace MyApp.Api.Services.Implementations
             var label = $"Bill #{bill.PurchaseBillNumber}";
             var net = bill.GrandTotal - bill.GSTAmount;
 
+            // Non-inventory lines split their net off the default Purchases
+            // account onto their mapped PurchaseAccount (Suspense when unmapped).
+            var nonInvRaw = await (
+                from p in _context.PurchaseItems
+                where p.PurchaseBillId == bill.Id && p.NonInventoryItemId != null
+                join n in _context.NonInventoryItems on p.NonInventoryItemId equals n.Id
+                group p.LineTotal by n.PurchaseAccountId into g
+                select new { AccountId = g.Key, Net = g.Sum() }).ToListAsync();
+            var nonInvByAccount = await ResolveNonInvNetAsync(
+                nonInvRaw.Select(x => (x.AccountId, x.Net)), accounts, bill.CompanyId);
+            var purchasesNet = net - nonInvByAccount.Values.Sum();
+
             var lines = new List<JournalLine>();
-            AddLine(lines, purchases.Id, debit: net, credit: 0m, bill.DivisionId, label);
+            AddLine(lines, purchases.Id, debit: purchasesNet, credit: 0m, bill.DivisionId, label);
+            foreach (var kv in nonInvByAccount)
+                AddLine(lines, kv.Key, debit: kv.Value, credit: 0m, bill.DivisionId, label);
             if (inputTax != null)
                 AddLine(lines, inputTax.Id, debit: bill.GSTAmount, credit: 0m, bill.DivisionId, label);
             lines.Add(new JournalLine
@@ -335,6 +366,25 @@ namespace MyApp.Api.Services.Implementations
             if (hit != null) return hit;
             _logger.LogWarning("Company {CompanyId} has no {Role} account — posting to Suspense.", companyId, roleName);
             return await SuspenseAsync(companyId, accounts);
+        }
+
+        /// <summary>Collapse a set of (mappedAccountId, net) pairs from a
+        /// document's non-inventory lines into accountId → net, resolving each
+        /// to an ACTIVE account of that company (unmapped / inactive / missing →
+        /// Suspense). Amounts on the same target account merge.</summary>
+        private async Task<Dictionary<int, decimal>> ResolveNonInvNetAsync(
+            IEnumerable<(int? AccountId, decimal Net)> raw, List<Account> accounts, int companyId)
+        {
+            var result = new Dictionary<int, decimal>();
+            Account? suspense = null;
+            foreach (var (accountId, net) in raw)
+            {
+                if (net == 0m) continue;
+                var target = accountId.HasValue ? accounts.FirstOrDefault(a => a.Id == accountId.Value) : null;
+                if (target == null) target = suspense ??= await SuspenseAsync(companyId, accounts);
+                result[target.Id] = result.GetValueOrDefault(target.Id) + net;
+            }
+            return result;
         }
 
         /// <summary>Sales income: seed:sales → an account literally named

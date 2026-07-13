@@ -198,6 +198,45 @@ namespace MyApp.Api.Services.Implementations
                     if (row.ExternalRef?.StartsWith("mgr-supp:") == true) supplierIdByGuid[row.ExternalRef["mgr-supp:".Length..]] = row.Id;
                 report.Created["clients"] = newClients; report.Created["suppliers"] = newSuppliers;
 
+                // ── Non-Inventory Items (GL-account shortcut lines: Freight,
+                // Discount, service fees) ────────────────────────────────────
+                // Created as per-company masters. Their sale/purchase account FKs
+                // are left null here (the chart of accounts doesn't exist until
+                // the perpetual GL build) and wired afterwards by
+                // BuildPerpetualGlAsync via the mgr-niitem:{guid} ExternalRef.
+                // Document lines whose Manager "Item" GUID matches one of these
+                // are linked below (NonInventoryItemId) instead of becoming
+                // free-text lines — faithful to Manager's Freight/Discount lines.
+                var niIdByGuid = new Dictionary<string, int>();
+                int newNonInv = 0;
+                foreach (var ni in Rows("non-inventory-items", false))
+                {
+                    var key = Str(ni, "key") ?? Str(ni, "Key");
+                    if (key == null) continue;
+                    var er = $"mgr-niitem:{key}";
+                    var existing = await _db.NonInventoryItems.FirstOrDefaultAsync(n => n.CompanyId == companyId && n.ExternalRef == er);
+                    if (existing == null)
+                    {
+                        existing = new NonInventoryItem
+                        {
+                            CompanyId = companyId,
+                            // Manager's non-inventory-items summary carries the
+                            // display name in "itemName" (not "name"/"Name").
+                            Name = (Str(ni, "itemName") ?? Str(ni, "ItemName") ?? Str(ni, "name") ?? Str(ni, "Name") ?? "(unnamed)").Trim(),
+                            Code = Str(ni, "code") ?? Str(ni, "Code"),
+                            UnitName = Str(ni, "unitName") ?? Str(ni, "UnitName"),
+                            IsActive = true,
+                            ExternalRef = er,
+                        };
+                        _db.NonInventoryItems.Add(existing);
+                        await _db.SaveChangesAsync();
+                        newNonInv++;
+                    }
+                    niIdByGuid[key] = existing.Id;
+                }
+                _db.ChangeTracker.Clear();
+                report.Created["nonInventoryItems"] = newNonInv;
+
                 var invAmountByGuid = Rows("sales-invoices", false).ToDictionary(e => Str(e, "key")!, e => (total: Money(e, "invoiceAmount"), balance: Money(e, "balanceDue")));
                 var billAmountByGuid = Rows("purchase-invoices", false).ToDictionary(e => Str(e, "key")!, e => (total: Money(e, "invoiceAmount"), balance: Money(e, "balanceDue")));
 
@@ -214,6 +253,9 @@ namespace MyApp.Api.Services.Implementations
                 (decimal qty, decimal price, string desc, string uom) Line(JsonElement ln, string priceProp)
                     => (ln.TryGetProperty("Qty", out var q) && q.ValueKind == JsonValueKind.Number ? q.GetDecimal() : 0m,
                         Money(ln, priceProp), (Str(ln, "LineDescription") ?? "").Trim(), Uom(ln));
+                // A line whose Manager "Item" GUID is one of the non-inventory
+                // items → link it (Freight/Discount/etc.), else null (product/free text).
+                int? NonInvId(JsonElement ln) => Str(ln, "Item") is { } g && niIdByGuid.TryGetValue(g, out var id) ? id : (int?)null;
 
                 // ── Sales quotes / orders / delivery notes ──────────────────────
                 int nQuote = 0;
@@ -223,7 +265,7 @@ namespace MyApp.Api.Services.Implementations
                     int num = Alloc("quote:0", RefNum(h));
                     var items = new List<SalesQuoteItem>();
                     if (h.TryGetProperty("Lines", out var L) && L.ValueKind == JsonValueKind.Array)
-                        foreach (var ln in L.EnumerateArray()) { var (qq, pp, dd, uu) = Line(ln, "SalesUnitPrice"); items.Add(new SalesQuoteItem { Description = dd, Quantity = qq, Unit = uu, UnitPrice = pp, LineTotal = Math.Round(qq * pp, 2) }); }
+                        foreach (var ln in L.EnumerateArray()) { var (qq, pp, dd, uu) = Line(ln, "SalesUnitPrice"); var niId = NonInvId(ln); var q = niId.HasValue && qq <= 0 ? 1m : qq; items.Add(new SalesQuoteItem { Description = dd, Quantity = q, Unit = uu, UnitPrice = pp, LineTotal = Math.Round(q * pp, 2), NonInventoryItemId = niId }); }
                     var sub = items.Sum(i => i.LineTotal);
                     _db.SalesQuotes.Add(new SalesQuote { CompanyId = companyId, DivisionId = null, ClientId = clientId, QuoteNumber = num, Date = Date(h, "IssueDate") ?? DateTime.Today, Subtotal = sub, GSTRate = 0, GSTAmount = 0, GrandTotal = sub, AmountInWords = "", Status = "Sent", Items = items });
                     nQuote++;
@@ -271,7 +313,7 @@ namespace MyApp.Api.Services.Implementations
                     var total = invAmountByGuid.TryGetValue(key, out var m) ? m.total : 0m;
                     var items = new List<InvoiceItem>();
                     if (h.TryGetProperty("Lines", out var L) && L.ValueKind == JsonValueKind.Array)
-                        foreach (var ln in L.EnumerateArray()) { var (qq, pp, dd, uu) = Line(ln, "SalesUnitPrice"); items.Add(new InvoiceItem { Description = dd, Quantity = qq, UOM = uu, UnitPrice = pp, LineTotal = Math.Round(qq * pp, 2) }); }
+                        foreach (var ln in L.EnumerateArray()) { var (qq, pp, dd, uu) = Line(ln, "SalesUnitPrice"); var niId = NonInvId(ln); var q = niId.HasValue && qq <= 0 ? 1m : qq; items.Add(new InvoiceItem { Description = dd, Quantity = q, UOM = uu, UnitPrice = pp, LineTotal = Math.Round(q * pp, 2), NonInventoryItemId = niId }); }
                     if (total <= 0) total = items.Sum(i => i.LineTotal);
                     _db.Invoices.Add(new Invoice { CompanyId = companyId, ClientId = clientId, DivisionId = divId, InvoiceNumber = num, Date = Date(h, "IssueDate") ?? DateTime.Today, Subtotal = total, GSTRate = 0, GSTAmount = 0, GrandTotal = total, AmountInWords = "", IsMigrated = true, IsFbrExcluded = true, ExternalRef = $"mgr-sinv:{key}", Items = items });
                     nInv++;
@@ -293,7 +335,7 @@ namespace MyApp.Api.Services.Implementations
                     var total = billAmountByGuid.TryGetValue(key, out var m) ? m.total : 0m;
                     var items = new List<PurchaseItem>();
                     if (h.TryGetProperty("Lines", out var L) && L.ValueKind == JsonValueKind.Array)
-                        foreach (var ln in L.EnumerateArray()) { var (qq, pp, dd, uu) = Line(ln, "PurchaseUnitPrice"); items.Add(new PurchaseItem { Description = dd, Quantity = qq, UOM = uu, UnitPrice = pp, LineTotal = Math.Round(qq * pp, 2) }); }
+                        foreach (var ln in L.EnumerateArray()) { var (qq, pp, dd, uu) = Line(ln, "PurchaseUnitPrice"); var niId = NonInvId(ln); var q = niId.HasValue && qq <= 0 ? 1m : qq; items.Add(new PurchaseItem { Description = dd, Quantity = q, UOM = uu, UnitPrice = pp, LineTotal = Math.Round(q * pp, 2), NonInventoryItemId = niId }); }
                     if (total <= 0) total = items.Sum(i => i.LineTotal);
                     _db.PurchaseBills.Add(new PurchaseBill { CompanyId = companyId, SupplierId = supplierId, PurchaseBillNumber = num, Date = Date(h, "IssueDate") ?? DateTime.Today, Subtotal = total, GSTRate = 0, GSTAmount = 0, GrandTotal = total, AmountInWords = "", IsMigrated = true, ExternalRef = $"mgr-pinv:{key}", Items = items });
                     nBill++;
@@ -318,7 +360,7 @@ namespace MyApp.Api.Services.Implementations
                         int num = Alloc($"note:{docType}:{divId ?? 0}", RefNum(h));
                         var items = new List<InvoiceItem>();
                         if (h.TryGetProperty("Lines", out var L) && L.ValueKind == JsonValueKind.Array)
-                            foreach (var ln in L.EnumerateArray()) { var (qq, pp, dd, uu) = Line(ln, "SalesUnitPrice"); var q = qq <= 0 ? 1m : qq; items.Add(new InvoiceItem { Description = dd, Quantity = q, UOM = uu, UnitPrice = pp, LineTotal = Math.Round(q * pp, 2) }); }
+                            foreach (var ln in L.EnumerateArray()) { var (qq, pp, dd, uu) = Line(ln, "SalesUnitPrice"); var q = qq <= 0 ? 1m : qq; items.Add(new InvoiceItem { Description = dd, Quantity = q, UOM = uu, UnitPrice = pp, LineTotal = Math.Round(q * pp, 2), NonInventoryItemId = NonInvId(ln) }); }
                         var total = items.Sum(i => i.LineTotal);
                         _db.Invoices.Add(new Invoice { CompanyId = companyId, ClientId = clientId, DivisionId = divId, InvoiceNumber = num, Date = Date(h, "IssueDate") ?? DateTime.Today, Subtotal = total, GSTRate = 0, GSTAmount = 0, GrandTotal = total, AmountPaid = total, AmountInWords = "", DocumentType = docType, OriginalInvoiceId = origId, IsMigrated = true, IsFbrExcluded = true, ExternalRef = $"{erPrefix}{key}", Items = items });
                         made++;
@@ -486,6 +528,12 @@ namespace MyApp.Api.Services.Implementations
                 await _db.JournalLines.Where(l => l.JournalEntry.CompanyId == companyId).ExecuteDeleteAsync();
                 await _db.JournalEntries.Where(e => e.CompanyId == companyId).ExecuteDeleteAsync();
                 await _db.AccountTransfers.Where(t => t.CompanyId == companyId).ExecuteDeleteAsync();
+                // Unmap non-inventory items from accounts about to be dropped
+                // (NoAction FKs would otherwise block the wipe). Snapshot mode
+                // leaves them unmapped (no perpetual GL to re-wire against).
+                await _db.NonInventoryItems.Where(n => n.CompanyId == companyId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(n => n.SaleAccountId, (int?)null)
+                                              .SetProperty(n => n.PurchaseAccountId, (int?)null));
                 await _db.Accounts.Where(a => a.CompanyId == companyId).ExecuteDeleteAsync();
                 await _db.AccountGroups.Where(g => g.CompanyId == companyId).ExecuteDeleteAsync();
 
@@ -727,6 +775,10 @@ namespace MyApp.Api.Services.Implementations
             await _db.SalesOrders.Where(o => o.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.Clients.Where(c => c.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.Suppliers.Where(s => s.CompanyId == companyId).ExecuteDeleteAsync();
+            // Non-inventory items reference Accounts (SetNull) and are referenced
+            // by the line items just deleted (Restrict) — remove them before the
+            // Accounts wipe below.
+            await _db.NonInventoryItems.Where(n => n.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.Accounts.Where(a => a.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.AccountGroups.Where(g => g.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.Divisions.Where(d => d.CompanyId == companyId).ExecuteDeleteAsync();

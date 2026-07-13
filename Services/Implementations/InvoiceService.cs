@@ -239,6 +239,8 @@ namespace MyApp.Api.Services.Implementations
                 DeliveryItemId = ii.DeliveryItemId,
                 ItemTypeId = ii.ItemTypeId,
                 ItemTypeName = ii.ItemType?.Name ?? ii.ItemTypeName,
+                NonInventoryItemId = ii.NonInventoryItemId,
+                NonInventoryItemName = ii.NonInventoryItem?.Name,
                 Description = ii.Description,
                 Quantity = ii.Quantity,
                 UOM = ii.UOM,
@@ -832,6 +834,7 @@ namespace MyApp.Api.Services.Implementations
             // and is already validated upstream).
             await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.UOM));
             await ValidateStandaloneItemDecimalQuantitiesAsync(dto.Items);
+            await ValidateNonInvLinesAsync(company, dto.Items.Select(i => i.NonInventoryItemId));
 
             // Preload referenced ItemTypes in a single round-trip
             var referencedTypeIds = dto.Items
@@ -857,6 +860,25 @@ namespace MyApp.Api.Services.Implementations
             var invoiceItems = new List<InvoiceItem>();
             foreach (var itemDto in dto.Items)
             {
+                // Non-inventory line (Freight/Discount): GL-account shortcut, no
+                // item type, no HS/UOM resolution, no FBR fields, no stock.
+                if (itemDto.NonInventoryItemId.HasValue)
+                {
+                    invoiceItems.Add(new InvoiceItem
+                    {
+                        DeliveryItemId = null,
+                        ItemTypeId = null,
+                        NonInventoryItemId = itemDto.NonInventoryItemId,
+                        ItemTypeName = "",
+                        Description = itemDto.Description ?? "",
+                        Quantity = itemDto.Quantity,
+                        UOM = itemDto.UOM ?? "",
+                        UnitPrice = itemDto.UnitPrice,
+                        LineTotal = itemDto.Quantity * itemDto.UnitPrice,
+                    });
+                    continue;
+                }
+
                 ItemType? itemType = null;
                 if (itemDto.ItemTypeId.HasValue)
                     typeMap.TryGetValue(itemDto.ItemTypeId.Value, out itemType);
@@ -1099,6 +1121,31 @@ namespace MyApp.Api.Services.Implementations
                         $"Quantity '{it.Quantity}' for unit '{it.UOM}' must be a whole number. " +
                         $"Enable decimal quantity for this unit on the Units admin page if fractions are allowed.");
             }
+        }
+
+        // Validate non-inventory line refs: (1) FBR guard — non-inv lines have no
+        // HS code so FBR line-based submission can't carry them; block them on
+        // FBR-enabled companies for phase 1 (migrated/FBR-off companies are fine).
+        // (2) cross-tenant link guard — the item must belong to this company.
+        private async Task ValidateNonInvLinesAsync(Company company, IEnumerable<int?> ids)
+        {
+            var wanted = ids.Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+            if (wanted.Count == 0) return;
+            if (company.FbrEnabled)
+                throw new InvalidOperationException(
+                    "Non-inventory items (Freight, Discount, …) aren't supported on FBR-enabled companies yet — an FBR line needs an HS code. Use a regular item type, or add non-inventory lines on an FBR-off company.");
+            var valid = await _context.NonInventoryItems.AsNoTracking()
+                .Where(n => n.CompanyId == company.Id && wanted.Contains(n.Id))
+                .Select(n => n.Id).ToListAsync();
+            if (wanted.Any(w => !valid.Contains(w)))
+                throw new InvalidOperationException("A selected non-inventory item does not belong to this company.");
+        }
+
+        private async Task ValidateNonInvLinesAsync(int companyId, IEnumerable<int?> ids)
+        {
+            if (!ids.Any(x => x.HasValue)) return;
+            var company = await _context.Companies.AsNoTracking().FirstAsync(c => c.Id == companyId);
+            await ValidateNonInvLinesAsync(company, ids);
         }
 
         public async Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto)

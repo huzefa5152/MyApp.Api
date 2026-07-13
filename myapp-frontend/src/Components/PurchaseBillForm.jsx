@@ -3,6 +3,7 @@ import { MdAdd, MdDelete, MdReceipt } from "react-icons/md";
 import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById } from "../api/purchaseBillApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getItemTypes } from "../api/itemTypeApi";
+import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { getPurchaseTemplate } from "../api/invoiceApi";
 import { getAllUnits } from "../api/unitsApi";
 import { formStyles } from "../theme";
@@ -33,6 +34,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const isFromOrders = Array.isArray(prefillItems) && prefillItems.length > 0;
   const [suppliers, setSuppliers] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
+  const [nonInvItems, setNonInvItems] = useState([]);
   // Units list — gates each row's quantity input on the picked UOM
   // (decimal allowed for KG/Liter/etc., integer-only for Pcs/SET/etc.),
   // same behaviour as the sales bill form.
@@ -59,7 +61,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
 
   function newRow() {
     return {
-      id: 0, itemTypeId: null, description: "", quantity: 1, unitPrice: 0,
+      id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unitPrice: 0,
       uom: "", hsCode: "", saleType: "",
       sourceInvoiceItemIds: [],
       // metadata used only when in against-sale mode (not sent to API)
@@ -93,6 +95,13 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     })();
   }, [companyId]);
 
+  // Per-company Non-Inventory Items (GL-account shortcut lines: Freight,
+  // Discount, …). A company with GL off / no items resolves to [] silently.
+  useEffect(() => {
+    if (!companyId) { setNonInvItems([]); return; }
+    getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
+  }, [companyId]);
+
   useEffect(() => {
     if (!isEdit) return;
     (async () => {
@@ -107,7 +116,8 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
         setPaymentTerms(data.paymentTerms || "");
         setPaymentMode(data.paymentMode || "");
         setItems((data.items || []).map(i => ({
-          id: i.id, itemTypeId: i.itemTypeId, description: i.description,
+          id: i.id, itemTypeId: i.itemTypeId, nonInventoryItemId: i.nonInventoryItemId ?? null,
+          description: i.description,
           quantity: i.quantity, unitPrice: i.unitPrice, uom: i.uom,
           hsCode: i.hsCode || "", saleType: i.saleType || "",
           sourceInvoiceItemIds: i.sourceInvoiceItemIds || [],
@@ -198,7 +208,8 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const pickItemType = (idx, newId, picked) => {
     setItems(prev => {
       const next = [...prev];
-      const r = { ...next[idx], itemTypeId: newId ? parseInt(newId) : null };
+      // Picking an item type is mutually exclusive with a non-inventory item.
+      const r = { ...next[idx], itemTypeId: newId ? parseInt(newId) : null, nonInventoryItemId: null };
       if (picked) {
         if (picked.uom) r.uom = picked.uom;
         if (picked.hsCode) r.hsCode = picked.hsCode;
@@ -206,6 +217,27 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
         if (!r.description?.trim() && picked.name) r.description = picked.name;
       } else {
         r.uom = ""; r.hsCode = ""; r.saleType = "";
+      }
+      next[idx] = r;
+      return next;
+    });
+  };
+
+  // Non-Inventory pick — mutually exclusive with an item type. Clears the
+  // item type + its FBR fields, records the non-inv id, and prefills
+  // description / UOM / purchase price only when those fields are empty.
+  const pickNonInventory = (idx, n) => {
+    setItems(prev => {
+      const next = [...prev];
+      const r = { ...next[idx] };
+      if (!n) {
+        r.nonInventoryItemId = null;
+      } else {
+        r.nonInventoryItemId = n.id;
+        r.itemTypeId = null; r.hsCode = ""; r.saleType = "";
+        if (!r.description?.trim()) r.description = n.defaultLineDescription || n.name || "";
+        if (!r.uom?.trim()) r.uom = n.unitName || "";
+        if ((!r.unitPrice || Number(r.unitPrice) === 0) && n.defaultPurchasePrice != null) r.unitPrice = n.defaultPurchasePrice;
       }
       next[idx] = r;
       return next;
@@ -244,6 +276,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
         items: items.map(i => ({
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
+          nonInventoryItemId: i.nonInventoryItemId || null,
           description: i.description?.trim(),
           // parseFloat preserves decimals (12.5 KG, 0.0004 Carat) — same as
           // the sales bill form; the server clamps/validates per UOM.
@@ -410,6 +443,9 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                               items={eligibleItemTypes}
                               value={it.itemTypeId || ""}
                               onChange={(newId, picked) => pickItemType(idx, newId, picked)}
+                              nonInventoryItems={nonInvItems}
+                              nonInventoryValue={it.nonInventoryItemId || ""}
+                              onPickNonInventory={(n) => pickNonInventory(idx, n)}
                               placeholder={isAgainstSale ? "— pick item with HS Code —" : "— optional —"}
                               style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem",
                                        ...(isAgainstSale && !it.itemTypeId ? { borderColor: "#dc3545" } : {}) }}

@@ -116,6 +116,10 @@ namespace MyApp.Api.DTOs
         /// <summary>FK to ItemType (FBR catalog entry) driving HS/UOM/Sale Type on this line.</summary>
         public int? ItemTypeId { get; set; }
         public string ItemTypeName { get; set; } = "";
+        /// <summary>FK to a per-company NonInventoryItem (GL-account shortcut). Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
+        /// <summary>Display name of the linked NonInventoryItem (read-only projection).</summary>
+        public string? NonInventoryItemName { get; set; }
         public string Description { get; set; } = "";
         // Decimal — see DeliveryItemDto.Quantity for the formatting contract.
         public decimal Quantity { get; set; }
@@ -195,6 +199,8 @@ namespace MyApp.Api.DTOs
         /// line (visible on the Invoices tab afterwards).
         /// </summary>
         public int? ItemTypeId { get; set; }
+        /// <summary>Optional NonInventoryItem link (GL-account shortcut line). Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
         /// <summary>Optional override of the delivery item's UOM (e.g. the FBR-matched UOM).</summary>
         public string? UOM { get; set; }
         public string? HSCode { get; set; }
@@ -250,6 +256,8 @@ namespace MyApp.Api.DTOs
         public decimal UnitPrice { get; set; }
         /// <summary>Optional ItemType (FBR catalog) link — when set, server re-derives HS / UOM / SaleType / FbrUOMId from the catalog.</summary>
         public int? ItemTypeId { get; set; }
+        /// <summary>Optional NonInventoryItem link (GL-account shortcut line, no stock/FBR). Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
         public string? HSCode { get; set; }
         public int? FbrUOMId { get; set; }
         public string? SaleType { get; set; }
@@ -389,6 +397,8 @@ namespace MyApp.Api.DTOs
         /// The UOM/HSCode/SaleType fields in this DTO are ignored when ItemTypeId is set.
         /// </summary>
         public int? ItemTypeId { get; set; }
+        /// <summary>Optional NonInventoryItem link (GL-account shortcut line). Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
         public string Description { get; set; } = "";
         // Decimal — see InvoiceItemDto.Quantity for the formatting contract.
         public decimal Quantity { get; set; }

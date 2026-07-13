@@ -20,6 +20,14 @@ namespace MyApp.Api.Models
         /// </summary>
         public int? ItemTypeId { get; set; }
 
+        /// <summary>
+        /// Optional link to a per-company <see cref="NonInventoryItem"/> (a GL
+        /// account shortcut like "Freight Charges"). A line has at most one of
+        /// <see cref="ItemTypeId"/> or this; a non-inventory line posts to the
+        /// item's PurchaseAccount and moves no stock. See <see cref="InvoiceItem"/>.
+        /// </summary>
+        public int? NonInventoryItemId { get; set; }
+
         public string ItemTypeName { get; set; } = "";
         public string Description { get; set; } = "";
         // Widened from int to decimal(18,4) so FBR Annexure-A imports
@@ -59,6 +67,7 @@ namespace MyApp.Api.Models
         public PurchaseBill PurchaseBill { get; set; } = null!;
         public GoodsReceiptItem? GoodsReceiptItem { get; set; }
         public ItemType? ItemType { get; set; }
+        public NonInventoryItem? NonInventoryItem { get; set; }
 
         /// <summary>
         /// Sale lines this purchase line covered (the "Purchase Against

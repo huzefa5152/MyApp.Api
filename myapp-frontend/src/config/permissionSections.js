@@ -84,6 +84,7 @@ export const PERMISSION_SECTIONS = [
       { key: "Clients" },
       { key: "Suppliers" },
       { key: "ItemTypes", label: "Item Types" },
+      { key: "NonInventoryItems", label: "Non-Inventory Items" },
       { key: "Configuration", label: "Lookups" },
       { key: "POFormats", label: "PO Formats" },
       { key: "PrintTemplates", label: "Print Templates" },

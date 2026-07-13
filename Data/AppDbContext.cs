@@ -88,6 +88,9 @@ namespace MyApp.Api.Data
         public DbSet<ItemDescription> ItemDescriptions { get; set; }
         public DbSet<Unit> Units { get; set; }
         public DbSet<ItemType> ItemTypes { get; set; }
+        // Per-company GL-account shortcut line items (Freight, Discount, …) —
+        // NOT stock, NOT FBR. Mirrors Manager.io's "Non-inventory Items".
+        public DbSet<NonInventoryItem> NonInventoryItems { get; set; }
         // Per-(company, item-type) inventory policy overrides + reorder level
         // (2026-07 inventory V2 redesign). ItemType is a global catalog with no
         // CompanyId, so per-company tracking policy must live here.
@@ -512,6 +515,63 @@ namespace MyApp.Api.Data
                 .HasIndex(it => new { it.Name, it.HSCode })
                 .IsUnique()
                 .HasFilter("[IsDeleted] = 0");
+
+            // ── Non-Inventory Items (per-company GL-account shortcut lines) ──
+            // Company Restrict (a company's non-inv items can't cascade-wipe).
+            // Both Account FKs are Restrict/NoAction: two SET NULL FKs from the
+            // same table to Accounts trip SQL Server's multiple-cascade-paths
+            // guard (1785). A mapped account therefore can't be deleted while a
+            // non-inv item references it — consistent with accounts carrying
+            // ledger history. Posting still falls back to Suspense when the FK is
+            // null (unmapped) or the account is inactive.
+            modelBuilder.Entity<NonInventoryItem>()
+                .HasOne(n => n.Company).WithMany()
+                .HasForeignKey(n => n.CompanyId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<NonInventoryItem>()
+                .HasOne(n => n.SaleAccount).WithMany()
+                .HasForeignKey(n => n.SaleAccountId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<NonInventoryItem>()
+                .HasOne(n => n.PurchaseAccount).WithMany()
+                .HasForeignKey(n => n.PurchaseAccountId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<NonInventoryItem>().Property(n => n.Name).HasMaxLength(150);
+            modelBuilder.Entity<NonInventoryItem>().Property(n => n.Code).HasMaxLength(60);
+            modelBuilder.Entity<NonInventoryItem>().Property(n => n.UnitName).HasMaxLength(50);
+            modelBuilder.Entity<NonInventoryItem>().Property(n => n.DefaultLineDescription).HasMaxLength(1000);
+            modelBuilder.Entity<NonInventoryItem>().Property(n => n.ExternalRef).HasMaxLength(80);
+            modelBuilder.Entity<NonInventoryItem>().Property(n => n.DefaultSalePrice).HasPrecision(18, 2);
+            modelBuilder.Entity<NonInventoryItem>().Property(n => n.DefaultPurchasePrice).HasPrecision(18, 2);
+            // One item per (company, name). Names don't collide across companies.
+            modelBuilder.Entity<NonInventoryItem>()
+                .HasIndex(n => new { n.CompanyId, n.Name }).IsUnique();
+
+            // Line → NonInventoryItem (optional, Restrict: a non-inv item with
+            // historical lines can't be hard-deleted — the service soft-disables
+            // via IsActive instead). Plus the "at most one of ItemType /
+            // NonInventoryItem per line" guard as a DB CHECK — defence in depth
+            // behind the service-layer validation.
+            modelBuilder.Entity<InvoiceItem>()
+                .HasOne(ii => ii.NonInventoryItem).WithMany()
+                .HasForeignKey(ii => ii.NonInventoryItemId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<InvoiceItem>().HasIndex(ii => ii.NonInventoryItemId);
+            modelBuilder.Entity<InvoiceItem>()
+                .ToTable(t => t.HasCheckConstraint("CK_InvoiceItem_OneItemRef",
+                    "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL"));
+
+            modelBuilder.Entity<PurchaseItem>()
+                .HasOne(pi => pi.NonInventoryItem).WithMany()
+                .HasForeignKey(pi => pi.NonInventoryItemId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<PurchaseItem>().HasIndex(pi => pi.NonInventoryItemId);
+            modelBuilder.Entity<PurchaseItem>()
+                .ToTable(t => t.HasCheckConstraint("CK_PurchaseItem_OneItemRef",
+                    "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL"));
+
+            modelBuilder.Entity<SalesQuoteItem>()
+                .HasOne(qi => qi.NonInventoryItem).WithMany()
+                .HasForeignKey(qi => qi.NonInventoryItemId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SalesQuoteItem>().HasIndex(qi => qi.NonInventoryItemId);
+            modelBuilder.Entity<SalesQuoteItem>()
+                .ToTable(t => t.HasCheckConstraint("CK_SalesQuoteItem_OneItemRef",
+                    "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL"));
 
             // PrintTemplate: multiple templates per (CompanyId, TemplateType), each
             // scoped to the company (DivisionId == null) or a division. Non-unique

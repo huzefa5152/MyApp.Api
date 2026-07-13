@@ -30,6 +30,7 @@ import TaxSheetPage from "./pages/TaxSheetPage";
 import ClientsPage from "./pages/ClientsPage";
 import SuppliersPage from "./pages/SuppliersPage";
 import ItemTypesPage from "./pages/ItemTypesPage";
+import NonInventoryItemsPage from "./pages/NonInventoryItemsPage";
 import UnitsPage from "./pages/UnitsPage";
 import POFormatsPage from "./pages/POFormatsPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -80,6 +81,7 @@ export default function App() {
           <Route path="/Clients/*" element={<ClientsPage />} />
           <Route path="/Suppliers/*" element={<SuppliersPage />} />
           <Route path="/item-types" element={<ItemTypesPage />} />
+          <Route path="/non-inventory-items" element={<NonInventoryItemsPage />} />
           <Route path="/units" element={<UnitsPage />} />
           <Route path="/po-formats" element={<POFormatsPage />} />
           <Route path="/challans" element={<ChallansPage />} />

@@ -65,6 +65,8 @@ namespace MyApp.Api.Services.Implementations
                 Id = i.Id,
                 ItemTypeId = i.ItemTypeId,
                 ItemTypeName = i.ItemType?.Name ?? i.ItemTypeName,
+                NonInventoryItemId = i.NonInventoryItemId,
+                NonInventoryItemName = i.NonInventoryItem?.Name,
                 Description = i.Description,
                 Quantity = i.Quantity,
                 UOM = i.UOM,
@@ -87,6 +89,19 @@ namespace MyApp.Api.Services.Implementations
                 .OrderBy(n => n)
                 .ToList() ?? new(),
         };
+
+        // Cross-tenant link guard: any non-inventory item referenced on a line
+        // must belong to this company. Throws on a foreign ref.
+        private async Task ValidateNonInvItemsAsync(int companyId, IEnumerable<int?> ids)
+        {
+            var wanted = ids.Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+            if (wanted.Count == 0) return;
+            var valid = await _context.NonInventoryItems.AsNoTracking()
+                .Where(n => n.CompanyId == companyId && wanted.Contains(n.Id))
+                .Select(n => n.Id).ToListAsync();
+            if (wanted.Any(w => !valid.Contains(w)))
+                throw new InvalidOperationException("A selected non-inventory item does not belong to this company.");
+        }
 
         public async Task<PagedResult<PurchaseBillDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
@@ -347,16 +362,20 @@ namespace MyApp.Api.Services.Implementations
                 .Where(it => chosenItemTypeIds.Contains(it.Id))
                 .ToDictionaryAsync(it => it.Id);
 
+            await ValidateNonInvItemsAsync(dto.CompanyId, dto.Items.Select(i => i.NonInventoryItemId));
+
             for (int idx = 0; idx < dto.Items.Count; idx++)
             {
                 var i = dto.Items[idx];
-                ItemType? itemType = i.ItemTypeId.HasValue
+                // A non-inventory line (Freight/Discount) has no item type / HS / stock.
+                bool isNonInv = i.NonInventoryItemId.HasValue;
+                ItemType? itemType = (!isNonInv && i.ItemTypeId.HasValue)
                     ? itemTypeMap.GetValueOrDefault(i.ItemTypeId.Value)
                     : null;
 
-                // HSCode gate for procurement-against-sale lines
+                // HSCode gate for procurement-against-sale lines (never a non-inv line).
                 bool isAgainstSale = (i.SourceInvoiceItemIds?.Count ?? 0) > 0;
-                if (isAgainstSale && string.IsNullOrWhiteSpace(itemType?.HSCode))
+                if (isAgainstSale && !isNonInv && string.IsNullOrWhiteSpace(itemType?.HSCode))
                 {
                     throw new InvalidOperationException(
                         $"Line {idx + 1}: pick an Item Type WITH HS Code — procurement against a sale bill must be FBR-compliant.");
@@ -364,18 +383,19 @@ namespace MyApp.Api.Services.Implementations
 
                 items.Add(new PurchaseItem
                 {
-                    ItemTypeId = i.ItemTypeId,
+                    ItemTypeId = isNonInv ? null : i.ItemTypeId,
+                    NonInventoryItemId = i.NonInventoryItemId,
                     ItemTypeName = itemType?.Name ?? "",
                     Description = i.Description?.Trim() ?? "",
                     Quantity = i.Quantity,
                     UOM = i.UOM ?? itemType?.UOM ?? "",
                     UnitPrice = i.UnitPrice,
                     LineTotal = Math.Round(i.Quantity * i.UnitPrice, 2),
-                    HSCode = i.HSCode ?? itemType?.HSCode,
-                    FbrUOMId = i.FbrUOMId ?? itemType?.FbrUOMId,
-                    SaleType = i.SaleType ?? itemType?.SaleType,
-                    RateId = i.RateId,
-                    FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
+                    HSCode = isNonInv ? null : (i.HSCode ?? itemType?.HSCode),
+                    FbrUOMId = isNonInv ? null : (i.FbrUOMId ?? itemType?.FbrUOMId),
+                    SaleType = isNonInv ? null : (i.SaleType ?? itemType?.SaleType),
+                    RateId = isNonInv ? null : i.RateId,
+                    FixedNotifiedValueOrRetailPrice = isNonInv ? null : i.FixedNotifiedValueOrRetailPrice,
                 });
             }
 
@@ -555,6 +575,8 @@ namespace MyApp.Api.Services.Implementations
                          || bill.ReconciliationStatus == "Disputed"))
                 bill.ReconciliationStatus = "Pending";
 
+            await ValidateNonInvItemsAsync(bill.CompanyId, dto.Items.Select(i => i.NonInventoryItemId));
+
             // Replace items wholesale (simpler than a diff, fine for v1)
             _context.PurchaseItems.RemoveRange(bill.Items);
             bill.Items.Clear();
@@ -562,23 +584,25 @@ namespace MyApp.Api.Services.Implementations
             var newItems = new List<PurchaseItem>();
             foreach (var i in dto.Items)
             {
-                ItemType? itemType = i.ItemTypeId.HasValue
+                bool isNonInv = i.NonInventoryItemId.HasValue;
+                ItemType? itemType = (!isNonInv && i.ItemTypeId.HasValue)
                     ? await _context.ItemTypes.FindAsync(i.ItemTypeId.Value)
                     : null;
                 var ni = new PurchaseItem
                 {
-                    ItemTypeId = i.ItemTypeId,
+                    ItemTypeId = isNonInv ? null : i.ItemTypeId,
+                    NonInventoryItemId = i.NonInventoryItemId,
                     ItemTypeName = itemType?.Name ?? "",
                     Description = i.Description?.Trim() ?? "",
                     Quantity = i.Quantity,
                     UOM = i.UOM ?? itemType?.UOM ?? "",
                     UnitPrice = i.UnitPrice,
                     LineTotal = Math.Round(i.Quantity * i.UnitPrice, 2),
-                    HSCode = i.HSCode ?? itemType?.HSCode,
-                    FbrUOMId = i.FbrUOMId ?? itemType?.FbrUOMId,
-                    SaleType = i.SaleType ?? itemType?.SaleType,
-                    RateId = i.RateId,
-                    FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
+                    HSCode = isNonInv ? null : (i.HSCode ?? itemType?.HSCode),
+                    FbrUOMId = isNonInv ? null : (i.FbrUOMId ?? itemType?.FbrUOMId),
+                    SaleType = isNonInv ? null : (i.SaleType ?? itemType?.SaleType),
+                    RateId = isNonInv ? null : i.RateId,
+                    FixedNotifiedValueOrRetailPrice = isNonInv ? null : i.FixedNotifiedValueOrRetailPrice,
                 };
                 newItems.Add(ni);
                 bill.Items.Add(ni);

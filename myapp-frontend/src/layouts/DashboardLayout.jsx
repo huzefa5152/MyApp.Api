@@ -163,6 +163,7 @@ export default function DashboardLayout() {
     "clients.manage.view",
     "suppliers.manage.view",
     "itemtypes.manage.view",
+    "noninventoryitems.list.view",
     "config.units.manage",
     "poformats.manage.view",
     "printtemplates.manage.update",
@@ -237,7 +238,7 @@ export default function DashboardLayout() {
     if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/bank-cash-accounts") || p.startsWith("/transfers") || p.startsWith("/journal-entries") || p.startsWith("/accounting/")) return "accounting";
     if (p.startsWith("/reports")) return "reports";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
-      || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
+      || p.startsWith("/item-types") || p.startsWith("/non-inventory-items") || p.startsWith("/units") || p.startsWith("/po-formats")
       || p.startsWith("/templates") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor")) return "configuration";
     if (p.startsWith("/users") || p.startsWith("/roles") || p.startsWith("/tenant-access") || p.startsWith("/audit-logs")) return "administration";
     return "main";
@@ -577,6 +578,12 @@ export default function DashboardLayout() {
                   <span>Item Types</span>
                 </NavLink>
               </Can>
+              <Can permission="noninventoryitems.list.view">
+                <NavLink to="/non-inventory-items" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdRequestQuote className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Non-Inventory Items</span>
+                </NavLink>
+              </Can>
               <Can permission="config.units.manage">
                 <NavLink to="/units" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdStraighten className="dl-subitem__icon" aria-hidden="true" />
@@ -776,6 +783,7 @@ function getBreadcrumb(pathname) {
     "/stock": "Purchases / Stock Dashboard",
     "/fbr-import/purchase": "Purchases / FBR Purchase Import",
     "/item-types": "Configuration / Item Types",
+    "/non-inventory-items": "Configuration / Non-Inventory Items",
     "/challans": "Sales / Delivery Challans",
     "/challans/import": "Sales / Import Challans",
     "/bills": "Sales / Bills",

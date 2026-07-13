@@ -14,6 +14,13 @@ namespace MyApp.Api.Models
         /// <summary>Optional link to the FBR-mapped product catalog entry.</summary>
         public int? ItemTypeId { get; set; }
 
+        /// <summary>
+        /// Optional link to a per-company <see cref="NonInventoryItem"/> (a GL
+        /// account shortcut like "Freight Charges"). At most one of
+        /// <see cref="ItemTypeId"/> or this is set. See <see cref="InvoiceItem"/>.
+        /// </summary>
+        public int? NonInventoryItemId { get; set; }
+
         public string Description { get; set; } = "";
         public decimal Quantity { get; set; }
         public string Unit { get; set; } = "";
@@ -25,5 +32,6 @@ namespace MyApp.Api.Models
         // Navigation
         public SalesQuote SalesQuote { get; set; } = null!;
         public ItemType? ItemType { get; set; }
+        public NonInventoryItem? NonInventoryItem { get; set; }
     }
 }

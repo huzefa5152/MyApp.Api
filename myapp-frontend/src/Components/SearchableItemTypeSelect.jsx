@@ -12,8 +12,19 @@ import { MdArrowDropDown, MdSearch, MdStar } from "react-icons/md";
  *   value      — currently selected item type id (or empty string for none)
  *   onChange   — (newId, pickedItemType) ⇒ void
  *   placeholder, style — passthroughs
+ *
+ * Non-inventory items (optional — Manager.io-style GL-account shortcut lines
+ * like Freight / Discount). When `nonInventoryItems` is non-empty the dropdown
+ * shows a separate "NON-INVENTORY" group; picking one calls `onPickNonInventory`
+ * instead of `onChange`. A line has at most one of an item type OR a non-inv item.
+ *   nonInventoryItems   — array of { id, name, code, unitName, defaultLineDescription, defaultSalePrice, defaultPurchasePrice }
+ *   nonInventoryValue   — currently selected non-inventory item id (or "")
+ *   onPickNonInventory  — (nonInvItem | null) ⇒ void
  */
-export default function SearchableItemTypeSelect({ items, value, onChange, placeholder, style, disabled = false }) {
+export default function SearchableItemTypeSelect({
+  items, value, onChange, placeholder, style, disabled = false,
+  nonInventoryItems = [], nonInventoryValue = "", onPickNonInventory,
+}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightIdx, setHighlightIdx] = useState(-1);
@@ -28,6 +39,12 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
   const selected = useMemo(
     () => (items || []).find((it) => String(it.id) === String(value)),
     [items, value]
+  );
+
+  // Non-inventory item selection (mutually exclusive with an item type).
+  const selectedNonInv = useMemo(
+    () => (nonInventoryItems || []).find((n) => String(n.id) === String(nonInventoryValue)),
+    [nonInventoryItems, nonInventoryValue]
   );
 
   // Sort:
@@ -112,14 +129,32 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
   }, [open]);
 
   const handlePick = (it) => {
+    // Picking an item type clears any non-inventory selection (mutually exclusive).
+    if (selectedNonInv) onPickNonInventory?.(null);
     onChange?.(it?.id || "", it || null);
+    setOpen(false);
+  };
+
+  const handlePickNonInv = (n) => {
+    // Picking a non-inventory item clears any item-type selection.
+    if (selected) onChange?.("", null);
+    onPickNonInventory?.(n || null);
     setOpen(false);
   };
 
   const handleClear = (e) => {
     e.stopPropagation();
-    onChange?.("", null);
+    if (selectedNonInv) onPickNonInventory?.(null);
+    else onChange?.("", null);
   };
+
+  // Non-inventory items filtered by the same search box (name / code).
+  const filteredNonInv = useMemo(() => {
+    const arr = [...(nonInventoryItems || [])].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    const term = query.trim().toLowerCase();
+    if (!term) return arr;
+    return arr.filter((n) => (n.name || "").toLowerCase().includes(term) || (n.code || "").toLowerCase().includes(term));
+  }, [nonInventoryItems, query]);
 
   const handleKeyDown = (e) => {
     if (!open) return;
@@ -168,7 +203,12 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
             "MEKO FABRICS" / "MEKO DENIM" don't collapse to an identical row
             (CLAUDE.md §3 / dashboard incident 2026-05-13). */}
         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", wordBreak: "break-word", textAlign: "left" }}>
-          {selected ? (
+          {selectedNonInv ? (
+            <>
+              <span style={styles.niTag}>charge</span>
+              {selectedNonInv.name}
+            </>
+          ) : selected ? (
             <>
               {selected.isFavorite && <MdStar size={12} color="#f59f00" style={{ verticalAlign: "middle", marginRight: 3 }} />}
               {selected.name}
@@ -178,7 +218,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
             <span style={styles.placeholder}>{placeholder || "Select item…"}</span>
           )}
         </span>
-        {selected && (
+        {(selected || selectedNonInv) && (
           <span onClick={handleClear} style={styles.clearBtn} title="Clear selection">×</span>
         )}
         <MdArrowDropDown size={18} style={{ flexShrink: 0 }} />
@@ -204,12 +244,38 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
           </div>
 
           <div style={styles.list}>
-            {filteredItems.length === 0 && (
+            {filteredItems.length === 0 && filteredNonInv.length === 0 && (
               <div style={styles.empty}>
                 {items?.length === 0
                   ? "No items in catalog yet. Add one on the Item Types page."
                   : `No items match "${query}".`}
               </div>
+            )}
+
+            {/* Non-Inventory Items (Freight, Discount, …) — a separate group,
+                mouse-clickable, excluded from arrow-key nav to keep the index
+                math on item types simple. */}
+            {filteredNonInv.length > 0 && (
+              <>
+                <div style={{ ...styles.sectionHeader, color: "#8a5a00", backgroundColor: "#fff8e1" }}>🚚 NON-INVENTORY (charges)</div>
+                {filteredNonInv.map((n) => (
+                  <div
+                    key={`ni-${n.id}`}
+                    onMouseDown={() => handlePickNonInv(n)}
+                    style={{ ...styles.row, backgroundColor: String(n.id) === String(nonInventoryValue) ? "#fff3cd" : "transparent" }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={styles.rowName}><span style={styles.niTag}>charge</span>{n.name}</div>
+                      {(n.code || n.unitName) && (
+                        <div style={styles.rowMeta}>
+                          {n.code && <span style={{ color: "#5f6d7e" }}>{n.code}</span>}
+                          {n.unitName && <span style={{ color: "#5f6d7e" }}> · {n.unitName}</span>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </>
             )}
 
             {stocked.length > 0 && (
@@ -311,6 +377,7 @@ const styles = {
     lineHeight: 1,
   },
   hsInline: { color: "#5f6d7e", fontFamily: "monospace", fontSize: "0.75rem", marginLeft: 4 },
+  niTag: { display: "inline-block", fontSize: "0.6rem", fontWeight: 800, color: "#8a5a00", background: "#ffe8a3", padding: "0.05rem 0.3rem", borderRadius: 4, marginRight: 5, verticalAlign: "middle", textTransform: "uppercase", letterSpacing: "0.03em" },
   // position: fixed uses viewport coords (no scrollY math). Anchored directly
   // to the trigger's getBoundingClientRect(), and the component re-measures
   // on every ancestor scroll/resize so the list tracks the trigger exactly.

@@ -281,6 +281,16 @@ namespace MyApp.Api.Helpers
             new("itemtypes.manage.update", "ItemTypes", "Manage", "Update", "Edit an item type"),
             new("itemtypes.manage.delete", "ItemTypes", "Manage", "Delete", "Delete an item type"),
 
+            // ── Non-Inventory Items (per-company GL-account shortcut lines) ──
+            // Freight / Discount / service-fee line items that post to a mapped
+            // income/expense account and move no stock (Manager.io "Non-inventory
+            // Items"). Managed from Configuration → Non-Inventory Items; each maps
+            // to the company's chart of accounts. NOT an FBR concept.
+            new("noninventoryitems.list.view",     "NonInventoryItems", "List",   "View",   "View the non-inventory items list"),
+            new("noninventoryitems.manage.create", "NonInventoryItems", "Manage", "Create", "Create a non-inventory item (Freight, Discount, …)"),
+            new("noninventoryitems.manage.update", "NonInventoryItems", "Manage", "Update", "Edit a non-inventory item and its account mapping"),
+            new("noninventoryitems.manage.delete", "NonInventoryItems", "Manage", "Delete", "Delete a non-inventory item (only when unused)"),
+
             new("config.itemdescriptions.manage", "Configuration", "ItemDescriptions", "Manage", "Manage the item-description lookup list"),
             new("config.units.manage",            "Configuration", "Units",            "Manage", "Manage the units-of-measure lookup list"),
             new("config.mergefields.manage",      "Configuration", "MergeFields",      "Manage", "Manage mergeable template fields"),

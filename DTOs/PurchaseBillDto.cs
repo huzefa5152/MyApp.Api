@@ -49,6 +49,9 @@ namespace MyApp.Api.DTOs
         public int Id { get; set; }
         public int? ItemTypeId { get; set; }
         public string ItemTypeName { get; set; } = "";
+        /// <summary>Optional NonInventoryItem link (GL-account shortcut). Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
+        public string? NonInventoryItemName { get; set; }
         public string Description { get; set; } = "";
         public decimal Quantity { get; set; }
         public string UOM { get; set; } = "";
@@ -90,6 +93,8 @@ namespace MyApp.Api.DTOs
     public class CreatePurchaseItemDto
     {
         public int? ItemTypeId { get; set; }
+        /// <summary>Optional NonInventoryItem link (GL-account shortcut line, no stock/FBR). Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
         public string Description { get; set; } = "";
         public decimal Quantity { get; set; }
         public string? UOM { get; set; }
@@ -132,6 +137,8 @@ namespace MyApp.Api.DTOs
     {
         public int Id { get; set; }
         public int? ItemTypeId { get; set; }
+        /// <summary>Optional NonInventoryItem link (GL-account shortcut). Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
         public string Description { get; set; } = "";
         public decimal Quantity { get; set; }
         public string UOM { get; set; } = "";
