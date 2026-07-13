@@ -26,4 +26,38 @@ namespace MyApp.Api.DTOs
         public bool Cleared { get; set; }
         public DateTime? ClearedDate { get; set; }
     }
+
+    /// <summary>One bank-affecting transaction for the reconcile screen. Amount is
+    /// signed FOR THIS ACCOUNT (+ deposit / − withdrawal).</summary>
+    public class ReconcileTxnDto
+    {
+        public string DocType { get; set; } = "";   // "Receipt" | "Payment" | "Transfer"
+        public int DocId { get; set; }
+        public string Reference { get; set; } = "";
+        public DateTime Date { get; set; }
+        public string? Description { get; set; }
+        public decimal Amount { get; set; }
+        public bool Cleared { get; set; }
+    }
+
+    /// <summary>Finalize (lock) a reconciliation of a bank account against a
+    /// statement's ending balance as of a date.</summary>
+    public class LockReconciliationDto
+    {
+        public int BankAccountId { get; set; }
+        public DateTime StatementDate { get; set; }
+        public decimal StatementBalance { get; set; }
+    }
+
+    /// <summary>A locked reconciliation record (history row).</summary>
+    public class BankReconciliationDto
+    {
+        public int Id { get; set; }
+        public int BankAccountId { get; set; }
+        public DateTime StatementDate { get; set; }
+        public decimal StatementBalance { get; set; }
+        public decimal ClearedBalance { get; set; }
+        public decimal Difference { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
 }

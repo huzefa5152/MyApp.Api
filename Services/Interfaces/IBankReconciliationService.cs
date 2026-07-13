@@ -18,5 +18,17 @@ namespace MyApp.Api.Services.Interfaces
 
         /// <summary>Set or clear a transfer's cleared date (both legs). Returns false if not found.</summary>
         Task<bool> SetTransferClearedAsync(int transferId, bool cleared, DateTime? clearedDate);
+
+        /// <summary>Every bank-affecting transaction for an account (receipts,
+        /// payments, transfers), signed for the account, with its cleared state —
+        /// the rows of the reconcile screen.</summary>
+        Task<List<ReconcileTxnDto>> GetAccountTransactionsAsync(int accountId);
+
+        /// <summary>Finalize a reconciliation: snapshot the cleared vs statement
+        /// balance and lock cleared transactions dated on/before the statement date.</summary>
+        Task<BankReconciliationDto> LockReconciliationAsync(int companyId, LockReconciliationDto dto);
+
+        /// <summary>Locked reconciliation history for an account (newest first).</summary>
+        Task<List<BankReconciliationDto>> GetReconciliationsAsync(int accountId);
     }
 }

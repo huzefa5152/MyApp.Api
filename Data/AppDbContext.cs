@@ -61,6 +61,9 @@ namespace MyApp.Api.Data
         // ── Inter-account transfers (bank↔cash movement, no contact) ──
         public DbSet<MyApp.Api.Models.Accounting.AccountTransfer> AccountTransfers { get; set; }
 
+        // ── Bank reconciliation snapshots (Phase 3) ──
+        public DbSet<MyApp.Api.Models.Accounting.BankReconciliation> BankReconciliations { get; set; }
+
         // ── Unified attachments + document folders (additive) ──
         // One Attachment row per uploaded file (bytes on disk). A Folder is a
         // per-company named container; an attachment may also/instead be linked
@@ -878,6 +881,22 @@ namespace MyApp.Api.Data
                 .Property(t => t.Description).HasMaxLength(300);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountTransfer>()
                 .HasIndex(t => new { t.CompanyId, t.Number }).IsUnique();
+
+            // ── Bank reconciliation snapshots ─────────────────────────────────
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.BankReconciliation>()
+                .HasOne(r => r.Company).WithMany()
+                .HasForeignKey(r => r.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.BankReconciliation>()
+                .HasOne(r => r.BankAccount).WithMany()
+                .HasForeignKey(r => r.BankAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.BankReconciliation>()
+                .Property(r => r.StatementBalance).HasPrecision(18, 2);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.BankReconciliation>()
+                .Property(r => r.ClearedBalance).HasPrecision(18, 2);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.BankReconciliation>()
+                .HasIndex(r => new { r.CompanyId, r.BankAccountId, r.StatementDate });
 
             // ── Data-migration traceability (design §13) ──────────────────────
             // ExternalRef carries the legacy source key on imported masters so the

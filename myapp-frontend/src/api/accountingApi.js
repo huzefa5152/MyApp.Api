@@ -55,6 +55,17 @@ export const setPaymentCleared = (paymentId, cleared, clearedDate = null) =>
 export const setTransferCleared = (transferId, cleared, clearedDate = null) =>
   httpClient.post(`/bank-reconciliation/transfer/${transferId}/cleared`, { cleared, clearedDate });
 
+// Reconcile workflow (Phase 3): the account's transactions to tick, a lock call,
+// and the locked-reconciliation history.
+export const getReconcileTransactions = (accountId) =>
+  httpClient.get(`/bank-reconciliation/account/${accountId}/transactions`);
+
+export const getReconciliationHistory = (accountId) =>
+  httpClient.get(`/bank-reconciliation/account/${accountId}/history`);
+
+export const lockReconciliation = (companyId, payload) =>
+  httpClient.post(`/bank-reconciliation/company/${companyId}/lock`, payload);
+
 export const createTransfer = (companyId, payload) =>
   httpClient.post(`/account-transfers/company/${companyId}`, payload);
 

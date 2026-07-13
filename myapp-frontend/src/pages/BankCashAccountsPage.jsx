@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { MdAccountBalance, MdAdd, MdSearch, MdVisibility, MdClose, MdBusiness } from "react-icons/md";
+import { MdAccountBalance, MdAdd, MdSearch, MdVisibility, MdClose, MdBusiness, MdFactCheck } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
@@ -7,6 +7,7 @@ import { colors, formStyles, modalSizes, dropdownStyles } from "../theme";
 import { getBankCashAccounts, createAccount, getCoaTree } from "../api/accountApi";
 import { getGlStatus, getBankReconSummary } from "../api/accountingApi";
 import AccountLedgerDialog from "../Components/AccountLedgerDialog";
+import ReconcileModal from "../Components/ReconcileModal";
 import DivisionSelect from "../Components/DivisionSelect";
 
 // "- PKR 10,306,052.29" for negatives, "PKR 3,517,780.34" otherwise — matches
@@ -50,6 +51,7 @@ export default function BankCashAccountsPage() {
   const [glOff, setGlOff] = useState(false);
   const [search, setSearch] = useState("");
   const [ledgerAccount, setLedgerAccount] = useState(null); // { id, name, code }
+  const [reconcileAccount, setReconcileAccount] = useState(null); // { id, name, code }
   const [showCreate, setShowCreate] = useState(false);
 
   const load = useCallback(async () => {
@@ -178,6 +180,11 @@ export default function BankCashAccountsPage() {
                     <button style={st.iconBtn} title="View ledger" onClick={(e) => { e.stopPropagation(); setLedgerAccount({ id: a.id, name: a.name, code: a.code }); }}>
                       <MdVisibility size={17} />
                     </button>
+                    {canManage && (
+                      <button style={st.iconBtn} title="Reconcile this account" onClick={(e) => { e.stopPropagation(); setReconcileAccount({ id: a.id, name: a.name, code: a.code }); }}>
+                        <MdFactCheck size={17} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -198,6 +205,15 @@ export default function BankCashAccountsPage() {
 
       {ledgerAccount && (
         <AccountLedgerDialog account={ledgerAccount} onClose={() => setLedgerAccount(null)} />
+      )}
+
+      {reconcileAccount && (
+        <ReconcileModal
+          companyId={companyId}
+          account={reconcileAccount}
+          onClose={() => setReconcileAccount(null)}
+          onLocked={() => { load(); }}
+        />
       )}
 
       {showCreate && (

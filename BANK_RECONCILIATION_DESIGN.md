@@ -205,9 +205,17 @@ regardless (it fixes attribution + the Al-Qahera view).
   where tick-to-clear lives (the summary read model + toggle endpoints already exist to back it).
 - **Phase 2 — Statement import: NOT STARTED.** `BankStatementImport`/`BankStatementLine` +
   CSV import + categorize-into-receipt/payment → the Uncategorized columns.
-- **Phase 3 — Reconciliation object + tick-to-clear + lock + auto-match: NOT STARTED.** This is
-  where the AccountLedgerDialog (or a dedicated reconcile view) gets the per-row cleared toggle
-  calling `setPaymentCleared`/`setTransferCleared` (both API client fns already added).
+- **Phase 3 — Reconciliation object + tick-to-clear + lock: DONE + verified.** New
+  `BankReconciliation` entity + table (migration `20260713125956_AddBankReconciliation`).
+  Endpoints: `GET account/{id}/transactions` (signed, with cleared flags), `POST company/{id}/lock`,
+  `GET account/{id}/history`; lock guard blocks re-clearing a txn inside a locked window (400).
+  Frontend `ReconcileModal` (opened from a per-account Reconcile button on the Bank & Cash screen):
+  statement date + ending balance, tick-to-clear checkboxes, live Cleared/Statement/Difference,
+  Lock enabled only when the difference is zero, plus reconciliation history. Verified: backend
+  API 8/8 (transactions/clear/lock/history/lock-guard); browser (ticking a txn moved cleared to
+  −100, difference to −100, and disabled Lock — exactly right).
+  **Auto-match: deferred with Phase 2** — matching imported statement lines to existing payments
+  requires the Phase 2 statement-import staging (no lines to match against until then).
 
 ## 7. Out of scope for v1 (parked)
 - Multi-currency bank accounts / FX revaluation.
