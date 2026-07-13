@@ -203,8 +203,16 @@ regardless (it fixes attribution + the Al-Qahera view).
   with actual unchanged; 401 guard); browser columns render with totals reconciling.
   **NOT yet built in Phase 1:** the interactive per-row "mark cleared" UI — deferred to Phase 3
   where tick-to-clear lives (the summary read model + toggle endpoints already exist to back it).
-- **Phase 2 — Statement import: NOT STARTED.** `BankStatementImport`/`BankStatementLine` +
-  CSV import + categorize-into-receipt/payment → the Uncategorized columns.
+- **Phase 2 — Statement import: DONE + verified.** `BankStatementImport`/`BankStatementLine`
+  staging (migration `20260713133504_AddBankStatementImport`). CSV import endpoint (parses
+  Date/Description + signed Amount or Debit/Credit), **auto-match** on import (links a line to a
+  unique un-cleared payment on the account by direction+amount+date±7d and clears it), categorize
+  (creates a receipt/payment against a chosen contra account + clears it), ignore. Bank & Cash
+  screen gained an **Uncategorized** column + a per-account Import-statement button opening
+  `StatementImportModal` (upload/paste CSV → review uncategorized lines → categorize/ignore).
+  Verified: backend API 11/11 (import, auto-match+clear, categorize, ignore, uncategorized columns,
+  401 guard); browser end-to-end (paste CSV → review step shows lines with contra-account pickers).
+  **Auto-match (the Phase 3 tail item): DONE here** — it's part of import.
 - **Phase 3 — Reconciliation object + tick-to-clear + lock: DONE + verified.** New
   `BankReconciliation` entity + table (migration `20260713125956_AddBankReconciliation`).
   Endpoints: `GET account/{id}/transactions` (signed, with cleared flags), `POST company/{id}/lock`,

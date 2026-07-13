@@ -64,6 +64,10 @@ namespace MyApp.Api.Data
         // ── Bank reconciliation snapshots (Phase 3) ──
         public DbSet<MyApp.Api.Models.Accounting.BankReconciliation> BankReconciliations { get; set; }
 
+        // ── Bank statement import staging (Phase 2) ──
+        public DbSet<MyApp.Api.Models.Accounting.BankStatementImport> BankStatementImports { get; set; }
+        public DbSet<MyApp.Api.Models.Accounting.BankStatementLine> BankStatementLines { get; set; }
+
         // ── Unified attachments + document folders (additive) ──
         // One Attachment row per uploaded file (bytes on disk). A Folder is a
         // per-company named container; an attachment may also/instead be linked
@@ -897,6 +901,28 @@ namespace MyApp.Api.Data
                 .Property(r => r.ClearedBalance).HasPrecision(18, 2);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.BankReconciliation>()
                 .HasIndex(r => new { r.CompanyId, r.BankAccountId, r.StatementDate });
+
+            // ── Bank statement import staging ─────────────────────────────────
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.BankStatementImport>()
+                .HasOne(i => i.Company).WithMany()
+                .HasForeignKey(i => i.CompanyId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.BankStatementImport>()
+                .HasOne(i => i.BankAccount).WithMany()
+                .HasForeignKey(i => i.BankAccountId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.BankStatementImport>()
+                .Property(i => i.FileName).HasMaxLength(260);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.BankStatementLine>()
+                .HasOne(l => l.Import).WithMany(i => i.Lines)
+                .HasForeignKey(l => l.ImportId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.BankStatementLine>()
+                .HasOne(l => l.BankAccount).WithMany()
+                .HasForeignKey(l => l.BankAccountId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.BankStatementLine>()
+                .Property(l => l.Amount).HasPrecision(18, 2);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.BankStatementLine>()
+                .Property(l => l.Description).HasMaxLength(500);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.BankStatementLine>()
+                .HasIndex(l => new { l.CompanyId, l.BankAccountId, l.Status });
 
             // ── Data-migration traceability (design §13) ──────────────────────
             // ExternalRef carries the legacy source key on imported masters so the

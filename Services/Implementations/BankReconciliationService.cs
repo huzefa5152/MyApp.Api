@@ -65,10 +65,24 @@ namespace MyApp.Api.Services.Implementations
                 if (valid.Contains(t.FromAccountId)) pendingWithdrawals[t.FromAccountId] += t.Amount;
             }
 
+            // Imported-but-uncategorized statement lines (Phase 2), per account.
+            var uncat = (await _context.BankStatementLines.AsNoTracking()
+                    .Where(l => l.CompanyId == companyId && l.Status == BankStatementLineStatus.Uncategorized)
+                    .Select(l => new { l.BankAccountId, l.Amount })
+                    .ToListAsync())
+                .GroupBy(l => l.BankAccountId)
+                .ToDictionary(g => g.Key, g => new
+                {
+                    Receipts = g.Where(x => x.Amount >= 0).Sum(x => x.Amount),
+                    Payments = g.Where(x => x.Amount < 0).Sum(x => -x.Amount),
+                    Count = g.Count(),
+                });
+
             return accounts.Select(a =>
             {
                 var pd = pendingDeposits.GetValueOrDefault(a.Id);
                 var pw = pendingWithdrawals.GetValueOrDefault(a.Id);
+                uncat.TryGetValue(a.Id, out var u);
                 return new BankAccountReconSummaryDto
                 {
                     AccountId = a.Id,
@@ -78,6 +92,9 @@ namespace MyApp.Api.Services.Implementations
                     ClearedBalance = a.Balance - pd + pw,
                     PendingDeposits = pd,
                     PendingWithdrawals = pw,
+                    UncategorizedReceipts = u?.Receipts ?? 0m,
+                    UncategorizedPayments = u?.Payments ?? 0m,
+                    UncategorizedCount = u?.Count ?? 0,
                 };
             }).ToList();
         }

@@ -16,6 +16,50 @@ namespace MyApp.Api.DTOs
         public decimal ClearedBalance { get; set; }
         public decimal PendingDeposits { get; set; }
         public decimal PendingWithdrawals { get; set; }
+        // Imported-but-not-yet-categorized statement lines (Phase 2), by direction.
+        public decimal UncategorizedReceipts { get; set; }
+        public decimal UncategorizedPayments { get; set; }
+        public int UncategorizedCount { get; set; }
+    }
+
+    /// <summary>Result of importing a bank-statement file.</summary>
+    public class ImportStatementResultDto
+    {
+        public int ImportId { get; set; }
+        public int Total { get; set; }
+        public int AutoMatched { get; set; }
+        public int Uncategorized { get; set; }
+    }
+
+    /// <summary>One imported statement line for the categorization panel.</summary>
+    public class BankStatementLineDto
+    {
+        public int Id { get; set; }
+        public DateTime Date { get; set; }
+        public string? Description { get; set; }
+        public decimal Amount { get; set; }   // signed: + deposit / − withdrawal
+        public string Status { get; set; } = "Uncategorized";
+        public int? PaymentId { get; set; }
+    }
+
+    /// <summary>Categorize an uncategorized line into a new receipt/payment
+    /// (direction inferred from the line's sign). <see cref="AccountId"/> is the
+    /// contra/category account the money is booked against (e.g. a Sales income
+    /// account for a deposit, an expense account for a withdrawal).</summary>
+    public class CategorizeLineDto
+    {
+        public int? AccountId { get; set; }
+        public string ContactType { get; set; } = "Other";  // "Client" | "Supplier" | "Other"
+        public int? ContactId { get; set; }
+        public string? Description { get; set; }
+    }
+
+    /// <summary>Import a bank statement's CSV text against a bank/cash account.</summary>
+    public class ImportStatementRequestDto
+    {
+        public int BankAccountId { get; set; }
+        public string? FileName { get; set; }
+        public string CsvText { get; set; } = "";
     }
 
     /// <summary>Toggle a receipt/payment/transfer's cleared state. When

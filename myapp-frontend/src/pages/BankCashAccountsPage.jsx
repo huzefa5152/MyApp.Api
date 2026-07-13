@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { MdAccountBalance, MdAdd, MdSearch, MdVisibility, MdClose, MdBusiness, MdFactCheck } from "react-icons/md";
+import { MdAccountBalance, MdAdd, MdSearch, MdVisibility, MdClose, MdBusiness, MdFactCheck, MdUploadFile } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
@@ -8,6 +8,7 @@ import { getBankCashAccounts, createAccount, getCoaTree } from "../api/accountAp
 import { getGlStatus, getBankReconSummary } from "../api/accountingApi";
 import AccountLedgerDialog from "../Components/AccountLedgerDialog";
 import ReconcileModal from "../Components/ReconcileModal";
+import StatementImportModal from "../Components/StatementImportModal";
 import DivisionSelect from "../Components/DivisionSelect";
 
 // "- PKR 10,306,052.29" for negatives, "PKR 3,517,780.34" otherwise — matches
@@ -52,6 +53,7 @@ export default function BankCashAccountsPage() {
   const [search, setSearch] = useState("");
   const [ledgerAccount, setLedgerAccount] = useState(null); // { id, name, code }
   const [reconcileAccount, setReconcileAccount] = useState(null); // { id, name, code }
+  const [importAccount, setImportAccount] = useState(null); // { id, name, code }
   const [showCreate, setShowCreate] = useState(false);
 
   const load = useCallback(async () => {
@@ -71,6 +73,8 @@ export default function BankCashAccountsPage() {
             id: r.accountId, name: r.name, code: r.code, balance: r.actualBalance,
             clearedBalance: r.clearedBalance, pendingDeposits: r.pendingDeposits,
             pendingWithdrawals: r.pendingWithdrawals,
+            uncategorizedReceipts: r.uncategorizedReceipts, uncategorizedPayments: r.uncategorizedPayments,
+            uncategorizedCount: r.uncategorizedCount,
           }
         : { id: r.id, name: r.name, code: r.code, balance: r.balance, accountGroupId: r.accountGroupId });
       setAccounts(rows);
@@ -163,6 +167,7 @@ export default function BankCashAccountsPage() {
                 {canReconcile && <th style={{ ...st.th, textAlign: "right" }}>Cleared</th>}
                 {canReconcile && <th style={{ ...st.th, textAlign: "right" }}>Pending In</th>}
                 {canReconcile && <th style={{ ...st.th, textAlign: "right" }}>Pending Out</th>}
+                {canReconcile && <th style={{ ...st.th, textAlign: "center" }}>Uncategorized</th>}
                 <th style={{ ...st.th, textAlign: "right" }}>Actual Balance</th>
                 <th style={{ ...st.th, width: 80, textAlign: "center" }}>Ledger</th>
               </tr>
@@ -174,7 +179,18 @@ export default function BankCashAccountsPage() {
                   <td style={st.td}>{a.code ? <span style={st.code}>{a.code}</span> : <span style={st.muted}>—</span>}</td>
                   {canReconcile && <td style={{ ...st.td, textAlign: "right", color: (Number(a.clearedBalance) || 0) < 0 ? "#b71c1c" : colors.textSecondary, whiteSpace: "nowrap" }}>{money(a.clearedBalance)}</td>}
                   {canReconcile && <td style={{ ...st.td, textAlign: "right", color: a.pendingDeposits ? "#1b7a3d" : colors.textSecondary, whiteSpace: "nowrap" }}>{a.pendingDeposits ? money(a.pendingDeposits) : "—"}</td>}
-                  {canReconcile && <td style={{ ...st.td, textAlign: "right", color: a.pendingWithdrawals ? "#b71c1c" : colors.textSecondary, whiteSpace: "nowrap" }}>{a.pendingWithdrawals ? money(a.pendingWithdrawals) : "—"}</td>}
+                  {canReconcile && <td style={{ ...st.td, textAlign: "center", whiteSpace: "nowrap" }}>
+                    {a.uncategorizedCount ? (
+                      <button
+                        type="button"
+                        style={{ ...st.reviewLink, color: colors.blue }}
+                        title="Import / categorize statement lines"
+                        onClick={(e) => { e.stopPropagation(); setImportAccount({ id: a.id, name: a.name, code: a.code }); }}
+                      >
+                        {a.uncategorizedCount} to review
+                      </button>
+                    ) : <span style={st.muted}>—</span>}
+                  </td>}
                   <td style={{ ...st.td, textAlign: "right", fontWeight: 700, color: (Number(a.balance) || 0) < 0 ? "#b71c1c" : colors.textPrimary, whiteSpace: "nowrap" }}>{money(a.balance)}</td>
                   <td style={{ ...st.td, textAlign: "center" }}>
                     <button style={st.iconBtn} title="View ledger" onClick={(e) => { e.stopPropagation(); setLedgerAccount({ id: a.id, name: a.name, code: a.code }); }}>
@@ -183,6 +199,11 @@ export default function BankCashAccountsPage() {
                     {canManage && (
                       <button style={st.iconBtn} title="Reconcile this account" onClick={(e) => { e.stopPropagation(); setReconcileAccount({ id: a.id, name: a.name, code: a.code }); }}>
                         <MdFactCheck size={17} />
+                      </button>
+                    )}
+                    {canManage && (
+                      <button style={st.iconBtn} title="Import bank statement" onClick={(e) => { e.stopPropagation(); setImportAccount({ id: a.id, name: a.name, code: a.code }); }}>
+                        <MdUploadFile size={17} />
                       </button>
                     )}
                   </td>
@@ -195,6 +216,10 @@ export default function BankCashAccountsPage() {
                 {canReconcile && <td style={{ ...st.footTd, textAlign: "right", fontWeight: 800, whiteSpace: "nowrap" }}>{money(filtered.reduce((s, a) => s + (Number(a.clearedBalance) || 0), 0))}</td>}
                 {canReconcile && <td style={{ ...st.footTd, textAlign: "right", fontWeight: 800, whiteSpace: "nowrap" }}>{money(filtered.reduce((s, a) => s + (Number(a.pendingDeposits) || 0), 0))}</td>}
                 {canReconcile && <td style={{ ...st.footTd, textAlign: "right", fontWeight: 800, whiteSpace: "nowrap" }}>{money(filtered.reduce((s, a) => s + (Number(a.pendingWithdrawals) || 0), 0))}</td>}
+                {canReconcile && (() => {
+                  const c = filtered.reduce((s, a) => s + (Number(a.uncategorizedCount) || 0), 0);
+                  return <td style={{ ...st.footTd, textAlign: "center", fontWeight: 800, whiteSpace: "nowrap" }}>{c ? `${c} to review` : ""}</td>;
+                })()}
                 <td style={{ ...st.footTd, textAlign: "right", fontWeight: 800, whiteSpace: "nowrap" }}>{money(total)}</td>
                 <td style={st.footTd} />
               </tr>
@@ -213,6 +238,15 @@ export default function BankCashAccountsPage() {
           account={reconcileAccount}
           onClose={() => setReconcileAccount(null)}
           onLocked={() => { load(); }}
+        />
+      )}
+
+      {importAccount && (
+        <StatementImportModal
+          companyId={companyId}
+          account={importAccount}
+          onClose={() => setImportAccount(null)}
+          onDone={() => { load(); }}
         />
       )}
 
@@ -362,6 +396,7 @@ const st = {
   accName: { fontWeight: 600 },
   code: { fontFamily: "monospace", fontSize: "0.75rem", color: colors.textSecondary, background: colors.inputBg, padding: "1px 6px", borderRadius: 4 },
   muted: { color: colors.textSecondary, fontSize: "0.82rem" },
+  reviewLink: { border: "none", background: "transparent", padding: 0, fontSize: "0.82rem", fontWeight: 700, cursor: "pointer", textDecoration: "underline" },
   iconBtn: { display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 8, border: "none", background: "transparent", color: colors.blue, cursor: "pointer" },
   empty: { padding: "2.5rem 1rem", textAlign: "center", color: colors.textSecondary, background: colors.cardBg, border: `1px dashed ${colors.inputBorder}`, borderRadius: 12 },
   footer: { display: "flex", justifyContent: "flex-end", gap: "0.6rem", flexWrap: "wrap", padding: "0.9rem clamp(1rem, 2vw, 1.5rem)", borderTop: `1px solid ${colors.cardBorder}`, flexShrink: 0 },

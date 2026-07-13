@@ -66,6 +66,20 @@ export const getReconciliationHistory = (accountId) =>
 export const lockReconciliation = (companyId, payload) =>
   httpClient.post(`/bank-reconciliation/company/${companyId}/lock`, payload);
 
+// Statement import (Phase 2): import CSV text, list staged lines, categorize
+// (into a new receipt/payment against a contra account) or ignore.
+export const importBankStatement = (companyId, payload) =>
+  httpClient.post(`/bank-statements/company/${companyId}/import`, payload);
+
+export const getStatementLines = (accountId, status) =>
+  httpClient.get(`/bank-statements/account/${accountId}/lines`, { params: status ? { status } : {} });
+
+export const categorizeStatementLine = (lineId, payload) =>
+  httpClient.post(`/bank-statements/line/${lineId}/categorize`, payload);
+
+export const ignoreStatementLine = (lineId) =>
+  httpClient.post(`/bank-statements/line/${lineId}/ignore`);
+
 export const createTransfer = (companyId, payload) =>
   httpClient.post(`/account-transfers/company/${companyId}`, payload);
 
