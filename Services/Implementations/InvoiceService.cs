@@ -1406,6 +1406,16 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException(
                     "A Debit/Credit Note cannot be edited. Void it and create a new return from the Return Invoices screen.");
 
+            // Invoices-tab edit is an FBR-classification flow. When the company's
+            // FBR integration is OFF there's nothing to classify — all edits must
+            // go through the Bills tab. Block it server-side (the Invoices-tab
+            // Edit button is also hidden for FBR-off companies). 2026-07-14.
+            var fbrOn = await _context.Companies.AsNoTracking()
+                .Where(c => c.Id == invoice.CompanyId).Select(c => c.FbrEnabled).FirstOrDefaultAsync();
+            if (!fbrOn)
+                throw new InvalidOperationException(
+                    "This company's FBR integration is off — edit the bill on the Bills tab. The Invoices tab is view-only here.");
+
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("At least one item is required.");
 
@@ -1961,38 +1971,17 @@ namespace MyApp.Api.Services.Implementations
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return false;
 
-            // Cannot delete FBR-submitted invoices
+            // Cannot delete FBR-submitted invoices — they're filed at FBR (with
+            // an IRN) and FBR has no delete; the correct reversal is a Credit
+            // Note. (For FBR-off companies this never triggers.)
             if (invoice.FbrStatus == "Submitted")
-                throw new InvalidOperationException("Cannot delete a bill that has been submitted to FBR.");
+                throw new InvalidOperationException("Cannot delete a bill that has been submitted to FBR — reverse it with a Credit Note instead.");
 
-            // Only the LAST bill (highest invoice number) can be deleted so
-            // numbering stays gap-free. Earlier bills must be edited in place.
-            // Demo bills (FBR Sandbox) live in their own 900000+ range and
-            // are excluded so the latest-real-bill rule isn't blocked by
-            // demo numbers. Demo deletes are gated by FbrSandboxService.
-            // 2026-07-02: Credit Notes and Debit Notes each run their own
-            // sequence, so the "latest" comparison is scoped to the
-            // document's own TYPE — Credit Note #3 is deletable even while
-            // sale bills sit at #3800+ or debit notes at #7.
-            var isNoteDoc = invoice.DocumentType == 9 || invoice.DocumentType == 10;
-            var maxNumber = invoice.IsDemo
-                ? await _context.Invoices
-                    .Where(i => i.CompanyId == invoice.CompanyId && i.IsDemo)
-                    .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0
-                : isNoteDoc
-                    ? await _context.Invoices
-                        .Where(i => i.CompanyId == invoice.CompanyId && !i.IsDemo
-                                 && i.DocumentType == invoice.DocumentType)
-                        .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0
-                    : await _context.Invoices
-                        .Where(i => i.CompanyId == invoice.CompanyId && !i.IsDemo
-                                 && i.DocumentType != 9 && i.DocumentType != 10)
-                        .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
-            if (invoice.InvoiceNumber != maxNumber)
-                throw new InvalidOperationException(
-                    $"Only the latest bill can be deleted (currently #{maxNumber}). " +
-                    $"To change bill #{invoice.InvoiceNumber}, edit it instead — " +
-                    "deleting earlier bills would leave gaps in the numbering.");
+            // 2026-07-14: the "only the latest bill can be deleted" rule was
+            // removed at the user's request — ANY bill/invoice can now be
+            // deleted, reverting its full GL + inventory impact (below) and
+            // freeing its challans. This intentionally allows a gap in the
+            // numbering sequence where the deleted document was.
 
             var companyId = invoice.CompanyId;
 
