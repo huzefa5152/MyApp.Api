@@ -30,6 +30,11 @@ string companyName = GetOpt("--company-name") ?? "Al-Qahera Trading Co.";
 string? tbPath = GetOpt("--trial-balance");
 bool perpetual = args.Contains("--build-perpetual");
 string? refDir = GetOpt("--ref");
+// Where document-attachment blobs get written (the app's data/attachments dir).
+// Defaults to <repo>/data/attachments so a locally-run import lands where the
+// dev backend serves them. Attachment blobs themselves live in <exportDir>/attachments/.
+string attachmentsRoot = GetOpt("--attachments-root")
+    ?? Path.Combine(Directory.GetCurrentDirectory(), "data", "attachments");
 
 string? GetOpt(string flag) { var i = Array.IndexOf(args, flag); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
 
@@ -39,6 +44,17 @@ static Dictionary<string, JsonDocument> Load(string dir)
     foreach (var f in Directory.EnumerateFiles(dir, "*.json"))
         map[Path.GetFileNameWithoutExtension(f)] = JsonDocument.Parse(File.ReadAllText(f));
     return map;
+}
+
+// Attachment blobs: <exportDir>/attachments/* → { filename : bytes }, matching
+// the manifest's "file" refs. Null when the folder is absent (no attachments).
+static Dictionary<string, byte[]>? LoadAttachmentBytes(string exportDir)
+{
+    var dir = Path.Combine(exportDir, "attachments");
+    if (!Directory.Exists(dir)) return null;
+    var map = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+    foreach (var f in Directory.EnumerateFiles(dir)) map[Path.GetFileName(f)] = File.ReadAllBytes(f);
+    return map.Count > 0 ? map : null;
 }
 
 var options = new DbContextOptionsBuilder<AppDbContext>()
@@ -68,8 +84,10 @@ try
         // 1) Load the documents (invoices/bills/receipts/payments/notes/quotes/…)
         //    so every document screen is populated — always committed (the GL
         //    build below needs the company + docs to exist).
+        var attBytes = LoadAttachmentBytes(exportDir);
+        if (attBytes != null) Console.WriteLine($"   attachments: {attBytes.Count} blob(s) found → {attachmentsRoot}");
         Console.WriteLine($"== Perpetual GL — step 1: documents ==  company=\"{companyName}\"  (summary {summary.Count}, detail {detail.Count})");
-        var docs = await svc.RunAsync(summary, detail, companyName, targetCompanyId: null, dryRun: false, fresh: true, callerUserId: null);
+        var docs = await svc.RunAsync(summary, detail, companyName, targetCompanyId: null, dryRun: false, fresh: true, callerUserId: null, attBytes, attachmentsRoot);
         Console.WriteLine($"   documents loaded into company id={docs.CompanyId}");
         // 2) Build the perpetual GL (CoA + journal entries + transfers + cutover).
         Console.WriteLine($"== Perpetual GL — step 2: chart of accounts + journal entries ==  dryRun={dryRun}  (ref {refd.Count})");
@@ -92,8 +110,10 @@ try
         var detailDir = Path.Combine(exportDir, "detail");
         if (!Directory.Exists(detailDir)) { Console.Error.WriteLine($"detail dir not found: {detailDir}"); return 2; }
         var summary = Load(exportDir); var detail = Load(detailDir);
+        var attBytes = LoadAttachmentBytes(exportDir);
+        if (attBytes != null) Console.WriteLine($"   attachments: {attBytes.Count} blob(s) found → {attachmentsRoot}");
         Console.WriteLine($"== Document import ==  company=\"{companyName}\"  dryRun={dryRun}  fresh={fresh}  (summary {summary.Count}, detail {detail.Count})");
-        r = await svc.RunAsync(summary, detail, companyName, targetCompanyId: null, dryRun, fresh, callerUserId: null);
+        r = await svc.RunAsync(summary, detail, companyName, targetCompanyId: null, dryRun, fresh, callerUserId: null, attBytes, attachmentsRoot);
     }
 
     Console.WriteLine($"\n   company id={r.CompanyId}");

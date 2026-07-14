@@ -26,12 +26,14 @@ namespace MyApp.Api.Controllers
     {
         private readonly IManagerImportService _import;
         private readonly ICompanyAccessGuard _access;
+        private readonly AttachmentStorage _attachments;
         private readonly ILogger<ManagerImportController> _logger;
 
-        public ManagerImportController(IManagerImportService import, ICompanyAccessGuard access, ILogger<ManagerImportController> logger)
+        public ManagerImportController(IManagerImportService import, ICompanyAccessGuard access, AttachmentStorage attachments, ILogger<ManagerImportController> logger)
         {
             _import = import;
             _access = access;
+            _attachments = attachments;
             _logger = logger;
         }
 
@@ -75,14 +77,32 @@ namespace MyApp.Api.Controllers
 
             var summary = new Dictionary<string, JsonDocument>(StringComparer.OrdinalIgnoreCase);
             var detail = new Dictionary<string, JsonDocument>(StringComparer.OrdinalIgnoreCase);
+            // Document-attachment blob bytes (files under an "attachments/" folder),
+            // keyed by filename to match the attachments.json manifest "file" refs.
+            var attachmentBytes = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
             try
             {
                 await using var stream = file.OpenReadStream();
                 using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
                 foreach (var entry in zip.Entries)
                 {
-                    if (entry.Length == 0 || !entry.FullName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (entry.Length == 0 || string.IsNullOrEmpty(entry.Name)) continue;
                     var path = entry.FullName.Replace('\\', '/');
+                    // Attachment blobs live under an "attachments/" folder (any name/ext)
+                    // — collect their bytes. The manifest itself (attachments.json) sits
+                    // at the export root and is picked up as a summary list below.
+                    var isAttBlob = (path.StartsWith("attachments/", StringComparison.OrdinalIgnoreCase)
+                                     || path.Contains("/attachments/", StringComparison.OrdinalIgnoreCase))
+                                    && !entry.Name.Equals("attachments.json", StringComparison.OrdinalIgnoreCase);
+                    if (isAttBlob)
+                    {
+                        await using var bs = entry.Open();
+                        using var ms = new MemoryStream();
+                        await bs.CopyToAsync(ms);
+                        attachmentBytes[entry.Name] = ms.ToArray();
+                        continue;
+                    }
+                    if (!entry.FullName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) continue;
                     var name = Path.GetFileNameWithoutExtension(entry.Name);   // e.g. "sales-invoices"
                     // detail files live under a ".../detail/" segment; everything else is a summary list.
                     var isDetail = path.Contains("/detail/", StringComparison.OrdinalIgnoreCase)
@@ -107,7 +127,11 @@ namespace MyApp.Api.Controllers
 
             try
             {
-                var report = await _import.RunAsync(summary, detail, companyName?.Trim(), companyId, dryRun, fresh, CurrentUserId);
+                // Attachments only apply on a commit (dry-run has no company to file
+                // them against, and rolls back). Blobs land in the app's data/attachments.
+                var attBytes = (!dryRun && attachmentBytes.Count > 0) ? attachmentBytes : null;
+                var report = await _import.RunAsync(summary, detail, companyName?.Trim(), companyId, dryRun, fresh, CurrentUserId,
+                    attBytes, attBytes != null ? _attachments.Root : null);
 
                 // Then the trial balance → chart-of-accounts opening balances. On a
                 // dry-run the document import rolled back (no company to load into),

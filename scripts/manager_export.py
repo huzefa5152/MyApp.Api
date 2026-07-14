@@ -140,14 +140,82 @@ def main(argv):
         json.dump(ordered, open(os.path.join(detaildir, e + ".json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
         print(f"  detail {e:26} {len(ordered)}")
 
-    # 3) zip it up (upload-ready)
+    # 2.5) document attachments (best-effort). Manager stores attachments as
+    #      objects; the exact form fields aren't in the OpenAPI, so extraction is
+    #      DEFENSIVE and dumps a raw sample (_attachment-form-sample.json) for
+    #      verifying/adjusting the field names against a real attachment-bearing
+    #      business. Writes blobs to attachments/ + an attachments.json manifest
+    #      [{ownerType, ownerKey, fileName, contentType, file}] that the MyApp
+    #      importer files onto the matching document. No-op when there are none
+    #      (Al-Qahera had zero — the per-doc 'attachment' flag was false for all).
+    import base64
+    owner_type_by_key = {}
+    for e in ("sales-quotes", "sales-orders", "delivery-notes", "sales-invoices", "purchase-invoices"):
+        for r in summary.get(e, []):
+            if isinstance(r, dict) and r.get("key"):
+                owner_type_by_key[r["key"]] = e
+    try:
+        att_list = page_all("attachments")
+    except Exception as ex:  # noqa
+        att_list = []; print(f"  attachments: list failed ({ex})")
+    manifest = []
+    if att_list:
+        attdir = os.path.join(outdir, "attachments")
+        os.makedirs(attdir, exist_ok=True)
+        made = skipped = 0
+        dumped = False
+
+        def pick(d, *names):
+            for n in names:
+                if isinstance(d, dict) and d.get(n) not in (None, ""):
+                    return d.get(n)
+            return None
+
+        for a in att_list:
+            akey = a.get("key") if isinstance(a, dict) else None
+            if not akey:
+                skipped += 1; continue
+            try:
+                form = get(f"attachment-form/{akey}")
+            except Exception:  # noqa
+                skipped += 1; continue
+            if not dumped:  # keep ONE raw sample to verify the field mapping below
+                json.dump(form, open(os.path.join(outdir, "_attachment-form-sample.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+                dumped = True
+            owner = pick(form, "Owner", "OwnerKey", "Object", "Document", "Parent", "Reference")
+            fname = pick(form, "FileName", "Name", "fileName") or str(akey)
+            ctype = pick(form, "ContentType", "MimeType", "contentType") or "application/octet-stream"
+            b64 = pick(form, "Content", "Data", "FileContent", "Bytes", "content")
+            otype = owner_type_by_key.get(owner) if isinstance(owner, str) else None
+            if not otype or not b64:
+                skipped += 1; continue
+            try:
+                raw = base64.b64decode(b64)
+            except Exception:  # noqa
+                skipped += 1; continue
+            ext = os.path.splitext(fname)[1] or ""
+            blobname = f"{akey}{ext}"
+            with open(os.path.join(attdir, blobname), "wb") as fh:
+                fh.write(raw)
+            manifest.append({"ownerType": otype, "ownerKey": owner, "fileName": fname, "contentType": ctype, "file": blobname})
+            made += 1
+        json.dump(manifest, open(os.path.join(outdir, "attachments.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        print(f"  attachments: {made} filed, {skipped} skipped ({len(att_list)} listed)")
+        if made == 0:
+            print("    NOTE: attachments listed but none extracted — inspect outdir/_attachment-form-sample.json and adjust the owner/fileName/content field names in manager_export.py.")
+
+    # 3) zip it up (upload-ready): all *.json (incl the attachments manifest) + the
+    #    attachment blob files under attachments/. Skips the debug sample + any zip.
     zpath = os.path.join(outdir, safe_biz + ".zip")
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
         for root, _, files in os.walk(outdir):
             for f in files:
-                if f.endswith(".json"):
-                    full = os.path.join(root, f)
-                    z.write(full, os.path.relpath(full, outdir))
+                full = os.path.join(root, f)
+                rel = os.path.relpath(full, outdir).replace("\\", "/")
+                if f == "_attachment-form-sample.json" or f.endswith(".zip"):
+                    continue
+                if f.endswith(".json") or rel.startswith("attachments/"):
+                    z.write(full, rel)
     print(f"\nDONE -> upload this on the MyApp 'Manager.io Import' page:\n  {zpath}")
     print("  (optionally also export Reports → Trial Balance → Copy to clipboard → save as .txt for the chart of accounts)")
     return 0

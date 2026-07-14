@@ -103,7 +103,13 @@ namespace MyApp.Api.Services.Implementations
         public async Task<ManagerImportReport> RunAsync(
             IReadOnlyDictionary<string, JsonDocument> summaryDocs,
             IReadOnlyDictionary<string, JsonDocument> detailDocs,
-            string? companyName, int? targetCompanyId, bool dryRun, bool fresh, int? callerUserId)
+            string? companyName, int? targetCompanyId, bool dryRun, bool fresh, int? callerUserId,
+            // Optional document attachments: the "attachments" manifest (in summaryDocs)
+            // lists {ownerType, ownerKey, fileName, contentType, file}; attachmentBytes
+            // maps each manifest "file" ref → its bytes; attachmentsRoot is the app's
+            // data/attachments directory to write blobs into. All null → attachments skipped.
+            IReadOnlyDictionary<string, byte[]>? attachmentBytes = null,
+            string? attachmentsRoot = null)
         {
             if (targetCompanyId == null && string.IsNullOrWhiteSpace(companyName))
                 throw new InvalidOperationException("Provide an existing companyId or a new companyName.");
@@ -331,6 +337,7 @@ namespace MyApp.Api.Services.Implementations
                 // ── Sales quotes / orders / delivery notes ──────────────────────
                 int nQuote = 0;
                 int quoteExpired = 0;
+                var quoteByGuid = new Dictionary<string, SalesQuote>();
                 foreach (var h in Rows("sales-quotes", true))
                 {
                     int clientId = await ClientOrPlaceholderAsync(Str(h, "Customer"));
@@ -346,10 +353,14 @@ namespace MyApp.Api.Services.Implementations
                     var qkey = Str(h, "Key") ?? Str(h, "id");
                     var validUntil = qkey != null ? quoteExpiryByKey.GetValueOrDefault(qkey) : null;
                     if (validUntil.HasValue && validUntil.Value.Date < DateTime.UtcNow.Date) quoteExpired++;
-                    _db.SalesQuotes.Add(new SalesQuote { CompanyId = companyId, DivisionId = null, ClientId = clientId, QuoteNumber = num, Date = Date(h, "IssueDate") ?? DateTime.Today, ValidUntil = validUntil, Subtotal = sub, GSTRate = 0, GSTAmount = 0, GrandTotal = sub, AmountInWords = "", Status = "Sent", Items = items });
+                    var quote = new SalesQuote { CompanyId = companyId, DivisionId = null, ClientId = clientId, QuoteNumber = num, Date = Date(h, "IssueDate") ?? DateTime.Today, ValidUntil = validUntil, Subtotal = sub, GSTRate = 0, GSTAmount = 0, GrandTotal = sub, AmountInWords = "", Status = "Sent", Items = items };
+                    _db.SalesQuotes.Add(quote);
+                    if (qkey != null) quoteByGuid[qkey] = quote;
                     nQuote++;
                 }
-                await _db.SaveChangesAsync(); _db.ChangeTracker.Clear();
+                await _db.SaveChangesAsync();
+                var quoteIdByGuid = quoteByGuid.ToDictionary(kv => kv.Key, kv => kv.Value.Id);
+                _db.ChangeTracker.Clear();
                 report.Created["salesQuotes"] = nQuote;
                 if (quoteExpired > 0) Note($"{quoteExpired} quote(s) imported with a past expiry → derive as \"Expired\".");
 
@@ -396,10 +407,12 @@ namespace MyApp.Api.Services.Implementations
                 // Collect (challan, guid) here; once invoices are imported below we
                 // resolve the guid → invoice id and mark the challan Billed.
                 var challanBillRefs = new List<(DeliveryChallan Dc, string InvGuid)>();
+                var challanByGuid = new Dictionary<string, DeliveryChallan>();
                 foreach (var h in Rows("delivery-notes", true))
                 {
                     int clientId = await ClientOrPlaceholderAsync(Str(h, "Customer"));
                     int num = Alloc("dc:0", RefNum(h), unique: false);
+                    var dcKey = Str(h, "Key") ?? Str(h, "id");
                     // Manager delivery notes carry a SalesOrder guid → link the challan
                     // to its order and match each line to an order line (by description,
                     // preferring an exact qty match) so the app derives the order's
@@ -426,14 +439,16 @@ namespace MyApp.Api.Services.Implementations
                     var po = Cf(h, poFieldGuidsForDn) ?? "";
                     var dc = new DeliveryChallan { CompanyId = companyId, DivisionId = null, ClientId = clientId, ChallanNumber = num, PoNumber = po, DeliveryDate = Date(h, "DeliveryDate"), Status = "Imported", IsImported = true, SalesOrderId = soId, Items = items };
                     _db.DeliveryChallans.Add(dc);
+                    if (dcKey != null) challanByGuid[dcKey] = dc;
                     if (Str(h, "SalesInvoice") is { } siGuid) challanBillRefs.Add((dc, siGuid));
                     if (soId != null) dcLinked++;
                     if (po.Length > 0) dcWithPo++;
                     nDc++;
                 }
                 await _db.SaveChangesAsync();
-                // Snapshot challan id → SalesInvoice guid before the tracker clear.
+                // Snapshot challan id → SalesInvoice guid + Manager DN key before the tracker clear.
                 var challanInvGuidById = challanBillRefs.ToDictionary(x => x.Dc.Id, x => x.InvGuid);
+                var challanIdByGuid = challanByGuid.ToDictionary(kv => kv.Key, kv => kv.Value.Id);
                 _db.ChangeTracker.Clear();
                 report.Created["deliveryChallans"] = nDc;
                 if (dcLinked > 0) Note($"linked {dcLinked} delivery note(s) to their sales order → fulfillment status derived from delivered qty.");
@@ -569,6 +584,60 @@ namespace MyApp.Api.Services.Implementations
                     if (key != null && billAmountByGuid.TryGetValue(key, out var m)) { b.AmountPaid = m.total - m.balance; billPaid++; }
                 }
                 await _db.SaveChangesAsync();
+
+                // ── Document attachments ────────────────────────────────────────
+                // Manager document attachments arrive as an "attachments" manifest
+                // (in summaryDocs) — [{ownerType, ownerKey, fileName, contentType,
+                // file}] — plus the blob bytes (attachmentBytes, keyed by the "file"
+                // ref) and the app's data/attachments dir (attachmentsRoot). Each is
+                // filed as a MyApp Attachment on the matching imported document. Full
+                // no-op when the export carries none (the common case).
+                var attManifest = Rows("attachments", false).ToList();
+                if (attManifest.Count > 0 && attachmentBytes != null && !string.IsNullOrWhiteSpace(attachmentsRoot))
+                {
+                    // Manager entity name → (MyApp Attachment EntityType, guid→id map).
+                    var attMap = new Dictionary<string, (string EntityType, IReadOnlyDictionary<string, int> Ids)>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["sales-quotes"]      = ("SalesQuote",      quoteIdByGuid),
+                        ["sales-orders"]      = ("SalesOrder",      orderIdByGuid),
+                        ["delivery-notes"]    = ("DeliveryChallan", challanIdByGuid),
+                        ["sales-invoices"]    = ("Invoice",         invoiceIdByGuid),
+                        ["purchase-invoices"] = ("PurchaseBill",    billIdByGuid),
+                    };
+                    var attDir = System.IO.Path.Combine(attachmentsRoot!, "Uncategorized");
+                    System.IO.Directory.CreateDirectory(attDir);
+                    int attMade = 0, attSkipped = 0;
+                    foreach (var a in attManifest)
+                    {
+                        var ownerType = Str(a, "ownerType");
+                        var ownerKey = Str(a, "ownerKey");
+                        var fileRef = Str(a, "file");
+                        if (ownerType == null || ownerKey == null || fileRef == null
+                            || !attMap.TryGetValue(ownerType, out var m)
+                            || !m.Ids.TryGetValue(ownerKey, out var entityId)
+                            || !attachmentBytes.TryGetValue(fileRef, out var bytes) || bytes.Length == 0)
+                        { attSkipped++; continue; }
+
+                        var fileName = Str(a, "fileName") ?? "attachment";
+                        var ext = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
+                        var storedName = $"{Guid.NewGuid():N}{ext}";
+                        await System.IO.File.WriteAllBytesAsync(System.IO.Path.Combine(attDir, storedName), bytes);
+                        string sha; using (var h = System.Security.Cryptography.SHA256.Create()) sha = Convert.ToHexString(h.ComputeHash(bytes)).ToLowerInvariant();
+                        _db.Attachments.Add(new Attachment
+                        {
+                            CompanyId = companyId, DivisionId = null, FolderId = null,
+                            EntityType = m.EntityType, EntityId = entityId,
+                            FileName = fileName, StoredFileName = storedName, StoragePath = $"Uncategorized/{storedName}",
+                            ContentType = Str(a, "contentType") ?? "application/octet-stream",
+                            FileExtension = ext, FileSizeBytes = bytes.Length, ContentSha256 = sha,
+                            UploadedByUserId = callerUserId, CreatedAt = DateTime.UtcNow,
+                        });
+                        attMade++;
+                    }
+                    if (attMade > 0) { await _db.SaveChangesAsync(); _db.ChangeTracker.Clear(); }
+                    report.Created["attachments"] = attMade;
+                    if (attSkipped > 0) Note($"Attachments: {attMade} filed onto documents, {attSkipped} skipped (owner doc not found or blob missing).");
+                }
 
                 // ── Seed next document numbers (company + per division) ─────────
                 // So the config screens don't show 0 and the next created document
@@ -918,6 +987,10 @@ namespace MyApp.Api.Services.Implementations
         // --fresh: delete a company's imported data (child-first).
         private async Task WipeCompanyAsync(int companyId)
         {
+            // Document attachments (leaf rows) — wipe so a --fresh reload doesn't
+            // accumulate orphaned attachments. On-disk blobs are left (harmless;
+            // the DB row is the source of truth) and get re-created on reload.
+            await _db.Attachments.Where(a => a.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.JournalLines.Where(l => l.JournalEntry.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.JournalEntries.Where(e => e.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.AccountTransfers.Where(t => t.CompanyId == companyId).ExecuteDeleteAsync();

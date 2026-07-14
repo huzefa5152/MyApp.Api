@@ -24,7 +24,9 @@ namespace MyApp.Api.Services.Interfaces
         Task<ManagerImportReport> RunAsync(
             IReadOnlyDictionary<string, JsonDocument> summaryDocs,
             IReadOnlyDictionary<string, JsonDocument> detailDocs,
-            string? companyName, int? companyId, bool dryRun, bool fresh, int? callerUserId);
+            string? companyName, int? companyId, bool dryRun, bool fresh, int? callerUserId,
+            IReadOnlyDictionary<string, byte[]>? attachmentBytes = null,
+            string? attachmentsRoot = null);
 
         /// <summary>
         /// Load an exported Manager Trial Balance (tab-separated text) into the
@@ -54,7 +56,7 @@ namespace MyApp.Api.Services.Interfaces
         ManagerImportReport PreviewTrialBalance(string trialBalanceText);
 
         /// <summary>
-        /// Perpetual-GL migration (FEATURE_PERPETUAL_GL_MIGRATION.md): rebuild the
+        /// Perpetual-GL migration (the perpetual-GL migration design): rebuild the
         /// company's chart of accounts keyed by Manager GUID with control types +
         /// STARTING balances, and post every historical document as a faithful
         /// balanced journal entry (ManualJournal) so each account carries a
