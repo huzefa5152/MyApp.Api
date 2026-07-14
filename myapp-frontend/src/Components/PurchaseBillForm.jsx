@@ -466,6 +466,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                         <tr key={idx}>
                           <td style={td}>
                             <SearchableItemTypeSelect
+                              divisionId={divisionId}
                               items={eligibleItemTypes}
                               value={it.itemTypeId || ""}
                               onChange={(newId, picked) => pickItemType(idx, newId, picked)}

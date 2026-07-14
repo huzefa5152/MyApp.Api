@@ -232,6 +232,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
                       <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
                       <td style={{ ...s.td, verticalAlign: "top" }}>
                         <SearchableItemTypeSelect
+                          divisionId={divisionId}
                           items={itemTypes}
                           value={item.itemTypeId || ""}
                           onChange={(newId, picked) => pickItemType(idx, newId, picked)}

@@ -306,6 +306,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
 
                     <div style={{ width: 190, flexShrink: 0 }}>
                       <SearchableItemTypeSelect
+                        divisionId={divisionId}
                         items={itemTypes}
                         value={item.itemTypeId || ""}
                         onChange={(newId, picked) => pickItemType(idx, newId, picked)}

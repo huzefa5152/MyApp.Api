@@ -20,10 +20,20 @@ import { MdArrowDropDown, MdSearch, MdStar } from "react-icons/md";
  *   nonInventoryItems   — array of { id, name, code, unitName, defaultLineDescription, defaultSalePrice, defaultPurchasePrice }
  *   nonInventoryValue   — currently selected non-inventory item id (or "")
  *   onPickNonInventory  — (nonInvItem | null) ⇒ void
+ *
+ * Division scoping (2026-07-14): when `divisionId` is set, the item-type list is
+ * filtered to that document's division — an item is shown only when its
+ * per-company overlay is company-wide (it.divisionId == null, incl. items with
+ * no overlay) OR pinned to this same division. Items pinned to a DIFFERENT
+ * division are hidden. Requires the parent to fetch getItemTypes(companyId) so
+ * each item carries its overlay `divisionId`. Non-inventory charges have no
+ * division and always show.
+ *   divisionId — the document's current division id (or "" / null for none)
  */
 export default function SearchableItemTypeSelect({
   items, value, onChange, placeholder, style, disabled = false,
   nonInventoryItems = [], nonInventoryValue = "", onPickNonInventory,
+  divisionId = null,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -57,8 +67,20 @@ export default function SearchableItemTypeSelect({
   //   2. Favorites next.
   //   3. Then by usage desc.
   //   4. Alphabetical tiebreaker.
+  // Division scope — hide item types pinned to a DIFFERENT division than this
+  // document's. Company-wide items (divisionId null, incl. items with no
+  // overlay for this company) always show. No filter when the document has no
+  // division. `selected`/`selectedNonInv` above intentionally search the FULL
+  // `items` so a line whose item is out-of-scope still renders its name.
+  const scopedItems = useMemo(() => {
+    const arr = items || [];
+    if (!divisionId) return arr;
+    const dv = String(divisionId);
+    return arr.filter((it) => it.divisionId == null || String(it.divisionId) === dv);
+  }, [items, divisionId]);
+
   const sortedItems = useMemo(() => {
-    const arr = [...(items || [])];
+    const arr = [...(scopedItems || [])];
     const hasHs = (it) => !!(it.hsCode && it.hsCode.trim());
     const inStock = (it) => (it.availableQty || 0) > 0;
     arr.sort((a, b) => {
@@ -74,7 +96,7 @@ export default function SearchableItemTypeSelect({
       return (a.name || "").localeCompare(b.name || "");
     });
     return arr;
-  }, [items]);
+  }, [scopedItems]);
 
   const filteredItems = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -243,21 +265,21 @@ export default function SearchableItemTypeSelect({
             />
           </div>
 
-          <div style={styles.list}>
-            {filteredItems.length === 0 && filteredNonInv.length === 0 && (
-              <div style={styles.empty}>
-                {items?.length === 0
-                  ? "No items in catalog yet. Add one on the Item Types page."
-                  : `No items match "${query}".`}
-              </div>
-            )}
+          {filteredItems.length === 0 && filteredNonInv.length === 0 && (
+            <div style={styles.empty}>
+              {(items?.length === 0 && nonInventoryItems?.length === 0)
+                ? "No items in catalog yet. Add one on the Item Types page."
+                : `No items match "${query}".`}
+            </div>
+          )}
 
-            {/* Non-Inventory Items (Freight, Discount, …) — a separate group,
-                mouse-clickable, excluded from arrow-key nav to keep the index
-                math on item types simple. */}
-            {filteredNonInv.length > 0 && (
-              <>
-                <div style={{ ...styles.sectionHeader, color: "#8a5a00", backgroundColor: "#fff8e1" }}>🚚 NON-INVENTORY (charges)</div>
+          {/* ── Non-Inventory charges (Freight, Discount, …) — its OWN pane with
+              a fixed header + independent scroll, so a long inventory list can't
+              push it out of view. Mouse-clickable, excluded from arrow-key nav. */}
+          {filteredNonInv.length > 0 && (
+            <div style={styles.niPane}>
+              <div style={styles.paneHeaderNi}>🚚 NON-INVENTORY · CHARGES ({filteredNonInv.length})</div>
+              <div style={styles.niScroll}>
                 {filteredNonInv.map((n) => (
                   <div
                     key={`ni-${n.id}`}
@@ -275,43 +297,58 @@ export default function SearchableItemTypeSelect({
                     </div>
                   </div>
                 ))}
-              </>
-            )}
+              </div>
+            </div>
+          )}
 
-            {stocked.length > 0 && (
-              <>
-                <div style={styles.sectionHeader}>📦 IN STOCK</div>
-                {stocked.map((it, i) => renderItem(it, i, highlightIdx, setHighlightIdx, handlePick))}
-              </>
-            )}
-            {quick.length > 0 && (
-              <>
-                <div style={styles.sectionHeader}>⚡ QUICK (no HS code)</div>
-                {quick.map((it, i) => {
-                  const realIdx = stocked.length + i;
-                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
-                })}
-              </>
-            )}
-            {favorites.length > 0 && (
-              <>
-                <div style={styles.sectionHeader}>★ FAVORITES</div>
-                {favorites.map((it, i) => {
-                  const realIdx = stocked.length + quick.length + i;
-                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
-                })}
-              </>
-            )}
-            {others.length > 0 && (
-              <>
-                {(stocked.length > 0 || quick.length > 0 || favorites.length > 0) && <div style={styles.sectionHeader}>OTHER</div>}
-                {others.map((it, i) => {
-                  const realIdx = stocked.length + quick.length + favorites.length + i;
-                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
-                })}
-              </>
-            )}
-          </div>
+          {/* ── Inventory items — its OWN pane with a fixed header + independent
+              scroll, taking the remaining height below the charges pane. */}
+          {(filteredItems.length > 0 || filteredNonInv.length > 0) && (
+            <div style={styles.invPane}>
+              <div style={styles.paneHeaderInv}>📦 INVENTORY ITEMS{filteredItems.length ? ` (${filteredItems.length})` : ""}</div>
+              <div style={styles.invScroll}>
+                {filteredItems.length === 0 ? (
+                  <div style={styles.empty}>No inventory items match &ldquo;{query}&rdquo;.</div>
+                ) : (
+                  <>
+                    {stocked.length > 0 && (
+                      <>
+                        <div style={styles.sectionHeader}>IN STOCK</div>
+                        {stocked.map((it, i) => renderItem(it, i, highlightIdx, setHighlightIdx, handlePick))}
+                      </>
+                    )}
+                    {quick.length > 0 && (
+                      <>
+                        <div style={styles.sectionHeader}>QUICK (no HS code)</div>
+                        {quick.map((it, i) => {
+                          const realIdx = stocked.length + i;
+                          return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
+                        })}
+                      </>
+                    )}
+                    {favorites.length > 0 && (
+                      <>
+                        <div style={styles.sectionHeader}>★ FAVORITES</div>
+                        {favorites.map((it, i) => {
+                          const realIdx = stocked.length + quick.length + i;
+                          return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
+                        })}
+                      </>
+                    )}
+                    {others.length > 0 && (
+                      <>
+                        {(stocked.length > 0 || quick.length > 0 || favorites.length > 0) && <div style={styles.sectionHeader}>OTHER</div>}
+                        {others.map((it, i) => {
+                          const realIdx = stocked.length + quick.length + favorites.length + i;
+                          return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
+                        })}
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>,
         document.body
       )}
@@ -424,11 +461,30 @@ const styles = {
     backgroundColor: "#f8f9fb",
   },
   list: { overflowY: "auto", flex: 1 },
+  // Non-inventory charges pane — capped height, own scroll, never grows to
+  // crowd out the inventory list below it.
+  niPane: { flexShrink: 0, borderBottom: "3px solid #ffe0b2" },
+  niScroll: { maxHeight: 132, overflowY: "auto", backgroundColor: "#fffdf7" },
+  // Inventory pane — takes the remaining height and scrolls on its own.
+  invPane: { flex: 1, minHeight: 96, display: "flex", flexDirection: "column" },
+  invScroll: { flex: 1, overflowY: "auto" },
+  // Section-level bars (the two panes). Solid, full-width, clearly separate the
+  // charges block from the inventory block.
+  paneHeaderNi: {
+    padding: "0.4rem 0.7rem", fontSize: "0.68rem", fontWeight: 800,
+    color: "#8a5a00", backgroundColor: "#fff3cd", letterSpacing: "0.04em",
+    textTransform: "uppercase", borderBottom: "1px solid #ffe8a3",
+  },
+  paneHeaderInv: {
+    padding: "0.4rem 0.7rem", fontSize: "0.68rem", fontWeight: 800,
+    color: "#0d47a1", backgroundColor: "#e8f0fe", letterSpacing: "0.04em",
+    textTransform: "uppercase", borderBottom: "1px solid #cfd9ff",
+  },
   sectionHeader: {
-    padding: "0.45rem 0.7rem 0.25rem",
-    fontSize: "0.65rem",
+    padding: "0.4rem 0.7rem 0.2rem",
+    fontSize: "0.62rem",
     fontWeight: 800,
-    color: "#5f6d7e",
+    color: "#8a94a6",
     letterSpacing: "0.05em",
     textTransform: "uppercase",
     backgroundColor: "#f8f9fb",
