@@ -217,6 +217,18 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     });
   };
 
+  // Bulk-apply a NON-INVENTORY item (charge) to all / empty rows — mirrors
+  // applyItemTypeToAll so the bulk picker's Non-Inventory section behaves like
+  // the per-row one.
+  const applyNonInvToAll = (n, mode = "all") => {
+    if (!n) return;
+    for (const item of allItems) {
+      const id = item.id;
+      if (mode === "empty" && (itemTypeIds[id] || itemNonInvIds[id])) continue;
+      handleNonInvPick(item, n);
+    }
+  };
+
   // Bulk-clear: drop the Item Type binding (and the inherited HS Code /
   // UOM / Sale Type / FbrUOMId) on every challan-derived item row in
   // one click. Description state is also cleared so the SmartItemAutocomplete
@@ -1322,6 +1334,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 divisionId={divisionId}
                                 items={filteredItemTypes}
                                 value=""
+                                nonInventoryItems={nonInvItems}
+                                nonInventoryValue=""
+                                onPickNonInventory={(n) => { if (n) applyNonInvToAll(n, bulkApplyMode); }}
                                 onChange={(newId, picked) => {
                                   if (!newId || !picked) return;
                                   applyItemTypeToAll(parseInt(newId), picked, bulkApplyMode);

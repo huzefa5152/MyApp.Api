@@ -13,6 +13,7 @@ import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
+import AccountSelect from "./AccountSelect";
 import AttachmentManager from "./AttachmentManager";
 import { usePermissions } from "../contexts/PermissionsContext";
 import QuantityInput from "./QuantityInput";
@@ -506,27 +507,15 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                           </td>
                           {glOn && (
                             <td style={td}>
-                              <select
-                                style={{ ...cellInput, fontSize: "0.76rem" }}
-                                value={it.accountId ?? ""}
+                              <AccountSelect
+                                accounts={accounts}
+                                value={it.accountId}
+                                onChange={(v) => updateItem(idx, "accountId", v)}
+                                side="expense"
                                 disabled={!!it.nonInventoryItemId}
-                                title={it.nonInventoryItemId ? "Posts to the non-inventory item's account" : "GL expense/COGS account for this line"}
-                                onChange={e => updateItem(idx, "accountId", e.target.value ? parseInt(e.target.value) : null)}
-                              >
-                                <option value="">{it.nonInventoryItemId ? "— item account —" : "— default —"}</option>
-                                {accounts.filter(a => a.accountType === "Expense").length > 0 && (
-                                  <optgroup label="Expense">
-                                    {accounts.filter(a => a.accountType === "Expense").map(a => (
-                                      <option key={a.id} value={a.id}>{a.code ? `${a.code} — ` : ""}{a.name}</option>
-                                    ))}
-                                  </optgroup>
-                                )}
-                                <optgroup label="Other accounts">
-                                  {accounts.filter(a => a.accountType !== "Expense").map(a => (
-                                    <option key={a.id} value={a.id}>{a.code ? `${a.code} — ` : ""}{a.name}</option>
-                                  ))}
-                                </optgroup>
-                              </select>
+                                placeholder={it.nonInventoryItemId ? "— item account —" : "— default —"}
+                                style={{ ...cellInput, fontSize: "0.76rem" }}
+                              />
                             </td>
                           )}
                           <td style={{ ...td, textAlign: "right", fontWeight: 600 }}>{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>

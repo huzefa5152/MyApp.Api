@@ -37,6 +37,7 @@ import { formStyles, modalSizes } from "../theme";
 import HsCodeAutocomplete from "./HsCodeAutocomplete";
 import LookupAutocomplete from "./LookupAutocomplete";
 import DivisionSelect from "./DivisionSelect";
+import AccountSelect from "./AccountSelect";
 
 // 2026-05-14 perf: module-level cache for FBR-hint responses keyed by
 // `${companyId}:${hsCode}`. PRAL latency dominates the lookup time
@@ -138,10 +139,6 @@ export default function ItemTypeForm({
       .catch(() => { if (!cancelled) setAccounts([]); });
     return () => { cancelled = true; };
   }, [showGlMapping, companyId]);
-
-  const incomeAccounts = accounts.filter((a) => a.accountType === "Income");
-  const expenseAccounts = accounts.filter((a) => a.accountType === "Expense");
-  const otherAccounts = accounts.filter((a) => a.accountType !== "Income" && a.accountType !== "Expense");
 
   // Prefill the opening balance when editing (fetch this company's current
   // opening for the item type, if any). Best-effort — never blocks the form.
@@ -665,53 +662,27 @@ export default function ItemTypeForm({
                     <label style={styles.label}>
                       Sales account <span style={{ fontWeight: 400, color: colors.textSecondary }}>(income)</span>
                     </label>
-                    <select
+                    <AccountSelect
+                      accounts={accounts}
+                      value={saleAccountId}
+                      onChange={setSaleAccountId}
+                      side="income"
+                      placeholder="Use company default"
                       style={styles.input}
-                      value={saleAccountId ?? ""}
-                      onChange={(e) => setSaleAccountId(e.target.value ? parseInt(e.target.value, 10) : null)}
-                    >
-                      <option value="">Use company default</option>
-                      {incomeAccounts.length > 0 && (
-                        <optgroup label="Income">
-                          {incomeAccounts.map((a) => (
-                            <option key={a.id} value={a.id}>{a.code ? `${a.code} — ` : ""}{a.name}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {otherAccounts.length > 0 && (
-                        <optgroup label="Other accounts">
-                          {otherAccounts.map((a) => (
-                            <option key={a.id} value={a.id}>{a.code ? `${a.code} — ` : ""}{a.name}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
+                    />
                   </div>
                   <div>
                     <label style={styles.label}>
                       Expense account <span style={{ fontWeight: 400, color: colors.textSecondary }}>(purchases / COGS)</span>
                     </label>
-                    <select
+                    <AccountSelect
+                      accounts={accounts}
+                      value={purchaseAccountId}
+                      onChange={setPurchaseAccountId}
+                      side="expense"
+                      placeholder="Use company default"
                       style={styles.input}
-                      value={purchaseAccountId ?? ""}
-                      onChange={(e) => setPurchaseAccountId(e.target.value ? parseInt(e.target.value, 10) : null)}
-                    >
-                      <option value="">Use company default</option>
-                      {expenseAccounts.length > 0 && (
-                        <optgroup label="Expense">
-                          {expenseAccounts.map((a) => (
-                            <option key={a.id} value={a.id}>{a.code ? `${a.code} — ` : ""}{a.name}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {otherAccounts.length > 0 && (
-                        <optgroup label="Other accounts">
-                          {otherAccounts.map((a) => (
-                            <option key={a.id} value={a.id}>{a.code ? `${a.code} — ` : ""}{a.name}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
+                    />
                   </div>
                 </div>
                 <small style={styles.compactNote}>

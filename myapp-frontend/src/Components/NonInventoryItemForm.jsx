@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { getAccountsFlat } from "../api/accountApi";
 import { notify } from "../utils/notify";
 import { formStyles, modalSizes } from "../theme";
+import AccountSelect from "./AccountSelect";
 
 // Create / edit a per-company Non-Inventory Item (Freight, Discount, …).
 // Maps to the company's chart of accounts (sale + purchase account). Accounts
@@ -35,13 +36,6 @@ export default function NonInventoryItemForm({ companyId, item, onClose, onSaved
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-  // Split accounts by side so the pickers surface the natural choice first:
-  // income for "when sold", expense/asset for "when purchased".
-  const incomeAccounts = accounts.filter((a) => a.accountType === "Income");
-  const otherAccounts = accounts.filter((a) => a.accountType !== "Income");
-  const expenseAccounts = accounts.filter((a) => a.accountType === "Expense");
-  const nonExpenseAccounts = accounts.filter((a) => a.accountType !== "Expense");
-
   const submit = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) { notify("A name is required.", "warning"); return; }
@@ -67,22 +61,6 @@ export default function NonInventoryItemForm({ companyId, item, onClose, onSaved
       setSaving(false);
     }
   };
-
-  const AccountSelect = ({ value, onChange, primary, primaryLabel, rest, restLabel, placeholder }) => (
-    <select style={formStyles.input} value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">{accountsErr ? "(chart of accounts unavailable)" : placeholder}</option>
-      {primary.length > 0 && (
-        <optgroup label={primaryLabel}>
-          {primary.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </optgroup>
-      )}
-      {rest.length > 0 && (
-        <optgroup label={restLabel}>
-          {rest.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.accountType})</option>)}
-        </optgroup>
-      )}
-    </select>
-  );
 
   return (
     <div style={formStyles.backdrop} onClick={onClose}>
@@ -111,20 +89,24 @@ export default function NonInventoryItemForm({ companyId, item, onClose, onSaved
           <div style={formStyles.formGroup}>
             <label style={formStyles.label}>When sold → account</label>
             <AccountSelect
+              accounts={accounts}
               value={form.saleAccountId} onChange={(v) => set("saleAccountId", v)}
-              primary={incomeAccounts} primaryLabel="Income"
-              rest={otherAccounts} restLabel="Other accounts"
+              side="income"
               placeholder="(Suspense — unmapped)"
+              style={formStyles.input}
+              unavailable={accountsErr}
             />
           </div>
 
           <div style={formStyles.formGroup}>
             <label style={formStyles.label}>When purchased → account</label>
             <AccountSelect
+              accounts={accounts}
               value={form.purchaseAccountId} onChange={(v) => set("purchaseAccountId", v)}
-              primary={expenseAccounts} primaryLabel="Expenses"
-              rest={nonExpenseAccounts} restLabel="Other accounts"
+              side="expense"
               placeholder="(Suspense — unmapped)"
+              style={formStyles.input}
+              unavailable={accountsErr}
             />
           </div>
 

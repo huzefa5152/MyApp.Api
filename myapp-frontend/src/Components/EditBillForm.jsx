@@ -788,6 +788,28 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
     }));
   };
 
+  // Bulk-apply a NON-INVENTORY item (charge) to all / empty rows — mirrors
+  // updateNonInventory so the bulk picker's Non-Inventory section behaves like
+  // the per-row one.
+  const applyNonInvToAll = (n, mode = "all") => {
+    if (!n) return;
+    setItems((prev) => prev.map((row) => {
+      if (mode === "empty" && (row.itemTypeId || row.nonInventoryItemId)) return row;
+      const next = {
+        ...row,
+        nonInventoryItemId: n.id,
+        itemTypeId: null, itemTypeName: "", hsCode: "", saleType: "", fbrUOMId: null,
+      };
+      if (!row.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
+      if (!row.uom?.trim()) next.uom = n.unitName || "";
+      if ((!row.unitPrice || Number(row.unitPrice) === 0) && n.defaultSalePrice != null) {
+        next.unitPrice = n.defaultSalePrice;
+        next.lineTotal = Math.round((parseFloat(row.quantity) || 0) * n.defaultSalePrice * 100) / 100;
+      }
+      return next;
+    }));
+  };
+
   // Derived: what's the common Item Type across rows? Used to drive
   // the bulk picker's `value` so the dropdown actually reflects what's
   // applied (pre-fix it always showed the placeholder even after apply).
@@ -1297,6 +1319,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                         // when they diverge (e.g. partial apply, manual
                         // edits) the placeholder returns.
                         value={commonItemTypeId}
+                        nonInventoryItems={nonInvItems}
+                        nonInventoryValue=""
+                        onPickNonInventory={(n) => { if (n) applyNonInvToAll(n, bulkApplyMode); }}
                         onChange={(newId, picked) => {
                           // Clearing the picker (× icon) wipes the row
                           // selection too — same behaviour as the

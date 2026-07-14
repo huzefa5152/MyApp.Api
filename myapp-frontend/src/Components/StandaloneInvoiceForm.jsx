@@ -484,6 +484,25 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     }));
   };
 
+  // Bulk-apply a NON-INVENTORY item (charge) to all / empty rows — mirrors
+  // applyItemTypeToRows so the bulk picker's Non-Inventory section behaves like
+  // the per-row one.
+  const applyNonInvToRows = (n, mode) => {
+    if (!n) return;
+    setRows((prev) => prev.map((r) => {
+      if (mode === "empty" && (r.itemTypeId || r.nonInventoryItemId)) return r;
+      const next = {
+        ...r,
+        nonInventoryItemId: n.id,
+        itemTypeId: "", itemTypeName: "", hsCode: "", fbrUOMId: null, saleType: "",
+      };
+      if (!r.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
+      if (!r.uom?.trim()) next.uom = n.unitName || "";
+      if ((!r.unitPrice || Number(r.unitPrice) === 0) && n.defaultSalePrice != null) next.unitPrice = String(n.defaultSalePrice);
+      return next;
+    }));
+  };
+
   // Bulk-clear: drop the Item Type binding (and the inherited HS Code /
   // UOM / Sale Type / FbrUOMId) on every row. Used when the operator
   // wants to start over after a wrong bulk-apply pick. In Invoices mode
@@ -1045,6 +1064,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               divisionId={divisionId}
                               items={filteredItemTypes}
                               value=""
+                              nonInventoryItems={nonInvItems}
+                              nonInventoryValue=""
+                              onPickNonInventory={(n) => { if (n) applyNonInvToRows(n, bulkApplyMode); }}
                               onChange={(_, picked) => applyItemTypeToRows(picked, bulkApplyMode)}
                               placeholder={bulkApplyMode === "all"
                                 ? "— pick to apply to all —"
