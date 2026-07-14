@@ -1306,6 +1306,10 @@ namespace MyApp.Api.Services.Implementations
                     invoice.ClientId = newClient.Id;
                 }
 
+                // Re-home to a different division when requested. GL + stock are
+                // re-derived below off invoice.DivisionId, so the move re-tags them.
+                await ApplyDivisionChangeAsync(invoice, dto.UpdateDivision, dto.DivisionId);
+
                 // Preload any referenced ItemTypes in one round-trip
                 var referencedTypeIds = dto.Items
                     .Where(i => i.ItemTypeId.HasValue)
@@ -1596,6 +1600,10 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                // Re-home to a different division when requested (GL + stock
+                // re-tag on the re-post below).
+                await ApplyDivisionChangeAsync(invoice, dto.UpdateDivision, dto.DivisionId);
+
                 // Pre-load existing overlays for these items so we upsert
                 // in one shot (no per-row roundtrip).
                 Dictionary<int, InvoiceItemAdjustment> existingOverlays =
@@ -3149,5 +3157,40 @@ namespace MyApp.Api.Services.Implementations
 
         private static int? Coerce(int? candidate, HashSet<int> validIds)
             => candidate is int id && validIds.Contains(id) ? id : null;
+
+        /// <summary>
+        /// Re-home a bill to a different division (2026-07-14). No-op unless
+        /// <paramref name="update"/> is set and the division actually changes.
+        /// Validates the target belongs to the bill's company and that moving it
+        /// there won't clash with an existing document number in that division
+        /// (the unique index is CompanyId, DivisionId, NoteKind, InvoiceNumber).
+        /// The caller re-posts GL + re-syncs stock afterwards, so the new
+        /// division flows onto the journal lines and stock movements.
+        /// </summary>
+        private async Task ApplyDivisionChangeAsync(Invoice invoice, bool update, int? newDivisionId)
+        {
+            if (!update || invoice.DivisionId == newDivisionId) return;
+
+            if (newDivisionId.HasValue)
+            {
+                var ok = await _context.Divisions.AsNoTracking()
+                    .AnyAsync(d => d.Id == newDivisionId.Value && d.CompanyId == invoice.CompanyId);
+                if (!ok)
+                    throw new InvalidOperationException("Selected division does not belong to this company.");
+            }
+
+            var clash = await _context.Invoices.AsNoTracking().AnyAsync(i =>
+                i.Id != invoice.Id
+                && i.CompanyId == invoice.CompanyId
+                && i.DivisionId == newDivisionId
+                && i.NoteKind == invoice.NoteKind
+                && i.InvoiceNumber == invoice.InvoiceNumber);
+            if (clash)
+                throw new InvalidOperationException(
+                    $"The target division already has document #{invoice.InvoiceNumber}. Moving this bill " +
+                    "there would clash with that number — renumber or pick a different division.");
+
+            invoice.DivisionId = newDivisionId;
+        }
     }
 }

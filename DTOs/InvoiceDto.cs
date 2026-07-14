@@ -412,6 +412,20 @@ namespace MyApp.Api.DTOs
         /// When null, the existing client is preserved.
         /// </summary>
         public int? ClientId { get; set; }
+
+        /// <summary>
+        /// Re-home the bill to a different division (2026-07-14). Only applied
+        /// when <see cref="UpdateDivision"/> is true — otherwise the stored
+        /// division is preserved (a bare null here would otherwise be
+        /// indistinguishable from "move to company-level"). <see cref="DivisionId"/>
+        /// null + flag true = move to company-level (no division). The service
+        /// validates the target belongs to the company and blocks a move that
+        /// would collide with an existing number in the target division; the GL
+        /// entry and stock movements are re-tagged with the new division on save.
+        /// </summary>
+        public bool UpdateDivision { get; set; }
+        public int? DivisionId { get; set; }
+
         public List<UpdateInvoiceItemDto> Items { get; set; } = new();
     }
 
@@ -464,6 +478,12 @@ namespace MyApp.Api.DTOs
     public class UpdateInvoiceItemTypesDto
     {
         public List<UpdateInvoiceItemTypeRow> Items { get; set; } = new();
+
+        /// <summary>Re-home the bill to a different division on the narrow
+        /// (Invoices-tab) edit path too. Same semantics as
+        /// <see cref="UpdateInvoiceDto.UpdateDivision"/> / <see cref="UpdateInvoiceDto.DivisionId"/>.</summary>
+        public bool UpdateDivision { get; set; }
+        public int? DivisionId { get; set; }
 
         /// <summary>
         /// Dual-book mode flag (2026-05-11):

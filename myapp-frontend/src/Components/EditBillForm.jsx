@@ -5,6 +5,7 @@ import { getInvoiceById, updateInvoice, updateInvoiceItemTypes, updateInvoiceIte
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { getClientsByCompany } from "../api/clientApi";
+import { getDivisionsByCompany } from "../api/divisionApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getClaimSummary } from "../api/taxClaimApi";
 import QuantityInput from "./QuantityInput";
@@ -128,6 +129,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // bill's existing buyer.
   const [clients, setClients] = useState([]);
   const [clientId, setClientId] = useState("");
+  // Division is editable here (2026-07-14) — moving a bill re-tags its GL +
+  // stock. Populated from the loaded bill; options fetched per company below.
+  const [divisions, setDivisions] = useState([]);
+  const [divisionId, setDivisionId] = useState("");
   // Units list — gates each row's quantity input on the picked UOM
   // (decimal allowed for KG/Liter/etc., integer-only for Pcs/SET/etc.).
   const [units, setUnits] = useState([]);
@@ -218,6 +223,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         setItemTypes(typesRes.data || []);
         setUnits(unitsRes.data || []);
         setClientId(data.clientId ? String(data.clientId) : "");
+        setDivisionId(data.divisionId ? String(data.divisionId) : "");
         setGstRate(data.gstRate ?? 18);
         // Date arrives as ISO string; the <input type="date"> control wants
         // YYYY-MM-DD in LOCAL time. Pre-fix (.toISOString().slice(0,10))
@@ -250,6 +256,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           getClientsByCompany(data.companyId)
             .then((res) => setClients(res.data || []))
             .catch(() => setClients([]));
+          // Company's divisions so the bill can be re-homed to another one.
+          getDivisionsByCompany(data.companyId)
+            .then((res) => setDivisions(res.data || []))
+            .catch(() => setDivisions([]));
           // Per-company Non-Inventory Items for the unified item picker.
           getNonInventoryItemsByCompany(data.companyId, true)
             .then((res) => setNonInvItems(res.data || []))
@@ -856,6 +866,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
     if (items.length === 0) return setError("No items to save.");
 
     setSaving(true);
+    // Division re-home (2026-07-14) — sent on every save path so the bill can
+    // be moved on both the Bills and Invoices tabs. `updateDivision` opts in so
+    // other callers that omit it never clobber the stored division.
+    const divisionPayload = { updateDivision: true, divisionId: divisionId ? parseInt(divisionId) : null };
     try {
       if (itemTypeOnlyMode) {
         // Narrow path — only re-classify lines by ItemType. Server enforces
@@ -864,6 +878,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         await updateInvoiceItemTypes(
           invoiceId,
           items.map((i) => ({ id: i.id || 0, itemTypeId: i.itemTypeId || null })),
+          divisionPayload,
         );
       } else if (itemTypeAndQtyMode) {
         // Narrow path — Item Type + Qty + UnitPrice. Same back-end
@@ -908,6 +923,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
             unitPrice: parseFloat(i.unitPrice) || 0,
           })),
           writeMode,
+          divisionPayload,
         );
       } else {
         // Full edit path — same validation as before.
@@ -934,6 +950,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           paymentTerms: ptToSave,
           documentType: documentType || null,
           paymentMode: paymentMode || null,
+          ...divisionPayload,
           // Only send clientId when it would actually change — backend
           // refuses to reassign on challan-linked bills, so omitting the
           // field on those (when locked) avoids a needless 400.
@@ -1116,18 +1133,25 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                       ))}
                     </select>
                   </div>
-                  {/* Division is set at creation time and never editable here —
-                      shown read-only so the operator can tell which division's
-                      sequence the bill belongs to. */}
-                  {invoice?.divisionName && (
+                  {/* Division is editable (2026-07-14) — moving the bill re-tags
+                      its GL entry + stock movements to the chosen division. Shown
+                      whenever the company has divisions; disabled only in
+                      read-only view. Not gated by lockNonItemType so it can be
+                      changed on the Invoices tab too. */}
+                  {divisions.length > 0 && (
                     <div style={{ flex: 1, minWidth: 140 }}>
                       <label style={styles.label}>Division</label>
-                      <input
-                        type="text"
-                        style={{ ...styles.input, ...styles.readOnlyInput }}
-                        value={invoice.divisionName}
-                        readOnly
-                      />
+                      <select
+                        style={{ ...styles.input, ...(readOnly ? styles.readOnlyInput : {}) }}
+                        value={divisionId}
+                        onChange={(e) => setDivisionId(e.target.value)}
+                        disabled={readOnly}
+                      >
+                        <option value="">— Company-wide (no division) —</option>
+                        {divisions.map((d) => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                      </select>
                     </div>
                   )}
                   <div style={{ flex: 1, minWidth: 140 }}>
@@ -1265,6 +1289,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     </select>
                     <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
                       <SearchableItemTypeSelect
+                        divisionId={divisionId}
                         items={filteredItemTypes}
                         // value derived from the rows themselves so the
                         // dropdown reflects the applied selection. When
@@ -1339,9 +1364,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                   <table style={styles.table}>
                     <thead>
                       <tr style={styles.thead}>
-                        {!billsMode && (
-                          <th style={{ ...styles.th, width: 180, minWidth: 180 }}>Item Type (FBR)</th>
-                        )}
+                        {/* Item Type shows in BOTH modes now — it drives the
+                            per-line GL account, not just FBR classification. */}
+                        <th style={{ ...styles.th, width: 180, minWidth: 180 }}>Item Type</th>
                         <th style={{ ...styles.th, minWidth: 140 }}>Description</th>
                         <th style={{ ...styles.th, width: 120, minWidth: 120 }}>Qty</th>
                         <th style={{ ...styles.th, width: 110, minWidth: 110 }}>UOM</th>
@@ -1362,24 +1387,23 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                         const hasItemType = !!item.itemTypeId;
                         return (
                           <tr key={item.id || `new-${idx}`}>
-                            {!billsMode && (
-                              <td style={styles.td}>
-                                {lockItemType ? (
-                                  <div style={styles.readOnlyText}>{item.itemTypeName || <span style={styles.muted}>—</span>}</div>
-                                ) : (
-                                  <SearchableItemTypeSelect
-                                    items={filteredItemTypes}
-                                    value={item.itemTypeId || ""}
-                                    onChange={(newId, picked) => updateItemType(idx, newId ? parseInt(newId) : null, picked)}
-                                    nonInventoryItems={nonInvItems}
-                                    nonInventoryValue={item.nonInventoryItemId || ""}
-                                    onPickNonInventory={(n) => updateNonInventory(idx, n)}
-                                    placeholder="Pick item…"
-                                    style={styles.tableInput}
-                                  />
-                                )}
-                              </td>
-                            )}
+                            <td style={styles.td}>
+                              {lockItemType ? (
+                                <div style={styles.readOnlyText}>{item.itemTypeName || (item.nonInventoryItemName ? item.nonInventoryItemName : <span style={styles.muted}>—</span>)}</div>
+                              ) : (
+                                <SearchableItemTypeSelect
+                                  divisionId={divisionId}
+                                  items={filteredItemTypes}
+                                  value={item.itemTypeId || ""}
+                                  onChange={(newId, picked) => updateItemType(idx, newId ? parseInt(newId) : null, picked)}
+                                  nonInventoryItems={nonInvItems}
+                                  nonInventoryValue={item.nonInventoryItemId || ""}
+                                  onPickNonInventory={(n) => updateNonInventory(idx, n)}
+                                  placeholder="Pick item…"
+                                  style={styles.tableInput}
+                                />
+                              )}
+                            </td>
                             <td style={styles.td}>
                               {lockNonItemType ? (
                                 <div style={styles.readOnlyText}>{item.description ? <RichText text={item.description} /> : <span style={styles.muted}>—</span>}</div>
@@ -1564,6 +1588,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           companyId={invoice?.companyId}
           scenarioCode={chosenScenario?.code}
           scenarioSaleType={chosenScenario?.saleType}
+          showGlMapping
+          defaultDivisionId={divisionId || null}
           onClose={() => setShowAddItemType(false)}
           onSaved={(created) => onItemTypeCreated(created)}
         />

@@ -192,7 +192,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     return data || [];
   };
   const refreshItemTypes = async () => {
-    const { data } = await getItemTypes();
+    const { data } = await getItemTypes(companyId);
     setItemTypes(data || []);
     return data || [];
   };
@@ -1042,6 +1042,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                           </select>
                           <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
                             <SearchableItemTypeSelect
+                              divisionId={divisionId}
                               items={filteredItemTypes}
                               value=""
                               onChange={(_, picked) => applyItemTypeToRows(picked, bulkApplyMode)}
@@ -1096,6 +1097,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                 <tr key={r.localId} style={styles.unifiedRow}>
                                   <td style={styles.unifiedTd}>
                                     <SearchableItemTypeSelect
+                                      divisionId={divisionId}
                                       items={filteredItemTypes}
                                       value={r.itemTypeId}
                                       onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
@@ -1342,6 +1344,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           companyId={companyId}
           scenarioCode={chosenScenario?.code}
           scenarioSaleType={chosenScenario?.saleType}
+          showGlMapping
+          defaultDivisionId={divisionId || null}
           onClose={() => { setShowAddItemType(false); setPendingItemTypeRow(null); }}
           onSaved={onItemTypeSaved}
         />

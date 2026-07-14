@@ -249,7 +249,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         const [challanRes, clientRes, typesRes, scenarioRes] = await Promise.all([
           getPendingChallansByCompany(companyId),
           getClientsByCompany(companyId),
-          getItemTypes().catch(() => ({ data: [] })),
+          getItemTypes(companyId).catch(() => ({ data: [] })),
           fbrEnabled
             ? getFbrApplicableScenarios(companyId).catch(() => ({ data: { scenarios: [] } }))
             : Promise.resolve({ data: { scenarios: [] } }),
@@ -802,7 +802,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     return data || [];
   };
   const refreshItemTypes = async () => {
-    const { data } = await getItemTypes();
+    const { data } = await getItemTypes(companyId);
     setItemTypes(data || []);
     return data || [];
   };
@@ -1319,6 +1319,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             </select>
                             <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
                               <SearchableItemTypeSelect
+                                divisionId={divisionId}
                                 items={filteredItemTypes}
                                 value=""
                                 onChange={(newId, picked) => {
@@ -1388,6 +1389,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                           The '+ New Item Type' affordance lives once above the grid
                                           (was per-row before — moved to declutter the table). */}
                                       <SearchableItemTypeSelect
+                                        divisionId={divisionId}
                                         items={filteredItemTypes}
                                         value={itemTypeIds[item.id] || ""}
                                         nonInventoryItems={nonInvItems}
@@ -1661,6 +1663,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           companyId={companyId}
           scenarioCode={chosenScenario?.code}
           scenarioSaleType={chosenScenario?.saleType}
+          showGlMapping
+          defaultDivisionId={divisionId || null}
           onClose={() => { setShowAddItemType(false); setPendingItemTypeRowId(null); }}
           onSaved={(created) => onItemTypeCreated(created)}
         />

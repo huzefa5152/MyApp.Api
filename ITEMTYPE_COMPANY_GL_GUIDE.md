@@ -98,8 +98,9 @@ behaviour-neutral vs `ResolvePurchasesAsync`.
 | Overlay CRUD + reads | `Services/Implementations/ItemTypeService.cs` (`UpsertOverlayAsync` — gated on `dto.WriteCompanyOverlay`; `ApplyOverlayAsync`) + `Services/Interfaces/IItemTypeService.cs` + `Controllers/ItemTypesController.cs` (asserts `_access` on `companyId`) |
 | Per-line passthrough | `Services/Implementations/InvoiceService.cs` + `PurchaseBillService.cs` (`ValidCompanyAccountIdsAsync` + `Coerce` — foreign/inactive id → null) |
 | DTOs | `DTOs/ItemTypeDto.cs` (+`WriteCompanyOverlay`), `DTOs/InvoiceDto.cs`, `DTOs/PurchaseBillDto.cs` |
-| Item Catalog UI | `myapp-frontend/src/pages/ItemTypesPage.jsx` (company dropdown, Division/GL column) + `myapp-frontend/src/Components/ItemTypeForm.jsx` (`showGlMapping` → Division + account pickers) |
+| Item Catalog UI | `myapp-frontend/src/pages/ItemTypesPage.jsx` (company dropdown, Division/GL column) + `myapp-frontend/src/Components/ItemTypeForm.jsx` (`showGlMapping` → Division + account pickers; `defaultDivisionId` pre-selects the division). The **"+ New Item Type" quick-add** on the Invoice / Standalone / Edit-Bill forms passes `showGlMapping` + `defaultDivisionId={divisionId}`, so quick-adds capture GL posting details and default to the document's division. |
 | Editable per-line Account column | `myapp-frontend/src/Components/PurchaseBillForm.jsx` (gated on `glOn`, auto-fills from item overlay) |
+| Document item picker | `myapp-frontend/src/Components/SearchableItemTypeSelect.jsx` — `divisionId` prop filters the item list to the document's division (company-wide items always show; items pinned to another division hidden); Non-Inventory charges + Inventory items render as two separate scroll panes; one search filters both. Wired into all document forms (Challan/SalesOrder/SalesQuote/GoodsReceipt/PurchaseBill/Invoice/StandaloneInvoice/EditBill), each of which fetches `getItemTypes(companyId)` so items carry their overlay `divisionId`. |
 | Test | `scripts/test_accounting_gl.py` suite **14** (per-line split) |
 
 ---
@@ -123,6 +124,8 @@ behaviour-neutral vs `ResolvePurchasesAsync`.
 ## 8. Debugging map (symptom → look here)
 
 - **Sale/purchase lumps on one account (no split):** GL off? item type has no overlay row for that company AND `Company.Default*` null → falls to the `Sales`/`Purchases` chain — that's expected. Check `CompanyItemTypeSettings` for a `(CompanyId, ItemTypeId)` row with `SaleAccountId`/`PurchaseAccountId`.
+- **Changing a line's item type doesn't move the GL:** it should — both `InvoiceService.UpdateAsync` (full edit) and `UpdateItemTypesAsync` (narrow) call `PostInvoiceAsync`, which removes the old journal entry and writes a new one against the new item's resolved account. If it didn't move, confirm you're hitting a build that has the current code (the posting is replace-on-edit).
+- **Editing a bill's division (2026-07-14):** `EditBillForm` shows an editable Division `<select>` and the Item Type column in BOTH Bills and Invoices modes. The chosen division is sent as `updateDivision:true` + `divisionId` on every save path; `InvoiceService.ApplyDivisionChangeAsync` validates it belongs to the company, blocks a move that would clash with an existing number in the target division (unique index `CompanyId,DivisionId,NoteKind,InvoiceNumber`), sets `Invoice.DivisionId`, and the GL + stock re-post re-tags journal lines / movements to the new division. `updateDivision` gates the apply so other API callers can't null the division by omission.
 - **Line posts to Suspense:** the resolved account is inactive or belongs to another company (coerced away). `LoadAccountsAsync` only loads `IsActive` accounts of the company.
 - **Overlay not saving from the Item Catalog form:** confirm the request carried `writeCompanyOverlay: true` and a `companyId`; the controller also asserts tenant access on `companyId`.
 - **"Selected division does not belong to this company":** `UpsertOverlayAsync` rejects a `DivisionId` whose `CompanyId` ≠ the item's company (cross-tenant guard).
@@ -134,5 +137,6 @@ behaviour-neutral vs `ResolvePurchasesAsync`.
 ## 9. Deferred (not yet built)
 
 - Editable per-line **Account** column on `StandaloneInvoiceForm`, `EditBillForm`, `InvoiceForm` (only `PurchaseBillForm` has it). The sales-side P&L split still works — it just derives the account from the item-type overlay instead of offering a manual per-line override.
-- Division-**filtered document pickers** (design §7): a division-scoped item type is tagged but pickers don't yet filter documents by division scope.
 - Moving item-type curation (`IsFavorite`/`UsageCount`) onto the overlay (still global on `ItemType`).
+
+**Done (was deferred):** division-filtered document pickers (design §7) — implemented via `SearchableItemTypeSelect`'s `divisionId` prop across all document forms; the picker also now separates Non-Inventory charges from Inventory items into two independently-scrolling panes.

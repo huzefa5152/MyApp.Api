@@ -92,6 +92,9 @@ export default function ItemTypeForm({
   showFavoriteToggle = false,
   showRichHints = false,
   showGlMapping = false,
+  // When quick-adding from a document that has a division, pre-select it here so
+  // the new item type is registered against the same division by default.
+  defaultDivisionId = null,
   existingHsCodes = [],
   onClose,
   onSaved,
@@ -122,7 +125,7 @@ export default function ItemTypeForm({
   // ── Per-company overlay (division + GL account mapping) ──
   // Only the Item Catalog screen passes showGlMapping; the bill-form quick-add
   // usages keep the modal lean and never touch the overlay.
-  const [divisionId, setDivisionId] = useState(editItem?.divisionId ?? null);
+  const [divisionId, setDivisionId] = useState(editItem?.divisionId ?? defaultDivisionId ?? null);
   const [saleAccountId, setSaleAccountId] = useState(editItem?.saleAccountId ?? null);
   const [purchaseAccountId, setPurchaseAccountId] = useState(editItem?.purchaseAccountId ?? null);
   const [accounts, setAccounts] = useState([]);
