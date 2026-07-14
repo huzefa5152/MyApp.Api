@@ -111,7 +111,7 @@ namespace MyApp.Api.Services.Implementations
                     .ToList();
             }
 
-            return sorted.Select(it =>
+            var result = sorted.Select(it =>
             {
                 var dto = ToDto(it);
                 if (onHandByItem != null)
@@ -120,15 +120,61 @@ namespace MyApp.Api.Services.Implementations
                 }
                 return dto;
             }).ToList();
+
+            // Annotate each row with the selected company's overlay (division +
+            // GL account mapping) so the Item Catalog screen can show/edit them
+            // in that company's context.
+            if (companyId.HasValue)
+                await ApplyOverlayAsync(result, companyId.Value);
+            return result;
         }
 
-        public async Task<ItemTypeDto?> GetByIdAsync(int id)
+        public async Task<ItemTypeDto?> GetByIdAsync(int id, int? companyId = null)
         {
             var it = await _repo.GetByIdAsync(id);
-            return it == null ? null : ToDto(it);
+            if (it == null) return null;
+            var dto = ToDto(it);
+            if (companyId.HasValue)
+                await ApplyOverlayAsync(new List<ItemTypeDto> { dto }, companyId.Value);
+            return dto;
         }
 
-        public async Task<ItemTypeDto> CreateAsync(ItemTypeDto dto, int? enrichWithCompanyId = null)
+        /// <summary>Populate DivisionId / Sale·PurchaseAccountId (+ display names)
+        /// on each DTO from the company's CompanyItemTypeSetting overlay rows.</summary>
+        private async Task ApplyOverlayAsync(List<ItemTypeDto> dtos, int companyId)
+        {
+            var ids = dtos.Select(d => d.Id).ToList();
+            if (ids.Count == 0) return;
+            var overlays = await _context.CompanyItemTypeSettings.AsNoTracking()
+                .Where(s => s.CompanyId == companyId && ids.Contains(s.ItemTypeId))
+                .Select(s => new { s.ItemTypeId, s.DivisionId, s.SaleAccountId, s.PurchaseAccountId })
+                .ToListAsync();
+            if (overlays.Count == 0) return;
+            var map = overlays.ToDictionary(x => x.ItemTypeId);
+
+            var divIds = overlays.Where(o => o.DivisionId.HasValue).Select(o => o.DivisionId!.Value).Distinct().ToList();
+            var acctIds = overlays.SelectMany(o => new[] { o.SaleAccountId, o.PurchaseAccountId })
+                .Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+            var divNames = divIds.Count == 0 ? new Dictionary<int, string>()
+                : await _context.Divisions.AsNoTracking().Where(d => divIds.Contains(d.Id))
+                    .ToDictionaryAsync(d => d.Id, d => d.Name);
+            var acctNames = acctIds.Count == 0 ? new Dictionary<int, string>()
+                : await _context.Accounts.AsNoTracking().Where(a => acctIds.Contains(a.Id))
+                    .ToDictionaryAsync(a => a.Id, a => a.Name);
+
+            foreach (var dto in dtos)
+            {
+                if (!map.TryGetValue(dto.Id, out var o)) continue;
+                dto.DivisionId = o.DivisionId;
+                dto.DivisionName = o.DivisionId.HasValue ? divNames.GetValueOrDefault(o.DivisionId.Value) : null;
+                dto.SaleAccountId = o.SaleAccountId;
+                dto.SaleAccountName = o.SaleAccountId.HasValue ? acctNames.GetValueOrDefault(o.SaleAccountId.Value) : null;
+                dto.PurchaseAccountId = o.PurchaseAccountId;
+                dto.PurchaseAccountName = o.PurchaseAccountId.HasValue ? acctNames.GetValueOrDefault(o.PurchaseAccountId.Value) : null;
+            }
+        }
+
+        public async Task<ItemTypeDto> CreateAsync(ItemTypeDto dto, int? companyId = null)
         {
             // Composite (Name, HSCode) uniqueness (2026-05-16). Operators
             // legitimately want "Hardware Items" with HS X AND "Hardware
@@ -149,7 +195,7 @@ namespace MyApp.Api.Services.Implementations
             // un-classified and won't move stock or submit to FBR until
             // a real code is added. A non-empty value MUST match the
             // catalog (or pass the format gate on a fresh-tenant fallback).
-            await ValidateHsCodeOrThrowAsync(dto.HSCode, enrichWithCompanyId);
+            await ValidateHsCodeOrThrowAsync(dto.HSCode, companyId);
 
             // Near-duplicate (mis-spelled) name guard. Now scoped to
             // matching-HSCode pairs only — "Hardware Items" + HS X and
@@ -165,7 +211,7 @@ namespace MyApp.Api.Services.Implementations
                     "Pick the existing row, OR mark this new row as Favorite " +
                     "to confirm you want both.");
 
-            await EnrichFromFbrAsync(dto, enrichWithCompanyId);
+            await EnrichFromFbrAsync(dto, companyId);
             await EnsureUnitRowAsync(dto.UOM);
 
             var created = await _repo.CreateAsync(new ItemType
@@ -178,7 +224,13 @@ namespace MyApp.Api.Services.Implementations
                 FbrDescription = dto.FbrDescription,
                 IsFavorite = dto.IsFavorite,
             });
-            return ToDto(created);
+
+            var result = ToDto(created);
+            if (companyId.HasValue && dto.WriteCompanyOverlay)
+                await UpsertOverlayAsync(companyId.Value, created.Id, dto);
+            if (companyId.HasValue)
+                await ApplyOverlayAsync(new List<ItemTypeDto> { result }, companyId.Value);
+            return result;
         }
 
         /// <summary>
@@ -257,7 +309,7 @@ namespace MyApp.Api.Services.Implementations
             return null;
         }
 
-        public async Task<ItemTypeDto?> UpdateAsync(int id, ItemTypeDto dto, int? enrichWithCompanyId = null)
+        public async Task<ItemTypeDto?> UpdateAsync(int id, ItemTypeDto dto, int? companyId = null)
         {
             var it = await _repo.GetByIdAsync(id);
             if (it == null) return null;
@@ -276,9 +328,9 @@ namespace MyApp.Api.Services.Implementations
             // the catalog goes briefly empty. Empty HSCode is allowed
             // (un-classified placeholder).
             if (!StringEq(it.HSCode, normalizedHs))
-                await ValidateHsCodeOrThrowAsync(normalizedHs, enrichWithCompanyId);
+                await ValidateHsCodeOrThrowAsync(normalizedHs, companyId);
 
-            await EnrichFromFbrAsync(dto, enrichWithCompanyId);
+            await EnrichFromFbrAsync(dto, companyId);
             await EnsureUnitRowAsync(dto.UOM);
 
             // Capture the OLD values so we can detect what actually changed,
@@ -306,7 +358,54 @@ namespace MyApp.Api.Services.Implementations
 
             var resultDto = ToDto(updated);
             resultDto.Propagation = summary;
+            if (companyId.HasValue && dto.WriteCompanyOverlay)
+                await UpsertOverlayAsync(companyId.Value, updated.Id, dto);
+            if (companyId.HasValue)
+                await ApplyOverlayAsync(new List<ItemTypeDto> { resultDto }, companyId.Value);
             return resultDto;
+        }
+
+        /// <summary>
+        /// Upsert the company's per-item overlay (CompanyItemTypeSetting) from the
+        /// DTO's DivisionId / SaleAccountId / PurchaseAccountId. Preserves the
+        /// existing Mode / ReorderLevel (owned by the inventory-policy endpoint).
+        /// Cross-tenant guard: a DivisionId / account id that doesn't belong to
+        /// <paramref name="companyId"/> is rejected (division) or dropped to null
+        /// (account) so the overlay can never link across tenants.
+        /// </summary>
+        private async Task UpsertOverlayAsync(int companyId, int itemTypeId, ItemTypeDto dto)
+        {
+            int? divisionId = null;
+            if (dto.DivisionId is int did && did > 0)
+            {
+                var ok = await _context.Divisions.AsNoTracking()
+                    .AnyAsync(d => d.Id == did && d.CompanyId == companyId);
+                if (!ok)
+                    throw new InvalidOperationException("Selected division does not belong to this company.");
+                divisionId = did;
+            }
+
+            var candidateAccountIds = new[] { dto.SaleAccountId, dto.PurchaseAccountId }
+                .Where(x => x is > 0).Select(x => x!.Value).Distinct().ToList();
+            var validAccountIds = candidateAccountIds.Count == 0
+                ? new HashSet<int>()
+                : (await _context.Accounts.AsNoTracking()
+                    .Where(a => a.CompanyId == companyId && a.IsActive && candidateAccountIds.Contains(a.Id))
+                    .Select(a => a.Id).ToListAsync()).ToHashSet();
+            int? Valid(int? id) => id is int v && validAccountIds.Contains(v) ? v : null;
+
+            var overlay = await _context.CompanyItemTypeSettings
+                .FirstOrDefaultAsync(s => s.CompanyId == companyId && s.ItemTypeId == itemTypeId);
+            if (overlay == null)
+            {
+                overlay = new CompanyItemTypeSetting { CompanyId = companyId, ItemTypeId = itemTypeId };
+                _context.CompanyItemTypeSettings.Add(overlay);
+            }
+            overlay.DivisionId = divisionId;
+            overlay.SaleAccountId = Valid(dto.SaleAccountId);
+            overlay.PurchaseAccountId = Valid(dto.PurchaseAccountId);
+            overlay.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
         }
 
         private static bool StringEq(string? a, string? b)
@@ -419,14 +518,14 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
-        // When the controller passes enrichWithCompanyId and the operator hasn't
+        // When the controller passes companyId and the operator hasn't
         // pre-picked a UOM, ask the tax engine for the FBR-published UOM list
         // for this HS code and store the first match. Catalog stays accurate
         // without forcing the user to scroll the global UOM list — and a stale
         // / missing UOM no longer silently drifts the bill into a 0052 error.
-        private async Task EnrichFromFbrAsync(ItemTypeDto dto, int? enrichWithCompanyId)
+        private async Task EnrichFromFbrAsync(ItemTypeDto dto, int? companyId)
         {
-            if (enrichWithCompanyId == null) return;
+            if (companyId == null) return;
             if (string.IsNullOrWhiteSpace(dto.HSCode)) return;
             // Only fill blanks — never overwrite a UOM the user explicitly chose.
             if (dto.FbrUOMId.HasValue && !string.IsNullOrWhiteSpace(dto.UOM)) return;
@@ -434,7 +533,7 @@ namespace MyApp.Api.Services.Implementations
             try
             {
                 var suggested = await _taxEngine.SuggestDefaultUomAsync(
-                    enrichWithCompanyId.Value, dto.HSCode!);
+                    companyId.Value, dto.HSCode!);
                 if (suggested == null) return;
 
                 if (!dto.FbrUOMId.HasValue)       dto.FbrUOMId = suggested.UOM_ID;

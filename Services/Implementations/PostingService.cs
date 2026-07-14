@@ -23,16 +23,22 @@ namespace MyApp.Api.Services.Implementations
         }
 
         // Cached per scoped instance — one request never flips the flag mid-way.
-        private readonly Dictionary<int, (bool Enabled, DateTime? LockDate)> _flags = new();
+        private readonly Dictionary<int, CompanyGlConfig> _flags = new();
 
-        private async Task<(bool Enabled, DateTime? LockDate)> FlagsAsync(int companyId)
+        private sealed record CompanyGlConfig(
+            bool Enabled, DateTime? LockDate,
+            int? DefaultSalesAccountId, int? DefaultPurchaseAccountId);
+
+        private async Task<CompanyGlConfig> FlagsAsync(int companyId)
         {
             if (_flags.TryGetValue(companyId, out var f)) return f;
             var row = await _context.Companies.AsNoTracking()
                 .Where(c => c.Id == companyId)
-                .Select(c => new { c.GlPostingEnabled, c.GlLockDate })
+                .Select(c => new { c.GlPostingEnabled, c.GlLockDate, c.DefaultSalesAccountId, c.DefaultPurchaseAccountId })
                 .FirstOrDefaultAsync();
-            var result = (row?.GlPostingEnabled ?? false, row?.GlLockDate);
+            var result = new CompanyGlConfig(
+                row?.GlPostingEnabled ?? false, row?.GlLockDate,
+                row?.DefaultSalesAccountId, row?.DefaultPurchaseAccountId);
             _flags[companyId] = result;
             return result;
         }
@@ -41,7 +47,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task AssertPeriodOpenAsync(int companyId, DateTime docDate)
         {
-            var (enabled, lockDate) = await FlagsAsync(companyId);
+            var (enabled, lockDate, _, _) = await FlagsAsync(companyId);
             if (enabled && lockDate.HasValue && docDate.Date <= lockDate.Value.Date)
                 throw new InvalidOperationException(
                     $"This period is locked (lock date {lockDate.Value:dd/MM/yyyy}). Documents dated on or before it can't be changed.");
@@ -162,19 +168,19 @@ namespace MyApp.Api.Services.Implementations
             };
             var net = invoice.GrandTotal - invoice.GSTAmount;
 
-            // Non-inventory lines (Freight, Discount, …) split their net off the
-            // default Sales account onto their mapped SaleAccount (Suspense when
-            // unmapped/inactive). The remainder posts to Sales — the entry stays
-            // balanced because Σ(non-inv net) + salesNet == net.
-            var nonInvRaw = await (
-                from i in _context.InvoiceItems
-                where i.InvoiceId == invoice.Id && i.NonInventoryItemId != null
-                join n in _context.NonInventoryItems on i.NonInventoryItemId equals n.Id
-                group i.LineTotal by n.SaleAccountId into g
-                select new { AccountId = g.Key, Net = g.Sum() }).ToListAsync();
-            var nonInvByAccount = await ResolveNonInvNetAsync(
-                nonInvRaw.Select(x => (x.AccountId, x.Net)), accounts, invoice.CompanyId);
-            var salesNet = net - nonInvByAccount.Values.Sum();
+            // Split the net across the per-line resolved income accounts (design
+            // §4/§6). Inventory item-type lines resolve to line → item-type
+            // overlay → company default → Sales; non-inventory lines keep their
+            // dedicated mapped account (Suspense when unmapped); any rounding
+            // residual plugs to Sales so Σ == net and the entry stays balanced.
+            var lineRows = await _context.InvoiceItems
+                .Where(i => i.InvoiceId == invoice.Id)
+                .Select(i => new LineForPosting(
+                    i.LineTotal, i.AccountId, i.ItemTypeId, i.NonInventoryItemId,
+                    i.NonInventoryItem != null ? i.NonInventoryItem.SaleAccountId : null))
+                .ToListAsync();
+            var byAccount = await GroupLinesByAccountAsync(
+                invoice.CompanyId, accounts, isSale: true, lineRows, sales, net);
 
             var lines = new List<JournalLine>();
             var arLine = new JournalLine
@@ -189,9 +195,7 @@ namespace MyApp.Api.Services.Implementations
                 Description = label,
             };
             lines.Add(arLine);
-            AddLine(lines, sales.Id, debit: isCreditNote ? salesNet : 0m,
-                credit: isCreditNote ? 0m : salesNet, invoice.DivisionId, label);
-            foreach (var kv in nonInvByAccount)
+            foreach (var kv in byAccount)
                 AddLine(lines, kv.Key, debit: isCreditNote ? kv.Value : 0m,
                     credit: isCreditNote ? 0m : kv.Value, invoice.DivisionId, label);
             if (outputTax != null)
@@ -223,21 +227,22 @@ namespace MyApp.Api.Services.Implementations
             var label = $"Bill #{bill.PurchaseBillNumber}";
             var net = bill.GrandTotal - bill.GSTAmount;
 
-            // Non-inventory lines split their net off the default Purchases
-            // account onto their mapped PurchaseAccount (Suspense when unmapped).
-            var nonInvRaw = await (
-                from p in _context.PurchaseItems
-                where p.PurchaseBillId == bill.Id && p.NonInventoryItemId != null
-                join n in _context.NonInventoryItems on p.NonInventoryItemId equals n.Id
-                group p.LineTotal by n.PurchaseAccountId into g
-                select new { AccountId = g.Key, Net = g.Sum() }).ToListAsync();
-            var nonInvByAccount = await ResolveNonInvNetAsync(
-                nonInvRaw.Select(x => (x.AccountId, x.Net)), accounts, bill.CompanyId);
-            var purchasesNet = net - nonInvByAccount.Values.Sum();
+            // Split the net across the per-line resolved expense/COGS accounts
+            // (design §4/§6): inventory lines resolve to line → item-type overlay
+            // → company default → Purchases/COGS; non-inventory lines keep their
+            // mapped PurchaseAccount (Suspense when unmapped); residual plugs to
+            // the default purchases account so Σ == net.
+            var lineRows = await _context.PurchaseItems
+                .Where(p => p.PurchaseBillId == bill.Id)
+                .Select(p => new LineForPosting(
+                    p.LineTotal, p.AccountId, p.ItemTypeId, p.NonInventoryItemId,
+                    p.NonInventoryItem != null ? p.NonInventoryItem.PurchaseAccountId : null))
+                .ToListAsync();
+            var byAccount = await GroupLinesByAccountAsync(
+                bill.CompanyId, accounts, isSale: false, lineRows, purchases, net);
 
             var lines = new List<JournalLine>();
-            AddLine(lines, purchases.Id, debit: purchasesNet, credit: 0m, bill.DivisionId, label);
-            foreach (var kv in nonInvByAccount)
+            foreach (var kv in byAccount)
                 AddLine(lines, kv.Key, debit: kv.Value, credit: 0m, bill.DivisionId, label);
             if (inputTax != null)
                 AddLine(lines, inputTax.Id, debit: bill.GSTAmount, credit: 0m, bill.DivisionId, label);
@@ -301,7 +306,7 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException(
                     $"Unbalanced posting for {type} #{sourceDocId}: Dr {dr:0.00##} vs Cr {cr:0.00##}.");
 
-            var (_, lockDate) = await FlagsAsync(companyId);
+            var (_, lockDate, _, _) = await FlagsAsync(companyId);
             if (lockDate.HasValue && date.Date <= lockDate.Value.Date)
                 throw new InvalidOperationException(
                     $"This period is locked (lock date {lockDate.Value:dd/MM/yyyy}).");
@@ -368,23 +373,70 @@ namespace MyApp.Api.Services.Implementations
             return await SuspenseAsync(companyId, accounts);
         }
 
-        /// <summary>Collapse a set of (mappedAccountId, net) pairs from a
-        /// document's non-inventory lines into accountId → net, resolving each
-        /// to an ACTIVE account of that company (unmapped / inactive / missing →
-        /// Suspense). Amounts on the same target account merge.</summary>
-        private async Task<Dictionary<int, decimal>> ResolveNonInvNetAsync(
-            IEnumerable<(int? AccountId, decimal Net)> raw, List<Account> accounts, int companyId)
+        /// <summary>A document line reduced to just what account resolution needs.
+        /// <c>NonInvAccountId</c> is the line's NonInventoryItem sale-or-purchase
+        /// account (side-specific, projected by the caller).</summary>
+        private sealed record LineForPosting(
+            decimal LineTotal, int? AccountId, int? ItemTypeId, int? NonInvItemId, int? NonInvAccountId);
+
+        /// <summary>
+        /// Group a document's line nets by their resolved GL account (design §4).
+        /// Per line, first ACTIVE non-null of:
+        ///   • non-inventory line → line.AccountId → NonInventoryItem account →
+        ///     Suspense (a non-inv item's whole job is its mapped account; unmapped
+        ///     pools on Suspense exactly as before).
+        ///   • otherwise (inventory item-type / plain line) → line.AccountId →
+        ///     CompanyItemTypeSetting.Sale/PurchaseAccountId → Company default →
+        ///     <paramref name="fallback"/> (the ResolveSales/ResolvePurchases chain,
+        ///     which itself ends at Suspense).
+        /// Any rounding residual (net − Σ assigned) plugs to <paramref name="fallback"/>
+        /// so the split always sums to the document net and the entry balances.
+        /// </summary>
+        private async Task<Dictionary<int, decimal>> GroupLinesByAccountAsync(
+            int companyId, List<Account> accounts, bool isSale,
+            List<LineForPosting> lines, Account fallback, decimal net)
         {
-            var result = new Dictionary<int, decimal>();
+            var (_, _, defaultSalesId, defaultPurchaseId) = await FlagsAsync(companyId);
+            var companyDefaultId = isSale ? defaultSalesId : defaultPurchaseId;
+
+            var itemTypeIds = lines.Where(l => l.ItemTypeId.HasValue)
+                .Select(l => l.ItemTypeId!.Value).Distinct().ToList();
+            var citsMap = itemTypeIds.Count == 0
+                ? new Dictionary<int, (int? Sale, int? Purchase)>()
+                : (await _context.CompanyItemTypeSettings.AsNoTracking()
+                        .Where(s => s.CompanyId == companyId && itemTypeIds.Contains(s.ItemTypeId))
+                        .Select(s => new { s.ItemTypeId, s.SaleAccountId, s.PurchaseAccountId })
+                        .ToListAsync())
+                    .ToDictionary(s => s.ItemTypeId, s => (Sale: s.SaleAccountId, Purchase: s.PurchaseAccountId));
+
+            var byAccount = new Dictionary<int, decimal>();
             Account? suspense = null;
-            foreach (var (accountId, net) in raw)
+            var assigned = 0m;
+            foreach (var ln in lines)
             {
-                if (net == 0m) continue;
-                var target = accountId.HasValue ? accounts.FirstOrDefault(a => a.Id == accountId.Value) : null;
-                if (target == null) target = suspense ??= await SuspenseAsync(companyId, accounts);
-                result[target.Id] = result.GetValueOrDefault(target.Id) + net;
+                if (ln.LineTotal == 0m) continue;
+                Account target;
+                if (ln.NonInvItemId.HasValue)
+                {
+                    var cand = ln.AccountId ?? ln.NonInvAccountId;
+                    target = (cand.HasValue ? accounts.FirstOrDefault(a => a.Id == cand.Value) : null)
+                             ?? (suspense ??= await SuspenseAsync(companyId, accounts));
+                }
+                else
+                {
+                    int? itemAcct = ln.ItemTypeId.HasValue && citsMap.TryGetValue(ln.ItemTypeId.Value, out var m)
+                        ? (isSale ? m.Sale : m.Purchase) : null;
+                    var cand = ln.AccountId ?? itemAcct ?? companyDefaultId;
+                    target = (cand.HasValue ? accounts.FirstOrDefault(a => a.Id == cand.Value) : null) ?? fallback;
+                }
+                byAccount[target.Id] = byAccount.GetValueOrDefault(target.Id) + ln.LineTotal;
+                assigned += ln.LineTotal;
             }
-            return result;
+
+            var residual = net - assigned;
+            if (residual != 0m)
+                byAccount[fallback.Id] = byAccount.GetValueOrDefault(fallback.Id) + residual;
+            return byAccount;
         }
 
         /// <summary>Sales income: seed:sales → an account literally named
@@ -471,6 +523,121 @@ namespace MyApp.Api.Services.Implementations
             accounts.Add(suspense);
             _logger.LogWarning("Created Suspense account for company {CompanyId}.", companyId);
             return suspense;
+        }
+
+        // ── Default inventory GL accounts (design §3.2.1) ───────────────────────
+
+        /// <summary>
+        /// Guarantees the company's Chart of Accounts holds a default inventory
+        /// <b>sales</b> (income) and <b>purchase/COGS</b> (expense) account, and
+        /// points <see cref="Company.DefaultSalesAccountId"/> /
+        /// <see cref="Company.DefaultPurchaseAccountId"/> at them. Idempotent
+        /// (adopts the seeded <c>seed:sales</c>/<c>seed:cogs</c> or any existing
+        /// income/expense account before creating), so it's safe to call on the
+        /// GL-enable path, at company setup, and lazily. Never creates a duplicate
+        /// — lookup keys off <c>ExternalRef</c> then account type.
+        /// </summary>
+        public async Task EnsureDefaultInventoryAccountsAsync(int companyId)
+        {
+            var company = await _context.Companies.FirstOrDefaultAsync(c => c.Id == companyId);
+            if (company == null) return;
+
+            var accounts = await _context.Accounts
+                .Where(a => a.CompanyId == companyId).ToListAsync();
+
+            bool Missing(int? id) => id == null || !accounts.Any(a => a.Id == id.Value && a.IsActive);
+
+            if (Missing(company.DefaultSalesAccountId))
+            {
+                var sales = accounts.FirstOrDefault(a => a.ExternalRef == "seed:inv-sales")
+                         ?? accounts.FirstOrDefault(a => a.ExternalRef == "seed:sales")
+                         ?? accounts.FirstOrDefault(a => a.AccountType == AccountType.Income &&
+                                string.Equals(a.Name, "Sales", StringComparison.OrdinalIgnoreCase))
+                         ?? accounts.Where(a => a.AccountType == AccountType.Income).OrderBy(a => a.Id).FirstOrDefault();
+                if (sales == null)
+                {
+                    var group = await EnsurePlGroupAsync(companyId, AccountType.Income, accounts);
+                    sales = new Account
+                    {
+                        CompanyId = companyId,
+                        Name = "Inventory – sales",
+                        AccountGroup = group,
+                        AccountType = AccountType.Income,
+                        IsActive = true,
+                        ExternalRef = "seed:inv-sales",
+                    };
+                    _context.Accounts.Add(sales);
+                    await _context.SaveChangesAsync();
+                    accounts.Add(sales);
+                }
+                company.DefaultSalesAccountId = sales.Id;
+            }
+
+            if (Missing(company.DefaultPurchaseAccountId))
+            {
+                // Match ResolvePurchasesAsync so pinning the default is behaviour-
+                // neutral: an inventory-tracking company debits its Inventory asset
+                // control account; everyone else uses COGS. Only item-type / line
+                // overrides deviate from this baseline.
+                Account? cogs = company.InventoryTrackingEnabled
+                    ? accounts.Where(a => a.ControlType == ControlType.Inventory).OrderBy(a => a.Id).FirstOrDefault()
+                    : null;
+                cogs ??= accounts.FirstOrDefault(a => a.ExternalRef == "seed:inv-purchases")
+                        ?? accounts.FirstOrDefault(a => a.ExternalRef == "seed:cogs")
+                        ?? accounts.FirstOrDefault(a => a.AccountType == AccountType.Expense &&
+                               a.Name.Contains("cost of goods", StringComparison.OrdinalIgnoreCase))
+                        ?? accounts.Where(a => a.AccountType == AccountType.Expense).OrderBy(a => a.Id).FirstOrDefault();
+                if (cogs == null)
+                {
+                    var group = await EnsurePlGroupAsync(companyId, AccountType.Expense, accounts);
+                    cogs = new Account
+                    {
+                        CompanyId = companyId,
+                        Name = "Cost of goods sold",
+                        AccountGroup = group,
+                        AccountType = AccountType.Expense,
+                        IsActive = true,
+                        ExternalRef = "seed:inv-purchases",
+                    };
+                    _context.Accounts.Add(cogs);
+                    await _context.SaveChangesAsync();
+                    accounts.Add(cogs);
+                }
+                company.DefaultPurchaseAccountId = cogs.Id;
+            }
+
+            await _context.SaveChangesAsync();
+            _flags.Remove(companyId); // drop cached defaults so this request re-reads them
+        }
+
+        /// <summary>Find — or create — the P&amp;L income / expense statement group
+        /// for a company (mirrors the CoA preset's "Income" / "Expenses" groups).
+        /// Never touches the Balance Sheet.</summary>
+        private async Task<AccountGroup> EnsurePlGroupAsync(int companyId, AccountType type, List<Account> _)
+        {
+            var isIncome = type == AccountType.Income;
+            var seedRef = isIncome ? "seed:income" : "seed:expenses";
+            var name = isIncome ? "Income" : "Expenses";
+
+            var group = await _context.AccountGroups
+                .Where(g => g.CompanyId == companyId && g.Statement == FinancialStatement.ProfitAndLoss)
+                .OrderByDescending(g => g.ExternalRef == seedRef)
+                .ThenByDescending(g => g.Name == name)
+                .ThenBy(g => g.Id)
+                .FirstOrDefaultAsync();
+            if (group != null && (group.ExternalRef == seedRef || group.Name == name)) return group;
+
+            var created = new AccountGroup
+            {
+                CompanyId = companyId,
+                Name = name,
+                Statement = FinancialStatement.ProfitAndLoss,
+                IsSystem = true,
+                ExternalRef = seedRef,
+            };
+            _context.AccountGroups.Add(created);
+            await _context.SaveChangesAsync();
+            return created;
         }
     }
 }

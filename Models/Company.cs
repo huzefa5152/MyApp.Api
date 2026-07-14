@@ -41,6 +41,19 @@
         // reference product's Lock Date). Null = no lock.
         public DateTime? GlLockDate { get; set; }
 
+        // ── Default inventory GL accounts (2026-07-14) ──
+        // Where inventory item-type lines post when the item (via its
+        // CompanyItemTypeSetting overlay) doesn't pin its own account. These
+        // are the Manager-style "Inventory – sales" (income) and "Inventory –
+        // purchases / COGS" (expense) defaults. Seeded + pointed at real CoA
+        // accounts by PostingService.EnsureDefaultInventoryAccountsAsync when
+        // GL is enabled. Null → the engine's name-guess chain (ResolveSales /
+        // ResolvePurchases) still resolves them, so nothing breaks when unset.
+        // Stored as bare account ids (no nav / FK) to avoid a Company↔Account
+        // cascade cycle; validated in code to belong to this company's CoA.
+        public int? DefaultSalesAccountId { get; set; }
+        public int? DefaultPurchaseAccountId { get; set; }
+
         // FBR Digital Invoicing
         // Master switch for the whole FBR flow on this company. When false,
         // the Validate/Submit-to-FBR buttons are hidden, challans don't get

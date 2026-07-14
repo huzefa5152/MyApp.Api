@@ -67,6 +67,11 @@ namespace MyApp.Api.Services.Implementations
             if (!await _context.Accounts.AnyAsync(a => a.CompanyId == companyId))
                 seeded = await _seeder.SeedWholesaleAsync(companyId);
 
+            // Guarantee the default inventory sales/purchase accounts exist and
+            // are pinned on the company, so item-type lines resolve to real CoA
+            // accounts (not the name-guess chain / Suspense) on the rebuild below.
+            await _posting.EnsureDefaultInventoryAccountsAsync(companyId);
+
             var wasEnabled = company.GlPostingEnabled;
             if (!company.GlPostingEnabled)
             {

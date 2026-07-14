@@ -31,10 +31,12 @@ import { MdLock, MdInfo, MdInventory2 } from "react-icons/md";
 import { createItemType, updateItemType, getItemTypeFbrHints } from "../api/itemTypeApi";
 import { getFbrHsUom } from "../api/fbrApi";
 import { getOpeningBalances, upsertOpeningBalance } from "../api/stockApi";
+import { getAccountsFlat } from "../api/accountApi";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { formStyles, modalSizes } from "../theme";
 import HsCodeAutocomplete from "./HsCodeAutocomplete";
 import LookupAutocomplete from "./LookupAutocomplete";
+import DivisionSelect from "./DivisionSelect";
 
 // 2026-05-14 perf: module-level cache for FBR-hint responses keyed by
 // `${companyId}:${hsCode}`. PRAL latency dominates the lookup time
@@ -89,6 +91,7 @@ export default function ItemTypeForm({
   scenarioSaleType,
   showFavoriteToggle = false,
   showRichHints = false,
+  showGlMapping = false,
   existingHsCodes = [],
   onClose,
   onSaved,
@@ -115,6 +118,27 @@ export default function ItemTypeForm({
   const canManageOpening = has("stock.opening.manage");
   const [openingBalance, setOpeningBalance] = useState("");
   const [openingInitial, setOpeningInitial] = useState("");
+
+  // ── Per-company overlay (division + GL account mapping) ──
+  // Only the Item Catalog screen passes showGlMapping; the bill-form quick-add
+  // usages keep the modal lean and never touch the overlay.
+  const [divisionId, setDivisionId] = useState(editItem?.divisionId ?? null);
+  const [saleAccountId, setSaleAccountId] = useState(editItem?.saleAccountId ?? null);
+  const [purchaseAccountId, setPurchaseAccountId] = useState(editItem?.purchaseAccountId ?? null);
+  const [accounts, setAccounts] = useState([]);
+
+  useEffect(() => {
+    if (!showGlMapping || !companyId) return;
+    let cancelled = false;
+    getAccountsFlat(companyId)
+      .then(({ data }) => { if (!cancelled) setAccounts((data || []).filter((a) => a.isActive)); })
+      .catch(() => { if (!cancelled) setAccounts([]); });
+    return () => { cancelled = true; };
+  }, [showGlMapping, companyId]);
+
+  const incomeAccounts = accounts.filter((a) => a.accountType === "Income");
+  const expenseAccounts = accounts.filter((a) => a.accountType === "Expense");
+  const otherAccounts = accounts.filter((a) => a.accountType !== "Income" && a.accountType !== "Expense");
 
   // Prefill the opening balance when editing (fetch this company's current
   // opening for the item type, if any). Best-effort — never blocks the form.
@@ -300,6 +324,15 @@ export default function ItemTypeForm({
         saleType: saleType || null,
         fbrDescription: fbrDescription?.trim() || null,
         isFavorite: !!isFavorite,
+        // Overlay fields — only sent (and persisted) from the Item Catalog screen.
+        ...(showGlMapping && companyId
+          ? {
+              writeCompanyOverlay: true,
+              divisionId: divisionId || null,
+              saleAccountId: saleAccountId || null,
+              purchaseAccountId: purchaseAccountId || null,
+            }
+          : {}),
       };
       let saved;
       if (mode === "edit") {
@@ -602,6 +635,85 @@ export default function ItemTypeForm({
                 />
                 <small style={{ color: "#5f6d7e" }}>
                   Sets this item's opening stock for the selected company. Leave blank to skip.
+                </small>
+              </div>
+            )}
+
+            {showGlMapping && companyId && (
+              <div style={{ ...styles.field, borderTop: `1px solid ${colors.inputBorder}`, paddingTop: "0.85rem" }}>
+                <div style={{ fontWeight: 700, fontSize: "0.8rem", color: colors.blue, marginBottom: "0.5rem" }}>
+                  <MdInventory2 size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                  Company inventory type &amp; GL accounts
+                </div>
+
+                <DivisionSelect
+                  companyId={companyId}
+                  value={divisionId}
+                  onChange={setDivisionId}
+                  mode="select"
+                  label={<>Division <span style={{ fontWeight: 400, color: colors.textSecondary }}>(optional — leave blank for company-wide)</span></>}
+                  labelStyle={styles.label}
+                  style={styles.input}
+                  noneLabel="Company-wide (all divisions)"
+                />
+
+                <div style={{ ...styles.row, marginTop: "0.75rem" }}>
+                  <div>
+                    <label style={styles.label}>
+                      Sales account <span style={{ fontWeight: 400, color: colors.textSecondary }}>(income)</span>
+                    </label>
+                    <select
+                      style={styles.input}
+                      value={saleAccountId ?? ""}
+                      onChange={(e) => setSaleAccountId(e.target.value ? parseInt(e.target.value, 10) : null)}
+                    >
+                      <option value="">Use company default</option>
+                      {incomeAccounts.length > 0 && (
+                        <optgroup label="Income">
+                          {incomeAccounts.map((a) => (
+                            <option key={a.id} value={a.id}>{a.code ? `${a.code} — ` : ""}{a.name}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {otherAccounts.length > 0 && (
+                        <optgroup label="Other accounts">
+                          {otherAccounts.map((a) => (
+                            <option key={a.id} value={a.id}>{a.code ? `${a.code} — ` : ""}{a.name}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={styles.label}>
+                      Expense account <span style={{ fontWeight: 400, color: colors.textSecondary }}>(purchases / COGS)</span>
+                    </label>
+                    <select
+                      style={styles.input}
+                      value={purchaseAccountId ?? ""}
+                      onChange={(e) => setPurchaseAccountId(e.target.value ? parseInt(e.target.value, 10) : null)}
+                    >
+                      <option value="">Use company default</option>
+                      {expenseAccounts.length > 0 && (
+                        <optgroup label="Expense">
+                          {expenseAccounts.map((a) => (
+                            <option key={a.id} value={a.id}>{a.code ? `${a.code} — ` : ""}{a.name}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {otherAccounts.length > 0 && (
+                        <optgroup label="Other accounts">
+                          {otherAccounts.map((a) => (
+                            <option key={a.id} value={a.id}>{a.code ? `${a.code} — ` : ""}{a.name}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </div>
+                </div>
+                <small style={styles.compactNote}>
+                  Bills &amp; invoices using this item post to these accounts. Leave blank to use the company's
+                  default inventory sales / purchase accounts.
                 </small>
               </div>
             )}

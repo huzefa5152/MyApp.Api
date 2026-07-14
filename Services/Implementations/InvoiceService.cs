@@ -241,6 +241,8 @@ namespace MyApp.Api.Services.Implementations
                 ItemTypeName = ii.ItemType?.Name ?? ii.ItemTypeName,
                 NonInventoryItemId = ii.NonInventoryItemId,
                 NonInventoryItemName = ii.NonInventoryItem?.Name,
+                AccountId = ii.AccountId,
+                AccountName = ii.Account?.Name,
                 Description = ii.Description,
                 Quantity = ii.Quantity,
                 UOM = ii.UOM,
@@ -487,6 +489,7 @@ namespace MyApp.Api.Services.Implementations
                     .ToDictionaryAsync(t => t.Id);
 
             // Build invoice items from delivery items + user-provided unit prices
+            var validAccountIds = await ValidCompanyAccountIdsAsync(dto.CompanyId, dto.Items.Select(i => i.AccountId));
             var invoiceItems = new List<InvoiceItem>();
             foreach (var itemDto in dto.Items)
             {
@@ -583,6 +586,7 @@ namespace MyApp.Api.Services.Implementations
                     ItemTypeId = itemType?.Id,        // flow the catalog linkage through
                     ItemTypeName = itemType?.Name ?? "",
                     NonInventoryItemId = nonInvId,
+                    AccountId = Coerce(itemDto.AccountId, validAccountIds),
                     Description = description,
                     Quantity = deliveryItem.Quantity,
                     UOM = effectiveUOM,
@@ -911,6 +915,7 @@ namespace MyApp.Api.Services.Implementations
                 ? company.FbrDefaultSaleType
                 : "Goods at Standard Rate (default)";
 
+            var validAccountIds = await ValidCompanyAccountIdsAsync(dto.CompanyId, dto.Items.Select(i => i.AccountId));
             var invoiceItems = new List<InvoiceItem>();
             foreach (var itemDto in dto.Items)
             {
@@ -923,6 +928,7 @@ namespace MyApp.Api.Services.Implementations
                         DeliveryItemId = null,
                         ItemTypeId = null,
                         NonInventoryItemId = itemDto.NonInventoryItemId,
+                        AccountId = Coerce(itemDto.AccountId, validAccountIds),
                         ItemTypeName = "",
                         Description = itemDto.Description ?? "",
                         Quantity = itemDto.Quantity,
@@ -967,6 +973,7 @@ namespace MyApp.Api.Services.Implementations
                     DeliveryItemId = null,            // standalone — no source line
                     ItemTypeId = itemType?.Id,
                     ItemTypeName = itemType?.Name ?? "",
+                    AccountId = Coerce(itemDto.AccountId, validAccountIds),
                     Description = itemDto.Description ?? "",
                     Quantity = itemDto.Quantity,
                     UOM = effectiveUOM,
@@ -1314,6 +1321,7 @@ namespace MyApp.Api.Services.Implementations
                 // Update existing items. If the line has an ItemTypeId set, re-derive
                 // UOM / HS Code / Sale Type / FbrUOMId from that ItemType — the user
                 // edits these indirectly by picking a different ItemType on the bill.
+                var validAccountIds = await ValidCompanyAccountIdsAsync(invoice.CompanyId, dto.Items.Select(i => i.AccountId));
                 foreach (var itemDto in dto.Items)
                 {
                     var existing = invoice.Items.First(ii => ii.Id == itemDto.Id);
@@ -1328,6 +1336,9 @@ namespace MyApp.Api.Services.Implementations
                     existing.UnitPrice = itemDto.UnitPrice;
                     existing.LineTotal = lineTotal;
                     existing.RateId = itemDto.RateId;
+                    // Per-line GL account override (design §3.3) — edit-driven, applies
+                    // to both the item-type and free-text branches below.
+                    existing.AccountId = Coerce(itemDto.AccountId, validAccountIds);
                     // 3rd-schedule retail price is always edit-driven (never inherited
                     // from the ItemType catalog), so it's applied the same way in both
                     // branches below.
@@ -1594,9 +1605,14 @@ namespace MyApp.Api.Services.Implementations
                             .ToDictionaryAsync(a => a.InvoiceItemId)
                         : new Dictionary<int, InvoiceItemAdjustment>();
 
+                var validAccountIds = await ValidCompanyAccountIdsAsync(invoice.CompanyId, dto.Items.Select(i => i.AccountId));
                 foreach (var row in dto.Items)
                 {
                     var existing = invoice.Items.First(ii => ii.Id == row.Id);
+                    // Per-line GL account (design §3.3) is bill data — like the
+                    // item type it's written straight to the InvoiceItem in both
+                    // Bill and Adjustment write-modes.
+                    existing.AccountId = Coerce(row.AccountId, validAccountIds);
 
                     if (asAdjustment)
                     {
@@ -2267,6 +2283,10 @@ namespace MyApp.Api.Services.Implementations
                 {
                     ItemTypeId   = src.ItemTypeId,
                     ItemTypeName = src.ItemTypeName,
+                    NonInventoryItemId = src.NonInventoryItemId,
+                    // Mirror the source line's GL account so the reversal note
+                    // debits the exact accounts the original sale credited.
+                    AccountId    = src.AccountId,
                     Description  = ov?.AdjustedDescription ?? src.Description,
                     Quantity     = qty,
                     UOM          = src.UOM,
@@ -2429,6 +2449,7 @@ namespace MyApp.Api.Services.Implementations
                 var attemptItems = noteItems
                     .Select(i => BuildLine(
                         new InvoiceItem { Id = 0, ItemTypeId = i.ItemTypeId, ItemTypeName = i.ItemTypeName,
+                            NonInventoryItemId = i.NonInventoryItemId, AccountId = i.AccountId,
                             Description = i.Description, Quantity = i.Quantity, UOM = i.UOM, UnitPrice = i.UnitPrice,
                             LineTotal = i.LineTotal, HSCode = i.HSCode, FbrUOMId = i.FbrUOMId, SaleType = i.SaleType,
                             RateId = i.RateId, FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
@@ -3108,5 +3129,25 @@ namespace MyApp.Api.Services.Implementations
 
             return result;
         }
+
+        /// <summary>
+        /// Returns the subset of <paramref name="candidates"/> that are ACTIVE
+        /// accounts of <paramref name="companyId"/>'s Chart of Accounts. Per-line
+        /// AccountId overrides (design §3.3) are validated against this so a
+        /// forged / foreign / inactive id is never persisted — the cross-tenant
+        /// account-link guard. Callers coerce a non-member id to null (the
+        /// posting engine then derives the account per §4).
+        /// </summary>
+        private async Task<HashSet<int>> ValidCompanyAccountIdsAsync(int companyId, IEnumerable<int?> candidates)
+        {
+            var ids = candidates.Where(x => x is > 0).Select(x => x!.Value).Distinct().ToList();
+            if (ids.Count == 0) return new HashSet<int>();
+            return (await _context.Accounts.AsNoTracking()
+                .Where(a => a.CompanyId == companyId && a.IsActive && ids.Contains(a.Id))
+                .Select(a => a.Id).ToListAsync()).ToHashSet();
+        }
+
+        private static int? Coerce(int? candidate, HashSet<int> validIds)
+            => candidate is int id && validIds.Contains(id) ? id : null;
     }
 }

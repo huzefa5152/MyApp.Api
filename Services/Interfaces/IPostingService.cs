@@ -46,5 +46,11 @@ namespace MyApp.Api.Services.Interfaces
         /// <summary>Deletes the journal entry (and lines) for a source document.
         /// Called from document delete paths. Safe when none exists.</summary>
         Task RemoveForSourceAsync(int companyId, SourceDocType type, int sourceDocId);
+
+        /// <summary>Seeds (if absent) the default inventory sales/purchase GL
+        /// accounts into the company's CoA and pins them on Company.Default*.
+        /// Idempotent; called on the GL-enable path so item-type lines resolve
+        /// to real, correctly-placed accounts (design §3.2.1).</summary>
+        Task EnsureDefaultInventoryAccountsAsync(int companyId);
     }
 }

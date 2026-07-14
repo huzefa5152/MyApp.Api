@@ -121,6 +121,11 @@ namespace MyApp.Api.DTOs
         public int? NonInventoryItemId { get; set; }
         /// <summary>Display name of the linked NonInventoryItem (read-only projection).</summary>
         public string? NonInventoryItemName { get; set; }
+        /// <summary>Per-line GL income account this line posts to (design §3.3);
+        /// null = derived at post time. Shown in the bill/invoice form's Account
+        /// column when GL posting is on.</summary>
+        public int? AccountId { get; set; }
+        public string? AccountName { get; set; }
         public string Description { get; set; } = "";
         // Decimal — see DeliveryItemDto.Quantity for the formatting contract.
         public decimal Quantity { get; set; }
@@ -209,6 +214,10 @@ namespace MyApp.Api.DTOs
         public int? ItemTypeId { get; set; }
         /// <summary>Optional NonInventoryItem link (GL-account shortcut line). Mutually exclusive with ItemTypeId.</summary>
         public int? NonInventoryItemId { get; set; }
+        /// <summary>Optional per-line GL income account override (design §4 step 1).
+        /// Validated server-side against the bill's company CoA; a foreign/inactive
+        /// id is dropped to null (engine derives).</summary>
+        public int? AccountId { get; set; }
         /// <summary>Optional override of the delivery item's UOM (e.g. the FBR-matched UOM).</summary>
         public string? UOM { get; set; }
         public string? HSCode { get; set; }
@@ -275,6 +284,8 @@ namespace MyApp.Api.DTOs
         public int? ItemTypeId { get; set; }
         /// <summary>Optional NonInventoryItem link (GL-account shortcut line, no stock/FBR). Mutually exclusive with ItemTypeId.</summary>
         public int? NonInventoryItemId { get; set; }
+        /// <summary>Optional per-line GL income account override (design §4 step 1).</summary>
+        public int? AccountId { get; set; }
         public string? HSCode { get; set; }
         public int? FbrUOMId { get; set; }
         public string? SaleType { get; set; }
@@ -416,6 +427,8 @@ namespace MyApp.Api.DTOs
         public int? ItemTypeId { get; set; }
         /// <summary>Optional NonInventoryItem link (GL-account shortcut line). Mutually exclusive with ItemTypeId.</summary>
         public int? NonInventoryItemId { get; set; }
+        /// <summary>Optional per-line GL income account override (design §4 step 1).</summary>
+        public int? AccountId { get; set; }
         public string Description { get; set; } = "";
         // Decimal — see InvoiceItemDto.Quantity for the formatting contract.
         public decimal Quantity { get; set; }
@@ -479,6 +492,9 @@ namespace MyApp.Api.DTOs
         /// <summary>Optional NonInventoryItem link (GL-account shortcut). Mutually
         /// exclusive with ItemTypeId — setting it clears the item type + FBR fields.</summary>
         public int? NonInventoryItemId { get; set; }
+        /// <summary>Optional per-line GL income account override (design §4 step 1).
+        /// Honoured on both the .itemtype and .itemtype.qty narrow-edit paths.</summary>
+        public int? AccountId { get; set; }
         /// <summary>
         /// Optional quantity update. Honoured ONLY when the controller
         /// is the .qty endpoint (gated by invoices.manage.update.itemtype.qty);

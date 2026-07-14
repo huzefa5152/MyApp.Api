@@ -565,6 +565,20 @@ namespace MyApp.Api.Data
                 .ToTable(t => t.HasCheckConstraint("CK_PurchaseItem_OneItemRef",
                     "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL"));
 
+            // Per-line GL account (2026-07-14, design §3.3). NoAction: the line's
+            // parent (Invoice/PurchaseBill) already cascades from Company, so a
+            // SET NULL/cascade to Accounts would create a second path (1785). A
+            // mapped account can't be deleted while lines reference it — matching
+            // NonInventoryItem's account FKs.
+            modelBuilder.Entity<InvoiceItem>()
+                .HasOne(ii => ii.Account).WithMany()
+                .HasForeignKey(ii => ii.AccountId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvoiceItem>().HasIndex(ii => ii.AccountId);
+            modelBuilder.Entity<PurchaseItem>()
+                .HasOne(pi => pi.Account).WithMany()
+                .HasForeignKey(pi => pi.AccountId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PurchaseItem>().HasIndex(pi => pi.AccountId);
+
             modelBuilder.Entity<SalesQuoteItem>()
                 .HasOne(qi => qi.NonInventoryItem).WithMany()
                 .HasForeignKey(qi => qi.NonInventoryItemId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
@@ -1724,6 +1738,22 @@ namespace MyApp.Api.Data
                 .Property(s => s.Mode).HasConversion<byte>();
             modelBuilder.Entity<CompanyItemTypeSetting>()
                 .Property(s => s.ReorderLevel).HasPrecision(18, 4);
+            // 2026-07-14: optional division scope + per-company GL account
+            // mapping on the overlay. All NoAction — Division already cascades
+            // from Company, and two Account FKs from one table (like
+            // NonInventoryItem) would trip SQL Server's multiple-cascade-path
+            // guard (1785). A mapped account/division therefore can't be deleted
+            // while an overlay references it; posting falls back to the company
+            // default / Suspense when the FK is null or the account is inactive.
+            modelBuilder.Entity<CompanyItemTypeSetting>()
+                .HasOne(s => s.Division).WithMany()
+                .HasForeignKey(s => s.DivisionId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CompanyItemTypeSetting>()
+                .HasOne(s => s.SaleAccount).WithMany()
+                .HasForeignKey(s => s.SaleAccountId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CompanyItemTypeSetting>()
+                .HasOne(s => s.PurchaseAccount).WithMany()
+                .HasForeignKey(s => s.PurchaseAccountId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
             // Movement-history + running-balance index: keyed on
             // (CompanyId, ItemTypeId, MovementDate, Id) so the dashboard feed

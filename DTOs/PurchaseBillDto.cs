@@ -52,6 +52,10 @@ namespace MyApp.Api.DTOs
         /// <summary>Optional NonInventoryItem link (GL-account shortcut). Mutually exclusive with ItemTypeId.</summary>
         public int? NonInventoryItemId { get; set; }
         public string? NonInventoryItemName { get; set; }
+        /// <summary>Per-line GL expense/COGS account this line posts to (design §3.3);
+        /// null = derived at post time.</summary>
+        public int? AccountId { get; set; }
+        public string? AccountName { get; set; }
         public string Description { get; set; } = "";
         public decimal Quantity { get; set; }
         public string UOM { get; set; } = "";
@@ -95,6 +99,8 @@ namespace MyApp.Api.DTOs
         public int? ItemTypeId { get; set; }
         /// <summary>Optional NonInventoryItem link (GL-account shortcut line, no stock/FBR). Mutually exclusive with ItemTypeId.</summary>
         public int? NonInventoryItemId { get; set; }
+        /// <summary>Optional per-line GL expense/COGS account override (design §4 step 1).</summary>
+        public int? AccountId { get; set; }
         public string Description { get; set; } = "";
         public decimal Quantity { get; set; }
         public string? UOM { get; set; }
@@ -139,6 +145,8 @@ namespace MyApp.Api.DTOs
         public int? ItemTypeId { get; set; }
         /// <summary>Optional NonInventoryItem link (GL-account shortcut). Mutually exclusive with ItemTypeId.</summary>
         public int? NonInventoryItemId { get; set; }
+        /// <summary>Optional per-line GL expense/COGS account override (design §4 step 1).</summary>
+        public int? AccountId { get; set; }
         public string Description { get; set; } = "";
         public decimal Quantity { get; set; }
         public string UOM { get; set; } = "";

@@ -71,17 +71,22 @@ export default function ItemTypesPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const fetchAll = async () => {
+  // The catalog rows are shared (global ItemType), but the per-company
+  // OVERLAY (division + GL account mapping) is what this screen edits — so it
+  // needs a company context. Own selector, defaulting to the header's company.
+  const [companyId, setCompanyId] = useState(selectedCompany?.id ?? companies?.[0]?.id ?? null);
+  useEffect(() => {
+    if (companyId == null && (selectedCompany?.id || companies?.[0]?.id))
+      setCompanyId(selectedCompany?.id ?? companies?.[0]?.id);
+  }, [selectedCompany, companies]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchAll = async (cid = companyId) => {
     setLoading(true);
     try {
-      // Item Types are common across the operator's tenants — the catalog
-      // is one shared list, not one-per-company. Skip the companyId arg
-      // so the backend AGGREGATES on-hand stock across every company the
-      // caller can reach (filtered to tracking-enabled). Without this,
-      // selecting "Roshan" in the header would zero out stock that lives
-      // under "Hakimi" for the same item, even though the operator owns
-      // both.
-      const { data } = await getItemTypes();
+      // Pass the selected company so each row carries that company's overlay
+      // (division + GL accounts) and per-company on-hand. Falls back to the
+      // shared/aggregated view when no company is selected.
+      const { data } = await getItemTypes(cid || undefined);
       setItemTypes(data);
     } catch {
       notify("Failed to load item types.", "error");
@@ -90,9 +95,8 @@ export default function ItemTypesPage() {
     }
   };
 
-  // Catalog is global — don't reload on global-company change. Refresh
-  // only happens after a create / update / favorite / delete action.
-  useEffect(() => { fetchAll(); }, []);
+  // Reload when the selected company changes so the overlay columns refresh.
+  useEffect(() => { fetchAll(companyId); }, [companyId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openAdd = () => {
     setEditItem(null);
@@ -158,17 +162,31 @@ export default function ItemTypesPage() {
             </p>
           </div>
         </div>
-        {canCreate && (
-          <button style={styles.addBtn} onClick={openAdd} disabled={!selectedCompany}>
-            <MdAdd size={18} /> New Item
-          </button>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+          {companies?.length > 0 && (
+            <select
+              value={companyId ?? ""}
+              onChange={(e) => setCompanyId(e.target.value ? parseInt(e.target.value, 10) : null)}
+              style={styles.companySelect}
+              title="Show item types, divisions and GL accounts for this company"
+            >
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
+              ))}
+            </select>
+          )}
+          {canCreate && (
+            <button style={styles.addBtn} onClick={openAdd} disabled={!companyId}>
+              <MdAdd size={18} /> New Item
+            </button>
+          )}
+        </div>
       </div>
 
-      {!selectedCompany && companies?.length > 0 && (
+      {!companyId && companies?.length > 0 && (
         <div style={styles.infoBox}>
           <MdBusiness size={16} style={{ flexShrink: 0 }} />
-          <div>Select a company on the dashboard first — HS-code lookups need an FBR-enabled company to query the catalog.</div>
+          <div>Pick a company above — item types are mapped to each company's divisions and GL accounts.</div>
         </div>
       )}
 
@@ -212,8 +230,9 @@ export default function ItemTypesPage() {
                 <span style={{ width: 32 }}></span>
                 <span style={{ flex: 2 }}>Name</span>
                 <span style={{ flex: 1.1 }}>HS Code</span>
-                <span style={{ flex: 1.5 }}>UOM</span>
-                <span style={{ flex: 1.6 }}>Sale Type</span>
+                <span style={{ flex: 1.3 }}>UOM</span>
+                <span style={{ flex: 1.3 }}>Sale Type</span>
+                <span style={{ flex: 1.5 }}>Division / GL accounts</span>
                 <span style={{ flex: 0.9, textAlign: "right" }}>On hand</span>
                 <span style={{ flex: 0.7, textAlign: "center" }}>Used</span>
                 <span style={{ width: 90, textAlign: "right" }}></span>
@@ -240,11 +259,22 @@ export default function ItemTypesPage() {
                   <span style={{ flex: 1.1, fontFamily: "monospace", fontSize: "0.82rem", color: it.hsCode ? colors.blue : colors.textSecondary }}>
                     {it.hsCode || "—"}
                   </span>
-                  <span style={{ flex: 1.5, fontSize: "0.82rem", color: colors.textPrimary }}>
+                  <span style={{ flex: 1.3, fontSize: "0.82rem", color: colors.textPrimary }}>
                     {it.uom || "—"}
                   </span>
-                  <span style={{ flex: 1.6, fontSize: "0.78rem", color: colors.textSecondary }}>
+                  <span style={{ flex: 1.3, fontSize: "0.78rem", color: colors.textSecondary }}>
                     {it.saleType || "—"}
+                  </span>
+                  <span style={{ flex: 1.5, fontSize: "0.75rem", color: colors.textSecondary, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, color: it.divisionName ? colors.teal : colors.textSecondary }}>
+                      {it.divisionName || "Company-wide"}
+                    </div>
+                    <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                         title={`Sales: ${it.saleAccountName || "default"} · Exp: ${it.purchaseAccountName || "default"}`}>
+                      {it.saleAccountName || it.purchaseAccountName
+                        ? `${it.saleAccountName || "default"} / ${it.purchaseAccountName || "default"}`
+                        : "Default accounts"}
+                    </div>
                   </span>
                   <span style={{
                     flex: 0.9,
@@ -360,12 +390,12 @@ export default function ItemTypesPage() {
       {showForm && (
         <ItemTypeForm
           editItem={editItem}
-          /* The catalog is global; fall back to any accessible company so
-             HS-code UOM / sale-type lookups still work when the operator
-             hasn't picked a company in the header. */
-          companyId={selectedCompany?.id || companies?.[0]?.id}
+          /* This screen edits the per-company overlay (division + GL accounts),
+             so the form is bound to the selected company. */
+          companyId={companyId}
           showFavoriteToggle
           showRichHints
+          showGlMapping
           existingHsCodes={itemTypes
             .filter((t) => t.hsCode && t.id !== editItem?.id)
             .map((t) => t.hsCode)}
@@ -402,6 +432,7 @@ const styles = {
   title: { fontSize: "1.45rem", fontWeight: 800, color: colors.textPrimary, margin: 0 },
   subtitle: { fontSize: "0.82rem", color: colors.textSecondary, margin: 0 },
   addBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.2rem", background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: "#fff", border: "none", borderRadius: 10, fontSize: "0.88rem", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
+  companySelect: { padding: "0.5rem 0.75rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 10, fontSize: "0.85rem", backgroundColor: "#fff", color: colors.textPrimary, outline: "none", fontWeight: 600, minWidth: 160, maxWidth: 240 },
   infoBox: { display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.65rem 0.85rem", backgroundColor: "#e3f2fd", border: "1px solid #90caf9", color: colors.textPrimary, borderRadius: 8, marginBottom: "1rem", fontSize: "0.82rem", lineHeight: 1.4 },
   searchWrap: { position: "relative", marginBottom: "1rem", maxWidth: 420 },
   searchIcon: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" },

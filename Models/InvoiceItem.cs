@@ -1,3 +1,5 @@
+using MyApp.Api.Models.Accounting;
+
 namespace MyApp.Api.Models
 {
     public class InvoiceItem
@@ -33,6 +35,19 @@ namespace MyApp.Api.Models
         /// guard lives in AppDbContext + the line services.
         /// </summary>
         public int? NonInventoryItemId { get; set; }
+
+        /// <summary>
+        /// Optional per-line GL income account (2026-07-14, Manager parity).
+        /// When set, the posting engine credits THIS account for the line's net
+        /// (design §4 step 1). Null = the engine derives the account from the
+        /// item's <see cref="CompanyItemTypeSetting.SaleAccountId"/> →
+        /// <see cref="Company.DefaultSalesAccountId"/> → name-guess chain, i.e.
+        /// exactly today's behaviour. Additive/nullable, so existing rows and
+        /// GL-off companies are unaffected. FK → Account NoAction (never orphan
+        /// a posted line's account; two account FKs from one table would trip
+        /// SQL Server 1785 on SET NULL, so we forbid deleting a mapped account).
+        /// </summary>
+        public int? AccountId { get; set; }
 
         public string ItemTypeName { get; set; } = "";
         public string Description { get; set; } = "";
@@ -83,6 +98,7 @@ namespace MyApp.Api.Models
         public DeliveryItem? DeliveryItem { get; set; }
         public ItemType? ItemType { get; set; }
         public NonInventoryItem? NonInventoryItem { get; set; }
+        public Account? Account { get; set; }
         /// <summary>
         /// Optional dual-book overlay — when present, FBR submission and
         /// tax-claim math read the AdjustedXxx values instead of the ones

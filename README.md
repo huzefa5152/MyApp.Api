@@ -290,6 +290,9 @@ Publish output optimized from 79 MB to 37 MB via:
 > `CLAUDE.md`.)
 
 ### 2026-07-14
+- **Company-specific item types with GL account mapping** — the Item Catalog screen now has a **company selector**; each item type can be mapped, per company, to a **division** (optional — leave blank for company-wide) and to its own **sales (income)** and **expense/COGS** accounts. The shared FBR catalog (HS code / UOM / sale type) stays global; the per-company data lives on an overlay.
+- **Per-line GL posting** — invoices and purchase bills now split their net across the accounts resolved per line (line override → item-type mapping → company default → the classic Sales/Purchases fallback), so the P&L breaks down by account like Manager instead of lumping onto one control account. Reversal notes mirror the original lines' accounts. All behind the GL-posting flag; companies with GL off are unchanged.
+- **Default inventory accounts guaranteed in the CoA** — enabling GL seeds (if missing) and pins each company's default **Inventory – sales** and **Cost of goods sold / Inventory** accounts, so item-type lines always resolve to a real, correctly-placed account.
 - Unified item picker on **every** document line — pick an inventory **Item Type** or a **Non-Inventory item** (GL-account line) from one grouped dropdown.
 - **Item Type (or Non-Inventory) required** on bills and purchase bills; optional on quotes / orders / delivery challans / goods receipts.
 - Bill-from-Sales-Order now **auto-selects** the order's unbilled challans and pins the checked ones to the top of the (long) pending list.

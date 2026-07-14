@@ -6,6 +6,7 @@ import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { getPurchaseTemplate } from "../api/invoiceApi";
 import { getAllUnits } from "../api/unitsApi";
+import { getAccountsFlat } from "../api/accountApi";
 import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
@@ -35,6 +36,10 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [suppliers, setSuppliers] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
   const [nonInvItems, setNonInvItems] = useState([]);
+  // GL accounts for the editable per-line "Account" column (design §5). Empty
+  // when GL isn't set up / the caller lacks accounting.coa.view → column hidden.
+  const [accounts, setAccounts] = useState([]);
+  const glOn = accounts.length > 0;
   // Units list — gates each row's quantity input on the picked UOM
   // (decimal allowed for KG/Liter/etc., integer-only for Pcs/SET/etc.),
   // same behaviour as the sales bill form.
@@ -61,7 +66,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
 
   function newRow() {
     return {
-      id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unitPrice: 0,
+      id: 0, itemTypeId: null, nonInventoryItemId: null, accountId: null, description: "", quantity: 1, unitPrice: 0,
       uom: "", hsCode: "", saleType: "",
       sourceInvoiceItemIds: [],
       // metadata used only when in against-sale mode (not sent to API)
@@ -83,7 +88,9 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       try {
         const [sRes, tRes, uRes] = await Promise.all([
           getSuppliersByCompany(companyId),
-          getItemTypes(),
+          // Pass companyId so each item type carries this company's overlay
+          // purchase account, which auto-fills the line's Account on pick.
+          getItemTypes(companyId),
           getAllUnits(),
         ]);
         setSuppliers(sRes.data || []);
@@ -93,6 +100,14 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
         setError("Failed to load suppliers or item types.");
       }
     })();
+  }, [companyId]);
+
+  // GL accounts (expense side highlighted) for the per-line Account picker.
+  useEffect(() => {
+    if (!companyId) { setAccounts([]); return; }
+    getAccountsFlat(companyId)
+      .then(({ data }) => setAccounts((data || []).filter((a) => a.isActive)))
+      .catch(() => setAccounts([]));
   }, [companyId]);
 
   // Per-company Non-Inventory Items (GL-account shortcut lines: Freight,
@@ -117,6 +132,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
         setPaymentMode(data.paymentMode || "");
         setItems((data.items || []).map(i => ({
           id: i.id, itemTypeId: i.itemTypeId, nonInventoryItemId: i.nonInventoryItemId ?? null,
+          accountId: i.accountId ?? null,
           description: i.description,
           quantity: i.quantity, unitPrice: i.unitPrice, uom: i.uom,
           hsCode: i.hsCode || "", saleType: i.saleType || "",
@@ -215,8 +231,11 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
         if (picked.hsCode) r.hsCode = picked.hsCode;
         if (picked.saleType) r.saleType = picked.saleType;
         if (!r.description?.trim() && picked.name) r.description = picked.name;
+        // Auto-fill the line's GL account from the item type's per-company
+        // purchase-account mapping (null → engine derives at post time).
+        r.accountId = picked.purchaseAccountId ?? null;
       } else {
-        r.uom = ""; r.hsCode = ""; r.saleType = "";
+        r.uom = ""; r.hsCode = ""; r.saleType = ""; r.accountId = null;
       }
       next[idx] = r;
       return next;
@@ -235,6 +254,9 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       } else {
         r.nonInventoryItemId = n.id;
         r.itemTypeId = null; r.hsCode = ""; r.saleType = "";
+        // A non-inventory item posts to its own mapped account — clear any
+        // per-line override so that mapping governs.
+        r.accountId = null;
         if (!r.description?.trim()) r.description = n.defaultLineDescription || n.name || "";
         if (!r.uom?.trim()) r.uom = n.unitName || "";
         if ((!r.unitPrice || Number(r.unitPrice) === 0) && n.defaultPurchasePrice != null) r.unitPrice = n.defaultPurchasePrice;
@@ -279,6 +301,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
           nonInventoryItemId: i.nonInventoryItemId || null,
+          accountId: i.accountId || null,
           description: i.description?.trim(),
           // parseFloat preserves decimals (12.5 KG, 0.0004 Carat) — same as
           // the sales bill form; the server clamps/validates per UOM.
@@ -430,6 +453,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                       <th style={{ ...th, textAlign: "right", width: 120, minWidth: 120 }}>Qty *</th>
                       <th style={{ ...th, textAlign: "right", width: 100 }}>Unit Price *</th>
                       <th style={{ ...th, width: 100 }}>UOM</th>
+                      {glOn && <th style={{ ...th, width: 170 }}>Account (GL)</th>}
                       <th style={{ ...th, textAlign: "right", width: 110 }}>Line Total</th>
                       <th style={{ ...th, width: 36 }}></th>
                     </tr>
@@ -479,6 +503,31 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                           <td style={td}>
                             <input type="text" style={cellInput} value={it.uom} onChange={e => updateItem(idx, "uom", e.target.value)} />
                           </td>
+                          {glOn && (
+                            <td style={td}>
+                              <select
+                                style={{ ...cellInput, fontSize: "0.76rem" }}
+                                value={it.accountId ?? ""}
+                                disabled={!!it.nonInventoryItemId}
+                                title={it.nonInventoryItemId ? "Posts to the non-inventory item's account" : "GL expense/COGS account for this line"}
+                                onChange={e => updateItem(idx, "accountId", e.target.value ? parseInt(e.target.value) : null)}
+                              >
+                                <option value="">{it.nonInventoryItemId ? "— item account —" : "— default —"}</option>
+                                {accounts.filter(a => a.accountType === "Expense").length > 0 && (
+                                  <optgroup label="Expense">
+                                    {accounts.filter(a => a.accountType === "Expense").map(a => (
+                                      <option key={a.id} value={a.id}>{a.code ? `${a.code} — ` : ""}{a.name}</option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                                <optgroup label="Other accounts">
+                                  {accounts.filter(a => a.accountType !== "Expense").map(a => (
+                                    <option key={a.id} value={a.id}>{a.code ? `${a.code} — ` : ""}{a.name}</option>
+                                  ))}
+                                </optgroup>
+                              </select>
+                            </td>
+                          )}
                           <td style={{ ...td, textAlign: "right", fontWeight: 600 }}>{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                           <td style={td}>
                             {items.length > 1 && (

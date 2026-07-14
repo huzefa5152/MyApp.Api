@@ -67,6 +67,8 @@ namespace MyApp.Api.Services.Implementations
                 ItemTypeName = i.ItemType?.Name ?? i.ItemTypeName,
                 NonInventoryItemId = i.NonInventoryItemId,
                 NonInventoryItemName = i.NonInventoryItem?.Name,
+                AccountId = i.AccountId,
+                AccountName = i.Account?.Name,
                 Description = i.Description,
                 Quantity = i.Quantity,
                 UOM = i.UOM,
@@ -368,6 +370,7 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException(
                     "Every purchase-bill line must have an Item Type or a Non-Inventory item selected.");
 
+            var validAccountIds = await ValidCompanyAccountIdsAsync(dto.CompanyId, dto.Items.Select(i => i.AccountId));
             for (int idx = 0; idx < dto.Items.Count; idx++)
             {
                 var i = dto.Items[idx];
@@ -389,6 +392,7 @@ namespace MyApp.Api.Services.Implementations
                 {
                     ItemTypeId = isNonInv ? null : i.ItemTypeId,
                     NonInventoryItemId = i.NonInventoryItemId,
+                    AccountId = Coerce(i.AccountId, validAccountIds),
                     ItemTypeName = itemType?.Name ?? "",
                     Description = i.Description?.Trim() ?? "",
                     Quantity = i.Quantity,
@@ -585,6 +589,7 @@ namespace MyApp.Api.Services.Implementations
             _context.PurchaseItems.RemoveRange(bill.Items);
             bill.Items.Clear();
 
+            var validAccountIds = await ValidCompanyAccountIdsAsync(bill.CompanyId, dto.Items.Select(i => i.AccountId));
             var newItems = new List<PurchaseItem>();
             foreach (var i in dto.Items)
             {
@@ -596,6 +601,7 @@ namespace MyApp.Api.Services.Implementations
                 {
                     ItemTypeId = isNonInv ? null : i.ItemTypeId,
                     NonInventoryItemId = i.NonInventoryItemId,
+                    AccountId = Coerce(i.AccountId, validAccountIds),
                     ItemTypeName = itemType?.Name ?? "",
                     Description = i.Description?.Trim() ?? "",
                     Quantity = i.Quantity,
@@ -806,5 +812,21 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new { SupplierId = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.SupplierId, x => x.Count);
         }
+
+        /// <summary>Subset of <paramref name="candidates"/> that are ACTIVE accounts
+        /// of the company's CoA — validates per-line AccountId overrides (design
+        /// §3.3) so a foreign/inactive id is never persisted. Non-members are
+        /// coerced to null by <see cref="Coerce"/> (engine derives the account).</summary>
+        private async Task<HashSet<int>> ValidCompanyAccountIdsAsync(int companyId, IEnumerable<int?> candidates)
+        {
+            var ids = candidates.Where(x => x is > 0).Select(x => x!.Value).Distinct().ToList();
+            if (ids.Count == 0) return new HashSet<int>();
+            return (await _context.Accounts.AsNoTracking()
+                .Where(a => a.CompanyId == companyId && a.IsActive && ids.Contains(a.Id))
+                .Select(a => a.Id).ToListAsync()).ToHashSet();
+        }
+
+        private static int? Coerce(int? candidate, HashSet<int> validIds)
+            => candidate is int id && validIds.Contains(id) ? id : null;
     }
 }
