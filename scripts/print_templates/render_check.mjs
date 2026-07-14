@@ -31,6 +31,7 @@ H.registerHelper("fmtDate", fdate);
 H.registerHelper("fmtDMY", d => { if(!d) return ""; const t=new Date(d); return String(t.getDate()).padStart(2,"0")+"/"+String(t.getMonth()+1).padStart(2,"0")+"/"+t.getFullYear(); });
 H.registerHelper("fmt", n => Number(n||0).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0}));
 H.registerHelper("fmtDec", n => Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}));
+H.registerHelper("fmtQty", n => Number(n||0).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:3}));
 H.registerHelper("nl2br", s => s==null?"":new H.SafeString(H.Utils.escapeExpression(String(s)).replace(/\n/g,"<br>")));
 H.registerHelper("richText", s => { if(s==null) return ""; let o=H.Utils.escapeExpression(String(s));
   o=o.replace(/&lt;(\/?)(b|i|u)&gt;/gi,(_,sl,t)=>`<${sl}${t.toLowerCase()}>`); return new H.SafeString(o.replace(/\n/g,"<br>")); });

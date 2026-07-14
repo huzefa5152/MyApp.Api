@@ -66,7 +66,9 @@ merge fields for the dynamic parts.
   `mergeTemplate(html, data)`. It injects `<base href="{origin}/">` so a path-absolute
   logo (`/data/uploads/logos/…`) resolves in the print popup.
 - **Registered helpers ONLY** (using any other helper throws):
-  `fmtDate` (dd-Mmm-yy), `fmt` (0-dp thousands), `fmtDec` (2-dp), `nl2br`, `richText`
+  `fmtDate` (dd-Mmm-yy), `fmtDMY` (dd/mm/yyyy — Manager's numeric date), `fmt` (0-dp
+  thousands), `fmtDec` (2-dp), `fmtQty` (thousands sep, keeps decimals only when
+  present: 1,000 / 500 / 2.5 — use for item quantities), `nl2br`, `richText`
   (allows `<b>/<i>/<u>`+`<br>`, XSS-safe — use `{{{richText x}}}`), `join`, `joinDates`,
   `emptyRows`, `billEmptyRows`, `taxEmptyRows`, `math` (only `+`/`-`), `gt`, `eq`, `or`,
   `uniqueTypes`, `inc`. Plus built-in `{{#each}}`, `{{#if}}`, `{{else}}`.

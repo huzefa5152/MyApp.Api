@@ -28,6 +28,13 @@ Handlebars.registerHelper("fmtDec", (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 );
 
+// Quantity format: thousands separator, but keep decimals ONLY when present
+// (1000 -> "1,000", 500 -> "500", 2.5 -> "2.5"). Use for item quantities so
+// whole units read like Manager's "1,000" yet fractional units aren't rounded.
+Handlebars.registerHelper("fmtQty", (n) =>
+  Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })
+);
+
 // Audit H-13 (2026-05-13): pre-fix, nl2br only replaced \n with <br>
 // then wrapped the result in a SafeString. Operator-controlled fields
 // (clientAddress, companyAddress, supplierAddress) flow through this
@@ -168,6 +175,8 @@ export const MERGE_FIELDS = {
     { field: "{{#each items}}", label: "Loop: Items Start" },
     { field: "{{/each}}", label: "Loop: End" },
     { field: "{{this.quantity}}", label: "Item Quantity (in loop)" },
+    { field: "{{fmtQty this.quantity}}", label: "Item Quantity — formatted (1,000 / 2.5)" },
+    { field: "{{this.unit}}", label: "Item Unit (in loop)" },
     { field: "{{{richText this.description}}}", label: "Item Description (in loop)" },
   ],
   Bill: [
