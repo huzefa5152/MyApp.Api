@@ -532,16 +532,13 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
   const rowErrors = (r) => {
     const errs = [];
-    // Bills mode: Item Type is optional, so validation keys on the
-    // free-text description instead. Invoices mode requires the type
-    // (description derives from it).
-    if (billsMode) {
-      if (!r.description?.trim()) errs.push("description");
-    } else {
-      // A non-inventory line (Freight / Discount / …) legitimately has no
-      // item type / HS code — it's valid as long as it carries a non-inv id.
-      if (!r.itemTypeId && !r.nonInventoryItemId) errs.push("itemType");
-    }
+    // Every bill line must be classified — an Item Type OR a Non-Inventory
+    // item (Freight / Discount / … which legitimately has no item type/HS).
+    // Required in BOTH Bills and Invoices modes.
+    if (!r.itemTypeId && !r.nonInventoryItemId) errs.push("itemType");
+    // Bills mode: the operator types the description directly; in Invoices
+    // mode it derives from the picked item type.
+    if (billsMode && !r.description?.trim()) errs.push("description");
     const q = parseFloat(r.quantity);
     if (!(q > 0)) errs.push("qty>0");
     const p = parseFloat(r.unitPrice);
@@ -1072,7 +1069,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                             <tr style={styles.unifiedThead}>
                               {/* Optional in Bills mode — a type picked at
                                   bill time persists to the Invoices tab. */}
-                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "22%" : "26%" }}>Item Type{billsMode ? "" : " *"}</th>
+                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "22%" : "26%" }}>Item Type *</th>
                               <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "16%" : "20%" }}>Description{billsMode ? " *" : ""}</th>
                               <th style={{ ...styles.unifiedTh, width: "7%" }}>Qty *</th>
                               <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
@@ -1105,7 +1102,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       nonInventoryItems={nonInvItems}
                                       nonInventoryValue={r.nonInventoryItemId || ""}
                                       onPickNonInventory={(n) => handleNonInventoryPick(r.localId, n)}
-                                      placeholder={billsMode ? "Optional — pick from catalog…" : "Pick from your catalog…"}
+                                      placeholder="Required — pick item or non-inventory…"
                                       style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                     />
                                   </td>

@@ -593,6 +593,16 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const grandTotal = subtotal + gstAmount;
 
   const allPricesValid = allItems.length > 0 && allItems.every((i) => itemPrices[i.id] && parseFloat(itemPrices[i.id]) > 0);
+  // Every line must be complete before the bill can be created: a classification
+  // (Item Type OR Non-Inventory item), a non-empty description, qty > 0, and
+  // unit price > 0. Gates the Create Bill button (disabled until all pass).
+  const allLinesComplete = allItems.length > 0 && allItems.every((i) => {
+    const hasPick = !!(itemTypeIds[i.id] || itemNonInvIds[i.id]);
+    const desc = ((itemDescriptions[i.id] ?? i.description) || "").trim();
+    const qty = Number(i.quantity) || 0;
+    const price = parseFloat(itemPrices[i.id]) || 0;
+    return hasPick && desc.length > 0 && qty > 0 && price > 0;
+  });
 
   const handlePriceChange = (itemId, value) => {
     setItemPrices((prev) => ({ ...prev, [itemId]: value }));
@@ -1343,7 +1353,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             <thead>
                               <tr style={styles.unifiedThead}>
                                 <th style={{ ...styles.unifiedTh, width: "4%" }}>DC#</th>
-                                <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type (FBR)</th>
+                                <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type (FBR) *</th>
                                 <th style={{ ...styles.unifiedTh, width: "16%" }}>Description</th>
                                 <th style={{ ...styles.unifiedTh, width: "9%" }}>Qty</th>
                                 <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
@@ -1410,7 +1420,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                             setItemFbrUomIds((p) => ({ ...p, [item.id]: null }));
                                           }
                                         }}
-                                        placeholder="— optional —"
+                                        placeholder="— required —"
                                         style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                                       />
                                     </td>
@@ -1576,8 +1586,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           </table>
                         </div>
                         <p style={styles.fbrToggleHint}>
-                          <b>*</b> Unit Price is required. HS Code &amp; Sale Type are optional —
-                          needed only when submitting to FBR. They auto-fill when you pick an item.
+                          <b>*</b> Item Type (or a Non-Inventory item) and Unit Price are required on every line.
+                          HS Code &amp; Sale Type are optional — needed only when submitting to FBR. They auto-fill when you pick an item.
                           {!canCreateItemType && (
                             <span style={{ marginLeft: 8 }}>
                               · <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
@@ -1611,16 +1621,16 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
             )}
           </div>
           <div style={formStyles.footer}>
-            {allItems.length > 0 && !allPricesValid && (
+            {allItems.length > 0 && !allLinesComplete && (
               <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
-                All items must have a unit price greater than 0.
+                Every line needs an Item Type (or Non-Inventory item), a description, quantity &gt; 0 and unit price &gt; 0.
               </span>
             )}
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button
               type="submit"
-              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid ? 0.6 : 1 }}
-              disabled={saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid}
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !selectedClientId || selectedIds.length === 0 || !allLinesComplete ? 0.6 : 1 }}
+              disabled={saving || !selectedClientId || selectedIds.length === 0 || !allLinesComplete}
             >
               {saving ? "Creating..." : "Create Bill"}
             </button>
