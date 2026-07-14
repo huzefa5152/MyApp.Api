@@ -2257,8 +2257,26 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("This bill is cancelled — there is nothing to reverse at FBR.");
             if (original.IsDemo)
                 throw new InvalidOperationException("Sandbox (demo) bills cannot be reversed — they exist only for FBR scenario testing.");
-            if (original.FbrStatus != "Submitted" || string.IsNullOrWhiteSpace(original.FbrIRN))
-                throw new InvalidOperationException("Only an invoice that has been submitted to FBR can have a note issued against it. A non-submitted bill should be voided instead.");
+
+            // Eligibility depends on whether the company runs FBR (2026-07-14):
+            //   • FBR-ON  — the invoice must be filed to FBR; a note is the
+            //     formal IRIS adjustment (Credit/Debit Note against the IRN).
+            //   • FBR-OFF — no FBR document exists, so a note may be raised
+            //     against a fully PAID sale invoice instead. The note carries a
+            //     null OriginalInvoiceRefIRN and is never sent to FBR.
+            var companyFbrEnabled = await _context.Companies.AsNoTracking()
+                .Where(c => c.Id == original.CompanyId).Select(c => c.FbrEnabled).FirstOrDefaultAsync();
+            if (companyFbrEnabled)
+            {
+                if (original.FbrStatus != "Submitted" || string.IsNullOrWhiteSpace(original.FbrIRN))
+                    throw new InvalidOperationException("Only an invoice that has been submitted to FBR can have a note issued against it. A non-submitted bill should be voided instead.");
+            }
+            else
+            {
+                var status = PaymentStatusCalculator.Status(original.GrandTotal, original.AmountPaid, original.DueDate).ToString();
+                if (status != "Paid")
+                    throw new InvalidOperationException("Only a fully paid invoice can have a Credit/Debit Note issued against it (FBR is off for this company). Record the payment first, or void the bill instead.");
+            }
 
             // 10 = CREDIT NOTE (return / reversal / reduction — the default);
             // 9 = DEBIT NOTE (upward adjustment: undercharge, rate change,
@@ -2713,6 +2731,7 @@ namespace MyApp.Api.Services.Implementations
                                 Quantity = totalQty,
                                 UOM = g.First().UOM,
                                 Description = g.Key,
+                                UnitPrice = totalQty != 0 ? Math.Round(totalValue / totalQty, 2) : 0m,
                                 ValueExclTax = totalValue,
                                 GSTRate = inv.GSTRate,
                                 GSTAmount = gstAmt,
@@ -2737,6 +2756,7 @@ namespace MyApp.Api.Services.Implementations
                                 Quantity = qty,
                                 UOM = ii.UOM,
                                 Description = ii.Description,
+                                UnitPrice = ii.Adjustment?.AdjustedUnitPrice ?? ii.UnitPrice,
                                 ValueExclTax = lineTotal,
                                 GSTRate = inv.GSTRate,
                                 GSTAmount = gstAmt,
