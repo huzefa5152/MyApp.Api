@@ -179,6 +179,7 @@ export default function BankCashAccountsPage() {
                   <td style={st.td}>{a.code ? <span style={st.code}>{a.code}</span> : <span style={st.muted}>—</span>}</td>
                   {canReconcile && <td style={{ ...st.td, textAlign: "right", color: (Number(a.clearedBalance) || 0) < 0 ? "#b71c1c" : colors.textSecondary, whiteSpace: "nowrap" }}>{money(a.clearedBalance)}</td>}
                   {canReconcile && <td style={{ ...st.td, textAlign: "right", color: a.pendingDeposits ? "#1b7a3d" : colors.textSecondary, whiteSpace: "nowrap" }}>{a.pendingDeposits ? money(a.pendingDeposits) : "—"}</td>}
+                  {canReconcile && <td style={{ ...st.td, textAlign: "right", color: a.pendingWithdrawals ? "#b71c1c" : colors.textSecondary, whiteSpace: "nowrap" }}>{a.pendingWithdrawals ? money(a.pendingWithdrawals) : "—"}</td>}
                   {canReconcile && <td style={{ ...st.td, textAlign: "center", whiteSpace: "nowrap" }}>
                     {a.uncategorizedCount ? (
                       <button
