@@ -1,7 +1,7 @@
 namespace MyApp.Api.Models.Accounting
 {
     /// <summary>Lifecycle of an imported bank-statement line
-    /// (BANK_RECONCILIATION_DESIGN.md Phase 2).</summary>
+    /// (the bank reconciliation design Phase 2).</summary>
     public enum BankStatementLineStatus { Uncategorized = 0, Categorized = 1, Ignored = 2 }
 
     /// <summary>One uploaded bank statement (a batch of <see cref="BankStatementLine"/>s)

@@ -3,7 +3,7 @@ using MyApp.Api.DTOs;
 namespace MyApp.Api.Services.Interfaces
 {
     /// <summary>
-    /// Bank statement import + categorization (BANK_RECONCILIATION_DESIGN.md
+    /// Bank statement import + categorization (the bank reconciliation design
     /// Phase 2). Imported lines live in a staging table with no GL impact until
     /// categorized (created as / matched to a receipt-payment). On import, lines
     /// are auto-matched to existing un-cleared payments and those get cleared.

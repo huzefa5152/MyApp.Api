@@ -10,7 +10,7 @@ using MyApp.Api.Services.Interfaces;
 namespace MyApp.Api.Controllers
 {
     /// <summary>
-    /// Bank statement import + categorization (BANK_RECONCILIATION_DESIGN.md
+    /// Bank statement import + categorization (the bank reconciliation design
     /// Phase 2). Upload a statement CSV → staged lines auto-match to existing
     /// un-cleared payments (and clear them); the rest are categorized (created as
     /// an on-account receipt/payment) or ignored.

@@ -7,7 +7,7 @@ using MyApp.Api.Services.Interfaces;
 namespace MyApp.Api.Services.Implementations
 {
     /// <summary>
-    /// Bank reconciliation read model + workflow (BANK_RECONCILIATION_DESIGN.md
+    /// Bank reconciliation read model + workflow (the bank reconciliation design
     /// §4.2–4.3, Phase 1 + 3).
     ///
     /// Actual balance is the GL balance (via AccountService). Pending buckets are

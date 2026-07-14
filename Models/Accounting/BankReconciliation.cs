@@ -1,7 +1,7 @@
 namespace MyApp.Api.Models.Accounting
 {
     /// <summary>
-    /// A locked bank-reconciliation snapshot (BANK_RECONCILIATION_DESIGN.md
+    /// A locked bank-reconciliation snapshot (the bank reconciliation design
     /// Phase 3). At <see cref="StatementDate"/> the bank statement's ending
     /// balance was <see cref="StatementBalance"/>, and the book's cleared balance
     /// (<see cref="ClearedBalance"/>) was reconciled against it. Live ticking of

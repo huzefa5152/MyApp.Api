@@ -2,7 +2,7 @@ namespace MyApp.Api.DTOs
 {
     /// <summary>
     /// Per bank/cash account reconciliation summary — the columns of the
-    /// Bank &amp; Cash Accounts screen (design: BANK_RECONCILIATION_DESIGN.md §4.2).
+    /// Bank &amp; Cash Accounts screen (design: the bank reconciliation design §4.2).
     /// Invariant: <c>ActualBalance = ClearedBalance + PendingDeposits − PendingWithdrawals</c>.
     /// Actual is the GL balance (opening + posted movement); Cleared is derived by
     /// removing the not-yet-cleared (pending) receipts/payments/transfers.

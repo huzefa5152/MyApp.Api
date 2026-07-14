@@ -88,7 +88,7 @@ namespace MyApp.Api.Models.Accounting
         /// <summary>Bank-reconciliation cleared marker. Null = not yet cleared by
         /// the bank (pending); set = cleared as of this bank date. Independent of
         /// <see cref="ChequeStatus"/> (a cash/transfer receipt clears too). Pure
-        /// metadata — never changes the GL posting. See BANK_RECONCILIATION_DESIGN.md §4.3.</summary>
+        /// metadata — never changes the GL posting. See the bank reconciliation design §4.3.</summary>
         public DateTime? ReconciledDate { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

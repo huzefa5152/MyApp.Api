@@ -10,7 +10,7 @@ using MyApp.Api.Services.Interfaces;
 namespace MyApp.Api.Controllers
 {
     /// <summary>
-    /// Bank reconciliation (BANK_RECONCILIATION_DESIGN.md). Read model for the
+    /// Bank reconciliation (the bank reconciliation design). Read model for the
     /// Bank &amp; Cash Accounts columns (actual / cleared / pending) plus the
     /// cleared-state toggles. A pure metadata layer over the GL — toggling cleared
     /// never posts or moves money.

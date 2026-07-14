@@ -244,6 +244,43 @@ tracking-enabled company and asserts on-hand after each edit:
 
 ---
 
+## Transient feature/research docs — delete once done (every session)
+
+Planning / research / spec / audit `.md` files created to build a feature are
+**transient**. Once that feature is **implemented AND verified**, delete its
+`.md` in the same session (the durable record is the README `## Changelog` +
+git history + `TECHNICAL_SPEC.md`). Applies to future `FEATURE_*`, `*_DESIGN`,
+`*_AUDIT`, gap-analysis, and research notes you author.
+
+- **Keep** while the feature is **not done / not verified** (e.g.
+  `FEATURE_TAX_OPTIMIZATION_GATE.md` — approved, not started).
+- **Never delete** the permanent docs: `README.md`, `CLAUDE.md`,
+  `TECHNICAL_SPEC.md`, `USER_GUIDE.md`, `AGENTS.md`, the `*_GUIDE.md` runbooks,
+  and any doc still cited from **source code, scripts, or `CLAUDE.md`** — strip
+  the citation first (or fold the doc's essence into `TECHNICAL_SPEC.md`) before
+  removing it, so nothing points at a missing file.
+- **Never delete another session's in-progress docs** (e.g. a `FEATURE_*` marked
+  DESIGN ONLY that a parallel session owns).
+
+## README changelog — MANDATORY (every session)
+
+`README.md` is the running, incremental record of this product's evolution.
+**Every session that ships a feature or bug fix MUST append a dated entry to the
+`## Changelog` section of `README.md` (newest first) before committing** —
+one concise entry per session summarising what changed (features, fixes,
+migrations). This is a hard rule, on par with the test-discipline checks.
+
+- Group same-day work under a single dated heading (`### YYYY-MM-DD`); add
+  bullets, don't rewrite history.
+- When a **new module/page/entity** ships, also keep the README **Features**,
+  **Roadmap**, and (if structural) **Project Structure** sections in sync.
+- Keep entries user-facing and honest — no internal-only notes (DB names,
+  session ids, throwaway company ids). Those belong in the audit/feature docs.
+- The changelog edit is part of the same commit as the feature/fix (or its own
+  commit in the same session), never deferred to "later".
+
+---
+
 ## Production deploy notes
 
 - Live host: **MonsterASP** at `hakimitraders.runasp.net`

@@ -9,6 +9,8 @@
 
 A full-stack ERP system for Pakistani businesses to manage the complete **Purchase Order -> Delivery Challan -> Invoice -> FBR Submission** workflow. Built with ASP.NET Core 9 and React 19, featuring AI-powered PO parsing, FBR Digital Invoicing integration, customizable print templates, and multi-company support.
 
+> Actively evolved across many focused sessions — see the **[Changelog](#changelog)** for the incremental, session-by-session history.
+
 ---
 
 ## Features
@@ -48,9 +50,10 @@ A full-stack ERP system for Pakistani businesses to manage the complete **Purcha
 ### Administration
 
 - **JWT Authentication** - 8-hour token expiry, BCrypt password hashing
-- **Role-Based Access** - Admin and User roles
-- **User Management** - Create, edit, delete users (Admin only)
-- **Audit Logging** - All errors/warnings logged with request details
+- **Granular RBAC** - permission catalog (`module.page.action`) with custom roles; action buttons render only when permitted
+- **Multi-Tenant Isolation** - per-company access control (`UserCompany` + division-level scoping)
+- **User Management** - Create, edit, delete users and assign roles/companies
+- **Audit Logging** - All errors/warnings + FBR communication logged with request details
 - **Profile Settings** - Avatar upload, password change
 
 ---
@@ -279,20 +282,56 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ---
 
+## Changelog
+
+> This project evolves across many focused sessions. **Every session that ships a
+> feature or bug fix appends a dated entry here (newest first)** — README is the
+> running, incremental record of the product's evolution. (See the rule in
+> `CLAUDE.md`.)
+
+### 2026-07-14
+- Unified item picker on **every** document line — pick an inventory **Item Type** or a **Non-Inventory item** (GL-account line) from one grouped dropdown.
+- **Item Type (or Non-Inventory) required** on bills and purchase bills; optional on quotes / orders / delivery challans / goods receipts.
+- Bill-from-Sales-Order now **auto-selects** the order's unbilled challans and pins the checked ones to the top of the (long) pending list.
+- **Any** invoice/bill can be deleted (not just the latest) — reverts its GL + inventory impact and frees its challans.
+- Invoices tab is **view-only for FBR-off companies** (edits routed to the Bills tab); read-only **View** available on both Bills and Invoices tabs.
+- Company + Division cards now list **all** document-number sequences (challan, invoice, sales quote/order, purchase bill, goods receipt, credit/debit note) with starting + last-issued.
+- **Sidebar restructure**: single **Dashboards** group (Overview / Inventory / Accounting); Accounting Reports moved under **Reports**; Configuration split into **Master Data** + **Settings**; import/migration tools moved to **Administration**.
+- Fixed Bank & Cash Accounts column misalignment (missing Pending Out cell).
+
+### 2026-07 (earlier)
+- **Non-Inventory Items** — per-company GL-account line items (Freight, Discount, …) that post to a mapped income/expense account and move no stock.
+- **Manager.io migration** — full-fidelity ETL importing a Manager.io business (documents + perpetual GL); reconciles the chart of accounts to the trial balance to the paisa.
+- **Chart of Accounts + General Ledger** — CoA tree, posting engine (one balanced journal entry per document), trial balance, AR/AP aging, live account balances; per-company flag (default off).
+- **Bank & Cash / Reconciliation** — bank & cash accounts with live balances, bank-statement import, auto-match, categorize, reconcile + period lock; inter-account transfers; receipts & payments (AR/AP subledger).
+- **Sales Quotes & Sales Orders** — priced quote -> confirmed order -> delivery challans -> bill, with fulfilment tracking.
+- **Divisions (sub-companies)** — per-division branding and document numbering, with division-scoped access control.
+- **Inventory V2** — derived read model (Committed / To-Deliver / Delivered / Incoming) with an over-commit guard; per-company flow version.
+- **Withholding Tax Receipts**, **Credit/Debit Notes** (FBR reversal flow), **multi-template per company/division** with a per-screen template picker, and a **Reports** module (FBR Sales report, Tax Sheet).
+- **Granular RBAC** — permission catalog (`module.page.action`) replacing the old Admin/User roles; multi-tenant + division isolation.
+
+---
+
 ## Roadmap
 
 - [x] Multi-company delivery challans
-- [x] JWT authentication & role-based access
+- [x] JWT authentication & granular RBAC (permission catalog)
+- [x] Multi-tenant + division isolation
 - [x] Server-side pagination & filtering
 - [x] Invoice generation from challans
 - [x] GST calculations with amount in words
 - [x] FBR Digital Invoicing (V1.12)
 - [x] AI-powered PO import (Gemini)
-- [x] Customizable print templates (HTML + GrapesJS)
+- [x] Customizable print templates (HTML + GrapesJS), multi-doc + per-division
 - [x] Excel export
-- [x] Audit logging
+- [x] Audit logging + FBR communication log
 - [x] User management
-- [ ] Dashboard analytics & charts
+- [x] Sales Quotes & Sales Orders
+- [x] Chart of Accounts + General Ledger posting engine
+- [x] Bank & Cash accounts + reconciliation
+- [x] Manager.io migration (full-fidelity perpetual GL)
+- [x] Non-Inventory (GL-account) line items
+- [x] Dashboard analytics & charts (Overview / Inventory / Accounting)
 - [ ] Dark mode
 - [ ] Mobile app (React Native)
 - [ ] Multi-language support (Urdu)

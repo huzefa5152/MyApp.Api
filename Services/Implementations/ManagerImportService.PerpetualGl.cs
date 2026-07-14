@@ -7,7 +7,7 @@ using MyApp.Api.Models.Accounting;
 namespace MyApp.Api.Services.Implementations
 {
     /// <summary>
-    /// Perpetual-GL migration (see FEATURE_PERPETUAL_GL_MIGRATION.md). Rebuilds a
+    /// Perpetual-GL migration (see the perpetual-GL migration design). Rebuilds a
     /// company's chart of accounts keyed by Manager GUID, opens each account at its
     /// Manager STARTING balance, and posts every historical document as a faithful
     /// balanced journal entry (ManualJournal, SourceDocId=null → the app's posting

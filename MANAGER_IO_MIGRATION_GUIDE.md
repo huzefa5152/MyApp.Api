@@ -279,7 +279,7 @@ run a second/third before calling the import section production-safe for any fil
 | GL rebuild cutover | `Services/Implementations/GeneralLedgerService.cs` (`RebuildAsync`, honours `Company.GlLockDate`) |
 | Exporter | `scripts/manager_export.py` (+ legacy `techvologix_export.py`, `pull_details.py`) |
 | Worked example (data + prototype) | `C:\Users\hussahuz\Downloads\alqahera-perpetual\` (incl. `perp_recon.py` reconciliation prototype) |
-| Design/decisions | `FEATURE_PERPETUAL_GL_MIGRATION.md`, `FEATURE_MANAGER_BANKCASH_IMPORT.md` |
+| Design/decisions | `the perpetual-GL migration design`, `the Manager bank/cash import design` |
 
 **Committed:** `a27262c` on `feat/sales-quote-order` ("Add full-fidelity Manager.io
 perpetual-GL migration").
