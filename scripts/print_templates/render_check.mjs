@@ -28,6 +28,7 @@ const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 const fdate = d => { if(!d) return ""; const t=new Date(d);
   return String(t.getDate()).padStart(2,"0")+"-"+months[t.getMonth()]+"-"+String(t.getFullYear()).slice(-2); };
 H.registerHelper("fmtDate", fdate);
+H.registerHelper("fmtDMY", d => { if(!d) return ""; const t=new Date(d); return String(t.getDate()).padStart(2,"0")+"/"+String(t.getMonth()+1).padStart(2,"0")+"/"+t.getFullYear(); });
 H.registerHelper("fmt", n => Number(n||0).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0}));
 H.registerHelper("fmtDec", n => Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}));
 H.registerHelper("nl2br", s => s==null?"":new H.SafeString(H.Utils.escapeExpression(String(s)).replace(/\n/g,"<br>")));

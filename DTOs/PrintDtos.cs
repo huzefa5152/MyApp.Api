@@ -141,6 +141,9 @@ namespace MyApp.Api.DTOs
         public decimal Quantity { get; set; }
         public string UOM { get; set; } = "";
         public string Description { get; set; } = "";
+        /// <summary>Net unit price (pre-tax). Lets the tax-invoice template render a
+        /// "Unit price" column like Manager's; = line ValueExclTax / Quantity.</summary>
+        public decimal UnitPrice { get; set; }
         public decimal ValueExclTax { get; set; }
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }

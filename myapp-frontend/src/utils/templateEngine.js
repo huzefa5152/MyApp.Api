@@ -11,6 +11,15 @@ Handlebars.registerHelper("fmtDate", (d) => {
   return `${dd}-${mmm}-${yy}`;
 });
 
+// Numeric day/month/year (dd/mm/yyyy) — matches Manager's invoice-date format.
+Handlebars.registerHelper("fmtDMY", (d) => {
+  if (!d) return "";
+  const dt = new Date(d);
+  const dd = String(dt.getDate()).padStart(2, "0");
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${dt.getFullYear()}`;
+});
+
 Handlebars.registerHelper("fmt", (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 );
