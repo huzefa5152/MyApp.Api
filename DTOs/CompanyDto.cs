@@ -43,6 +43,16 @@
         public string? FbrDefaultPaymentModeRegistered { get; set; }
         public string? FbrDefaultPaymentModeUnregistered { get; set; }
 
+        // ── GL posting defaults (read-only projection) ──────────────
+        // The company-wide fallback accounts sale / purchase lines post to when
+        // an item type carries no per-company account overlay. Managed by the
+        // GL enable hook (PostingService.EnsureDefaultInventoryAccountsAsync),
+        // NOT writable via company create/update. Surfaced so the bill forms can
+        // NAME the account an unmapped line will land in ("→ Inventory – sales").
+        // Null when GL posting has never been enabled for the company.
+        public int? DefaultSalesAccountId { get; set; }
+        public int? DefaultPurchaseAccountId { get; set; }
+
         // ── Inventory module toggles ──────────────────────────────
         // Off by default. While off, no Stock movements are emitted by
         // PurchaseBill saves or FBR submissions, and the stock guard at

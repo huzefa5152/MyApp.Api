@@ -46,9 +46,6 @@ export default function SalesOrderPage() {
   const canBill = has("bills.manage.create");
   const canImportPo = canCreate && has("poformats.import.create");
 
-  // Shared template-picker state (dropdown + Print/PDF resolution).
-  const tplPicker = usePrintTemplates("SalesOrder");
-
   const [orders, setOrders] = useState([]);
   const [exportingId, setExportingId] = useState(null);
   const [showImport, setShowImport] = useState(false);
@@ -64,6 +61,11 @@ export default function SalesOrderPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
+
+  // Shared template-picker state, scoped to the selected division: "All
+  // Divisions" → company-wide templates; a specific division → that division's.
+  // An empty scope hides the picker and blocks Print/PDF.
+  const tplPicker = usePrintTemplates("SalesOrder", { divisionId: divisionFilter });
 
   const fetchOrders = useCallback(async (companyId, pg) => {
     if (!companyId) return;

@@ -10,6 +10,7 @@ import { getAccountsFlat } from "../api/accountApi";
 import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
+import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
@@ -28,7 +29,7 @@ const colors = {
   inputBorder: "#d0d7e2",
 };
 
-export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, prefillItems = null, prefillSourceLabel = null, readOnly = false, defaultDivisionId = null }) {
+export default function PurchaseBillForm({ companyId, company = null, billId, onClose, onSaved, prefillFromInvoiceId = null, prefillItems = null, prefillSourceLabel = null, readOnly = false, defaultDivisionId = null }) {
   const isEdit = !!billId;
   const isAgainstSale = !!prefillFromInvoiceId;
   // "Purchase Against Sales Order(s)" prefill — plain lines (NOT the FBR
@@ -213,6 +214,16 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     [subtotal, gstRate]
   );
   const grandTotal = subtotal + gstAmount;
+
+  // Account labels for the per-line Account (GL) column — name the resolved
+  // company-default purchase account (shown when a line carries no explicit
+  // account) and a non-inventory line's own mapped purchase account, so the
+  // operator always sees which account the amount lands in.
+  const defaultPurchaseAccountLabel = defaultAccountPlaceholder(accounts, company?.defaultPurchaseAccountId);
+  const nonInvPurchaseAccountLabel = (nonInvId) => {
+    const n = nonInvItems.find((x) => String(x.id) === String(nonInvId));
+    return n?.purchaseAccountName ? `→ ${n.purchaseAccountName}` : "→ Suspense";
+  };
 
   const updateItem = (idx, field, value) => {
     setItems(prev => {
@@ -513,7 +524,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                                 onChange={(v) => updateItem(idx, "accountId", v)}
                                 side="expense"
                                 disabled={!!it.nonInventoryItemId}
-                                placeholder={it.nonInventoryItemId ? "— item account —" : "— default —"}
+                                placeholder={it.nonInventoryItemId ? nonInvPurchaseAccountLabel(it.nonInventoryItemId) : defaultPurchaseAccountLabel}
                                 style={{ ...cellInput, fontSize: "0.76rem" }}
                               />
                             </td>

@@ -43,8 +43,14 @@ export default function TransfersPage() {
   const canDelete = has("accounting.transfers.delete");
   const canPrintTransfer = has("accounting.transfers.print");
 
+  // Division scope for the print-template picker. Transfers aren't a
+  // division-scoped LIST, but templates can be division-scoped, so the selector
+  // drives which template scope Print/PDF use — consistent with every other
+  // document screen. "All Divisions" → company-wide templates; a specific
+  // division → that division's. (Separate from the create-form's own division.)
+  const [divisionFilter, setDivisionFilter] = useState("");
   // Shared template-picker state (dropdown + Print/PDF resolution).
-  const tplPicker = usePrintTemplates("Transfer");
+  const tplPicker = usePrintTemplates("Transfer", { divisionId: divisionFilter });
   const [exportingId, setExportingId] = useState(null);
 
   const [rows, setRows] = useState([]);
@@ -154,6 +160,12 @@ export default function TransfersPage() {
           >
             {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
           </select>
+          {/* Division scope — next to Company. Scopes the print-template picker
+              (company-wide vs a division's templates). Self-hides for companies
+              with no divisions. */}
+          {selectedCompany && (
+            <DivisionSelect companyId={selectedCompany.id} value={divisionFilter} onChange={setDivisionFilter} style={dropdownStyles.base} />
+          )}
         </div>
       )}
 

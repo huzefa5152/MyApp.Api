@@ -2,7 +2,7 @@ import { MdVisibility, MdEdit, MdDelete, MdPrint, MdPictureAsPdf } from "react-i
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 
-export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onDelete, onPrint, onExportPdf, exportingId }) {
+export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onDelete, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "" }) {
   const columns = [
     {
       key: "goodsReceiptNumber",
@@ -58,12 +58,12 @@ export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onD
         <MdVisibility size={14} />
       </button>
       {perms.canPrint && onPrint && (
-        <button style={btn.print} onClick={() => onPrint(g)} title="Print goods receipt">
+        <button style={{ ...btn.print, ...(printDisabled ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={printDisabled} onClick={() => onPrint(g)} title={printDisabled ? printDisabledReason : "Print goods receipt"}>
           <MdPrint size={14} />
         </button>
       )}
       {perms.canPrint && onExportPdf && (
-        <button style={{ ...btn.pdf, opacity: exportingId === g.id ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => onExportPdf(g)} title="Download PDF">
+        <button style={{ ...btn.pdf, opacity: (printDisabled || exportingId === g.id) ? 0.5 : 1, ...(printDisabled ? { cursor: "not-allowed" } : {}) }} disabled={printDisabled || !!exportingId} onClick={() => onExportPdf(g)} title={printDisabled ? printDisabledReason : "Download PDF"}>
           <MdPictureAsPdf size={14} />
         </button>
       )}

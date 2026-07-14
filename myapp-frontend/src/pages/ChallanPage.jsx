@@ -53,8 +53,6 @@ export default function ChallanPage() {
   const canUpdate = has("challans.manage.update");
   const canDelete = has("challans.manage.delete");
   const canPrint = has("challans.print.view");
-  // Shared template-picker state (dropdown + Print/PDF resolution).
-  const tplPicker = usePrintTemplates("Challan");
   // Client-filter dropdown calls GET /api/clients/company/{id} which is
   // gated by clients.manage.view. View-only roles (e.g. tax consultant
   // with just challans.list.view) would 403 on that call AND see an
@@ -79,6 +77,11 @@ export default function ChallanPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
   const [clientFilter, setClientFilter] = useState("");
+  // Shared template-picker state (dropdown + Print/PDF resolution), scoped to
+  // the selected division: "All Divisions" → company-wide templates; a specific
+  // division → that division's. An empty scope hides the picker and blocks
+  // Print/PDF. Declared after divisionFilter so it can consume it.
+  const tplPicker = usePrintTemplates("Challan", { divisionId: divisionFilter });
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [hasExcelTpl, setHasExcelTpl] = useState(false);
@@ -362,6 +365,17 @@ export default function ChallanPage() {
                 <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
               ))}
             </select>
+            {/* Division scope — sits next to Company. Drives both the list
+                filter and the print-template scope. Hidden for companies with
+                no divisions (DivisionSelect self-hides). */}
+            {selectedCompany && (
+              <DivisionSelect
+                companyId={selectedCompany.id}
+                value={divisionFilter}
+                onChange={(v) => { setDivisionFilter(v); setPage(1); }}
+                style={dropdownStyles.base}
+              />
+            )}
           </div>
 
           {/* Filters + view-mode toggle */}
@@ -386,12 +400,6 @@ export default function ChallanPage() {
                 <option value="Invoiced">Billed</option>
                 <option value="Cancelled">Cancelled</option>
               </select>
-              <DivisionSelect
-                companyId={selectedCompany.id}
-                value={divisionFilter}
-                onChange={(v) => { setDivisionFilter(v); setPage(1); }}
-                className="filter-select"
-              />
               {canViewClients && (
                 <div style={{ minWidth: 220, maxWidth: 340 }}>
                   <SearchableSelect

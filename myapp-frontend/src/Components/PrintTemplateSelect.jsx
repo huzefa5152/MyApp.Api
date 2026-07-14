@@ -4,26 +4,24 @@ import { MdPrint } from "react-icons/md";
 // usePrintTemplates — the page owns the hook instance (so Print/PDF handlers
 // and this dropdown share one state) and passes it in as `picker`:
 //
-//   const picker = usePrintTemplates("SalesOrder");
+//   const picker = usePrintTemplates("SalesOrder", { divisionId: divisionFilter });
 //   <PrintTemplateSelect picker={picker} />
 //   ...
 //   const tpl = picker.resolveTemplate(doc)?.htmlContent || builtInDefault;
 //
+// The dropdown lists ONLY the templates in the screen's current division scope
+// (see usePrintTemplates): company-wide templates when "All Divisions" is
+// selected, or that division's templates for a specific division.
+//
 // Renders nothing when the operator can't list templates (no
-// printtemplates.manage.view) or the company has none of this type —
-// printing then falls back to the default exactly as before.
+// printtemplates.manage.view) OR the active scope has no template — in the
+// latter case the screen also blocks Print/PDF (picker.noTemplate), so we
+// never offer a picker that can't resolve to a valid template.
 export default function PrintTemplateSelect({ picker, style }) {
   if (!picker?.canChoose) return null;
 
-  // On divisionAware screens (Sales Quotes) the default is resolved PER
-  // DOCUMENT — a division quote uses its division's default, not the
-  // company one — so naming a single company template here would mislead.
-  // Show a scope-neutral label instead. Elsewhere the default is a single
-  // company-level template, so name it.
-  const autoDefault = picker.resolveAuto(null);
-  const autoLabel = picker.divisionAware
-    ? "Default (per division)"
-    : autoDefault ? `Default — ${autoDefault.name}` : "Default";
+  const autoDefault = picker.resolveAuto();
+  const autoLabel = autoDefault ? `Default — ${autoDefault.name}` : "Default";
 
   return (
     <div className="print-template-picker" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", minWidth: 0, ...style }} title="Print template used by Print / PDF">
@@ -39,7 +37,6 @@ export default function PrintTemplateSelect({ picker, style }) {
         {picker.templates.map((t) => (
           <option key={t.id} value={String(t.id)}>
             {t.name}
-            {t.divisionName ? ` (${t.divisionName})` : ""}
             {t.isDefault ? " ★" : ""}
           </option>
         ))}

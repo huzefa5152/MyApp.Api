@@ -34,14 +34,16 @@ export default function WithholdingTaxReceiptsPage() {
   const canUpdate = has("withholdingtax.manage.update");
   const canDelete = has("withholdingtax.manage.delete");
   const canPrint = has("withholdingtax.print.view");
-  // Shared template-picker state (dropdown + Print/PDF resolution).
-  const tplPicker = usePrintTemplates("WithholdingTaxReceipt");
 
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [exportingId, setExportingId] = useState(null);
   const [search, setSearch] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
+  // Shared template-picker state, scoped to the selected division: "All
+  // Divisions" → company-wide templates; a specific division → that division's.
+  // An empty scope hides the picker and blocks Print/PDF (in the View modal).
+  const tplPicker = usePrintTemplates("WithholdingTaxReceipt", { divisionId: divisionFilter });
   const [showForm, setShowForm] = useState(false);
   const [editReceipt, setEditReceipt] = useState(null);
   const [viewReceipt, setViewReceipt] = useState(null);

@@ -40,11 +40,6 @@ export default function SalesQuotePage() {
   const canConvert = has("salesorders.manage.create");
   const canSeeAttachments = has("attachments.list.view");
 
-  // Shared template-picker state: division-aware auto resolution (division
-  // quotes need a division template) + operator-pinned explicit choice.
-  const tplPicker = usePrintTemplates("SalesQuote", { divisionAware: true });
-  const { templatesLoaded } = tplPicker;
-
   const [quotes, setQuotes] = useState([]);
   const [attachCounts, setAttachCounts] = useState({}); // { quoteId: attachmentCount }
   const [viewQuote, setViewQuote] = useState(null);
@@ -59,6 +54,13 @@ export default function SalesQuotePage() {
   const [divisionFilter, setDivisionFilter] = useState("");
   const [clientFilter, setClientFilter] = useState("");
   const [clients, setClients] = useState([]);
+
+  // Shared template-picker state, scoped to the selected division: "All
+  // Divisions" → company-wide templates; a specific division → that division's.
+  // An empty scope hides the picker and blocks Print/PDF. Declared after
+  // divisionFilter so it can consume it.
+  const tplPicker = usePrintTemplates("SalesQuote", { divisionId: divisionFilter });
+  const { templatesLoaded } = tplPicker;
 
   const fetchQuotes = useCallback(async (companyId, pg) => {
     if (!companyId) return;

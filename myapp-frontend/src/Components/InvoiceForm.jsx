@@ -6,6 +6,7 @@ import { createInvoice, getLastRatesForChallan } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
+import { getAccountsFlat } from "../api/accountApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { formStyles, modalSizes } from "../theme";
@@ -13,6 +14,7 @@ import { todayYmd } from "../utils/dateInput";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import AccountSelect from "./AccountSelect";
 import ClientForm from "./ClientForm";
 import DivisionSelect from "./DivisionSelect";
 import SearchableSelect from "./SearchableSelect";
@@ -24,6 +26,7 @@ import PermissionLackedHint from "./PermissionLackedHint";
 // to retype "Pcs" / "KG" / etc. each line.
 import LookupAutocomplete from "./LookupAutocomplete";
 import AttachmentManager from "./AttachmentManager";
+import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 
 const colors = {
   blue: "#0d47a1",
@@ -156,6 +159,15 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // keyed by delivery item id. Mutually exclusive with itemTypeIds[id].
   const [itemNonInvIds, setItemNonInvIds] = useState({});
   const [nonInvItems, setNonInvItems] = useState([]);
+  // ── Per-line GL account (design §4) ──
+  // Which income account each line posts to, keyed by delivery item id.
+  // Auto-fills from the picked item type's per-company overlay account and is
+  // overridable per row. The Account column + this state only matter when the
+  // company has a Chart of Accounts (glOn); GL-off companies never see it and
+  // the null accountId lets the posting engine derive as before.
+  const [itemAccountIds, setItemAccountIds] = useState({});
+  const [accounts, setAccounts] = useState([]);
+  const glOn = accounts.length > 0;
 
   // ── Scenario lock ─────────────────────────────────────────────
   // FBR allows only one sale type per invoice. Operator picks the
@@ -187,13 +199,16 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (!newId || !picked) return;
     setItemTypeIds((prev) => {
       const next = { ...prev };
-      const newHs = {}, newSt = {}, newUom = {}, newFbrUom = {}, newDesc = {}, clearNi = {};
+      const newHs = {}, newSt = {}, newUom = {}, newFbrUom = {}, newDesc = {}, clearNi = {}, newAcct = {};
       for (const item of allItems) {
         const id = item.id;
         if (mode === "empty" && next[id]) continue;
         next[id] = parseInt(newId);
         // Stamping an item type clears any non-inventory binding (mutually exclusive).
         clearNi[id] = null;
+        // Auto-fill the line's GL account from the item type's per-company
+        // sale-account mapping (null → engine derives at post time).
+        newAcct[id] = picked.saleAccountId ?? null;
         if (picked.hsCode) newHs[id] = picked.hsCode;
         if (picked.saleType) newSt[id] = picked.saleType;
         if (picked.uom) newUom[id] = picked.uom;
@@ -212,6 +227,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         if (Object.keys(newFbrUom).length) setItemFbrUomIds(p => ({ ...p, ...newFbrUom }));
         if (Object.keys(newDesc).length) setItemDescriptions(p => ({ ...p, ...newDesc }));
         if (Object.keys(clearNi).length) setItemNonInvIds(p => ({ ...p, ...clearNi }));
+        if (Object.keys(newAcct).length) setItemAccountIds(p => ({ ...p, ...newAcct }));
       }, 0);
       return next;
     });
@@ -241,6 +257,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     setItemUoms({});
     setItemFbrUomIds({});
     setItemDescriptions({});
+    setItemAccountIds({});
   };
 
   // Last-billed rate per delivery item, keyed by deliveryItemId.
@@ -326,6 +343,16 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   useEffect(() => {
     if (!companyId) { setNonInvItems([]); return; }
     getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
+  }, [companyId]);
+
+  // GL accounts (income side highlighted) for the per-line Account picker.
+  // Empty when GL isn't set up / the caller lacks accounting.coa.view → the
+  // Account column stays hidden and lines post to the derived default.
+  useEffect(() => {
+    if (!companyId) { setAccounts([]); return; }
+    getAccountsFlat(companyId)
+      .then(({ data }) => setAccounts((data || []).filter((a) => a.isActive)))
+      .catch(() => setAccounts([]));
   }, [companyId]);
 
   // Whenever a challan gets newly ticked (either via the Generate-Bill
@@ -644,6 +671,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (!n) { setItemNonInvIds((p) => ({ ...p, [id]: null })); return; }
     setItemNonInvIds((p) => ({ ...p, [id]: n.id }));
     setItemTypeIds((p) => ({ ...p, [id]: null }));
+    // A non-inventory item posts to its own mapped account — clear any per-line
+    // override so that mapping governs.
+    setItemAccountIds((p) => ({ ...p, [id]: null }));
     setItemHsCodes((p) => ({ ...p, [id]: "" }));
     setItemSaleTypes((p) => ({ ...p, [id]: "" }));
     setItemFbrUomIds((p) => ({ ...p, [id]: null }));
@@ -711,6 +741,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           itemTypeId: itemTypeIds[item.id] || null,
           // Non-Inventory line (Freight / Discount / …) — mutually exclusive with itemTypeId.
           nonInventoryItemId: itemNonInvIds[item.id] || null,
+          // Per-line GL income account (auto-filled from the item type's overlay,
+          // overridable). Server validates against the company CoA; null → derived.
+          accountId: itemAccountIds[item.id] || null,
           // Optional FBR fields — sent only if user filled them in (or auto-filled from picked ItemType)
           uom: itemUoms[item.id]?.trim() || null,
           fbrUOMId: itemFbrUomIds[item.id] || null,
@@ -834,6 +867,15 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     // apply toolbar — explicit and undoable. created is unused here but
     // kept on the signature for parity with onClientCreated.
     setPendingItemTypeRowId(null);
+  };
+
+  // Account labels for the per-line Account (GL) column: the resolved company
+  // default (named, shown when a line carries no explicit account) + a helper
+  // naming a non-inventory line's own mapped sale account.
+  const defaultSaleAccountLabel = defaultAccountPlaceholder(accounts, company?.defaultSalesAccountId);
+  const nonInvSaleAccountLabel = (nonInvId) => {
+    const n = nonInvItems.find((x) => String(x.id) === String(nonInvId));
+    return n?.saleAccountName ? `→ ${n.saleAccountName}` : "→ Suspense";
   };
 
   // Backdrop click is a no-op — bills can hold a lot of typed data and
@@ -1375,6 +1417,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
                                 <th style={{ ...styles.unifiedTh, width: "8%" }}>Unit Price *</th>
                                 <th style={{ ...styles.unifiedTh, width: "9%" }}>Line Total</th>
+                                {/* Account (GL) — which income account this line's
+                                    amount posts to. Shown in BOTH Bills and Invoices
+                                    modes when the company has a Chart of Accounts. */}
+                                {glOn && (
+                                  <th style={{ ...styles.unifiedTh, width: "14%" }} title="GL income account this line posts to">Account (GL)</th>
+                                )}
                                 {/* HS Code is FBR data — only relevant on the
                                     Invoices tab. Bills mode is pre-FBR data
                                     entry, so hide it. */}
@@ -1415,6 +1463,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                           if (picked) {
                                             // Picking an ItemType clears any non-inventory binding (mutually exclusive).
                                             setItemNonInvIds((p) => ({ ...p, [item.id]: null }));
+                                            // Auto-fill the line's GL income account from the item
+                                            // type's per-company overlay (null → engine derives).
+                                            setItemAccountIds((p) => ({ ...p, [item.id]: picked.saleAccountId ?? null }));
                                             // Picking an ItemType binds these fields to the catalog row.
                                             // Description switches to the item type's name and the
                                             // input goes read-only — same UX as the no-challan form.
@@ -1435,6 +1486,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                             setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
                                             setItemUoms((p) => ({ ...p, [item.id]: "" }));
                                             setItemFbrUomIds((p) => ({ ...p, [item.id]: null }));
+                                            setItemAccountIds((p) => ({ ...p, [item.id]: null }));
                                           }
                                         }}
                                         placeholder="— required —"
@@ -1529,6 +1581,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                     <td style={{ ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
                                       {(item.quantity * price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
+                                    {glOn && (
+                                      <td style={styles.unifiedTd}>
+                                        <AccountSelect
+                                          accounts={accounts}
+                                          value={itemAccountIds[item.id] ?? null}
+                                          onChange={(v) => setItemAccountIds((p) => ({ ...p, [item.id]: v }))}
+                                          side="income"
+                                          disabled={!!itemNonInvIds[item.id]}
+                                          placeholder={itemNonInvIds[item.id] ? nonInvSaleAccountLabel(itemNonInvIds[item.id]) : defaultSaleAccountLabel}
+                                          style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.76rem" }}
+                                        />
+                                      </td>
+                                    )}
                                     {!billsMode && (
                                       <td
                                         style={{

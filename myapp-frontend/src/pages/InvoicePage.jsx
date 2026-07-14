@@ -123,7 +123,12 @@ export default function InvoicePage({ mode = "invoices" }) {
     : noteDocType === 9 ? "DebitNote"
     : noteDocType === 10 ? "CreditNote"
     : "TaxInvoice";
-  const tplPicker = usePrintTemplates(printTemplateType);
+  // Division scope for the print-template picker (declared here so the hook can
+  // consume it; the list filter + dropdown next to Company drive it). "All
+  // Divisions" → company-wide templates; a specific division → that division's;
+  // an empty scope hides the picker and blocks Print/PDF.
+  const [divisionFilter, setDivisionFilter] = useState("");
+  const tplPicker = usePrintTemplates(printTemplateType, { divisionId: divisionFilter });
   const printFallbackTemplate = isBillsMode ? defaultBillTemplate
     : noteDocType === 9 ? defaultDebitNoteTemplate
     : noteDocType === 10 ? defaultCreditNoteTemplate
@@ -236,7 +241,6 @@ export default function InvoicePage({ mode = "invoices" }) {
   // straight to this list filtered to that client (distinct route key remounts
   // the page, so this initializer always sees the current URL).
   const [clientFilter, setClientFilter] = useState(() => searchParams.get("clientId") || "");
-  const [divisionFilter, setDivisionFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [hasExcelBill, setHasExcelBill] = useState(false);
@@ -796,6 +800,17 @@ export default function InvoicePage({ mode = "invoices" }) {
             >
               {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
             </select>
+            {/* Division scope — next to Company. Drives the list filter + the
+                print-template scope. Self-hides for companies with no divisions. */}
+            {selectedCompany && (
+              <DivisionSelect
+                companyId={selectedCompany?.id}
+                value={divisionFilter}
+                onChange={(v) => { setDivisionFilter(v); setPage(1); }}
+                mode="filter"
+                style={dropdownStyles.base}
+              />
+            )}
           </div>
 
           {/* FBR Bulk Actions — bar shows if caller has either FBR perm.
@@ -884,14 +899,6 @@ export default function InvoicePage({ mode = "invoices" }) {
                   />
                 </div>
               )}
-              {/* Renders nothing when the company has no divisions. */}
-              <DivisionSelect
-                companyId={selectedCompany?.id}
-                value={divisionFilter}
-                onChange={(v) => { setDivisionFilter(v); setPage(1); }}
-                mode="filter"
-                className="filter-select"
-              />
               <div className="filter-date-group">
                 <input type="date" className="filter-date-input" value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" />
                 <span className="filter-date-sep">–</span>

@@ -5,11 +5,14 @@ import { getClientsByCompany } from "../api/clientApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
+import { getAccountsFlat } from "../api/accountApi";
 import { getSalesOrdersForPicker, getSalesOrderInvoicePrefill } from "../api/salesOrderApi";
 import { formStyles, modalSizes } from "../theme";
 import { todayYmd } from "../utils/dateInput";
+import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import AccountSelect from "./AccountSelect";
 import LookupAutocomplete from "./LookupAutocomplete";
 import ClientForm from "./ClientForm";
 import DivisionSelect from "./DivisionSelect";
@@ -91,6 +94,9 @@ const blankRow = () => ({
   // Non-Inventory Item id (GL-account shortcut line: Freight / Discount / …).
   // Mutually exclusive with itemTypeId — a line carries at most one.
   nonInventoryItemId: "",
+  // Per-line GL income account (auto-filled from the picked item type's
+  // per-company overlay, overridable). null → posting engine derives.
+  accountId: null,
   // Free-text description used in Bills mode; picking an (optional)
   // Item Type seeds it when blank. In Invoices mode this stays empty
   // and the description derives from itemTypeName instead.
@@ -133,6 +139,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [itemTypes, setItemTypes] = useState([]);
   const [nonInvItems, setNonInvItems] = useState([]);
   const [scenarios, setScenarios] = useState([]);
+  // GL accounts for the per-line Account column — empty (column hidden) when GL
+  // isn't set up / the caller lacks accounting.coa.view.
+  const [accounts, setAccounts] = useState([]);
+  const glOn = accounts.length > 0;
 
   const [selectedClientId, setSelectedClientId] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(todayYmd());
@@ -236,6 +246,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
   }, [companyId]);
 
+  // GL accounts (income side highlighted) for the per-line Account picker.
+  useEffect(() => {
+    if (!companyId) { setAccounts([]); return; }
+    getAccountsFlat(companyId)
+      .then(({ data }) => setAccounts((data || []).filter((a) => a.isActive)))
+      .catch(() => setAccounts([]));
+  }, [companyId]);
+
   // Picker options — narrowed to the form's selected division when one is
   // set; otherwise every Open order shows.
   const salesOrderOptions = useMemo(() => {
@@ -293,6 +311,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           hsCode: t?.hsCode || "",
           fbrUOMId: t?.fbrUOMId || null,
           saleType: t?.saleType || "",
+          accountId: t?.saleAccountId ?? null,
         };
       });
       setRows(mapped.length ? mapped : [blankRow()]);
@@ -417,9 +436,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
   const handleItemTypePick = (localId, picked) => {
     if (!picked) {
-      // Clearing the item type also drops any non-inv binding (mutually exclusive).
+      // Clearing the item type also drops any non-inv binding (mutually exclusive)
+      // and the auto-filled GL account.
       updateRow(localId, {
-        itemTypeId: "", itemTypeName: "", hsCode: "", uom: "", fbrUOMId: null, saleType: "", nonInventoryItemId: "",
+        itemTypeId: "", itemTypeName: "", hsCode: "", uom: "", fbrUOMId: null, saleType: "", nonInventoryItemId: "", accountId: null,
       });
       return;
     }
@@ -433,6 +453,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         uom: picked.uom || "",
         fbrUOMId: picked.fbrUOMId || null,
         saleType: picked.saleType || "",
+        // Auto-fill the line's GL income account from the item type's overlay.
+        accountId: picked.saleAccountId ?? null,
         // Picking an item type clears any non-inventory selection.
         nonInventoryItemId: "",
         // Bills mode types the description directly — seed it from the
@@ -453,6 +475,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         ...r,
         nonInventoryItemId: n.id,
         itemTypeId: "", itemTypeName: "", hsCode: "", fbrUOMId: null, saleType: "",
+        // Non-inventory posts to its own mapped account — clear any per-line override.
+        accountId: null,
       };
       if (!r.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
       if (!r.uom?.trim()) next.uom = n.unitName || "";
@@ -476,6 +500,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         uom: picked.uom || "",
         fbrUOMId: picked.fbrUOMId || null,
         saleType: picked.saleType || "",
+        // Auto-fill the line's GL income account from the item type's overlay.
+        accountId: picked.saleAccountId ?? null,
         // Stamping an item type clears any non-inventory binding.
         nonInventoryItemId: "",
         // Same Bills-mode seeding rule as the per-row pick.
@@ -495,6 +521,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         ...r,
         nonInventoryItemId: n.id,
         itemTypeId: "", itemTypeName: "", hsCode: "", fbrUOMId: null, saleType: "",
+        accountId: null,
       };
       if (!r.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
       if (!r.uom?.trim()) next.uom = n.unitName || "";
@@ -519,6 +546,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       uom: "",
       fbrUOMId: null,
       saleType: "",
+      accountId: null,
     })));
   };
 
@@ -537,6 +565,15 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
   // Effective sale type for a row — locked to scenario when one's picked.
   const effectiveSaleType = (r) => (chosenScenario ? chosenScenario.saleType : r.saleType || "");
+
+  // Account labels for the per-line Account (GL) column: the resolved company
+  // default (named, shown when a line carries no explicit account) + a helper
+  // naming a non-inventory line's own mapped sale account.
+  const defaultSaleAccountLabel = defaultAccountPlaceholder(accounts, company?.defaultSalesAccountId);
+  const nonInvSaleAccountLabel = (nonInvId) => {
+    const n = nonInvItems.find((x) => String(x.id) === String(nonInvId));
+    return n?.saleAccountName ? `→ ${n.saleAccountName}` : "→ Suspense";
+  };
 
   // Totals — see comment in CreateStandaloneAsync about MRP scenarios:
   // backend backs tax out of MRP at FBR submit, but the bill subtotal
@@ -613,6 +650,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           // Non-Inventory line (Freight / Discount / …) — mutually exclusive
           // with itemTypeId; the backend sources GL accounts from it.
           nonInventoryItemId: r.nonInventoryItemId ? parseInt(r.nonInventoryItemId) : null,
+          // Per-line GL income account (auto-filled from the item type's overlay,
+          // overridable). Server validates against the company CoA; null → derived.
+          accountId: r.accountId || null,
           // Description in Invoices mode is the item type's name (locked).
           // In Bills mode the operator types it directly into r.description
           // (or an optional Item Type pick seeds it). A non-inv line has no
@@ -1098,6 +1138,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
                               <th style={{ ...styles.unifiedTh, width: "9%" }}>Unit Price *</th>
                               <th style={{ ...styles.unifiedTh, width: "10%" }}>Line Total</th>
+                              {/* Account (GL) — which income account this line's
+                                  amount posts to. Shown in both modes when the
+                                  company has a Chart of Accounts. */}
+                              {glOn && (
+                                <th style={{ ...styles.unifiedTh, width: "14%" }} title="GL income account this line posts to">Account (GL)</th>
+                              )}
                               {/* HS Code is an FBR field — only relevant on
                                   the Invoices tab. Bills mode is pre-FBR
                                   data entry, so hide the column. */}
@@ -1211,6 +1257,19 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   <td style={{ ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
                                     {(q * p).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                   </td>
+                                  {glOn && (
+                                    <td style={styles.unifiedTd}>
+                                      <AccountSelect
+                                        accounts={accounts}
+                                        value={r.accountId ?? null}
+                                        onChange={(v) => updateRow(r.localId, { accountId: v })}
+                                        side="income"
+                                        disabled={!!r.nonInventoryItemId}
+                                        placeholder={r.nonInventoryItemId ? nonInvSaleAccountLabel(r.nonInventoryItemId) : defaultSaleAccountLabel}
+                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.76rem" }}
+                                      />
+                                    </td>
+                                  )}
                                   {!billsMode && (
                                     <td
                                       style={{

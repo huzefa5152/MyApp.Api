@@ -79,6 +79,8 @@ namespace MyApp.Api.Services.Implementations
             FbrDefaultUOM = c.FbrDefaultUOM,
             FbrDefaultPaymentModeRegistered = c.FbrDefaultPaymentModeRegistered,
             FbrDefaultPaymentModeUnregistered = c.FbrDefaultPaymentModeUnregistered,
+            DefaultSalesAccountId = c.DefaultSalesAccountId,
+            DefaultPurchaseAccountId = c.DefaultPurchaseAccountId,
             InventoryTrackingEnabled = c.InventoryTrackingEnabled,
             StockGuardHardBlock = c.StockGuardHardBlock,
             InventoryFlowVersion = c.InventoryFlowVersion,

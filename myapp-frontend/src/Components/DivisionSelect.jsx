@@ -39,7 +39,18 @@ export default function DivisionSelect({
     if (!companyId) { setDivisions([]); return; }
     let cancelled = false;
     getDivisionsByCompany(companyId)
-      .then(({ data }) => { if (!cancelled) { setDivisions(data || []); onLoaded?.(data || []); } })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const list = data || [];
+        setDivisions(list);
+        onLoaded?.(list);
+        // Prune a stale selection that belongs to a DIFFERENT company (e.g. the
+        // operator switched companies while a division was picked). Left as-is,
+        // the id would scope list filters / print templates to a division that
+        // doesn't exist here — silently blanking the list or blocking printing.
+        // Reset to "" (All / none) so the parent falls back to the safe default.
+        if (value && !list.some((d) => String(d.id) === String(value))) onChange("");
+      })
       .catch(() => { if (!cancelled) setDivisions([]); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

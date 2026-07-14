@@ -21,6 +21,7 @@ import { writeAndPrint } from "../utils/printDocument";
 import { exportToPdf } from "../utils/exportUtils";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
+import DivisionSelect from "../Components/DivisionSelect";
 import { defaultJournalEntryTemplate } from "../utils/accountingDocTemplates";
 
 const fmtMoney = (n) =>
@@ -69,8 +70,14 @@ export default function JournalEntriesPage() {
   const canCreate = has("accounting.journal.create");
   const canDelete = has("accounting.journal.delete");
   const canPrintJournal = has("accounting.journal.print");
+  // Division scope for the print-template picker. Journal entries aren't a
+  // division-scoped LIST (no per-division filtering of the entries themselves),
+  // but templates can be division-scoped, so the selector drives which template
+  // scope Print/PDF use — consistent with every other document screen. "All
+  // Divisions" → company-wide templates; a specific division → that division's.
+  const [divisionFilter, setDivisionFilter] = useState("");
   // Shared template-picker state (dropdown + Print/PDF resolution + no-template gating).
-  const tplPicker = usePrintTemplates("JournalEntry");
+  const tplPicker = usePrintTemplates("JournalEntry", { divisionId: divisionFilter });
   const [exportingId, setExportingId] = useState(null);
 
   // Explicit dropdown pick wins; else the company default; else the built-in.
@@ -181,6 +188,12 @@ export default function JournalEntriesPage() {
           >
             {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
           </select>
+          {/* Division scope — next to Company. Scopes the print-template picker
+              (company-wide vs a division's templates). Self-hides for companies
+              with no divisions. */}
+          {selectedCompany && (
+            <DivisionSelect companyId={selectedCompany.id} value={divisionFilter} onChange={setDivisionFilter} style={dropdownStyles.base} />
+          )}
         </div>
       )}
 

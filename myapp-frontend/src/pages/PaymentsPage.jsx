@@ -19,6 +19,7 @@ import { writeAndPrint } from "../utils/printDocument";
 import { exportToPdf } from "../utils/exportUtils";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
+import DivisionSelect from "../Components/DivisionSelect";
 import { defaultReceiptTemplate, defaultPaymentTemplate } from "../utils/accountingDocTemplates";
 
 const fmtMoney = (n) =>
@@ -48,8 +49,14 @@ export default function PaymentsPage({ mode = "receipts" }) {
   const canDelete = has(`accounting.${dir}.delete`);
   const canPrint = has(`accounting.${dir}.print`);
 
+  // Division scope for the print-template picker. Receipts/payments aren't a
+  // division-scoped LIST, but templates can be division-scoped, so the selector
+  // drives which template scope Print/PDF use — consistent with every other
+  // document screen. "All Divisions" → company-wide templates; a specific
+  // division → that division's.
+  const [divisionFilter, setDivisionFilter] = useState("");
   // Mode-aware print-template picker (dropdown + Print/PDF resolution + gating).
-  const tplPicker = usePrintTemplates(isReceipt ? "Receipt" : "Payment");
+  const tplPicker = usePrintTemplates(isReceipt ? "Receipt" : "Payment", { divisionId: divisionFilter });
   const defaultTpl = isReceipt ? defaultReceiptTemplate : defaultPaymentTemplate;
   // Explicit dropdown pick wins; else the company default; else the built-in.
   const resolveTpl = (p) => tplPicker.resolveTemplate(p)?.htmlContent || defaultTpl;
@@ -161,6 +168,12 @@ export default function PaymentsPage({ mode = "receipts" }) {
           >
             {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
           </select>
+          {/* Division scope — next to Company. Scopes the print-template picker
+              (company-wide vs a division's templates). Self-hides for companies
+              with no divisions. */}
+          {selectedCompany && (
+            <DivisionSelect companyId={selectedCompany.id} value={divisionFilter} onChange={setDivisionFilter} style={dropdownStyles.base} />
+          )}
         </div>
       )}
 
