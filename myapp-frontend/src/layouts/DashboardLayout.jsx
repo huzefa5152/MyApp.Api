@@ -307,7 +307,10 @@ export default function DashboardLayout() {
                 </NavLink>
               </Can>
               <Can permission="challans.list.view">
-                <NavLink to="/challans" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                {/* `end` so "/challans" matches ONLY the Delivery Challans list —
+                    without it React Router also marks it active on the child
+                    route "/challans/import", lighting BOTH dots at once. */}
+                <NavLink to="/challans" end className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdDescription className="dl-subitem__icon" aria-hidden="true" />
                   <span>Delivery Challans</span>
                 </NavLink>
