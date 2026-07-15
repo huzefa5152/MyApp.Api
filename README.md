@@ -279,6 +279,19 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ---
 
+## Changelog
+
+### 2026-07-15 — Bill-mode vs Invoice-mode Item Types (HS-aware) + dual-book reclassification
+
+- **Fixed:** an Item Type picked on the challan-based bill-create form was silently dropped — `CreateInvoiceItemDto` carried no `ItemTypeId` and `InvoiceService.CreateAsync` read the type from the source challan line instead of the operator's pick. The pick now wins (falling back to the challan's type when none is sent), so it persists to the bill line, the Invoice-tab view/edit, and the grouped Sales Tax Invoice print.
+- **Item Type pickers are now HS-code-aware and role-scoped:** Bill mode (Bills tab + both create forms) offers only **non-HS** "product family" types (the operator declares what shipped); Invoice mode (Invoices tab) offers only **HS-coded** types (the tax consultant assigns the FBR classification).
+- **Dual-book reclassification:** on the Invoices tab the consultant reclassifies each grouped row to an HS-coded type and adjusts qty/unit price. Those changes land on the `InvoiceItemAdjustment` overlay only (no schema change) — the Bill/delivery document keeps the operator's declared non-HS type and real qty, while the Sales Tax Invoice and FBR Validate/Submit read the reclassified HS type. A bill of 10 lines (5 + 5) shows as 2 editable grouped rows.
+- **FBR-ready badge + workflow filter are dual-book-aware:** a bill reclassified to HS types in Invoice mode now shows the green "ready" badge and appears under the "ready" list filter (previously it read the non-HS base line and stayed stuck in "not adjusted").
+- **UX fixes:** the "Apply same Item Type to all" bulk picker now retains its selection on the create forms; and the Invoice-mode grouped picker shows the line's current (non-HS declared) type instead of an empty "Pick item…", while still offering HS-coded types to reclassify to.
+- **"Adjustment out of date" guard:** if the delivery bill is edited *after* the tax consultant reconciled the FBR adjustment (qty / unit price / line changed), the invoice's FBR total no longer matches the bill total. The invoice drops out of "ready", shows a **"Bill changed — re-adjust"** badge + a clear Invoice-mode banner, and FBR **Validate/Submit are blocked server-side** until the consultant re-adjusts — robust across repeated bill edits (a per-line snapshot backfills onto existing adjustments). When re-opening a stale invoice, the rows show the consultant's **last adjusted** quantities & unit prices, each with a **"bill: …"** note showing what the bill now says; the total-preservation panel shows the gap between the last adjustment and the current bill so they can reconcile to the bill total, then Save.
+
+---
+
 ## Roadmap
 
 - [x] Multi-company delivery challans

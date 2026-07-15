@@ -198,22 +198,58 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         // button).
         const billItems = data.items.map((it) => ({ ...it }));
 
-        // Invoice-mode overlay (2026-05-12 — narrowed scope):
-        // The InvoiceItemAdjustment overlay carries ONLY the
-        // numerical decomposition the operator filed for FBR
-        // tax-claim optimization (qty / unit_price / line_total).
-        // Item Type / UOM / HS Code / Sale Type / Description are
-        // legitimate bill data and live on InvoiceItem — those
-        // always render off bi.* directly so the printed bill and
-        // Tax Invoice stay accurate. Bill mode ignores the overlay
-        // entirely.
+        // Invoice-mode overlay (2026-07-15 — dual-book widened to the
+        // FBR reclassification): the InvoiceItemAdjustment overlay
+        // carries the tax consultant's Invoice-mode changes — the
+        // qty / unit_price / line_total decomposition AND, when they
+        // reclassified a group, the FBR Item Type / HS Code / Sale
+        // Type / UOM. We render those adjusted values as the
+        // Invoice-mode "current" state so the grouped view + the
+        // picker's value key off the EFFECTIVE itemTypeId. The bill
+        // row (bi.*) stays the delivery document's source of truth and
+        // is preserved verbatim in originalItemsRef. Bill mode ignores
+        // the overlay entirely.
+        // Seed the editable rows from the tax consultant's LAST ADJUSTED
+        // decomposition (their filed qty / unit price), NOT the live bill.
+        // The current bill values are stashed on next._bill* so the grouped
+        // view can show the drift ("bill: N") beneath qty / unit price when
+        // the operator has since changed the bill. When the line was only
+        // RECLASSIFIED (item-type-only — no qty/price adjustment) there is no
+        // adjusted decomposition to restore, so we keep the bill's own numbers.
         const editableItems = billItems.map((bi) => {
           if (!forceItemTypeAndQty || !bi.adjustment) return { ...bi };
           const adj = bi.adjustment;
           const next = { ...bi };
-          if (adj.adjustedQuantity != null)  next.quantity  = adj.adjustedQuantity;
-          if (adj.adjustedUnitPrice != null) next.unitPrice = adj.adjustedUnitPrice;
-          if (adj.adjustedLineTotal != null) next.lineTotal = adj.adjustedLineTotal;
+          // Item Type: always show the consultant's FBR reclassification —
+          // it stays valid across a bill qty/price tweak, so they don't
+          // have to re-pick it.
+          if (adj.adjustedItemTypeId != null) {
+            next.itemTypeId   = adj.adjustedItemTypeId;
+            next.itemTypeName = adj.adjustedItemTypeName || "";
+            next.hsCode       = adj.adjustedHSCode || "";
+            next.saleType     = adj.adjustedSaleType || "";
+            if (adj.adjustedUOM != null)      next.uom = adj.adjustedUOM;
+            if (adj.adjustedFbrUOMId != null) next.fbrUOMId = adj.adjustedFbrUOMId;
+          }
+          // The live bill values (drift reference target).
+          next._billQty       = bi.quantity;
+          next._billUnitPrice = bi.unitPrice;
+          next._billLineTotal = bi.lineTotal;
+          // A line is "numerically adjusted" only when the consultant changed
+          // qty or unit price (AdjustedLineTotal alone is now always stored as
+          // a drift snapshot, so it is NOT a "was adjusted" signal). Restore
+          // that decomposition; keep it internally consistent (qty × price).
+          const numericallyAdjusted = adj.adjustedQuantity != null || adj.adjustedUnitPrice != null;
+          if (numericallyAdjusted) {
+            const q  = adj.adjustedQuantity != null ? adj.adjustedQuantity : bi.quantity;
+            const lt = adj.adjustedLineTotal != null ? adj.adjustedLineTotal : Math.round(q * bi.unitPrice * 100) / 100;
+            next.quantity  = q;
+            next.lineTotal = lt;
+            next.unitPrice = adj.adjustedUnitPrice != null
+              ? adj.adjustedUnitPrice
+              : (q ? Math.round((lt / q) * 100) / 100 : bi.unitPrice);
+          }
+          // else: item-type-only — leave bi.quantity / unitPrice / lineTotal.
           return next;
         });
         setItems(editableItems);
@@ -296,15 +332,39 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
     [scenarios, scenarioCode],
   );
 
-  // Item types compatible with the chosen scenario. Empty selection ("auto")
-  // shows ALL item types — same fallback as the create form.
+  // Item-type picker list — HS-code-aware and mode-dependent (2026-07-15):
+  //   • Bills tab (billsMode) — the operator DECLARES what kind of goods
+  //     shipped, so only NON-HS "product family" types show (e.g.
+  //     "Hardware Items"). FBR classification is deferred to the Invoice tab.
+  //   • Invoices tab (!billsMode) — the tax consultant assigns the real FBR
+  //     classification, so only HS-coded types show, further narrowed to the
+  //     chosen scenario's sale type ("auto" = no scenario shows all HS types).
   const filteredItemTypes = useMemo(() => {
-    if (!chosenScenario) return itemTypes;
+    const hasHs = (it) => !!(it.hsCode && String(it.hsCode).trim());
+    if (billsMode) return itemTypes.filter((it) => !hasHs(it));
+    const withHs = itemTypes.filter(hasHs);
+    if (!chosenScenario) return withHs;
     const target = (chosenScenario.saleType || "").trim().toLowerCase();
-    return itemTypes.filter(
+    return withHs.filter(
       (it) => (it.saleType || "").trim().toLowerCase() === target,
     );
-  }, [itemTypes, chosenScenario]);
+  }, [itemTypes, chosenScenario, billsMode]);
+
+  // The Invoice-mode picker lists only HS-coded types, but a line's CURRENT
+  // type is often a non-HS "product family" declared in Bill mode — which the
+  // HS/scenario filter drops. Without this the dropdown renders an empty
+  // "Pick item…" even though the row IS classified (and grouped) under that
+  // type. So we always inject the current selection into its own picker's
+  // list: it DISPLAYS as selected, and the operator still picks an HS-coded
+  // type from the rest to reclassify for FBR. No-op when the current type is
+  // already in the filtered list (e.g. already HS, or Bills mode).
+  const pickerItemsWithCurrent = (currentId) => {
+    if (!currentId) return filteredItemTypes;
+    const cid = String(currentId); // callers pass number (rows) or string (bulk)
+    if (filteredItemTypes.some((t) => String(t.id) === cid)) return filteredItemTypes;
+    const cur = itemTypes.find((t) => String(t.id) === cid);
+    return cur ? [cur, ...filteredItemTypes] : filteredItemTypes;
+  };
 
   // ── HS Stock panel — derive unique HS codes + per-HS bill totals ────
   //
@@ -788,12 +848,22 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         lineIndices: [],
         totalQty: 0,
         totalValue: 0,
+        // Live-bill reference (the drift target). billQty/billValue sum the
+        // CURRENT bill (editableItems._bill*) so the UI can show "bill: N"
+        // beneath the consultant's adjusted qty / unit price when the bill has
+        // changed since they filed. billQty falls back to the shown qty when a
+        // line carries no bill stash (non-overlaid line).
+        billQty: 0,
+        billValue: 0,
       };
       const qty = parseFloat(it.quantity) || 0;
       const val = parseFloat(it.lineTotal) || qty * (parseFloat(it.unitPrice) || 0);
       g.lineIndices.push(idx);
       g.totalQty += qty;
       g.totalValue += val;
+      // Current-bill totals for the drift reference.
+      g.billQty   += (it._billQty       != null ? Number(it._billQty)       : qty);
+      g.billValue += (it._billLineTotal != null ? Number(it._billLineTotal) : val);
       // Prefer the most complete catalog-derived labels across the group's
       // lines (they should all match, but be defensive against blanks).
       if (it.itemTypeName) g.itemTypeName = it.itemTypeName;
@@ -807,10 +877,17 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
       // surface in the qty/value cells.
       const totalQty = Math.round(g.totalQty * 10000) / 10000;
       const totalValue = Math.round(g.totalValue * 100) / 100;
+      const billQty = Math.round(g.billQty * 10000) / 10000;
+      const billValue = Math.round(g.billValue * 100) / 100;
       return {
         ...g,
         totalQty,
         totalValue,
+        billQty,
+        billValue,
+        // Weighted-average bill unit price (Σ bill value / Σ bill qty) — the
+        // drift-reference unit price shown beneath the editable one.
+        billUnitPrice: billQty > 0 ? Math.round((billValue / billQty) * 100) / 100 : 0,
         // Weighted-average unit price (Σvalue / Σqty). FBR itself never
         // carries a grouped unit price — it takes summed qty + summed value —
         // so this is a display/entry convenience only.
@@ -1141,6 +1218,33 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
               <>
                 {error && <div style={styles.errorAlert}>{error}</div>}
 
+                {/* Dual-book "adjustment out of date" banner (2026-07-15).
+                    Shows on the Invoices tab when the delivery bill was edited
+                    after this invoice was reconciled for FBR — the overlay's
+                    total no longer matches the bill. Validate/Submit are
+                    blocked server-side until the consultant re-adjusts here. */}
+                {forceItemTypeAndQty && invoice.fbrAdjustmentStale && (
+                  <div style={{
+                    display: "flex", gap: "0.6rem", alignItems: "flex-start",
+                    padding: "0.8rem 1rem", marginBottom: "0.85rem", borderRadius: 8,
+                    background: "#fff4e0", border: "1px solid #ffcc80",
+                    borderLeft: "4px solid #e65100",
+                  }}>
+                    <MdWarning size={20} style={{ color: "#e65100", flexShrink: 0, marginTop: 2 }} />
+                    <div style={{ fontSize: "0.85rem", color: colors.textPrimary, lineHeight: 1.55 }}>
+                      <strong style={{ color: "#e65100" }}>Bill changed since this invoice was adjusted — re-adjustment needed.</strong>
+                      <div style={{ marginTop: 4 }}>
+                        You last filed{" "}
+                        <strong>Rs. {Number(invoice.fbrAdjustedSubtotal ?? invoice.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong> for FBR, but the delivery bill is now{" "}
+                        <strong>Rs. {Number(invoice.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong>.
+                      </div>
+                      <div style={{ marginTop: 4 }}>
+                        The rows below show <strong>your last adjusted</strong> quantities &amp; unit prices; each <span style={{ color: "#e65100" }}>“bill: …”</span> note shows what the bill now says. Re-adjust the grouped Qty / Unit Price so the total matches the bill total (<strong>Rs. {Number(invoice.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong> — see the guard below), then <strong>Save Item Types, Qty &amp; Price</strong>. FBR <strong>Validate</strong> &amp; <strong>Submit</strong> stay blocked until you do.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {!readOnly && (
                   <div style={styles.infoBox}>
                     <MdInfo size={16} style={{ color: colors.blue, flexShrink: 0, marginTop: 2 }} />
@@ -1443,7 +1547,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     </select>
                     <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
                       <SearchableItemTypeSelect
-                        items={filteredItemTypes}
+                        items={pickerItemsWithCurrent(commonItemTypeId)}
                         // value derived from the rows themselves so the
                         // dropdown reflects the applied selection. When
                         // all rows share an Item Type, that one shows;
@@ -1549,7 +1653,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                 <div style={styles.readOnlyText}>{group.itemTypeName || <span style={styles.muted}>—</span>}</div>
                               ) : (
                                 <SearchableItemTypeSelect
-                                  items={filteredItemTypes}
+                                  items={pickerItemsWithCurrent(group.itemTypeId)}
                                   value={group.itemTypeId || ""}
                                   onChange={(newId, picked) => updateGroupItemType(group, newId ? parseInt(newId) : null, picked)}
                                   placeholder="Pick item…"
@@ -1576,6 +1680,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                 readOnly={lockQty}
                                 style={{ ...styles.tableInput, ...(lockQty ? styles.readOnlyInput : {}), textAlign: "right" }}
                               />
+                              {invoice?.fbrAdjustmentStale && Math.abs(group.billQty - group.totalQty) > 0.0001 && (
+                                <div style={{ ...styles.groupMeta, color: "#e65100", textAlign: "right" }}
+                                     title="The bill changed after you adjusted this invoice. This field shows the qty you last filed; the bill now shows this qty. Re-adjust so the total matches the bill.">
+                                  bill: {group.billQty.toLocaleString()}
+                                </div>
+                              )}
                             </td>
                             <td style={{ ...styles.td, ...styles.readOnlyCell }} title="Comes from Item Type">
                               {group.uom || <span style={styles.muted}>—</span>}
@@ -1592,6 +1702,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                 step={0.01}
                                 readOnly={lockPrice}
                               />
+                              {invoice?.fbrAdjustmentStale && Math.abs(group.billUnitPrice - group.unitPrice) > 0.005 && (
+                                <div style={{ ...styles.groupMeta, color: "#e65100", textAlign: "right" }}
+                                     title="Unit price on the current bill. The bill changed after you adjusted this invoice — re-adjust so the group total matches the bill.">
+                                  bill: {group.billUnitPrice.toLocaleString()}
+                                </div>
+                              )}
                               {multi && !lockPrice && (
                                 <div style={styles.groupMeta} title="Weighted average across the grouped lines. Editing sets one price for the whole group.">
                                   avg · applies to all {group.lineIndices.length}
@@ -1620,7 +1736,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                               ) : (
                                 <>
                                   <SearchableItemTypeSelect
-                                    items={filteredItemTypes}
+                                    items={pickerItemsWithCurrent(item.itemTypeId)}
                                     value={item.itemTypeId || ""}
                                     onChange={(newId, picked) => updateItemType(idx, newId ? parseInt(newId) : null, picked)}
                                     placeholder="Pick item…"

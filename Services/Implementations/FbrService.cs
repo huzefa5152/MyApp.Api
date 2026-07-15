@@ -40,6 +40,12 @@ namespace MyApp.Api.Services.Implementations
         // STATL / Registration check
         private const string DistBase = "https://gw.fbr.gov.pk/dist/v1";
 
+        // Max Rs. the FBR (overlay) subtotal may differ from the delivery-bill
+        // subtotal before the dual-book adjustment is treated as "out of date"
+        // and Validate/Submit is blocked. Matches the default narrow-edit
+        // total-preservation tolerance in InvoiceService.
+        private const decimal AdjustmentDriftTolerancePkr = 2m;
+
         // Province code → name cache (populated from reference API on first use)
         private static readonly ConcurrentDictionary<int, Dictionary<int, string>> _provinceCache = new();
 
@@ -231,29 +237,30 @@ namespace MyApp.Api.Services.Implementations
         {
             if (ii.Adjustment == null) return ii;
             var a = ii.Adjustment;
-            // 2026-05-12: narrowed scope. The overlay ONLY ever carries
-            // numerical fields (qty / unit_price / line_total). Item
-            // Type / UOM / HS Code / Sale Type / Description are
-            // legitimate bill data and live on InvoiceItem directly so
-            // the printed bill and the Tax Invoice can render them.
-            // We still read those fields off ii, never off the overlay,
-            // even if a row from before the 2026-05-12 fix has stale
-            // values in the deprecated columns.
+            // Dual-book overlay (2026-07-15 — re-widened to carry the FBR
+            // classification). The bill/delivery document keeps the operator's
+            // declared item type (often a non-HS "product family" like
+            // "Hardware Items") on the InvoiceItem. In Invoice-mode edit the
+            // tax consultant reclassifies each group to a real HS-coded type
+            // and adjusts qty / unit price; those live on the overlay so the
+            // printed bill is untouched. FBR Validate / Submit must therefore
+            // read the ADJUSTED item type / HS Code / Sale Type / UOM when the
+            // overlay carries one, falling back to the bill row otherwise.
             return new InvoiceItem
             {
                 Id              = ii.Id,
                 InvoiceId       = ii.InvoiceId,
                 DeliveryItemId  = ii.DeliveryItemId,
-                ItemTypeId      = ii.ItemTypeId,
-                ItemTypeName    = ii.ItemTypeName,
+                ItemTypeId      = a.AdjustedItemTypeId   ?? ii.ItemTypeId,
+                ItemTypeName    = a.AdjustedItemTypeName ?? ii.ItemTypeName,
                 Description     = ii.Description,
                 Quantity        = a.AdjustedQuantity   ?? ii.Quantity,
-                UOM             = ii.UOM,
+                UOM             = a.AdjustedUOM         ?? ii.UOM,
                 UnitPrice       = a.AdjustedUnitPrice  ?? ii.UnitPrice,
                 LineTotal       = a.AdjustedLineTotal  ?? ii.LineTotal,
-                HSCode          = ii.HSCode,
-                FbrUOMId        = ii.FbrUOMId,
-                SaleType        = ii.SaleType,
+                HSCode          = a.AdjustedHSCode      ?? ii.HSCode,
+                FbrUOMId        = a.AdjustedFbrUOMId    ?? ii.FbrUOMId,
+                SaleType        = a.AdjustedSaleType    ?? ii.SaleType,
                 RateId          = ii.RateId,
                 FixedNotifiedValueOrRetailPrice = ii.FixedNotifiedValueOrRetailPrice,
                 SroScheduleNo   = ii.SroScheduleNo,
@@ -537,11 +544,19 @@ namespace MyApp.Api.Services.Implementations
                 errors.Add("Invoice date cannot be in the future. [FBR 0043]");
 
             // ─ Items ─
+            // Dual-book: validate the EFFECTIVE (overlay-applied) lines — the
+            // exact decomposition submitted to FBR. A bill whose base line
+            // carries a non-HS "declared" item type is legitimately
+            // reclassified to an HS-coded type via the Invoice-mode overlay;
+            // FBR must validate that reclassified line, not the bill's non-HS
+            // base (else it wrongly fails "HS Code is required" [0019]).
+            var effectiveItems = (invoice.Items ?? new List<InvoiceItem>())
+                .Select(ApplyAdjustmentOverlay).ToList();
             if (invoice.Items == null || !invoice.Items.Any())
                 errors.Add("Invoice must have at least one item.");
             else
             {
-                var itemList = invoice.Items.ToList();
+                var itemList = effectiveItems;
                 for (int i = 0; i < itemList.Count; i++)
                 {
                     var item = itemList[i];
@@ -570,7 +585,7 @@ namespace MyApp.Api.Services.Implementations
             // exactly which lines to split out.
             if (errors.Count == 0 && invoice.Items != null)
             {
-                var byBucket = invoice.Items
+                var byBucket = effectiveItems
                     .Where(i => !string.IsNullOrWhiteSpace(i.SaleType))
                     .GroupBy(i => NormalizeSaleType(i.SaleType))
                     .ToList();
@@ -604,7 +619,7 @@ namespace MyApp.Api.Services.Implementations
                         if (m.Success) scen = m.Groups[1].Value.ToUpperInvariant();
                     }
 
-                    var itemList = invoice.Items.ToList();
+                    var itemList = effectiveItems;
                     for (int i = 0; i < itemList.Count; i++)
                     {
                         var item = itemList[i];
@@ -627,6 +642,31 @@ namespace MyApp.Api.Services.Implementations
                             errors.Add($"Item {i + 1}: {err}");
                     }
                 }
+            }
+
+            // ── Dual-book "adjustment out of date" gate (2026-07-15) ──
+            // If the delivery bill was edited AFTER the tax consultant
+            // reconciled the FBR overlay (e.g. the operator added qty to a
+            // line), the overlay's decomposition no longer sums to the bill
+            // total — submitting would file a total that disagrees with the
+            // bill the buyer received. Block Validate AND Submit (and the
+            // dry-run preview) until the consultant re-opens Invoice mode and
+            // re-adjusts qty/price back to the bill total. Mirrors the
+            // in-memory InvoiceDto.FbrAdjustmentStale flag the UI shows.
+            if (invoice.Items != null && invoice.Items.Any(ii => ii.Adjustment != null))
+            {
+                var billSubtotal = invoice.Items.Sum(ii => ii.LineTotal);
+                var fbrSubtotal  = invoice.Items.Sum(ii =>
+                    ii.Adjustment != null && ii.Adjustment.AdjustedLineTotal.HasValue
+                        ? ii.Adjustment.AdjustedLineTotal.Value
+                        : ii.LineTotal);
+                var drift = Math.Abs(billSubtotal - fbrSubtotal);
+                if (drift > AdjustmentDriftTolerancePkr)
+                    errors.Add(
+                        $"This bill was changed after it was adjusted for FBR. The delivery bill now totals " +
+                        $"Rs. {billSubtotal:N2}, but the FBR adjustment totals Rs. {fbrSubtotal:N2} (off by Rs. {drift:N2}). " +
+                        $"Open the invoice in Invoice mode, re-adjust the quantities / unit prices so they match the bill " +
+                        $"total, then validate again. [Adjustment out of date]");
             }
 
             if (errors.Count > 0)

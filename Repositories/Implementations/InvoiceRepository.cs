@@ -43,6 +43,11 @@ namespace MyApp.Api.Repositories.Implementations
             var query = _context.Invoices
                 .Include(i => i.Client)
                 .Include(i => i.Items)
+                    // Dual-book overlay pulled on the list too, so the DTO's
+                    // FbrReady / FbrMissing badge reflects the EFFECTIVE line
+                    // (a bill reclassified to an HS type in Invoice mode shows
+                    // "ready" even though its base line is a non-HS declaration).
+                    .ThenInclude(ii => ii.Adjustment)
                 .Include(i => i.DeliveryChallans)
                 .Include(i => i.OriginalInvoice)
                 .Where(i => i.CompanyId == companyId && !i.IsDemo
@@ -88,25 +93,30 @@ namespace MyApp.Api.Repositories.Implementations
                     case "submitted":
                         query = query.Where(i => i.FbrStatus == "Submitted");
                         break;
+                    // Dual-book: judge each line on its EFFECTIVE value
+                    // (overlay AdjustedXxx when present, else the bill row) so a
+                    // bill reclassified to an HS type in Invoice mode counts as
+                    // "ready" and drops out of "notadjusted". COALESCE(adj, base)
+                    // mirrors ComputeFbrMissing / FbrService.ApplyAdjustmentOverlay.
                     case "ready":
                         query = query.Where(i =>
                             i.FbrStatus != "Submitted" && !i.IsCancelled &&
                             i.Items.Any() &&
                             !i.Items.Any(it =>
-                                it.HSCode == null || it.HSCode == "" ||
-                                it.SaleType == null || it.SaleType == "" ||
-                                (it.FbrUOMId == null && (it.UOM == null || it.UOM == "")) ||
-                                it.UnitPrice <= 0));
+                                (it.Adjustment.AdjustedHSCode ?? it.HSCode) == null || (it.Adjustment.AdjustedHSCode ?? it.HSCode) == "" ||
+                                (it.Adjustment.AdjustedSaleType ?? it.SaleType) == null || (it.Adjustment.AdjustedSaleType ?? it.SaleType) == "" ||
+                                ((it.Adjustment.AdjustedFbrUOMId ?? it.FbrUOMId) == null && ((it.Adjustment.AdjustedUOM ?? it.UOM) == null || (it.Adjustment.AdjustedUOM ?? it.UOM) == "")) ||
+                                (it.Adjustment.AdjustedUnitPrice ?? it.UnitPrice) <= 0));
                         break;
                     case "notadjusted":
                         query = query.Where(i =>
                             i.FbrStatus != "Submitted" && !i.IsCancelled &&
                             (!i.Items.Any() ||
                              i.Items.Any(it =>
-                                it.HSCode == null || it.HSCode == "" ||
-                                it.SaleType == null || it.SaleType == "" ||
-                                (it.FbrUOMId == null && (it.UOM == null || it.UOM == "")) ||
-                                it.UnitPrice <= 0)));
+                                (it.Adjustment.AdjustedHSCode ?? it.HSCode) == null || (it.Adjustment.AdjustedHSCode ?? it.HSCode) == "" ||
+                                (it.Adjustment.AdjustedSaleType ?? it.SaleType) == null || (it.Adjustment.AdjustedSaleType ?? it.SaleType) == "" ||
+                                ((it.Adjustment.AdjustedFbrUOMId ?? it.FbrUOMId) == null && ((it.Adjustment.AdjustedUOM ?? it.UOM) == null || (it.Adjustment.AdjustedUOM ?? it.UOM) == "")) ||
+                                (it.Adjustment.AdjustedUnitPrice ?? it.UnitPrice) <= 0)));
                         break;
                 }
             }

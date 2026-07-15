@@ -154,6 +154,20 @@ def pick_classified_item_type(base: str, token: str) -> dict | None:
     return None
 
 
+def pick_second_classified(base: str, token: str, first: dict | None) -> dict | None:
+    """A second fully-classified ItemType, distinct from `first` — used by
+    Suite 7 to prove the operator's bill-form pick overrides the challan's
+    own type. Returns None when the seed catalog has fewer than two."""
+    status, items = http("GET", "/api/itemtypes", base, token=token)
+    if status != 200 or not isinstance(items, list):
+        return None
+    for it in items:
+        if (it.get("hsCode") and it.get("uom") and it.get("saleType")
+                and (first is None or it["id"] != first["id"])):
+            return it
+    return None
+
+
 # ── Suite 1: Challan creation ──────────────────────────────────────
 def test_challan_creation(base: str, token: str, company: dict, client: dict,
                           classified_item_type: dict | None) -> dict | None:
@@ -409,6 +423,86 @@ def test_tax_calculations(base: str, token: str, company: dict, client: dict) ->
               f"got {b.get('gstAmount')}")
 
 
+# ── Suite 7: Bill-form Item Type overrides the challan's type ──────
+# Regression guard for the 2026-07-15 bug: a bill created FROM a challan
+# silently dropped the Item Type the operator picked on the bill-create
+# form. Root cause — CreateInvoiceItemDto carried no ItemTypeId field, and
+# InvoiceService.CreateAsync resolved the type from the challan's delivery
+# item (`deliveryItem.ItemType`) instead of the operator's pick. Result:
+# the base InvoiceItem kept the challan's type (or none), so Invoice-mode
+# view/edit showed the wrong/blank type and the Sales-Tax-Invoice print
+# could not group by it (grouping requires every line to carry a name).
+#
+# This suite bills a challan classified as A while the operator picks B on
+# the bill form; the pick must win end-to-end (base line, Invoice-mode GET,
+# and the grouped Tax-Invoice print).
+def test_billform_itemtype_override(base: str, token: str, company: dict,
+                                    client: dict, type_a: dict | None,
+                                    type_b: dict | None) -> None:
+    suite = "7. Bill-form Item Type overrides challan type"
+    print(f"\n=== {suite} ===")
+    if not type_a or not type_b or type_a["id"] == type_b["id"]:
+        check(suite, "skipped — need two distinct classified ItemTypes", False,
+              f"A={type_a and type_a.get('id')} B={type_b and type_b.get('id')}")
+        return
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+
+    # Challan classified as A -> lands Pending (billable).
+    ch_items = [{"description": d, "quantity": q, "unit": "Pcs",
+                 "itemTypeId": type_a["id"], "itemTypeName": type_a["name"]}
+                for q, d in [(10, "Override Line 1"), (5, "Override Line 2")]]
+    status, dc = http("POST", f"/api/deliverychallans/company/{company['id']}",
+                      base, token=token, body={
+                          "companyId": company["id"], "clientId": client["id"],
+                          "poNumber": "PO-OVERRIDE", "poDate": today,
+                          "deliveryDate": today, "items": ch_items})
+    if status not in (200, 201) or dc.get("status") != "Pending":
+        check(suite, "challan billable", False, f"status={status} {dc}")
+        return
+
+    # Bill FROM the challan, picking B on every line (the operator
+    # re-classifies at bill time).
+    bill_items = [{"deliveryItemId": it["id"], "unitPrice": 100,
+                   "description": it["description"], "itemTypeId": type_b["id"]}
+                  for it in dc["items"]]
+    status, bill = http("POST", "/api/invoices", base, token=token, body={
+        "date": today, "companyId": company["id"], "clientId": client["id"],
+        "gstRate": 18, "challanIds": [dc["id"]], "items": bill_items})
+    check(suite, "bill create 200/201", status in (200, 201), f"got {status} {bill}")
+    if status not in (200, 201):
+        return
+
+    lines = bill.get("items", [])
+    check(suite, "every line adopts picked Item Type B (not challan's A)",
+          bool(lines) and all(l.get("itemTypeId") == type_b["id"] for l in lines),
+          f"ids={[l.get('itemTypeId') for l in lines]} (A={type_a['id']}, B={type_b['id']})")
+    check(suite, "every line name == B",
+          all((l.get("itemTypeName") or "") == type_b["name"] for l in lines),
+          f"names={[l.get('itemTypeName') for l in lines]}")
+    check(suite, "every line HS re-derived from B",
+          all((l.get("hsCode") or "") == (type_b.get("hsCode") or "") for l in lines),
+          f"hs={[l.get('hsCode') for l in lines]} (B={type_b.get('hsCode')})")
+
+    # Invoice-mode view/edit reads GET /api/invoices/{id}.
+    status, reloaded = http("GET", f"/api/invoices/{bill['id']}", base, token=token)
+    rlines = (reloaded or {}).get("items", [])
+    check(suite, "Invoice-mode GET shows B on every line",
+          status == 200 and bool(rlines) and all(l.get("itemTypeId") == type_b["id"] for l in rlines),
+          f"ids={[l.get('itemTypeId') for l in rlines]}")
+
+    # Sales-Tax-Invoice print groups by Item Type -> exactly one B row.
+    status, tax = http("GET", f"/api/invoices/{bill['id']}/print/tax-invoice",
+                       base, token=token)
+    titems = (tax or {}).get("items", [])
+    check(suite, "tax invoice grouped into one Item-Type row",
+          status == 200 and len(titems) == 1,
+          f"status={status} rows={[t.get('itemTypeName') for t in titems]}")
+    if titems:
+        check(suite, "grouped row named after B",
+              (titems[0].get("itemTypeName") or "") == type_b["name"],
+              f"name={titems[0].get('itemTypeName')}")
+
+
 # ── Reporter ───────────────────────────────────────────────────────
 def print_report() -> int:
     by_suite: dict[str, list[tuple[str, str]]] = {}
@@ -462,6 +556,11 @@ def main() -> int:
         test_invoice_update(args.base, token, standalone)
         test_item_rate_history(args.base, token, company, classified)
         test_tax_calculations(args.base, token, company, client)
+        # Regression: operator's bill-form Item Type pick must override the
+        # challan's own type (needs a second distinct classified type).
+        second_classified = pick_second_classified(args.base, token, classified)
+        test_billform_itemtype_override(args.base, token, company, client,
+                                        classified, second_classified)
     finally:
         teardown(args.base, token, company, args.keep)
 

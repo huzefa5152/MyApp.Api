@@ -318,12 +318,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // scenario's saleType are surfaced — preventing the operator from
   // building a mixed-sale-type bill that FBR will reject with 0052.
   const filteredItemTypes = useMemo(() => {
-    if (!chosenScenario) return itemTypes;
-    const target = (chosenScenario.saleType || "").trim().toLowerCase();
-    return itemTypes.filter(
-      (it) => (it.saleType || "").trim().toLowerCase() === target,
-    );
-  }, [itemTypes, chosenScenario]);
+    // Bill create is always Bill mode (2026-07-15): the operator DECLARES the
+    // kind of goods shipped, so only NON-HS "product family" item types are
+    // offered (e.g. "Hardware Items"). FBR classification — assigning a real
+    // HS-coded type — happens later on the Invoices tab (tax-consultant role).
+    return itemTypes.filter((it) => !(it.hsCode && String(it.hsCode).trim()));
+  }, [itemTypes]);
 
   // When operator picks a scenario, snap the GST Rate to that scenario's
   // canonical rate. Field is read-only while a scenario is locked — same
@@ -437,6 +437,18 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // Item Type is required on every line so the invoice can always group by
   // it (5 hardware + 5 chemical lines → 2 grouped rows on the invoice).
   const allItemTypesValid = allItems.length > 0 && allItems.every((i) => !!itemTypeIds[i.id]);
+
+  // Drives the "Apply same Item Type to all" picker's displayed value so it
+  // RETAINS the applied selection (was hardcoded "" → snapped back to the
+  // placeholder after every pick). Resolves to the common Item Type when
+  // every row shares one, and "" when rows diverge (then the operator can
+  // re-pick to re-unify). Mirrors EditBillForm's bulk picker.
+  const bulkCommonItemTypeId = useMemo(() => {
+    if (allItems.length === 0) return "";
+    const ids = allItems.map((i) => itemTypeIds[i.id] || null);
+    const first = ids[0];
+    return first && ids.every((x) => x === first) ? String(first) : "";
+  }, [allItems, itemTypeIds]);
 
   const handlePriceChange = (itemId, value) => {
     setItemPrices((prev) => ({ ...prev, [itemId]: value }));
@@ -1086,7 +1098,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
                               <SearchableItemTypeSelect
                                 items={filteredItemTypes}
-                                value=""
+                                value={bulkCommonItemTypeId}
                                 onChange={(newId, picked) => {
                                   if (!newId || !picked) return;
                                   applyItemTypeToAll(parseInt(newId), picked, bulkApplyMode);

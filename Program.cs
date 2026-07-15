@@ -1466,6 +1466,45 @@ using (var scope = app.Services.CreateScope())
         await db.SaveChangesAsync();
     }
 
+    // ── One-time backfill: snapshot AdjustedLineTotal on existing overlays ──
+    // 2026-07-15: the dual-book overlay was re-widened to carry the FBR
+    // reclassification, and the "adjustment out of date" guard detects a bill
+    // edited after the consultant reconciled it by comparing the overlay's
+    // snapshotted line total against the current bill line total. New saves
+    // now ALWAYS snapshot AdjustedLineTotal (even when it equals the bill).
+    // Overlays created before that fix have AdjustedLineTotal = NULL for lines
+    // reclassified WITHOUT a qty/price change (e.g. item-type-only) — leaving
+    // the guard with no reference point, so a later bill edit went undetected.
+    // Backfill the snapshot = effective (adjusted-or-bill) line total so those
+    // bills join the drift check on their next bill edit. FBR-neutral: it
+    // equals what ApplyAdjustmentOverlay already files (AdjustedLineTotal ?? base).
+    var adjSnapshotBackfillRan = await db.AuditLogs
+        .AnyAsync(a => a.ExceptionType == "ADJUSTEDLINETOTAL_SNAPSHOT_BACKFILL_V1");
+    if (!adjSnapshotBackfillRan)
+    {
+        db.Database.ExecuteSqlRaw(@"
+            UPDATE a
+               SET a.AdjustedLineTotal = ROUND(
+                       COALESCE(a.AdjustedQuantity,  ii.Quantity) *
+                       COALESCE(a.AdjustedUnitPrice, ii.UnitPrice), 2)
+              FROM InvoiceItemAdjustments a
+              JOIN InvoiceItems ii ON ii.Id = a.InvoiceItemId
+             WHERE a.AdjustedLineTotal IS NULL;
+        ");
+        db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
+        {
+            Timestamp = DateTime.UtcNow,
+            Level = "Info",
+            UserName = "system",
+            HttpMethod = "SEED",
+            RequestPath = "/migrations/adjustedlinetotal-snapshot-backfill",
+            StatusCode = 200,
+            ExceptionType = "ADJUSTEDLINETOTAL_SNAPSHOT_BACKFILL_V1",
+            Message = "One-time backfill: snapshotted AdjustedLineTotal = effective (adjusted-or-bill) line total on overlays where it was NULL, so the FBR adjustment-out-of-date guard has a reference point for existing adjusted bills.",
+        });
+        await db.SaveChangesAsync();
+    }
+
     // ── One-time backfill: re-sync stock movements for adjusted bills ──
     // 2026-05-12: the stock-out trigger moved from "emit on FBR submit"
     // to "emit on invoice save" AND the quantity source flipped to use

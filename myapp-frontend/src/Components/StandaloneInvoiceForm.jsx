@@ -346,12 +346,20 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // surface — same rule the InvoiceForm uses, prevents 0052 mixed-bucket
   // errors at FBR validation.
   const filteredItemTypes = useMemo(() => {
-    if (!chosenScenario) return itemTypes;
-    const target = (chosenScenario.saleType || "").trim().toLowerCase();
-    return itemTypes.filter(
-      (t) => (t.saleType || "").trim().toLowerCase() === target,
-    );
-  }, [itemTypes, chosenScenario]);
+    // Bill create is always Bill mode (2026-07-15): only NON-HS "product
+    // family" item types are offered here. FBR HS-coded classification is
+    // assigned later on the Invoices tab (tax-consultant role).
+    return itemTypes.filter((t) => !(t.hsCode && String(t.hsCode).trim()));
+  }, [itemTypes]);
+
+  // Drives the "Apply same Item Type to all" picker's displayed value so it
+  // RETAINS the applied selection (was hardcoded "" → snapped back to the
+  // placeholder after every pick). Common Item Type across rows, else "".
+  const bulkCommonItemTypeId = useMemo(() => {
+    if (rows.length === 0) return "";
+    const first = rows[0].itemTypeId || null;
+    return first && rows.every((r) => (r.itemTypeId || null) === first) ? String(first) : "";
+  }, [rows]);
 
   // Effective sale type for a row — locked to scenario when one's picked.
   const effectiveSaleType = (r) => (chosenScenario ? chosenScenario.saleType : r.saleType || "");
@@ -818,7 +826,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                           <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
                             <SearchableItemTypeSelect
                               items={filteredItemTypes}
-                              value=""
+                              value={bulkCommonItemTypeId}
                               onChange={(_, picked) => applyItemTypeToRows(picked, bulkApplyMode)}
                               placeholder={bulkApplyMode === "all"
                                 ? "— pick to apply to all —"

@@ -1020,7 +1020,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         {inv.fbrErrorMessage}
                       </p>
                     )}
-                    {!isBillsMode && !inv.isCancelled && inv.fbrStatus !== "Submitted" && !inv.fbrReady && (
+                    {!isBillsMode && !inv.isCancelled && inv.fbrStatus !== "Submitted" && !inv.fbrReady && !inv.fbrAdjustmentStale && (
                       <div
                         style={styles.fbrPillIncomplete}
                         title={inv.fbrMissing?.length ? `Missing:\n• ${inv.fbrMissing.join("\n• ")}` : ""}
@@ -1034,6 +1034,28 @@ export default function InvoicePage({ mode = "invoices" }) {
                               {inv.fbrMissing.length > 3 && ` · +${inv.fbrMissing.length - 3} more`}
                             </span>
                           )}
+                        </div>
+                      </div>
+                    )}
+                    {/* Dual-book "adjustment out of date": the bill was edited
+                        after this invoice was reconciled for FBR, so the
+                        overlay total no longer matches. Distinct from "Setup
+                        Incomplete" (which is genuinely missing fields). Open
+                        the invoice, re-adjust, Save; Validate/Submit blocked. */}
+                    {!isBillsMode && !inv.isCancelled && inv.fbrStatus !== "Submitted" && inv.fbrAdjustmentStale && (
+                      <div
+                        style={styles.fbrPillIncomplete}
+                        title={`The delivery bill was changed after this invoice was adjusted for FBR.\n` +
+                          `Bill total: Rs. ${Number(inv.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 2 })}\n` +
+                          `FBR adjustment: Rs. ${Number(inv.fbrAdjustedSubtotal ?? inv.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 2 })}\n` +
+                          `Open this invoice, re-adjust qty / unit price so they match, then Save. Validate & Submit are blocked until they match.`}
+                      >
+                        <MdError size={14} color="#e65100" style={{ flexShrink: 0 }} />
+                        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.3 }}>
+                          <span>Bill changed — re-adjust</span>
+                          <span style={styles.fbrPillIncompleteHint}>
+                            Bill Rs. {Number(inv.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 0 })} vs FBR Rs. {Number(inv.fbrAdjustedSubtotal ?? inv.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 0 })}
+                          </span>
                         </div>
                       </div>
                     )}
@@ -1144,9 +1166,11 @@ export default function InvoicePage({ mode = "invoices" }) {
                             disabled={!!fbrLoading || !inv.fbrReady}
                             onClick={() => handleFbrValidate(inv)}
                             title={
-                              !inv.fbrReady
-                                ? `Complete FBR setup first:\n• ${inv.fbrMissing?.join("\n• ") || "Missing FBR fields"}`
-                                : "Dry-run: checks all bill data with FBR without recording it. Must pass before you can submit."
+                              inv.fbrAdjustmentStale
+                                ? "Bill changed after this invoice was adjusted — open it, re-adjust qty / unit price so the FBR total matches the bill total, then Save. Validate is blocked until they match."
+                                : !inv.fbrReady
+                                  ? `Complete FBR setup first:\n• ${inv.fbrMissing?.join("\n• ") || "Missing FBR fields"}`
+                                  : "Dry-run: checks all bill data with FBR without recording it. Must pass before you can submit."
                             }
                           >
                             {fbrLoading === inv.id + "-validate" ? <span className="btn-spinner" /> : <MdCheckCircle size={14} />}
@@ -1163,7 +1187,9 @@ export default function InvoicePage({ mode = "invoices" }) {
                             disabled={!!fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady}
                             onClick={() => handleFbrSubmit(inv)}
                             title={
-                              !inv.fbrReady
+                              inv.fbrAdjustmentStale
+                                ? "Bill changed after this invoice was adjusted — re-adjust it so the FBR total matches the bill total, then Save. Submit is blocked until they match."
+                                : !inv.fbrReady
                                 ? "Complete FBR setup first."
                                 : fbrValidated.has(inv.id)
                                 ? "Permanently submit this bill to FBR. Cannot be undone."

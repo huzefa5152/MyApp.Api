@@ -170,21 +170,70 @@ namespace MyApp.Api.Services.Implementations
             {
                 var it = items[i];
                 var n = i + 1;
-                if (string.IsNullOrWhiteSpace(it.HSCode))
+                // Dual-book (2026-07-15): FBR readiness is judged on the
+                // EFFECTIVE line — the Invoice-mode overlay when present,
+                // else the bill row — because that is exactly what Validate /
+                // Submit send. A bill whose base line carries a non-HS
+                // "declared" type but was reclassified to an HS-coded type in
+                // the overlay is FBR-ready; reading the base would wrongly
+                // flag it "missing HS Code". Mirrors
+                // FbrService.ApplyAdjustmentOverlay's precedence.
+                var a = it.Adjustment;
+                var hsCode   = a?.AdjustedHSCode   ?? it.HSCode;
+                var saleType = a?.AdjustedSaleType ?? it.SaleType;
+                var uom      = a?.AdjustedUOM      ?? it.UOM;
+                var fbrUomId = a?.AdjustedFbrUOMId ?? it.FbrUOMId;
+                var unitPrice = a?.AdjustedUnitPrice ?? it.UnitPrice;
+                if (string.IsNullOrWhiteSpace(hsCode))
                     missing.Add($"Item {n}: HS Code");
-                if (string.IsNullOrWhiteSpace(it.SaleType))
+                if (string.IsNullOrWhiteSpace(saleType))
                     missing.Add($"Item {n}: Sale Type");
-                if (it.FbrUOMId == null && string.IsNullOrWhiteSpace(it.UOM))
+                if (fbrUomId == null && string.IsNullOrWhiteSpace(uom))
                     missing.Add($"Item {n}: UOM");
-                if (it.UnitPrice <= 0)
+                if (unitPrice <= 0)
                     missing.Add($"Item {n}: Unit Price");
             }
             return missing;
         }
 
+        /// <summary>
+        /// The FBR-facing effective line value for PRINT/DISPLAY: the tax
+        /// consultant's adjusted line total ONLY when they numerically adjusted
+        /// the line (changed qty or unit price); otherwise the live bill line
+        /// total. This keeps the printed value consistent with the printed
+        /// quantity (AdjustedQuantity ?? Quantity) even after a later bill edit
+        /// — the frozen AdjustedLineTotal snapshot (always stored now) is a
+        /// drift-detection reference only, never a standalone print value.
+        /// </summary>
+        private static decimal EffectivePrintLineTotal(InvoiceItem ii)
+        {
+            var a = ii.Adjustment;
+            if (a != null && (a.AdjustedQuantity.HasValue || a.AdjustedUnitPrice.HasValue))
+                return a.AdjustedLineTotal ?? ii.LineTotal;
+            return ii.LineTotal;
+        }
+
+        // Max Rs. the FBR (overlay) subtotal may drift from the bill subtotal
+        // before the dual-book adjustment is flagged "out of date". Matches
+        // the narrow-edit total-preservation default + FbrService's gate.
+        private const decimal AdjustmentDriftTolerancePkr = 2m;
+
         private static InvoiceDto ToDto(Invoice inv)
         {
             var missing = ComputeFbrMissing(inv);
+            // Dual-book "adjustment out of date" detection: an overlay exists
+            // but its effective subtotal no longer matches the bill subtotal
+            // (the bill was edited after the consultant reconciled it). The
+            // FbrService gate blocks Validate/Submit on the same condition;
+            // here we surface it to the UI (badge + Invoice-mode banner).
+            bool anyOverlay = inv.Items != null && inv.Items.Any(ii => ii.Adjustment != null);
+            decimal? fbrAdjustedSubtotal = anyOverlay
+                ? inv.Items!.Sum(ii => ii.Adjustment != null && ii.Adjustment.AdjustedLineTotal.HasValue
+                        ? ii.Adjustment.AdjustedLineTotal.Value
+                        : ii.LineTotal)
+                : (decimal?)null;
+            bool adjustmentStale = anyOverlay
+                && Math.Abs(fbrAdjustedSubtotal!.Value - inv.Subtotal) > AdjustmentDriftTolerancePkr;
             return new InvoiceDto
         {
             Id = inv.Id,
@@ -219,8 +268,10 @@ namespace MyApp.Api.Services.Implementations
             NoteReason = inv.NoteReason,
             NoteReasonRemarks = inv.NoteReasonRemarks,
             NoteAffectsStock = inv.NoteAffectsStock,
-            FbrReady = missing.Count == 0,
+            FbrReady = missing.Count == 0 && !adjustmentStale,
             FbrMissing = missing,
+            FbrAdjustmentStale = adjustmentStale,
+            FbrAdjustedSubtotal = fbrAdjustedSubtotal,
             Items = inv.Items.Select(ii => new InvoiceItemDto
             {
                 Id = ii.Id,
@@ -395,6 +446,27 @@ namespace MyApp.Api.Services.Implementations
                 challans.Add(dc);
             }
 
+            // Preload any ItemTypes the operator picked per-line on the bill
+            // form. The pick OVERRIDES whatever type was on the source challan
+            // line — the operator classifies (or corrects) FBR classification
+            // at bill time. Mirrors CreateStandaloneAsync / UpdateAsync, which
+            // both read itemDto.ItemTypeId. Without this the pick was silently
+            // lost: the created bill line kept the challan's type (or none),
+            // so Invoice-mode view/edit showed no type and the Tax Invoice
+            // print couldn't group by item type. ItemTypes are not
+            // company-scoped (no CompanyId column), so no tenant filter here —
+            // same as UpdateAsync.
+            var referencedTypeIds = dto.Items
+                .Where(i => i.ItemTypeId.HasValue)
+                .Select(i => i.ItemTypeId!.Value)
+                .Distinct()
+                .ToList();
+            var typeMap = referencedTypeIds.Count == 0
+                ? new Dictionary<int, ItemType>()
+                : await _context.ItemTypes
+                    .Where(t => referencedTypeIds.Contains(t.Id))
+                    .ToDictionaryAsync(t => t.Id);
+
             // Build invoice items from delivery items + user-provided unit prices
             var invoiceItems = new List<InvoiceItem>();
             foreach (var itemDto in dto.Items)
@@ -419,7 +491,14 @@ namespace MyApp.Api.Services.Implementations
                 //    the Item Catalog: each FBR item in the catalog carries its
                 //    HS Code / UOM / SaleType, and bill lines referencing it pick
                 //    those up automatically so the user doesn't re-enter them.
-                var itemType = deliveryItem.ItemType;
+                //
+                // The operator's bill-form pick (itemDto.ItemTypeId) wins over
+                // the type on the source challan line; fall back to the
+                // delivery item's own ItemType when no explicit pick was sent.
+                ItemType? itemType =
+                    (itemDto.ItemTypeId.HasValue && typeMap.TryGetValue(itemDto.ItemTypeId.Value, out var pickedType))
+                        ? pickedType
+                        : deliveryItem.ItemType;
 
                 // ── Per-company FBR defaults (configurable via Company settings) ──
                 //
@@ -1120,7 +1199,12 @@ namespace MyApp.Api.Services.Implementations
                 foreach (var itemDto in dto.Items)
                 {
                     var existing = invoice.Items.First(ii => ii.Id == itemDto.Id);
-                    var lineTotal = Math.Round(itemDto.Quantity * itemDto.UnitPrice, 2);
+                    // AwayFromZero to match the narrow-edit path (:1617), the
+                    // overlay snapshot, and the SQL backfill — otherwise a
+                    // ".xx5" midpoint rounds differently here (banker's ToEven)
+                    // and the stored LineTotal drifts one paisa from the
+                    // snapshot with no real edit, tripping the drift guard.
+                    var lineTotal = Math.Round(itemDto.Quantity * itemDto.UnitPrice, 2, MidpointRounding.AwayFromZero);
 
                     ItemType? pickedType = null;
                     if (itemDto.ItemTypeId.HasValue && typeMap.TryGetValue(itemDto.ItemTypeId.Value, out var t))
@@ -1395,65 +1479,62 @@ namespace MyApp.Api.Services.Implementations
 
                     if (asAdjustment)
                     {
-                        // ── Adjustment path (2026-05-12 — narrowed scope) ──
-                        // Item Type / UOM / HS Code / Sale Type /
-                        // Description are LEGITIMATE bill data — they
-                        // describe WHAT was sold, not the qty/price
-                        // decomposition. The printed bill and the Tax
-                        // Invoice need those values to render correctly.
-                        // So we write them straight to InvoiceItem
-                        // exactly like the Bill-mode path does.
+                        // ── Dual-book adjustment path (2026-07-15) ──
+                        // The bill / delivery line (InvoiceItem) is LEFT
+                        // UNTOUCHED so the printed bill keeps the operator's
+                        // DECLARED item type (often a non-HS "product family"
+                        // like "Hardware Items") plus the real qty / price.
                         //
-                        // ONLY Quantity / UnitPrice / LineTotal go to
-                        // the overlay — those are the tax-claim
-                        // optimization knobs that should leave the bill
-                        // print untouched.
-                        if (row.ItemTypeId.HasValue && typeMap.TryGetValue(row.ItemTypeId.Value, out var tAdj))
-                        {
-                            existing.ItemTypeId   = tAdj.Id;
-                            existing.ItemTypeName = tAdj.Name;
-                            existing.UOM          = tAdj.UOM ?? "";
-                            existing.FbrUOMId     = tAdj.FbrUOMId;
-                            existing.HSCode       = tAdj.HSCode;
-                            existing.SaleType     = tAdj.SaleType;
-                        }
-                        else if (!row.ItemTypeId.HasValue)
-                        {
-                            existing.ItemTypeId   = null;
-                            existing.ItemTypeName = "";
-                            existing.UOM          = "";
-                            existing.FbrUOMId     = null;
-                            existing.HSCode       = null;
-                            existing.SaleType     = null;
-                        }
+                        // Everything the tax consultant changes in Invoice
+                        // mode lands on the InvoiceItemAdjustment overlay:
+                        //   • the FBR reclassification — Item Type → HS Code /
+                        //     Sale Type / UOM / FbrUOMId
+                        //   • the qty / unit-price decomposition
+                        // Validate / Submit (FbrService.ApplyAdjustmentOverlay)
+                        // and the Tax-Invoice print read the overlay
+                        // (Adjusted* ?? base). The bill print never does.
+                        ItemType? picked = null;
+                        if (row.ItemTypeId.HasValue)
+                            typeMap.TryGetValue(row.ItemTypeId.Value, out picked);
 
-                        // Numerical decomposition → overlay.
+                        // Item-type divergence is measured against the BASE
+                        // line (existing.ItemTypeId), which we never mutate
+                        // here. A null/unknown picked type means "no override"
+                        // — the FBR view falls back to the bill's own type.
+                        bool itemTypeDiverges = picked != null && picked.Id != existing.ItemTypeId;
+
+                        // Numerical decomposition. Always compute the effective
+                        // (filed) line total — the consultant's adjusted
+                        // qty×price when set, else the bill's — and snapshot it
+                        // onto the overlay below EVEN when it equals the bill.
+                        // That snapshot is what keeps the "adjustment out of
+                        // date" check robust across REPEATED bill edits: any
+                        // later change to this line's bill value diverges from
+                        // the snapshot, even after the consultant accepted the
+                        // bill's numbers on a prior round (which would otherwise
+                        // leave AdjustedLineTotal null and defeat detection).
                         decimal? newQty   = row.Quantity.HasValue && row.Quantity.Value > 0 ? row.Quantity.Value : (decimal?)null;
                         decimal? newPrice = row.UnitPrice.HasValue && row.UnitPrice.Value >= 0 ? row.UnitPrice.Value : (decimal?)null;
-                        decimal? newLineTotal = null;
-                        if (newQty.HasValue || newPrice.HasValue)
-                        {
-                            var qtyEff   = newQty   ?? existing.Quantity;
-                            var priceEff = newPrice ?? existing.UnitPrice;
-                            newLineTotal = Math.Round(qtyEff * priceEff, 2, MidpointRounding.AwayFromZero);
-                        }
+                        var qtyEff   = newQty   ?? existing.Quantity;
+                        var priceEff = newPrice ?? existing.UnitPrice;
+                        var snapshotLineTotal = Math.Round(qtyEff * priceEff, 2, MidpointRounding.AwayFromZero);
 
-                        bool qtyDiverges       = newQty.HasValue       && newQty.Value       != existing.Quantity;
-                        bool priceDiverges     = newPrice.HasValue     && newPrice.Value     != existing.UnitPrice;
-                        bool lineTotalDiverges = newLineTotal.HasValue && newLineTotal.Value != existing.LineTotal;
+                        bool qtyDiverges       = newQty.HasValue   && newQty.Value   != existing.Quantity;
+                        bool priceDiverges     = newPrice.HasValue && newPrice.Value != existing.UnitPrice;
+                        bool lineTotalDiverges = snapshotLineTotal != existing.LineTotal;
                         bool anyNumDivergence  = qtyDiverges || priceDiverges || lineTotalDiverges;
+                        bool anyDivergence     = itemTypeDiverges || anyNumDivergence;
 
                         existingOverlays.TryGetValue(existing.Id, out var overlay);
-                        if (!anyNumDivergence)
+                        if (!anyDivergence)
                         {
-                            // Numerical values match the bill — drop any
-                            // existing overlay (operator reverted to bill
-                            // qty/price by way of Reset, or the only
-                            // change was an Item Type swap which we
-                            // already applied to InvoiceItem above).
+                            // Invoice view is identical to the bill on every
+                            // field (operator reverted qty/price AND the item
+                            // type matches the bill's own) — drop any overlay.
                             if (overlay != null)
                             {
                                 _context.InvoiceItemAdjustments.Remove(overlay);
+                                existingOverlays.Remove(existing.Id);
                             }
                             continue;
                         }
@@ -1468,25 +1549,48 @@ namespace MyApp.Api.Services.Implementations
                                 CreatedAt     = DateTime.UtcNow,
                             };
                             _context.InvoiceItemAdjustments.Add(overlay);
+                            // Keep the in-memory map in sync so the
+                            // total-preservation guard below sees this
+                            // newly-created overlay's AdjustedLineTotal.
+                            existingOverlays[existing.Id] = overlay;
                         }
                         else
                         {
                             overlay.UpdatedAt = DateTime.UtcNow;
                         }
-                        // Numerical fields only — everything else stays null.
-                        overlay.AdjustedQuantity     = qtyDiverges       ? newQty       : null;
-                        overlay.AdjustedUnitPrice    = priceDiverges     ? newPrice     : null;
-                        overlay.AdjustedLineTotal   = lineTotalDiverges ? newLineTotal : null;
-                        // Explicitly null the deprecated text columns so
-                        // any stale rows from before this fix get cleared
-                        // on next save.
-                        overlay.AdjustedItemTypeId   = null;
-                        overlay.AdjustedItemTypeName = null;
-                        overlay.AdjustedUOM          = null;
-                        overlay.AdjustedFbrUOMId     = null;
-                        overlay.AdjustedHSCode       = null;
-                        overlay.AdjustedSaleType     = null;
-                        overlay.AdjustedDescription  = null;
+
+                        // Qty / unit price → overlay only when they diverge
+                        // (keeps a partial edit minimal). Line total is ALWAYS
+                        // snapshotted (see above) so drift detection survives
+                        // repeated bill edits.
+                        overlay.AdjustedQuantity  = qtyDiverges   ? newQty   : null;
+                        overlay.AdjustedUnitPrice = priceDiverges ? newPrice : null;
+                        overlay.AdjustedLineTotal = snapshotLineTotal;
+
+                        // FBR reclassification → overlay, but ONLY when the
+                        // consultant picked a type different from the bill's.
+                        // When it matches, null the columns so the FBR view
+                        // falls back to the bill row (and any stale override
+                        // from a previous save is cleared).
+                        if (itemTypeDiverges)
+                        {
+                            overlay.AdjustedItemTypeId   = picked!.Id;
+                            overlay.AdjustedItemTypeName = picked.Name;
+                            overlay.AdjustedHSCode       = picked.HSCode;
+                            overlay.AdjustedSaleType     = picked.SaleType;
+                            overlay.AdjustedUOM          = picked.UOM;
+                            overlay.AdjustedFbrUOMId     = picked.FbrUOMId;
+                        }
+                        else
+                        {
+                            overlay.AdjustedItemTypeId   = null;
+                            overlay.AdjustedItemTypeName = null;
+                            overlay.AdjustedHSCode       = null;
+                            overlay.AdjustedSaleType     = null;
+                            overlay.AdjustedUOM          = null;
+                            overlay.AdjustedFbrUOMId     = null;
+                        }
+                        overlay.AdjustedDescription = null;
                         continue;
                     }
 
@@ -2392,54 +2496,59 @@ namespace MyApp.Api.Services.Implementations
                 // is for the warehouse + delivery), and they SHOULD
                 // diverge when the operator runs the §8B optimization.
                 //
-                // Description / UOM / ItemTypeName / HSCode continue to
-                // come from InvoiceItem — same narrowing the FbrService
-                // applies (overlay only ever carries numerical fields).
-                Items = inv.Items.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName))
+                // Dual-book (2026-07-15): the Tax Invoice is the FBR-aligned
+                // document, so it groups + renders by the EFFECTIVE item type /
+                // HS Code / UOM — the reclassification the tax consultant filed
+                // in Invoice mode (overlay) — falling back to the bill row when
+                // no overlay exists. Numeric fields already read the overlay
+                // (Adjusted* ?? base). The customer-facing Bill print
+                // (GetPrintBillAsync) still renders the bill row verbatim, so
+                // the delivery document keeps the operator's declared type.
+                Items = inv.Items.All(ii => !string.IsNullOrWhiteSpace(ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName))
                     ? inv.Items
-                        .GroupBy(ii => ii.ItemTypeName)
+                        .GroupBy(ii => ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName)
                         .Select(g =>
                         {
                             var totalQty = g.Sum(ii =>
                                 ii.Adjustment?.AdjustedQuantity ?? ii.Quantity);
-                            var totalValue = g.Sum(ii =>
-                                ii.Adjustment?.AdjustedLineTotal ?? ii.LineTotal);
+                            var totalValue = g.Sum(EffectivePrintLineTotal);
                             var gstAmt = Math.Round(totalValue * inv.GSTRate / 100, 2);
                             return new PrintTaxItemDto
                             {
                                 ItemTypeName = g.Key,
                                 Quantity = totalQty,
-                                UOM = g.First().UOM,
+                                UOM = g.Select(x => x.Adjustment?.AdjustedUOM ?? x.UOM)
+                                       .FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)) ?? "",
                                 Description = g.Key,
                                 ValueExclTax = totalValue,
                                 GSTRate = inv.GSTRate,
                                 GSTAmount = gstAmt,
                                 TotalInclTax = totalValue + gstAmt,
-                                // All rows in a group share an ItemTypeName,
-                                // which drives the HSCode at write-time, so
-                                // they should all carry the same code. Pick
-                                // the first non-empty value defensively in
-                                // case a legacy row was saved blank.
-                                HSCode = g.Select(x => x.HSCode)
+                                // All rows in a group share an (effective)
+                                // ItemTypeName, which drives the HSCode at
+                                // write-time, so they should all carry the same
+                                // code. Pick the first non-empty effective value
+                                // defensively in case a legacy row was blank.
+                                HSCode = g.Select(x => x.Adjustment?.AdjustedHSCode ?? x.HSCode)
                                           .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
                             };
                         }).ToList()
                     : inv.Items.Select(ii =>
                         {
-                            var lineTotal = ii.Adjustment?.AdjustedLineTotal ?? ii.LineTotal;
+                            var lineTotal = EffectivePrintLineTotal(ii);
                             var qty       = ii.Adjustment?.AdjustedQuantity  ?? ii.Quantity;
                             var gstAmt = Math.Round(lineTotal * inv.GSTRate / 100, 2);
                             return new PrintTaxItemDto
                             {
-                                ItemTypeName = ii.ItemTypeName,
+                                ItemTypeName = ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName,
                                 Quantity = qty,
-                                UOM = ii.UOM,
+                                UOM = ii.Adjustment?.AdjustedUOM ?? ii.UOM,
                                 Description = ii.Description,
                                 ValueExclTax = lineTotal,
                                 GSTRate = inv.GSTRate,
                                 GSTAmount = gstAmt,
                                 TotalInclTax = lineTotal + gstAmt,
-                                HSCode = ii.HSCode
+                                HSCode = ii.Adjustment?.AdjustedHSCode ?? ii.HSCode
                             };
                         }).ToList()
             };

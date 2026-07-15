@@ -80,6 +80,22 @@ namespace MyApp.Api.DTOs
         /// Human-readable list of what's missing for FBR submission. Empty when FbrReady == true.
         /// </summary>
         public List<string> FbrMissing { get; set; } = new();
+        /// <summary>
+        /// True when a dual-book FBR adjustment (InvoiceItemAdjustment overlay)
+        /// exists but its total no longer matches the delivery-bill total —
+        /// i.e. the bill was edited after the tax consultant reconciled it, so
+        /// the FBR decomposition is out of date. Validate/Submit are blocked
+        /// until the consultant re-adjusts in Invoice mode. FbrReady is forced
+        /// false while this is true.
+        /// </summary>
+        public bool FbrAdjustmentStale { get; set; }
+        /// <summary>
+        /// The effective (overlay-applied) subtotal that would be filed to FBR.
+        /// Null when no overlay exists. When it differs from <see cref="Subtotal"/>
+        /// (the bill total) by more than the tolerance, <see cref="FbrAdjustmentStale"/>
+        /// is true and the UI shows the "re-adjust" banner with both figures.
+        /// </summary>
+        public decimal? FbrAdjustedSubtotal { get; set; }
         public List<InvoiceItemDto> Items { get; set; } = new();
         public List<int> ChallanNumbers { get; set; } = new();
 
@@ -173,6 +189,16 @@ namespace MyApp.Api.DTOs
         public int DeliveryItemId { get; set; }
         public decimal UnitPrice { get; set; }
         public string? Description { get; set; }
+        /// <summary>
+        /// Optional ItemType (FBR catalog) link picked on the bill-create form.
+        /// When set it OVERRIDES whatever type was on the source challan line —
+        /// the operator classifies (or re-classifies) at bill time and the
+        /// server re-derives HS Code / Sale Type / UOM / FbrUOMId from the
+        /// catalog. Mirrors <see cref="CreateStandaloneInvoiceItemDto.ItemTypeId"/>
+        /// and the Bills-tab edit path. Falls back to the delivery item's own
+        /// ItemType when left null.
+        /// </summary>
+        public int? ItemTypeId { get; set; }
         /// <summary>Optional override of the delivery item's UOM (e.g. the FBR-matched UOM).</summary>
         public string? UOM { get; set; }
         public string? HSCode { get; set; }
