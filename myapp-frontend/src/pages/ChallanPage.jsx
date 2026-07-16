@@ -186,6 +186,28 @@ export default function ChallanPage() {
     }
   };
 
+  // Print only once every image in the popup has loaded — otherwise
+  // w.print() fires before the company logo / product images decode, so the
+  // first print comes out with them blank (they appear only on a 2nd/3rd
+  // attempt once cached) and on production the network-fetched logo misses
+  // consistently. `error` listeners + a 3s safety timeout prevent a broken or
+  // slow image from ever blocking the print dialog.
+  const printWindowWhenImagesReady = (w) => {
+    const imgs = Array.from(w.document.images || []);
+    const ready = Promise.all(imgs.map((img) => (
+      img.complete && img.naturalHeight !== 0
+        ? Promise.resolve()
+        : new Promise((resolve) => {
+            img.addEventListener("load", resolve, { once: true });
+            img.addEventListener("error", resolve, { once: true });
+          })
+    )));
+    const safety = new Promise((resolve) => setTimeout(resolve, 3000));
+    Promise.race([ready, safety]).then(() => {
+      try { w.focus(); w.print(); } catch { /* popup already closed */ }
+    });
+  };
+
   const handlePrint = async (challan) => {
     if (!selectedCompany) { notify("No company selected.", "error"); return; }
     const w = window.open("", "_blank");
@@ -202,9 +224,8 @@ export default function ChallanPage() {
       w.document.open();
       w.document.write(html);
       w.document.close();
-      w.focus();
       w.onafterprint = () => w.close();
-      w.print();
+      printWindowWhenImagesReady(w);
     } catch {
       w.close();
       notify("Failed to load print data.", "error");

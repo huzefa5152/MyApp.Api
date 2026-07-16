@@ -264,6 +264,29 @@ export default function InvoicePage({ mode = "invoices" }) {
     fetchInvoices(selectedCompany.id, 1);
   };
 
+  // Print only once every image in the popup has finished loading. Without
+  // this, w.print() fires before the FBR QR (a base64 data-URL) and the FBR
+  // logo (/images/fbr-logo.png, a network fetch) have decoded — so the FIRST
+  // print comes out with them blank/missing and they only appear on a 2nd/3rd
+  // attempt once cached. On production the network-fetched logo is slower, so
+  // it misses consistently. `error` listeners + a 3s safety timeout guarantee
+  // a broken or slow image never blocks the print dialog.
+  const printWindowWhenImagesReady = (w) => {
+    const imgs = Array.from(w.document.images || []);
+    const ready = Promise.all(imgs.map((img) => (
+      img.complete && img.naturalHeight !== 0
+        ? Promise.resolve()
+        : new Promise((resolve) => {
+            img.addEventListener("load", resolve, { once: true });
+            img.addEventListener("error", resolve, { once: true });
+          })
+    )));
+    const safety = new Promise((resolve) => setTimeout(resolve, 3000));
+    Promise.race([ready, safety]).then(() => {
+      try { w.focus(); w.print(); } catch { /* popup already closed */ }
+    });
+  };
+
   const handlePrintBill = async (inv) => {
     const w = window.open("", "_blank");
     if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
@@ -279,9 +302,8 @@ export default function InvoicePage({ mode = "invoices" }) {
       w.document.open();
       w.document.write(html);
       w.document.close();
-      w.focus();
       w.onafterprint = () => w.close();
-      w.print();
+      printWindowWhenImagesReady(w);
     } catch { w.close(); notify("Failed to load bill data.", "error"); }
   };
 
@@ -300,9 +322,8 @@ export default function InvoicePage({ mode = "invoices" }) {
       w.document.open();
       w.document.write(html);
       w.document.close();
-      w.focus();
       w.onafterprint = () => w.close();
-      w.print();
+      printWindowWhenImagesReady(w);
     } catch { w.close(); notify("Failed to load tax invoice data.", "error"); }
   };
 
