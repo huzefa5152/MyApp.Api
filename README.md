@@ -281,6 +281,12 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-17 — Report client filters, Tax Sheet transfer, invoice-list scroll fix
+
+- **Client filter** (specific client name, e.g. "Lotte Kolson") on both the **Tax Sheet** and the **Sales** report, each carrying through to its **Excel export**. On the Sales report it sits alongside the existing buyer-type filter (they combine).
+- **Transfer remaining → next month** on the Tax Sheet: when the consultant classified only some of a period's invoices, the still-unclassified ones can be moved to a chosen date (defaults to the 1st of next month) in one action, instead of re-dating each bill by hand. The server recomputes exactly what the sheet shows (period + client filter), moves those invoices' dates, and skips any already submitted to FBR. Gated by a new `reports.taxsheet.transfer` permission; audit-logged.
+- **Fixed:** the Bills/Invoices list jumped to the top after Validate / Submit / Edit-Save (and other row actions) — it now keeps its scroll position (the list stays mounted during the refresh instead of being replaced by a spinner).
+
 ### 2026-07-15 — Bill-mode vs Invoice-mode Item Types (HS-aware) + dual-book reclassification
 
 - **Fixed:** an Item Type picked on the challan-based bill-create form was silently dropped — `CreateInvoiceItemDto` carried no `ItemTypeId` and `InvoiceService.CreateAsync` read the type from the source challan line instead of the operator's pick. The pick now wins (falling back to the challan's type when none is sent), so it persists to the bill line, the Invoice-tab view/edit, and the grouped Sales Tax Invoice print.

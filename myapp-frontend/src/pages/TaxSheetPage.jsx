@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdFactCheck, MdBusiness, MdRefresh, MdDownload } from "react-icons/md";
-import { getTaxSheet, getTaxSheetExcel } from "../api/reportApi";
+import { MdFactCheck, MdBusiness, MdRefresh, MdDownload, MdPerson, MdEventRepeat, MdClose } from "react-icons/md";
+import { getTaxSheet, getTaxSheetExcel, transferTaxSheet } from "../api/reportApi";
+import { getClientsByCompany } from "../api/clientApi";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -41,6 +42,7 @@ export default function TaxSheetPage() {
   const { has } = usePermissions();
   const canView = has("reports.taxsheet.view");
   const canExport = has("reports.taxsheet.export");
+  const canTransfer = has("reports.taxsheet.transfer");
 
   const [mode, setMode] = useState("period"); // "period" | "custom"
   const [year, setYear] = useState(NOW.getFullYear());
@@ -48,18 +50,36 @@ export default function TaxSheetPage() {
   const [fullYear, setFullYear] = useState(false);
   const [dateFrom, setDateFrom] = useState(ymd(new Date(NOW.getFullYear(), NOW.getMonth(), 1)));
   const [dateTo, setDateTo] = useState(ymd(NOW));
+  const [clientId, setClientId] = useState(""); // "" = all clients
+  const [clients, setClients] = useState([]);
 
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
 
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferDate, setTransferDate] = useState("");
+  const [transferring, setTransferring] = useState(false);
+
+  // Load the company's clients for the filter; reset the filter on switch.
+  useEffect(() => {
+    if (!selectedCompany) { setClients([]); return; }
+    setClientId("");
+    getClientsByCompany(selectedCompany.id)
+      .then((res) => setClients(res.data || []))
+      .catch(() => setClients([]));
+  }, [selectedCompany?.id]);
+
+  // Period + client params, shared by the report, the Excel export, AND the
+  // transfer — so the client filter applies to all three consistently.
   const buildParams = useCallback(() => {
-    if (mode === "custom") return { dateFrom, dateTo };
-    const p = { year };
-    if (!fullYear) p.month = month;
+    const p = mode === "custom"
+      ? { dateFrom, dateTo }
+      : { year, ...(fullYear ? {} : { month }) };
+    if (clientId) p.clientId = clientId;
     return p;
-  }, [mode, dateFrom, dateTo, year, month, fullYear]);
+  }, [mode, dateFrom, dateTo, year, month, fullYear, clientId]);
 
   const rangeInvalid = mode === "custom" && dateFrom && dateTo && dateFrom > dateTo;
 
@@ -103,11 +123,43 @@ export default function TaxSheetPage() {
       a.download = `Tax-Sheet-${(report?.companyName || "company")}-${periodLabel}.xlsx`.replace(/\s+/g, "_");
       a.click();
       URL.revokeObjectURL(url);
-      notify.success("Tax sheet exported.");
+      notify("Tax sheet exported.", "success");
     } catch {
-      notify.error("Failed to export the tax sheet.");
+      notify("Failed to export the tax sheet.", "error");
     } finally {
       setExporting(false);
+    }
+  };
+
+  // Default transfer target = the 1st of the month AFTER the sheet's period.
+  const nextMonthFirst = () => {
+    let base;
+    if (mode === "custom" && dateTo) {
+      const d = new Date(dateTo);
+      base = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    } else if (fullYear) {
+      base = new Date(year + 1, 0, 1);
+    } else {
+      base = new Date(year, month, 1); // month is 1-indexed → JS month arg = next month
+    }
+    return ymd(base);
+  };
+
+  const openTransfer = () => { setTransferDate(nextMonthFirst()); setTransferOpen(true); };
+
+  const handleTransfer = async () => {
+    if (!selectedCompany || !transferDate) return;
+    setTransferring(true);
+    try {
+      const { data } = await transferTaxSheet(selectedCompany.id, { ...buildParams(), targetDate: transferDate });
+      setTransferOpen(false);
+      const skippedMsg = data.skipped ? ` · ${data.skipped} skipped (already submitted)` : "";
+      notify(`Moved ${data.transferred} invoice(s) to ${prettyDate(transferDate)}${skippedMsg}.`, "success");
+      fetchReport();
+    } catch (e) {
+      notify(e?.response?.data?.message || "Failed to transfer invoices.", "error");
+    } finally {
+      setTransferring(false);
     }
   };
 
@@ -139,6 +191,17 @@ export default function TaxSheetPage() {
             onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}
           >
             {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
+          </select>
+        </Field>
+
+        <Field label="Client" icon={<MdPerson size={15} />}>
+          <select
+            style={{ ...dropdownStyles.base, minWidth: 180, maxWidth: 240 }}
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+          >
+            <option value="">All clients</option>
+            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </Field>
 
@@ -191,6 +254,16 @@ export default function TaxSheetPage() {
           {canExport && (
             <button onClick={exportExcel} disabled={!report || loading || exporting || rangeInvalid} style={btn(colors.teal)}>
               <MdDownload size={16} /> {exporting ? "Exporting…" : "Export Excel"}
+            </button>
+          )}
+          {canTransfer && (
+            <button
+              onClick={openTransfer}
+              disabled={!report || loading || rangeInvalid || (report?.rows?.length || 0) === 0}
+              style={btn("#e65100")}
+              title="Move the remaining (unclassified) invoices to a new date so you can file them next period"
+            >
+              <MdEventRepeat size={16} /> Transfer → next month
             </button>
           )}
         </div>
@@ -257,9 +330,51 @@ export default function TaxSheetPage() {
       )}
 
       {loading && <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>Loading tax sheet…</div>}
+
+      {transferOpen && (
+        <div style={overlay} onClick={() => !transferring && setTransferOpen(false)}>
+          <div style={modalBox} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <h3 style={{ margin: 0, fontSize: "1.05rem", color: colors.textPrimary }}>Transfer remaining invoices</h3>
+              <button onClick={() => setTransferOpen(false)} style={{ border: "none", background: "none", cursor: "pointer", color: colors.textSecondary, display: "flex" }}>
+                <MdClose size={20} />
+              </button>
+            </div>
+            <p style={{ margin: "0 0 14px", fontSize: "0.88rem", color: colors.textSecondary, lineHeight: 1.55 }}>
+              Move the <strong>{report?.invoiceCount || 0}</strong> still-unclassified invoice(s){clientId ? " for the selected client" : ""} off <strong>{periodLabel}</strong> onto a new date, so they roll into that month's tax sheet for the consultant to classify next. This updates each bill's date; invoices already submitted to FBR are skipped.
+            </p>
+            <Field label="Transfer to date">
+              <input
+                type="date"
+                style={{ ...dropdownStyles.base, minWidth: 200 }}
+                value={transferDate}
+                onChange={(e) => setTransferDate(e.target.value)}
+              />
+            </Field>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 18 }}>
+              <button onClick={() => setTransferOpen(false)} disabled={transferring}
+                style={{ ...btn("#eef1f6"), color: colors.textPrimary }}>
+                Cancel
+              </button>
+              <button onClick={handleTransfer} disabled={transferring || !transferDate} style={btn("#e65100")}>
+                {transferring ? "Transferring…" : `Transfer to ${prettyDate(transferDate)}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+const overlay = {
+  position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)",
+  display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16,
+};
+const modalBox = {
+  background: "#fff", borderRadius: 12, padding: 20, width: "min(460px, 100%)",
+  boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+};
 
 function Field({ label, icon, children }) {
   return (

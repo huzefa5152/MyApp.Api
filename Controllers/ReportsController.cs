@@ -42,12 +42,13 @@ namespace MyApp.Api.Controllers
             [FromQuery] int? month = null,
             [FromQuery] string buyerType = "all",
             [FromQuery] DateTime? dateFrom = null,
-            [FromQuery] DateTime? dateTo = null)
+            [FromQuery] DateTime? dateTo = null,
+            [FromQuery] int? clientId = null)
         {
             if (ValidatePeriod(year, month, dateFrom, dateTo) is { } err)
                 return BadRequest(new { message = err });
 
-            var report = await _reports.GetSalesReportAsync(companyId, year, month, buyerType, dateFrom, dateTo);
+            var report = await _reports.GetSalesReportAsync(companyId, year, month, buyerType, dateFrom, dateTo, clientId);
             return Ok(report);
         }
 
@@ -84,12 +85,13 @@ namespace MyApp.Api.Controllers
             [FromQuery] int? month = null,
             [FromQuery] string buyerType = "all",
             [FromQuery] DateTime? dateFrom = null,
-            [FromQuery] DateTime? dateTo = null)
+            [FromQuery] DateTime? dateTo = null,
+            [FromQuery] int? clientId = null)
         {
             if (ValidatePeriod(year, month, dateFrom, dateTo) is { } err)
                 return BadRequest(new { message = err });
 
-            var bytes = await _reports.GetSalesReportExcelAsync(companyId, year, month, buyerType, dateFrom, dateTo);
+            var bytes = await _reports.GetSalesReportExcelAsync(companyId, year, month, buyerType, dateFrom, dateTo, clientId);
             var period = (dateFrom.HasValue && dateTo.HasValue)
                 ? $"{dateFrom.Value:yyyy-MM-dd}_to_{dateTo.Value:yyyy-MM-dd}"
                 : month.HasValue ? $"{year}-{month.Value:00}" : $"{year}";
@@ -111,12 +113,13 @@ namespace MyApp.Api.Controllers
             [FromQuery] int? year = null,
             [FromQuery] int? month = null,
             [FromQuery] DateTime? dateFrom = null,
-            [FromQuery] DateTime? dateTo = null)
+            [FromQuery] DateTime? dateTo = null,
+            [FromQuery] int? clientId = null)
         {
             if (ValidatePeriod(year, month, dateFrom, dateTo) is { } err)
                 return BadRequest(new { message = err });
 
-            var report = await _reports.GetTaxSheetAsync(companyId, year, month, dateFrom, dateTo);
+            var report = await _reports.GetTaxSheetAsync(companyId, year, month, dateFrom, dateTo, clientId);
             return Ok(report);
         }
 
@@ -129,12 +132,13 @@ namespace MyApp.Api.Controllers
             [FromQuery] int? year = null,
             [FromQuery] int? month = null,
             [FromQuery] DateTime? dateFrom = null,
-            [FromQuery] DateTime? dateTo = null)
+            [FromQuery] DateTime? dateTo = null,
+            [FromQuery] int? clientId = null)
         {
             if (ValidatePeriod(year, month, dateFrom, dateTo) is { } err)
                 return BadRequest(new { message = err });
 
-            var bytes = await _reports.GetTaxSheetExcelAsync(companyId, year, month, dateFrom, dateTo);
+            var bytes = await _reports.GetTaxSheetExcelAsync(companyId, year, month, dateFrom, dateTo, clientId);
             var period = (dateFrom.HasValue && dateTo.HasValue)
                 ? $"{dateFrom.Value:yyyy-MM-dd}_to_{dateTo.Value:yyyy-MM-dd}"
                 : month.HasValue ? $"{year}-{month.Value:00}" : $"{year}";
@@ -142,6 +146,30 @@ namespace MyApp.Api.Controllers
             return File(bytes,
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 fileName);
+        }
+
+        /// <summary>
+        /// Move the still-unclassified invoices of a tax-sheet period onto a new
+        /// date (typically the 1st of next month), so the consultant can defer
+        /// what they didn't get to classify this period in one action instead of
+        /// re-dating each bill by hand. Mutates invoice dates → gated by a
+        /// dedicated write permission; submitted/cancelled invoices are skipped.
+        /// </summary>
+        [HttpPost("company/{companyId}/tax-sheet/transfer")]
+        [HasPermission("reports.taxsheet.transfer")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<TaxSheetTransferResultDto>> TransferTaxSheet(
+            int companyId, [FromBody] TaxSheetTransferRequestDto dto)
+        {
+            if (dto == null) return BadRequest(new { message = "Request body is required." });
+            if (dto.TargetDate == default) return BadRequest(new { message = "A target date is required." });
+            if (ValidatePeriod(dto.Year, dto.Month, dto.DateFrom, dto.DateTo) is { } err)
+                return BadRequest(new { message = err });
+
+            var result = await _reports.TransferTaxSheetInvoicesAsync(
+                companyId, dto.Year, dto.Month, dto.DateFrom, dto.DateTo,
+                dto.ClientId, dto.TargetDate, User.Identity?.Name);
+            return Ok(result);
         }
     }
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
-import { MdAssessment, MdBusiness, MdRefresh, MdDownload, MdChevronRight, MdExpandMore, MdUnfoldMore, MdUnfoldLess } from "react-icons/md";
+import { MdAssessment, MdBusiness, MdRefresh, MdDownload, MdChevronRight, MdExpandMore, MdUnfoldMore, MdUnfoldLess, MdPerson } from "react-icons/md";
 import { getSalesReport, getSalesReportExcel } from "../api/reportApi";
+import { getClientsByCompany } from "../api/clientApi";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -62,13 +63,24 @@ export default function SalesReportPage() {
   const [dateFrom, setDateFrom] = useState(ymd(new Date(NOW.getFullYear(), NOW.getMonth(), 1)));
   const [dateTo, setDateTo] = useState(ymd(NOW));
   const [buyerType, setBuyerType] = useState("all");
+  const [clientId, setClientId] = useState(""); // "" = all clients
+  const [clients, setClients] = useState([]);
 
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Load the company's clients for the filter; reset the filter on switch.
+  useEffect(() => {
+    if (!selectedCompany) { setClients([]); return; }
+    setClientId("");
+    getClientsByCompany(selectedCompany.id)
+      .then((res) => setClients(res.data || []))
+      .catch(() => setClients([]));
+  }, [selectedCompany?.id]);
+
   // Single source of truth for the query params — used by both the on-screen
-  // fetch and the Excel export so they always agree.
+  // fetch and the Excel export so they always agree (client filter included).
   const buildParams = useCallback(() => {
     const p = { buyerType };
     if (mode === "custom") {
@@ -78,8 +90,9 @@ export default function SalesReportPage() {
       p.year = year;
       if (!fullYear) p.month = month;
     }
+    if (clientId) p.clientId = clientId;
     return p;
-  }, [mode, buyerType, dateFrom, dateTo, year, month, fullYear]);
+  }, [mode, buyerType, dateFrom, dateTo, year, month, fullYear, clientId]);
 
   const rangeInvalid = mode === "custom" && dateFrom && dateTo && dateFrom > dateTo;
 
@@ -124,9 +137,9 @@ export default function SalesReportPage() {
       a.download = `Sale-Report-${(report?.companyName || "company")}-${periodLabel}.xlsx`.replace(/\s+/g, "_");
       a.click();
       URL.revokeObjectURL(url);
-      notify.success("Excel exported.");
+      notify("Excel exported.", "success");
     } catch {
-      notify.error("Failed to export the Excel file.");
+      notify("Failed to export the Excel file.", "error");
     } finally {
       setExporting(false);
     }
@@ -228,6 +241,17 @@ export default function SalesReportPage() {
         <Field label="Buyer type">
           <select style={dropdownStyles.base} value={buyerType} onChange={(e) => setBuyerType(e.target.value)}>
             {BUYER_TYPES.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
+          </select>
+        </Field>
+
+        <Field label="Client" icon={<MdPerson size={15} />}>
+          <select
+            style={{ ...dropdownStyles.base, minWidth: 180, maxWidth: 240 }}
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+          >
+            <option value="">All clients</option>
+            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </Field>
 

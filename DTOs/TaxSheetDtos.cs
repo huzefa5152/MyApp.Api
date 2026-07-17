@@ -10,6 +10,10 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class TaxSheetRowDto
     {
+        /// <summary>Underlying invoice id — lets the UI act on the row (e.g. the transfer-to-next-month bulk action).</summary>
+        public int InvoiceId { get; set; }
+        /// <summary>Buyer id — supports the client filter / grouping.</summary>
+        public int ClientId { get; set; }
         public string Ntn { get; set; } = "";
         public string PartyName { get; set; } = "";
         public string DocumentNumber { get; set; } = "";
@@ -47,5 +51,34 @@ namespace MyApp.Api.DTOs
         /// <summary>Distinct invoices that still need HS classification.</summary>
         public int InvoiceCount { get; set; }
         public int RowCount { get; set; }
+    }
+
+    /// <summary>
+    /// Request to move the STILL-UNCLASSIFIED invoices of a tax-sheet period
+    /// onto a new date (typically the 1st of next month) — so the tax
+    /// consultant can defer the invoices they didn't get to this filing
+    /// period to the next one, in one action, instead of re-dating each bill
+    /// by hand. The server recomputes the exact set the sheet shows (same
+    /// period + client filter), so it always transfers what the user sees.
+    /// </summary>
+    public class TaxSheetTransferRequestDto
+    {
+        public int? Year { get; set; }
+        public int? Month { get; set; }
+        public DateTime? DateFrom { get; set; }
+        public DateTime? DateTo { get; set; }
+        public int? ClientId { get; set; }
+        /// <summary>The date every transferred invoice is moved to (e.g. 2026-08-03).</summary>
+        public DateTime TargetDate { get; set; }
+    }
+
+    /// <summary>Outcome of a tax-sheet transfer.</summary>
+    public class TaxSheetTransferResultDto
+    {
+        public int Transferred { get; set; }
+        public int Skipped { get; set; }
+        public DateTime TargetDate { get; set; }
+        /// <summary>Invoice numbers that were skipped (already submitted to FBR / cancelled) so the UI can explain.</summary>
+        public List<string> SkippedInvoiceNumbers { get; set; } = new();
     }
 }

@@ -21,7 +21,7 @@ namespace MyApp.Api.Services.Implementations
         }
 
         public async Task<SalesReportDto> GetSalesReportAsync(int companyId, int? year, int? month, string buyerType,
-            DateTime? dateFrom = null, DateTime? dateTo = null)
+            DateTime? dateFrom = null, DateTime? dateTo = null, int? clientId = null)
         {
             buyerType = (buyerType ?? "all").Trim().ToLowerInvariant();
 
@@ -81,6 +81,10 @@ namespace MyApp.Api.Services.Implementations
             else if (buyerType == "unregistered")
                 query = query.Where(i => i.Client == null || i.Client.RegistrationType != "Registered");
             // "all" → no buyer filter.
+
+            // Optional single-client filter (applied on top of the buyer type).
+            if (clientId.HasValue)
+                query = query.Where(i => i.ClientId == clientId.Value);
 
             var invoices = await query
                 .OrderBy(i => i.Date)
@@ -171,9 +175,9 @@ namespace MyApp.Api.Services.Implementations
         // line items grouped beneath as a collapsible outline (+/-), and a
         // merged grand-total row across all invoices. #,##0.00 money columns.
         public async Task<byte[]> GetSalesReportExcelAsync(int companyId, int? year, int? month, string buyerType,
-            DateTime? dateFrom = null, DateTime? dateTo = null)
+            DateTime? dateFrom = null, DateTime? dateTo = null, int? clientId = null)
         {
-            var report = await GetSalesReportAsync(companyId, year, month, buyerType, dateFrom, dateTo);
+            var report = await GetSalesReportAsync(companyId, year, month, buyerType, dateFrom, dateTo, clientId);
 
             const int COLS = 14; // Sr .. Total Amount (invoice-level cols 1-4/7, line-level 5-6/9-10)
             const string MONEY = "#,##0.00";
@@ -336,7 +340,7 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Tax Sheet — invoice lines still missing a valid HS code ──────
         public async Task<TaxSheetReportDto> GetTaxSheetAsync(int companyId, int? year, int? month,
-            DateTime? dateFrom = null, DateTime? dateTo = null)
+            DateTime? dateFrom = null, DateTime? dateTo = null, int? clientId = null)
         {
             var company = await _context.Companies.AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == companyId);
@@ -367,7 +371,8 @@ namespace MyApp.Api.Services.Implementations
                          && i.Date >= from && i.Date < toExclusive
                          && i.NoteKind == 0
                          && !i.IsCancelled
-                         && !i.IsDemo)
+                         && !i.IsDemo
+                         && (clientId == null || i.ClientId == clientId.Value))
                 .OrderBy(i => i.Date).ThenBy(i => i.InvoiceNumber)
                 .ToListAsync();
 
@@ -410,6 +415,8 @@ namespace MyApp.Api.Services.Implementations
                     var g = groups[name];
                     report.Rows.Add(new TaxSheetRowDto
                     {
+                        InvoiceId = inv.Id,
+                        ClientId = inv.ClientId,
                         Ntn = ntn,
                         PartyName = party,
                         DocumentNumber = inv.InvoiceNumber.ToString(),
@@ -433,9 +440,9 @@ namespace MyApp.Api.Services.Implementations
         }
 
         public async Task<byte[]> GetTaxSheetExcelAsync(int companyId, int? year, int? month,
-            DateTime? dateFrom = null, DateTime? dateTo = null)
+            DateTime? dateFrom = null, DateTime? dateTo = null, int? clientId = null)
         {
-            var report = await GetTaxSheetAsync(companyId, year, month, dateFrom, dateTo);
+            var report = await GetTaxSheetAsync(companyId, year, month, dateFrom, dateTo, clientId);
 
             const int COLS = 9;
             const string MONEY = "#,##0.00";
@@ -511,6 +518,96 @@ namespace MyApp.Api.Services.Implementations
             using var ms = new MemoryStream();
             wb.SaveAs(ms);
             return ms.ToArray();
+        }
+
+        public async Task<TaxSheetTransferResultDto> TransferTaxSheetInvoicesAsync(
+            int companyId, int? year, int? month, DateTime? dateFrom, DateTime? dateTo,
+            int? clientId, DateTime targetDate, string? actorUserName)
+        {
+            // Resolve the SAME window the tax sheet uses, so we move exactly the
+            // set the user is looking at.
+            var customRange = dateFrom.HasValue && dateTo.HasValue;
+            DateTime from, toExclusive;
+            if (customRange) { from = dateFrom!.Value.Date; toExclusive = dateTo!.Value.Date.AddDays(1); }
+            else
+            {
+                var y = year ?? DateTime.UtcNow.Year;
+                if (month.HasValue) { from = new DateTime(y, month.Value, 1); toExclusive = from.AddMonths(1); }
+                else { from = new DateTime(y, 1, 1); toExclusive = from.AddYears(1); }
+            }
+
+            // Tracked query — same predicate as GetTaxSheetAsync.
+            var invoices = await _context.Invoices
+                .Include(i => i.Items).ThenInclude(it => it.ItemType)
+                .Where(i => i.CompanyId == companyId
+                         && i.Date >= from && i.Date < toExclusive
+                         && i.NoteKind == 0
+                         && !i.IsCancelled
+                         && !i.IsDemo
+                         && (clientId == null || i.ClientId == clientId.Value))
+                .ToListAsync();
+
+            var tDate = targetDate.Date;
+            var result = new TaxSheetTransferResultDto { TargetDate = tDate };
+            var transferredNumbers = new List<string>();
+
+            foreach (var inv in invoices)
+            {
+                // Only invoices that still carry an un-classified line are "remaining".
+                var hasUnclassified = inv.Items.Any(item =>
+                {
+                    var effHs = !string.IsNullOrWhiteSpace(item.HSCode) ? item.HSCode : item.ItemType?.HSCode;
+                    return string.IsNullOrWhiteSpace(effHs);
+                });
+                if (!hasUnclassified) continue;
+
+                // A submitted / cancelled invoice can't be re-dated (already filed
+                // or voided). Shouldn't reach here — a submitted invoice has HS
+                // codes on every line — but guard and report it rather than throw.
+                if (inv.FbrStatus == "Submitted" || inv.IsCancelled)
+                {
+                    result.Skipped++;
+                    result.SkippedInvoiceNumbers.Add(inv.InvoiceNumber.ToString());
+                    continue;
+                }
+
+                if (inv.Date.Date == tDate) continue; // already there
+
+                inv.Date = tDate;
+                // A date change invalidates any prior FBR validation.
+                inv.FbrStatus = null;
+                inv.FbrErrorMessage = null;
+                result.Transferred++;
+                transferredNumbers.Add(inv.InvoiceNumber.ToString());
+            }
+
+            if (result.Transferred > 0)
+            {
+                await _context.SaveChangesAsync();
+                // Audit (best-effort — never break the transfer on a log failure).
+                try
+                {
+                    var moved = string.Join(", ", transferredNumbers.Take(100));
+                    var skipped = result.Skipped > 0
+                        ? $"; skipped {result.Skipped} submitted/cancelled ({string.Join(", ", result.SkippedInvoiceNumbers.Take(50))})"
+                        : "";
+                    _context.AuditLogs.Add(new AuditLog
+                    {
+                        Timestamp = DateTime.UtcNow,
+                        Level = "Info",
+                        UserName = actorUserName ?? "system",
+                        HttpMethod = "POST",
+                        RequestPath = $"/reports/company/{companyId}/tax-sheet/transfer",
+                        StatusCode = 200,
+                        ExceptionType = "TAXSHEET_TRANSFER",
+                        Message = $"Tax-sheet transfer: moved {result.Transferred} invoice(s) to {tDate:yyyy-MM-dd} "
+                                + $"[{moved}]{skipped}.",
+                    });
+                    await _context.SaveChangesAsync();
+                }
+                catch { /* audit is non-critical */ }
+            }
+            return result;
         }
 
         // Generic piece-type units we DON'T suffix onto the quantity label
