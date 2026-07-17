@@ -545,9 +545,41 @@ namespace MyApp.Api.Services.Implementations
                     if (docType == 10) nCn = made; else nDn = made;
                 }
                 await ImportNotes("credit-notes", 10, "mgr-scn:");
-                await ImportNotes("debit-notes", 9, "mgr-sdn:");
-                report.Created["creditNotes"] = nCn; report.Created["debitNotes"] = nDn;
-                if (noteNoClient > 0) Note($"Skipped {noteNoClient} note(s) with no resolvable customer.");
+
+                // Debit notes: in Manager these are PURCHASE (supplier-side)
+                // documents — they debit a SUPPLIER, unlike sales credit/debit
+                // notes which are client-based Invoices. Import them into the
+                // dedicated PurchaseDebitNote entity (see Models/PurchaseDebitNote).
+                int nPdn = 0, pdnNoSupplier = 0;
+                foreach (var h in Rows("debit-notes", true))
+                {
+                    var key = Str(h, "Key") ?? Str(h, "id")!;
+                    if (Str(h, "Supplier") is not { } sup || !supplierIdByGuid.TryGetValue(sup, out var supplierId)) { pdnNoSupplier++; continue; }
+                    int? divId = DivFromLines(h);
+                    int num = Alloc($"pdn:{divId ?? 0}", RefNum(h));
+                    var pitems = new List<PurchaseDebitNoteItem>();
+                    if (h.TryGetProperty("Lines", out var L) && L.ValueKind == JsonValueKind.Array)
+                        foreach (var ln in L.EnumerateArray())
+                        {
+                            var (qq, pp, dd, uu) = Line(ln, "PurchaseUnitPrice");
+                            var q = qq <= 0 ? 1m : qq;
+                            pitems.Add(new PurchaseDebitNoteItem { Description = dd, Quantity = q, UOM = uu, UnitPrice = pp, LineTotal = Math.Round(q * pp, 2) });
+                        }
+                    var ptotal = pitems.Sum(i => i.LineTotal);
+                    _db.PurchaseDebitNotes.Add(new PurchaseDebitNote
+                    {
+                        CompanyId = companyId, DivisionId = divId, SupplierId = supplierId,
+                        DebitNoteNumber = num, Date = Date(h, "IssueDate") ?? DateTime.Today,
+                        SupplierRef = Str(h, "Reference"), Subtotal = ptotal, GSTAmount = 0, GrandTotal = ptotal,
+                        IsMigrated = true, ExternalRef = $"mgr-pdn:{key}", Items = pitems,
+                    });
+                    nPdn++;
+                }
+                await _db.SaveChangesAsync(); _db.ChangeTracker.Clear();
+
+                report.Created["creditNotes"] = nCn; report.Created["purchaseDebitNotes"] = nPdn;
+                if (noteNoClient > 0) Note($"Skipped {noteNoClient} credit note(s) with no resolvable customer.");
+                if (pdnNoSupplier > 0) Note($"Skipped {pdnNoSupplier} purchase debit note(s) with no resolvable supplier.");
 
                 // ── Withholding-tax receipts ────────────────────────────────────
                 int nWht = 0, whtNoClient = 0, whtSeq = 0;
@@ -1012,6 +1044,9 @@ namespace MyApp.Api.Services.Implementations
             await _db.Invoices.Where(i => i.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.PurchaseItems.Where(pi => pi.PurchaseBill!.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.PurchaseBills.Where(p => p.CompanyId == companyId).ExecuteDeleteAsync();
+            // Purchase (supplier-side) debit notes — before Suppliers (Restrict FK).
+            await _db.PurchaseDebitNoteItems.Where(i => i.PurchaseDebitNote!.CompanyId == companyId).ExecuteDeleteAsync();
+            await _db.PurchaseDebitNotes.Where(d => d.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.SalesQuoteItems.Where(qi => qi.SalesQuote!.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.SalesQuotes.Where(q => q.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.SalesOrderItems.Where(oi => oi.SalesOrder!.CompanyId == companyId).ExecuteDeleteAsync();

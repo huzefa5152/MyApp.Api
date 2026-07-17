@@ -55,6 +55,7 @@ export const PERMISSION_SECTIONS = [
     section: "Purchases",
     modules: [
       { key: "PurchaseBills", label: "Purchase Bills" },
+      { key: "PurchaseDebitNotes", label: "Purchase Debit Notes" },
       { key: "GoodsReceipts", label: "Goods Receipts" },
       { key: "Inventory" },
       // FBR Annexure-A purchase ledger import — Module name in

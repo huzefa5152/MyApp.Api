@@ -297,6 +297,7 @@ builder.Services.AddScoped<ISupplierService, SupplierService>();
 // unchanged; this is purely additive.
 builder.Services.AddScoped<ISupplierGroupService, SupplierGroupService>();
 builder.Services.AddScoped<IPurchaseBillService, PurchaseBillService>();
+builder.Services.AddScoped<IPurchaseDebitNoteService, PurchaseDebitNoteService>();
 builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
