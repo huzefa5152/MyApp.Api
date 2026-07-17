@@ -448,14 +448,13 @@ namespace MyApp.Api.Services.Implementations
                 var dc = await _challanRepo.GetByIdAsync(challanId);
                 if (dc == null) throw new KeyNotFoundException($"Challan {challanId} not found.");
                 // Both "Pending" (natively-created) and "Imported" (back-filled)
-                // are billable. "No PO" is billable only when the company runs
-                // with FBR OFF — those tenants routinely sell without a
-                // customer PO, so the needs-a-PO gate (an FBR / PO-driven
-                // workflow rule) would dead-end their SO → challan → bill
-                // flow. Everything else (Invoiced, Cancelled, Setup Required)
-                // always blocks bill creation.
+                // are billable. "No PO" (FBR fields ready, just no customer PO)
+                // is billable in every FBR mode — a PO is optional metadata, not
+                // a billing prerequisite; it prefills onto the bill when present.
+                // Everything else (Invoiced, Cancelled, Setup Required) always
+                // blocks bill creation.
                 var billable = dc.Status == "Pending" || dc.Status == "Imported"
-                            || (dc.Status == "No PO" && !company.FbrEnabled);
+                            || dc.Status == "No PO";
                 if (!billable)
                     throw new InvalidOperationException($"Challan {dc.ChallanNumber} is not in a billable status (got '{dc.Status}').");
                 if (dc.CompanyId != dto.CompanyId) throw new InvalidOperationException($"Challan {dc.ChallanNumber} does not belong to this company.");

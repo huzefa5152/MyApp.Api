@@ -967,11 +967,12 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<List<DeliveryChallanDto>> GetPendingChallansByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            // FBR-off companies don't require a customer PO to bill — their
-            // "No PO" challans are billable too (see repository comment).
-            var company = await _context.Companies.FindAsync(companyId);
-            var includeNoPo = company != null && !company.FbrEnabled;
-            var challans = await _repository.GetPendingChallansByCompanyAsync(companyId, includeNoPo, allowedDivisionIds);
+            // A customer PO is NOT required to bill: "No PO" challans (FBR
+            // fields otherwise ready, just no PO) are billable in every FBR
+            // mode — the PO is optional metadata, prefilled onto the bill when
+            // present. ("Setup Required" — incomplete FBR fields — still stays
+            // out; that's not about the PO.)
+            var challans = await _repository.GetPendingChallansByCompanyAsync(companyId, includeNoPo: true, allowedDivisionIds);
             return challans.Select(ToDto).ToList();
         }
 

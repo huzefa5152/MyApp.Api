@@ -526,27 +526,24 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     setFetchedRateChallanIds(new Set());
   };
 
-  // Orders offered by the picker: delivery must be COMPLETE ("Fully
-  // Delivered" / "Over Delivered" — both mean nothing left to deliver;
-  // partially/not-delivered orders are excluded per the operator's rule:
-  // bill only what has fully shipped) AND the order must still have at
-  // least one unbilled challan. Cancelled orders never show. Narrowed to
-  // the form's division when one is picked; the label carries the
-  // unbilled-challan count so the operator sees what there is to bill.
+  // Orders offered by the picker: any order that still has at least one UNBILLED
+  // challan linked to it (billable = Pending / Imported / No PO — a customer PO
+  // is NOT required, "No PO" counts). Fully-delivered orders stay in as long as
+  // an unbilled challan remains; an order whose challans are all billed drops
+  // out (nothing left to bill here). Cancelled orders never show. Narrowed to
+  // the form's division when one is picked; the label carries the delivery
+  // status + unbilled-challan count. Picking one auto-ticks its unbilled challans.
   const salesOrderOptions = useMemo(() => {
     const list = divisionId
       ? salesOrders.filter((o) => o.divisionId === parseInt(divisionId))
       : salesOrders;
     return list
       .map((o) => ({ o, pending: allChallans.filter((c) => c.salesOrderId === o.id).length }))
-      // Any order with at least one unbilled (pending) challan can be billed —
-      // partially-delivered orders included. Picking it selects those challans.
-      .filter(({ o, pending }) =>
-        pending > 0
-        && o.status !== "Cancelled")
+      .filter(({ o, pending }) => pending > 0 && o.status !== "Cancelled")
+      .sort((a, b) => b.pending - a.pending || b.o.salesOrderNumber - a.o.salesOrderNumber)
       .map(({ o, pending }) => ({
         ...o,
-        _label: `SO #${o.salesOrderNumber} — ${o.clientName} (${pending} unbilled DC${pending !== 1 ? "s" : ""})${o.divisionName ? ` · ${o.divisionName}` : ""}`,
+        _label: `SO #${o.salesOrderNumber} — ${o.clientName}${o.fulfillmentStatus ? ` · ${o.fulfillmentStatus}` : ""} (${pending} unbilled DC${pending !== 1 ? "s" : ""})${o.divisionName ? ` · ${o.divisionName}` : ""}`,
       }));
   }, [salesOrders, allChallans, divisionId]);
 

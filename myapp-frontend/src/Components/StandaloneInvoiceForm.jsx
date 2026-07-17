@@ -228,12 +228,15 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
-  // Load Open sales orders once for the prefill picker — offered in both
-  // FBR modes (FBR-on operators wanted the same shortcut; the scenario
-  // still drives GST/classification). Page-walking helper: the server
-  // clamps pageSize at 100.
+  // Load sales orders once for the prefill picker — offered in both FBR modes
+  // (FBR-on operators wanted the same shortcut; the scenario still drives
+  // GST/classification). NO status filter: a fully-delivered order auto-flips
+  // to "Closed", so filtering by status:"Open" would hide exactly the
+  // partially/fully delivered orders the operator most wants to bill. Keep
+  // every order; only Cancelled ones are dropped below. Page-walking helper:
+  // the server clamps pageSize at 100.
   useEffect(() => {
-    getSalesOrdersForPicker(companyId, { status: "Open" })
+    getSalesOrdersForPicker(companyId)
       .then((items) => setSalesOrders(items))
       .catch(() => setSalesOrders([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -255,15 +258,19 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   }, [companyId]);
 
   // Picker options — narrowed to the form's selected division when one is
-  // set; otherwise every Open order shows.
+  // set; otherwise every order shows. Cancelled orders are excluded; the label
+  // carries the delivery status so partially / fully delivered orders are easy
+  // to spot.
   const salesOrderOptions = useMemo(() => {
     const list = divisionId
       ? salesOrders.filter((o) => o.divisionId === parseInt(divisionId))
       : salesOrders;
-    return list.map((o) => ({
-      ...o,
-      _label: `SO #${o.salesOrderNumber} — ${o.clientName}${o.divisionName ? ` · ${o.divisionName}` : ""}`,
-    }));
+    return list
+      .filter((o) => o.status !== "Cancelled")
+      .map((o) => ({
+        ...o,
+        _label: `SO #${o.salesOrderNumber} — ${o.clientName}${o.fulfillmentStatus ? ` · ${o.fulfillmentStatus}` : ""}${o.divisionName ? ` · ${o.divisionName}` : ""}`,
+      }));
   }, [salesOrders, divisionId]);
 
   // Selecting an order REPLACES the item rows with its lines (picking a
@@ -741,7 +748,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                   <label style={styles.label}>Sales Order <span style={{ fontWeight: 400 }}>(optional — loads buyer &amp; items)</span></label>
                   {salesOrderOptions.length === 0 ? (
                     <p style={{ color: colors.textSecondary, fontSize: "0.82rem", margin: 0 }}>
-                      No open sales orders{divisionId ? " in this division" : ""} — enter the bill manually below.
+                      No sales orders{divisionId ? " in this division" : ""} — enter the bill manually below.
                     </p>
                   ) : (
                     <SearchableSelect

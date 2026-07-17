@@ -204,11 +204,10 @@ namespace MyApp.Api.Repositories.Implementations
         {
             // Both "Pending" (natively-created) and "Imported" (historical back-fill)
             // are billable — the bill-creation picker shows both populations.
-            // "Setup Required" is never billable. "No PO" is billable ONLY for
-            // FBR-off companies (includeNoPo, decided by the service): the
-            // needs-a-PO-before-billing rule belongs to the FBR / PO-driven
-            // wholesale workflow, while migrated FBR-off tenants routinely
-            // sell without a customer PO (2026-07-03, Jorbai).
+            // "Setup Required" is never billable. "No PO" is billable when the
+            // caller passes includeNoPo: the service now enables it in every FBR
+            // mode (a customer PO is optional metadata, not a billing
+            // prerequisite), so SO → challan → bill never dead-ends on a missing PO.
             var query = _context.DeliveryChallans
                                 .Include(dc => dc.Items)
                                     .ThenInclude(i => i.ItemType)

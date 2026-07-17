@@ -290,6 +290,10 @@ Publish output optimized from 79 MB to 37 MB via:
 > `CLAUDE.md`.)
 
 ### 2026-07-17
+- **Bill without a customer PO** — a PO is no longer required to bill a delivery challan or sales order. Challans with no PO are billable in every FBR mode (a PO is optional metadata that prefills onto the bill from the Sales Order or the selected challan when present; incomplete FBR fields still block, since that isn't about the PO).
+- **Sales Order picker on the bill forms**
+  - **New Bill (No Challan)** now lists all **partially- and fully-delivered** sales orders (previously only "Open" ones — a fully-delivered order auto-closes, so it was hidden), each labelled with its delivery status; picking one loads the order's items.
+  - **New Bill (with challan)** lists every order that still has **at least one unbilled challan** — a **No PO** challan counts (a customer PO isn't required to bill), and fully-delivered orders stay listed until all their challans are billed. Picking one sets the buyer and auto-ticks its unbilled challans.
 - **Customer solution brought up to date** — merged the full `feat/sales-quote-order` feature set into the `customize-solution-for-other` deployment (company/division item types with per-line GL posting, Inventory V2, Chart of Accounts + General Ledger, Non-Inventory items, Withholding-Tax receipts, Bank & Cash accounts + reconciliation, multi-document print templates, division-scoped printing, the Reports module, and the Manager.io import). Deployed to the customer's hosted ERP (landing at `/`, app under `/admin`).
 - **Al-Qahera Trading Co. migrated onto the customer instance** — imported the business as a new company via the in-app Manager.io Import (documents + trial-balance opening balances), reconciled against Manager.
 
