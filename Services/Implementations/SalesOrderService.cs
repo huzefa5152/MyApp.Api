@@ -611,18 +611,21 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new { Key = g.Key, Qty = g.Sum(x => x.Quantity) })
                 .ToDictionaryAsync(x => x.Key, x => x.Qty);
 
-            // Decide what to deliver on THIS challan.
+            // Decide what to deliver on THIS challan — keep the whole line so a
+            // per-line item-type override picked at delivery time is honoured.
             var requested = (dto.Lines ?? new List<DeliverLineDto>())
                 .Where(l => l.Quantity > 0)
-                .ToDictionary(l => l.SalesOrderItemId, l => l.Quantity);
+                .ToDictionary(l => l.SalesOrderItemId, l => l);
 
             var challanItems = new List<DeliveryItemDto>();
             foreach (var soItem in order.Items)
             {
                 decimal qty;
+                DeliverLineDto? reqLine = null;
                 if (requested.Count > 0)
                 {
-                    if (!requested.TryGetValue(soItem.Id, out qty) || qty <= 0) continue; // line not on this challan
+                    if (!requested.TryGetValue(soItem.Id, out reqLine) || reqLine.Quantity <= 0) continue; // line not on this challan
+                    qty = reqLine.Quantity;
                 }
                 else
                 {
@@ -631,10 +634,25 @@ namespace MyApp.Api.Services.Implementations
                     if (qty <= 0) continue;                      // already fulfilled
                 }
 
+                // Item type: an override the operator picked at delivery time wins
+                // over the (possibly un-classified) sales-order line. Item-type and
+                // non-inventory are mutually exclusive.
+                int? itemTypeId, nonInvId;
+                if (reqLine != null && (reqLine.ItemTypeId.HasValue || reqLine.NonInventoryItemId.HasValue))
+                {
+                    nonInvId = reqLine.NonInventoryItemId;
+                    itemTypeId = nonInvId.HasValue ? null : reqLine.ItemTypeId;
+                }
+                else
+                {
+                    nonInvId = soItem.NonInventoryItemId;
+                    itemTypeId = nonInvId.HasValue ? null : soItem.ItemTypeId;
+                }
+
                 challanItems.Add(new DeliveryItemDto
                 {
-                    ItemTypeId = soItem.ItemTypeId,
-                    NonInventoryItemId = soItem.NonInventoryItemId,
+                    ItemTypeId = itemTypeId,
+                    NonInventoryItemId = nonInvId,
                     Description = soItem.Description,
                     Quantity = qty,
                     Unit = soItem.Unit,

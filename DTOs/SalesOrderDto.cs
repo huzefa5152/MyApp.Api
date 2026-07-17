@@ -96,6 +96,12 @@ namespace MyApp.Api.DTOs
     {
         public int SalesOrderItemId { get; set; }
         public decimal Quantity { get; set; }
+        /// <summary>Optional per-line item-type override for the challan line. When
+        /// set it wins over the sales-order line's item type (lets the operator
+        /// tag inventory at delivery time when the order line was un-classified).
+        /// Mutually exclusive with <see cref="NonInventoryItemId"/>.</summary>
+        public int? ItemTypeId { get; set; }
+        public int? NonInventoryItemId { get; set; }
     }
 
     /// <summary>Body for the status-change endpoints on quotes and orders.</summary>

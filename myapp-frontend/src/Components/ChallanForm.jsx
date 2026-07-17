@@ -3,11 +3,14 @@ import { MdAdd, MdClose, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import SearchableSelect from "./SearchableSelect";
+import RichText from "./RichText";
 import SelectDropdown from "./SelectDropdown";
 import DivisionSelect from "./DivisionSelect";
 import QuantityInput from "./QuantityInput";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { saveItemFbrDefaults } from "../api/lookupApi";
+import { getOpenSalesOrdersByCompany, getSalesOrderById } from "../api/salesOrderApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
@@ -54,9 +57,100 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
   const itemsContainerRef = useRef(null);
   const attachmentRef = useRef(null);
 
+  // ── Optional "deliver from Sales Order" mode ─────────────────────────────
+  // Pick an open/partially-delivered order → the form fills each undelivered
+  // line and the operator just enters how much to deliver now (default = the
+  // remaining qty, capped at it, 0 to skip that line). On save the challan is
+  // created against the order so delivery tracking updates.
+  const [openOrders, setOpenOrders] = useState([]);
+  const [salesOrderId, setSalesOrderId] = useState("");
+  const [order, setOrder] = useState(null);           // full order (with items) once picked
+  const [orderQtys, setOrderQtys] = useState({});     // salesOrderItemId → qty to deliver
+  // salesOrderItemId → { itemTypeId, nonInventoryItemId } — the challan line's
+  // item type. Defaults to the order line's (carries over); editable so the
+  // operator can tag inventory when the order line was un-classified.
+  const [orderItemTypes, setOrderItemTypes] = useState({});
+  const [loadingOrder, setLoadingOrder] = useState(false);
+  const fromOrder = !!order;
+
   useEffect(() => {
     getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
   }, []);
+
+  // Open (not fully-delivered) orders for the optional picker — these are the
+  // orders that still have something left to deliver.
+  useEffect(() => {
+    if (!companyId) { setOpenOrders([]); return; }
+    getOpenSalesOrdersByCompany(companyId)
+      .then(({ data }) => setOpenOrders(data || []))
+      .catch(() => setOpenOrders([]));
+  }, [companyId]);
+
+  // Options for the SearchableSelect — labelled "SO #123 · Client · date".
+  const orderOptions = (openOrders || []).map((o) => ({
+    id: o.id,
+    salesOrderNumber: o.salesOrderNumber,
+    clientName: o.clientName,
+    name: `SO #${o.salesOrderNumber} · ${o.clientName || "—"}`,
+  }));
+
+  const pickOrder = async (id) => {
+    setSalesOrderId(id ? String(id) : "");
+    setError("");
+    if (!id) { setOrder(null); setOrderQtys({}); return; }
+    setLoadingOrder(true);
+    try {
+      const { data } = await getSalesOrderById(id);
+      const deliverable = (data.items || []).filter((i) => Number(i.remainingQuantity) > 0);
+      if (deliverable.length === 0) {
+        setError("This sales order has nothing left to deliver.");
+        setOrder(null); setOrderQtys({}); setSalesOrderId("");
+        return;
+      }
+      setOrder(data);
+      // Default each line to its full remaining quantity + carry its item type.
+      const m = {};
+      const t = {};
+      deliverable.forEach((i) => {
+        m[i.id] = i.remainingQuantity;
+        t[i.id] = { itemTypeId: i.itemTypeId ?? null, nonInventoryItemId: i.nonInventoryItemId ?? null };
+      });
+      setOrderQtys(m);
+      setOrderItemTypes(t);
+      // Carry the order's client, site, division, and delivery date onto the challan.
+      setClient({ id: data.clientId, label: data.clientName });
+      setSite(data.site || "");
+      if (data.divisionId) setDivisionId(String(data.divisionId));
+      if (!deliveryDate) setDeliveryDate(new Date().toISOString().slice(0, 10));
+    } catch {
+      setError("Failed to load the selected sales order.");
+      setOrder(null); setOrderQtys({}); setSalesOrderId("");
+    } finally {
+      setLoadingOrder(false);
+    }
+  };
+
+  const clearOrder = () => { setSalesOrderId(""); setOrder(null); setOrderQtys({}); setOrderItemTypes({}); };
+
+  const setOrderItemType = (itemId, newId) =>
+    setOrderItemTypes((p) => ({ ...p, [itemId]: { itemTypeId: newId ? parseInt(newId) : null, nonInventoryItemId: null } }));
+  const setOrderNonInv = (itemId, n) =>
+    setOrderItemTypes((p) => ({ ...p, [itemId]: { itemTypeId: null, nonInventoryItemId: n ? n.id : null } }));
+
+  const setOrderQty = (itemId, remaining, raw) => {
+    // Clamp to [0, remaining] — you can't deliver more than what's left.
+    let v = raw === "" ? "" : Number(raw);
+    if (v !== "" && !Number.isNaN(v)) { if (v < 0) v = 0; if (v > remaining) v = remaining; }
+    setOrderQtys((p) => ({ ...p, [itemId]: v }));
+  };
+  const deliverableItems = (order?.items || []).filter((i) => Number(i.remainingQuantity) > 0);
+  const anyOrderQty = Object.values(orderQtys).some((q) => Number(q) > 0);
+  const setAllRemaining = () => {
+    const m = {};
+    deliverableItems.forEach((i) => { m[i.id] = i.remainingQuantity; });
+    setOrderQtys(m);
+  };
+  const clearAllQtys = () => setOrderQtys({});
   useEffect(() => {
     getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([]));
   }, [companyId]);
@@ -142,6 +236,38 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
     if (saving) return;
     setError("");
 
+    // ── Deliver-from-order path — create the challan against the order ──────
+    if (fromOrder) {
+      const lines = deliverableItems
+        .map((i) => ({
+          salesOrderItemId: i.id,
+          quantity: Number(orderQtys[i.id]) || 0,
+          itemTypeId: orderItemTypes[i.id]?.itemTypeId || null,
+          nonInventoryItemId: orderItemTypes[i.id]?.nonInventoryItemId || null,
+        }))
+        .filter((l) => l.quantity > 0);
+      if (lines.length === 0) {
+        setError("Enter a quantity to deliver on at least one line.");
+        return;
+      }
+      setSaving(true);
+      try {
+        const saved = await onSaved({
+          salesOrderId: order.id,
+          deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : null,
+          site: site.trim() || null,
+          lines,
+        });
+        try { if (saved?.id) await attachmentRef.current?.flush(saved.id); } catch { /* best-effort */ }
+        onClose();
+      } catch (err) {
+        const serverMsg = err.response?.data?.error || err.response?.data?.message;
+        setError(serverMsg || (!err.response ? "Could not reach the server. Please try again." : "Could not create the challan. Please try again."));
+        setSaving(false);
+      }
+      return;
+    }
+
     const validItems = items.filter((item) => item.description.trim());
     if (validItems.length === 0) {
       setError("Please add at least one item with a description.");
@@ -197,7 +323,9 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
     }
   };
 
-  const isDisabled = items.some((i) => !i.description.trim()) || !client || saving;
+  const isDisabled = fromOrder
+    ? (!anyOrderQty || saving)
+    : (items.some((i) => !i.description.trim()) || !client || saving);
 
   // Backdrop click is intentionally a no-op — the user can lose minutes
   // of typed data with one stray click otherwise. Use the X in the
@@ -214,20 +342,58 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
           <div style={formStyles.body}>
             {error && <div style={styles.errorAlert}>{error}</div>}
 
+            {/* Optional: build this challan by delivering an open Sales Order.
+                Picking one fills every undelivered line; the operator just sets
+                how much to deliver now. */}
+            <div style={styles.soPickerCard}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                <span style={styles.soPickerLabel}>Deliver a Sales Order <span style={{ fontWeight: 400, color: colors.textSecondary }}>(optional)</span></span>
+                <div style={{ flex: 1, minWidth: 240 }}>
+                  <SearchableSelect
+                    items={orderOptions}
+                    value={salesOrderId}
+                    onChange={(id) => pickOrder(id)}
+                    searchKeys={["name", "salesOrderNumber", "clientName"]}
+                    placeholder={openOrders.length ? "Search open sales orders…" : "No open sales orders"}
+                    disabled={loadingOrder || openOrders.length === 0}
+                  />
+                </div>
+                {fromOrder && (
+                  <button type="button" style={styles.soClearBtn} onClick={clearOrder}>Clear &amp; enter manually</button>
+                )}
+              </div>
+              {fromOrder && (
+                <div style={styles.soBanner}>
+                  Delivering <strong>SO #{order.salesOrderNumber}</strong> for <strong>{order.clientName}</strong>.
+                  Enter how much to deliver per line — defaults to the remaining quantity, capped at it; set 0 to skip a line.
+                </div>
+              )}
+            </div>
+
             {/* Header row: Client / Site / Delivery Date — same layout as
                 Edit Challan so operators see identical shape on both flows.
                 Site is dropdown when the picked client has presets, free-text
                 otherwise so one-offs still work. */}
             <div style={styles.row}>
               <div style={{ flex: 2, minWidth: 220 }}>
-                <SelectDropdown
-                  label="Client"
-                  endpoint={`/clients/company/${companyId}`}
-                  value={client}
-                  onChange={(val) => { setClient(val); setSite(""); }}
-                  placeholder="Choose client"
-                  className=""
-                />
+                {fromOrder ? (
+                  <>
+                    <label style={styles.label}>Client</label>
+                    <div style={{ ...styles.input, backgroundColor: "#eef2ff", color: colors.textPrimary, fontWeight: 600, display: "flex", alignItems: "center" }}>
+                      {client?.label || order.clientName}
+                      <span style={{ marginLeft: "auto", fontSize: "0.7rem", fontWeight: 600, color: colors.blue }}>from order</span>
+                    </div>
+                  </>
+                ) : (
+                  <SelectDropdown
+                    label="Client"
+                    endpoint={`/clients/company/${companyId}`}
+                    value={client}
+                    onChange={(val) => { setClient(val); setSite(""); }}
+                    placeholder="Choose client"
+                    className=""
+                  />
+                )}
               </div>
               <div style={{ flex: 1.5, minWidth: 180 }}>
                 <label style={styles.label}>Site / Department</label>
@@ -262,13 +428,15 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                 <label style={styles.label}>Delivery Date</label>
                 <input type="date" style={styles.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
               </div>
-              {has("divisions.manage.view") && (
+              {!fromOrder && has("divisions.manage.view") && (
                 <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ color: "#5f6d7e", fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 150 }} />
               )}
             </div>
 
             {/* PO row: Number + Date + Indent No — flex weights match
-                ChallanEditForm's PO row so Add and Edit look identical. */}
+                ChallanEditForm's PO row so Add and Edit look identical.
+                Hidden in deliver-from-order mode (inherited from the order). */}
+            {!fromOrder && (
             <div style={styles.row}>
               <div style={{ flex: 1, minWidth: 180 }}>
                 <label style={styles.label}>PO Number</label>
@@ -291,7 +459,74 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                 />
               </div>
             </div>
+            )}
 
+            {/* Deliver-from-order grid — read-only lines, operator sets qty. */}
+            {fromOrder && (
+              <div style={{ marginTop: "0.25rem" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <label style={{ ...styles.label, margin: 0 }}>Items to deliver ({deliverableItems.length})</label>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button type="button" style={styles.soQuickBtn} onClick={setAllRemaining}>Deliver all remaining</button>
+                    <button type="button" style={{ ...styles.soQuickBtn, color: colors.textSecondary, borderColor: colors.cardBorder, background: "#fff" }} onClick={clearAllQtys}>Clear all</button>
+                  </div>
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={styles.soTable}>
+                    <thead>
+                      <tr>
+                        <th style={{ ...styles.soTh, textAlign: "left" }}>Item</th>
+                        <th style={{ ...styles.soTh, textAlign: "left", width: 200 }}>Item Type</th>
+                        <th style={styles.soTh}>Ordered</th>
+                        <th style={styles.soTh}>Delivered</th>
+                        <th style={styles.soTh}>Remaining</th>
+                        <th style={{ ...styles.soTh, width: 140 }}>Deliver now</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deliverableItems.map((i) => {
+                        const q = Number(orderQtys[i.id]) || 0;
+                        const it = orderItemTypes[i.id] || {};
+                        return (
+                          <tr key={i.id} style={{ opacity: q > 0 ? 1 : 0.55 }}>
+                            <td style={styles.soTd}>
+                              <div style={{ fontWeight: 600, color: colors.textPrimary }}><RichText text={i.description} /></div>
+                              {i.unit && <div style={{ fontSize: "0.72rem", color: colors.textSecondary }}>{i.unit}</div>}
+                            </td>
+                            <td style={{ ...styles.soTd, minWidth: 200 }}>
+                              <SearchableItemTypeSelect
+                                divisionId={divisionId}
+                                items={itemTypes}
+                                value={it.itemTypeId || ""}
+                                onChange={(newId) => setOrderItemType(i.id, newId)}
+                                nonInventoryItems={nonInvItems}
+                                nonInventoryValue={it.nonInventoryItemId || ""}
+                                onPickNonInventory={(n) => setOrderNonInv(i.id, n)}
+                                placeholder="— item type (optional) —"
+                                style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                              />
+                            </td>
+                            <td style={{ ...styles.soTd, textAlign: "center" }}>{i.quantity}</td>
+                            <td style={{ ...styles.soTd, textAlign: "center" }}>{i.deliveredQuantity}</td>
+                            <td style={{ ...styles.soTd, textAlign: "center", fontWeight: 700, color: colors.blue }}>{i.remainingQuantity}</td>
+                            <td style={{ ...styles.soTd, textAlign: "right" }}>
+                              <input
+                                type="number" min="0" max={i.remainingQuantity} step="0.0001"
+                                style={{ ...styles.input, textAlign: "right", padding: "0.4rem 0.45rem" }}
+                                value={orderQtys[i.id] ?? 0}
+                                onChange={(e) => setOrderQty(i.id, i.remainingQuantity, e.target.value)}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {!fromOrder && (
             <div style={{ marginTop: "0.25rem" }}>
               <label style={{ ...styles.label, marginBottom: "0.5rem" }}>Items</label>
 
@@ -357,6 +592,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
 
               <button type="button" style={styles.addItemBtn} onClick={addItem}><MdAdd size={16} /> Add Item</button>
             </div>
+            )}
 
             {/* entityId=null — files are staged client-side and flushed against
                 the new challan id after save (this form is create-only). */}
@@ -389,4 +625,12 @@ const styles = {
   itemIndex: { width: 22, paddingTop: "0.55rem", fontWeight: 700, fontSize: "0.82rem", color: colors.textSecondary, textAlign: "center", flexShrink: 0 },
   removeBtn: { display: "flex", alignItems: "center", justifyContent: "center", padding: "0.4rem", marginTop: "0.3rem", borderRadius: 8, border: `1px solid ${colors.danger}25`, backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", transition: "background-color 0.2s", flexShrink: 0 },
   addItemBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", marginTop: "0.6rem", padding: "0.4rem 0.9rem", borderRadius: 8, border: "none", backgroundColor: `${colors.teal}14`, color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", transition: "background-color 0.2s" },
+  soPickerCard: { padding: "0.75rem 0.9rem", marginBottom: "1rem", borderRadius: 10, border: `1px solid ${colors.blue}22`, backgroundColor: "#f5f8ff" },
+  soPickerLabel: { fontWeight: 700, fontSize: "0.9rem", color: colors.blue },
+  soClearBtn: { padding: "0.35rem 0.7rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
+  soBanner: { marginTop: "0.6rem", padding: "0.5rem 0.7rem", borderRadius: 8, backgroundColor: "#e8f5e9", border: "1px solid #a5d6a7", color: "#1a2332", fontSize: "0.82rem", lineHeight: 1.4 },
+  soQuickBtn: { padding: "0.3rem 0.65rem", borderRadius: 8, border: `1px solid ${colors.blue}33`, background: `${colors.blue}0d`, color: colors.blue, fontSize: "0.76rem", fontWeight: 600, cursor: "pointer" },
+  soTable: { width: "100%", borderCollapse: "collapse", minWidth: 560 },
+  soTh: { padding: "0.45rem 0.6rem", textAlign: "center", fontSize: "0.7rem", fontWeight: 800, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `2px solid ${colors.cardBorder}`, background: "#f8f9fb", whiteSpace: "nowrap" },
+  soTd: { padding: "0.45rem 0.6rem", fontSize: "0.85rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "top" },
 };

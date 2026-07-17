@@ -18,6 +18,7 @@ import {
   getChallanPrintData,
 } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
+import { createChallanFromOrder } from "../api/salesOrderApi";
 import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
@@ -178,7 +179,15 @@ export default function ChallanPage() {
     if (!selectedCompany) return;
     // Return the created challan so the form can flush staged attachments
     // against the new id. The form closes itself (after the flush) via onClose.
-    const res = await createDeliveryChallan(selectedCompany.id, payload);
+    // When the form is in deliver-from-order mode it sends { salesOrderId, lines }
+    // — route that to the order-linked create so fulfilment tracking updates.
+    const res = payload.salesOrderId
+      ? await createChallanFromOrder(payload.salesOrderId, {
+          deliveryDate: payload.deliveryDate,
+          site: payload.site,
+          lines: payload.lines,
+        })
+      : await createDeliveryChallan(selectedCompany.id, payload);
     fetchChallans(selectedCompany.id, page);
     return res.data;
   };
