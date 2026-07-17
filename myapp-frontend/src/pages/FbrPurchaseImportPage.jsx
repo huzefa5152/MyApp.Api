@@ -116,7 +116,7 @@ export default function FbrPurchaseImportPage() {
     if (!f) return;
     const lower = (f.name || "").toLowerCase();
     if (!lower.endsWith(".xls") && !lower.endsWith(".xlsx")) {
-      notify.error("Please pick a .xls or .xlsx file.");
+      notify("Please pick a .xls or .xlsx file.", "error");
       return;
     }
     setFile(f);
@@ -124,8 +124,8 @@ export default function FbrPurchaseImportPage() {
   };
 
   const onRun = async () => {
-    if (!file) { notify.error("Pick an FBR Annexure-A xls file first."); return; }
-    if (!selectedCompany) { notify.error("Pick a company first."); return; }
+    if (!file) { notify("Pick an FBR Annexure-A xls file first.", "error"); return; }
+    if (!selectedCompany) { notify("Pick a company first.", "error"); return; }
     setRunning(true);
     try {
       const data = await previewFbrPurchaseImport(file, selectedCompany.id);
@@ -135,7 +135,7 @@ export default function FbrPurchaseImportPage() {
       if (data?.invoices?.length) setExpandedInvoices(new Set([0]));
     } catch (err) {
       const msg = err?.response?.data?.error || err?.message || "Preview failed.";
-      notify.error(msg);
+      notify(msg, "error");
     } finally {
       setRunning(false);
     }
@@ -198,10 +198,10 @@ export default function FbrPurchaseImportPage() {
       // needed.
       setResult(null);
       setExpandedInvoices(new Set());
-      notify.success(`Imported ${data.counts.invoicesImported} invoice${data.counts.invoicesImported !== 1 ? "s" : ""}.`);
+      notify(`Imported ${data.counts.invoicesImported} invoice${data.counts.invoicesImported !== 1 ? "s" : ""}.`, "success");
     } catch (err) {
       const msg = err?.response?.data?.error || err?.message || "Commit failed.";
-      notify.error(msg);
+      notify(msg, "error");
     } finally {
       setCommitting(false);
     }

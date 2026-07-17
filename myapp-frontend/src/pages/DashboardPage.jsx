@@ -115,7 +115,7 @@ export default function DashboardPage() {
         if (cancelled) return;
         const msg = err?.response?.data?.error || err?.message || "Failed to load dashboard.";
         setError(msg);
-        notify.error(msg);
+        notify(msg, "error");
       } finally {
         if (!cancelled) setLoading(false);
       }

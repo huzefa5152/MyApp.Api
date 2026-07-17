@@ -78,7 +78,7 @@ export default function FbrMonitorPage() {
         const r = await getFbrSummary({ companyId, hours: windowHours });
         if (!cancelled) setSummary(r.data);
       } catch (err) {
-        if (!cancelled) notify.error(err.response?.data?.message || "Could not load summary.");
+        if (!cancelled) notify(err.response?.data?.message || "Could not load summary.", "error");
       }
     })();
     return () => { cancelled = true; };
@@ -102,7 +102,7 @@ export default function FbrMonitorPage() {
           setTotal(r.data.totalCount || 0);
         }
       } catch (err) {
-        if (!cancelled) notify.error(err.response?.data?.message || "Could not load FBR logs.");
+        if (!cancelled) notify(err.response?.data?.message || "Could not load FBR logs.", "error");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -156,7 +156,7 @@ export default function FbrMonitorPage() {
             const fr = await getFbrLogById(r.id);
             setDrawer(fr.data);
           } catch (err) {
-            notify.error("Could not load row detail.");
+            notify("Could not load row detail.", "error");
           }
         }}
       />
