@@ -289,6 +289,10 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-07-17
+- **Customer solution brought up to date** — merged the full `feat/sales-quote-order` feature set into the `customize-solution-for-other` deployment (company/division item types with per-line GL posting, Inventory V2, Chart of Accounts + General Ledger, Non-Inventory items, Withholding-Tax receipts, Bank & Cash accounts + reconciliation, multi-document print templates, division-scoped printing, the Reports module, and the Manager.io import). Deployed to the customer's hosted ERP (landing at `/`, app under `/admin`).
+- **Al-Qahera Trading Co. migrated onto the customer instance** — imported the business as a new company via the in-app Manager.io Import (documents + trial-balance opening balances), reconciled against Manager.
+
 ### 2026-07-15
 - **Division-scoped print templates across every document** — every document screen now has a **Division** dropdown next to the Company dropdown that drives which print templates Print / Export-PDF use, consistently across all document types (challans, sales quotes/orders, bills, tax invoices, credit/debit notes, purchase bills, goods receipts, receipts, payments, transfers, journal entries, withholding-tax receipts). Picking **All Divisions** lists only company-wide templates; picking a specific division lists only that division's. If the selected division has **no** template for that document type, the template picker is hidden and **Print + Export PDF are blocked** (disabled with an explanatory tooltip) in **both** card and table/grid views — so you can never print with no valid template. Logic is centralised in the shared `usePrintTemplates` hook + `PrintTemplateSelect`, so behaviour is identical everywhere. Fixed the goods-receipts table view, which previously left Print/PDF enabled when no template existed.
 
