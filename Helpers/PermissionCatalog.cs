@@ -312,6 +312,8 @@ namespace MyApp.Api.Helpers
             new("purchasebills.manage.update", "PurchaseBills", "Manage", "Update", "Edit a purchase bill"),
             new("purchasebills.manage.delete", "PurchaseBills", "Manage", "Delete", "Delete a purchase bill (reverses any Stock IN it emitted)"),
             new("purchasebills.print.view",    "PurchaseBills", "Print",  "View",   "Print or download purchase bills"),
+            new("purchasedebitnotes.list.view",     "PurchaseDebitNotes", "List",   "View",   "View the purchase (supplier) debit-notes list and a single note"),
+            new("purchasedebitnotes.manage.delete", "PurchaseDebitNotes", "Manage", "Delete", "Delete a purchase debit note"),
 
             // ── Goods Receipts (mirror of Delivery Challans on the buy-side) ─
             new("goodsreceipts.list.view",     "GoodsReceipts", "List",   "View",   "View goods-receipt notes"),

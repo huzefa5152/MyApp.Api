@@ -22,6 +22,7 @@ import ManagerImportPage from "./pages/ManagerImportPage";
 import CreditDebitNotePage from "./pages/CreditDebitNotePage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
 import PurchaseBillsPage from "./pages/PurchaseBillsPage";
+import PurchaseDebitNotesPage from "./pages/PurchaseDebitNotesPage";
 import GoodsReceiptsPage from "./pages/GoodsReceiptsPage";
 import StockDashboardPage from "./pages/StockDashboardPage";
 import FbrPurchaseImportPage from "./pages/FbrPurchaseImportPage";
@@ -129,6 +130,7 @@ export default function App() {
           <Route path="/accounting/data-migration" element={<DataMigrationPage />} />
           <Route path="/accounting/manager-import" element={<ManagerImportPage />} />
           <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
+          <Route path="/purchase-debit-notes" element={<PurchaseDebitNotesPage />} />
           <Route path="/goods-receipts" element={<GoodsReceiptsPage />} />
           <Route path="/stock" element={<StockDashboardPage />} />
           {/* FBR Annexure-A purchase ledger import — Phase 1 preview only */}

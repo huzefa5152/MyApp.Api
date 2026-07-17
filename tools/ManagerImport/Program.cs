@@ -29,6 +29,10 @@ bool fresh = args.Contains("--fresh");
 string companyName = GetOpt("--company-name") ?? "Al-Qahera Trading Co.";
 string? tbPath = GetOpt("--trial-balance");
 bool perpetual = args.Contains("--build-perpetual");
+// Targeted, idempotent import of PURCHASE (supplier) debit notes into an EXISTING
+// company (pass --company-id N). Adds them to a business migrated before that
+// document type existed; skips notes already present. --dry-run rolls back.
+bool importPdn = args.Contains("--import-pdn");
 string? refDir = GetOpt("--ref");
 // GL-only rebuild target: with --build-perpetual, pass --company-id N to
 // (re)build the CoA + GL + true-up on an EXISTING company WITHOUT re-importing
@@ -72,6 +76,22 @@ var svc = new ManagerImportService(db);
 try
 {
     MyApp.Api.DTOs.ManagerImportReport r;
+
+    // Targeted: add PURCHASE (supplier) debit notes to an EXISTING company.
+    if (importPdn)
+    {
+        if (existingCompanyId is not int pdnCid) { Console.Error.WriteLine("--import-pdn requires --company-id N."); return 2; }
+        var pdnDetailDir = Path.Combine(exportDir, "detail");
+        if (!Directory.Exists(pdnDetailDir)) { Console.Error.WriteLine($"detail dir not found: {pdnDetailDir}"); return 2; }
+        var pdnSummary = Load(exportDir); var pdnDetail = Load(pdnDetailDir);
+        Console.WriteLine($"== Import purchase (supplier) debit notes ==  company id={pdnCid}  dryRun={dryRun}");
+        await using var pdnTx = await db.Database.BeginTransactionAsync();
+        var (made, skipped) = await svc.ImportPurchaseDebitNotesAsync(pdnCid, pdnSummary, pdnDetail);
+        Console.WriteLine($"   created {made} purchase debit note(s); skipped {skipped} (no resolvable supplier)");
+        if (dryRun) { await pdnTx.RollbackAsync(); Console.WriteLine("\nDRY RUN — rolled back."); }
+        else { await pdnTx.CommitAsync(); Console.WriteLine("\nCOMMITTED."); }
+        return 0;
+    }
 
     if (perpetual)
     {

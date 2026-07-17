@@ -125,6 +125,8 @@ namespace MyApp.Api.Data
         public DbSet<SupplierGroup> SupplierGroups { get; set; }
         public DbSet<PurchaseBill> PurchaseBills { get; set; }
         public DbSet<PurchaseItem> PurchaseItems { get; set; }
+        public DbSet<PurchaseDebitNote> PurchaseDebitNotes { get; set; }
+        public DbSet<PurchaseDebitNoteItem> PurchaseDebitNoteItems { get; set; }
         public DbSet<PurchaseItemSourceLine> PurchaseItemSourceLines { get; set; }
         public DbSet<GoodsReceipt> GoodsReceipts { get; set; }
         public DbSet<GoodsReceiptItem> GoodsReceiptItems { get; set; }
@@ -1619,6 +1621,36 @@ namespace MyApp.Api.Data
 
             // PurchaseBill.Source — short string column tagging row lineage.
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.Source).HasMaxLength(20);
+
+            // ── Purchase (supplier-side) Debit Notes — lean standalone document ──
+            // Company/Supplier are Restrict (block a delete that would orphan them —
+            // CompanyService.DeleteAsync clears these first), Division NoAction (multi
+            // cascade-path guard), items cascade with the note.
+            modelBuilder.Entity<PurchaseDebitNote>()
+                .HasOne(d => d.Company).WithMany()
+                .HasForeignKey(d => d.CompanyId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<PurchaseDebitNote>()
+                .HasOne(d => d.Supplier).WithMany()
+                .HasForeignKey(d => d.SupplierId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<PurchaseDebitNote>()
+                .HasOne(d => d.Division).WithMany()
+                .HasForeignKey(d => d.DivisionId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PurchaseDebitNote>().HasIndex(d => d.CompanyId);
+            modelBuilder.Entity<PurchaseDebitNote>()
+                .HasIndex(d => new { d.CompanyId, d.DivisionId, d.DebitNoteNumber }).IsUnique().HasFilter(null);
+            modelBuilder.Entity<PurchaseDebitNote>().Property(d => d.ExternalRef).HasMaxLength(60);
+            modelBuilder.Entity<PurchaseDebitNote>().HasIndex(d => new { d.CompanyId, d.ExternalRef });
+            modelBuilder.Entity<PurchaseDebitNote>().Property(d => d.SupplierRef).HasMaxLength(100);
+            modelBuilder.Entity<PurchaseDebitNote>().Property(d => d.Subtotal).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseDebitNote>().Property(d => d.GSTAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseDebitNote>().Property(d => d.GrandTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseDebitNoteItem>()
+                .HasOne(i => i.PurchaseDebitNote).WithMany(d => d.Items)
+                .HasForeignKey(i => i.PurchaseDebitNoteId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PurchaseDebitNoteItem>().HasIndex(i => i.PurchaseDebitNoteId);
+            modelBuilder.Entity<PurchaseDebitNoteItem>().Property(i => i.Quantity).HasPrecision(18, 4);
+            modelBuilder.Entity<PurchaseDebitNoteItem>().Property(i => i.UnitPrice).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseDebitNoteItem>().Property(i => i.LineTotal).HasPrecision(18, 2);
 
             // GoodsReceipt — mirror of DeliveryChallan
             modelBuilder.Entity<GoodsReceipt>()

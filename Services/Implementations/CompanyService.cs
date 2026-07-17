@@ -437,6 +437,11 @@ namespace MyApp.Api.Services.Implementations
                         .Where(pi => purchaseBillIds.Contains(pi.PurchaseBillId)).ExecuteDeleteAsync();
                     await _context.PurchaseBills.Where(pb => pb.CompanyId == id).ExecuteDeleteAsync();
                 }
+                // Purchase (supplier-side) debit notes — Supplier/Company are Restrict
+                // FKs, so clear them (items cascade) before the Suppliers delete below.
+                await _context.PurchaseDebitNoteItems
+                    .Where(i => i.PurchaseDebitNote.CompanyId == id).ExecuteDeleteAsync();
+                await _context.PurchaseDebitNotes.Where(d => d.CompanyId == id).ExecuteDeleteAsync();
                 await _context.Suppliers.Where(s => s.CompanyId == id).ExecuteDeleteAsync();
 
                 // 7. FBR communication log + tenant-access grants. The

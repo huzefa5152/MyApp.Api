@@ -545,9 +545,41 @@ namespace MyApp.Api.Services.Implementations
                     if (docType == 10) nCn = made; else nDn = made;
                 }
                 await ImportNotes("credit-notes", 10, "mgr-scn:");
-                await ImportNotes("debit-notes", 9, "mgr-sdn:");
-                report.Created["creditNotes"] = nCn; report.Created["debitNotes"] = nDn;
-                if (noteNoClient > 0) Note($"Skipped {noteNoClient} note(s) with no resolvable customer.");
+
+                // Debit notes: in Manager these are PURCHASE (supplier-side)
+                // documents — they debit a SUPPLIER, unlike sales credit/debit
+                // notes which are client-based Invoices. Import them into the
+                // dedicated PurchaseDebitNote entity (see Models/PurchaseDebitNote).
+                int nPdn = 0, pdnNoSupplier = 0;
+                foreach (var h in Rows("debit-notes", true))
+                {
+                    var key = Str(h, "Key") ?? Str(h, "id")!;
+                    if (Str(h, "Supplier") is not { } sup || !supplierIdByGuid.TryGetValue(sup, out var supplierId)) { pdnNoSupplier++; continue; }
+                    int? divId = DivFromLines(h);
+                    int num = Alloc($"pdn:{divId ?? 0}", RefNum(h));
+                    var pitems = new List<PurchaseDebitNoteItem>();
+                    if (h.TryGetProperty("Lines", out var L) && L.ValueKind == JsonValueKind.Array)
+                        foreach (var ln in L.EnumerateArray())
+                        {
+                            var (qq, pp, dd, uu) = Line(ln, "PurchaseUnitPrice");
+                            var q = qq <= 0 ? 1m : qq;
+                            pitems.Add(new PurchaseDebitNoteItem { Description = dd, Quantity = q, UOM = uu, UnitPrice = pp, LineTotal = Math.Round(q * pp, 2) });
+                        }
+                    var ptotal = pitems.Sum(i => i.LineTotal);
+                    _db.PurchaseDebitNotes.Add(new PurchaseDebitNote
+                    {
+                        CompanyId = companyId, DivisionId = divId, SupplierId = supplierId,
+                        DebitNoteNumber = num, Date = Date(h, "IssueDate") ?? DateTime.Today,
+                        SupplierRef = Str(h, "Reference"), Subtotal = ptotal, GSTAmount = 0, GrandTotal = ptotal,
+                        IsMigrated = true, ExternalRef = $"mgr-pdn:{key}", Items = pitems,
+                    });
+                    nPdn++;
+                }
+                await _db.SaveChangesAsync(); _db.ChangeTracker.Clear();
+
+                report.Created["creditNotes"] = nCn; report.Created["purchaseDebitNotes"] = nPdn;
+                if (noteNoClient > 0) Note($"Skipped {noteNoClient} credit note(s) with no resolvable customer.");
+                if (pdnNoSupplier > 0) Note($"Skipped {pdnNoSupplier} purchase debit note(s) with no resolvable supplier.");
 
                 // ── Withholding-tax receipts ────────────────────────────────────
                 int nWht = 0, whtNoClient = 0, whtSeq = 0;
@@ -991,6 +1023,76 @@ namespace MyApp.Api.Services.Implementations
             await _db.SaveChangesAsync();
         }
 
+        /// <summary>
+        /// Idempotently import Manager PURCHASE (supplier-side) debit notes into an
+        /// EXISTING, already-migrated company — used to add them where a business was
+        /// imported before this document type existed. Mirrors the inline debit-note
+        /// step in <see cref="RunAsync"/> but resolves suppliers/divisions from the DB
+        /// (suppliers by their mgr-supp: ExternalRef, divisions by name) and skips any
+        /// note already present (by mgr-pdn: ExternalRef). The CALLER owns the
+        /// transaction. Returns (created, skippedNoSupplier).
+        /// </summary>
+        public async Task<(int made, int skippedNoSupplier)> ImportPurchaseDebitNotesAsync(
+            int companyId,
+            IReadOnlyDictionary<string, JsonDocument> summaryDocs,
+            IReadOnlyDictionary<string, JsonDocument> detailDocs)
+        {
+            var detail = detailDocs.TryGetValue("debit-notes", out var dd) ? dd.RootElement : default;
+            if (detail.ValueKind != JsonValueKind.Array) return (0, 0);
+
+            var divNameByGuid = new Dictionary<string, string>();
+            if (summaryDocs.TryGetValue("divisions", out var dv) && dv.RootElement.ValueKind == JsonValueKind.Array)
+                foreach (var d in dv.RootElement.EnumerateArray())
+                { var k = Str(d, "key"); var n = Str(d, "name"); if (k != null && n != null) divNameByGuid[k] = n.Trim(); }
+            var divIdByName = await _db.Divisions.Where(x => x.CompanyId == companyId)
+                .ToDictionaryAsync(x => x.Name, x => x.Id, StringComparer.OrdinalIgnoreCase);
+            var supplierIdByGuid = (await _db.Suppliers
+                .Where(s => s.CompanyId == companyId && s.ExternalRef != null && s.ExternalRef.StartsWith("mgr-supp:"))
+                .Select(s => new { s.ExternalRef, s.Id }).ToListAsync())
+                .ToDictionary(s => s.ExternalRef!["mgr-supp:".Length..], s => s.Id);
+            var existingRefs = (await _db.PurchaseDebitNotes
+                .Where(d => d.CompanyId == companyId && d.ExternalRef != null)
+                .Select(d => d.ExternalRef!).ToListAsync()).ToHashSet();
+            var maxNum = new Dictionary<int, int>();
+            foreach (var g in await _db.PurchaseDebitNotes.Where(d => d.CompanyId == companyId)
+                .GroupBy(d => d.DivisionId ?? 0).Select(g => new { g.Key, M = g.Max(x => x.DebitNoteNumber) }).ToListAsync())
+                maxNum[g.Key] = g.M;
+
+            int made = 0, skipped = 0;
+            foreach (var h in detail.EnumerateArray())
+            {
+                var key = Str(h, "Key") ?? Str(h, "id");
+                if (key == null || existingRefs.Contains($"mgr-pdn:{key}")) continue;   // idempotent
+                if (Str(h, "Supplier") is not { } sup || !supplierIdByGuid.TryGetValue(sup, out var supplierId)) { skipped++; continue; }
+                int? divId = null;
+                if (h.TryGetProperty("Lines", out var L0) && L0.ValueKind == JsonValueKind.Array)
+                    foreach (var ln in L0.EnumerateArray())
+                    { var g = Str(ln, "Division"); if (g != null && divNameByGuid.TryGetValue(g, out var dn) && divIdByName.TryGetValue(dn, out var did)) { divId = did; break; } }
+                var scope = divId ?? 0;
+                var num = (maxNum.TryGetValue(scope, out var m) ? m : 0) + 1; maxNum[scope] = num;
+                var items = new List<PurchaseDebitNoteItem>();
+                if (h.TryGetProperty("Lines", out var L) && L.ValueKind == JsonValueKind.Array)
+                    foreach (var ln in L.EnumerateArray())
+                    {
+                        var qty = ln.TryGetProperty("Qty", out var q) && q.ValueKind == JsonValueKind.Number ? q.GetDecimal() : 0m;
+                        if (qty <= 0) qty = 1m;
+                        var price = Money(ln, "PurchaseUnitPrice");
+                        items.Add(new PurchaseDebitNoteItem { Description = (Str(ln, "LineDescription") ?? "").Trim(), Quantity = qty, UOM = Uom(ln), UnitPrice = price, LineTotal = Math.Round(qty * price, 2) });
+                    }
+                var total = items.Sum(i => i.LineTotal);
+                _db.PurchaseDebitNotes.Add(new PurchaseDebitNote
+                {
+                    CompanyId = companyId, DivisionId = divId, SupplierId = supplierId,
+                    DebitNoteNumber = num, Date = Date(h, "IssueDate") ?? DateTime.Today,
+                    SupplierRef = Str(h, "Reference"), Subtotal = total, GSTAmount = 0, GrandTotal = total,
+                    IsMigrated = true, ExternalRef = $"mgr-pdn:{key}", Items = items,
+                });
+                made++;
+            }
+            await _db.SaveChangesAsync();
+            return (made, skipped);
+        }
+
         // --fresh: delete a company's imported data (child-first).
         private async Task WipeCompanyAsync(int companyId)
         {
@@ -1012,6 +1114,9 @@ namespace MyApp.Api.Services.Implementations
             await _db.Invoices.Where(i => i.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.PurchaseItems.Where(pi => pi.PurchaseBill!.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.PurchaseBills.Where(p => p.CompanyId == companyId).ExecuteDeleteAsync();
+            // Purchase (supplier-side) debit notes — before Suppliers (Restrict FK).
+            await _db.PurchaseDebitNoteItems.Where(i => i.PurchaseDebitNote!.CompanyId == companyId).ExecuteDeleteAsync();
+            await _db.PurchaseDebitNotes.Where(d => d.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.SalesQuoteItems.Where(qi => qi.SalesQuote!.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.SalesQuotes.Where(q => q.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.SalesOrderItems.Where(oi => oi.SalesOrder!.CompanyId == companyId).ExecuteDeleteAsync();

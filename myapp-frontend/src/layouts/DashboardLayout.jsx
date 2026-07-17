@@ -197,6 +197,7 @@ export default function DashboardLayout() {
   ];
   const purchasesKeys = [
     "purchasebills.list.view",
+    "purchasedebitnotes.list.view",
     "goodsreceipts.list.view",
     "fbrimport.purchase.preview",
   ];
@@ -256,7 +257,7 @@ export default function DashboardLayout() {
     if (p.startsWith("/users") || p.startsWith("/roles") || p.startsWith("/tenant-access") || p.startsWith("/audit-logs")
       || p.startsWith("/accounting/data-migration") || p.startsWith("/accounting/manager-import")) return "administration";
     if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p.startsWith("/withholding-tax") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history") return "sales";
-    if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/fbr-import/purchase")) return "purchases";
+    if (p.startsWith("/purchase-bills") || p.startsWith("/purchase-debit-notes") || p.startsWith("/goods-receipts") || p.startsWith("/fbr-import/purchase")) return "purchases";
     if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/bank-cash-accounts") || p.startsWith("/transfers") || p.startsWith("/journal-entries") || p.startsWith("/accounting/")) return "accounting";
     if (p.startsWith("/clients") || p.startsWith("/suppliers") || p.startsWith("/item-types") || p.startsWith("/non-inventory-items") || p.startsWith("/units")) return "masterdata";
     if (p.startsWith("/companies") || p.startsWith("/configuration/") || p.startsWith("/divisions") || p.startsWith("/po-formats")
@@ -462,6 +463,12 @@ export default function DashboardLayout() {
                 <NavLink to="/purchase-bills" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdShoppingCart className="dl-subitem__icon" aria-hidden="true" />
                   <span>Purchase Bills</span>
+                </NavLink>
+              </Can>
+              <Can permission="purchasedebitnotes.list.view">
+                <NavLink to="/purchase-debit-notes" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdReceiptLong className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Purchase Debit Notes</span>
                 </NavLink>
               </Can>
               <Can permission="goodsreceipts.list.view">
@@ -825,6 +832,7 @@ function getBreadcrumb(pathname) {
     "/Clients/list": "Configuration / Clients List",
     "/Suppliers/list": "Configuration / Suppliers List",
     "/purchase-bills": "Purchases / Purchase Bills",
+    "/purchase-debit-notes": "Purchases / Purchase Debit Notes",
     "/goods-receipts": "Purchases / Goods Receipts",
     "/stock": "Purchases / Stock Dashboard",
     "/fbr-import/purchase": "Purchases / FBR Purchase Import",
