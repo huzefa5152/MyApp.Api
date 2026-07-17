@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdSwapHoriz, MdAttachFile, MdVisibility } from "react-icons/md";
+import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdSwapHoriz, MdAttachFile, MdVisibility, MdUploadFile } from "react-icons/md";
 import SalesQuoteForm from "../Components/SalesQuoteForm";
 import SalesQuoteDetailModal from "../Components/SalesQuoteDetailModal";
+import POImportForm from "../Components/POImportForm";
 import {
   getPagedSalesQuotesByCompany, createSalesQuote, updateSalesQuote,
   deleteSalesQuote, convertQuoteToOrder, getSalesQuotePrintData,
@@ -38,6 +39,7 @@ export default function SalesQuotePage() {
   const canDelete = has("salesquotes.manage.delete");
   const canPrint = has("salesquotes.print.view");
   const canConvert = has("salesorders.manage.create");
+  const canImportPo = canCreate && has("poformats.import.create");
   const canSeeAttachments = has("attachments.list.view");
 
   const [quotes, setQuotes] = useState([]);
@@ -45,6 +47,7 @@ export default function SalesQuotePage() {
   const [viewQuote, setViewQuote] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editQuote, setEditQuote] = useState(null);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -199,8 +202,15 @@ export default function SalesQuotePage() {
             <p style={st.subtitle}>{selectedCompany ? `${totalCount} quote${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` : "Select a company to view quotes"}</p>
           </div>
         </div>
-        {companies.length > 0 && canCreate && (
-          <button style={st.addBtn} onClick={() => selectedCompany && (setEditQuote(null), setShowForm(true))}><MdAdd size={18} /> New Quote</button>
+        {companies.length > 0 && (canCreate || canImportPo) && (
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            {canCreate && (
+              <button style={st.addBtn} onClick={() => selectedCompany && (setEditQuote(null), setShowForm(true))}><MdAdd size={18} /> New Quote</button>
+            )}
+            {canImportPo && (
+              <button style={{ ...st.addBtn, background: colors.teal, boxShadow: "0 4px 14px rgba(0,137,123,0.25)" }} onClick={() => selectedCompany && setShowImport(true)}><MdUploadFile size={18} /> Import PO</button>
+            )}
+          </div>
         )}
       </div>
 
@@ -282,6 +292,15 @@ export default function SalesQuotePage() {
 
       {showForm && selectedCompany && (
         <SalesQuoteForm companyId={selectedCompany.id} quote={editQuote} defaultDivisionId={editQuote ? null : divisionFilter} onClose={() => { setShowForm(false); setEditQuote(null); }} onSaved={handleSave} />
+      )}
+
+      {showImport && selectedCompany && (
+        <POImportForm
+          companyId={selectedCompany.id}
+          target="salesquote"
+          onClose={() => setShowImport(false)}
+          onSaved={() => { setShowImport(false); reload(); notify("Sales Quote created from PO.", "success"); }}
+        />
       )}
 
       {viewQuote && selectedCompany && (

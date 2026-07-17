@@ -3,7 +3,8 @@ import { MdUploadFile, MdTextSnippet, MdAdd, MdDelete, MdWarning, MdCheckCircle,
 import { parsePdf, parseText, ensureLookups } from "../api/poImportApi";
 import { getClientsByCompany, getClientById } from "../api/clientApi";
 import { createSalesOrder } from "../api/salesOrderApi";
-import { getSalesQuotesForPicker } from "../api/salesQuoteApi";
+import { createSalesQuote, getSalesQuotesForPicker } from "../api/salesQuoteApi";
+import { createDeliveryChallan } from "../api/challanApi";
 import { getAllUnits } from "../api/unitsApi";
 import { formStyles, modalSizes } from "../theme";
 import { todayYmd } from "../utils/dateInput";
@@ -26,7 +27,17 @@ const colors = {
   warningLight: "#fff3e0",
 };
 
-export default function POImportForm({ companyId, onClose, onSaved }) {
+// Per-target wiring — one PO-import wizard drives three destinations.
+// `showQuoteLink` only makes sense for orders (an order links to a quote);
+// `showPrice` adds a unit-price column for quotes (a priced document).
+const TARGET_CONFIG = {
+  salesorder: { doc: "Sales Order", verb: "Create Sales Order", dateLabel: "Order Date *", showQuoteLink: true, showPrice: false },
+  salesquote: { doc: "Sales Quote", verb: "Create Sales Quote", dateLabel: "Quote Date *", showQuoteLink: false, showPrice: true },
+  challan: { doc: "Delivery Challan", verb: "Create Challan", dateLabel: "Delivery Date *", showQuoteLink: false, showPrice: false },
+};
+
+export default function POImportForm({ companyId, target = "salesorder", onClose, onSaved }) {
+  const cfg = TARGET_CONFIG[target] || TARGET_CONFIG.salesorder;
   const [step, setStep] = useState(1); // 1=import, 2=preview
   const [importMode, setImportMode] = useState("pdf"); // "pdf" or "text"
   const [pastedText, setPastedText] = useState("");
@@ -71,8 +82,10 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
         const [clientRes, unitsRes, quoteItems] = await Promise.all([
           getClientsByCompany(companyId),
           getAllUnits().catch(() => ({ data: [] })),
-          // Page-walking helper: the server clamps pageSize at 100.
-          getSalesQuotesForPicker(companyId).catch(() => []),
+          // Quote-link picker is order-only — skip the (paged) fetch otherwise.
+          cfg.showQuoteLink
+            ? getSalesQuotesForPicker(companyId).catch(() => [])
+            : Promise.resolve([]),
         ]);
         setClients(clientRes.data);
         setUnits(unitsRes.data || []);
@@ -80,7 +93,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
       } catch { /* ignore */ }
     };
     load();
-  }, [companyId]);
+  }, [companyId, cfg.showQuoteLink]);
 
   // If the parse response carries a matchedClientId but it's not in the
   // current company's client list, fetch that one client and merge it in —
@@ -125,6 +138,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
         description: item.description || "",
         quantity: item.quantity || 1,
         unit: item.unit || "Pcs",
+        unitPrice: 0,  // priced later (only surfaced for the quote target)
       })) || []);
       setRawText(data.rawText || "");
       setMatchedFormatId(data.matchedFormatId ?? null);
@@ -174,7 +188,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
   };
 
   const addItem = () => {
-    setItems((prev) => [...prev, { id: Date.now(), description: "", quantity: 1, unit: "Pcs" }]);
+    setItems((prev) => [...prev, { id: Date.now(), description: "", quantity: 1, unit: "Pcs", unitPrice: 0 }]);
   };
 
   const removeItem = (idx) => {
@@ -220,38 +234,85 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
       const unitNames = items.map((i) => i.unit.trim()).filter(Boolean);
       await ensureLookups(descriptions, unitNames);
 
-      // Create a Sales Order from the parsed PO (quantity-only). The customer's
-      // PO number/date carry onto the order; delivery challans are raised
-      // against this order afterwards to track fulfilment.
-      const linkedQuote = salesQuoteId
-        ? quotes.find((x) => String(x.id) === String(salesQuoteId))
-        : null;
-      const payload = {
-        clientId: parseInt(selectedClientId),
-        salesQuoteId: salesQuoteId ? parseInt(salesQuoteId) : null,
-        // The order lives in its source quote's division — same inheritance
-        // the convert-to-order flow applies, so the imported order numbers
-        // from the quote's division sequence and prints with its branding.
-        divisionId: linkedQuote?.divisionId ?? null,
-        customerPoNumber: poNumber.trim() || null,
-        customerPoDate: poDate ? new Date(poDate).toISOString() : null,
-        orderDate: new Date(deliveryDate).toISOString(),
-        site: site || null,
-        isImported: true,
-        items: items.map((i) => ({
-          description: i.description.trim(),
-          // Preserve fractional quantities (KG, Litre) — Sales Order lines
-          // carry the same decimal contract as challan/invoice lines.
-          quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
-          unit: i.unit.trim() || "Pcs",
-          itemTypeId: null,
-        })),
-      };
+      // Preserve fractional quantities (KG, Litre) — every document's lines
+      // carry the same decimal contract.
+      const qty = (i) => (typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1));
+      const clientId = parseInt(selectedClientId);
+      const iso = (d) => (d ? new Date(d).toISOString() : null);
 
-      await createSalesOrder(companyId, payload);
+      if (target === "salesquote") {
+        // Quote: description + qty + unit + price (operator prices in preview).
+        // PO number/date map to the customer-enquiry reference fields — a
+        // quote has no "customer PO" field of its own.
+        await createSalesQuote(companyId, {
+          clientId,
+          divisionId: null,
+          date: iso(deliveryDate),
+          validUntil: null,
+          customerEnquiryRef: poNumber.trim() || null,
+          enquiryDate: iso(poDate),
+          gstRate: 0,
+          notes: null,
+          items: items.map((i) => ({
+            id: 0,
+            itemTypeId: null,
+            nonInventoryItemId: null,
+            description: i.description.trim(),
+            quantity: qty(i),
+            unit: i.unit.trim() || "Pcs",
+            unitPrice: Number(i.unitPrice) || 0,
+          })),
+        });
+      } else if (target === "challan") {
+        // Direct delivery challan (no sales order). Same shape the manual
+        // "New Challan" form posts; qty-only, item types classified later.
+        await createDeliveryChallan(companyId, {
+          clientId,
+          divisionId: null,
+          clientName: selectedClient?.name || null,
+          site: site || null,
+          poNumber: poNumber.trim(),
+          poDate: iso(poDate),
+          indentNo: null,
+          deliveryDate: iso(deliveryDate),
+          items: items.map((i) => ({
+            description: i.description.trim(),
+            quantity: qty(i),
+            unit: i.unit.trim() || "Pcs",
+            itemTypeId: null,
+            nonInventoryItemId: null,
+          })),
+        });
+      } else {
+        // Sales Order (default). The customer's PO number/date carry onto the
+        // order; delivery challans are raised against it afterwards to track
+        // fulfilment.
+        const linkedQuote = salesQuoteId
+          ? quotes.find((x) => String(x.id) === String(salesQuoteId))
+          : null;
+        await createSalesOrder(companyId, {
+          clientId,
+          salesQuoteId: salesQuoteId ? parseInt(salesQuoteId) : null,
+          // The order lives in its source quote's division — same inheritance
+          // the convert-to-order flow applies, so the imported order numbers
+          // from the quote's division sequence and prints with its branding.
+          divisionId: linkedQuote?.divisionId ?? null,
+          customerPoNumber: poNumber.trim() || null,
+          customerPoDate: iso(poDate),
+          orderDate: iso(deliveryDate),
+          site: site || null,
+          isImported: true,
+          items: items.map((i) => ({
+            description: i.description.trim(),
+            quantity: qty(i),
+            unit: i.unit.trim() || "Pcs",
+            itemTypeId: null,
+          })),
+        });
+      }
       onSaved();
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to create sales order.");
+      setError(err.response?.data?.error || `Failed to create ${cfg.doc.toLowerCase()}.`);
     } finally {
       setSaving(false);
     }
@@ -264,7 +325,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
       <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>
-            {step === 1 ? "Import Purchase Order" : "Review & Create Sales Order"}
+            {step === 1 ? "Import Purchase Order" : `Review & ${cfg.verb}`}
           </h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
@@ -357,20 +418,23 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
               )}
 
               {/* Quote link is asked FIRST — picking one auto-fills the client
-                  below. Optional; the list narrows once a client is set. */}
-              <div style={styles.row}>
-                <div style={{ flex: 1, minWidth: 220 }}>
-                  <label style={styles.label}>Sales Quote (optional)</label>
-                  <select style={styles.select} value={salesQuoteId} onChange={(e) => handleQuotePick(e.target.value)}>
-                    <option value="">— not linked —</option>
-                    {linkableQuotes.map((q) => (
-                      <option key={q.id} value={q.id}>
-                        Quote #{q.quoteNumber} · {q.clientName}{q.divisionName ? ` · ${q.divisionName}` : ""}{q.status ? ` · ${q.status}` : ""}
-                      </option>
-                    ))}
-                  </select>
+                  below. Order-only (a quote → order link); optional; the list
+                  narrows once a client is set. */}
+              {cfg.showQuoteLink && (
+                <div style={styles.row}>
+                  <div style={{ flex: 1, minWidth: 220 }}>
+                    <label style={styles.label}>Sales Quote (optional)</label>
+                    <select style={styles.select} value={salesQuoteId} onChange={(e) => handleQuotePick(e.target.value)}>
+                      <option value="">— not linked —</option>
+                      {linkableQuotes.map((q) => (
+                        <option key={q.id} value={q.id}>
+                          Quote #{q.quoteNumber} · {q.clientName}{q.divisionName ? ` · ${q.divisionName}` : ""}{q.status ? ` · ${q.status}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Header row: Client / Site / Delivery Date — same 2/1.5/1
                   layout as Add and Edit Challan so the import preview feels
@@ -406,7 +470,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                   )}
                 </div>
                 <div style={{ flex: 1, minWidth: 150 }}>
-                  <label style={styles.label}>Order Date *</label>
+                  <label style={styles.label}>{cfg.dateLabel}</label>
                   <input type="date" style={styles.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
                 </div>
               </div>
@@ -453,6 +517,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                       <span style={{ flex: 2.5 }}>Description *</span>
                       <span style={{ flex: 0.6, textAlign: "center" }}>Qty *</span>
                       <span style={{ flex: 1 }}>Unit</span>
+                      {cfg.showPrice && <span style={{ flex: 1, textAlign: "right" }}>Unit Price</span>}
                       <span style={{ flex: 0.3 }}></span>
                     </div>
                     {items.map((item, idx) => (
@@ -490,6 +555,18 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                             inputStyle={{ ...styles.input, padding: "0.35rem 0.5rem", fontSize: "0.85rem" }}
                           />
                         </div>
+                        {cfg.showPrice && (
+                          <div style={{ flex: 1 }}>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={item.unitPrice}
+                              onChange={(e) => handleItemChange(idx, "unitPrice", e.target.value)}
+                              style={{ ...styles.input, padding: "0.35rem 0.5rem", fontSize: "0.85rem", textAlign: "right" }}
+                            />
+                          </div>
+                        )}
                         <div style={{ flex: 0.3, display: "flex", alignItems: "center", justifyContent: "center" }}>
                           <button
                             type="button"
@@ -553,7 +630,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
               disabled={!canSubmit || saving}
               onClick={handleSubmit}
             >
-              {saving ? "Creating..." : "Create Sales Order"}
+              {saving ? "Creating..." : cfg.verb}
             </button>
           )}
         </div>

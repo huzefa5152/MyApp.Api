@@ -72,6 +72,10 @@ namespace MyApp.Api.Controllers
         }
 
         // List formats, optionally filtered by companyId and/or clientId.
+        // Tenant-scoped: a specific companyId is access-asserted; without
+        // one we scope to the caller's accessible companies (plus any
+        // legacy globals). Never leak a company's formats to a caller who
+        // can't see that company.
         [HttpGet]
         [HasPermission("poformats.manage.view")]
         public async Task<ActionResult<List<POFormatListItemDto>>> List([FromQuery] int? companyId, [FromQuery] int? clientId)
@@ -84,11 +88,25 @@ namespace MyApp.Api.Controllers
                 .AsQueryable();
 
             if (companyId.HasValue)
+            {
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
                 q = q.Where(f => f.CompanyId == companyId.Value || f.CompanyId == null);
+            }
             if (clientId.HasValue)
                 q = q.Where(f => f.ClientId == clientId.Value);
 
             var formats = await q.OrderByDescending(f => f.UpdatedAt).ToListAsync();
+
+            // When no company filter was given, restrict company-scoped
+            // rows to the caller's accessible set (globals stay visible).
+            if (!companyId.HasValue)
+            {
+                var allowed = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+                formats = formats
+                    .Where(f => f.CompanyId == null || allowed.Contains(f.CompanyId.Value))
+                    .ToList();
+            }
+
             return Ok(formats.Select(ToListItemDto).ToList());
         }
 
@@ -180,12 +198,13 @@ namespace MyApp.Api.Controllers
                 await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId.Value);
             await AssertClientAccessAsync(dto.ClientId);
 
-            // Dedup — one format per Common Client GROUP, not per
-            // (company, client) pair. Common Clients machinery ensures
-            // every Client has a ClientGroupId (single-company clients
-            // get a 1-member group). So configuring a format for any
-            // tenant's Lotte automatically covers every other tenant's
-            // Lotte too — that's the whole point of Phase 3.
+            // Dedup. Each company owns its own PO formats, so one format
+            // is allowed per (CompanyId, ClientId) — the SAME legal entity
+            // can have a distinct layout in every company that trades with
+            // it. ClientGroupId is still resolved + stored (the import
+            // matcher uses it to find the per-company client row), but it
+            // no longer forces cross-company uniqueness. Only a GLOBAL
+            // format (no CompanyId) falls back to one-per-ClientGroup.
             int? newClientGroupId = null;
             if (dto.ClientId.HasValue)
             {
@@ -194,16 +213,18 @@ namespace MyApp.Api.Controllers
                     .Select(c => c.ClientGroupId)
                     .FirstOrDefaultAsync();
 
-                // Dedup check — prefer ClientGroupId equality so we
-                // catch cross-tenant duplicates (Hakimi has a Lotte
-                // format, operator on Roshan tries to add another one).
-                // Falls back to ClientId equality only when the legacy
-                // client somehow doesn't have a group yet.
-                var existing = newClientGroupId.HasValue
-                    ? await _db.POFormats.FirstOrDefaultAsync(f => f.ClientGroupId == newClientGroupId.Value)
-                    : await _db.POFormats.FirstOrDefaultAsync(f => f.CompanyId == dto.CompanyId && f.ClientId == dto.ClientId);
+                POFormat? existing;
+                if (dto.CompanyId.HasValue)
+                    existing = await _db.POFormats.FirstOrDefaultAsync(
+                        f => f.CompanyId == dto.CompanyId.Value && f.ClientId == dto.ClientId.Value);
+                else if (newClientGroupId.HasValue)
+                    existing = await _db.POFormats.FirstOrDefaultAsync(
+                        f => f.CompanyId == null && f.ClientGroupId == newClientGroupId.Value);
+                else
+                    existing = await _db.POFormats.FirstOrDefaultAsync(
+                        f => f.CompanyId == null && f.ClientId == dto.ClientId);
                 if (existing != null)
-                    return Conflict(new { error = $"A PO format already exists for this client ('{existing.Name}'). Edit it instead of creating a duplicate — every tenant that has this client will use the same format.", existingId = existing.Id });
+                    return Conflict(new { error = $"A PO format already exists for this client ('{existing.Name}'). Edit it instead of creating a duplicate.", existingId = existing.Id });
             }
 
             var ruleSet = BuildSimpleRuleSet(dto);
@@ -247,10 +268,10 @@ namespace MyApp.Api.Controllers
                 await _access.AssertAccessAsync(CurrentUserId, format.CompanyId.Value);
             await AssertClientAccessAsync(dto.ClientId);
 
-            // Dedup on edit — same group-aware check as Create. If the
-            // operator re-assigns this format to a client that already
-            // has a format saved at the GROUP level (could be in a
-            // different tenant), surface a clear conflict.
+            // Dedup on edit — same company-aware check as Create. The
+            // format's company scope is fixed (edit can't move it between
+            // companies), so we dedup within THIS format's company. Only a
+            // GLOBAL format (no CompanyId) falls back to the group-level check.
             int? newClientGroupId = null;
             if (dto.ClientId.HasValue && dto.ClientId != format.ClientId)
             {
@@ -259,9 +280,16 @@ namespace MyApp.Api.Controllers
                     .Select(c => c.ClientGroupId)
                     .FirstOrDefaultAsync();
 
-                var dupe = newClientGroupId.HasValue
-                    ? await _db.POFormats.FirstOrDefaultAsync(f => f.Id != id && f.ClientGroupId == newClientGroupId.Value)
-                    : await _db.POFormats.FirstOrDefaultAsync(f => f.Id != id && f.CompanyId == format.CompanyId && f.ClientId == dto.ClientId);
+                POFormat? dupe;
+                if (format.CompanyId.HasValue)
+                    dupe = await _db.POFormats.FirstOrDefaultAsync(
+                        f => f.Id != id && f.CompanyId == format.CompanyId.Value && f.ClientId == dto.ClientId.Value);
+                else if (newClientGroupId.HasValue)
+                    dupe = await _db.POFormats.FirstOrDefaultAsync(
+                        f => f.Id != id && f.CompanyId == null && f.ClientGroupId == newClientGroupId.Value);
+                else
+                    dupe = await _db.POFormats.FirstOrDefaultAsync(
+                        f => f.Id != id && f.CompanyId == null && f.ClientId == dto.ClientId);
                 if (dupe != null)
                     return Conflict(new { error = $"Another PO format already exists for that client ('{dupe.Name}').", existingId = dupe.Id });
             }

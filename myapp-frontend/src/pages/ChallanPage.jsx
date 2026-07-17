@@ -5,6 +5,7 @@ import ChallanTable from "../Components/ChallanTable";
 import SearchableSelect from "../Components/SearchableSelect";
 import ChallanForm from "../Components/ChallanForm";
 import ChallanEditForm from "../Components/ChallanEditForm";
+import POImportForm from "../Components/POImportForm";
 import DivisionSelect from "../Components/DivisionSelect";
 import InvoiceForm from "../Components/InvoiceForm";
 import ViewModeToggle from "../Components/ViewModeToggle";
@@ -53,6 +54,7 @@ export default function ChallanPage() {
   const canCreate = has("challans.manage.create");
   const canUpdate = has("challans.manage.update");
   const canDelete = has("challans.manage.delete");
+  const canImportPo = canCreate && has("poformats.import.create");
   const canPrint = has("challans.print.view");
   // Client-filter dropdown calls GET /api/clients/company/{id} which is
   // gated by clients.manage.view. View-only roles (e.g. tax consultant
@@ -63,6 +65,7 @@ export default function ChallanPage() {
   const [clients, setClients] = useState([]);
   const [challans, setChallans] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editChallan, setEditChallan] = useState(null);
   const [loadingChallans, setLoadingChallans] = useState(false);
   // Generate-Bill shortcut: holds the challanId to prefill into InvoiceForm
@@ -350,6 +353,14 @@ export default function ChallanPage() {
                 <MdAdd size={18} /> New Challan
               </button>
             )}
+            {canImportPo && (
+              <button
+                style={{ ...styles.addBtn, background: colors.teal, boxShadow: "0 4px 14px rgba(0,137,123,0.25)" }}
+                onClick={() => selectedCompany && setShowImport(true)}
+              >
+                <MdUploadFile size={18} /> Import PO
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -521,6 +532,15 @@ export default function ChallanPage() {
           defaultDivisionId={divisionFilter}
           onClose={() => setShowModal(false)}
           onSaved={handleSaveChallan}
+        />
+      )}
+
+      {showImport && selectedCompany && (
+        <POImportForm
+          companyId={selectedCompany.id}
+          target="challan"
+          onClose={() => setShowImport(false)}
+          onSaved={() => { setShowImport(false); fetchChallans(selectedCompany.id, page); notify("Delivery Challan created from PO.", "success"); }}
         />
       )}
 

@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { MdUploadFile, MdCheckCircle, MdWarning, MdInfoOutline, MdBusiness } from "react-icons/md";
-import { getAllClientGroups } from "../api/clientApi";
+import { getClientsByCompany } from "../api/clientApi";
 import {
   fingerprintPdf,
   createPoFormatSimple,
   updatePoFormatSimple,
   listPoFormats,
 } from "../api/poFormatApi";
+import SearchableSelect from "./SearchableSelect";
 import { formStyles, modalSizes } from "../theme";
 
 const colors = {
@@ -28,15 +29,19 @@ const colors = {
 };
 
 /**
- * Modal for adding/editing a PO format. ONE format per legal entity
- * (= per ClientGroup) — applies in every tenant that has the client
- * as a per-company record. So the picker here lists distinct Common
- * Clients (single-company AND multi-company) instead of per-company
- * client rows. The save still posts a `clientId` (from any group
- * member); the backend auto-derives the ClientGroupId from it.
+ * Modal for adding/editing a PO format. Each company owns its own PO
+ * formats — the picker lists that company's clients (a searchable
+ * dropdown), and the format is scoped to (company, client). The save
+ * posts `companyId` + `clientId`; the backend also resolves + stores
+ * the client's ClientGroupId so the import matcher can find the right
+ * per-company client row when a PO comes in.
+ *
+ * `companyId` is the company the format belongs to (the page's selected
+ * company on create; the format's own company on edit — legacy globals
+ * fall back to the page's company just so we can list its clients).
  *
  * Add flow:
- *   1. Pick the client (one entry per legal entity — Common or not).
+ *   1. Pick the client (searchable — all clients for this company).
  *   2. Upload a sample PDF — server returns the extracted raw text so the
  *      operator can see what PdfPig sees (single-space tokenisation, etc).
  *   3. Fill the 5 label/header strings that appear in that raw text.
@@ -47,16 +52,18 @@ const colors = {
  *   - Same 5 fields, but sample upload is hidden (fingerprint is locked
  *     to whatever sample the format was created with).
  */
-export default function POFormatForm({ format, onClose, onSaved }) {
+export default function POFormatForm({ format, companyId, companyName, onClose, onSaved }) {
   const isEdit = !!format;
 
-  // groups = every distinct legal entity (single + multi-company).
-  // We track GROUPID as the user-facing selection but submit a
-  // representative member's ClientId to the existing save endpoint —
-  // backend derives ClientGroupId from that ClientId, so submission
-  // shape stays identical to the legacy per-company flow.
-  const [groups, setGroups] = useState([]);
-  const [selectedGroupId, setSelectedGroupId] = useState(null);
+  // Company this format is scoped to. On edit prefer the format's own
+  // company; legacy globals (no CompanyId) fall back to the page's
+  // selected company so we can still list clients to display/edit.
+  const formatCompanyId = format?.companyId ?? companyId ?? null;
+
+  // Per-company clients + the picked one. selectedClientId maps straight
+  // to the saved ClientId (backend derives ClientGroupId from it).
+  const [clients, setClients] = useState([]);
+  const [selectedClientId, setSelectedClientId] = useState(format?.clientId ?? null);
 
   const [name, setName] = useState(format?.name || "");
   const [isActive, setIsActive] = useState(format?.isActive ?? true);
@@ -77,70 +84,53 @@ export default function POFormatForm({ format, onClose, onSaved }) {
   const [error, setError] = useState("");
   const fileInputRef = useRef(null);
 
-  // Set of group IDs that ALREADY have a PO format. The dropdown
-  // hides these so the operator can't try to create a duplicate
-  // binding (the backend would 409 anyway, but pre-filtering makes
-  // the picker show only "free" clients). When editing, we exclude
-  // THIS format's id from the taken set so its currently-bound
-  // group stays visible / selectable.
-  const [takenGroupIds, setTakenGroupIds] = useState(() => new Set());
+  // Set of client IDs that ALREADY have a PO format IN THIS COMPANY.
+  // The dropdown hides these so the operator can't try to create a
+  // duplicate (the backend would 409 anyway, but pre-filtering shows
+  // only "free" clients). When editing, we exclude THIS format's id
+  // from the taken set so its currently-bound client stays selectable.
+  const [takenClientIds, setTakenClientIds] = useState(() => new Set());
 
-  // Load every Client Group + every existing PO format once. The
-  // picker lists each group as one "Common Client" entry regardless
-  // of how many companies have the client — single-company groups
-  // are still pickable so uncommon clients can have a format too.
-  // Already-bound groups are filtered out below.
+  // Load this company's clients + its existing PO formats. The picker
+  // lists every client for the company; clients that already have a
+  // format in this company are filtered out below.
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (!formatCompanyId) {
+        setClients([]);
+        setTakenClientIds(new Set());
+        return;
+      }
       try {
-        const [{ data: groupData }, { data: formatData }] = await Promise.all([
-          getAllClientGroups(),
-          listPoFormats({}),
+        const [{ data: clientData }, { data: formatData }] = await Promise.all([
+          getClientsByCompany(formatCompanyId),
+          listPoFormats({ companyId: formatCompanyId }),
         ]);
         if (cancelled) return;
 
-        setGroups(Array.isArray(groupData) ? groupData : []);
+        setClients(Array.isArray(clientData) ? clientData : []);
 
         const taken = new Set();
         for (const f of (formatData || [])) {
-          if (!f.clientGroupId) continue;
-          if (format?.id && f.id === format.id) continue; // editing this one — keep its group selectable
-          taken.add(f.clientGroupId);
+          if (!f.clientId || f.companyId !== formatCompanyId) continue;
+          if (format?.id && f.id === format.id) continue; // editing this one — keep its client selectable
+          taken.add(f.clientId);
         }
-        setTakenGroupIds(taken);
-
-        // On EDIT, pre-select the group via the saved ClientId →
-        // group.thisCompanyClientId / group members lookup. The
-        // backend already keeps POFormat.ClientGroupId in sync on
-        // save, but list endpoints surface ClientId alongside it,
-        // so we pre-select by walking the groups list.
-        if (format?.clientId) {
-          // ClientGroupId might already be on the format payload —
-          // prefer it when present.
-          if (format?.clientGroupId) {
-            setSelectedGroupId(Number(format.clientGroupId));
-          } else {
-            // Fallback: find the group whose representative member
-            // matches the saved ClientId. (Not always perfect but
-            // gives the operator a sensible default to confirm.)
-            const match = groupData.find((g) => g.thisCompanyClientId === format.clientId);
-            if (match) setSelectedGroupId(match.groupId);
-          }
-        }
+        setTakenClientIds(taken);
       } catch {
         if (!cancelled) {
-          setGroups([]);
-          setTakenGroupIds(new Set());
+          setClients([]);
+          setTakenClientIds(new Set());
         }
       }
     })();
     return () => { cancelled = true; };
-  }, [format?.id, format?.clientId, format?.clientGroupId]);
+  }, [formatCompanyId, format?.id]);
 
-  // Visible options: free groups + (when editing) the currently-bound one.
-  const availableGroups = groups.filter(
-    (g) => !takenGroupIds.has(g.groupId) || g.groupId === selectedGroupId
+  // Visible options: free clients + (when editing) the currently-bound one.
+  const availableClients = clients.filter(
+    (c) => !takenClientIds.has(c.id) || c.id === selectedClientId
   );
 
   // Preload the 5 fields when editing — parse them out of RuleSetJson
@@ -160,9 +150,8 @@ export default function POFormatForm({ format, onClose, onSaved }) {
     }
   }, [format]);
 
-  // Lookup helper — finds the currently-selected group object so we
-  // can read its representative ClientId and DisplayName.
-  const selectedGroup = groups.find((g) => g.groupId === selectedGroupId) || null;
+  // Lookup helper — the currently-selected client object.
+  const selectedClient = clients.find((c) => c.id === selectedClientId) || null;
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
@@ -172,17 +161,17 @@ export default function POFormatForm({ format, onClose, onSaved }) {
     setExistingMatchName(null);
     setError("");
     try {
-      // Fingerprint is global — no companyId scoping. Pass undefined
-      // so the API call doesn't add the param at all.
-      const res = await fingerprintPdf(file);
+      // Scope the "already saved?" check to this company so a match only
+      // fires against a format this company owns (or a legacy global).
+      const res = await fingerprintPdf(file, formatCompanyId);
       setRawText(res.data.rawText || "");
       if (res.data.matchedFormat && res.data.isExactMatch) {
         setExistingMatchName(res.data.matchedFormat.name);
       }
       setUploaded(true);
-      // Auto-suggest name from the selected Common Client.
-      if (!name && selectedGroup) {
-        setName(`${selectedGroup.displayName} PO`);
+      // Auto-suggest name from the selected client.
+      if (!name && selectedClient) {
+        setName(`${selectedClient.name} PO`);
       }
     } catch (err) {
       setError(err.response?.data?.error || "Failed to read PDF.");
@@ -194,10 +183,8 @@ export default function POFormatForm({ format, onClose, onSaved }) {
   const handleSave = async () => {
     setError("");
 
-    if (!selectedGroupId) return setError("Pick the client this format applies to.");
-    if (!selectedGroup?.thisCompanyClientId) {
-      return setError("This client has no per-company records yet — create one first via Clients.");
-    }
+    if (!formatCompanyId) return setError("Select a company first.");
+    if (!selectedClientId) return setError("Pick the client this format applies to.");
     if (!name.trim()) return setError("Enter a name for this format.");
     if (!descriptionHeader.trim() || !quantityHeader.trim() || !unitHeader.trim()) {
       return setError("Fill the three column headers (Description, Quantity, Unit).");
@@ -206,17 +193,13 @@ export default function POFormatForm({ format, onClose, onSaved }) {
       return setError("Upload a sample PDF so we can lock in the layout fingerprint.");
     }
 
-    // Backend auto-derives ClientGroupId from this ClientId — so picking
-    // ANY group member is equivalent (they all share the same group).
-    const representativeClientId = selectedGroup.thisCompanyClientId;
-
     setSaving(true);
     try {
       if (isEdit) {
         await updatePoFormatSimple(format.id, {
           name: name.trim(),
           isActive,
-          clientId: representativeClientId,
+          clientId: selectedClientId,
           poNumberLabel: poNumberLabel.trim(),
           poDateLabel: poDateLabel.trim(),
           descriptionHeader: descriptionHeader.trim(),
@@ -230,10 +213,9 @@ export default function POFormatForm({ format, onClose, onSaved }) {
       } else {
         await createPoFormatSimple({
           name: name.trim(),
-          // CompanyId left null — formats are global (one per legal
-          // entity, applied in every tenant that has the client).
-          companyId: null,
-          clientId: representativeClientId,
+          // Company-scoped — each company owns its own PO formats.
+          companyId: formatCompanyId,
+          clientId: selectedClientId,
           rawText,
           poNumberLabel: poNumberLabel.trim(),
           poDateLabel: poDateLabel.trim(),
@@ -275,56 +257,59 @@ export default function POFormatForm({ format, onClose, onSaved }) {
             </div>
           )}
 
-          {/* Client + name. The "Client" picker lists every distinct
-              legal entity (one per ClientGroup) — picking one binds
-              the format to that entity globally, so it applies in
-              EVERY tenant that has them as a per-company client.
-              Clients that ALREADY have a PO format saved are hidden
-              (one format per legal entity is the rule). */}
+          {/* Which company this format belongs to. Set by the page's
+              company dropdown — every format is owned by one company. */}
+          {companyName && (
+            <div style={styles.companyChip}>
+              <MdBusiness size={15} /> {companyName}
+            </div>
+          )}
+
+          {/* Client + name. The "Client" picker is a searchable dropdown
+              of every client for the selected company. Picking one scopes
+              the format to (company, client). Clients that ALREADY have a
+              PO format in this company are hidden (one format per client
+              per company is the rule). */}
           <div style={styles.row}>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 220 }}>
               <label style={styles.label}>Client *</label>
-              <select
-                style={styles.input}
-                value={selectedGroupId ?? ""}
-                onChange={(e) => setSelectedGroupId(e.target.value === "" ? null : Number(e.target.value))}
-              >
-                <option value="">— Select client —</option>
-                {availableGroups.map((g) => (
-                  <option key={g.groupId} value={g.groupId}>
-                    {g.displayName}
-                    {g.companyCount > 1 ? ` · ${g.companyCount} companies` : ""}
-                    {g.ntn ? ` · NTN ${g.ntn}` : ""}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                items={availableClients}
+                value={selectedClientId ?? ""}
+                onChange={(id) => setSelectedClientId(id === "" || id == null ? null : Number(id))}
+                valueKey="id"
+                labelKey="name"
+                searchKeys={["name", "ntn"]}
+                placeholder="Select client…"
+                disabled={!formatCompanyId}
+              />
               {/* Visible-count hint when some clients are hidden because
                   they already have a format. Helps the operator
                   understand "where's <X>?" when scanning the list. */}
-              {!isEdit && groups.length > availableGroups.length && (
+              {!isEdit && clients.length > availableClients.length && (
                 <div style={{ ...styles.hint, marginTop: "0.3rem" }}>
-                  {groups.length - availableGroups.length} client
-                  {groups.length - availableGroups.length !== 1 ? "s are" : " is"} hidden — they already have a PO format saved.
+                  {clients.length - availableClients.length} client
+                  {clients.length - availableClients.length !== 1 ? "s are" : " is"} hidden — they already have a PO format in this company.
                 </div>
               )}
-              {!isEdit && availableGroups.length === 0 && groups.length > 0 && (
+              {!isEdit && availableClients.length === 0 && clients.length > 0 && (
                 <div style={{ ...styles.hint, color: colors.warning, marginTop: "0.3rem" }}>
-                  Every existing client already has a PO format. Edit the existing one instead, or create a new client first.
+                  Every client in this company already has a PO format. Edit the existing one instead, or add a new client first.
                 </div>
               )}
-              {selectedGroup && selectedGroup.companyCount > 1 && (
-                <div style={{ ...styles.hint, color: colors.primary, marginTop: "0.3rem" }}>
-                  This format will apply across {selectedGroup.companyNames?.join(", ") || `${selectedGroup.companyCount} companies`}.
+              {!isEdit && formatCompanyId && clients.length === 0 && (
+                <div style={{ ...styles.hint, color: colors.warning, marginTop: "0.3rem" }}>
+                  This company has no clients yet — add one under Clients first.
                 </div>
               )}
             </div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 220 }}>
               <label style={styles.label}>Format name *</label>
               <input
                 style={styles.input}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Lotte Kolson PO"
+                placeholder="e.g. Client PO"
               />
             </div>
           </div>
