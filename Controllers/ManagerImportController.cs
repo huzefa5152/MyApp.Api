@@ -42,7 +42,22 @@ namespace MyApp.Api.Controllers
 
         /// <summary>
         /// Upload the export .zip and run the import. multipart/form-data:
-        /// file=&lt;zip&gt;, companyName, dryRun (default true), fresh (default false).
+        /// file=&lt;zip&gt;, companyName, dryRun (default true), fresh (default false),
+        /// perpetual (default false).
+        /// <para>
+        /// Snapshot (perpetual=false): documents + the trial balance loaded as
+        /// chart-of-accounts opening balances, GL posting left OFF.
+        /// </para>
+        /// <para>
+        /// Full General Ledger (perpetual=true): documents + a journal entry per
+        /// document + inter-account transfers + a migration true-up, so the Chart
+        /// of Accounts matches Manager with GL posting ENABLED. Requires the
+        /// trialBalance file AND a "perpetual/" folder in the zip (chart-of-accounts,
+        /// bank/BS starting balances, resolved tax codes + non-inventory items).
+        /// If companyId is supplied, ONLY the CoA + GL are (re)built on that existing
+        /// company (documents untouched) — this is the fix for a company whose GL was
+        /// enabled after a snapshot import and no longer matches Manager.
+        /// </para>
         /// Returns the per-entity counts + AR/AP reconciliation.
         /// </summary>
         [HttpPost("run")]
@@ -52,7 +67,8 @@ namespace MyApp.Api.Controllers
             [FromForm] string? companyName = null,
             [FromForm] int? companyId = null,
             [FromForm] bool dryRun = true,
-            [FromForm] bool fresh = false)
+            [FromForm] bool fresh = false,
+            [FromForm] bool perpetual = false)
         {
             // Read files explicitly by field name — robust with multiple file
             // parts + form fields (parameter binding of a second IFormFile is
@@ -77,6 +93,10 @@ namespace MyApp.Api.Controllers
 
             var summary = new Dictionary<string, JsonDocument>(StringComparer.OrdinalIgnoreCase);
             var detail = new Dictionary<string, JsonDocument>(StringComparer.OrdinalIgnoreCase);
+            // Perpetual-GL reference data (files under a "perpetual/" folder):
+            // chart-of-accounts, bank/BS starting balances, resolved tax codes +
+            // non-inventory items. Only consumed when perpetual=true.
+            var refDocs = new Dictionary<string, JsonDocument>(StringComparer.OrdinalIgnoreCase);
             // Document-attachment blob bytes (files under an "attachments/" folder),
             // keyed by filename to match the attachments.json manifest "file" refs.
             var attachmentBytes = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
@@ -104,13 +124,17 @@ namespace MyApp.Api.Controllers
                     }
                     if (!entry.FullName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) continue;
                     var name = Path.GetFileNameWithoutExtension(entry.Name);   // e.g. "sales-invoices"
-                    // detail files live under a ".../detail/" segment; everything else is a summary list.
+                    // detail files live under a ".../detail/" segment; perpetual-GL
+                    // reference data under a ".../perpetual/" segment; everything else
+                    // is a summary list.
                     var isDetail = path.Contains("/detail/", StringComparison.OrdinalIgnoreCase)
                                    || path.StartsWith("detail/", StringComparison.OrdinalIgnoreCase);
+                    var isRef = path.Contains("/perpetual/", StringComparison.OrdinalIgnoreCase)
+                                || path.StartsWith("perpetual/", StringComparison.OrdinalIgnoreCase);
                     JsonDocument doc;
                     await using (var es = entry.Open())
                         doc = await JsonDocument.ParseAsync(es);
-                    (isDetail ? detail : summary)[name] = doc;
+                    (isRef ? refDocs : isDetail ? detail : summary)[name] = doc;
                 }
             }
             catch (InvalidDataException)
@@ -127,6 +151,59 @@ namespace MyApp.Api.Controllers
 
             try
             {
+                // ── Full General Ledger (perpetual) import ────────────────────
+                // Documents + a journal entry per document + inter-account transfers
+                // + a migration true-up, so the Chart of Accounts matches Manager
+                // with GL posting ENABLED. Needs the trial balance + the perpetual/
+                // reference data.
+                if (perpetual)
+                {
+                    if (tbText == null)
+                        return BadRequest(new { error = "Full-GL import needs the Manager Trial Balance (.txt) — upload it alongside the .zip." });
+                    // chart-of-accounts may live under perpetual/ or fall back to the summary list.
+                    if (!refDocs.ContainsKey("chart-of-accounts") && summary.TryGetValue("chart-of-accounts", out var coaSum))
+                        refDocs["chart-of-accounts"] = coaSum;
+                    if (!refDocs.ContainsKey("chart-of-accounts"))
+                        return BadRequest(new { error = "Full-GL import needs the 'perpetual/' reference data in the zip (chart-of-accounts, starting balances, resolved tax/non-inventory). Re-export with the perpetual option." });
+
+                    if (companyId is int existId)
+                    {
+                        // Existing company: its documents are already imported — rebuild
+                        // ONLY the CoA + journal entries + true-up (documents untouched).
+                        // dryRun rolls back. This fixes a company whose GL was enabled
+                        // after a snapshot import and no longer matches Manager.
+                        var glOnly = await _import.BuildPerpetualGlAsync(existId, tbText, summary, detail, refDocs, dryRun);
+                        _logger.LogInformation("Manager perpetual GL rebuild ({Mode}) on existing company {CompanyId}", dryRun ? "dry-run" : "commit", existId);
+                        return Ok(glOnly);
+                    }
+
+                    // New company. A true dry-run isn't possible (creating then rolling
+                    // back the company leaves nothing for the GL build to post against),
+                    // so preview the snapshot + note that the full GL builds on commit.
+                    if (dryRun)
+                    {
+                        var pv = await _import.RunAsync(summary, detail, companyName?.Trim(), null, true, fresh, CurrentUserId, null, null);
+                        var tbPv = _import.PreviewTrialBalance(tbText);
+                        foreach (var kv in tbPv.Created) pv.Created[kv.Key] = kv.Value;
+                        pv.Notes.AddRange(tbPv.Notes);
+                        pv.Notes.Add("Full General Ledger (a journal entry per document + inter-account transfers + true-up) will be built on COMMIT — the Chart of Accounts will match Manager with GL posting enabled.");
+                        return Ok(pv);
+                    }
+
+                    // Commit: import the documents, then build the perpetual GL on top.
+                    var attB = attachmentBytes.Count > 0 ? attachmentBytes : null;
+                    var docs = await _import.RunAsync(summary, detail, companyName?.Trim(), null, false, fresh, CurrentUserId,
+                        attB, attB != null ? _attachments.Root : null);
+                    var gl = await _import.BuildPerpetualGlAsync(docs.CompanyId, tbText, summary, detail, refDocs, false);
+                    // Surface both the document counts and the GL counts in one report.
+                    foreach (var kv in docs.Created) gl.Created.TryAdd(kv.Key, kv.Value);
+                    gl.Notes.InsertRange(0, docs.Notes);
+                    _logger.LogInformation("Manager perpetual GL import (commit) into new company {CompanyId} \"{Name}\": {@Created}",
+                        gl.CompanyId, gl.CompanyName, gl.Created);
+                    return Ok(gl);
+                }
+
+                // ── Snapshot import (documents + trial-balance opening balances) ──
                 // Attachments only apply on a commit (dry-run has no company to file
                 // them against, and rolls back). Blobs land in the app's data/attachments.
                 var attBytes = (!dryRun && attachmentBytes.Count > 0) ? attachmentBytes : null;
@@ -171,6 +248,7 @@ namespace MyApp.Api.Controllers
             {
                 foreach (var d in summary.Values) d.Dispose();
                 foreach (var d in detail.Values) d.Dispose();
+                foreach (var d in refDocs.Values) d.Dispose();
             }
         }
     }

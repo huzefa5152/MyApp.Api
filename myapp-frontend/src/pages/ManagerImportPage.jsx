@@ -28,6 +28,10 @@ export default function ManagerImportPage() {
   const [companyId, setCompanyId] = useState("");
   const [dryRun, setDryRun] = useState(true);
   const [fresh, setFresh] = useState(false);
+  // Full General Ledger (perpetual): build a journal entry per document + true-up
+  // so the CoA matches Manager with GL posting ENABLED (needs the trial balance +
+  // a perpetual/ folder in the zip). Off = snapshot (opening balances, GL off).
+  const [perpetual, setPerpetual] = useState(false);
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState(null);
 
@@ -47,7 +51,7 @@ export default function ManagerImportPage() {
         file, trialBalance,
         companyName: companyName.trim(),
         companyId: existing ? Number(companyId) : undefined,
-        dryRun, fresh,
+        dryRun, fresh, perpetual,
       });
       setReport(data);
       notify(data.dryRun ? "Dry run complete — nothing persisted." : "Import committed.", "success");
@@ -123,6 +127,9 @@ export default function ManagerImportPage() {
         <div style={{ display: "flex", gap: "1.2rem", flexWrap: "wrap", alignItems: "center" }}>
           <label style={st.check}><input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} disabled={busy} /> Dry run (validate, roll back)</label>
           <label style={st.check}><input type="checkbox" checked={fresh} onChange={(e) => setFresh(e.target.checked)} disabled={busy} /> Fresh (wipe existing data first)</label>
+          <label style={st.check} title="Build the full General Ledger (a journal entry per document + true-up) so the Chart of Accounts matches Manager with GL posting ENABLED. Requires the Trial Balance + a perpetual/ folder in the zip. On an existing company, only the CoA + GL are rebuilt (documents untouched).">
+            <input type="checkbox" checked={perpetual} onChange={(e) => setPerpetual(e.target.checked)} disabled={busy} /> Full General Ledger (match Manager with GL on)
+          </label>
         </div>
 
         <button

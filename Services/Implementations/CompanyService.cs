@@ -281,15 +281,19 @@ namespace MyApp.Api.Services.Implementations
                 company.CurrentSalesOrderNumber = 0;
             }
 
-            // Note sequences — same lock per type: changeable only while the
-            // company has no notes of that type yet (mirrors invoices/challans).
-            var hasDebitNotes = await _invoiceRepo.HasNotesForCompanyAsync(id, 9);
+            // Note sequences — same lock per type, scoped to COMPANY-LEVEL notes
+            // (DivisionId == null), mirroring invoices/challans above. Division-tagged
+            // notes draw from their division's own sequence and must NOT freeze the
+            // company field — otherwise an all-division-scoped import (e.g. Manager.io,
+            // where every credit note belongs to a division) would leave the company
+            // starting number stuck at 1 and un-editable.
+            var hasDebitNotes = await _context.Invoices.AnyAsync(i => i.CompanyId == id && i.DivisionId == null && i.DocumentType == 9);
             if (!hasDebitNotes)
             {
                 company.StartingDebitNoteNumber = dto.StartingDebitNoteNumber > 0 ? dto.StartingDebitNoteNumber : 1;
                 company.CurrentDebitNoteNumber = 0;
             }
-            var hasCreditNotes = await _invoiceRepo.HasNotesForCompanyAsync(id, 10);
+            var hasCreditNotes = await _context.Invoices.AnyAsync(i => i.CompanyId == id && i.DivisionId == null && i.DocumentType == 10);
             if (!hasCreditNotes)
             {
                 company.StartingCreditNoteNumber = dto.StartingCreditNoteNumber > 0 ? dto.StartingCreditNoteNumber : 1;
