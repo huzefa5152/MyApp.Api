@@ -5,7 +5,8 @@ Runs on the machine where Manager Desktop is open, with the target business
 loaded and an Access Token minted (Settings → Access Tokens). Pulls everything
 the MyApp "Manager.io Import" page needs and writes a single upload-ready .zip:
 
-    <outdir>/<business>.zip   (contains {entity}.json + detail/{entity}.json)
+    <outdir>/<business>.zip   (contains {entity}.json + detail/{entity}.json +
+                               perpetual/ reference data for the Full-GL import)
 
 Then, on the MyApp Import page, upload that .zip (+ optionally the Manager
 Trial Balance .txt you export from Reports → Trial Balance → Copy to clipboard)
@@ -67,6 +68,10 @@ def main(argv):
     ap.add_argument("--base", default=DEFAULT_BASE)
     ap.add_argument("--outdir", default="data/manager-export")
     ap.add_argument("--workers", type=int, default=6)
+    ap.add_argument("--no-perpetual", action="store_true",
+                    help="Skip the perpetual-GL reference data (starting balances + resolved "
+                         "tax codes / non-inventory items). Without it the zip supports only "
+                         "the snapshot import, not the 'Full General Ledger' option.")
     args = ap.parse_args(argv)
     base, key = args.base.rstrip("/"), args.key
 
@@ -125,10 +130,11 @@ def main(argv):
         print(f"  list {e:26} {len(summary[e])}")
 
     # 2) per-record detail (parallel), for entities that have a -form endpoint
+    detail_data = {}   # entity -> [detail objects]  (kept for the perpetual ref pull)
     for e, form in DETAIL_FORM.items():
         keys = [r["key"] for r in summary.get(e, []) if isinstance(r, dict) and r.get("key")]
         if not keys:
-            json.dump([], open(os.path.join(detaildir, e + ".json"), "w", encoding="utf-8")); continue
+            json.dump([], open(os.path.join(detaildir, e + ".json"), "w", encoding="utf-8")); detail_data[e] = []; continue
         results, done, t0 = {}, 0, time.time()
         with ThreadPoolExecutor(max_workers=args.workers) as ex:
             futs = {ex.submit(get, f"{form}/{k}"): k for k in keys}
@@ -138,7 +144,52 @@ def main(argv):
                     print(f"    detail {e}: {done}/{len(keys)} ({done/max(0.1,time.time()-t0):.0f}/s)")
         ordered = [results[k] for k in keys if k in results]
         json.dump(ordered, open(os.path.join(detaildir, e + ".json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        detail_data[e] = ordered
         print(f"  detail {e:26} {len(ordered)}")
+
+    # 2.5) perpetual-GL reference data → perpetual/  (makes the zip full-GL-ready,
+    #      so the Import page's "Full General Ledger" option can match Manager with
+    #      GL posting enabled). Small: starting balances + the tax codes / non-inv
+    #      items actually used in the documents, resolved to their rate + accounts.
+    #      Skip with --no-perpetual. See MANAGER_IO_MIGRATION_GUIDE.md §11.
+    if not args.no_perpetual:
+        perpdir = os.path.join(outdir, "perpetual")
+        os.makedirs(perpdir, exist_ok=True)
+        def savep(name, obj):
+            json.dump(obj, open(os.path.join(perpdir, name + ".json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        # chart of accounts — copy the summary list so the ref folder is self-contained
+        savep("chart-of-accounts", summary.get("chart-of-accounts", []))
+        # starting balances (bank/cash + balance-sheet)
+        for name, ep in (("bank-starting-balances", "bank-or-cash-account-starting-balance-list"),
+                         ("bs-starting-balances", "balance-sheet-account-starting-balance-list")):
+            try:
+                savep(name, rows(get(f"{ep}?pageSize=1000")))
+            except Exception as ex:  # noqa
+                savep(name, []); print(f"  perpetual {name}: failed ({ex})")
+        # resolve tax codes + non-inventory items USED on document lines
+        tax_guids, item_guids = set(), set()
+        for e in ("sales-invoices", "purchase-invoices", "credit-notes", "debit-notes"):
+            for doc in detail_data.get(e, []):
+                for ln in (doc.get("Lines", []) if isinstance(doc, dict) else []):
+                    if ln.get("TaxCode"): tax_guids.add(ln["TaxCode"])
+                    if ln.get("Item"): item_guids.add(ln["Item"])
+        tax = {}
+        for g in tax_guids:
+            try:
+                f = get(f"tax-code-form/{g}")
+                tax[g] = {"name": f.get("Name"), "rate": f.get("Rate"), "account": f.get("Account")}
+            except Exception:  # noqa
+                pass
+        ni = {}
+        for g in item_guids:
+            try:
+                f = get(f"non-inventory-item-form/{g}")
+                ni[g] = {"name": f.get("ItemName") or f.get("Name"), "sale": f.get("SaleItemAccount"), "purchase": f.get("PurchaseItemAccount")}
+            except Exception:  # noqa
+                pass
+        savep("taxcodes-resolved", tax)
+        savep("noninv-resolved", ni)
+        print(f"  perpetual ref: {len(tax)} tax code(s), {len(ni)} non-inv item(s), starting balances")
 
     # 2.5) document attachments (best-effort). Manager stores attachments as
     #      objects; the exact form fields aren't in the OpenAPI, so extraction is

@@ -30,6 +30,10 @@ string companyName = GetOpt("--company-name") ?? "Al-Qahera Trading Co.";
 string? tbPath = GetOpt("--trial-balance");
 bool perpetual = args.Contains("--build-perpetual");
 string? refDir = GetOpt("--ref");
+// GL-only rebuild target: with --build-perpetual, pass --company-id N to
+// (re)build the CoA + GL + true-up on an EXISTING company WITHOUT re-importing
+// its documents. Wipes/rebuilds only CoA + journal entries; documents untouched.
+int? existingCompanyId = int.TryParse(GetOpt("--company-id"), out var _cid) ? _cid : (int?)null;
 // Where document-attachment blobs get written (the app's data/attachments dir).
 // Defaults to <repo>/data/attachments so a locally-run import lands where the
 // dev backend serves them. Attachment blobs themselves live in <exportDir>/attachments/.
@@ -81,17 +85,32 @@ try
         if (tbPath == null) { Console.Error.WriteLine("--trial-balance <path> is required for --build-perpetual."); return 2; }
         var summary = Load(exportDir); var detail = Load(detailDir); var refd = Load(refDir);
         var tbText = await File.ReadAllTextAsync(tbPath);
-        // 1) Load the documents (invoices/bills/receipts/payments/notes/quotes/…)
-        //    so every document screen is populated — always committed (the GL
-        //    build below needs the company + docs to exist).
-        var attBytes = LoadAttachmentBytes(exportDir);
-        if (attBytes != null) Console.WriteLine($"   attachments: {attBytes.Count} blob(s) found → {attachmentsRoot}");
-        Console.WriteLine($"== Perpetual GL — step 1: documents ==  company=\"{companyName}\"  (summary {summary.Count}, detail {detail.Count})");
-        var docs = await svc.RunAsync(summary, detail, companyName, targetCompanyId: null, dryRun: false, fresh: true, callerUserId: null, attBytes, attachmentsRoot);
-        Console.WriteLine($"   documents loaded into company id={docs.CompanyId}");
-        // 2) Build the perpetual GL (CoA + journal entries + transfers + cutover).
-        Console.WriteLine($"== Perpetual GL — step 2: chart of accounts + journal entries ==  dryRun={dryRun}  (ref {refd.Count})");
-        r = await svc.BuildPerpetualGlAsync(docs.CompanyId, tbText, summary, detail, refd, dryRun);
+        int targetCompanyId;
+        if (existingCompanyId is int existId)
+        {
+            // GL-ONLY rebuild on an existing company: DO NOT re-import documents.
+            // BuildPerpetualGlAsync wipes/rebuilds only the CoA + journal entries
+            // and trues-up openings to the trial balance — documents are untouched.
+            var existing = await db.Companies.FirstOrDefaultAsync(c => c.Id == existId)
+                ?? throw new InvalidOperationException($"Company id={existId} not found.");
+            Console.WriteLine($"== Perpetual GL (GL-ONLY, existing company) ==  id={existId} \"{existing.Name}\"  dryRun={dryRun}");
+            targetCompanyId = existId;
+        }
+        else
+        {
+            // 1) Load the documents (invoices/bills/receipts/payments/notes/quotes/…)
+            //    so every document screen is populated — always committed (the GL
+            //    build below needs the company + docs to exist).
+            var attBytes = LoadAttachmentBytes(exportDir);
+            if (attBytes != null) Console.WriteLine($"   attachments: {attBytes.Count} blob(s) found → {attachmentsRoot}");
+            Console.WriteLine($"== Perpetual GL — step 1: documents ==  company=\"{companyName}\"  (summary {summary.Count}, detail {detail.Count})");
+            var docs = await svc.RunAsync(summary, detail, companyName, targetCompanyId: null, dryRun: false, fresh: true, callerUserId: null, attBytes, attachmentsRoot);
+            Console.WriteLine($"   documents loaded into company id={docs.CompanyId}");
+            targetCompanyId = docs.CompanyId;
+        }
+        // Build the perpetual GL (CoA + journal entries + transfers + cutover).
+        Console.WriteLine($"== Perpetual GL — chart of accounts + journal entries ==  dryRun={dryRun}  (ref {refd.Count})");
+        r = await svc.BuildPerpetualGlAsync(targetCompanyId, tbText, summary, detail, refd, dryRun);
     }
     else if (tbPath != null)
     {

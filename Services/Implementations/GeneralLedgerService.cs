@@ -63,6 +63,26 @@ namespace MyApp.Api.Services.Implementations
             var company = await _context.Companies.FirstOrDefaultAsync(c => c.Id == companyId)
                 ?? throw new InvalidOperationException("Company not found.");
 
+            // GUARD — Manager.io snapshot import: a snapshot loads the trial balance
+            // as chart-of-accounts OPENING balances with GL posting OFF, precisely so
+            // the imported documents (which carry no journal entries) don't
+            // double-count. Enabling GL here backfills those same documents ON TOP of
+            // the opening balances → the P&L roughly doubles. The signature is:
+            // migrated documents + non-zero opening balances + no GL cutover date
+            // (a perpetual build sets a GlLockDate; a fresh company has no openings).
+            // Block it and point to the correct path — re-import with "Full General
+            // Ledger", which rebuilds the ledger and trues up to match Manager.
+            if (company.GlLockDate == null
+                && await _context.Invoices.AnyAsync(i => i.CompanyId == companyId && i.IsMigrated)
+                && await _context.Accounts.AnyAsync(a => a.CompanyId == companyId && a.OpeningBalance != 0m))
+            {
+                throw new InvalidOperationException(
+                    "This company was imported as a Manager.io snapshot (documents + trial-balance opening balances), " +
+                    "so enabling GL now would post the imported documents on top of those opening balances and double-count. " +
+                    "Use Manager.io Import → \"Full General Ledger\" instead — it rebuilds the ledger and trues up so the " +
+                    "Chart of Accounts matches Manager with GL posting enabled.");
+            }
+
             var seeded = 0;
             if (!await _context.Accounts.AnyAsync(a => a.CompanyId == companyId))
                 seeded = await _seeder.SeedWholesaleAsync(companyId);

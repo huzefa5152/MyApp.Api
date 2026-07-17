@@ -978,8 +978,15 @@ namespace MyApp.Api.Services.Implementations
             (company.StartingSalesQuoteNumber, company.CurrentSalesQuoteNumber) = Next(quote.GetValueOrDefault(0), company.StartingSalesQuoteNumber, company.CurrentSalesQuoteNumber);
             (company.StartingSalesOrderNumber, company.CurrentSalesOrderNumber) = Next(order.GetValueOrDefault(0), company.StartingSalesOrderNumber, company.CurrentSalesOrderNumber);
             (company.StartingChallanNumber, company.CurrentChallanNumber) = Next(challan.GetValueOrDefault(0), company.StartingChallanNumber, company.CurrentChallanNumber);
-            (company.StartingCreditNoteNumber, company.CurrentCreditNoteNumber) = Next(cn.GetValueOrDefault(0), company.StartingCreditNoteNumber, company.CurrentCreditNoteNumber);
-            (company.StartingDebitNoteNumber, company.CurrentDebitNoteNumber) = Next(dn.GetValueOrDefault(0), company.StartingDebitNoteNumber, company.CurrentDebitNoteNumber);
+            // Credit/Debit notes are typically ALL division-scoped in Manager (no
+            // company-wide note), so the per-division sequences above get seeded but
+            // the company-wide one would restart at 1 — misleading on the company
+            // card and it'd re-issue #1 for a company-wide note. Seed the company-wide
+            // start from the OVERALL max across every division so it continues the
+            // sequence instead of restarting. (0 notes → stays at the default, so
+            // debit notes with none imported correctly remain at 1.)
+            (company.StartingCreditNoteNumber, company.CurrentCreditNoteNumber) = Next(cn.Values.DefaultIfEmpty(0).Max(), company.StartingCreditNoteNumber, company.CurrentCreditNoteNumber);
+            (company.StartingDebitNoteNumber, company.CurrentDebitNoteNumber) = Next(dn.Values.DefaultIfEmpty(0).Max(), company.StartingDebitNoteNumber, company.CurrentDebitNoteNumber);
             (company.StartingPurchaseBillNumber, company.CurrentPurchaseBillNumber) = Next(billMax, company.StartingPurchaseBillNumber, company.CurrentPurchaseBillNumber);
             await _db.SaveChangesAsync();
         }
