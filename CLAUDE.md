@@ -115,6 +115,8 @@ in the sidebar. `python scripts/verify_permission_sections.py` enforces this
 - Long names: `display: "-webkit-box"; WebkitLineClamp: 2; WebkitBoxOrient: "vertical"` — DO NOT use `whiteSpace: "nowrap"` + `textOverflow: "ellipsis"` on user-supplied strings (it collapsed "MEKO FABRICS" and "MEKO DENIM" into identical-looking rows, see dashboard incident 2026-05-13)
 - Tap targets ≥ 44×44 px
 - Picker dropdowns: full-width on phone (`flex: 1`), capped on desktop (`maxWidth: 260`)
+- Icon buttons: **always verify the icon actually renders** before shipping (DOM-measure the `svg` width > 0, or reload) — a green build is not visual proof; screenshots are broken on this machine. For NEW fixed-size icon-only buttons prefer the house pattern `display: "grid", placeItems: "center"` with a fixed `width`/`height` (copy `iconBtn` from `WithholdingTaxReceiptsPage.jsx`) and pass an explicit `size` — it's the convention and a cheap hedge against the rare flex/SVG sizing quirk. (An audit of 115 icon buttons found 0 real collapse bugs, so `inline-flex` is NOT broken — don't go refactoring existing inline-flex icon buttons.)
+- Reuse existing filter/select styling — pass `style={dropdownStyles.base}` to shared components like `DivisionSelect` (a bare `<DivisionSelect>` renders an unstyled native `<select>`).
 
 ### 4. Data integrity
 
@@ -299,6 +301,7 @@ migrations). This is a hard rule, on par with the test-discipline checks.
 - ❌ A single SQL batch that adds a column AND references it (fails at parse time)
 - ❌ Action buttons rendered without permission check (operator sees a button that 403s)
 - ❌ `whiteSpace: "nowrap"` + `textOverflow: "ellipsis"` on user-supplied names (collapses similar-prefix names visually)
+- ❌ Shipping a UI change without confirming it renders (green build ≠ visual proof — DOM-measure `svg`/element or reload the page; e.g. the "invisible icons" report)
 - ❌ Retrying POSTs to FBR (can issue duplicate IRN)
 - ❌ Logging passwords / JWTs / FBR tokens (use `SensitiveDataRedactor`)
 - ❌ Cross-tenant entity links (`Invoice.ClientId` pointing at a `Client` whose `CompanyId` doesn't match)

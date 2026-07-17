@@ -262,6 +262,64 @@ namespace MyApp.Api.Services.Implementations
                 bill.Date, label, bill.DivisionId, lines);
         }
 
+        // ── Purchase (supplier) debit notes ────────────────────────────────────
+
+        public async Task PostPurchaseDebitNoteAsync(PurchaseDebitNote note)
+        {
+            if (!await IsEnabledAsync(note.CompanyId)) return;
+            // Migration-created notes carry their financial effect in the
+            // chart-of-accounts opening balances already — never retro-post them.
+            if (note.IsMigrated) return;
+            if (note.GrandTotal == 0)
+            {
+                await RemoveForSourceAsync(note.CompanyId, SourceDocType.PurchaseDebitNote, note.Id);
+                return;
+            }
+
+            var accounts = await LoadAccountsAsync(note.CompanyId);
+            var ap = await ResolveAsync(note.CompanyId, accounts, ControlType.AccountsPayable, "accounts payable");
+            var purchases = await ResolvePurchasesAsync(note.CompanyId, accounts);
+            var inputTax = note.GSTAmount != 0
+                ? await ResolveAsync(note.CompanyId, accounts, ControlType.InputTax, "input tax")
+                : null;
+
+            var label = $"Debit Note #{note.DebitNoteNumber}";
+            var net = note.GrandTotal - note.GSTAmount;
+
+            // Same per-line account resolution a purchase bill uses (line →
+            // item-type overlay → company default → Purchases/Inventory); a
+            // supplier debit note has no non-inventory lines, so those refs are null.
+            var lineRows = await _context.PurchaseDebitNoteItems
+                .Where(p => p.PurchaseDebitNoteId == note.Id)
+                .Select(p => new LineForPosting(p.LineTotal, p.AccountId, p.ItemTypeId, null, null))
+                .ToListAsync();
+            var byAccount = await GroupLinesByAccountAsync(
+                note.CompanyId, accounts, isSale: false, lineRows, purchases, net);
+
+            // Every side is the OPPOSITE of a purchase bill: Dr AP, Cr the split
+            // accounts, Cr input tax.
+            var lines = new List<JournalLine>
+            {
+                new JournalLine
+                {
+                    AccountId = ap.Id,
+                    Debit = note.GrandTotal,
+                    Credit = 0m,
+                    PartyType = "Supplier",
+                    PartyId = note.SupplierId,
+                    DivisionId = note.DivisionId,
+                    Description = label,
+                },
+            };
+            foreach (var kv in byAccount)
+                AddLine(lines, kv.Key, debit: 0m, credit: kv.Value, note.DivisionId, label);
+            if (inputTax != null)
+                AddLine(lines, inputTax.Id, debit: 0m, credit: note.GSTAmount, note.DivisionId, label);
+
+            await WriteEntryAsync(note.CompanyId, SourceDocType.PurchaseDebitNote, note.Id,
+                note.Date, label, note.DivisionId, lines);
+        }
+
         // ── Inter-account transfers ────────────────────────────────────────────
 
         public async Task PostTransferAsync(AccountTransfer transfer)

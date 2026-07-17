@@ -1642,6 +1642,7 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<PurchaseDebitNote>().HasIndex(d => new { d.CompanyId, d.ExternalRef });
             modelBuilder.Entity<PurchaseDebitNote>().Property(d => d.SupplierRef).HasMaxLength(100);
             modelBuilder.Entity<PurchaseDebitNote>().Property(d => d.Subtotal).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseDebitNote>().Property(d => d.GSTRate).HasPrecision(5, 2);
             modelBuilder.Entity<PurchaseDebitNote>().Property(d => d.GSTAmount).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseDebitNote>().Property(d => d.GrandTotal).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseDebitNoteItem>()
@@ -1651,6 +1652,20 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<PurchaseDebitNoteItem>().Property(i => i.Quantity).HasPrecision(18, 4);
             modelBuilder.Entity<PurchaseDebitNoteItem>().Property(i => i.UnitPrice).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseDebitNoteItem>().Property(i => i.LineTotal).HasPrecision(18, 2);
+            // Optional inventory + per-line GL classification for user-created notes.
+            // NoAction FKs (the parent already cascades from Company; a second path
+            // to ItemTypes/Accounts would be a multi-cascade 1785). Both nullable —
+            // migrated/lean rows leave them null (no stock, no GL split).
+            modelBuilder.Entity<PurchaseDebitNoteItem>().Property(i => i.ItemTypeName).HasMaxLength(200);
+            modelBuilder.Entity<PurchaseDebitNoteItem>().Property(i => i.HSCode).HasMaxLength(50);
+            modelBuilder.Entity<PurchaseDebitNoteItem>()
+                .HasOne(i => i.ItemType).WithMany()
+                .HasForeignKey(i => i.ItemTypeId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PurchaseDebitNoteItem>().HasIndex(i => i.ItemTypeId);
+            modelBuilder.Entity<PurchaseDebitNoteItem>()
+                .HasOne(i => i.Account).WithMany()
+                .HasForeignKey(i => i.AccountId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PurchaseDebitNoteItem>().HasIndex(i => i.AccountId);
 
             // GoodsReceipt — mirror of DeliveryChallan
             modelBuilder.Entity<GoodsReceipt>()

@@ -13,6 +13,10 @@ namespace MyApp.Api.Models
         Invoice        = 2,
         Adjustment     = 3,
         GoodsReceipt   = 4,
+        // A supplier debit note returns goods to the supplier → stock OUT. Kept
+        // as its own source so reverse/reconcile filters don't collide with a
+        // PurchaseBill/Invoice of the same integer id.
+        PurchaseDebitNote = 5,
     }
 
     public enum StockMovementDirection

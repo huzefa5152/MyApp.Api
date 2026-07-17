@@ -1,3 +1,5 @@
+using MyApp.Api.Models.Accounting;
+
 namespace MyApp.Api.Models
 {
     /// <summary>
@@ -27,6 +29,9 @@ namespace MyApp.Api.Models
         public string? Notes { get; set; }
 
         public decimal Subtotal { get; set; }
+        /// <summary>Header GST rate (%). User-created notes capture this and the
+        /// service computes <see cref="GSTAmount"/>; the import leaves both 0.</summary>
+        public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
 
@@ -55,6 +60,22 @@ namespace MyApp.Api.Models
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
 
+        /// <summary>Optional inventory classification. When set (and the company
+        /// tracks that item type), the line records a stock OUT — the goods
+        /// returned to the supplier reduce on-hand. Migration-created rows leave
+        /// it null → no stock movement, exactly as today.</summary>
+        public int? ItemTypeId { get; set; }
+        /// <summary>Denormalized item-type name at save time (mirrors PurchaseItem).</summary>
+        public string? ItemTypeName { get; set; }
+        /// <summary>Optional per-line GL account override; else the account is
+        /// resolved from the item type / company default at posting time.</summary>
+        public int? AccountId { get; set; }
+        /// <summary>Optional FBR HS code carried from the item type (metadata).</summary>
+        public string? HSCode { get; set; }
+
+        // Navigation
         public PurchaseDebitNote PurchaseDebitNote { get; set; } = null!;
+        public ItemType? ItemType { get; set; }
+        public Account? Account { get; set; }
     }
 }

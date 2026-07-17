@@ -143,6 +143,7 @@ namespace MyApp.Api.Services.Implementations
                     ExceptionType = "GL_ENABLE_V1",
                     Message = $"GL posting enabled for company {companyId}: seeded {seeded} accounts, " +
                               $"posted {result.PostedInvoices} invoices / {result.PostedBills} bills / " +
+                              $"{result.PostedDebitNotes} debit notes / " +
                               $"{result.PostedPayments} payments / {result.PostedTransfers} transfers.",
                 });
             }
@@ -198,6 +199,23 @@ namespace MyApp.Api.Services.Implementations
                 _context.ChangeTracker.Clear();
             }
 
+            // Purchase (supplier) debit notes — only user-created ones. Migrated
+            // notes (IsMigrated) are excluded here AND guarded inside
+            // PostPurchaseDebitNoteAsync so their opening-balance effect isn't
+            // double-posted on enable/rebuild.
+            var debitNoteIds = await _context.PurchaseDebitNotes.AsNoTracking()
+                .Where(d => d.CompanyId == companyId && !d.IsMigrated && d.GrandTotal != 0
+                            && (lockDate == null || d.Date > lockDate))
+                .OrderBy(d => d.Date).ThenBy(d => d.Id)
+                .Select(d => d.Id).ToListAsync();
+            foreach (var chunk in Chunk(debitNoteIds, 200))
+            {
+                var rows = await _context.PurchaseDebitNotes.AsNoTracking()
+                    .Where(d => chunk.Contains(d.Id)).ToListAsync();
+                foreach (var note in rows) { await _posting.PostPurchaseDebitNoteAsync(note); result.PostedDebitNotes++; }
+                _context.ChangeTracker.Clear();
+            }
+
             var paymentIds = await _context.Payments.AsNoTracking()
                 .Where(p => p.CompanyId == companyId && !p.IsCancelled && p.Amount != 0 && (lockDate == null || p.Date > lockDate))
                 .OrderBy(p => p.Date).ThenBy(p => p.Id)
@@ -218,8 +236,8 @@ namespace MyApp.Api.Services.Implementations
             _context.ChangeTracker.Clear();
 
             _logger.LogInformation(
-                "GL rebuild for company {CompanyId}: {Invoices} invoices, {Bills} bills, {Payments} payments, {Transfers} transfers ({Removed} old entries removed).",
-                companyId, result.PostedInvoices, result.PostedBills, result.PostedPayments, result.PostedTransfers, removed);
+                "GL rebuild for company {CompanyId}: {Invoices} invoices, {Bills} bills, {DebitNotes} debit notes, {Payments} payments, {Transfers} transfers ({Removed} old entries removed).",
+                companyId, result.PostedInvoices, result.PostedBills, result.PostedDebitNotes, result.PostedPayments, result.PostedTransfers, removed);
             return result;
         }
 

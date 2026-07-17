@@ -40,6 +40,13 @@ namespace MyApp.Api.Services.Interfaces
         /// company doesn't track inventory), Dr Input tax, Cr AP.</summary>
         Task PostPurchaseBillAsync(PurchaseBill bill);
 
+        /// <summary>Purchase (supplier) debit note — the exact mirror of a
+        /// purchase bill: Dr AP (reduces what we owe the supplier), Cr Inventory
+        /// (or the per-line/COGS account), Cr Input tax. Migration-created notes
+        /// (IsMigrated) post nothing — their effect is already in opening
+        /// balances.</summary>
+        Task PostPurchaseDebitNoteAsync(PurchaseDebitNote note);
+
         /// <summary>Inter-account transfer: Dr receiving, Cr paying account.</summary>
         Task PostTransferAsync(AccountTransfer transfer);
 

@@ -335,4 +335,52 @@ namespace MyApp.Api.DTOs
         // Matches the Challan item convention — templates bind {{this.unit}}.
         public string Unit { get; set; } = "";
     }
+
+    // Data for printing a PURCHASE (supplier-side) Debit Note. It reuses the
+    // existing "DebitNote" print template, so the field names mirror that
+    // template's merge model: the letterhead/issuer block binds the {{supplier*}}
+    // tokens (= OUR company / division), and the counterparty block binds the
+    // {{buyer*}} tokens (= the supplier we're debiting). {{invoiceNumber}} is the
+    // note's own number. FBR tokens stay empty — a purchase debit note isn't an
+    // FBR document.
+    public class PrintPurchaseDebitNoteDto
+    {
+        // Issuer letterhead — our company (or its division) → template {{supplier*}}
+        public string SupplierName { get; set; } = "";
+        public string? SupplierLogoPath { get; set; }
+        public string? SupplierAddress { get; set; }
+        public string? SupplierPhone { get; set; }
+        public string? SupplierNTN { get; set; }
+        public string? SupplierSTRN { get; set; }
+        // Counterparty — the supplier being debited → template {{buyer*}}
+        public string BuyerName { get; set; } = "";
+        public string? BuyerAddress { get; set; }
+        public string? BuyerPhone { get; set; }
+        public string? BuyerNTN { get; set; }
+        public string? BuyerSTRN { get; set; }
+        // The note itself
+        public string InvoiceNumber { get; set; } = "";     // the debit-note number
+        public DateTime Date { get; set; }
+        public decimal Subtotal { get; set; }
+        public decimal GstRate { get; set; }
+        public decimal GstAmount { get; set; }
+        public decimal GrandTotal { get; set; }
+        public string AmountInWords { get; set; } = "";
+        public string? OriginalInvoiceNumber { get; set; }  // supplier's own reference
+        public string NoteKindLabel { get; set; } = "Debit Note";
+        public List<PrintPurchaseDebitNoteItemDto> Items { get; set; } = new();
+    }
+
+    public class PrintPurchaseDebitNoteItemDto
+    {
+        public string? ItemTypeName { get; set; }
+        public decimal Quantity { get; set; }
+        public string? Uom { get; set; }
+        public string Description { get; set; } = "";
+        public string? HsCode { get; set; }
+        public decimal ValueExclTax { get; set; }
+        public decimal GstRate { get; set; }
+        public decimal GstAmount { get; set; }
+        public decimal TotalInclTax { get; set; }
+    }
 }

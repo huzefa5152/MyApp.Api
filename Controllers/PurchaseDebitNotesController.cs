@@ -71,6 +71,53 @@ namespace MyApp.Api.Controllers
             return Ok(note);
         }
 
+        [HttpGet("{id}/print")]
+        [HasPermission("purchasedebitnotes.print.view")]
+        public async Task<ActionResult<PrintPurchaseDebitNoteDto>> GetPrintData(int id)
+        {
+            var note = await _service.GetByIdAsync(id);
+            if (note == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, note.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, note.CompanyId, note.DivisionId);
+            var dto = await _service.GetPrintDataAsync(id);
+            return dto == null ? NotFound() : Ok(dto);
+        }
+
+        [HttpPost]
+        [HasPermission("purchasedebitnotes.manage.create")]
+        public async Task<ActionResult<PurchaseDebitNoteDto>> Create([FromBody] CreatePurchaseDebitNoteDto dto)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
+            // Division-restricted users must tag the note with one of their
+            // divisions (write-assert also rejects null → policy D2).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, dto.DivisionId);
+            try
+            {
+                var created = await _service.CreateAsync(dto);
+                return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
+        [HttpPut("{id}")]
+        [HasPermission("purchasedebitnotes.manage.update")]
+        public async Task<ActionResult<PurchaseDebitNoteDto>> Update(int id, [FromBody] UpdatePurchaseDebitNoteDto dto)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            // Assert against the STORED company/division — body fields can be forged.
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
+            try
+            {
+                var updated = await _service.UpdateAsync(id, dto);
+                return updated == null ? NotFound() : Ok(updated);
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
         [HttpDelete("{id}")]
         [HasPermission("purchasedebitnotes.manage.delete")]
         public async Task<IActionResult> Delete(int id)
