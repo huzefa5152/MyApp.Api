@@ -18,10 +18,20 @@ namespace MyApp.Api.Helpers
         public const string Invoice = "Invoice";
         public const string PurchaseBill = "PurchaseBill";
         public const string GoodsReceipt = "GoodsReceipt";
+        public const string WithholdingTaxReceipt = "WithholdingTaxReceipt";
+        // Accounting subledger documents. A Receipt (money in) and a Payment
+        // (money out) are both rows of the single Payment entity (distinguished
+        // by Direction), so they share ONE type — mirroring how Invoice covers
+        // bills/invoices/notes. Transfers and manual Journal Entries are their
+        // own documents.
+        public const string Payment = "Payment";
+        public const string AccountTransfer = "AccountTransfer";
+        public const string JournalEntry = "JournalEntry";
 
         public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
         {
-            SalesQuote, SalesOrder, DeliveryChallan, Invoice, PurchaseBill, GoodsReceipt
+            SalesQuote, SalesOrder, DeliveryChallan, Invoice, PurchaseBill, GoodsReceipt, WithholdingTaxReceipt,
+            Payment, AccountTransfer, JournalEntry
         };
 
         /// <summary>

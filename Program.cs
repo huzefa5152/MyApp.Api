@@ -239,6 +239,7 @@ builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<IDeliveryChallanRepository, DeliveryChallanRepository>();
 builder.Services.AddScoped<ISalesQuoteRepository, SalesQuoteRepository>();
 builder.Services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
+builder.Services.AddScoped<IWithholdingTaxReceiptRepository, WithholdingTaxReceiptRepository>();
 builder.Services.AddScoped<IFolderRepository, FolderRepository>();
 builder.Services.AddScoped<IAttachmentRepository, AttachmentRepository>();
 builder.Services.AddScoped<IDivisionRepository, DivisionRepository>();
@@ -260,6 +261,7 @@ builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
 // depends on IDeliveryChallanService (create-challan-from-order). No cycle.
 builder.Services.AddScoped<ISalesQuoteService, SalesQuoteService>();
 builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
+builder.Services.AddScoped<IWithholdingTaxReceiptService, WithholdingTaxReceiptService>();
 // Unified attachments + document folders. AttachmentStorage is stateless
 // (just the disk root) so it's a singleton; the services are scoped.
 builder.Services.AddScoped<IFolderService, FolderService>();
@@ -277,7 +279,10 @@ builder.Services.AddScoped<IPostingService, PostingService>();
 builder.Services.AddScoped<IGeneralLedgerService, GeneralLedgerService>();
 builder.Services.AddScoped<IJournalEntryService, JournalEntryService>();
 builder.Services.AddScoped<IAccountTransferService, AccountTransferService>();
+builder.Services.AddScoped<IBankReconciliationService, BankReconciliationService>();
+builder.Services.AddScoped<IBankStatementService, BankStatementService>();
 builder.Services.AddScoped<ILegacyImportService, LegacyImportService>();
+builder.Services.AddScoped<IManagerImportService, ManagerImportService>();
 builder.Services.AddScoped<IClientService, ClientService>();
 // "Common Clients" grouping — the same legal entity (matched by NTN, then
 // fallback to normalised name) shared across multiple companies. Sits
@@ -295,6 +300,7 @@ builder.Services.AddScoped<IPurchaseBillService, PurchaseBillService>();
 builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
+builder.Services.AddScoped<INonInventoryItemService, NonInventoryItemService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<IFbrService, FbrService>();
 builder.Services.AddScoped<IFbrLookupService, FbrLookupService>();

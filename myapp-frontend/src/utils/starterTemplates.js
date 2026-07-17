@@ -19,6 +19,11 @@ import { creditNoteStarters } from "./starters/creditNote";
 import { debitNoteStarters } from "./starters/debitNote";
 import { purchaseBillStarters } from "./starters/purchaseBill";
 import { goodsReceiptStarters } from "./starters/goodsReceipt";
+import { receiptStarters } from "./starters/receipt";
+import { paymentStarters } from "./starters/payment";
+import { transferStarters } from "./starters/transfer";
+import { journalEntryStarters } from "./starters/journalEntry";
+import { withholdingTaxStarters } from "./starters/withholdingTax";
 
 export const STARTER_TEMPLATES = [
   ...challanStarters,
@@ -30,4 +35,9 @@ export const STARTER_TEMPLATES = [
   ...debitNoteStarters,
   ...purchaseBillStarters,
   ...goodsReceiptStarters,
+  ...receiptStarters,
+  ...paymentStarters,
+  ...transferStarters,
+  ...journalEntryStarters,
+  ...withholdingTaxStarters,
 ];

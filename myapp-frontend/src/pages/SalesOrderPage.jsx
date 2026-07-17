@@ -46,9 +46,6 @@ export default function SalesOrderPage() {
   const canBill = has("bills.manage.create");
   const canImportPo = canCreate && has("poformats.import.create");
 
-  // Shared template-picker state (dropdown + Print/PDF resolution).
-  const tplPicker = usePrintTemplates("SalesOrder");
-
   const [orders, setOrders] = useState([]);
   const [exportingId, setExportingId] = useState(null);
   const [showImport, setShowImport] = useState(false);
@@ -64,6 +61,11 @@ export default function SalesOrderPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
+
+  // Shared template-picker state, scoped to the selected division: "All
+  // Divisions" → company-wide templates; a specific division → that division's.
+  // An empty scope hides the picker and blocks Print/PDF.
+  const tplPicker = usePrintTemplates("SalesOrder", { divisionId: divisionFilter });
 
   const fetchOrders = useCallback(async (companyId, pg) => {
     if (!companyId) return;
@@ -278,8 +280,8 @@ export default function SalesOrderPage() {
                     {canView && <button style={st.actBtn} onClick={() => setViewOrder(o)} title="View details"><MdVisibility size={16} /></button>}
                     {canDeliver && <button style={st.deliverBtn} onClick={() => setDeliverOrder(o)}><MdLocalShipping size={15} /> Deliver</button>}
                     {canUpdate && o.isEditable && <button style={st.actBtn} onClick={() => { setEditOrder(o); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
-                    {canPrint && <button style={st.actBtn} onClick={() => handlePrint(o)} title="Print"><MdPrint size={16} /></button>}
-                    {canPrint && <button style={{ ...st.actBtn, opacity: exportingId === o.id ? 0.5 : 1 }} onClick={() => handleExportPdf(o)} disabled={!!exportingId} title="Download PDF"><MdPictureAsPdf size={16} /></button>}
+                    {canPrint && <button style={{ ...st.actBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} onClick={() => handlePrint(o)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}><MdPrint size={16} /></button>}
+                    {canPrint && <button style={{ ...st.actBtn, opacity: (tplPicker.noTemplate || exportingId === o.id) ? 0.5 : 1, ...(tplPicker.noTemplate ? { cursor: "not-allowed" } : {}) }} onClick={() => handleExportPdf(o)} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={16} /></button>}
                     {canBill && o.billableChallanCount > 0 && <button style={st.billBtn} onClick={() => handleGenerateBill(o)} title="Generate bill from delivered challans"><MdReceiptLong size={15} /> Bill</button>}
                     {canUpdate && o.status !== "Cancelled" && (
                       <select style={st.statusSelect} value={o.status} onChange={(e) => handleStatus(o, e.target.value)} title="Set status">

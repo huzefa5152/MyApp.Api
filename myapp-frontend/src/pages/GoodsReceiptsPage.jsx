@@ -37,8 +37,6 @@ export default function GoodsReceiptsPage() {
   const canUpdate = has("goodsreceipts.manage.update");
   const canDelete = has("goodsreceipts.manage.delete");
   const canPrint = has("goodsreceipts.print.view");
-  // Shared template-picker state (dropdown + Print/PDF resolution).
-  const tplPicker = usePrintTemplates("GoodsReceipt");
   const [viewMode, setViewMode, isBigScreen] = useListViewMode("goodsReceipts");
 
   const [receipts, setReceipts] = useState([]);
@@ -50,6 +48,10 @@ export default function GoodsReceiptsPage() {
   const [search, setSearch] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
+  // Shared template-picker state, scoped to the selected division: "All
+  // Divisions" → company-wide templates; a specific division → that division's.
+  // An empty scope hides the picker and blocks Print/PDF.
+  const tplPicker = usePrintTemplates("GoodsReceipt", { divisionId: divisionFilter });
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
@@ -159,6 +161,9 @@ export default function GoodsReceiptsPage() {
             <select style={dropdownStyles.base} value={selectedCompany?.id || ""} onChange={e => setSelectedCompany(companies.find(c => parseInt(c.id) === parseInt(e.target.value)))}>
               {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
             </select>
+            {selectedCompany && (
+              <DivisionSelect companyId={selectedCompany.id} value={divisionFilter} onChange={(v) => { setDivisionFilter(v); setPage(1); }} style={dropdownStyles.base} />
+            )}
           </div>
 
           {selectedCompany && (
@@ -175,7 +180,6 @@ export default function GoodsReceiptsPage() {
                   placeholder="All Suppliers"
                 />
               </div>
-              <DivisionSelect companyId={selectedCompany.id} value={divisionFilter} onChange={(v) => { setDivisionFilter(v); setPage(1); }} className="filter-select" />
               <PrintTemplateSelect picker={tplPicker} />
               {isBigScreen && (
                 <div style={{ marginLeft: "auto" }}>
@@ -203,6 +207,8 @@ export default function GoodsReceiptsPage() {
                   onDelete={handleDelete}
                   onPrint={handlePrint}
                   onExportPdf={handleExportPdf}
+                  printDisabled={tplPicker.noTemplate}
+                  printDisabledReason={tplPicker.noTemplateReason}
                   exportingId={exportingId}
                 />
               ) : (
@@ -226,8 +232,8 @@ export default function GoodsReceiptsPage() {
                       </div>
                       <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
                         <button style={btnView} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdVisibility size={14} /> View</button>
-                        {canPrint && <button style={btnPrint} onClick={() => handlePrint(gr)} title="Print goods receipt"><MdPrint size={14} /> Print</button>}
-                        {canPrint && <button style={{ ...btnPdf, opacity: exportingId === gr.id ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportPdf(gr)} title="Download PDF"><MdPictureAsPdf size={14} /> PDF</button>}
+                        {canPrint && <button style={{ ...btnPrint, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} onClick={() => handlePrint(gr)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print goods receipt"}><MdPrint size={14} /> Print</button>}
+                        {canPrint && <button style={{ ...btnPdf, ...((tplPicker.noTemplate || exportingId === gr.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate || !!exportingId} onClick={() => handleExportPdf(gr)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={14} /> PDF</button>}
                         {canUpdate && <button style={btnEdit} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdEdit size={14} /> Edit</button>}
                         {canDelete && <button style={btnDelete} onClick={() => handleDelete(gr)}><MdDelete size={14} /> Delete</button>}
                       </div>

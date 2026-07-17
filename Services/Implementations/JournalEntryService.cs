@@ -326,6 +326,54 @@ namespace MyApp.Api.Services.Implementations
                 .ToDictionaryAsync(d => d.Id, d => d.Name);
         }
 
+        public async Task<PrintJournalEntryDto?> GetPrintDataAsync(int id)
+        {
+            var je = await _context.JournalEntries.AsNoTracking()
+                .Include(x => x.Company)
+                .Include(x => x.Lines).ThenInclude(l => l.Account)
+                .FirstOrDefaultAsync(x => x.Id == id);
+            if (je == null) return null;
+            var division = je.DivisionId.HasValue
+                ? await _context.Divisions.AsNoTracking().FirstOrDefaultAsync(d => d.Id == je.DivisionId.Value)
+                : null;
+            var sNo = 0;
+            // Debit lines first, then credit lines — the conventional voucher order.
+            var lines = je.Lines
+                .OrderByDescending(l => l.Debit > 0)
+                .ThenBy(l => l.Id)
+                .Select(l => new PrintJournalLineDto
+                {
+                    SNo = ++sNo,
+                    AccountCode = l.Account?.Code,
+                    AccountName = l.Account?.Name ?? "",
+                    Description = l.Description,
+                    Debit = l.Debit,
+                    Credit = l.Credit,
+                }).ToList();
+            return new PrintJournalEntryDto
+            {
+                CompanyBrandName = je.Company?.BrandName ?? je.Company?.Name ?? "",
+                CompanyLogoPath = je.Company?.LogoPath,
+                CompanyAddress = je.Company?.FullAddress,
+                CompanyPhone = je.Company?.Phone,
+                DivisionName = division?.Name,
+                DivisionBrandName = division?.BrandName,
+                DivisionLogoPath = division?.LogoPath,
+                DivisionAddress = division?.FullAddress,
+                DivisionPhone = division?.Phone,
+                DivisionNTN = division?.NTN,
+                DivisionSTRN = division?.STRN,
+                DivisionEmail = division?.Email,
+                Reference = "JE-" + je.EntryNo,
+                EntryNo = je.EntryNo,
+                Date = je.Date,
+                Narration = je.Narration,
+                TotalDebit = je.Lines.Sum(l => l.Debit),
+                TotalCredit = je.Lines.Sum(l => l.Credit),
+                Lines = lines,
+            };
+        }
+
         private static string? Trimmed(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
     }
 }

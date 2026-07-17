@@ -261,10 +261,20 @@ def test_bill_from_challan(base: str, token: str, company: dict, client: dict, c
 
 
 # ── Suite 3: Bill creation WITHOUT a challan ───────────────────────
+def first_item_type_id(base: str, token: str):
+    """Any item type satisfies the 'each bill line must be classified' rule
+    (item types are global, shared across companies). Used to classify the
+    standalone bill lines the tests create, per the item-type-required rule."""
+    _, its = http("GET", "/api/itemtypes", base, token=token)
+    rows = its if isinstance(its, list) else (its.get("items") or its.get("data") or [])
+    return rows[0]["id"] if rows else None
+
+
 def test_standalone_bill(base: str, token: str, company: dict, client: dict) -> dict | None:
     suite = "3. Bill creation WITHOUT a challan"
     print(f"\n=== {suite} ===")
     today = pkt_date_iso()  # date as a Karachi operator's bill form would send it
+    it_id = first_item_type_id(base, token)
     payload = {
         "date": today,
         "companyId": company["id"],
@@ -272,7 +282,7 @@ def test_standalone_bill(base: str, token: str, company: dict, client: dict) -> 
         "gstRate": 18,
         "items": [
             {"description": "Service Charge", "quantity": 1,
-             "uom": "Pcs", "unitPrice": 500},
+             "uom": "Pcs", "unitPrice": 500, "itemTypeId": it_id},
         ],
     }
     status, bill = http("POST", "/api/invoices/standalone", base, token=token, body=payload)
@@ -356,6 +366,7 @@ def test_tax_calculations(base: str, token: str, company: dict, client: dict) ->
     suite = "6. Tax calculation correctness"
     print(f"\n=== {suite} ===")
     today = pkt_date_iso()  # date as a Karachi operator's bill form would send it
+    it_id = first_item_type_id(base, token)  # bills require a classified line
 
     # 6a — Exempt 0 %. Subtotal 1000, GST 0, grand 1000.
     status, b = http("POST", "/api/invoices/standalone", base, token=token, body={
@@ -364,7 +375,7 @@ def test_tax_calculations(base: str, token: str, company: dict, client: dict) ->
         "clientId": client["id"],
         "gstRate": 0,
         "items": [{"description": "Exempt Good", "quantity": 10,
-                   "uom": "Pcs", "unitPrice": 100}],
+                   "uom": "Pcs", "unitPrice": 100, "itemTypeId": it_id}],
     })
     check(suite, "6a exempt 0 %: created",  status in (200, 201), f"got {status} {b}")
     if status in (200, 201):
@@ -382,7 +393,7 @@ def test_tax_calculations(base: str, token: str, company: dict, client: dict) ->
         "clientId": client["id"],
         "gstRate": 5,
         "items": [{"description": "Reduced-rate Good", "quantity": 10,
-                   "uom": "Pcs", "unitPrice": 100}],
+                   "uom": "Pcs", "unitPrice": 100, "itemTypeId": it_id}],
     })
     check(suite, "6b reduced 5 %: created",  status in (200, 201), f"got {status} {b}")
     if status in (200, 201):
@@ -400,7 +411,7 @@ def test_tax_calculations(base: str, token: str, company: dict, client: dict) ->
         "clientId": client["id"],
         "gstRate": 18,
         "items": [{"description": "Standard Good", "quantity": 10,
-                   "uom": "Pcs", "unitPrice": 100}],
+                   "uom": "Pcs", "unitPrice": 100, "itemTypeId": it_id}],
     })
     check(suite, "6c standard 18 %: created", status in (200, 201), f"got {status} {b}")
     if status in (200, 201):
@@ -418,7 +429,7 @@ def test_tax_calculations(base: str, token: str, company: dict, client: dict) ->
         "clientId": client["id"],
         "gstRate": 17.5,
         "items": [{"description": "Fractional-rate Good", "quantity": 10,
-                   "uom": "Pcs", "unitPrice": 100}],
+                   "uom": "Pcs", "unitPrice": 100, "itemTypeId": it_id}],
     })
     check(suite, "6d fractional 17.5 %: created", status in (200, 201), f"got {status} {b}")
     if status in (200, 201):
@@ -436,6 +447,7 @@ def test_future_date_guard(base: str, token: str, company: dict, client: dict,
     Covers both the standalone and the from-challan create paths."""
     suite = "7. FBR 0043 future-date guard (PKT)"
     print(f"\n=== {suite} ===")
+    it_id = first_item_type_id(base, token)  # bills require a classified line
 
     def cites_0043(body: Any) -> bool:
         return "0043" in (body if isinstance(body, str) else json.dumps(body))
@@ -448,7 +460,7 @@ def test_future_date_guard(base: str, token: str, company: dict, client: dict,
         "date": pkt_date_iso(0),
         "companyId": company["id"], "clientId": client["id"], "gstRate": 18,
         "items": [{"description": "Same-day Service", "quantity": 1,
-                   "uom": "Pcs", "unitPrice": 100}],
+                   "uom": "Pcs", "unitPrice": 100, "itemTypeId": it_id}],
     })
     check(suite, "7a standalone bill dated today (PKT) accepted",
           status in (200, 201), f"got {status} {b}")
@@ -459,7 +471,7 @@ def test_future_date_guard(base: str, token: str, company: dict, client: dict,
         "date": pkt_date_iso(2),
         "companyId": company["id"], "clientId": client["id"], "gstRate": 18,
         "items": [{"description": "Future Service", "quantity": 1,
-                   "uom": "Pcs", "unitPrice": 100}],
+                   "uom": "Pcs", "unitPrice": 100, "itemTypeId": it_id}],
     })
     check(suite, "7b standalone future bill rejected (400)", status == 400, f"got {status} {b}")
     check(suite, "7b rejection cites [FBR 0043]", cites_0043(b), f"body = {b}")

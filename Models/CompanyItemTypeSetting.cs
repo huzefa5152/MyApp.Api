@@ -1,3 +1,5 @@
+using MyApp.Api.Models.Accounting;
+
 namespace MyApp.Api.Models
 {
     /// <summary>
@@ -51,9 +53,13 @@ namespace MyApp.Api.Models
     }
 
     /// <summary>
-    /// Per-(company, item-type) inventory settings. Carries the tracking-mode
-    /// override and an optional reorder level for the inventory summary.
-    /// One row at most per pair (unique index in AppDbContext).
+    /// Per-(company, item-type) overlay — the company's own "registration" of a
+    /// row from the GLOBAL <see cref="ItemType"/> catalog. Carries the tracking-
+    /// mode override, an optional reorder level, an optional division scope, and
+    /// the company's own GL account mapping for lines using this item type.
+    /// One row at most per (CompanyId, ItemTypeId) pair (unique index in
+    /// AppDbContext) — <see cref="DivisionId"/> is a scope TAG, not part of the
+    /// key, so the inventory-tracking lookups keyed on ItemTypeId stay 1:1.
     /// </summary>
     public class CompanyItemTypeSetting
     {
@@ -61,11 +67,36 @@ namespace MyApp.Api.Models
         public int CompanyId { get; set; }
         public int ItemTypeId { get; set; }
 
+        /// <summary>
+        /// Optional division scope (2026-07-14). Null = a company-wide item type
+        /// (available to every division). Set = this item type "belongs to" the
+        /// named division — document pickers filtered by division show it only
+        /// for that division (plus the company-wide ones). Lets both a company
+        /// and a division curate their own inventory types. FK → Division
+        /// (NoAction: Division already cascades from Company, a second cascade
+        /// path would trip SQL Server 1785).
+        /// </summary>
+        public int? DivisionId { get; set; }
+
         public InventoryItemMode Mode { get; set; } = InventoryItemMode.Default;
 
         /// <summary>Optional reorder threshold surfaced as a low-stock badge
         /// on the inventory summary. Null = no reorder tracking.</summary>
         public decimal? ReorderLevel { get; set; }
+
+        /// <summary>
+        /// Income account a SALES line using this item type posts to, for THIS
+        /// company (Manager's per-item "Custom income account"). Null = fall back
+        /// to <see cref="Company.DefaultSalesAccountId"/>, then the engine's
+        /// name-guess chain. FK → Account (NoAction — two account FKs from one
+        /// table trip SQL Server's multiple-cascade-path guard 1785).
+        /// </summary>
+        public int? SaleAccountId { get; set; }
+
+        /// <summary>Expense/COGS account a PURCHASE line using this item type
+        /// posts to, for THIS company. Null = <see cref="Company.DefaultPurchaseAccountId"/>
+        /// then the engine's chain.</summary>
+        public int? PurchaseAccountId { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
@@ -73,5 +104,8 @@ namespace MyApp.Api.Models
         // Navigation
         public Company Company { get; set; } = null!;
         public ItemType ItemType { get; set; } = null!;
+        public Division? Division { get; set; }
+        public Account? SaleAccount { get; set; }
+        public Account? PurchaseAccount { get; set; }
     }
 }

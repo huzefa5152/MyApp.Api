@@ -252,15 +252,95 @@ namespace MyApp.Api.Services.Implementations
             var supplier = await _repo.GetByIdAsync(id);
             if (supplier == null) return;
 
-            // Suppliers with bookings can't be deleted — same safety stance
-            // as Clients with invoices, but tighter: no cascade. The
-            // operator must remove the PurchaseBills first if they really
-            // mean to delete the supplier (and that itself reverses any
-            // Stock IN movements those bills emitted).
-            if (await _repo.HasPurchaseBillsAsync(id))
-                throw new InvalidOperationException("Cannot delete supplier — purchase bills exist against this supplier. Delete the bills first.");
+            // Full cascade (parity with ClientService.DeleteAsync) — a supplier
+            // with purchase bills / goods receipts USED to be undeletable (hard
+            // guard). Now it removes the whole purchase-side subtree in one
+            // transaction: AP receipts + allocations, the GL entries posted from
+            // the bills/payments, attachments, stock movements, goods receipts,
+            // purchase bills, then the supplier. Order is children-first so no
+            // Restrict FK trips.
+            var companyId = supplier.CompanyId;
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var billIds = await _context.PurchaseBills.Where(pb => pb.SupplierId == id).Select(pb => pb.Id).ToListAsync();
+                var grIds = await _context.GoodsReceipts.Where(gr => gr.SupplierId == id).Select(gr => gr.Id).ToListAsync();
 
-            await _repo.DeleteAsync(supplier);
+                // 1. Payments (AP) — allocations against this supplier's bills
+                //    FK-block the bill delete (FK_PaymentAllocations_PurchaseBills);
+                //    then the supplier's own payment headers.
+                var supplierPaymentIds = await _context.Payments
+                    .Where(p => p.ContactType == "Supplier" && p.ContactId == id)
+                    .Select(p => p.Id).ToListAsync();
+                if (billIds.Count > 0)
+                    await _context.PaymentAllocations
+                        .Where(a => a.PurchaseBillId != null && billIds.Contains(a.PurchaseBillId.Value))
+                        .ExecuteDeleteAsync();
+                if (supplierPaymentIds.Count > 0)
+                {
+                    await _context.PaymentAllocations.Where(a => supplierPaymentIds.Contains(a.PaymentId)).ExecuteDeleteAsync();
+                    await _context.Payments.Where(p => supplierPaymentIds.Contains(p.Id)).ExecuteDeleteAsync();
+                }
+
+                // 2. GL journal entries posted from the bills + payments.
+                if (billIds.Count > 0 || supplierPaymentIds.Count > 0)
+                {
+                    var jeIds = await _context.JournalEntries
+                        .Where(je =>
+                            (je.SourceDocType == MyApp.Api.Models.Accounting.SourceDocType.PurchaseBill && je.SourceDocId != null && billIds.Contains(je.SourceDocId.Value)) ||
+                            (je.SourceDocType == MyApp.Api.Models.Accounting.SourceDocType.Payment && je.SourceDocId != null && supplierPaymentIds.Contains(je.SourceDocId.Value)))
+                        .Select(je => je.Id).ToListAsync();
+                    if (jeIds.Count > 0)
+                    {
+                        await _context.JournalLines.Where(l => jeIds.Contains(l.JournalEntryId)).ExecuteDeleteAsync();
+                        await _context.JournalEntries.Where(je => jeIds.Contains(je.Id)).ExecuteDeleteAsync();
+                    }
+                }
+
+                // 3. Attachments on the bills / goods receipts (DB rows; bytes on
+                //    disk are left for the attachment reconciler — same stance as
+                //    CompanyService.DeleteAsync).
+                if (billIds.Count > 0 || grIds.Count > 0)
+                    await _context.Attachments
+                        .Where(a => a.CompanyId == companyId && a.EntityType != null && a.EntityId != null && (
+                            (a.EntityType == "PurchaseBill" && billIds.Contains(a.EntityId.Value)) ||
+                            (a.EntityType == "GoodsReceipt" && grIds.Contains(a.EntityId.Value))))
+                        .ExecuteDeleteAsync();
+
+                // 4. Goods receipts (+ items + their stock movements). Before bills,
+                //    which a receipt can reference.
+                if (grIds.Count > 0)
+                {
+                    await _context.StockMovements
+                        .Where(m => m.CompanyId == companyId && m.SourceType == StockMovementSourceType.GoodsReceipt && m.SourceId != null && grIds.Contains(m.SourceId.Value))
+                        .ExecuteDeleteAsync();
+                    await _context.GoodsReceiptItems.Where(gri => grIds.Contains(gri.GoodsReceiptId)).ExecuteDeleteAsync();
+                    await _context.GoodsReceipts.Where(gr => gr.SupplierId == id).ExecuteDeleteAsync();
+                }
+
+                // 5. Purchase bills (+ items + source lines + their stock IN).
+                if (billIds.Count > 0)
+                {
+                    await _context.StockMovements
+                        .Where(m => m.CompanyId == companyId && m.SourceType == StockMovementSourceType.PurchaseBill && m.SourceId != null && billIds.Contains(m.SourceId.Value))
+                        .ExecuteDeleteAsync();
+                    var itemIds = await _context.PurchaseItems.Where(pi => billIds.Contains(pi.PurchaseBillId)).Select(pi => pi.Id).ToListAsync();
+                    if (itemIds.Count > 0)
+                        await _context.PurchaseItemSourceLines.Where(sl => itemIds.Contains(sl.PurchaseItemId)).ExecuteDeleteAsync();
+                    await _context.PurchaseItems.Where(pi => billIds.Contains(pi.PurchaseBillId)).ExecuteDeleteAsync();
+                    await _context.PurchaseBills.Where(pb => pb.SupplierId == id).ExecuteDeleteAsync();
+                }
+
+                // 6. Finally the supplier.
+                await _repo.DeleteAsync(supplier);
+                await tx.CommitAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "SupplierService: delete-supplier transaction rolled back for supplierId={SupplierId}", id);
+                await tx.RollbackAsync();
+                throw;
+            }
         }
     }
 }

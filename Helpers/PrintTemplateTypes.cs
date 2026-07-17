@@ -15,6 +15,11 @@ namespace MyApp.Api.Helpers
         {
             "Challan", "Bill", "TaxInvoice", "SalesQuote", "SalesOrder",
             "DebitNote", "CreditNote", "PurchaseBill", "GoodsReceipt",
+            // Accounting documents (2026-07). Receipt (money in) and Payment
+            // (money out) are separate templates though they share the Payment
+            // entity, since a receipt voucher and a payment voucher read
+            // differently.
+            "Receipt", "Payment", "Transfer", "JournalEntry", "WithholdingTaxReceipt",
         };
 
         /// <summary>Human-readable list for validation error messages.</summary>

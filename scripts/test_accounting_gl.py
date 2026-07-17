@@ -273,11 +273,21 @@ def run(base: str, token: str, company: dict, client: dict, supplier: dict) -> N
     # ── 3. Sales invoice posting ────────────────────────────────────
     suite = "3. Sales invoice posting"
     print(f"\n=== {suite} ===")
+    # Every bill line must be classified (Item Type or Non-Inventory item), so
+    # seed a plain item type first. With no overlay account it resolves to the
+    # company's default Sales income account — the pre-split baseline.
+    st, it0 = http("POST", f"/api/itemtypes?companyId={cid}", base, token=token, body={
+        "name": f"GL base c{cid}", "isFavorite": True,
+    })
+    check(suite, "seeded a plain item type", st in (200, 201) and isinstance(it0, dict) and it0.get("id"),
+          f"got {st} {it0}")
+    if st not in (200, 201):
+        raise Fatal("item type creation failed")
     # Standalone invoice: 1000 net + 18 % GST = 1180 grand total.
     st, inv = http("POST", "/api/invoices/standalone", base, token=token, body={
         "date": today, "companyId": cid, "clientId": client["id"], "gstRate": 18,
         "items": [{"description": "GL test item", "quantity": 1,
-                   "uom": "Pcs", "unitPrice": 1000}],
+                   "uom": "Pcs", "unitPrice": 1000, "itemTypeId": it0["id"]}],
     })
     check(suite, "standalone invoice created (grand 1180)",
           st in (200, 201) and eq(inv.get("grandTotal") if isinstance(inv, dict) else None, 1180),
@@ -337,11 +347,12 @@ def run(base: str, token: str, company: dict, client: dict, supplier: dict) -> N
     # ── 5. Purchase bill posting ────────────────────────────────────
     suite = "5. Purchase bill posting"
     print(f"\n=== {suite} ===")
-    # 2000 net + 18 % GST = 2360 grand total.
+    # 2000 net + 18 % GST = 2360 grand total. Line classified with the plain
+    # item type (required on purchase bills too).
     st, bill = http("POST", "/api/purchasebills", base, token=token, body={
         "date": today, "companyId": cid, "supplierId": supplier["id"], "gstRate": 18,
         "items": [{"description": "GL purchase item", "quantity": 1,
-                   "uom": "Pcs", "unitPrice": 2000}],
+                   "uom": "Pcs", "unitPrice": 2000, "itemTypeId": it0["id"]}],
     })
     check(suite, "purchase bill created (grand 2360)",
           st in (200, 201) and eq(bill.get("grandTotal") if isinstance(bill, dict) else None, 2360),
@@ -574,6 +585,46 @@ def run(base: str, token: str, company: dict, client: dict, supplier: dict) -> N
         check(suite, "invalid cheque status rejected (400)", st == 400, f"got {st} {err}")
     else:
         check(suite, "cheque lifecycle — skipped (receipt not created)", False, "no cheque receipt")
+
+    # ── 14. Per-line GL account split via item-type overlay ─────────
+    # Manager-style splitting: an item type mapped (per this company's overlay)
+    # to a DISTINCT income account routes its line's net there, not onto the
+    # default Sales lump — trial balance still balances. Runs LAST so the extra
+    # invoice doesn't perturb the AR / income / receipt assertions above.
+    suite = "14. Per-line account split"
+    print(f"\n=== {suite} ===")
+    sales_acct = find_acct(get_flat(base, token, cid), name="Sales")
+    ok_group = sales_acct is not None and sales_acct.get("accountGroupId")
+    check(suite, "seeded Sales income account present", bool(ok_group), f"sales={sales_acct}")
+    if ok_group:
+        st, exp_acct = http("POST", f"/api/accounts/company/{cid}", base, token=token, body={
+            "name": "Export sales", "accountType": "Income",
+            "accountGroupId": sales_acct["accountGroupId"],
+        })
+        ok_acct = st in (200, 201) and isinstance(exp_acct, dict) and exp_acct.get("id")
+        check(suite, "created a distinct income account", bool(ok_acct), f"got {st} {exp_acct}")
+        if ok_acct:
+            st, it = http("POST", f"/api/itemtypes?companyId={cid}", base, token=token, body={
+                "name": f"GLSplit c{cid}", "isFavorite": True,
+                "writeCompanyOverlay": True, "saleAccountId": exp_acct["id"],
+            })
+            ok_it = (st in (200, 201) and isinstance(it, dict) and it.get("id")
+                     and it.get("saleAccountId") == exp_acct["id"])
+            check(suite, "item type maps to the overlay income account", bool(ok_it),
+                  f"got {st} {it}")
+            if ok_it:
+                st, inv2 = http("POST", "/api/invoices/standalone", base, token=token, body={
+                    "date": today, "companyId": cid, "clientId": client["id"], "gstRate": 18,
+                    "items": [{"description": "mapped line", "quantity": 1, "uom": "Pcs",
+                               "unitPrice": 500, "itemTypeId": it["id"]}],
+                })
+                check(suite, "invoice with mapped item type created", st in (200, 201),
+                      f"got {st} {inv2}")
+                assert_balanced(base, token, cid, suite, "trial balance still balances after split")
+                # Income is credit-natural → debit-positive balance == -500.
+                check(suite, "net (500) posted to the mapped income account, not Sales",
+                      eq(balance_of(base, token, cid, exp_acct["id"]), -500),
+                      f"Export sales balance = {balance_of(base, token, cid, exp_acct['id'])}")
 
 
 # ── Reporter ───────────────────────────────────────────────────────

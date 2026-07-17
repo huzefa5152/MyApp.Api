@@ -5,7 +5,7 @@ namespace MyApp.Api.Services.Interfaces
 {
     /// <summary>
     /// Backs the dedicated FBR monitoring trail. See audit H-3
-    /// (AUDIT_2026_05_08_OBSERVABILITY.md) — pre-fix every FBR call
+    /// (the observability audit) — pre-fix every FBR call
     /// dumped its request/response into AuditLogs alongside everything
     /// else, so admins couldn't isolate FBR health.
     /// </summary>

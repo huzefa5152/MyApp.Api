@@ -14,11 +14,15 @@ namespace MyApp.Api.Models
         public GoodsReceipt GoodsReceipt { get; set; } = null!;
 
         public int? ItemTypeId { get; set; }
+        /// <summary>Optional link to a per-company NonInventoryItem (GL-account
+        /// shortcut line). Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
         public string Description { get; set; } = "";
         public int Quantity { get; set; }
         public string Unit { get; set; } = "";
 
         // Navigation
         public ItemType? ItemType { get; set; }
+        public NonInventoryItem? NonInventoryItem { get; set; }
     }
 }

@@ -128,21 +128,30 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<ItemTypeDto>> GetById(int id)
+        public async Task<ActionResult<ItemTypeDto>> GetById(int id, [FromQuery] int? companyId = null)
         {
-            var item = await _service.GetByIdAsync(id);
+            // Tenant guard — with a company context the DTO carries that
+            // company's overlay (division + GL accounts), which is per-tenant data.
+            if (companyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+            var item = await _service.GetByIdAsync(id, companyId);
             if (item == null) return NotFound();
             return Ok(item);
         }
 
         // Optional ?companyId= triggers the tax engine to back-fill UOM from
-        // FBR's HS_UOM endpoint when the operator left UOM blank. The company
-        // is just the source of the FBR token — ItemTypes are global.
+        // FBR's HS_UOM endpoint when the operator left UOM blank, AND upserts
+        // that company's overlay (division + GL accounts) from the DTO. The
+        // shared ItemType row stays global; the per-company data lives on the
+        // CompanyItemTypeSetting overlay.
         [HttpPost]
         [HasPermission("itemtypes.manage.create")]
         public async Task<ActionResult<ItemTypeDto>> Create(
             [FromBody] ItemTypeDto dto, [FromQuery] int? companyId = null)
         {
+            // Tenant guard — a company context here writes per-company overlay data.
+            if (companyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
             try
             {
                 var created = await _service.CreateAsync(dto, companyId);
@@ -159,6 +168,8 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<ItemTypeDto>> Update(
             int id, [FromBody] ItemTypeDto dto, [FromQuery] int? companyId = null)
         {
+            if (companyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
             try
             {
                 var updated = await _service.UpdateAsync(id, dto, companyId);

@@ -428,7 +428,7 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
   </div>
 </div>
 
-<!-- Conditional PO number for Lotte Kolson â€” sits just below the buyer
+<!-- Conditional PO number for Lotte Kolson — sits just below the buyer
      box, right-aligned, so the operator sees it next to the client it
      applies to rather than on the Term Of Sale line. -->
 {{#if (eq buyerName "LOTTE Kolson (Pvt.) Limited")}}{{#if poNumber}}
@@ -500,7 +500,7 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
 {{#if fbrIRN}}
 <!-- FBR Digital Invoicing Section.
      QR and logo are now self-contained: the QR is a base64 PNG rendered
-     server-side ({{{fbrQrPngDataUrl}}} â€” triple braces so Handlebars
+     server-side ({{{fbrQrPngDataUrl}}} — triple braces so Handlebars
      doesn't HTML-escape the data URI), and the FBR logo is served from
      wwwroot/images so it deploys with the bundle. Replaces the earlier
      dependency on external image hosts. -->

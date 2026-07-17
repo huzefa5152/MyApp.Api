@@ -1,3 +1,5 @@
+using MyApp.Api.Models.Accounting;
+
 namespace MyApp.Api.Models
 {
     /// <summary>
@@ -19,6 +21,24 @@ namespace MyApp.Api.Models
         /// which is what makes inventory tracking possible.
         /// </summary>
         public int? ItemTypeId { get; set; }
+
+        /// <summary>
+        /// Optional link to a per-company <see cref="NonInventoryItem"/> (a GL
+        /// account shortcut like "Freight Charges"). A line has at most one of
+        /// <see cref="ItemTypeId"/> or this; a non-inventory line posts to the
+        /// item's PurchaseAccount and moves no stock. See <see cref="InvoiceItem"/>.
+        /// </summary>
+        public int? NonInventoryItemId { get; set; }
+
+        /// <summary>
+        /// Optional per-line GL expense/COGS account (2026-07-14, Manager
+        /// parity). When set, the posting engine debits THIS account for the
+        /// line's net (design §4 step 1). Null = the engine derives it from the
+        /// item's <see cref="CompanyItemTypeSetting.PurchaseAccountId"/> →
+        /// <see cref="Company.DefaultPurchaseAccountId"/> → name-guess chain
+        /// (today's behaviour). Additive/nullable; FK → Account NoAction.
+        /// </summary>
+        public int? AccountId { get; set; }
 
         public string ItemTypeName { get; set; } = "";
         public string Description { get; set; } = "";
@@ -59,6 +79,8 @@ namespace MyApp.Api.Models
         public PurchaseBill PurchaseBill { get; set; } = null!;
         public GoodsReceiptItem? GoodsReceiptItem { get; set; }
         public ItemType? ItemType { get; set; }
+        public NonInventoryItem? NonInventoryItem { get; set; }
+        public Account? Account { get; set; }
 
         /// <summary>
         /// Sale lines this purchase line covered (the "Purchase Against

@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   MdAdd, MdDelete, MdChevronLeft, MdChevronRight, MdSwapHoriz, MdSearch,
   MdBusiness, MdCalendarToday, MdLabel, MdNotes, MdEdit, MdClose,
-  MdArrowForward,
+  MdArrowForward, MdPrint, MdPictureAsPdf, MdVisibility,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -11,7 +11,14 @@ import { notify } from "../utils/notify";
 import { colors, dropdownStyles, formStyles, modalSizes } from "../theme";
 import BankCashSelect from "../Components/BankCashSelect";
 import DivisionSelect from "../Components/DivisionSelect";
-import { getTransfersPaged, createTransfer, updateTransfer, deleteTransfer } from "../api/accountingApi";
+import AttachmentManager from "../Components/AttachmentManager";
+import { getTransfersPaged, createTransfer, updateTransfer, deleteTransfer, getTransferPrintData } from "../api/accountingApi";
+import { mergeTemplate } from "../utils/templateEngine";
+import { writeAndPrint } from "../utils/printDocument";
+import { exportToPdf } from "../utils/exportUtils";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
+import { defaultTransferTemplate } from "../utils/accountingDocTemplates";
 
 const fmtMoney = (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -34,6 +41,17 @@ export default function TransfersPage() {
   const canView = has("accounting.transfers.view");
   const canCreate = has("accounting.transfers.create");
   const canDelete = has("accounting.transfers.delete");
+  const canPrintTransfer = has("accounting.transfers.print");
+
+  // Division scope for the print-template picker. Transfers aren't a
+  // division-scoped LIST, but templates can be division-scoped, so the selector
+  // drives which template scope Print/PDF use — consistent with every other
+  // document screen. "All Divisions" → company-wide templates; a specific
+  // division → that division's. (Separate from the create-form's own division.)
+  const [divisionFilter, setDivisionFilter] = useState("");
+  // Shared template-picker state (dropdown + Print/PDF resolution).
+  const tplPicker = usePrintTemplates("Transfer", { divisionId: divisionFilter });
+  const [exportingId, setExportingId] = useState(null);
 
   const [rows, setRows] = useState([]);
   const [page, setPage] = useState(1);
@@ -43,6 +61,7 @@ export default function TransfersPage() {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);   // transfer being edited
+  const [viewing, setViewing] = useState(null);   // transfer being viewed (read-only)
 
   const companyId = selectedCompany?.id;
 
@@ -84,6 +103,29 @@ export default function TransfersPage() {
     }
   };
 
+  // Explicit dropdown pick wins; else the company default; else the built-in.
+  const resolveTpl = (t) => tplPicker.resolveTemplate(t)?.htmlContent || defaultTransferTemplate;
+
+  const handlePrint = async (t) => {
+    const w = window.open("", "_blank");
+    if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
+    w.document.write("<p>Loading transfer voucher...</p>");
+    try {
+      const { data } = await getTransferPrintData(t.id);
+      writeAndPrint(w, mergeTemplate(resolveTpl(t), data));
+    } catch { w.close(); notify("Failed to load print data.", "error"); }
+  };
+
+  const handleExportPdf = async (t) => {
+    if (exportingId) return;
+    setExportingId(t.id);
+    try {
+      const { data } = await getTransferPrintData(t.id);
+      await exportToPdf(mergeTemplate(resolveTpl(t), data), `Transfer ${data.reference || t.id}`);
+    } catch { notify("Failed to export PDF.", "error"); }
+    finally { setExportingId(null); }
+  };
+
   if (!canView) {
     return <div style={{ padding: "2rem", color: colors.textSecondary }}>You don't have permission to view transfers.</div>;
   }
@@ -118,6 +160,12 @@ export default function TransfersPage() {
           >
             {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
           </select>
+          {/* Division scope — next to Company. Scopes the print-template picker
+              (company-wide vs a division's templates). Self-hides for companies
+              with no divisions. */}
+          {selectedCompany && (
+            <DivisionSelect companyId={selectedCompany.id} value={divisionFilter} onChange={setDivisionFilter} style={dropdownStyles.base} />
+          )}
         </div>
       )}
 
@@ -136,6 +184,7 @@ export default function TransfersPage() {
                 onKeyDown={(e) => { if (e.key === "Enter") { setPage(1); fetchRows(1); } }}
               />
             </div>
+            {canPrintTransfer && tplPicker.canChoose && <PrintTemplateSelect picker={tplPicker} />}
             {rows.length > 0 && (
               <div style={st.pageSummary}>
                 <span style={st.pageSummaryCount}>{totalCount} transfers</span>
@@ -157,8 +206,14 @@ export default function TransfersPage() {
                   t={t}
                   canEdit={canCreate}
                   canDelete={canDelete}
+                  canPrint={canPrintTransfer}
+                  tplPicker={tplPicker}
+                  exportingId={exportingId}
+                  onView={() => setViewing(t)}
                   onEdit={() => setEditing(t)}
                   onDelete={() => handleDelete(t)}
+                  onPrint={() => handlePrint(t)}
+                  onExportPdf={() => handleExportPdf(t)}
                 />
               ))}
             </div>
@@ -194,12 +249,23 @@ export default function TransfersPage() {
           onSaved={() => { setEditing(null); fetchRows(page); notify("Transfer updated.", "success"); }}
         />
       )}
+
+      {viewing && (
+        <ViewTransferModal
+          t={viewing}
+          canEdit={canCreate}
+          onEdit={() => { setViewing(null); setEditing(viewing); }}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </div>
   );
 }
 
 /** One transfer card: reference, amount, from → to, date/division meta, description. */
-function TransferCard({ t, canEdit, canDelete, onEdit, onDelete }) {
+function TransferCard({ t, canEdit, canDelete, canPrint, tplPicker, exportingId, onView, onEdit, onDelete, onPrint, onExportPdf }) {
+  const noTpl = tplPicker?.noTemplate;
+  const noTplReason = tplPicker?.noTemplateReason;
   return (
     <div style={st.card}>
       <div style={{ ...st.accentStrip, background: accent }} />
@@ -233,8 +299,33 @@ function TransferCard({ t, canEdit, canDelete, onEdit, onDelete }) {
           </div>
         )}
 
-        {(canEdit || canDelete) && (
+        {(onView || canEdit || canDelete || canPrint) && (
           <div style={st.cardActions}>
+            {onView && (
+              <button style={st.viewBtn} onClick={onView} title="View transfer">
+                <MdVisibility size={16} /> View
+              </button>
+            )}
+            {canPrint && (
+              <button
+                style={{ ...st.printBtn, ...(noTpl ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                disabled={noTpl}
+                title={noTpl ? noTplReason : "Print transfer"}
+                onClick={onPrint}
+              >
+                <MdPrint size={16} /> Print
+              </button>
+            )}
+            {canPrint && (
+              <button
+                style={{ ...st.pdfBtn, ...((noTpl || exportingId === t.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                disabled={noTpl || !!exportingId}
+                title={noTpl ? noTplReason : "Download PDF"}
+                onClick={onExportPdf}
+              >
+                <MdPictureAsPdf size={16} /> PDF
+              </button>
+            )}
             {canEdit && (
               <button style={st.editBtn} onClick={onEdit} title="Edit">
                 <MdEdit size={16} /> Edit
@@ -247,6 +338,53 @@ function TransferCard({ t, canEdit, canDelete, onEdit, onDelete }) {
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Read-only detail view of an inter-account transfer. Mirrors the reference
+ * product's "View" action — full details without the edit affordances.
+ */
+function ViewTransferModal({ t, canEdit, onEdit, onClose }) {
+  const Row = ({ label, children }) => (
+    <div style={st.vRow}>
+      <span style={st.vLabel}>{label}</span>
+      <span style={st.vValue}>{children}</span>
+    </div>
+  );
+  return (
+    <div style={formStyles.backdrop} onClick={onClose}>
+      <div style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
+        <div style={formStyles.header}>
+          <h3 style={formStyles.title}>Transfer {t.reference}</h3>
+          <button style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
+        </div>
+        <div style={formStyles.body}>
+          <div style={{ ...st.amount, color: accent, marginBottom: "1rem" }}>
+            <span style={st.rs}>Rs</span> {fmtMoney(t.amount)}
+          </div>
+          <div style={st.accountsRow}>
+            <span style={st.accountName}>{t.fromAccountName || "—"}</span>
+            <MdArrowForward size={16} style={{ color: accent, flexShrink: 0 }} />
+            <span style={st.accountName}>{t.toAccountName || "—"}</span>
+          </div>
+          <div style={{ marginTop: "1rem" }}>
+            <Row label="Reference">{t.reference}</Row>
+            <Row label="Date">{fmtDate(t.date)}</Row>
+            <Row label="From account">{t.fromAccountName || "—"}</Row>
+            <Row label="To account">{t.toAccountName || "—"}</Row>
+            <Row label="Amount">Rs {fmtMoney(t.amount)}</Row>
+            {t.divisionName && <Row label="Division">{t.divisionName}</Row>}
+            {t.description && <Row label="Description">{t.description}</Row>}
+            {t.createdAt && <Row label="Created">{fmtDate(t.createdAt)}</Row>}
+          </div>
+        </div>
+        <div style={st.viewFooter}>
+          <button type="button" style={st.editBtn} onClick={onClose}>Close</button>
+          {canEdit && <button type="button" style={st.viewBtn} onClick={onEdit}><MdEdit size={16} /> Edit</button>}
+        </div>
       </div>
     </div>
   );
@@ -276,6 +414,7 @@ function TransferForm({ companyId, editTransfer = null, onClose, onSaved }) {
 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const attachmentRef = useRef(null);
 
   const sameAccount = !!fromAccountId && fromAccountId === toAccountId;
   const amtNum = parseFloat(amount) || 0;
@@ -310,8 +449,14 @@ function TransferForm({ companyId, editTransfer = null, onClose, onSaved }) {
         description: description.trim() || null,
         divisionId: divisionId ? Number(divisionId) : null,
       };
-      if (isEdit) await updateTransfer(editTransfer.id, payload);
-      else await createTransfer(companyId, payload);
+      const { data: saved } = isEdit
+        ? await updateTransfer(editTransfer.id, payload)
+        : await createTransfer(companyId, payload);
+      // Upload any files staged before the record had an id (best-effort).
+      try {
+        const savedId = saved?.id ?? editTransfer?.id;
+        if (savedId) await attachmentRef.current?.flush(savedId);
+      } catch { /* attachments are best-effort — the transfer is already saved */ }
       onSaved?.();
       onClose?.();
     } catch (err) {
@@ -386,6 +531,16 @@ function TransferForm({ companyId, editTransfer = null, onClose, onSaved }) {
                 style={{ ...dropdownStyles.base, width: "100%" }}
               />
             )}
+
+            <div style={{ marginTop: "0.5rem" }}>
+              <AttachmentManager
+                ref={attachmentRef}
+                companyId={companyId}
+                entityType="AccountTransfer"
+                entityId={editTransfer?.id ?? null}
+                mode="edit"
+              />
+            </div>
           </div>
 
           <div style={formStyles.footer}>
@@ -434,6 +589,13 @@ const st = {
   descText: { overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" },
 
   cardActions: { display: "flex", justifyContent: "flex-end", gap: 6, marginTop: 10, flexWrap: "wrap" },
+  viewBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.blue, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
+  viewFooter: { display: "flex", justifyContent: "flex-end", gap: "0.6rem", flexWrap: "wrap", padding: "0.9rem clamp(1rem, 2vw, 1.5rem)", borderTop: `1px solid ${colors.cardBorder}`, flexShrink: 0 },
+  vRow: { display: "flex", gap: "0.75rem", padding: "0.4rem 0", borderBottom: `1px solid ${colors.cardBorder}` },
+  vLabel: { flex: "0 0 130px", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary },
+  vValue: { flex: 1, fontSize: "0.9rem", color: colors.textPrimary, wordBreak: "break-word" },
+  printBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#4527a0", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
+  pdfBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#ad1457", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
   editBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#e65100", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
   delBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
 

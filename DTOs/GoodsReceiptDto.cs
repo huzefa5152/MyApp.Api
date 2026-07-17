@@ -24,6 +24,9 @@ namespace MyApp.Api.DTOs
         public int Id { get; set; }
         public int? ItemTypeId { get; set; }
         public string ItemTypeName { get; set; } = "";
+        /// <summary>Optional NonInventoryItem link (GL-account shortcut). Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
+        public string? NonInventoryItemName { get; set; }
         public string Description { get; set; } = "";
         public int Quantity { get; set; }
         public string Unit { get; set; } = "";
@@ -44,6 +47,8 @@ namespace MyApp.Api.DTOs
     public class CreateGoodsReceiptItemDto
     {
         public int? ItemTypeId { get; set; }
+        /// <summary>Optional NonInventoryItem link. Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
         public string Description { get; set; } = "";
         public int Quantity { get; set; }
         public string Unit { get; set; } = "";
@@ -64,6 +69,8 @@ namespace MyApp.Api.DTOs
     {
         public int Id { get; set; }
         public int? ItemTypeId { get; set; }
+        /// <summary>Optional NonInventoryItem link. Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
         public string Description { get; set; } = "";
         public int Quantity { get; set; }
         public string Unit { get; set; } = "";

@@ -57,7 +57,7 @@ function WarningTooltip({ warnings }) {
   );
 }
 
-export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, exportingId, duplicatingId }) {
+export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "" }) {
   const { has } = usePermissions();
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
@@ -203,7 +203,9 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                   </button>
                   {permPrint && (
                     <button
-                      style={{ ...styles.actionBtn, ...styles.printBtn }}
+                      style={{ ...styles.actionBtn, ...styles.printBtn, ...(printDisabled ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                      disabled={printDisabled}
+                      title={printDisabled ? printDisabledReason : "Print"}
                       onClick={() => onPrint?.(c)}
                     >
                       <MdPrint size={14} /> Print
@@ -211,8 +213,9 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                   )}
                   {permPrint && (
                     <button
-                      style={{ ...styles.actionBtn, ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }}
-                      disabled={!!exportingId}
+                      style={{ ...styles.actionBtn, ...styles.pdfBtn, opacity: (printDisabled || exportingId) ? 0.5 : 1, ...(printDisabled ? { cursor: "not-allowed" } : {}) }}
+                      disabled={printDisabled || !!exportingId}
+                      title={printDisabled ? printDisabledReason : "Download PDF"}
                       onClick={() => onExportPdf?.(c)}
                     >
                       {exportingId === c.id + "-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} PDF

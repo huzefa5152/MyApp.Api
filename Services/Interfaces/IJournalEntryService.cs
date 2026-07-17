@@ -43,5 +43,7 @@ namespace MyApp.Api.Services.Interfaces
         /// on the stored date. Returns false when not found; throws when the
         /// entry is system-posted.</summary>
         Task<bool> DeleteManualAsync(int id);
+
+        Task<PrintJournalEntryDto?> GetPrintDataAsync(int id);
     }
 }

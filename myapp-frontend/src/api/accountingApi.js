@@ -23,6 +23,9 @@ export const getJournalEntriesPaged = (companyId, params = {}) =>
 
 export const getJournalEntry = (id) => httpClient.get(`/journal-entries/${id}`);
 
+export const getJournalEntryPrintData = (id) =>
+  httpClient.get(`/journal-entries/${id}/print`);
+
 export const createJournalEntry = (companyId, payload) =>
   httpClient.post(`/journal-entries/company/${companyId}`, payload);
 
@@ -36,6 +39,46 @@ export const getTransfersPaged = (companyId, params = {}) =>
   httpClient.get(`/account-transfers/company/${companyId}/paged`, { params });
 
 export const getTransfer = (id) => httpClient.get(`/account-transfers/${id}`);
+
+export const getTransferPrintData = (id) =>
+  httpClient.get(`/account-transfers/${id}/print`);
+
+// ── Bank reconciliation (BANK_RECONCILIATION_DESIGN.md) ──────────────────────
+// Per-account actual/cleared/pending summary + cleared-state toggles. Toggling
+// cleared is pure metadata — it never posts to the GL.
+export const getBankReconSummary = (companyId) =>
+  httpClient.get(`/bank-reconciliation/company/${companyId}/summary`);
+
+export const setPaymentCleared = (paymentId, cleared, clearedDate = null) =>
+  httpClient.post(`/bank-reconciliation/payment/${paymentId}/cleared`, { cleared, clearedDate });
+
+export const setTransferCleared = (transferId, cleared, clearedDate = null) =>
+  httpClient.post(`/bank-reconciliation/transfer/${transferId}/cleared`, { cleared, clearedDate });
+
+// Reconcile workflow (Phase 3): the account's transactions to tick, a lock call,
+// and the locked-reconciliation history.
+export const getReconcileTransactions = (accountId) =>
+  httpClient.get(`/bank-reconciliation/account/${accountId}/transactions`);
+
+export const getReconciliationHistory = (accountId) =>
+  httpClient.get(`/bank-reconciliation/account/${accountId}/history`);
+
+export const lockReconciliation = (companyId, payload) =>
+  httpClient.post(`/bank-reconciliation/company/${companyId}/lock`, payload);
+
+// Statement import (Phase 2): import CSV text, list staged lines, categorize
+// (into a new receipt/payment against a contra account) or ignore.
+export const importBankStatement = (companyId, payload) =>
+  httpClient.post(`/bank-statements/company/${companyId}/import`, payload);
+
+export const getStatementLines = (accountId, status) =>
+  httpClient.get(`/bank-statements/account/${accountId}/lines`, { params: status ? { status } : {} });
+
+export const categorizeStatementLine = (lineId, payload) =>
+  httpClient.post(`/bank-statements/line/${lineId}/categorize`, payload);
+
+export const ignoreStatementLine = (lineId) =>
+  httpClient.post(`/bank-statements/line/${lineId}/ignore`);
 
 export const createTransfer = (companyId, payload) =>
   httpClient.post(`/account-transfers/company/${companyId}`, payload);

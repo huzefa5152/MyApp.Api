@@ -95,6 +95,14 @@ namespace MyApp.Api.Services.Implementations
                         .Select(x => new LinkedEntityRef(x.DivisionId)).FirstOrDefaultAsync(),
                     AttachmentEntityTypes.GoodsReceipt => await _context.GoodsReceipts.Where(x => x.Id == id && x.CompanyId == companyId)
                         .Select(x => new LinkedEntityRef(x.DivisionId)).FirstOrDefaultAsync(),
+                    AttachmentEntityTypes.WithholdingTaxReceipt => await _context.WithholdingTaxReceipts.Where(x => x.Id == id && x.CompanyId == companyId)
+                        .Select(x => new LinkedEntityRef(x.DivisionId)).FirstOrDefaultAsync(),
+                    AttachmentEntityTypes.Payment => await _context.Payments.Where(x => x.Id == id && x.CompanyId == companyId)
+                        .Select(x => new LinkedEntityRef(x.DivisionId)).FirstOrDefaultAsync(),
+                    AttachmentEntityTypes.AccountTransfer => await _context.AccountTransfers.Where(x => x.Id == id && x.CompanyId == companyId)
+                        .Select(x => new LinkedEntityRef(x.DivisionId)).FirstOrDefaultAsync(),
+                    AttachmentEntityTypes.JournalEntry => await _context.JournalEntries.Where(x => x.Id == id && x.CompanyId == companyId)
+                        .Select(x => new LinkedEntityRef(x.DivisionId)).FirstOrDefaultAsync(),
                     _ => null,
                 };
                 if (linked == null)

@@ -65,7 +65,7 @@ export default function TemplateEditorPage() {
   const [divisions, setDivisions] = useState([]);
   const [scopeDivisionId, setScopeDivisionId] = useState(null);
   // Full template list for the company (each item carries its html/json/excel info,
-  // so the editor populates straight from here â€” no per-id fetch).
+  // so the editor populates straight from here — no per-id fetch).
   const [allTemplates, setAllTemplates] = useState([]);
   const [currentTemplateId, setCurrentTemplateId] = useState(null);
   const [currentTemplateName, setCurrentTemplateName] = useState("Default");
@@ -77,7 +77,7 @@ export default function TemplateEditorPage() {
   const [excelSheetName, setExcelSheetName] = useState(null);
   // All sheets present in the uploaded workbook (for the picker dropdown).
   const [excelSheetNames, setExcelSheetNames] = useState([]);
-  // Set while a POST to save the sheet pin is in flight â€” disables the
+  // Set while a POST to save the sheet pin is in flight — disables the
   // dropdown to prevent double-submits.
   const [sheetSaving, setSheetSaving] = useState(false);
   const excelInputRef = useRef(null);
@@ -91,7 +91,7 @@ export default function TemplateEditorPage() {
   // Captured ONCE at mount (before the persist effects below can overwrite
   // localStorage) so a page reload restores the last scope + template. Restore
   // is gated on the saved company matching the restored company, and is
-  // consumed after the first company-load â€” so a deliberate company switch
+  // consumed after the first company-load — so a deliberate company switch
   // resets to company-wide rather than restoring a stale division/template.
   const initialRestoreRef = useRef({
     companyId: Number(localStorage.getItem("te.companyId")) || null,
@@ -134,7 +134,7 @@ export default function TemplateEditorPage() {
     else localStorage.removeItem("te.templateId");
   }, [selectedCompany?.id, scopeDivisionId, currentTemplateId]);
 
-  // â”€â”€ Scope + multi-template helpers â”€â”€
+  // ── Scope + multi-template helpers ──
 
   // Populate the editor from a template DTO (or seed a blank default for an empty scope).
   // keepTab leaves the Editor/Preview tab as-is (so switching templates while previewing
@@ -158,7 +158,7 @@ export default function TemplateEditorPage() {
       setCurrentTemplateId(null);
       setCurrentTemplateName("Default");
       setHtmlContent(def);
-      setOriginalContent("");   // empty scope â†’ show as unsaved so Save creates the first template
+      setOriginalContent("");   // empty scope → show as unsaved so Save creates the first template
       setTemplateJson(null);
       setOriginalJson(null);
       setEditorMode("code");
@@ -232,7 +232,7 @@ export default function TemplateEditorPage() {
       }
     })();
     return () => { cancelled = true; };
-    // templateType intentionally omitted â€” type changes are handled by handleTypeChange
+    // templateType intentionally omitted — type changes are handled by handleTypeChange
     // (no company refetch needed); only a company switch reloads the list here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany?.id]);
@@ -271,7 +271,7 @@ export default function TemplateEditorPage() {
         setAllTemplates((prev) => prev.map((t) =>
           t.id === currentTemplateId ? { ...t, htmlContent: saveHtml, templateJson: saveJson, editorMode } : t));
       } else {
-        // Empty scope â†’ create the first template (server forces it default).
+        // Empty scope → create the first template (server forces it default).
         const { data } = await createTemplate(selectedCompany.id, {
           templateType, divisionId: scopeDivisionId, name: currentTemplateName || "Default",
           htmlContent: saveHtml, templateJson: saveJson, editorMode, isDefault: true,
@@ -330,7 +330,7 @@ export default function TemplateEditorPage() {
     setActiveTab("editor");
   };
 
-  // Starter pick â†’ create a NEW template in the current scope from the starter
+  // Starter pick → create a NEW template in the current scope from the starter
   // design (server forces default only when it's the first in the scope).
   const handleSelectStarter = async (starter) => {
     if (!selectedCompany) return;
@@ -350,7 +350,7 @@ export default function TemplateEditorPage() {
     }
   };
 
-  // â”€â”€ Saved-templates manager actions â”€â”€
+  // ── Saved-templates manager actions ──
 
   // Switch the active template (from the header dropdown or the manager). Guards
   // unsaved edits, preserves the current Editor/Preview tab. Returns true if switched.
@@ -468,8 +468,8 @@ export default function TemplateEditorPage() {
   // challan exports are single-sheet, so forcing the operator to pick at
   // upload time would be friction for zero benefit. If the workbook has
   // multiple sheets, the post-upload dropdown on the Excel Template Bar
-  // lets the operator pin a specific sheet â€” the importer's smart
-  // resolver (sheet-name match â†’ score-based â†’ sheet 0) already handles
+  // lets the operator pin a specific sheet — the importer's smart
+  // resolver (sheet-name match → score-based → sheet 0) already handles
   // the common multi-sheet case automatically.
   const handleExcelUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -490,7 +490,7 @@ export default function TemplateEditorPage() {
         : t));
       const sheetCount = (data.excelSheetNames || []).length;
       if (sheetCount > 1) {
-        showToast(`Excel template uploaded â€” ${sheetCount} sheets detected, pin one in the Data sheet dropdown if needed.`);
+        showToast(`Excel template uploaded — ${sheetCount} sheets detected, pin one in the Data sheet dropdown if needed.`);
       } else {
         showToast("Excel template uploaded!");
       }
@@ -509,7 +509,7 @@ export default function TemplateEditorPage() {
     try {
       await setExcelSheetNameById(currentTemplateId, value);
       setExcelSheetName(value);
-      showToast(value ? `Pinned sheet "${value}".` : "Sheet pin cleared â€” auto-detect on.");
+      showToast(value ? `Pinned sheet "${value}".` : "Sheet pin cleared — auto-detect on.");
     } catch (err) {
       showToast(err.response?.data?.error || "Failed to update sheet name.", "error");
     } finally {
@@ -617,7 +617,7 @@ export default function TemplateEditorPage() {
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
-  // Templates in the current (type, scope) â€” drives the Saved-Templates manager.
+  // Templates in the current (type, scope) — drives the Saved-Templates manager.
   const scopeTemplates = allTemplates.filter(
     (t) => t.templateType === templateType && (t.divisionId ?? null) === (scopeDivisionId ?? null)
   );
@@ -777,7 +777,7 @@ export default function TemplateEditorPage() {
                   title="Saved template"
                 >
                   {scopeTemplates.length === 0 && <option value="">New template (unsaved)</option>}
-                  {scopeTemplates.map((t) => <option key={t.id} value={t.id}>{t.isDefault ? `â˜… ${t.name}` : t.name}</option>)}
+                  {scopeTemplates.map((t) => <option key={t.id} value={t.id}>{t.isDefault ? `★ ${t.name}` : t.name}</option>)}
                 </select>
               </div>
             </div>
@@ -837,7 +837,7 @@ export default function TemplateEditorPage() {
                   style={{ ...dropdownStyles.base, minWidth: "170px" }}
                   value={scopeDivisionId ?? ""}
                   onChange={(e) => handleScopeChange(e.target.value)}
-                  title="Template scope â€” Company-wide or a specific division"
+                  title="Template scope — Company-wide or a specific division"
                 >
                   <option value="">Company-wide</option>
                   {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
@@ -847,17 +847,17 @@ export default function TemplateEditorPage() {
 
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Template</label>
-              {/* Saved-template selector â€” switch which template is loaded for preview/edit */}
+              {/* Saved-template selector — switch which template is loaded for preview/edit */}
               <select
                 style={{ ...dropdownStyles.base, minWidth: "190px" }}
                 value={currentTemplateId ?? ""}
                 onChange={(e) => { if (e.target.value) handleTemplateSelect(Number(e.target.value)); }}
                 disabled={scopeTemplates.length === 0}
-                title="Saved template â€” switch to preview / edit another"
+                title="Saved template — switch to preview / edit another"
               >
                 {scopeTemplates.length === 0 && <option value="">New template (unsaved)</option>}
                 {scopeTemplates.map((t) => (
-                  <option key={t.id} value={t.id}>{t.isDefault ? `â˜… ${t.name}` : t.name}</option>
+                  <option key={t.id} value={t.id}>{t.isDefault ? `★ ${t.name}` : t.name}</option>
                 ))}
               </select>
             </div>
@@ -932,7 +932,7 @@ export default function TemplateEditorPage() {
                     disabled={sheetSaving}
                     onChange={(e) => handleSheetChange(e.target.value)}
                     title={excelSheetNames.length === 1
-                      ? "Single-sheet template â€” Auto-detect handles this case. You can still pin the sheet name if your import files use a different layout."
+                      ? "Single-sheet template — Auto-detect handles this case. You can still pin the sheet name if your import files use a different layout."
                       : "Pin the sheet that holds the data on every uploaded file. Leave 'Auto-detect' to let the importer choose."}
                   >
                     <option value="">
@@ -958,7 +958,7 @@ export default function TemplateEditorPage() {
           ) : (
             <>
               <span style={{ fontSize: "0.8rem", color: colors.textSecondary }}>
-                No Excel template â€” Excel export button hidden on challan/invoice pages
+                No Excel template — Excel export button hidden on challan/invoice pages
               </span>
               <button
                 style={{ ...styles.btn, ...styles.btnOutline, padding: "0.3rem 0.6rem", fontSize: "0.78rem" }}
@@ -1068,7 +1068,7 @@ export default function TemplateEditorPage() {
 }
 
 const styles = {
-  // Labeled dropdown groups in the toolbar â€” a small caption above each
+  // Labeled dropdown groups in the toolbar — a small caption above each
   // <select> so it's obvious what each control selects.
   fieldGroup: { display: "flex", flexDirection: "column", gap: "0.18rem" },
   fieldLabel: {

@@ -5,7 +5,7 @@ namespace MyApp.Api.Services.Interfaces
     /// The company guard answers "can this user see THIS company?"; this one
     /// answers "within that company, can they see THIS division's records?".
     ///
-    /// Semantics (see DIVISION_RBAC_AUDIT_2026_07_04.md §3.1):
+    /// Semantics (see the division-RBAC design §3.1):
     /// - A user is <b>unrestricted</b> in a company unless their UserCompany
     ///   row has <c>RestrictToDivisions = true</c>. Unrestricted = sees every
     ///   division; this is the default, so existing users are unaffected.

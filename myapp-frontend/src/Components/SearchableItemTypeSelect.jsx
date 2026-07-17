@@ -12,8 +12,29 @@ import { MdArrowDropDown, MdSearch, MdStar } from "react-icons/md";
  *   value      — currently selected item type id (or empty string for none)
  *   onChange   — (newId, pickedItemType) ⇒ void
  *   placeholder, style — passthroughs
+ *
+ * Non-inventory items (optional — Manager.io-style GL-account shortcut lines
+ * like Freight / Discount). When `nonInventoryItems` is non-empty the dropdown
+ * shows a separate "NON-INVENTORY" group; picking one calls `onPickNonInventory`
+ * instead of `onChange`. A line has at most one of an item type OR a non-inv item.
+ *   nonInventoryItems   — array of { id, name, code, unitName, defaultLineDescription, defaultSalePrice, defaultPurchasePrice }
+ *   nonInventoryValue   — currently selected non-inventory item id (or "")
+ *   onPickNonInventory  — (nonInvItem | null) ⇒ void
+ *
+ * Division scoping (2026-07-14): when `divisionId` is set, the item-type list is
+ * filtered to that document's division — an item is shown only when its
+ * per-company overlay is company-wide (it.divisionId == null, incl. items with
+ * no overlay) OR pinned to this same division. Items pinned to a DIFFERENT
+ * division are hidden. Requires the parent to fetch getItemTypes(companyId) so
+ * each item carries its overlay `divisionId`. Non-inventory charges have no
+ * division and always show.
+ *   divisionId — the document's current division id (or "" / null for none)
  */
-export default function SearchableItemTypeSelect({ items, value, onChange, placeholder, style, disabled = false }) {
+export default function SearchableItemTypeSelect({
+  items, value, onChange, placeholder, style, disabled = false,
+  nonInventoryItems = [], nonInventoryValue = "", onPickNonInventory,
+  divisionId = null,
+}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightIdx, setHighlightIdx] = useState(-1);
@@ -30,6 +51,12 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
     [items, value]
   );
 
+  // Non-inventory item selection (mutually exclusive with an item type).
+  const selectedNonInv = useMemo(
+    () => (nonInventoryItems || []).find((n) => String(n.id) === String(nonInventoryValue)),
+    [nonInventoryItems, nonInventoryValue]
+  );
+
   // Sort:
   //   0. (2026-05-12) Items the operator can actually sell — availableQty
   //      > 0 — bubble to the top so the dropdown leads with what's in
@@ -40,8 +67,20 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
   //   2. Favorites next.
   //   3. Then by usage desc.
   //   4. Alphabetical tiebreaker.
+  // Division scope — hide item types pinned to a DIFFERENT division than this
+  // document's. Company-wide items (divisionId null, incl. items with no
+  // overlay for this company) always show. No filter when the document has no
+  // division. `selected`/`selectedNonInv` above intentionally search the FULL
+  // `items` so a line whose item is out-of-scope still renders its name.
+  const scopedItems = useMemo(() => {
+    const arr = items || [];
+    if (!divisionId) return arr;
+    const dv = String(divisionId);
+    return arr.filter((it) => it.divisionId == null || String(it.divisionId) === dv);
+  }, [items, divisionId]);
+
   const sortedItems = useMemo(() => {
-    const arr = [...(items || [])];
+    const arr = [...(scopedItems || [])];
     const hasHs = (it) => !!(it.hsCode && it.hsCode.trim());
     const inStock = (it) => (it.availableQty || 0) > 0;
     arr.sort((a, b) => {
@@ -57,7 +96,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
       return (a.name || "").localeCompare(b.name || "");
     });
     return arr;
-  }, [items]);
+  }, [scopedItems]);
 
   const filteredItems = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -112,14 +151,32 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
   }, [open]);
 
   const handlePick = (it) => {
+    // Picking an item type clears any non-inventory selection (mutually exclusive).
+    if (selectedNonInv) onPickNonInventory?.(null);
     onChange?.(it?.id || "", it || null);
+    setOpen(false);
+  };
+
+  const handlePickNonInv = (n) => {
+    // Picking a non-inventory item clears any item-type selection.
+    if (selected) onChange?.("", null);
+    onPickNonInventory?.(n || null);
     setOpen(false);
   };
 
   const handleClear = (e) => {
     e.stopPropagation();
-    onChange?.("", null);
+    if (selectedNonInv) onPickNonInventory?.(null);
+    else onChange?.("", null);
   };
+
+  // Non-inventory items filtered by the same search box (name / code).
+  const filteredNonInv = useMemo(() => {
+    const arr = [...(nonInventoryItems || [])].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    const term = query.trim().toLowerCase();
+    if (!term) return arr;
+    return arr.filter((n) => (n.name || "").toLowerCase().includes(term) || (n.code || "").toLowerCase().includes(term));
+  }, [nonInventoryItems, query]);
 
   const handleKeyDown = (e) => {
     if (!open) return;
@@ -168,7 +225,12 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
             "MEKO FABRICS" / "MEKO DENIM" don't collapse to an identical row
             (CLAUDE.md §3 / dashboard incident 2026-05-13). */}
         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", wordBreak: "break-word", textAlign: "left" }}>
-          {selected ? (
+          {selectedNonInv ? (
+            <>
+              <span style={styles.niTag}>charge</span>
+              {selectedNonInv.name}
+            </>
+          ) : selected ? (
             <>
               {selected.isFavorite && <MdStar size={12} color="#f59f00" style={{ verticalAlign: "middle", marginRight: 3 }} />}
               {selected.name}
@@ -178,7 +240,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
             <span style={styles.placeholder}>{placeholder || "Select item…"}</span>
           )}
         </span>
-        {selected && (
+        {(selected || selectedNonInv) && (
           <span onClick={handleClear} style={styles.clearBtn} title="Clear selection">×</span>
         )}
         <MdArrowDropDown size={18} style={{ flexShrink: 0 }} />
@@ -203,49 +265,90 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
             />
           </div>
 
-          <div style={styles.list}>
-            {filteredItems.length === 0 && (
-              <div style={styles.empty}>
-                {items?.length === 0
-                  ? "No items in catalog yet. Add one on the Item Types page."
-                  : `No items match "${query}".`}
-              </div>
-            )}
+          {filteredItems.length === 0 && filteredNonInv.length === 0 && (
+            <div style={styles.empty}>
+              {(items?.length === 0 && nonInventoryItems?.length === 0)
+                ? "No items in catalog yet. Add one on the Item Types page."
+                : `No items match "${query}".`}
+            </div>
+          )}
 
-            {stocked.length > 0 && (
-              <>
-                <div style={styles.sectionHeader}>📦 IN STOCK</div>
-                {stocked.map((it, i) => renderItem(it, i, highlightIdx, setHighlightIdx, handlePick))}
-              </>
-            )}
-            {quick.length > 0 && (
-              <>
-                <div style={styles.sectionHeader}>⚡ QUICK (no HS code)</div>
-                {quick.map((it, i) => {
-                  const realIdx = stocked.length + i;
-                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
-                })}
-              </>
-            )}
-            {favorites.length > 0 && (
-              <>
-                <div style={styles.sectionHeader}>★ FAVORITES</div>
-                {favorites.map((it, i) => {
-                  const realIdx = stocked.length + quick.length + i;
-                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
-                })}
-              </>
-            )}
-            {others.length > 0 && (
-              <>
-                {(stocked.length > 0 || quick.length > 0 || favorites.length > 0) && <div style={styles.sectionHeader}>OTHER</div>}
-                {others.map((it, i) => {
-                  const realIdx = stocked.length + quick.length + favorites.length + i;
-                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
-                })}
-              </>
-            )}
-          </div>
+          {/* ── Non-Inventory charges (Freight, Discount, …) — its OWN pane with
+              a fixed header + independent scroll, so a long inventory list can't
+              push it out of view. Mouse-clickable, excluded from arrow-key nav. */}
+          {filteredNonInv.length > 0 && (
+            <div style={styles.niPane}>
+              <div style={styles.paneHeaderNi}>🚚 NON-INVENTORY · CHARGES ({filteredNonInv.length})</div>
+              <div style={styles.niScroll}>
+                {filteredNonInv.map((n) => (
+                  <div
+                    key={`ni-${n.id}`}
+                    onMouseDown={() => handlePickNonInv(n)}
+                    style={{ ...styles.row, backgroundColor: String(n.id) === String(nonInventoryValue) ? "#fff3cd" : "transparent" }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={styles.rowName}><span style={styles.niTag}>charge</span>{n.name}</div>
+                      {(n.code || n.unitName) && (
+                        <div style={styles.rowMeta}>
+                          {n.code && <span style={{ color: "#5f6d7e" }}>{n.code}</span>}
+                          {n.unitName && <span style={{ color: "#5f6d7e" }}> · {n.unitName}</span>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Inventory items — its OWN pane with a fixed header + independent
+              scroll, taking the remaining height below the charges pane. */}
+          {(filteredItems.length > 0 || filteredNonInv.length > 0) && (
+            <div style={styles.invPane}>
+              <div style={styles.paneHeaderInv}>📦 INVENTORY ITEMS{filteredItems.length ? ` (${filteredItems.length})` : ""}</div>
+              <div style={styles.invScroll}>
+                {filteredItems.length === 0 ? (
+                  <div style={styles.empty}>No inventory items match &ldquo;{query}&rdquo;.</div>
+                ) : (
+                  <>
+                    {stocked.length > 0 && (
+                      <>
+                        <div style={styles.sectionHeader}>IN STOCK</div>
+                        {stocked.map((it, i) => renderItem(it, i, highlightIdx, setHighlightIdx, handlePick))}
+                      </>
+                    )}
+                    {quick.length > 0 && (
+                      <>
+                        <div style={styles.sectionHeader}>QUICK (no HS code)</div>
+                        {quick.map((it, i) => {
+                          const realIdx = stocked.length + i;
+                          return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
+                        })}
+                      </>
+                    )}
+                    {favorites.length > 0 && (
+                      <>
+                        <div style={styles.sectionHeader}>★ FAVORITES</div>
+                        {favorites.map((it, i) => {
+                          const realIdx = stocked.length + quick.length + i;
+                          return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
+                        })}
+                      </>
+                    )}
+                    {others.length > 0 && (
+                      <>
+                        {(stocked.length > 0 || quick.length > 0 || favorites.length > 0) && <div style={styles.sectionHeader}>OTHER</div>}
+                        {others.map((it, i) => {
+                          const realIdx = stocked.length + quick.length + favorites.length + i;
+                          return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
+                        })}
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>,
         document.body
       )}
@@ -311,6 +414,7 @@ const styles = {
     lineHeight: 1,
   },
   hsInline: { color: "#5f6d7e", fontFamily: "monospace", fontSize: "0.75rem", marginLeft: 4 },
+  niTag: { display: "inline-block", fontSize: "0.6rem", fontWeight: 800, color: "#8a5a00", background: "#ffe8a3", padding: "0.05rem 0.3rem", borderRadius: 4, marginRight: 5, verticalAlign: "middle", textTransform: "uppercase", letterSpacing: "0.03em" },
   // position: fixed uses viewport coords (no scrollY math). Anchored directly
   // to the trigger's getBoundingClientRect(), and the component re-measures
   // on every ancestor scroll/resize so the list tracks the trigger exactly.
@@ -357,11 +461,30 @@ const styles = {
     backgroundColor: "#f8f9fb",
   },
   list: { overflowY: "auto", flex: 1 },
+  // Non-inventory charges pane — capped height, own scroll, never grows to
+  // crowd out the inventory list below it.
+  niPane: { flexShrink: 0, borderBottom: "3px solid #ffe0b2" },
+  niScroll: { maxHeight: 132, overflowY: "auto", backgroundColor: "#fffdf7" },
+  // Inventory pane — takes the remaining height and scrolls on its own.
+  invPane: { flex: 1, minHeight: 96, display: "flex", flexDirection: "column" },
+  invScroll: { flex: 1, overflowY: "auto" },
+  // Section-level bars (the two panes). Solid, full-width, clearly separate the
+  // charges block from the inventory block.
+  paneHeaderNi: {
+    padding: "0.4rem 0.7rem", fontSize: "0.68rem", fontWeight: 800,
+    color: "#8a5a00", backgroundColor: "#fff3cd", letterSpacing: "0.04em",
+    textTransform: "uppercase", borderBottom: "1px solid #ffe8a3",
+  },
+  paneHeaderInv: {
+    padding: "0.4rem 0.7rem", fontSize: "0.68rem", fontWeight: 800,
+    color: "#0d47a1", backgroundColor: "#e8f0fe", letterSpacing: "0.04em",
+    textTransform: "uppercase", borderBottom: "1px solid #cfd9ff",
+  },
   sectionHeader: {
-    padding: "0.45rem 0.7rem 0.25rem",
-    fontSize: "0.65rem",
+    padding: "0.4rem 0.7rem 0.2rem",
+    fontSize: "0.62rem",
     fontWeight: 800,
-    color: "#5f6d7e",
+    color: "#8a94a6",
     letterSpacing: "0.05em",
     textTransform: "uppercase",
     backgroundColor: "#f8f9fb",

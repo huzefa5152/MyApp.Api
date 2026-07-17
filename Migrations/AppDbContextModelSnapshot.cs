@@ -175,6 +175,9 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("Number")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("ReconciledDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("ToAccountId")
                         .HasColumnType("int");
 
@@ -188,6 +191,125 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("AccountTransfers");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.Accounting.BankReconciliation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BankAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ClearedBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("StatementBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("StatementDate")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankAccountId");
+
+                    b.HasIndex("CompanyId", "BankAccountId", "StatementDate");
+
+                    b.ToTable("BankReconciliations");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.Accounting.BankStatementImport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BankAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)");
+
+                    b.Property<DateTime>("ImportedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RowCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankAccountId");
+
+                    b.HasIndex("CompanyId");
+
+                    b.ToTable("BankStatementImports");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.Accounting.BankStatementLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("BankAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("ImportId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PaymentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankAccountId");
+
+                    b.HasIndex("ImportId");
+
+                    b.HasIndex("CompanyId", "BankAccountId", "Status");
+
+                    b.ToTable("BankStatementLines");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Accounting.JournalEntry", b =>
@@ -363,6 +485,9 @@ namespace MyApp.Api.Migrations
 
                     b.Property<int>("Number")
                         .HasColumnType("int");
+
+                    b.Property<DateTime?>("ReconciledDate")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
@@ -707,6 +832,12 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("CurrentSalesQuoteNumber")
                         .HasColumnType("int");
 
+                    b.Property<int?>("DefaultPurchaseAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DefaultSalesAccountId")
+                        .HasColumnType("int");
+
                     b.Property<string>("FbrBusinessActivity")
                         .HasColumnType("nvarchar(max)");
 
@@ -825,22 +956,37 @@ namespace MyApp.Api.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("DivisionId")
+                        .HasColumnType("int");
+
                     b.Property<int>("ItemTypeId")
                         .HasColumnType("int");
 
                     b.Property<byte>("Mode")
                         .HasColumnType("tinyint");
 
+                    b.Property<int?>("PurchaseAccountId")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("ReorderLevel")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
+
+                    b.Property<int?>("SaleAccountId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DivisionId");
+
                     b.HasIndex("ItemTypeId");
+
+                    b.HasIndex("PurchaseAccountId");
+
+                    b.HasIndex("SaleAccountId");
 
                     b.HasIndex("CompanyId", "ItemTypeId")
                         .IsUnique();
@@ -946,6 +1092,9 @@ namespace MyApp.Api.Migrations
                     b.Property<int?>("ItemTypeId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("NonInventoryItemId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("Quantity")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
@@ -963,9 +1112,14 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("ItemTypeId");
 
+                    b.HasIndex("NonInventoryItemId");
+
                     b.HasIndex("SalesOrderItemId");
 
-                    b.ToTable("DeliveryItems");
+                    b.ToTable("DeliveryItems", t =>
+                        {
+                            t.HasCheckConstraint("CK_DeliveryItem_OneItemRef", "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL");
+                        });
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Division", b =>
@@ -1666,6 +1820,9 @@ namespace MyApp.Api.Migrations
                     b.Property<int?>("ItemTypeId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("NonInventoryItemId")
+                        .HasColumnType("int");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
 
@@ -1679,7 +1836,12 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("ItemTypeId");
 
-                    b.ToTable("GoodsReceiptItems");
+                    b.HasIndex("NonInventoryItemId");
+
+                    b.ToTable("GoodsReceiptItems", t =>
+                        {
+                            t.HasCheckConstraint("CK_GoodsReceiptItem_OneItemRef", "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL");
+                        });
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Invoice", b =>
@@ -1797,6 +1959,12 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("PaymentTerms")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("PoDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PoNumber")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("SalesOrderId")
                         .HasColumnType("int");
 
@@ -1834,6 +2002,9 @@ namespace MyApp.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AccountId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("DeliveryItemId")
                         .HasColumnType("int");
 
@@ -1864,6 +2035,9 @@ namespace MyApp.Api.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int?>("NonInventoryItemId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("Quantity")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
@@ -1893,15 +2067,22 @@ namespace MyApp.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AccountId");
+
                     b.HasIndex("DeliveryItemId");
 
                     b.HasIndex("InvoiceId");
 
                     b.HasIndex("ItemTypeId");
 
+                    b.HasIndex("NonInventoryItemId");
+
                     b.HasIndex("SalesOrderItemId");
 
-                    b.ToTable("InvoiceItems");
+                    b.ToTable("InvoiceItems", t =>
+                        {
+                            t.HasCheckConstraint("CK_InvoiceItem_OneItemRef", "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL");
+                        });
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.InvoiceItemAdjustment", b =>
@@ -3004,6 +3185,73 @@ namespace MyApp.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.NonInventoryItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DefaultLineDescription")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal?>("DefaultPurchasePrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("DefaultSalePrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ExternalRef")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<bool>("HideNameOnPrint")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("PurchaseAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SaleAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UnitName")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PurchaseAccountId");
+
+                    b.HasIndex("SaleAccountId");
+
+                    b.HasIndex("CompanyId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("NonInventoryItems");
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.OpeningStockBalance", b =>
                 {
                     b.Property<int>("Id")
@@ -3476,6 +3724,9 @@ namespace MyApp.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AccountId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -3507,6 +3758,9 @@ namespace MyApp.Api.Migrations
                     b.Property<decimal>("LineTotal")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("NonInventoryItemId")
+                        .HasColumnType("int");
 
                     b.Property<int>("PurchaseBillId")
                         .HasColumnType("int");
@@ -3541,13 +3795,20 @@ namespace MyApp.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AccountId");
+
                     b.HasIndex("GoodsReceiptItemId");
 
                     b.HasIndex("ItemTypeId");
 
+                    b.HasIndex("NonInventoryItemId");
+
                     b.HasIndex("PurchaseBillId");
 
-                    b.ToTable("PurchaseItems");
+                    b.ToTable("PurchaseItems", t =>
+                        {
+                            t.HasCheckConstraint("CK_PurchaseItem_OneItemRef", "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL");
+                        });
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.PurchaseItemSourceLine", b =>
@@ -3700,6 +3961,9 @@ namespace MyApp.Api.Migrations
                     b.Property<int?>("ItemTypeId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("NonInventoryItemId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("Quantity")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
@@ -3715,9 +3979,14 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("ItemTypeId");
 
+                    b.HasIndex("NonInventoryItemId");
+
                     b.HasIndex("SalesOrderId");
 
-                    b.ToTable("SalesOrderItems");
+                    b.ToTable("SalesOrderItems", t =>
+                        {
+                            t.HasCheckConstraint("CK_SalesOrderItem_OneItemRef", "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL");
+                        });
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.SalesQuote", b =>
@@ -3820,6 +4089,9 @@ namespace MyApp.Api.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int?>("NonInventoryItemId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("Quantity")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
@@ -3839,9 +4111,14 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("ItemTypeId");
 
+                    b.HasIndex("NonInventoryItemId");
+
                     b.HasIndex("SalesQuoteId");
 
-                    b.ToTable("SalesQuoteItems");
+                    b.ToTable("SalesQuoteItems", t =>
+                        {
+                            t.HasCheckConstraint("CK_SalesQuoteItem_OneItemRef", "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL");
+                        });
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.StockMovement", b =>
@@ -4167,6 +4444,51 @@ namespace MyApp.Api.Migrations
                     b.ToTable("UserRoles");
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.WithholdingTaxReceipt", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("ClientId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("DivisionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ReceiptNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
+
+                    b.HasIndex("DivisionId");
+
+                    b.HasIndex("CompanyId", "DivisionId", "ReceiptNumber")
+                        .IsUnique();
+
+                    b.ToTable("WithholdingTaxReceipts");
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.Accounting.Account", b =>
                 {
                     b.HasOne("MyApp.Api.Models.Accounting.AccountGroup", "AccountGroup")
@@ -4229,6 +4551,63 @@ namespace MyApp.Api.Migrations
                     b.Navigation("FromAccount");
 
                     b.Navigation("ToAccount");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.Accounting.BankReconciliation", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "BankAccount")
+                        .WithMany()
+                        .HasForeignKey("BankAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("BankAccount");
+
+                    b.Navigation("Company");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.Accounting.BankStatementImport", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "BankAccount")
+                        .WithMany()
+                        .HasForeignKey("BankAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("BankAccount");
+
+                    b.Navigation("Company");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.Accounting.BankStatementLine", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "BankAccount")
+                        .WithMany()
+                        .HasForeignKey("BankAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.Accounting.BankStatementImport", "Import")
+                        .WithMany("Lines")
+                        .HasForeignKey("ImportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BankAccount");
+
+                    b.Navigation("Import");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Accounting.JournalEntry", b =>
@@ -4372,15 +4751,36 @@ namespace MyApp.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("MyApp.Api.Models.Division", "Division")
+                        .WithMany()
+                        .HasForeignKey("DivisionId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("MyApp.Api.Models.ItemType", "ItemType")
                         .WithMany()
                         .HasForeignKey("ItemTypeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "PurchaseAccount")
+                        .WithMany()
+                        .HasForeignKey("PurchaseAccountId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "SaleAccount")
+                        .WithMany()
+                        .HasForeignKey("SaleAccountId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.Navigation("Company");
 
+                    b.Navigation("Division");
+
                     b.Navigation("ItemType");
+
+                    b.Navigation("PurchaseAccount");
+
+                    b.Navigation("SaleAccount");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.DeliveryChallan", b =>
@@ -4443,6 +4843,11 @@ namespace MyApp.Api.Migrations
                         .HasForeignKey("ItemTypeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("MyApp.Api.Models.NonInventoryItem", "NonInventoryItem")
+                        .WithMany()
+                        .HasForeignKey("NonInventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("MyApp.Api.Models.SalesOrderItem", "SalesOrderItem")
                         .WithMany("DeliveryItems")
                         .HasForeignKey("SalesOrderItemId")
@@ -4451,6 +4856,8 @@ namespace MyApp.Api.Migrations
                     b.Navigation("DeliveryChallan");
 
                     b.Navigation("ItemType");
+
+                    b.Navigation("NonInventoryItem");
 
                     b.Navigation("SalesOrderItem");
                 });
@@ -4530,9 +4937,16 @@ namespace MyApp.Api.Migrations
                         .HasForeignKey("ItemTypeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("MyApp.Api.Models.NonInventoryItem", "NonInventoryItem")
+                        .WithMany()
+                        .HasForeignKey("NonInventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("GoodsReceipt");
 
                     b.Navigation("ItemType");
+
+                    b.Navigation("NonInventoryItem");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Invoice", b =>
@@ -4575,6 +4989,11 @@ namespace MyApp.Api.Migrations
 
             modelBuilder.Entity("MyApp.Api.Models.InvoiceItem", b =>
                 {
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("MyApp.Api.Models.DeliveryItem", "DeliveryItem")
                         .WithMany()
                         .HasForeignKey("DeliveryItemId")
@@ -4590,16 +5009,25 @@ namespace MyApp.Api.Migrations
                         .WithMany()
                         .HasForeignKey("ItemTypeId");
 
+                    b.HasOne("MyApp.Api.Models.NonInventoryItem", "NonInventoryItem")
+                        .WithMany()
+                        .HasForeignKey("NonInventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("MyApp.Api.Models.SalesOrderItem", null)
                         .WithMany()
                         .HasForeignKey("SalesOrderItemId")
                         .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Account");
 
                     b.Navigation("DeliveryItem");
 
                     b.Navigation("Invoice");
 
                     b.Navigation("ItemType");
+
+                    b.Navigation("NonInventoryItem");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.InvoiceItemAdjustment", b =>
@@ -4611,6 +5039,31 @@ namespace MyApp.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("InvoiceItem");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.NonInventoryItem", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "PurchaseAccount")
+                        .WithMany()
+                        .HasForeignKey("PurchaseAccountId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "SaleAccount")
+                        .WithMany()
+                        .HasForeignKey("SaleAccountId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Company");
+
+                    b.Navigation("PurchaseAccount");
+
+                    b.Navigation("SaleAccount");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.OpeningStockBalance", b =>
@@ -4724,6 +5177,11 @@ namespace MyApp.Api.Migrations
 
             modelBuilder.Entity("MyApp.Api.Models.PurchaseItem", b =>
                 {
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("MyApp.Api.Models.GoodsReceiptItem", "GoodsReceiptItem")
                         .WithMany()
                         .HasForeignKey("GoodsReceiptItemId")
@@ -4734,15 +5192,24 @@ namespace MyApp.Api.Migrations
                         .HasForeignKey("ItemTypeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("MyApp.Api.Models.NonInventoryItem", "NonInventoryItem")
+                        .WithMany()
+                        .HasForeignKey("NonInventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("MyApp.Api.Models.PurchaseBill", "PurchaseBill")
                         .WithMany("Items")
                         .HasForeignKey("PurchaseBillId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.Navigation("Account");
+
                     b.Navigation("GoodsReceiptItem");
 
                     b.Navigation("ItemType");
+
+                    b.Navigation("NonInventoryItem");
 
                     b.Navigation("PurchaseBill");
                 });
@@ -4825,6 +5292,11 @@ namespace MyApp.Api.Migrations
                         .HasForeignKey("ItemTypeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("MyApp.Api.Models.NonInventoryItem", "NonInventoryItem")
+                        .WithMany()
+                        .HasForeignKey("NonInventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("MyApp.Api.Models.SalesOrder", "SalesOrder")
                         .WithMany("Items")
                         .HasForeignKey("SalesOrderId")
@@ -4832,6 +5304,8 @@ namespace MyApp.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("ItemType");
+
+                    b.Navigation("NonInventoryItem");
 
                     b.Navigation("SalesOrder");
                 });
@@ -4876,6 +5350,11 @@ namespace MyApp.Api.Migrations
                         .HasForeignKey("ItemTypeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("MyApp.Api.Models.NonInventoryItem", "NonInventoryItem")
+                        .WithMany()
+                        .HasForeignKey("NonInventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("MyApp.Api.Models.SalesQuote", "SalesQuote")
                         .WithMany("Items")
                         .HasForeignKey("SalesQuoteId")
@@ -4883,6 +5362,8 @@ namespace MyApp.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("ItemType");
+
+                    b.Navigation("NonInventoryItem");
 
                     b.Navigation("SalesQuote");
                 });
@@ -4986,6 +5467,37 @@ namespace MyApp.Api.Migrations
                     b.Navigation("Role");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.WithholdingTaxReceipt", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.Division", "Division")
+                        .WithMany()
+                        .HasForeignKey("DivisionId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Client");
+
+                    b.Navigation("Company");
+
+                    b.Navigation("Division");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.Accounting.BankStatementImport", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Accounting.JournalEntry", b =>

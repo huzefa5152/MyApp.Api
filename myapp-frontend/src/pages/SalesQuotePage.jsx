@@ -40,11 +40,6 @@ export default function SalesQuotePage() {
   const canConvert = has("salesorders.manage.create");
   const canSeeAttachments = has("attachments.list.view");
 
-  // Shared template-picker state: division-aware auto resolution (division
-  // quotes need a division template) + operator-pinned explicit choice.
-  const tplPicker = usePrintTemplates("SalesQuote", { divisionAware: true });
-  const { templatesLoaded } = tplPicker;
-
   const [quotes, setQuotes] = useState([]);
   const [attachCounts, setAttachCounts] = useState({}); // { quoteId: attachmentCount }
   const [viewQuote, setViewQuote] = useState(null);
@@ -59,6 +54,13 @@ export default function SalesQuotePage() {
   const [divisionFilter, setDivisionFilter] = useState("");
   const [clientFilter, setClientFilter] = useState("");
   const [clients, setClients] = useState([]);
+
+  // Shared template-picker state, scoped to the selected division: "All
+  // Divisions" → company-wide templates; a specific division → that division's.
+  // An empty scope hides the picker and blocks Print/PDF. Declared after
+  // divisionFilter so it can consume it.
+  const tplPicker = usePrintTemplates("SalesQuote", { divisionId: divisionFilter });
+  const { templatesLoaded } = tplPicker;
 
   const fetchQuotes = useCallback(async (companyId, pg) => {
     if (!companyId) return;
@@ -106,16 +108,11 @@ export default function SalesQuotePage() {
   // quote the company default (null when a division quote has no template).
   const resolveQuoteTemplate = (q) => tplPicker.resolveTemplate(q);
 
-  // Show Print only when it can produce something: division quotes need a
-  // division template (or an explicit pick); company-level quotes always can
-  // (built-in default fallback). If templates couldn't load (no perm), keep
-  // legacy behavior.
-  const canPrintQuote = (q) => {
-    if (!canPrint) return false;
-    if (!templatesLoaded) return true;
-    if (q.divisionId) return !!resolveQuoteTemplate(q);
-    return true;
-  };
+  // Print/PDF render when the operator has print permission, and are DISABLED
+  // (with a tooltip) when the company has ZERO SalesQuote templates — the same
+  // uniform rule every document screen uses. (Argument kept so existing
+  // call sites don't change; the flag is company/type-level, not per-quote.)
+  const quoteNoTemplate = () => tplPicker.noTemplate;
 
   const handleSave = async (payload) => {
     // Return the saved quote so the form can flush staged attachments against
@@ -158,8 +155,8 @@ export default function SalesQuotePage() {
   const handlePrint = async (q) => {
     // A division quote with no division template can't print (button is hidden;
     // guard here too).
-    if (templatesLoaded && q.divisionId && !resolveQuoteTemplate(q)) {
-      notify("No print template is set for this division.", "warning");
+    if (quoteNoTemplate(q)) {
+      notify(tplPicker.noTemplateReason, "warning");
       return;
     }
     const w = window.open("", "_blank");
@@ -176,8 +173,8 @@ export default function SalesQuotePage() {
 
   const [exportingId, setExportingId] = useState(null);
   const handleExportPdf = async (q) => {
-    if (templatesLoaded && q.divisionId && !resolveQuoteTemplate(q)) {
-      notify("No print template is set for this division.", "warning");
+    if (quoteNoTemplate(q)) {
+      notify(tplPicker.noTemplateReason, "warning");
       return;
     }
     if (exportingId) return;
@@ -265,8 +262,8 @@ export default function SalesQuotePage() {
                 <div style={st.actions}>
                   <button style={st.actBtn} onClick={() => setViewQuote(q)} title="View"><MdVisibility size={16} /></button>
                   {canUpdate && q.isEditable && <button style={st.actBtn} onClick={() => { setEditQuote(q); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
-                  {canPrintQuote(q) && <button style={st.actBtn} onClick={() => handlePrint(q)} title="Print"><MdPrint size={16} /></button>}
-                  {canPrintQuote(q) && <button style={{ ...st.actBtn, opacity: exportingId === q.id ? 0.5 : 1 }} onClick={() => handleExportPdf(q)} disabled={!!exportingId} title="Download PDF"><MdPictureAsPdf size={16} /></button>}
+                  {canPrint && <button style={{ ...st.actBtn, ...(quoteNoTemplate(q) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={quoteNoTemplate(q)} onClick={() => handlePrint(q)} title={quoteNoTemplate(q) ? tplPicker.noTemplateReason : "Print"}><MdPrint size={16} /></button>}
+                  {canPrint && <button style={{ ...st.actBtn, opacity: (quoteNoTemplate(q) || exportingId === q.id) ? 0.5 : 1, ...(quoteNoTemplate(q) ? { cursor: "not-allowed" } : {}) }} onClick={() => handleExportPdf(q)} disabled={quoteNoTemplate(q) || !!exportingId} title={quoteNoTemplate(q) ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={16} /></button>}
                   {canConvert && q.status !== "Accepted" && <button style={{ ...st.actBtn, color: colors.teal }} onClick={() => handleConvert(q)} title="Convert to Sales Order"><MdSwapHoriz size={16} /></button>}
                   {canDelete && <button style={{ ...st.actBtn, color: "#dc3545" }} onClick={() => handleDelete(q)} title="Delete"><MdDelete size={16} /></button>}
                 </div>
@@ -291,7 +288,7 @@ export default function SalesQuotePage() {
         <SalesQuoteDetailModal
           companyId={selectedCompany.id}
           quote={viewQuote}
-          canPrint={canPrintQuote(viewQuote)}
+          canPrint={canPrint && !quoteNoTemplate(viewQuote)}
           onPrint={(q) => { setViewQuote(null); handlePrint(q); }}
           onClose={() => setViewQuote(null)}
         />

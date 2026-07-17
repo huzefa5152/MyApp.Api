@@ -49,6 +49,9 @@ export default function CreditDebitNotePage() {
   const { selectedCompany } = useCompany();
   const { has } = usePermissions();
   const canCreate = has("invoices.note.create");
+  // FBR-on companies raise notes against FBR-submitted invoices (the IRIS
+  // adjustment); FBR-off companies raise them against fully PAID sale invoices.
+  const fbrOn = selectedCompany?.fbrEnabled !== false;
 
   // ?type=credit|debit picks the note kind; ?invoiceId=N preselects the
   // original invoice (the Reverse button's entry path).
@@ -100,23 +103,30 @@ export default function CreditDebitNotePage() {
         .then(r => setDivisions(r.data || []))
         .catch(() => setDivisions([]));
       const { data } = await getInvoicesByCompany(selectedCompany.id);
-      // Only FBR-submitted sale invoices; per type, hide ones that already
-      // carry a live note of THIS type (FBR 0064 — one per type per invoice).
-      const eligible = (data || []).filter((i) =>
-        i.fbrStatus === "Submitted" &&
-        (isCredit ? !i.reversedByCreditNoteNumber : !i.adjustedByDebitNoteNumber));
+      // Eligible = sale invoices (not notes, not cancelled) that don't already
+      // carry a live note of THIS type (FBR 0064 — one per type per invoice),
+      // AND that are billable for a note: FBR-submitted when FBR is on, fully
+      // PAID when FBR is off.
+      const eligible = (data || []).filter((i) => {
+        if (i.documentType === 9 || i.documentType === 10 || i.isCancelled) return false;
+        const notAlreadyNoted = isCredit ? !i.reversedByCreditNoteNumber : !i.adjustedByDebitNoteNumber;
+        if (!notAlreadyNoted) return false;
+        return fbrOn ? i.fbrStatus === "Submitted" : i.paymentStatus === "Paid";
+      });
       setInvoices(eligible);
       if (preselectId) {
         const pre = eligible.find((i) => i.id === preselectId);
         if (pre) pickInvoice(pre);
-        else notify("That invoice is not eligible (not submitted, or it already has a note of this type).", "error");
+        else notify(fbrOn
+          ? "That invoice is not eligible (not submitted, or it already has a note of this type)."
+          : "That invoice is not eligible (not fully paid, or it already has a note of this type).", "error");
       }
     } catch {
       notify("Failed to load invoices.", "error");
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany?.id, isCredit, preselectId, pickInvoice]);
+  }, [selectedCompany?.id, isCredit, preselectId, pickInvoice, fbrOn]);
 
   useEffect(() => { fetchInvoices(); }, [fetchInvoices]);
 
@@ -186,7 +196,7 @@ export default function CreditDebitNotePage() {
       // BEFORE navigate() unmounts this page.
       try { await attachmentRef.current?.flush(note.id); }
       catch { /* attachments are best-effort — the note is already created */ }
-      notify(`${label} #${note.invoiceNumber} created against bill #${selected.invoiceNumber}. Validate then submit it to FBR.`, "success");
+      notify(`${label} #${note.invoiceNumber} created against bill #${selected.invoiceNumber}.${fbrOn ? " Validate then submit it to FBR." : ""}`, "success");
       navigate(isCredit ? "/credit-notes" : "/debit-notes");
     } catch (err) {
       notify(err.response?.data?.error || "Failed to create note.", "error");
@@ -209,9 +219,9 @@ export default function CreditDebitNotePage() {
       </h2>
       <p style={{ color: colors.textSecondary, marginTop: 0 }}>
         {isCredit
-          ? "Reverse an FBR-submitted invoice — fully or partially. A Credit Note reduces the sale (goods returned, cancellation, discount) and re-enters stock only when goods physically come back."
-          : "Record an upward adjustment against an FBR-submitted invoice (undercharge, rate change, extra goods). A Debit Note increases the sale and normally leaves stock untouched."}
-        {" "}The note is created unsubmitted — validate and submit it to FBR from its tab.
+          ? `Reverse ${fbrOn ? "an FBR-submitted" : "a paid"} invoice — fully or partially. A Credit Note reduces the sale (goods returned, cancellation, discount) and re-enters stock only when goods physically come back.`
+          : `Record an upward adjustment against ${fbrOn ? "an FBR-submitted" : "a paid"} invoice (undercharge, rate change, extra goods). A Debit Note increases the sale and normally leaves stock untouched.`}
+        {fbrOn && " The note is created unsubmitted — validate and submit it to FBR from its tab."}
       </p>
 
       {!selected ? (
@@ -249,14 +259,14 @@ export default function CreditDebitNotePage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search submitted invoices by #, client, or IRN…"
+              placeholder={fbrOn ? "Search submitted invoices by #, client, or IRN…" : "Search paid invoices by #, client, or PO…"}
               style={{ width: "100%", padding: "10px 10px 10px 34px", borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.inputBg, boxSizing: "border-box" }}
             />
           </div>
           {loading ? (
             <p style={{ color: colors.textSecondary }}>Loading…</p>
           ) : filtered.length === 0 ? (
-            <p style={{ color: colors.textSecondary }}>No eligible FBR-submitted invoices{paymentFilter !== "All" ? ` with status "${paymentFilter}"` : ""}{divisionFilter !== "all" ? " in the selected division" : ""}. Adjust the filters above to widen the list.</p>
+            <p style={{ color: colors.textSecondary }}>No eligible {fbrOn ? "FBR-submitted" : "paid"} invoices{paymentFilter !== "All" ? ` with status "${paymentFilter}"` : ""}{divisionFilter !== "all" ? " in the selected division" : ""}. Adjust the filters above to widen the list.</p>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))", gap: 10 }}>
               {filtered.map((inv) => (
@@ -284,9 +294,11 @@ export default function CreditDebitNotePage() {
                   <div style={{ fontSize: "0.8rem", color: colors.textSecondary }}>
                     {inv.date ? new Date(inv.date).toLocaleDateString() : ""} · Rs {Number(inv.grandTotal).toLocaleString()}
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: colors.textSecondary, marginTop: 4, wordBreak: "break-all" }}>
-                    IRN {inv.fbrIRN}
-                  </div>
+                  {inv.fbrIRN && (
+                    <div style={{ fontSize: "0.72rem", color: colors.textSecondary, marginTop: 4, wordBreak: "break-all" }}>
+                      IRN {inv.fbrIRN}
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
@@ -303,7 +315,7 @@ export default function CreditDebitNotePage() {
             <span style={{ marginLeft: 8, fontSize: "0.72rem", fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: "#e3f2fd", color: "#0d47a1" }}>
               {selected.divisionName || "Company level"}
             </span>
-            <div style={{ fontSize: "0.78rem", color: colors.textSecondary, wordBreak: "break-all" }}>IRN {selected.fbrIRN}</div>
+            {selected.fbrIRN && <div style={{ fontSize: "0.78rem", color: colors.textSecondary, wordBreak: "break-all" }}>IRN {selected.fbrIRN}</div>}
           </div>
 
           {/* Lines */}

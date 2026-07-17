@@ -156,6 +156,46 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<IEnumerable<ClientDto>>> GetClientsByCompany(int companyId)
             => Ok(await _service.GetByCompanyAsync(companyId));
 
+        /// <summary>
+        /// Per-client roll-up for the Customers screen — Manager.io-style
+        /// columns (document counts, qty-to-deliver / qty-to-invoice, accounts
+        /// receivable, withholding-tax receivable, status). One row per client.
+        /// </summary>
+        [HttpGet("company/{companyId}/summary")]
+        [HasPermission("clients.manage.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<List<ClientSummaryDto>>> GetClientSummaryByCompany(int companyId)
+            => Ok(await _service.GetSummaryByCompanyAsync(companyId));
+
+        /// <summary>
+        /// Drill-down for one customer — their documents grouped by type, for
+        /// the expandable customer-detail popup opened from a count/amount cell.
+        /// </summary>
+        [HttpGet("{clientId}/drilldown")]
+        [HasPermission("clients.manage.view")]
+        public async Task<ActionResult<ClientDrilldownDto>> GetClientDrilldown(int clientId)
+        {
+            var client = await _service.GetByIdAsync(clientId);
+            if (client == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, client.CompanyId);
+            return Ok(await _service.GetDrilldownAsync(clientId, client.Name));
+        }
+
+        /// <summary>
+        /// Customer A/R statement — chronological ledger of invoices (debits)
+        /// and receipts (credits) with a running balance, opened from the
+        /// Accounts-Receivable cell.
+        /// </summary>
+        [HttpGet("{clientId}/statement")]
+        [HasPermission("clients.manage.view")]
+        public async Task<ActionResult<ClientStatementDto>> GetClientStatement(int clientId)
+        {
+            var client = await _service.GetByIdAsync(clientId);
+            if (client == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, client.CompanyId);
+            return Ok(await _service.GetStatementAsync(clientId, client.Name));
+        }
+
         [HttpGet("{id}")]
         [HasPermission("clients.manage.view")]
         public async Task<ActionResult<ClientDto>> GetClient(int id)

@@ -105,6 +105,11 @@ namespace MyApp.Api.Repositories.Implementations
                     .ThenInclude(ii => ii.DeliveryItem)
                 .Include(i => i.Items)
                     .ThenInclude(ii => ii.ItemType)
+                // Non-inventory line link (Freight/Discount/…) — needed so the
+                // detail DTO's NonInventoryItemName populates and the item cell
+                // shows the non-inventory item (not "—") on view/edit.
+                .Include(i => i.Items)
+                    .ThenInclude(ii => ii.NonInventoryItem)
                 // Dual-book overlay (2026-05-11). Pulled on detail
                 // fetches so EditBillForm in Invoice mode can hydrate
                 // the AdjustedXxx values as "current" while keeping

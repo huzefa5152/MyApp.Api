@@ -11,7 +11,7 @@ function paymentStatusBadge(b) {
   return <StatusBadge tone="neutral">Unpaid</StatusBadge>;
 }
 
-export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete, onRecordPayment, onShowPayments, onPrint, onExportPdf, exportingId }) {
+export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete, onRecordPayment, onShowPayments, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "" }) {
   const columns = [
     {
       key: "purchaseBillNumber",
@@ -98,12 +98,12 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
         <MdVisibility size={14} />
       </button>
       {perms.canPrint && onPrint && (
-        <button style={btn.print} onClick={() => onPrint(b)} title="Print purchase bill">
+        <button style={{ ...btn.print, ...(printDisabled ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={printDisabled} onClick={() => onPrint(b)} title={printDisabled ? printDisabledReason : "Print purchase bill"}>
           <MdPrint size={14} />
         </button>
       )}
       {perms.canPrint && onExportPdf && (
-        <button style={{ ...btn.pdf, opacity: exportingId === b.id ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => onExportPdf(b)} title="Download PDF">
+        <button style={{ ...btn.pdf, opacity: (exportingId === b.id || printDisabled) ? 0.5 : 1, ...(printDisabled ? { cursor: "not-allowed" } : {}) }} disabled={!!exportingId || printDisabled} onClick={() => onExportPdf(b)} title={printDisabled ? printDisabledReason : "Download PDF"}>
           <MdPictureAsPdf size={14} />
         </button>
       )}

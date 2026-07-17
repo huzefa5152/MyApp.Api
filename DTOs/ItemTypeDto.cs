@@ -17,6 +17,38 @@ namespace MyApp.Api.DTOs
         public bool IsFavorite { get; set; }
         public int UsageCount { get; set; }
 
+        // ── Per-company overlay (CompanyItemTypeSetting), 2026-07-14 ──
+        // Populated on reads when GET /api/itemtypes?companyId=X is called, and
+        // consumed on POST/PUT (?companyId=X) to upsert the company's overlay row.
+        // All null when no company context (the global catalog view) or when the
+        // company has no overlay row for this item yet.
+
+        /// <summary>Optional division this item type belongs to WITHIN the selected
+        /// company. Null = company-wide (available to every division). Lets a
+        /// company and a division each curate their own inventory types.</summary>
+        public int? DivisionId { get; set; }
+        public string? DivisionName { get; set; }
+
+        /// <summary>Company-specific income account SALES lines of this item type
+        /// post to (Manager's "Custom income account"). Null = the company default
+        /// inventory-sales account.</summary>
+        public int? SaleAccountId { get; set; }
+        public string? SaleAccountName { get; set; }
+
+        /// <summary>Company-specific expense/COGS account PURCHASE lines post to.
+        /// Null = the company default inventory-purchases account.</summary>
+        public int? PurchaseAccountId { get; set; }
+        public string? PurchaseAccountName { get; set; }
+
+        /// <summary>
+        /// When true (Item Catalog screen with a company selected), a POST/PUT
+        /// with ?companyId=X upserts that company's overlay from DivisionId /
+        /// Sale·PurchaseAccountId above. Left false by the bill-form quick-create
+        /// paths — they pass companyId only for FBR enrichment and must NOT touch
+        /// (or clear) the overlay.
+        /// </summary>
+        public bool WriteCompanyOverlay { get; set; }
+
         /// <summary>
         /// Per-company on-hand qty (opening balance + Σ purchase In − Σ sale Out)
         /// — populated only when GET /api/itemtypes is called with

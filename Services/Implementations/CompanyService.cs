@@ -79,6 +79,8 @@ namespace MyApp.Api.Services.Implementations
             FbrDefaultUOM = c.FbrDefaultUOM,
             FbrDefaultPaymentModeRegistered = c.FbrDefaultPaymentModeRegistered,
             FbrDefaultPaymentModeUnregistered = c.FbrDefaultPaymentModeUnregistered,
+            DefaultSalesAccountId = c.DefaultSalesAccountId,
+            DefaultPurchaseAccountId = c.DefaultPurchaseAccountId,
             InventoryTrackingEnabled = c.InventoryTrackingEnabled,
             StockGuardHardBlock = c.StockGuardHardBlock,
             InventoryFlowVersion = c.InventoryFlowVersion,
@@ -382,6 +384,11 @@ namespace MyApp.Api.Services.Implementations
                     await _context.SalesQuotes.Where(q => q.CompanyId == id).ExecuteDeleteAsync();
                 }
 
+                // 3c. Withholding-tax receipts — Client + Company Restrict FKs, so
+                //     they MUST go before Clients below (added 2026-07; the cascade
+                //     predated the table → FK_WithholdingTaxReceipts_Clients_ClientId).
+                await _context.WithholdingTaxReceipts.Where(r => r.CompanyId == id).ExecuteDeleteAsync();
+
                 // 4. Delete clients
                 await _context.Clients.Where(c => c.CompanyId == id).ExecuteDeleteAsync();
 
@@ -436,6 +443,27 @@ namespace MyApp.Api.Services.Implementations
                 //    becomes undeleteable.
                 await _context.FbrCommunicationLogs.Where(l => l.CompanyId == id).ExecuteDeleteAsync();
                 await _context.UserCompanies.Where(uc => uc.CompanyId == id).ExecuteDeleteAsync();
+
+                // 7a-bis. General Ledger + inter-account transfers. JournalLine ->
+                //     Account and AccountTransfer -> Account are FKs, so these MUST
+                //     go before the Accounts delete below; JournalEntry /
+                //     AccountTransfer -> Company are Restrict, so they'd also block
+                //     the company row. (These tables postdated the cascade — a
+                //     GL-enabled company was otherwise undeletable.)
+                await _context.AccountTransfers.Where(t => t.CompanyId == id).ExecuteDeleteAsync();
+                var jeIds = await _context.JournalEntries.Where(je => je.CompanyId == id).Select(je => je.Id).ToListAsync();
+                if (jeIds.Count > 0)
+                {
+                    await _context.JournalLines.Where(l => jeIds.Contains(l.JournalEntryId)).ExecuteDeleteAsync();
+                    await _context.JournalEntries.Where(je => je.CompanyId == id).ExecuteDeleteAsync();
+                }
+
+                // 7a-ter. Non-Inventory Items. NonInventoryItem -> Company is
+                //     Restrict (would block the company row) and -> Account is
+                //     NoAction (would block the Accounts delete below). The line
+                //     items referencing them were already deleted above, so they
+                //     can go now — before the Accounts wipe.
+                await _context.NonInventoryItems.Where(n => n.CompanyId == id).ExecuteDeleteAsync();
 
                 // 7b. Chart of Accounts. Account -> AccountGroup is Restrict, so
                 //     accounts go first; AccountGroup self-FK is satisfied by the

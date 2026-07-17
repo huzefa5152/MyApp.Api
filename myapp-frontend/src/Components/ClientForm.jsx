@@ -304,17 +304,13 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
               </div>
             </div>
 
-            {/* FBR identity — pick Registration Type first; the relevant
-                identity fields render below conditionally. Hides NTN/STRN
-                for Unregistered/CNIC entities and shows CNIC instead, per
-                Pakistan FBR convention.  */}
+            {/* FBR identity — hidden entirely when the target company's FBR
+                integration is off (user rule). When shown: pick Registration
+                Type first; the relevant identity fields render conditionally
+                (NTN/STRN for Registered/FTN, CNIC for Unregistered). */}
+            {fbrRequired && (
             <div style={{ marginTop: "0.5rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #0d47a130", backgroundColor: "#e3f2fd" }}>
               <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#0d47a1" }}>FBR Details</p>
-              {!fbrRequired && (
-                <p style={{ margin: "0 0 0.6rem", fontSize: "0.76rem", color: "#5f6d7e" }}>
-                  FBR integration is off for the selected company — these details are optional.
-                </p>
-              )}
               <div className="form-grid-2col">
                 <div style={formGroup}>
                   <label style={label}>Registration Type{star}</label>
@@ -397,6 +393,7 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
                 </div>
               )}
             </div>
+            )}
 
             <div style={formGroup}>
               <label style={label}>Sites</label>

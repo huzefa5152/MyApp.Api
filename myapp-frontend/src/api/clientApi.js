@@ -2,6 +2,16 @@ import http from "./httpClient";
 
 export const getClients = () => http.get("/clients");
 export const getClientsByCompany = (companyId) => http.get(`/clients/company/${companyId}`);
+// Per-client roll-up for the Customers screen (Manager.io-style columns):
+// document counts, qty-to-deliver / qty-to-invoice, accounts receivable,
+// withholding-tax receivable, status. One row per client.
+export const getClientSummary = (companyId) => http.get(`/clients/company/${companyId}/summary`);
+// Per-customer drill-down bundle (documents grouped by type) for the
+// expandable customer-detail popup opened from a count/amount cell.
+export const getClientDrilldown = (clientId) => http.get(`/clients/${clientId}/drilldown`);
+// Customer A/R statement — chronological ledger of invoices (debits) and
+// receipts (credits) with a running balance, for the Accounts-Receivable click.
+export const getClientStatement = (clientId) => http.get(`/clients/${clientId}/statement`);
 export const getClientById = (id) => http.get(`/clients/${id}`);
 export const createClient = (payload) => http.post("/clients", payload);
 

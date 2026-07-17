@@ -16,6 +16,10 @@ import {
   defaultCreditNoteTemplate, defaultDebitNoteTemplate,
   defaultPurchaseBillTemplate, defaultGoodsReceiptTemplate,
 } from "./purchaseNoteDocTemplates";
+import {
+  defaultReceiptTemplate, defaultPaymentTemplate, defaultTransferTemplate,
+  defaultJournalEntryTemplate, defaultWithholdingTaxTemplate,
+} from "./accountingDocTemplates";
 
 export const TEMPLATE_TYPES = [
   { value: "Challan", label: "Delivery Challan" },
@@ -27,13 +31,102 @@ export const TEMPLATE_TYPES = [
   { value: "DebitNote", label: "Debit Note" },
   { value: "PurchaseBill", label: "Purchase Bill" },
   { value: "GoodsReceipt", label: "Goods Receipt" },
+  { value: "Receipt", label: "Receipt Voucher" },
+  { value: "Payment", label: "Payment Voucher" },
+  { value: "Transfer", label: "Fund Transfer" },
+  { value: "JournalEntry", label: "Journal Voucher" },
+  { value: "WithholdingTaxReceipt", label: "Withholding Tax Receipt" },
 ];
 
 export const TEMPLATE_TYPE_LABEL = Object.fromEntries(
   TEMPLATE_TYPES.map((t) => [t.value, t.label])
 );
 
+const SAMPLE_BRANDING = {
+  companyBrandName: "SAMPLE COMPANY",
+  companyLogoPath: "",
+  companyAddress: "123 Business Street,\nCity, Country",
+  companyPhone: "0300-1234567",
+  companyNTN: "1234567-8",
+  companySTRN: "1234567890123",
+};
+
 export const SAMPLE_DATA = {
+  Receipt: {
+    ...SAMPLE_BRANDING,
+    reference: "RCV-12",
+    date: new Date().toISOString(),
+    contactType: "Client",
+    contactName: "Sample Client Pvt Ltd",
+    contactAddress: "Client Address,\nCity",
+    contactPhone: "0321-7654321",
+    method: "Bank Transfer",
+    bankAccountName: "Meezan Bank — Current 0123",
+    chequeNumber: "004521",
+    chequeDate: new Date().toISOString(),
+    description: "Payment received against outstanding invoices",
+    amount: 177000,
+    amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
+    allocations: [
+      { sNo: 1, documentLabel: "Invoice #501", date: new Date().toISOString(), amount: 100000 },
+      { sNo: 2, documentLabel: "Invoice #498", date: new Date().toISOString(), amount: 77000 },
+    ],
+  },
+  Payment: {
+    ...SAMPLE_BRANDING,
+    reference: "PMT-8",
+    date: new Date().toISOString(),
+    contactType: "Supplier",
+    contactName: "Sample Supplier Co.",
+    contactAddress: "Supplier Address,\nCity",
+    contactPhone: "0300-1112223",
+    method: "Cheque",
+    bankAccountName: "HBL — Current 9988",
+    chequeNumber: "778812",
+    chequeDate: new Date().toISOString(),
+    description: "Payment made against purchase bills",
+    amount: 250000,
+    amountInWords: "Two Hundred Fifty Thousand Rupees Only",
+    allocations: [
+      { sNo: 1, documentLabel: "Bill #45", date: new Date().toISOString(), amount: 150000 },
+      { sNo: 2, documentLabel: "Bill #52", date: new Date().toISOString(), amount: 100000 },
+    ],
+  },
+  Transfer: {
+    ...SAMPLE_BRANDING,
+    reference: "TRF-7",
+    date: new Date().toISOString(),
+    fromAccountName: "Cash in Hand",
+    toAccountName: "Meezan Bank — Current 0123",
+    description: "Cash deposited to bank",
+    amount: 500000,
+    amountInWords: "Five Hundred Thousand Rupees Only",
+  },
+  JournalEntry: {
+    ...SAMPLE_BRANDING,
+    reference: "JE-14",
+    entryNo: 14,
+    date: new Date().toISOString(),
+    narration: "Depreciation charged for the month of June",
+    totalDebit: 45000,
+    totalCredit: 45000,
+    lines: [
+      { sNo: 1, accountCode: "5200", accountName: "Depreciation Expense", description: "Monthly depreciation", debit: 45000, credit: 0 },
+      { sNo: 2, accountCode: "1500", accountName: "Accumulated Depreciation", description: "", debit: 0, credit: 45000 },
+    ],
+  },
+  WithholdingTaxReceipt: {
+    ...SAMPLE_BRANDING,
+    receiptNumber: 23,
+    date: new Date().toISOString(),
+    customerName: "Sample Client Pvt Ltd",
+    customerAddress: "Client Address,\nCity",
+    customerNTN: "9876543-2",
+    customerSTRN: "9876543210987",
+    description: "Tax withheld on supply of goods under section 153(1)",
+    amount: 8850,
+    amountInWords: "Eight Thousand Eight Hundred Fifty Rupees Only",
+  },
   Challan: {
     companyBrandName: "SAMPLE COMPANY",
     companyLogoPath: "",
@@ -277,6 +370,11 @@ export const DEFAULT_TEMPLATES = {
   DebitNote: defaultDebitNoteTemplate,
   PurchaseBill: defaultPurchaseBillTemplate,
   GoodsReceipt: defaultGoodsReceiptTemplate,
+  Receipt: defaultReceiptTemplate,
+  Payment: defaultPaymentTemplate,
+  Transfer: defaultTransferTemplate,
+  JournalEntry: defaultJournalEntryTemplate,
+  WithholdingTaxReceipt: defaultWithholdingTaxTemplate,
 };
 
 /**

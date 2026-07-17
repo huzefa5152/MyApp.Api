@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   MdAdd, MdDelete, MdEdit, MdVisibility, MdClose, MdChevronLeft, MdChevronRight,
-  MdSearch, MdBusiness, MdMenuBook, MdArrowDropDown,
+  MdSearch, MdBusiness, MdMenuBook, MdArrowDropDown, MdPrint, MdPictureAsPdf,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -10,11 +10,19 @@ import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import { colors, formStyles, modalSizes, dropdownStyles } from "../theme";
 import StatusBadge from "../Components/StatusBadge";
+import AttachmentManager from "../Components/AttachmentManager";
 import {
   getJournalEntriesPaged, getJournalEntry, createJournalEntry,
-  updateJournalEntry, deleteJournalEntry,
+  updateJournalEntry, deleteJournalEntry, getJournalEntryPrintData,
 } from "../api/accountingApi";
 import { getAccountsFlat } from "../api/accountApi";
+import { mergeTemplate } from "../utils/templateEngine";
+import { writeAndPrint } from "../utils/printDocument";
+import { exportToPdf } from "../utils/exportUtils";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
+import DivisionSelect from "../Components/DivisionSelect";
+import { defaultJournalEntryTemplate } from "../utils/accountingDocTemplates";
 
 const fmtMoney = (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -61,12 +69,48 @@ export default function JournalEntriesPage() {
   const canView = has("accounting.journal.view");
   const canCreate = has("accounting.journal.create");
   const canDelete = has("accounting.journal.delete");
+  const canPrintJournal = has("accounting.journal.print");
+  // Division scope for the print-template picker. Journal entries aren't a
+  // division-scoped LIST (no per-division filtering of the entries themselves),
+  // but templates can be division-scoped, so the selector drives which template
+  // scope Print/PDF use — consistent with every other document screen. "All
+  // Divisions" → company-wide templates; a specific division → that division's.
+  const [divisionFilter, setDivisionFilter] = useState("");
+  // Shared template-picker state (dropdown + Print/PDF resolution + no-template gating).
+  const tplPicker = usePrintTemplates("JournalEntry", { divisionId: divisionFilter });
+  const [exportingId, setExportingId] = useState(null);
+
+  // Explicit dropdown pick wins; else the company default; else the built-in.
+  const resolveTpl = (je) => tplPicker.resolveTemplate(je)?.htmlContent || defaultJournalEntryTemplate;
+
+  const handlePrint = async (je) => {
+    const w = window.open("", "_blank");
+    if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
+    w.document.write("<p>Loading journal voucher...</p>");
+    try {
+      const { data } = await getJournalEntryPrintData(je.id);
+      writeAndPrint(w, mergeTemplate(resolveTpl(je), data));
+    } catch { w.close(); notify("Failed to load print data.", "error"); }
+  };
+
+  const handleExportPdf = async (je) => {
+    if (exportingId) return;
+    setExportingId(je.id);
+    try {
+      const { data } = await getJournalEntryPrintData(je.id);
+      await exportToPdf(mergeTemplate(resolveTpl(je), data), `Journal ${data.reference || je.id}`);
+    } catch { notify("Failed to export PDF.", "error"); }
+    finally { setExportingId(null); }
+  };
 
   const [rows, setRows] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [search, setSearch] = useState("");
+  // Default to real journals only (Manager's "Journal Entries" tab) — the
+  // system-posted document/receipt/transfer entries live in the ledgers.
+  const [manualOnly, setManualOnly] = useState(true);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);   // manual entry being edited
@@ -80,6 +124,7 @@ export default function JournalEntriesPage() {
     try {
       const params = { page: pg || page };
       if (search.trim()) params.search = search.trim();
+      if (manualOnly) params.manualOnly = true;
       const { data } = await getJournalEntriesPaged(companyId, params);
       setRows(data.items || []);
       setTotalCount(data.totalCount || 0);
@@ -89,7 +134,7 @@ export default function JournalEntriesPage() {
     } finally {
       setLoading(false);
     }
-  }, [companyId, page, search]);
+  }, [companyId, page, search, manualOnly]);
 
   // Reset to page 1 on company switch.
   useEffect(() => { setPage(1); setSearch(""); }, [companyId]);
@@ -143,6 +188,12 @@ export default function JournalEntriesPage() {
           >
             {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
           </select>
+          {/* Division scope — next to Company. Scopes the print-template picker
+              (company-wide vs a division's templates). Self-hides for companies
+              with no divisions. */}
+          {selectedCompany && (
+            <DivisionSelect companyId={selectedCompany.id} value={divisionFilter} onChange={setDivisionFilter} style={dropdownStyles.base} />
+          )}
         </div>
       )}
 
@@ -161,6 +212,11 @@ export default function JournalEntriesPage() {
                 onKeyDown={(e) => { if (e.key === "Enter") { setPage(1); fetchRows(1); } }}
               />
             </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", color: colors.textSecondary, cursor: "pointer", whiteSpace: "nowrap" }} title="Show only manual journals (like the reference product), hiding system-posted document/receipt/transfer entries">
+              <input type="checkbox" checked={manualOnly} onChange={(e) => { setManualOnly(e.target.checked); setPage(1); }} />
+              Manual journals only
+            </label>
+            {tplPicker.canChoose && <PrintTemplateSelect picker={tplPicker} />}
             {rows.length > 0 && (
               <div style={st.pageSummary}>
                 <span style={st.pageSummaryCount}>{totalCount}</span> entr{totalCount === 1 ? "y" : "ies"}
@@ -180,9 +236,14 @@ export default function JournalEntriesPage() {
                   entry={e}
                   canEdit={canCreate}
                   canDelete={canDelete}
+                  canPrint={canPrintJournal}
+                  tplPicker={tplPicker}
+                  exportingId={exportingId}
                   onView={() => setViewing(e)}
                   onEdit={() => setEditing(e)}
                   onDelete={() => handleDelete(e)}
+                  onPrint={() => handlePrint(e)}
+                  onExportPdf={() => handleExportPdf(e)}
                 />
               ))}
             </div>
@@ -220,7 +281,7 @@ export default function JournalEntriesPage() {
       )}
 
       {viewing && (
-        <JournalViewDialog entry={viewing} onClose={() => setViewing(null)} />
+        <JournalViewDialog entry={viewing} companyId={companyId} onClose={() => setViewing(null)} />
       )}
     </div>
   );
@@ -231,7 +292,7 @@ export default function JournalEntriesPage() {
  * desktop (reads like a table row), stacked one-per-line at 375px — no media
  * queries. Edit/Delete only on manual rows; system rows are view-only.
  */
-function EntryRow({ entry: e, canEdit, canDelete, onView, onEdit, onDelete }) {
+function EntryRow({ entry: e, canEdit, canDelete, canPrint, tplPicker, exportingId, onView, onEdit, onDelete, onPrint, onExportPdf }) {
   const src = sourceMeta(e.sourceDocType);
   const balanced = r2(e.totalDebit) === r2(e.totalCredit);
 
@@ -280,6 +341,26 @@ function EntryRow({ entry: e, canEdit, canDelete, onView, onEdit, onDelete }) {
             <button style={st.viewBtn} onClick={onView} title="View lines">
               <MdVisibility size={16} /> View
             </button>
+            {canPrint && (
+              <button
+                style={{ ...st.printBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                disabled={tplPicker.noTemplate}
+                title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print voucher"}
+                onClick={onPrint}
+              >
+                <MdPrint size={14} /> Print
+              </button>
+            )}
+            {canPrint && (
+              <button
+                style={{ ...st.pdfBtn, ...((tplPicker.noTemplate || exportingId === e.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                disabled={tplPicker.noTemplate || !!exportingId}
+                title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}
+                onClick={onExportPdf}
+              >
+                <MdPictureAsPdf size={14} /> PDF
+              </button>
+            )}
             {e.isManual && canEdit && (
               <button style={st.editBtn} onClick={onEdit} title="Edit">
                 <MdEdit size={16} /> Edit
@@ -298,7 +379,7 @@ function EntryRow({ entry: e, canEdit, canDelete, onView, onEdit, onDelete }) {
 }
 
 /** Read-only detail dialog — meta rows + full line table. */
-function JournalViewDialog({ entry: e, onClose }) {
+function JournalViewDialog({ entry: e, companyId, onClose }) {
   const src = sourceMeta(e.sourceDocType);
   const lines = e.lines || [];
   return (
@@ -355,6 +436,11 @@ function JournalViewDialog({ entry: e, onClose }) {
               </tfoot>
             </table>
           </div>
+          {companyId && (
+            <div style={{ marginTop: "1rem" }}>
+              <AttachmentManager companyId={companyId} entityType="JournalEntry" entityId={e.id} mode="view" />
+            </div>
+          )}
         </div>
         <div style={formStyles.footer}>
           <button style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
@@ -375,6 +461,7 @@ function JournalEntryForm({ companyId, entry, onClose, onSaved }) {
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const attachmentRef = useRef(null);
 
   // Postable accounts: active, and never bank/cash (those move only through
   // receipts / payments / transfers — server rejects them too).
@@ -438,8 +525,14 @@ function JournalEntryForm({ companyId, entry, onClose, onSaved }) {
           description: l.description.trim() || null,
         })),
       };
-      if (isEdit) await updateJournalEntry(entry.id, payload);
-      else await createJournalEntry(companyId, payload);
+      const { data: saved } = isEdit
+        ? await updateJournalEntry(entry.id, payload)
+        : await createJournalEntry(companyId, payload);
+      // Upload any files staged before the entry had an id (best-effort).
+      try {
+        const savedId = saved?.id ?? entry?.id;
+        if (savedId) await attachmentRef.current?.flush(savedId);
+      } catch { /* attachments are best-effort — the entry is already saved */ }
       onSaved();
     } catch (err) {
       setError(err.response?.data?.error || "Could not save the journal entry.");
@@ -542,6 +635,16 @@ function JournalEntryForm({ companyId, entry, onClose, onSaved }) {
                 Needs at least two lines — each with an account and a single debit or credit — and matching totals above zero.
               </div>
             )}
+
+            <div style={{ marginTop: "1rem" }}>
+              <AttachmentManager
+                ref={attachmentRef}
+                companyId={companyId}
+                entityType="JournalEntry"
+                entityId={entry?.id ?? null}
+                mode="edit"
+              />
+            </div>
           </div>
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
@@ -714,6 +817,8 @@ const st = {
   rowActions: { display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", alignSelf: "center" },
   viewBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.blue, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
   editBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#e65100", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
+  printBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#4527a0", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
+  pdfBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#ad1457", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
   delBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
 
   pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", marginTop: "1.25rem" },

@@ -52,18 +52,23 @@ namespace MyApp.Api.Services.Implementations
         {
             if (company.InventoryFlowVersion != (byte)InventoryFlowVersion.V2Standard) return;
 
-            if (items.Any(i => !i.ItemTypeId.HasValue || i.ItemTypeId.Value <= 0))
+            // Non-inventory lines (Freight/Discount → GL account, no stock) are
+            // exempt from the item-type requirement and UOM constraint. Every
+            // OTHER line must carry an item type OR be a non-inventory line.
+            if (items.Any(i => (!i.ItemTypeId.HasValue || i.ItemTypeId.Value <= 0) && !i.NonInventoryItemId.HasValue))
                 throw new InvalidOperationException(
-                    "On a V2 (standard inventory) company, every sales-order line must have an item type selected.");
+                    "On a V2 (standard inventory) company, every sales-order line must have an Item Type or a Non-Inventory item selected.");
 
-            var itemTypeIds = items.Select(i => i.ItemTypeId!.Value).Distinct().ToList();
+            var invLines = items.Where(i => i.ItemTypeId.HasValue && i.ItemTypeId.Value > 0 && !i.NonInventoryItemId.HasValue).ToList();
+            var itemTypeIds = invLines.Select(i => i.ItemTypeId!.Value).Distinct().ToList();
+            if (itemTypeIds.Count == 0) return;
             var tracked = await _stock.GetStockTrackedItemTypeIdsAsync(company.Id, itemTypeIds);
             var meta = await _context.ItemTypes
                 .Where(it => itemTypeIds.Contains(it.Id))
                 .Select(it => new { it.Id, it.Name, it.UOM })
                 .ToDictionaryAsync(x => x.Id, x => x);
 
-            foreach (var i in items)
+            foreach (var i in invLines)
             {
                 var id = i.ItemTypeId!.Value;
                 if (!tracked.Contains(id)) continue;               // FBR-only → unconstrained
@@ -192,6 +197,8 @@ namespace MyApp.Api.Services.Implementations
                     Id = i.Id,
                     ItemTypeId = i.ItemTypeId,
                     ItemTypeName = i.ItemType?.Name ?? "",
+                    NonInventoryItemId = i.NonInventoryItemId,
+                    NonInventoryItemName = i.NonInventoryItem?.Name,
                     Description = i.Description,
                     Quantity = i.Quantity,
                     Unit = i.Unit,
@@ -295,6 +302,18 @@ namespace MyApp.Api.Services.Implementations
         public async Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
             => await _repository.GetCountByCompanyAsync(companyId, allowedDivisionIds);
 
+        // Cross-tenant link guard for non-inventory item refs on the lines.
+        private async Task ValidateNonInvAsync(int companyId, IEnumerable<int?> ids)
+        {
+            var wanted = ids.Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+            if (wanted.Count == 0) return;
+            var valid = await _context.NonInventoryItems.AsNoTracking()
+                .Where(n => n.CompanyId == companyId && wanted.Contains(n.Id))
+                .Select(n => n.Id).ToListAsync();
+            if (wanted.Any(w => !valid.Contains(w)))
+                throw new InvalidOperationException("A selected non-inventory item does not belong to this company.");
+        }
+
         // ── Create ───────────────────────────────────────────────────────────
 
         public async Task<SalesOrderDto> CreateAsync(int companyId, SalesOrderDto dto)
@@ -314,6 +333,7 @@ namespace MyApp.Api.Services.Implementations
                 ?? throw new KeyNotFoundException("Client not found.");
             if (client.CompanyId != companyId)
                 throw new InvalidOperationException("Client does not belong to this company.");
+            await ValidateNonInvAsync(companyId, dto.Items.Select(i => i.NonInventoryItemId));
 
             // Cross-tenant guard (PR-03): a linked Sales Quote must belong to
             // the SAME company — never trust dto.SalesQuoteId from the body.
@@ -362,7 +382,8 @@ namespace MyApp.Api.Services.Implementations
                     IsImported = dto.IsImported,
                     Items = dto.Items.Select(i => new SalesOrderItem
                     {
-                        ItemTypeId = i.ItemTypeId,
+                        ItemTypeId = i.NonInventoryItemId.HasValue ? null : i.ItemTypeId,
+                        NonInventoryItemId = i.NonInventoryItemId,
                         Description = i.Description.Trim(),
                         Quantity = i.Quantity,
                         Unit = i.Unit
@@ -478,6 +499,8 @@ namespace MyApp.Api.Services.Implementations
             order.SalesQuoteId = dto.SalesQuoteId;
 
             // ── Items diff with delivery guards ──
+            await ValidateNonInvAsync(order.CompanyId, dto.Items.Select(i => i.NonInventoryItemId));
+
             var keptIds = dto.Items.Where(i => i.Id > 0).Select(i => i.Id).ToHashSet();
             var toRemove = order.Items.Where(i => !keptIds.Contains(i.Id)).ToList();
             foreach (var rem in toRemove)
@@ -496,7 +519,8 @@ namespace MyApp.Api.Services.Implementations
                     if (itemDto.Quantity < delivered)
                         throw new InvalidOperationException(
                             $"Cannot reduce \"{existing.Description}\" below the {delivered} already delivered.");
-                    existing.ItemTypeId = itemDto.ItemTypeId;
+                    existing.NonInventoryItemId = itemDto.NonInventoryItemId;
+                    existing.ItemTypeId = itemDto.NonInventoryItemId.HasValue ? null : itemDto.ItemTypeId;
                     existing.Description = itemDto.Description.Trim();
                     existing.Quantity = itemDto.Quantity;
                     existing.Unit = itemDto.Unit;
@@ -506,7 +530,8 @@ namespace MyApp.Api.Services.Implementations
                     order.Items.Add(new SalesOrderItem
                     {
                         SalesOrderId = order.Id,
-                        ItemTypeId = itemDto.ItemTypeId,
+                        ItemTypeId = itemDto.NonInventoryItemId.HasValue ? null : itemDto.ItemTypeId,
+                        NonInventoryItemId = itemDto.NonInventoryItemId,
                         Description = itemDto.Description.Trim(),
                         Quantity = itemDto.Quantity,
                         Unit = itemDto.Unit
@@ -609,6 +634,7 @@ namespace MyApp.Api.Services.Implementations
                 challanItems.Add(new DeliveryItemDto
                 {
                     ItemTypeId = soItem.ItemTypeId,
+                    NonInventoryItemId = soItem.NonInventoryItemId,
                     Description = soItem.Description,
                     Quantity = qty,
                     Unit = soItem.Unit,
@@ -698,6 +724,8 @@ namespace MyApp.Api.Services.Implementations
                 var line = new SalesOrderInvoicePrefillLineDto
                 {
                     ItemTypeId = item.ItemTypeId,
+                    NonInventoryItemId = item.NonInventoryItemId,
+                    NonInventoryItemName = item.NonInventoryItem?.Name,
                     Description = item.Description,
                     Quantity = item.Quantity,
                     Unit = item.Unit,
@@ -734,6 +762,7 @@ namespace MyApp.Api.Services.Implementations
                 ClientId = order.ClientId,
                 ClientName = order.Client?.Name ?? "",
                 CustomerPoNumber = order.CustomerPoNumber,
+                CustomerPoDate = order.CustomerPoDate,
                 Site = order.Site,
                 SalesQuoteId = order.SalesQuoteId,
                 GstRate = gstRate,

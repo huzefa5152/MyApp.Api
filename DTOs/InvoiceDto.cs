@@ -105,6 +105,7 @@ namespace MyApp.Api.DTOs
         // exist across the linked challans (rare in practice — most
         // bills cover one challan).
         public string? PoNumber { get; set; }
+        public DateTime? PoDate { get; set; }
         public string? IndentNo { get; set; }
         public string? Site { get; set; }
     }
@@ -116,6 +117,15 @@ namespace MyApp.Api.DTOs
         /// <summary>FK to ItemType (FBR catalog entry) driving HS/UOM/Sale Type on this line.</summary>
         public int? ItemTypeId { get; set; }
         public string ItemTypeName { get; set; } = "";
+        /// <summary>FK to a per-company NonInventoryItem (GL-account shortcut). Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
+        /// <summary>Display name of the linked NonInventoryItem (read-only projection).</summary>
+        public string? NonInventoryItemName { get; set; }
+        /// <summary>Per-line GL income account this line posts to (design §3.3);
+        /// null = derived at post time. Shown in the bill/invoice form's Account
+        /// column when GL posting is on.</summary>
+        public int? AccountId { get; set; }
+        public string? AccountName { get; set; }
         public string Description { get; set; } = "";
         // Decimal — see DeliveryItemDto.Quantity for the formatting contract.
         public decimal Quantity { get; set; }
@@ -181,6 +191,13 @@ namespace MyApp.Api.DTOs
         public List<int> ChallanIds { get; set; } = new();
         public List<CreateInvoiceItemDto> Items { get; set; } = new();
         public Dictionary<int, DateTime> PoDateUpdates { get; set; } = new();
+        /// <summary>
+        /// Customer PO for the bill. When null/blank the server prefills it from
+        /// the linked Sales Order (CustomerPoNumber) or the source challan(s); a
+        /// value entered on the form overrides that prefill.
+        /// </summary>
+        public string? PoNumber { get; set; }
+        public DateTime? PoDate { get; set; }
     }
 
     public class CreateInvoiceItemDto
@@ -195,6 +212,12 @@ namespace MyApp.Api.DTOs
         /// line (visible on the Invoices tab afterwards).
         /// </summary>
         public int? ItemTypeId { get; set; }
+        /// <summary>Optional NonInventoryItem link (GL-account shortcut line). Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
+        /// <summary>Optional per-line GL income account override (design §4 step 1).
+        /// Validated server-side against the bill's company CoA; a foreign/inactive
+        /// id is dropped to null (engine derives).</summary>
+        public int? AccountId { get; set; }
         /// <summary>Optional override of the delivery item's UOM (e.g. the FBR-matched UOM).</summary>
         public string? UOM { get; set; }
         public string? HSCode { get; set; }
@@ -236,6 +259,15 @@ namespace MyApp.Api.DTOs
         /// items.
         /// </summary>
         public string? ScenarioId { get; set; }
+        /// <summary>
+        /// Optional Sales Order this bill fulfils. Company-validated server-side
+        /// (never trusted). When set, the bill's PO prefills from the order's
+        /// CustomerPoNumber/Date unless <see cref="PoNumber"/> is supplied.
+        /// </summary>
+        public int? SalesOrderId { get; set; }
+        /// <summary>Customer PO for the bill — manual entry, or prefilled from the linked order.</summary>
+        public string? PoNumber { get; set; }
+        public DateTime? PoDate { get; set; }
         public List<CreateStandaloneInvoiceItemDto> Items { get; set; } = new();
     }
 
@@ -250,6 +282,10 @@ namespace MyApp.Api.DTOs
         public decimal UnitPrice { get; set; }
         /// <summary>Optional ItemType (FBR catalog) link — when set, server re-derives HS / UOM / SaleType / FbrUOMId from the catalog.</summary>
         public int? ItemTypeId { get; set; }
+        /// <summary>Optional NonInventoryItem link (GL-account shortcut line, no stock/FBR). Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
+        /// <summary>Optional per-line GL income account override (design §4 step 1).</summary>
+        public int? AccountId { get; set; }
         public string? HSCode { get; set; }
         public int? FbrUOMId { get; set; }
         public string? SaleType { get; set; }
@@ -376,6 +412,20 @@ namespace MyApp.Api.DTOs
         /// When null, the existing client is preserved.
         /// </summary>
         public int? ClientId { get; set; }
+
+        /// <summary>
+        /// Re-home the bill to a different division (2026-07-14). Only applied
+        /// when <see cref="UpdateDivision"/> is true — otherwise the stored
+        /// division is preserved (a bare null here would otherwise be
+        /// indistinguishable from "move to company-level"). <see cref="DivisionId"/>
+        /// null + flag true = move to company-level (no division). The service
+        /// validates the target belongs to the company and blocks a move that
+        /// would collide with an existing number in the target division; the GL
+        /// entry and stock movements are re-tagged with the new division on save.
+        /// </summary>
+        public bool UpdateDivision { get; set; }
+        public int? DivisionId { get; set; }
+
         public List<UpdateInvoiceItemDto> Items { get; set; } = new();
     }
 
@@ -389,6 +439,10 @@ namespace MyApp.Api.DTOs
         /// The UOM/HSCode/SaleType fields in this DTO are ignored when ItemTypeId is set.
         /// </summary>
         public int? ItemTypeId { get; set; }
+        /// <summary>Optional NonInventoryItem link (GL-account shortcut line). Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
+        /// <summary>Optional per-line GL income account override (design §4 step 1).</summary>
+        public int? AccountId { get; set; }
         public string Description { get; set; } = "";
         // Decimal — see InvoiceItemDto.Quantity for the formatting contract.
         public decimal Quantity { get; set; }
@@ -425,6 +479,12 @@ namespace MyApp.Api.DTOs
     {
         public List<UpdateInvoiceItemTypeRow> Items { get; set; } = new();
 
+        /// <summary>Re-home the bill to a different division on the narrow
+        /// (Invoices-tab) edit path too. Same semantics as
+        /// <see cref="UpdateInvoiceDto.UpdateDivision"/> / <see cref="UpdateInvoiceDto.DivisionId"/>.</summary>
+        public bool UpdateDivision { get; set; }
+        public int? DivisionId { get; set; }
+
         /// <summary>
         /// Dual-book mode flag (2026-05-11):
         ///   • "bill" (default) — every honoured field on each row is
@@ -449,6 +509,12 @@ namespace MyApp.Api.DTOs
     {
         public int Id { get; set; }                  // existing InvoiceItem.Id
         public int? ItemTypeId { get; set; }         // null clears the link
+        /// <summary>Optional NonInventoryItem link (GL-account shortcut). Mutually
+        /// exclusive with ItemTypeId — setting it clears the item type + FBR fields.</summary>
+        public int? NonInventoryItemId { get; set; }
+        /// <summary>Optional per-line GL income account override (design §4 step 1).
+        /// Honoured on both the .itemtype and .itemtype.qty narrow-edit paths.</summary>
+        public int? AccountId { get; set; }
         /// <summary>
         /// Optional quantity update. Honoured ONLY when the controller
         /// is the .qty endpoint (gated by invoices.manage.update.itemtype.qty);

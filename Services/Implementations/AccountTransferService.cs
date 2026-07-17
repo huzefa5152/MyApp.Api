@@ -80,6 +80,8 @@ namespace MyApp.Api.Services.Implementations
             {
                 CompanyId = companyId,
                 Date = date,
+                // Cleared-by-default (Manager-style) — see PaymentService.CreateAsync.
+                ReconciledDate = date,
                 FromAccountId = dto.FromAccountId,
                 ToAccountId = dto.ToAccountId,
                 Amount = dto.Amount,
@@ -281,6 +283,41 @@ namespace MyApp.Api.Services.Implementations
                 DivisionId = t.DivisionId,
                 DivisionName = row.DivisionName,
                 CreatedAt = t.CreatedAt,
+            };
+        }
+
+        public async Task<PrintTransferDto?> GetPrintDataAsync(int id)
+        {
+            var t = await _context.AccountTransfers.AsNoTracking()
+                .Include(x => x.Company)
+                .Include(x => x.FromAccount)
+                .Include(x => x.ToAccount)
+                .FirstOrDefaultAsync(x => x.Id == id);
+            if (t == null) return null;
+            var division = t.DivisionId.HasValue
+                ? await _context.Divisions.AsNoTracking().FirstOrDefaultAsync(d => d.Id == t.DivisionId.Value)
+                : null;
+            return new PrintTransferDto
+            {
+                CompanyBrandName = t.Company?.BrandName ?? t.Company?.Name ?? "",
+                CompanyLogoPath = t.Company?.LogoPath,
+                CompanyAddress = t.Company?.FullAddress,
+                CompanyPhone = t.Company?.Phone,
+                DivisionName = division?.Name,
+                DivisionBrandName = division?.BrandName,
+                DivisionLogoPath = division?.LogoPath,
+                DivisionAddress = division?.FullAddress,
+                DivisionPhone = division?.Phone,
+                DivisionNTN = division?.NTN,
+                DivisionSTRN = division?.STRN,
+                DivisionEmail = division?.Email,
+                Reference = "TRF-" + t.Number,
+                Date = t.Date,
+                FromAccountName = t.FromAccount?.Name ?? "",
+                ToAccountName = t.ToAccount?.Name ?? "",
+                Description = t.Description,
+                Amount = t.Amount,
+                AmountInWords = NumberToWordsConverter.Convert(t.Amount),
             };
         }
 

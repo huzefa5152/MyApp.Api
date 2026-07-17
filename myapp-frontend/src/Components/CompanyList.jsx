@@ -74,14 +74,25 @@ export default function CompanyList({ companies, onEdit, fetchCompanies }) {
                   ✓ Inventory tracking ON
                 </p>
               )}
-              <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <MdReceipt style={{ color: "#0d47a1", flexShrink: 0 }} />
-                <strong>Challan #:</strong> Starts at {c.startingChallanNumber}{c.currentChallanNumber > 0 ? ` → Current: #${c.currentChallanNumber}` : ""}
-              </p>
-              <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <MdReceipt style={{ color: "#00897b", flexShrink: 0 }} />
-                <strong>Invoice #:</strong> Starts at {c.startingInvoiceNumber}{c.currentInvoiceNumber > 0 ? ` → Current: #${c.currentInvoiceNumber}` : ""}
-              </p>
+              {/* Every document-number sequence for the company — Starting seed
+                  and last-issued (Current), shown only when the sequence exists. */}
+              <div style={{ display: "grid", gap: "0.15rem", marginTop: "0.3rem" }}>
+                {[
+                  ["Challan", c.startingChallanNumber, c.currentChallanNumber],
+                  ["Invoice", c.startingInvoiceNumber, c.currentInvoiceNumber],
+                  ["Sales Quote", c.startingSalesQuoteNumber, c.currentSalesQuoteNumber],
+                  ["Sales Order", c.startingSalesOrderNumber, c.currentSalesOrderNumber],
+                  ["Purchase Bill", c.startingPurchaseBillNumber, c.currentPurchaseBillNumber],
+                  ["Goods Receipt", c.startingGoodsReceiptNumber, c.currentGoodsReceiptNumber],
+                  ["Credit Note", c.startingCreditNoteNumber, c.currentCreditNoteNumber],
+                  ["Debit Note", c.startingDebitNoteNumber, c.currentDebitNoteNumber],
+                ].map(([label, start, current]) => (
+                  <p key={label} style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem", margin: 0 }}>
+                    <MdReceipt style={{ color: "#5f6d7e", flexShrink: 0, fontSize: "0.9rem" }} />
+                    <strong>{label} #:</strong> Starts at {start || 1}{current > 0 ? ` → Current: #${current}` : ""}
+                  </p>
+                ))}
+              </div>
               {c.logoPath && (
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem", padding: "0.4rem 0.6rem", backgroundColor: "#f8f9fb", borderRadius: 8, border: "1px solid #e8edf3", width: "fit-content" }}>
                   <img src={c.logoPath} alt="Company Logo" style={{ height: "36px", borderRadius: 4, objectFit: "contain" }} />

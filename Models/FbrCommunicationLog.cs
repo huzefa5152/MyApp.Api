@@ -2,7 +2,7 @@ namespace MyApp.Api.Models
 {
     /// <summary>
     /// Dedicated log for every FBR / PRAL HTTP call. See audit H-3
-    /// (AUDIT_2026_05_08_OBSERVABILITY.md): pre-fix, FBR traffic was
+    /// (the observability audit): pre-fix, FBR traffic was
     /// mixed into AuditLogs with the response stored in StackTrace.
     /// Operators couldn't isolate FBR health without SQL.
     ///

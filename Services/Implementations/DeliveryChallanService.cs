@@ -24,6 +24,18 @@ namespace MyApp.Api.Services.Implementations
             _logger = logger;
         }
 
+        // Cross-tenant link guard for non-inventory item refs on the lines.
+        private async Task ValidateNonInvAsync(int companyId, IEnumerable<int?> ids)
+        {
+            var wanted = ids.Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+            if (wanted.Count == 0) return;
+            var valid = await _context.NonInventoryItems.AsNoTracking()
+                .Where(n => n.CompanyId == companyId && wanted.Contains(n.Id))
+                .Select(n => n.Id).ToListAsync();
+            if (wanted.Any(w => !valid.Contains(w)))
+                throw new InvalidOperationException("A selected non-inventory item does not belong to this company.");
+        }
+
         /// <summary>
         /// Defence-in-depth check: reject fractional quantities (e.g. 2.5
         /// Pcs) for any line whose UOM has AllowsDecimalQuantity = false.
@@ -127,6 +139,8 @@ namespace MyApp.Api.Services.Implementations
                     Id = i.Id,
                     ItemTypeId = i.ItemTypeId,
                     ItemTypeName = i.ItemType?.Name ?? "",
+                    NonInventoryItemId = i.NonInventoryItemId,
+                    NonInventoryItemName = i.NonInventoryItem?.Name,
                     Description = i.Description,
                     Quantity = i.Quantity,
                     Unit = i.Unit,
@@ -310,6 +324,9 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("Challan lines carry sales-order links but no sales order is linked.");
             }
 
+            // Cross-tenant link guard for non-inventory item refs on the lines.
+            await ValidateNonInvAsync(companyId, (dto.Items ?? Enumerable.Empty<DeliveryItemDto>()).Select(i => i.NonInventoryItemId));
+
             var fbrReady = company != null && IsFbrReady(company, client);
 
             string status;
@@ -336,7 +353,10 @@ namespace MyApp.Api.Services.Implementations
                 SalesOrderId = dto.SalesOrderId,
                 Items = dto.Items.Select(i => new DeliveryItem
                 {
-                    ItemTypeId = i.ItemTypeId,
+                    // A non-inventory line carries no item type (mutually exclusive);
+                    // its null ItemTypeId also keeps the stock engine skipping it.
+                    ItemTypeId = i.NonInventoryItemId.HasValue ? null : i.ItemTypeId,
+                    NonInventoryItemId = i.NonInventoryItemId,
                     Description = i.Description,
                     Quantity = i.Quantity,
                     Unit = i.Unit,
@@ -502,6 +522,10 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         private async Task ApplyItemsDiffAsync(DeliveryChallan dc, List<DeliveryItemDto> items)
         {
+            // Cross-tenant link guard — validate against the STORED CompanyId,
+            // never anything from the incoming DTO.
+            await ValidateNonInvAsync(dc.CompanyId, items.Select(i => i.NonInventoryItemId));
+
             var updatedIds = items.Where(i => i.Id > 0).Select(i => i.Id).ToHashSet();
             var toRemove = dc.Items.Where(i => !updatedIds.Contains(i.Id)).ToList();
             var removedDeliveryItemIds = toRemove.Select(i => i.Id).ToList();
@@ -520,7 +544,8 @@ namespace MyApp.Api.Services.Implementations
                     {
                         quantityChanges[existing.Id] = itemDto.Quantity;
                     }
-                    existing.ItemTypeId = itemDto.ItemTypeId;
+                    existing.NonInventoryItemId = itemDto.NonInventoryItemId;
+                    existing.ItemTypeId = itemDto.NonInventoryItemId.HasValue ? null : itemDto.ItemTypeId;
                     existing.Description = itemDto.Description;
                     existing.Quantity = itemDto.Quantity;
                     existing.Unit = itemDto.Unit;
@@ -530,7 +555,8 @@ namespace MyApp.Api.Services.Implementations
                     var newItem = new DeliveryItem
                     {
                         DeliveryChallanId = dc.Id,
-                        ItemTypeId = itemDto.ItemTypeId,
+                        ItemTypeId = itemDto.NonInventoryItemId.HasValue ? null : itemDto.ItemTypeId,
+                        NonInventoryItemId = itemDto.NonInventoryItemId,
                         Description = itemDto.Description,
                         Quantity = itemDto.Quantity,
                         Unit = itemDto.Unit

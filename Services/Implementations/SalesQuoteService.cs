@@ -66,6 +66,8 @@ namespace MyApp.Api.Services.Implementations
                     Id = i.Id,
                     ItemTypeId = i.ItemTypeId,
                     ItemTypeName = i.ItemType?.Name ?? "",
+                    NonInventoryItemId = i.NonInventoryItemId,
+                    NonInventoryItemName = i.NonInventoryItem?.Name,
                     Description = i.Description,
                     Quantity = i.Quantity,
                     Unit = i.Unit,
@@ -108,6 +110,19 @@ namespace MyApp.Api.Services.Implementations
             quote.GSTAmount = Math.Round(quote.Subtotal * gstRate / 100m, 2);
             quote.GrandTotal = quote.Subtotal + quote.GSTAmount;
             quote.AmountInWords = NumberToWordsConverter.Convert(quote.GrandTotal);
+        }
+
+        // Validate that any non-inventory item ids on the lines belong to this
+        // company (cross-tenant link guard). Throws on a foreign ref.
+        private async Task ValidateNonInvAsync(int companyId, IEnumerable<int?> ids)
+        {
+            var wanted = ids.Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+            if (wanted.Count == 0) return;
+            var valid = await _context.NonInventoryItems.AsNoTracking()
+                .Where(n => n.CompanyId == companyId && wanted.Contains(n.Id))
+                .Select(n => n.Id).ToListAsync();
+            if (wanted.Any(w => !valid.Contains(w)))
+                throw new InvalidOperationException("A selected non-inventory item does not belong to this company.");
         }
 
         // ── Reads ────────────────────────────────────────────────────────────
@@ -175,6 +190,7 @@ namespace MyApp.Api.Services.Implementations
             }
 
             await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.Unit));
+            await ValidateNonInvAsync(companyId, dto.Items.Select(i => i.NonInventoryItemId));
 
             var createdId = await NumberAllocationRetry.ExecuteAsync(async _ =>
             {
@@ -202,7 +218,9 @@ namespace MyApp.Api.Services.Implementations
                     Status = "Draft",
                     Items = dto.Items.Select(i => new SalesQuoteItem
                     {
-                        ItemTypeId = i.ItemTypeId,
+                        // A non-inventory line clears ItemTypeId (mutually exclusive; DB CHECK enforced).
+                        ItemTypeId = i.NonInventoryItemId.HasValue ? null : i.ItemTypeId,
+                        NonInventoryItemId = i.NonInventoryItemId,
                         Description = i.Description.Trim(),
                         Quantity = i.Quantity,
                         Unit = i.Unit,
@@ -258,6 +276,7 @@ namespace MyApp.Api.Services.Implementations
             quote.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
 
             await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.Unit));
+            await ValidateNonInvAsync(quote.CompanyId, dto.Items.Select(i => i.NonInventoryItemId));
 
             // Full replace of items — quotes have no downstream links so a
             // straight rebuild is safe (unlike challans, which sync a bill).
@@ -272,7 +291,8 @@ namespace MyApp.Api.Services.Implementations
                 var existing = itemDto.Id > 0 ? quote.Items.FirstOrDefault(i => i.Id == itemDto.Id) : null;
                 if (existing != null)
                 {
-                    existing.ItemTypeId = itemDto.ItemTypeId;
+                    existing.NonInventoryItemId = itemDto.NonInventoryItemId;
+                    existing.ItemTypeId = itemDto.NonInventoryItemId.HasValue ? null : itemDto.ItemTypeId;
                     existing.Description = itemDto.Description.Trim();
                     existing.Quantity = itemDto.Quantity;
                     existing.Unit = itemDto.Unit;
@@ -283,7 +303,8 @@ namespace MyApp.Api.Services.Implementations
                     quote.Items.Add(new SalesQuoteItem
                     {
                         SalesQuoteId = quote.Id,
-                        ItemTypeId = itemDto.ItemTypeId,
+                        ItemTypeId = itemDto.NonInventoryItemId.HasValue ? null : itemDto.ItemTypeId,
+                        NonInventoryItemId = itemDto.NonInventoryItemId,
                         Description = itemDto.Description.Trim(),
                         Quantity = itemDto.Quantity,
                         Unit = itemDto.Unit,
@@ -354,6 +375,7 @@ namespace MyApp.Api.Services.Implementations
                 Items = quote.Items.Select(i => new SalesOrderItemDto
                 {
                     ItemTypeId = i.ItemTypeId,
+                    NonInventoryItemId = i.NonInventoryItemId,
                     Description = i.Description,
                     Quantity = i.Quantity,
                     Unit = i.Unit

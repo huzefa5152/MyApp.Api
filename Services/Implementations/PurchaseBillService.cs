@@ -65,6 +65,10 @@ namespace MyApp.Api.Services.Implementations
                 Id = i.Id,
                 ItemTypeId = i.ItemTypeId,
                 ItemTypeName = i.ItemType?.Name ?? i.ItemTypeName,
+                NonInventoryItemId = i.NonInventoryItemId,
+                NonInventoryItemName = i.NonInventoryItem?.Name,
+                AccountId = i.AccountId,
+                AccountName = i.Account?.Name,
                 Description = i.Description,
                 Quantity = i.Quantity,
                 UOM = i.UOM,
@@ -87,6 +91,19 @@ namespace MyApp.Api.Services.Implementations
                 .OrderBy(n => n)
                 .ToList() ?? new(),
         };
+
+        // Cross-tenant link guard: any non-inventory item referenced on a line
+        // must belong to this company. Throws on a foreign ref.
+        private async Task ValidateNonInvItemsAsync(int companyId, IEnumerable<int?> ids)
+        {
+            var wanted = ids.Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+            if (wanted.Count == 0) return;
+            var valid = await _context.NonInventoryItems.AsNoTracking()
+                .Where(n => n.CompanyId == companyId && wanted.Contains(n.Id))
+                .Select(n => n.Id).ToListAsync();
+            if (wanted.Any(w => !valid.Contains(w)))
+                throw new InvalidOperationException("A selected non-inventory item does not belong to this company.");
+        }
 
         public async Task<PagedResult<PurchaseBillDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
@@ -347,16 +364,25 @@ namespace MyApp.Api.Services.Implementations
                 .Where(it => chosenItemTypeIds.Contains(it.Id))
                 .ToDictionaryAsync(it => it.Id);
 
+            await ValidateNonInvItemsAsync(dto.CompanyId, dto.Items.Select(i => i.NonInventoryItemId));
+            // Each purchase-bill line must be classified — an Item Type OR a Non-Inventory item.
+            if (dto.Items.Any(i => !i.ItemTypeId.HasValue && !i.NonInventoryItemId.HasValue))
+                throw new InvalidOperationException(
+                    "Every purchase-bill line must have an Item Type or a Non-Inventory item selected.");
+
+            var validAccountIds = await ValidCompanyAccountIdsAsync(dto.CompanyId, dto.Items.Select(i => i.AccountId));
             for (int idx = 0; idx < dto.Items.Count; idx++)
             {
                 var i = dto.Items[idx];
-                ItemType? itemType = i.ItemTypeId.HasValue
+                // A non-inventory line (Freight/Discount) has no item type / HS / stock.
+                bool isNonInv = i.NonInventoryItemId.HasValue;
+                ItemType? itemType = (!isNonInv && i.ItemTypeId.HasValue)
                     ? itemTypeMap.GetValueOrDefault(i.ItemTypeId.Value)
                     : null;
 
-                // HSCode gate for procurement-against-sale lines
+                // HSCode gate for procurement-against-sale lines (never a non-inv line).
                 bool isAgainstSale = (i.SourceInvoiceItemIds?.Count ?? 0) > 0;
-                if (isAgainstSale && string.IsNullOrWhiteSpace(itemType?.HSCode))
+                if (isAgainstSale && !isNonInv && string.IsNullOrWhiteSpace(itemType?.HSCode))
                 {
                     throw new InvalidOperationException(
                         $"Line {idx + 1}: pick an Item Type WITH HS Code — procurement against a sale bill must be FBR-compliant.");
@@ -364,18 +390,20 @@ namespace MyApp.Api.Services.Implementations
 
                 items.Add(new PurchaseItem
                 {
-                    ItemTypeId = i.ItemTypeId,
+                    ItemTypeId = isNonInv ? null : i.ItemTypeId,
+                    NonInventoryItemId = i.NonInventoryItemId,
+                    AccountId = Coerce(i.AccountId, validAccountIds),
                     ItemTypeName = itemType?.Name ?? "",
                     Description = i.Description?.Trim() ?? "",
                     Quantity = i.Quantity,
                     UOM = i.UOM ?? itemType?.UOM ?? "",
                     UnitPrice = i.UnitPrice,
                     LineTotal = Math.Round(i.Quantity * i.UnitPrice, 2),
-                    HSCode = i.HSCode ?? itemType?.HSCode,
-                    FbrUOMId = i.FbrUOMId ?? itemType?.FbrUOMId,
-                    SaleType = i.SaleType ?? itemType?.SaleType,
-                    RateId = i.RateId,
-                    FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
+                    HSCode = isNonInv ? null : (i.HSCode ?? itemType?.HSCode),
+                    FbrUOMId = isNonInv ? null : (i.FbrUOMId ?? itemType?.FbrUOMId),
+                    SaleType = isNonInv ? null : (i.SaleType ?? itemType?.SaleType),
+                    RateId = isNonInv ? null : i.RateId,
+                    FixedNotifiedValueOrRetailPrice = isNonInv ? null : i.FixedNotifiedValueOrRetailPrice,
                 });
             }
 
@@ -555,30 +583,36 @@ namespace MyApp.Api.Services.Implementations
                          || bill.ReconciliationStatus == "Disputed"))
                 bill.ReconciliationStatus = "Pending";
 
+            await ValidateNonInvItemsAsync(bill.CompanyId, dto.Items.Select(i => i.NonInventoryItemId));
+
             // Replace items wholesale (simpler than a diff, fine for v1)
             _context.PurchaseItems.RemoveRange(bill.Items);
             bill.Items.Clear();
 
+            var validAccountIds = await ValidCompanyAccountIdsAsync(bill.CompanyId, dto.Items.Select(i => i.AccountId));
             var newItems = new List<PurchaseItem>();
             foreach (var i in dto.Items)
             {
-                ItemType? itemType = i.ItemTypeId.HasValue
+                bool isNonInv = i.NonInventoryItemId.HasValue;
+                ItemType? itemType = (!isNonInv && i.ItemTypeId.HasValue)
                     ? await _context.ItemTypes.FindAsync(i.ItemTypeId.Value)
                     : null;
                 var ni = new PurchaseItem
                 {
-                    ItemTypeId = i.ItemTypeId,
+                    ItemTypeId = isNonInv ? null : i.ItemTypeId,
+                    NonInventoryItemId = i.NonInventoryItemId,
+                    AccountId = Coerce(i.AccountId, validAccountIds),
                     ItemTypeName = itemType?.Name ?? "",
                     Description = i.Description?.Trim() ?? "",
                     Quantity = i.Quantity,
                     UOM = i.UOM ?? itemType?.UOM ?? "",
                     UnitPrice = i.UnitPrice,
                     LineTotal = Math.Round(i.Quantity * i.UnitPrice, 2),
-                    HSCode = i.HSCode ?? itemType?.HSCode,
-                    FbrUOMId = i.FbrUOMId ?? itemType?.FbrUOMId,
-                    SaleType = i.SaleType ?? itemType?.SaleType,
-                    RateId = i.RateId,
-                    FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
+                    HSCode = isNonInv ? null : (i.HSCode ?? itemType?.HSCode),
+                    FbrUOMId = isNonInv ? null : (i.FbrUOMId ?? itemType?.FbrUOMId),
+                    SaleType = isNonInv ? null : (i.SaleType ?? itemType?.SaleType),
+                    RateId = isNonInv ? null : i.RateId,
+                    FixedNotifiedValueOrRetailPrice = isNonInv ? null : i.FixedNotifiedValueOrRetailPrice,
                 };
                 newItems.Add(ni);
                 bill.Items.Add(ni);
@@ -778,5 +812,21 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new { SupplierId = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.SupplierId, x => x.Count);
         }
+
+        /// <summary>Subset of <paramref name="candidates"/> that are ACTIVE accounts
+        /// of the company's CoA — validates per-line AccountId overrides (design
+        /// §3.3) so a foreign/inactive id is never persisted. Non-members are
+        /// coerced to null by <see cref="Coerce"/> (engine derives the account).</summary>
+        private async Task<HashSet<int>> ValidCompanyAccountIdsAsync(int companyId, IEnumerable<int?> candidates)
+        {
+            var ids = candidates.Where(x => x is > 0).Select(x => x!.Value).Distinct().ToList();
+            if (ids.Count == 0) return new HashSet<int>();
+            return (await _context.Accounts.AsNoTracking()
+                .Where(a => a.CompanyId == companyId && a.IsActive && ids.Contains(a.Id))
+                .Select(a => a.Id).ToListAsync()).ToHashSet();
+        }
+
+        private static int? Coerce(int? candidate, HashSet<int> validIds)
+            => candidate is int id && validIds.Contains(id) ? id : null;
     }
 }

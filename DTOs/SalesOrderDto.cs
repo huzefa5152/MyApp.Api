@@ -62,6 +62,9 @@ namespace MyApp.Api.DTOs
         public int Id { get; set; }
         public int? ItemTypeId { get; set; }
         public string ItemTypeName { get; set; } = "";
+        /// <summary>Optional NonInventoryItem link (GL-account shortcut). Mutually exclusive with ItemTypeId.</summary>
+        public int? NonInventoryItemId { get; set; }
+        public string? NonInventoryItemName { get; set; }
         public string Description { get; set; } = "";
         /// <summary>Ordered quantity.</summary>
         public decimal Quantity { get; set; }
@@ -146,6 +149,7 @@ namespace MyApp.Api.DTOs
         public int ClientId { get; set; }
         public string ClientName { get; set; } = "";
         public string? CustomerPoNumber { get; set; }
+        public DateTime? CustomerPoDate { get; set; }
         public string? Site { get; set; }
         public int? SalesQuoteId { get; set; }
         /// <summary>GST rate of the source quote, when one is linked.</summary>
@@ -156,6 +160,9 @@ namespace MyApp.Api.DTOs
     public class SalesOrderInvoicePrefillLineDto
     {
         public int? ItemTypeId { get; set; }
+        /// <summary>Non-inventory link carried from the order line so the bill prefill keeps it.</summary>
+        public int? NonInventoryItemId { get; set; }
+        public string? NonInventoryItemName { get; set; }
         public string Description { get; set; } = "";
         public decimal Quantity { get; set; }
         public string Unit { get; set; } = "";

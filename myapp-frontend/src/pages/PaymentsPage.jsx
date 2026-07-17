@@ -3,6 +3,7 @@ import {
   MdAdd, MdDelete, MdChevronLeft, MdChevronRight, MdReceiptLong, MdPayments,
   MdSearch, MdBusiness, MdExpandMore, MdPerson, MdAccountBalanceWallet,
   MdCalendarToday, MdLabel, MdNotes, MdVisibility, MdEdit, MdClose,
+  MdPrint, MdPictureAsPdf,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -11,7 +12,15 @@ import { notify } from "../utils/notify";
 import { colors, dropdownStyles } from "../theme";
 import StatusBadge from "../Components/StatusBadge";
 import PaymentForm from "../Components/PaymentForm";
-import { getPagedPayments, deletePayment } from "../api/paymentApi";
+import AttachmentManager from "../Components/AttachmentManager";
+import { getPagedPayments, deletePayment, getPaymentPrintData } from "../api/paymentApi";
+import { mergeTemplate } from "../utils/templateEngine";
+import { writeAndPrint } from "../utils/printDocument";
+import { exportToPdf } from "../utils/exportUtils";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
+import DivisionSelect from "../Components/DivisionSelect";
+import { defaultReceiptTemplate, defaultPaymentTemplate } from "../utils/accountingDocTemplates";
 
 const fmtMoney = (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -38,6 +47,19 @@ export default function PaymentsPage({ mode = "receipts" }) {
   const canView = has(`accounting.${dir}.view`);
   const canCreate = has(`accounting.${dir}.create`);
   const canDelete = has(`accounting.${dir}.delete`);
+  const canPrint = has(`accounting.${dir}.print`);
+
+  // Division scope for the print-template picker. Receipts/payments aren't a
+  // division-scoped LIST, but templates can be division-scoped, so the selector
+  // drives which template scope Print/PDF use — consistent with every other
+  // document screen. "All Divisions" → company-wide templates; a specific
+  // division → that division's.
+  const [divisionFilter, setDivisionFilter] = useState("");
+  // Mode-aware print-template picker (dropdown + Print/PDF resolution + gating).
+  const tplPicker = usePrintTemplates(isReceipt ? "Receipt" : "Payment", { divisionId: divisionFilter });
+  const defaultTpl = isReceipt ? defaultReceiptTemplate : defaultPaymentTemplate;
+  // Explicit dropdown pick wins; else the company default; else the built-in.
+  const resolveTpl = (p) => tplPicker.resolveTemplate(p)?.htmlContent || defaultTpl;
 
   const [rows, setRows] = useState([]);
   const [page, setPage] = useState(1);
@@ -48,6 +70,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);   // payment being edited
   const [viewing, setViewing] = useState(null);    // payment being viewed (read-only)
+  const [exportingId, setExportingId] = useState(null);   // PDF export in flight
 
   const companyId = selectedCompany?.id;
 
@@ -91,6 +114,26 @@ export default function PaymentsPage({ mode = "receipts" }) {
 
   const onSaved = () => { setPage(1); fetchRows(1); notify(`${isReceipt ? "Receipt" : "Payment"} saved.`, "success"); };
 
+  const handlePrint = async (p) => {
+    const w = window.open("", "_blank");
+    if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
+    w.document.write("<p>Loading voucher...</p>");
+    try {
+      const { data } = await getPaymentPrintData(dir, p.id);
+      writeAndPrint(w, mergeTemplate(resolveTpl(p), data));
+    } catch { w.close(); notify("Failed to load print data.", "error"); }
+  };
+
+  const handleExportPdf = async (p) => {
+    if (exportingId) return;
+    setExportingId(p.id);
+    try {
+      const { data } = await getPaymentPrintData(dir, p.id);
+      await exportToPdf(mergeTemplate(resolveTpl(p), data), `${isReceipt ? "Receipt" : "Payment"} ${data.reference || p.id}`);
+    } catch { notify("Failed to export PDF.", "error"); }
+    finally { setExportingId(null); }
+  };
+
   if (!canView) {
     return <div style={{ padding: "2rem", color: colors.textSecondary }}>You don't have permission to view {title.toLowerCase()}.</div>;
   }
@@ -125,6 +168,12 @@ export default function PaymentsPage({ mode = "receipts" }) {
           >
             {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
           </select>
+          {/* Division scope — next to Company. Scopes the print-template picker
+              (company-wide vs a division's templates). Self-hides for companies
+              with no divisions. */}
+          {selectedCompany && (
+            <DivisionSelect companyId={selectedCompany.id} value={divisionFilter} onChange={setDivisionFilter} style={dropdownStyles.base} />
+          )}
         </div>
       )}
 
@@ -143,6 +192,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
                 onKeyDown={(e) => { if (e.key === "Enter") { setPage(1); fetchRows(1); } }}
               />
             </div>
+            {tplPicker.canChoose && <PrintTemplateSelect picker={tplPicker} />}
             {rows.length > 0 && (
               <div style={st.pageSummary}>
                 <span style={st.pageSummaryCount}>{totalCount} {title.toLowerCase()}</span>
@@ -166,9 +216,14 @@ export default function PaymentsPage({ mode = "receipts" }) {
                   docNoun={docNoun}
                   canDelete={canDelete}
                   canEdit={canCreate}
+                  canPrint={canPrint}
+                  tplPicker={tplPicker}
+                  exportingId={exportingId}
                   onDelete={() => handleDelete(p)}
                   onEdit={() => setEditing(p)}
                   onView={() => setViewing(p)}
+                  onPrint={() => handlePrint(p)}
+                  onExportPdf={() => handleExportPdf(p)}
                 />
               ))}
             </div>
@@ -203,7 +258,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
       )}
 
       {viewing && (
-        <PaymentViewDialog p={viewing} accent={accent} docNoun={docNoun} onClose={() => setViewing(null)} />
+        <PaymentViewDialog p={viewing} companyId={companyId} accent={accent} docNoun={docNoun} onClose={() => setViewing(null)} />
       )}
     </div>
   );
@@ -214,7 +269,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
  * settled-document breakdown is collapsed behind an expander so a 10-invoice
  * receipt and a 1-invoice receipt take the same space until you drill in.
  */
-function PayCard({ p, accent, docNoun, canDelete, canEdit, onDelete, onEdit, onView }) {
+function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, exportingId, onDelete, onEdit, onView, onPrint, onExportPdf }) {
   const [open, setOpen] = useState(false);
   const allocs = p.allocations || [];
   const count = allocs.length;
@@ -315,6 +370,26 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, onDelete, onEdit, onV
           <button style={st.viewBtn} onClick={onView} title="View details">
             <MdVisibility size={16} /> View
           </button>
+          {canPrint && (
+            <button
+              style={{ ...st.printBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+              disabled={tplPicker.noTemplate}
+              title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print voucher"}
+              onClick={onPrint}
+            >
+              <MdPrint size={14} /> Print
+            </button>
+          )}
+          {canPrint && (
+            <button
+              style={{ ...st.pdfBtn, ...((tplPicker.noTemplate || exportingId === p.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+              disabled={tplPicker.noTemplate || !!exportingId}
+              title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}
+              onClick={onExportPdf}
+            >
+              <MdPictureAsPdf size={14} /> PDF
+            </button>
+          )}
           {canEdit && !p.isCancelled && (
             <button style={st.editBtn} onClick={onEdit} title="Edit">
               <MdEdit size={16} /> Edit
@@ -332,7 +407,7 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, onDelete, onEdit, onV
 }
 
 /** Read-only detail view of a single receipt/payment (manager.io-style). */
-function PaymentViewDialog({ p, accent, docNoun, onClose }) {
+function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
   const allocs = p.allocations || [];
   const Row = ({ label, value }) => value == null || value === "" ? null : (
     <div style={vd.row}><span style={vd.k}>{label}</span><span style={vd.v}>{value}</span></div>
@@ -365,6 +440,11 @@ function PaymentViewDialog({ p, accent, docNoun, onClose }) {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+          {companyId && (
+            <div style={{ marginTop: "0.9rem" }}>
+              <AttachmentManager companyId={companyId} entityType="Payment" entityId={p.id} mode="view" />
             </div>
           )}
         </div>
@@ -420,6 +500,8 @@ const st = {
 
   cardActions: { display: "flex", justifyContent: "flex-end", gap: 6, marginTop: 10, flexWrap: "wrap" },
   viewBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 36, padding: "0.35rem 0.7rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.blue, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
+  printBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 36, padding: "0.35rem 0.7rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#4527a0", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
+  pdfBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 36, padding: "0.35rem 0.7rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#ad1457", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
   editBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 36, padding: "0.35rem 0.7rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#e65100", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
   delBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 36, padding: "0.35rem 0.7rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
 

@@ -10,7 +10,7 @@ Test matrix (company "Test DivRBAC Co.", divisions North + South):
   dana : company access + RestrictToDivisions=true, granted North only
   erik : company access, unrestricted (flag off)
 
-Expectations (policies D1/D2 — see DIVISION_RBAC_AUDIT_2026_07_04.md §3/§10):
+Expectations (policies D1/D2 — see the division-RBAC design §3/§10):
   dana : sees North + company-level (null-division) rows; SOUTH rows hidden
          403 on any South row by id, on ?divisionId=South filters,
          on creating in South, AND on creating company-level (D2)

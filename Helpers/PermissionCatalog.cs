@@ -106,6 +106,17 @@ namespace MyApp.Api.Helpers
             new("salesorders.manage.delete", "SalesOrders", "Manage", "Delete", "Delete a sales order"),
             new("salesorders.print.view",    "SalesOrders", "Print",  "View",   "Print or download a sales order"),
 
+            // ── Withholding Tax Receipts (customer-issued tax certificates) ──
+            // Records tax a customer withheld at source (and remitted on our
+            // behalf). The per-customer sum is the "Withholding tax receivable"
+            // figure on the Customers screen. NOT an FBR document. The read
+            // permission also gates the print/view of a single receipt.
+            new("withholdingtax.list.view",     "WithholdingTax", "List",   "View",   "View the withholding-tax-receipts list and a single receipt"),
+            new("withholdingtax.manage.create", "WithholdingTax", "Manage", "Create", "Record a withholding tax receipt"),
+            new("withholdingtax.manage.update", "WithholdingTax", "Manage", "Update", "Edit a withholding tax receipt"),
+            new("withholdingtax.manage.delete", "WithholdingTax", "Manage", "Delete", "Delete a withholding tax receipt"),
+            new("withholdingtax.print.view",    "WithholdingTax", "Print",  "View",   "Print or download a withholding tax receipt"),
+
             // ── Accounting: Receipts & Payments (AR/AP subledger) ───────────
             // Money in (receipts → settle sales invoices) and money out
             // (payments → settle purchase bills). Split namespaces so a role can
@@ -114,9 +125,11 @@ namespace MyApp.Api.Helpers
             new("accounting.receipts.view",   "Accounting", "Receipts", "View",   "View receipts (money in) and an invoice's settled payments"),
             new("accounting.receipts.create", "Accounting", "Receipts", "Create", "Record a receipt against one or more sales invoices"),
             new("accounting.receipts.delete", "Accounting", "Receipts", "Delete", "Delete a receipt"),
+            new("accounting.receipts.print",  "Accounting", "Receipts", "Print",  "Print or download a receipt voucher"),
             new("accounting.payments.view",   "Accounting", "Payments", "View",   "View payments (money out) and a bill's settled payments"),
             new("accounting.payments.create", "Accounting", "Payments", "Create", "Record a payment against one or more purchase bills"),
             new("accounting.payments.delete", "Accounting", "Payments", "Delete", "Delete a payment"),
+            new("accounting.payments.print",  "Accounting", "Payments", "Print",  "Print or download a payment voucher"),
 
             // Chart of Accounts (the account tree postings land on). View to read
             // the tree; manage to add/edit/delete groups & accounts and seed a
@@ -132,9 +145,13 @@ namespace MyApp.Api.Helpers
             new("accounting.journal.view",    "Accounting", "Journal Entries", "View",   "View journal entries (manual and system-posted)"),
             new("accounting.journal.create",  "Accounting", "Journal Entries", "Create", "Create and edit manual journal entries"),
             new("accounting.journal.delete",  "Accounting", "Journal Entries", "Delete", "Delete manual journal entries"),
+            new("accounting.journal.print",   "Accounting", "Journal Entries", "Print",  "Print or download a journal voucher"),
             new("accounting.transfers.view",   "Accounting", "Account Transfers", "View",   "View inter-account (bank/cash) transfers"),
             new("accounting.transfers.create", "Accounting", "Account Transfers", "Create", "Record and edit inter-account transfers"),
             new("accounting.transfers.delete", "Accounting", "Account Transfers", "Delete", "Delete inter-account transfers"),
+            new("accounting.transfers.print",  "Accounting", "Account Transfers", "Print",  "Print or download a transfer advice"),
+            new("accounting.reconciliation.view",   "Accounting", "Bank Reconciliation", "View",   "View bank/cash account balances and reconciliation status"),
+            new("accounting.reconciliation.manage", "Accounting", "Bank Reconciliation", "Manage", "Mark transactions cleared and reconcile a bank statement"),
             new("accounting.gl.manage",       "Accounting", "General Ledger", "Manage", "Enable GL posting, run backfill/rebuild and set the lock date"),
             new("accounting.reports.view",    "Accounting", "Reports", "View", "View trial balance and AR/AP aging reports"),
             new("accounting.dashboard.view",  "Accounting", "Dashboard", "View", "View the accounting summary dashboard"),
@@ -142,6 +159,7 @@ namespace MyApp.Api.Helpers
             // Legacy data migration (admin/ops). Also gated by a non-Production
             // environment + the LegacyDb connection string — never reachable in prod.
             new("accounting.import.run", "Accounting", "Data Migration", "Run", "Run the legacy Data_2021 ETL into a company (non-prod only)"),
+            new("accounting.import.manager", "Accounting", "Data Migration", "Manager Import", "Import a Manager.io business export (.zip of JSON) into a company — works on the live server"),
 
             // ── Folders + Attachments (unified document management) ─────────
             // One shared system powers the Configuration → Folders library AND
@@ -262,6 +280,16 @@ namespace MyApp.Api.Helpers
             new("itemtypes.manage.create", "ItemTypes", "Manage", "Create", "Create a new item type"),
             new("itemtypes.manage.update", "ItemTypes", "Manage", "Update", "Edit an item type"),
             new("itemtypes.manage.delete", "ItemTypes", "Manage", "Delete", "Delete an item type"),
+
+            // ── Non-Inventory Items (per-company GL-account shortcut lines) ──
+            // Freight / Discount / service-fee line items that post to a mapped
+            // income/expense account and move no stock (Manager.io "Non-inventory
+            // Items"). Managed from Configuration → Non-Inventory Items; each maps
+            // to the company's chart of accounts. NOT an FBR concept.
+            new("noninventoryitems.list.view",     "NonInventoryItems", "List",   "View",   "View the non-inventory items list"),
+            new("noninventoryitems.manage.create", "NonInventoryItems", "Manage", "Create", "Create a non-inventory item (Freight, Discount, …)"),
+            new("noninventoryitems.manage.update", "NonInventoryItems", "Manage", "Update", "Edit a non-inventory item and its account mapping"),
+            new("noninventoryitems.manage.delete", "NonInventoryItems", "Manage", "Delete", "Delete a non-inventory item (only when unused)"),
 
             new("config.itemdescriptions.manage", "Configuration", "ItemDescriptions", "Manage", "Manage the item-description lookup list"),
             new("config.units.manage",            "Configuration", "Units",            "Manage", "Manage the units-of-measure lookup list"),

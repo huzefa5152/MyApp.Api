@@ -11,12 +11,28 @@ Handlebars.registerHelper("fmtDate", (d) => {
   return `${dd}-${mmm}-${yy}`;
 });
 
+// Numeric day/month/year (dd/mm/yyyy) — matches Manager's invoice-date format.
+Handlebars.registerHelper("fmtDMY", (d) => {
+  if (!d) return "";
+  const dt = new Date(d);
+  const dd = String(dt.getDate()).padStart(2, "0");
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${dt.getFullYear()}`;
+});
+
 Handlebars.registerHelper("fmt", (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 );
 
 Handlebars.registerHelper("fmtDec", (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+);
+
+// Quantity format: thousands separator, but keep decimals ONLY when present
+// (1000 -> "1,000", 500 -> "500", 2.5 -> "2.5"). Use for item quantities so
+// whole units read like Manager's "1,000" yet fractional units aren't rounded.
+Handlebars.registerHelper("fmtQty", (n) =>
+  Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })
 );
 
 // Audit H-13 (2026-05-13): pre-fix, nl2br only replaced \n with <br>
@@ -159,6 +175,8 @@ export const MERGE_FIELDS = {
     { field: "{{#each items}}", label: "Loop: Items Start" },
     { field: "{{/each}}", label: "Loop: End" },
     { field: "{{this.quantity}}", label: "Item Quantity (in loop)" },
+    { field: "{{fmtQty this.quantity}}", label: "Item Quantity — formatted (1,000 / 2.5)" },
+    { field: "{{this.unit}}", label: "Item Unit (in loop)" },
     { field: "{{{richText this.description}}}", label: "Item Description (in loop)" },
   ],
   Bill: [
@@ -230,5 +248,108 @@ export const MERGE_FIELDS = {
     //   <img src="{{{fbrQrPngDataUrl}}}" />
     { field: "{{{fbrQrPngDataUrl}}}", label: "FBR QR Code (base64 PNG)" },
     { field: "{{fbrLogoUrl}}", label: "FBR Logo URL" },
+  ],
+  Receipt: [
+    { field: "{{companyBrandName}}", label: "Company Brand Name" },
+    { field: "{{companyLogoPath}}", label: "Company Logo URL" },
+    { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },
+    { field: "{{{nl2br companyPhone}}}", label: "Company Phone (with line breaks)" },
+    { field: "{{companyNTN}}", label: "Company NTN" },
+    { field: "{{companySTRN}}", label: "Company STRN" },
+    { field: "{{reference}}", label: "Voucher Reference (RCV-#)" },
+    { field: "{{fmtDate date}}", label: "Receipt Date" },
+    { field: "{{contactName}}", label: "Received From (Name)" },
+    { field: "{{{nl2br contactAddress}}}", label: "Contact Address" },
+    { field: "{{contactPhone}}", label: "Contact Phone" },
+    { field: "{{method}}", label: "Payment Method" },
+    { field: "{{bankAccountName}}", label: "Bank/Cash Account" },
+    { field: "{{chequeNumber}}", label: "Cheque Number" },
+    { field: "{{fmtDate chequeDate}}", label: "Cheque Date" },
+    { field: "{{description}}", label: "Description" },
+    { field: "{{fmt amount}}", label: "Amount" },
+    { field: "{{amountInWords}}", label: "Amount In Words" },
+    { field: "{{#if allocations.length}}", label: "If: Has Allocations" },
+    { field: "{{/if}}", label: "End If" },
+    { field: "{{#each allocations}}", label: "Loop: Allocations Start" },
+    { field: "{{/each}}", label: "Loop: End" },
+    { field: "{{this.documentLabel}}", label: "Settled Document (in loop)" },
+    { field: "{{fmtDate this.date}}", label: "Document Date (in loop)" },
+    { field: "{{fmt this.amount}}", label: "Settled Amount (in loop)" },
+  ],
+  Payment: [
+    { field: "{{companyBrandName}}", label: "Company Brand Name" },
+    { field: "{{companyLogoPath}}", label: "Company Logo URL" },
+    { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },
+    { field: "{{{nl2br companyPhone}}}", label: "Company Phone (with line breaks)" },
+    { field: "{{companyNTN}}", label: "Company NTN" },
+    { field: "{{companySTRN}}", label: "Company STRN" },
+    { field: "{{reference}}", label: "Voucher Reference (PMT-#)" },
+    { field: "{{fmtDate date}}", label: "Payment Date" },
+    { field: "{{contactName}}", label: "Paid To (Name)" },
+    { field: "{{{nl2br contactAddress}}}", label: "Contact Address" },
+    { field: "{{contactPhone}}", label: "Contact Phone" },
+    { field: "{{method}}", label: "Payment Method" },
+    { field: "{{bankAccountName}}", label: "Bank/Cash Account" },
+    { field: "{{chequeNumber}}", label: "Cheque Number" },
+    { field: "{{fmtDate chequeDate}}", label: "Cheque Date" },
+    { field: "{{description}}", label: "Description" },
+    { field: "{{fmt amount}}", label: "Amount" },
+    { field: "{{amountInWords}}", label: "Amount In Words" },
+    { field: "{{#if allocations.length}}", label: "If: Has Allocations" },
+    { field: "{{/if}}", label: "End If" },
+    { field: "{{#each allocations}}", label: "Loop: Allocations Start" },
+    { field: "{{/each}}", label: "Loop: End" },
+    { field: "{{this.documentLabel}}", label: "Settled Document (in loop)" },
+    { field: "{{fmtDate this.date}}", label: "Document Date (in loop)" },
+    { field: "{{fmt this.amount}}", label: "Settled Amount (in loop)" },
+  ],
+  Transfer: [
+    { field: "{{companyBrandName}}", label: "Company Brand Name" },
+    { field: "{{companyLogoPath}}", label: "Company Logo URL" },
+    { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },
+    { field: "{{{nl2br companyPhone}}}", label: "Company Phone (with line breaks)" },
+    { field: "{{reference}}", label: "Voucher Reference (TRF-#)" },
+    { field: "{{fmtDate date}}", label: "Transfer Date" },
+    { field: "{{fromAccountName}}", label: "From Account" },
+    { field: "{{toAccountName}}", label: "To Account" },
+    { field: "{{description}}", label: "Description / Remarks" },
+    { field: "{{fmt amount}}", label: "Amount" },
+    { field: "{{amountInWords}}", label: "Amount In Words" },
+  ],
+  JournalEntry: [
+    { field: "{{companyBrandName}}", label: "Company Brand Name" },
+    { field: "{{companyLogoPath}}", label: "Company Logo URL" },
+    { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },
+    { field: "{{{nl2br companyPhone}}}", label: "Company Phone (with line breaks)" },
+    { field: "{{reference}}", label: "Voucher Reference (JE-#)" },
+    { field: "{{entryNo}}", label: "Entry Number" },
+    { field: "{{fmtDate date}}", label: "Entry Date" },
+    { field: "{{narration}}", label: "Narration" },
+    { field: "{{fmt totalDebit}}", label: "Total Debit" },
+    { field: "{{fmt totalCredit}}", label: "Total Credit" },
+    { field: "{{#each lines}}", label: "Loop: Lines Start" },
+    { field: "{{/each}}", label: "Loop: End" },
+    { field: "{{this.accountCode}}", label: "Account Code (in loop)" },
+    { field: "{{this.accountName}}", label: "Account Name (in loop)" },
+    { field: "{{{richText this.description}}}", label: "Line Description (in loop)" },
+    { field: "{{fmt this.debit}}", label: "Line Debit (in loop)" },
+    { field: "{{fmt this.credit}}", label: "Line Credit (in loop)" },
+  ],
+  WithholdingTaxReceipt: [
+    { field: "{{companyBrandName}}", label: "Company Brand Name" },
+    { field: "{{companyLogoPath}}", label: "Company Logo URL" },
+    { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },
+    { field: "{{{nl2br companyPhone}}}", label: "Company Phone (with line breaks)" },
+    { field: "{{companyNTN}}", label: "Company NTN" },
+    { field: "{{companySTRN}}", label: "Company STRN" },
+    { field: "{{receiptNumber}}", label: "Certificate / Receipt Number" },
+    { field: "{{fmtDate date}}", label: "Date" },
+    { field: "{{customerName}}", label: "Withheld From (Name)" },
+    { field: "{{{nl2br customerAddress}}}", label: "Customer Address" },
+    { field: "{{customerNTN}}", label: "Customer NTN" },
+    { field: "{{customerSTRN}}", label: "Customer STRN" },
+    { field: "{{description}}", label: "Particulars / Description" },
+    { field: "{{fmt amount}}", label: "Tax Amount Withheld" },
+    { field: "{{amountInWords}}", label: "Amount In Words" },
   ],
 };

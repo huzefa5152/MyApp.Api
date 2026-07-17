@@ -53,8 +53,6 @@ export default function PurchaseBillsPage() {
   const canUpdate = has("purchasebills.manage.update");
   const canDelete = has("purchasebills.manage.delete");
   const canPrint = has("purchasebills.print.view");
-  // Shared template-picker state (dropdown + Print/PDF resolution).
-  const tplPicker = usePrintTemplates("PurchaseBill");
   // Shortcut to record a payment (money out) straight from a purchase bill —
   // opens the PaymentForm pre-filled with this supplier + this bill.
   const canRecordPayment = has("accounting.payments.create");
@@ -79,6 +77,10 @@ export default function PurchaseBillsPage() {
   const [divisionFilter, setDivisionFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  // Shared template-picker state, scoped to the selected division: "All
+  // Divisions" → company-wide templates; a specific division → that division's.
+  // An empty scope hides the picker and blocks Print/PDF.
+  const tplPicker = usePrintTemplates("PurchaseBill", { divisionId: divisionFilter });
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [viewOnly, setViewOnly] = useState(false);
@@ -325,6 +327,9 @@ export default function PurchaseBillsPage() {
             <select style={dropdownStyles.base} value={selectedCompany?.id || ""} onChange={e => setSelectedCompany(companies.find(c => parseInt(c.id) === parseInt(e.target.value)))}>
               {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
             </select>
+            {selectedCompany && (
+              <DivisionSelect companyId={selectedCompany.id} value={divisionFilter} onChange={(v) => { setDivisionFilter(v); setPage(1); }} style={dropdownStyles.base} />
+            )}
           </div>
 
           {selectedCompany && (
@@ -341,12 +346,6 @@ export default function PurchaseBillsPage() {
                   placeholder="All Suppliers"
                 />
               </div>
-              <DivisionSelect
-                companyId={selectedCompany.id}
-                value={divisionFilter}
-                onChange={(v) => { setDivisionFilter(v); setPage(1); }}
-                className="filter-select"
-              />
               <div className="filter-date-group">
                 <input type="date" className="filter-date-input" value={dateFrom} onChange={onFilterChange(setDateFrom)} title="From" />
                 <span className="filter-date-sep">–</span>
@@ -385,6 +384,8 @@ export default function PurchaseBillsPage() {
                   onPrint={handlePrint}
                   onExportPdf={handleExportPdf}
                   exportingId={exportingId}
+                  printDisabled={tplPicker.noTemplate}
+                  printDisabledReason={tplPicker.noTemplateReason}
                 />
               ) : (
               <div className="card-grid">
@@ -431,12 +432,12 @@ export default function PurchaseBillsPage() {
                           <MdVisibility size={14} /> View
                         </button>
                         {canPrint && (
-                          <button style={btnPrint} onClick={() => handlePrint(b)} title="Print purchase bill">
+                          <button style={{ ...btnPrint, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} onClick={() => handlePrint(b)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print purchase bill"}>
                             <MdPrint size={14} /> Print
                           </button>
                         )}
                         {canPrint && (
-                          <button style={{ ...btnPdf, opacity: exportingId === b.id ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportPdf(b)} title="Download PDF">
+                          <button style={{ ...btnPdf, opacity: (tplPicker.noTemplate || exportingId === b.id) ? 0.5 : 1, ...(tplPicker.noTemplate ? { cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate || !!exportingId} onClick={() => handleExportPdf(b)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}>
                             <MdPictureAsPdf size={14} /> PDF
                           </button>
                         )}
@@ -480,6 +481,7 @@ export default function PurchaseBillsPage() {
       {showForm && selectedCompany && (
         <PurchaseBillForm
           companyId={selectedCompany.id}
+          company={selectedCompany}
           billId={editingId}
           readOnly={viewOnly}
           defaultDivisionId={editingId ? null : divisionFilter}

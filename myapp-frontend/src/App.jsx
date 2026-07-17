@@ -12,11 +12,13 @@ import SalesOrderPage from "./pages/SalesOrderPage";
 import InvoicePage from "./pages/InvoicePage";
 import PaymentsPage from "./pages/PaymentsPage";
 import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
+import BankCashAccountsPage from "./pages/BankCashAccountsPage";
 import JournalEntriesPage from "./pages/JournalEntriesPage";
 import TransfersPage from "./pages/TransfersPage";
 import AccountingDashboardPage from "./pages/AccountingDashboardPage";
 import AccountingReportsPage from "./pages/AccountingReportsPage";
 import DataMigrationPage from "./pages/DataMigrationPage";
+import ManagerImportPage from "./pages/ManagerImportPage";
 import CreditDebitNotePage from "./pages/CreditDebitNotePage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
 import PurchaseBillsPage from "./pages/PurchaseBillsPage";
@@ -28,6 +30,7 @@ import TaxSheetPage from "./pages/TaxSheetPage";
 import ClientsPage from "./pages/ClientsPage";
 import SuppliersPage from "./pages/SuppliersPage";
 import ItemTypesPage from "./pages/ItemTypesPage";
+import NonInventoryItemsPage from "./pages/NonInventoryItemsPage";
 import UnitsPage from "./pages/UnitsPage";
 import POFormatsPage from "./pages/POFormatsPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -41,6 +44,7 @@ import FbrSettingsPage from "./pages/FbrSettingsPage";
 import FbrSandboxPage from "./pages/FbrSandboxPage";
 import FbrMonitorPage from "./pages/FbrMonitorPage";
 import NavigationMenuPage from "./pages/NavigationMenuPage";
+import WithholdingTaxReceiptsPage from "./pages/WithholdingTaxReceiptsPage";
 import LoginPage from "./pages/public/LoginPage";
 import LandingPage from "./pages/public/LandingPage";
 import ProtectedRoute from "./Components/ProtectedRoute";
@@ -77,6 +81,7 @@ export default function App() {
           <Route path="/Clients/*" element={<ClientsPage />} />
           <Route path="/Suppliers/*" element={<SuppliersPage />} />
           <Route path="/item-types" element={<ItemTypesPage />} />
+          <Route path="/non-inventory-items" element={<NonInventoryItemsPage />} />
           <Route path="/units" element={<UnitsPage />} />
           <Route path="/po-formats" element={<POFormatsPage />} />
           <Route path="/challans" element={<ChallansPage />} />
@@ -96,6 +101,9 @@ export default function App() {
               challan fulfilment). Pre-sale documents; not FBR. */}
           <Route path="/sales-quotes" element={<SalesQuotePage />} />
           <Route path="/sales-orders" element={<SalesOrderPage />} />
+          {/* Withholding Tax Receipts — customer-issued tax certificates;
+              per-customer sum feeds the Customers screen's WHT-receivable. */}
+          <Route path="/withholding-tax" element={<WithholdingTaxReceiptsPage />} />
           {/* Credit Notes (returns/reversals) and Debit Notes (upward
               adjustments) — each tab lists ONLY its type, in its own
               numbering sequence. Never mixed with Bills or Invoices.
@@ -110,6 +118,7 @@ export default function App() {
           <Route path="/receipts" element={<PaymentsPage key="receipts" mode="receipts" />} />
           <Route path="/payments" element={<PaymentsPage key="payments" mode="payments" />} />
           <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />
+          <Route path="/bank-cash-accounts" element={<BankCashAccountsPage />} />
           {/* General Ledger (Phase B): transfers move money between own
               bank/cash accounts; journal entries are manual GL postings;
               the accounting dashboard + reports read the live ledger. */}
@@ -118,6 +127,7 @@ export default function App() {
           <Route path="/accounting/dashboard" element={<AccountingDashboardPage />} />
           <Route path="/accounting/reports" element={<AccountingReportsPage />} />
           <Route path="/accounting/data-migration" element={<DataMigrationPage />} />
+          <Route path="/accounting/manager-import" element={<ManagerImportPage />} />
           <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
           <Route path="/goods-receipts" element={<GoodsReceiptsPage />} />
           <Route path="/stock" element={<StockDashboardPage />} />

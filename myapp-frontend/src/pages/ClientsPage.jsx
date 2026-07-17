@@ -1,13 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { MdPeople, MdAdd, MdSearch, MdBusiness } from "react-icons/md";
 import ClientList from "../Components/ClientList";
+import ClientDetailModal from "../Components/ClientDetailModal";
 import ClientForm from "../Components/ClientForm";
 import CommonClientsPanel from "../Components/CommonClientsPanel";
 import CommonClientForm from "../Components/CommonClientForm";
 import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
-import { getClientsByCompany, getCommonClients, copyClientToCompanies } from "../api/clientApi";
-import { getInvoiceCountsByClient } from "../api/invoiceApi";
+import { getClientsByCompany, getCommonClients, copyClientToCompanies, getClientSummary } from "../api/clientApi";
 import { notify } from "../utils/notify";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
@@ -22,15 +21,13 @@ const colors = {
 };
 
 export default function ClientsPage() {
-  const navigate = useNavigate();
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
   const canCreate = has("clients.manage.create");
-  // Whether the operator may open the Invoices list (gates the clickable count).
-  const canViewInvoices = has("invoices.list.view") || has("bills.list.view");
   const [clients, setClients] = useState([]);
-  // clientId -> sales-invoice count, for the clickable chip on each card.
-  const [invoiceCounts, setInvoiceCounts] = useState({});
+  // clientId -> per-client summary row (counts, qty-to-deliver/invoice, A/R,
+  // WHT receivable, status) for the Customers table.
+  const [summaryById, setSummaryById] = useState({});
   const [selectedClient, setSelectedClient] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
@@ -45,6 +42,10 @@ export default function ClientsPage() {
 
   // Copy-to-companies dialog: holds the source client when open, null when closed.
   const [copyingClient, setCopyingClient] = useState(null);
+
+  // Customer drill-down popup: { client, section } when open (section is the
+  // metric cell clicked, or null when the name was clicked), null when closed.
+  const [detailTarget, setDetailTarget] = useState(null);
 
   // The set of multi-company group IDs visible right now — used to
   // hide those clients from the per-company list below the dropdown.
@@ -76,10 +77,22 @@ export default function ClientsPage() {
     if (!companyId) return;
     setLoadingClients(true);
     try {
-      const { data } = await getClientsByCompany(companyId);
-      setClients(data);
+      // Clients (full records for edit/copy/delete) + the per-client summary
+      // roll-up, in parallel. Summary is best-effort — the list still renders
+      // (with zeroed columns) if the summary call fails.
+      const [{ data: clientRows }, summaryRes] = await Promise.all([
+        getClientsByCompany(companyId),
+        getClientSummary(companyId).catch(() => ({ data: [] })),
+      ]);
+      setClients(Array.isArray(clientRows) ? clientRows : []);
+      const map = {};
+      // Guard: only accept a plain array. A missing endpoint returns the SPA
+      // fallback HTML with a 200, which must NOT be treated as summary rows.
+      (Array.isArray(summaryRes?.data) ? summaryRes.data : []).forEach((s) => { map[s.clientId] = s; });
+      setSummaryById(map);
     } catch {
       setClients([]);
+      setSummaryById({});
     } finally {
       setLoadingClients(false);
     }
@@ -87,21 +100,8 @@ export default function ClientsPage() {
 
   useEffect(() => {
     if (selectedCompany) fetchClients(selectedCompany.id);
-    else setClients([]);
+    else { setClients([]); setSummaryById({}); }
   }, [selectedCompany]);
-
-  // Sales-invoice counts per client (one GROUP BY call). Best-effort: a
-  // view-only role without invoice access just gets no chips.
-  useEffect(() => {
-    if (!selectedCompany || !canViewInvoices) { setInvoiceCounts({}); return; }
-    let cancelled = false;
-    getInvoiceCountsByClient(selectedCompany.id)
-      // Guard: only accept a plain object map. If the endpoint is missing the
-      // SPA fallback returns HTML with a 200, which must NOT become "counts".
-      .then(({ data }) => { if (!cancelled) setInvoiceCounts(data && typeof data === "object" && !Array.isArray(data) ? data : {}); })
-      .catch(() => { if (!cancelled) setInvoiceCounts({}); });
-    return () => { cancelled = true; };
-  }, [selectedCompany, canViewInvoices]);
 
   const handleEdit = (client) => {
     setSelectedClient(client);
@@ -225,11 +225,11 @@ export default function ClientsPage() {
       ) : (
         <ClientList
           clients={filtered}
+          summaryById={summaryById}
           onEdit={handleEdit}
           onCopy={(client) => setCopyingClient(client)}
           fetchClients={() => fetchClients(selectedCompany?.id)}
-          invoiceCounts={invoiceCounts}
-          onShowInvoices={canViewInvoices ? (c) => navigate(`/invoices?clientId=${c.id}`) : null}
+          onOpenDetail={(client, section) => setDetailTarget({ client, section })}
         />
       )}
 
@@ -309,6 +309,17 @@ export default function ClientsPage() {
             if (selectedCompany) fetchClients(selectedCompany.id);
             setCommonRefreshKey((k) => k + 1);
           }}
+        />
+      )}
+
+      {/* Customer drill-down popup — opens from a clickable count/amount cell
+          (or the customer name), with expandable/collapsible document sections. */}
+      {detailTarget && (
+        <ClientDetailModal
+          clientId={detailTarget.client.id}
+          clientName={detailTarget.client.name}
+          initialSection={detailTarget.section}
+          onClose={() => setDetailTarget(null)}
         />
       )}
     </div>

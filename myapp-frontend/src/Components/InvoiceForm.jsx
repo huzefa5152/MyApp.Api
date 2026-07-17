@@ -5,6 +5,8 @@ import { getSalesOrdersForPicker } from "../api/salesOrderApi";
 import { createInvoice, getLastRatesForChallan } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getItemTypes } from "../api/itemTypeApi";
+import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
+import { getAccountsFlat } from "../api/accountApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { formStyles, modalSizes } from "../theme";
@@ -12,6 +14,7 @@ import { todayYmd } from "../utils/dateInput";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import AccountSelect from "./AccountSelect";
 import ClientForm from "./ClientForm";
 import DivisionSelect from "./DivisionSelect";
 import SearchableSelect from "./SearchableSelect";
@@ -23,6 +26,7 @@ import PermissionLackedHint from "./PermissionLackedHint";
 // to retype "Pcs" / "KG" / etc. each line.
 import LookupAutocomplete from "./LookupAutocomplete";
 import AttachmentManager from "./AttachmentManager";
+import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 
 const colors = {
   blue: "#0d47a1",
@@ -105,6 +109,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [itemPrices, setItemPrices] = useState({});
   const [itemDescriptions, setItemDescriptions] = useState({});
   const [commonPoDate, setCommonPoDate] = useState("");
+  // Bill-level customer PO (number + date). Prefilled from the linked Sales
+  // Order / selected challans; editable, or typed manually when none exists.
+  const [billPoNumber, setBillPoNumber] = useState("");
+  const [billPoDate, setBillPoDate] = useState("");
   const [dcSearch, setDcSearch] = useState("");
   const [gstRate, setGstRate] = useState(18);
   const [paymentTerms, setPaymentTerms] = useState("");
@@ -147,6 +155,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // to the backend so the bill line is permanently linked to the catalog.
   const [itemTypes, setItemTypes] = useState([]);
   const [itemTypeIds, setItemTypeIds] = useState({});
+  // Per-item Non-Inventory Item id (GL-account shortcut line: Freight / Discount / …),
+  // keyed by delivery item id. Mutually exclusive with itemTypeIds[id].
+  const [itemNonInvIds, setItemNonInvIds] = useState({});
+  const [nonInvItems, setNonInvItems] = useState([]);
+  // ── Per-line GL account (design §4) ──
+  // Which income account each line posts to, keyed by delivery item id.
+  // Auto-fills from the picked item type's per-company overlay account and is
+  // overridable per row. The Account column + this state only matter when the
+  // company has a Chart of Accounts (glOn); GL-off companies never see it and
+  // the null accountId lets the posting engine derive as before.
+  const [itemAccountIds, setItemAccountIds] = useState({});
+  const [accounts, setAccounts] = useState([]);
+  const glOn = accounts.length > 0;
 
   // ── Scenario lock ─────────────────────────────────────────────
   // FBR allows only one sale type per invoice. Operator picks the
@@ -178,11 +199,16 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (!newId || !picked) return;
     setItemTypeIds((prev) => {
       const next = { ...prev };
-      const newHs = {}, newSt = {}, newUom = {}, newFbrUom = {}, newDesc = {};
+      const newHs = {}, newSt = {}, newUom = {}, newFbrUom = {}, newDesc = {}, clearNi = {}, newAcct = {};
       for (const item of allItems) {
         const id = item.id;
         if (mode === "empty" && next[id]) continue;
         next[id] = parseInt(newId);
+        // Stamping an item type clears any non-inventory binding (mutually exclusive).
+        clearNi[id] = null;
+        // Auto-fill the line's GL account from the item type's per-company
+        // sale-account mapping (null → engine derives at post time).
+        newAcct[id] = picked.saleAccountId ?? null;
         if (picked.hsCode) newHs[id] = picked.hsCode;
         if (picked.saleType) newSt[id] = picked.saleType;
         if (picked.uom) newUom[id] = picked.uom;
@@ -200,9 +226,23 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         if (Object.keys(newUom).length) setItemUoms(p => ({ ...p, ...newUom }));
         if (Object.keys(newFbrUom).length) setItemFbrUomIds(p => ({ ...p, ...newFbrUom }));
         if (Object.keys(newDesc).length) setItemDescriptions(p => ({ ...p, ...newDesc }));
+        if (Object.keys(clearNi).length) setItemNonInvIds(p => ({ ...p, ...clearNi }));
+        if (Object.keys(newAcct).length) setItemAccountIds(p => ({ ...p, ...newAcct }));
       }, 0);
       return next;
     });
+  };
+
+  // Bulk-apply a NON-INVENTORY item (charge) to all / empty rows — mirrors
+  // applyItemTypeToAll so the bulk picker's Non-Inventory section behaves like
+  // the per-row one.
+  const applyNonInvToAll = (n, mode = "all") => {
+    if (!n) return;
+    for (const item of allItems) {
+      const id = item.id;
+      if (mode === "empty" && (itemTypeIds[id] || itemNonInvIds[id])) continue;
+      handleNonInvPick(item, n);
+    }
   };
 
   // Bulk-clear: drop the Item Type binding (and the inherited HS Code /
@@ -217,6 +257,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     setItemUoms({});
     setItemFbrUomIds({});
     setItemDescriptions({});
+    setItemAccountIds({});
   };
 
   // Last-billed rate per delivery item, keyed by deliveryItemId.
@@ -237,7 +278,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         const [challanRes, clientRes, typesRes, scenarioRes] = await Promise.all([
           getPendingChallansByCompany(companyId),
           getClientsByCompany(companyId),
-          getItemTypes().catch(() => ({ data: [] })),
+          getItemTypes(companyId).catch(() => ({ data: [] })),
           fbrEnabled
             ? getFbrApplicableScenarios(companyId).catch(() => ({ data: { scenarios: [] } }))
             : Promise.resolve({ data: { scenarios: [] } }),
@@ -295,6 +336,23 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       .then((items) => setSalesOrders(items))
       .catch(() => setSalesOrders([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId]);
+
+  // Per-company Non-Inventory Items (GL-account shortcut lines: Freight, Discount, …).
+  // A company with GL off / no items resolves to [] and the picker shows none.
+  useEffect(() => {
+    if (!companyId) { setNonInvItems([]); return; }
+    getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
+  }, [companyId]);
+
+  // GL accounts (income side highlighted) for the per-line Account picker.
+  // Empty when GL isn't set up / the caller lacks accounting.coa.view → the
+  // Account column stays hidden and lines post to the derived default.
+  useEffect(() => {
+    if (!companyId) { setAccounts([]); return; }
+    getAccountsFlat(companyId)
+      .then(({ data }) => setAccounts((data || []).filter((a) => a.isActive)))
+      .catch(() => setAccounts([]));
   }, [companyId]);
 
   // Whenever a challan gets newly ticked (either via the Generate-Bill
@@ -434,14 +492,21 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
   // Further filter by DC search (challan number, PO, or item descriptions)
   const filteredChallans = useMemo(() => {
-    if (!dcSearch.trim()) return clientChallans;
-    const term = dcSearch.toLowerCase();
-    return clientChallans.filter((c) =>
-      c.challanNumber.toString().includes(term) ||
-      (c.poNumber && c.poNumber.toLowerCase().includes(term)) ||
-      c.items?.some((item) => item.description?.toLowerCase().includes(term))
+    const term = dcSearch.trim().toLowerCase();
+    const base = !term
+      ? clientChallans
+      : clientChallans.filter((c) =>
+          c.challanNumber.toString().includes(term) ||
+          (c.poNumber && c.poNumber.toLowerCase().includes(term)) ||
+          c.items?.some((item) => item.description?.toLowerCase().includes(term))
+        );
+    // Pin CHECKED challans to the top so a Sales-Order auto-selection (or a
+    // manual tick) doesn't get lost among hundreds of pending DCs. Stable
+    // sort preserves the existing DC#-descending order within each group.
+    return [...base].sort(
+      (a, b) => (selectedIds.includes(b.id) ? 1 : 0) - (selectedIds.includes(a.id) ? 1 : 0)
     );
-  }, [clientChallans, dcSearch]);
+  }, [clientChallans, dcSearch, selectedIds]);
 
   // Reset selections when client changes
   const handleClientChange = (e) => {
@@ -450,6 +515,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     setItemPrices({});
     setItemDescriptions({});
     setCommonPoDate("");
+    setBillPoNumber("");
+    setBillPoDate("");
     setDcSearch("");
     setError("");
     // Also clear any leftover rate-history state so the warning banner and
@@ -472,10 +539,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       : salesOrders;
     return list
       .map((o) => ({ o, pending: allChallans.filter((c) => c.salesOrderId === o.id).length }))
+      // Any order with at least one unbilled (pending) challan can be billed —
+      // partially-delivered orders included. Picking it selects those challans.
       .filter(({ o, pending }) =>
         pending > 0
-        && o.status !== "Cancelled"
-        && (o.fulfillmentStatus === "Fully Delivered" || o.fulfillmentStatus === "Over Delivered"))
+        && o.status !== "Cancelled")
       .map(({ o, pending }) => ({
         ...o,
         _label: `SO #${o.salesOrderNumber} — ${o.clientName} (${pending} unbilled DC${pending !== 1 ? "s" : ""})${o.divisionName ? ` · ${o.divisionName}` : ""}`,
@@ -492,6 +560,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     setItemPrices({});
     setItemDescriptions({});
     setCommonPoDate("");
+    setBillPoNumber("");
+    setBillPoDate("");
     setDcSearch("");
     setError("");
     setLastRates({});
@@ -513,6 +583,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     setSelectedClientId(so.clientId ? String(so.clientId) : "");
     setDivisionId(so.divisionId ? String(so.divisionId) : "");
     setSelectedIds(soChallans.map((c) => c.id));
+    // Prefill the bill's customer PO from the order (operator can still edit).
+    if (so.customerPoNumber) setBillPoNumber(so.customerPoNumber);
+    if (so.customerPoDate) setBillPoDate(String(so.customerPoDate).slice(0, 10));
     setSoPickMsg(soChallans.length
       ? `Selected ${soChallans.length} unbilled challan${soChallans.length !== 1 ? "s" : ""} from Sales Order #${so.salesOrderNumber}.`
       : `Sales Order #${so.salesOrderNumber} has no unbilled challans — create a challan for it first, or tick challans manually below.`);
@@ -540,6 +613,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     c.items.map((item) => ({ ...item, challanNumber: c.challanNumber }))
   );
 
+  // Prefill the bill PO from the selected challans (they carry the order's PO)
+  // when the operator hasn't set one yet — covers the "Generate Bill from order"
+  // path where challans are preselected without calling handleSalesOrderPick.
+  useEffect(() => {
+    const po = selectedChallans.map((c) => c.poNumber).find((p) => p && p.trim());
+    const pod = selectedChallans.map((c) => c.poDate).find((d) => d);
+    if (po) setBillPoNumber((prev) => prev || po);
+    if (pod) setBillPoDate((prev) => prev || String(pod).slice(0, 10));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIds]);
+
   const subtotal = allItems.reduce((sum, item) => {
     const price = parseFloat(itemPrices[item.id]) || 0;
     return sum + item.quantity * price;
@@ -548,6 +632,16 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const grandTotal = subtotal + gstAmount;
 
   const allPricesValid = allItems.length > 0 && allItems.every((i) => itemPrices[i.id] && parseFloat(itemPrices[i.id]) > 0);
+  // Every line must be complete before the bill can be created: a classification
+  // (Item Type OR Non-Inventory item), a non-empty description, qty > 0, and
+  // unit price > 0. Gates the Create Bill button (disabled until all pass).
+  const allLinesComplete = allItems.length > 0 && allItems.every((i) => {
+    const hasPick = !!(itemTypeIds[i.id] || itemNonInvIds[i.id]);
+    const desc = ((itemDescriptions[i.id] ?? i.description) || "").trim();
+    const qty = Number(i.quantity) || 0;
+    const price = parseFloat(itemPrices[i.id]) || 0;
+    return hasPick && desc.length > 0 && qty > 0 && price > 0;
+  });
 
   const handlePriceChange = (itemId, value) => {
     setItemPrices((prev) => ({ ...prev, [itemId]: value }));
@@ -568,6 +662,30 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [itemId]: picked.saleType }));
   };
 
+  // Non-Inventory pick — mutually exclusive with an item type. Records the
+  // non-inv id, clears the item-type binding + inherited FBR fields, and
+  // prefills description / UOM / price only when those are still empty
+  // (this is a sales bill, so use the item's defaultSalePrice).
+  const handleNonInvPick = (item, n) => {
+    const id = item.id;
+    if (!n) { setItemNonInvIds((p) => ({ ...p, [id]: null })); return; }
+    setItemNonInvIds((p) => ({ ...p, [id]: n.id }));
+    setItemTypeIds((p) => ({ ...p, [id]: null }));
+    // A non-inventory item posts to its own mapped account — clear any per-line
+    // override so that mapping governs.
+    setItemAccountIds((p) => ({ ...p, [id]: null }));
+    setItemHsCodes((p) => ({ ...p, [id]: "" }));
+    setItemSaleTypes((p) => ({ ...p, [id]: "" }));
+    setItemFbrUomIds((p) => ({ ...p, [id]: null }));
+    const curDesc = (itemDescriptions[id] ?? item.description) || "";
+    if (!curDesc.trim()) setItemDescriptions((p) => ({ ...p, [id]: n.defaultLineDescription || n.name || "" }));
+    const curUom = (itemUoms[id] ?? item.unit) || "";
+    if (!curUom.trim()) setItemUoms((p) => ({ ...p, [id]: n.unitName || "" }));
+    if ((!itemPrices[id] || Number(itemPrices[id]) === 0) && n.defaultSalePrice != null) {
+      setItemPrices((p) => ({ ...p, [id]: String(n.defaultSalePrice) }));
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -580,12 +698,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     const missingPrices = allItems.filter((i) => !itemPrices[i.id] || parseFloat(itemPrices[i.id]) <= 0);
     if (missingPrices.length > 0) return setError("Enter unit price for all items.");
 
+    // Every line on a bill must be classified — an Item Type OR a Non-Inventory item.
+    const missingPick = allItems.filter((i) => !itemTypeIds[i.id] && !itemNonInvIds[i.id]);
+    if (missingPick.length > 0) return setError("Every line must have an Item Type or Non-Inventory item selected.");
+
     setSaving(true);
     try {
-      // Build PO date updates for selected challans that don't have a PO date
+      // Backfill the PO date onto selected challans that don't have one, using
+      // the bill's PO date (the "PO Date" field the operator sees/edits).
       const poDateUpdates = {};
-      if (commonPoDate) {
-        const isoDate = new Date(commonPoDate).toISOString();
+      if (billPoDate) {
+        const isoDate = new Date(billPoDate).toISOString();
         for (const dc of selectedChallans) {
           if (!dc.poDate) {
             poDateUpdates[dc.id] = isoDate;
@@ -616,6 +739,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           description: itemDescriptions[item.id] || item.description,
           // ItemType link (new) — when set, backend re-derives HS/UOM/SaleType from catalog
           itemTypeId: itemTypeIds[item.id] || null,
+          // Non-Inventory line (Freight / Discount / …) — mutually exclusive with itemTypeId.
+          nonInventoryItemId: itemNonInvIds[item.id] || null,
+          // Per-line GL income account (auto-filled from the item type's overlay,
+          // overridable). Server validates against the company CoA; null → derived.
+          accountId: itemAccountIds[item.id] || null,
           // Optional FBR fields — sent only if user filled them in (or auto-filled from picked ItemType)
           uom: itemUoms[item.id]?.trim() || null,
           fbrUOMId: itemFbrUomIds[item.id] || null,
@@ -629,6 +757,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
             : (itemSaleTypes[item.id]?.trim() || null),
         })),
         poDateUpdates,
+        poNumber: billPoNumber.trim() || null,
+        poDate: billPoDate ? new Date(billPoDate).toISOString() : null,
       });
 
       // ── Remember FBR defaults per item description ──
@@ -717,7 +847,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     return data || [];
   };
   const refreshItemTypes = async () => {
-    const { data } = await getItemTypes();
+    const { data } = await getItemTypes(companyId);
     setItemTypes(data || []);
     return data || [];
   };
@@ -737,6 +867,15 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     // apply toolbar — explicit and undoable. created is unused here but
     // kept on the signature for parity with onClientCreated.
     setPendingItemTypeRowId(null);
+  };
+
+  // Account labels for the per-line Account (GL) column: the resolved company
+  // default (named, shown when a line carries no explicit account) + a helper
+  // naming a non-inventory line's own mapped sale account.
+  const defaultSaleAccountLabel = defaultAccountPlaceholder(accounts, company?.defaultSalesAccountId);
+  const nonInvSaleAccountLabel = (nonInvId) => {
+    const n = nonInvItems.find((x) => String(x.id) === String(nonInvId));
+    return n?.saleAccountName ? `→ ${n.saleAccountName}` : "→ Suspense";
   };
 
   // Backdrop click is a no-op — bills can hold a lot of typed data and
@@ -766,7 +905,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                   </label>
                   {salesOrderOptions.length === 0 ? (
                     <p style={{ color: colors.textSecondary, fontSize: "0.82rem", margin: 0 }}>
-                      No fully-delivered sales orders with unbilled challans{divisionId ? " in this division" : ""} — pick a buyer and challans below.
+                      No sales orders with unbilled challans{divisionId ? " in this division" : ""} — pick a buyer and challans below.
                     </p>
                   ) : (
                     <SearchableSelect
@@ -1118,21 +1257,27 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               </label>
                             ))}
                           </div>
-                          {selectedIds.length > 0 && selectedChallans.find((c) => c.poDate) && (
-                            <div style={styles.poDateInfo}>
-                              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: colors.textSecondary }}>PO Date:</span>
-                              <span style={{ fontSize: "0.82rem", color: colors.textPrimary }}>{new Date(selectedChallans.find((c) => c.poDate).poDate).toLocaleDateString()}</span>
-                            </div>
-                          )}
-                          {selectedIds.length > 0 && !selectedChallans.find((c) => c.poDate) && (
-                            <div style={styles.poDateInfo}>
-                              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: colors.textSecondary }}>PO Date (for all selected DCs):</span>
-                              <input
-                                type="date"
-                                style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.82rem", width: "auto" }}
-                                value={commonPoDate}
-                                onChange={(e) => setCommonPoDate(e.target.value)}
-                              />
+                          {selectedIds.length > 0 && (
+                            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginTop: "0.6rem" }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem", flex: "1 1 180px" }}>
+                                <label style={{ fontSize: "0.82rem", fontWeight: 600, color: colors.textSecondary }}>Customer PO #</label>
+                                <input
+                                  type="text"
+                                  placeholder="From order, or enter manually"
+                                  style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.82rem" }}
+                                  value={billPoNumber}
+                                  onChange={(e) => setBillPoNumber(e.target.value)}
+                                />
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+                                <label style={{ fontSize: "0.82rem", fontWeight: 600, color: colors.textSecondary }}>PO Date</label>
+                                <input
+                                  type="date"
+                                  style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.82rem", width: "auto" }}
+                                  value={billPoDate}
+                                  onChange={(e) => setBillPoDate(e.target.value)}
+                                />
+                              </div>
                             </div>
                           )}
                         </>
@@ -1228,8 +1373,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             </select>
                             <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
                               <SearchableItemTypeSelect
+                                divisionId={divisionId}
                                 items={filteredItemTypes}
                                 value=""
+                                nonInventoryItems={nonInvItems}
+                                nonInventoryValue=""
+                                onPickNonInventory={(n) => { if (n) applyNonInvToAll(n, bulkApplyMode); }}
                                 onChange={(newId, picked) => {
                                   if (!newId || !picked) return;
                                   applyItemTypeToAll(parseInt(newId), picked, bulkApplyMode);
@@ -1262,12 +1411,18 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             <thead>
                               <tr style={styles.unifiedThead}>
                                 <th style={{ ...styles.unifiedTh, width: "4%" }}>DC#</th>
-                                <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type (FBR)</th>
+                                <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type (FBR) *</th>
                                 <th style={{ ...styles.unifiedTh, width: "16%" }}>Description</th>
                                 <th style={{ ...styles.unifiedTh, width: "9%" }}>Qty</th>
                                 <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
                                 <th style={{ ...styles.unifiedTh, width: "8%" }}>Unit Price *</th>
                                 <th style={{ ...styles.unifiedTh, width: "9%" }}>Line Total</th>
+                                {/* Account (GL) — which income account this line's
+                                    amount posts to. Shown in BOTH Bills and Invoices
+                                    modes when the company has a Chart of Accounts. */}
+                                {glOn && (
+                                  <th style={{ ...styles.unifiedTh, width: "14%" }} title="GL income account this line posts to">Account (GL)</th>
+                                )}
                                 {/* HS Code is FBR data — only relevant on the
                                     Invoices tab. Bills mode is pre-FBR data
                                     entry, so hide it. */}
@@ -1297,11 +1452,20 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                           The '+ New Item Type' affordance lives once above the grid
                                           (was per-row before — moved to declutter the table). */}
                                       <SearchableItemTypeSelect
+                                        divisionId={divisionId}
                                         items={filteredItemTypes}
                                         value={itemTypeIds[item.id] || ""}
+                                        nonInventoryItems={nonInvItems}
+                                        nonInventoryValue={itemNonInvIds[item.id] || ""}
+                                        onPickNonInventory={(n) => handleNonInvPick(item, n)}
                                         onChange={(newId, picked) => {
                                           setItemTypeIds((p) => ({ ...p, [item.id]: newId ? parseInt(newId) : null }));
                                           if (picked) {
+                                            // Picking an ItemType clears any non-inventory binding (mutually exclusive).
+                                            setItemNonInvIds((p) => ({ ...p, [item.id]: null }));
+                                            // Auto-fill the line's GL income account from the item
+                                            // type's per-company overlay (null → engine derives).
+                                            setItemAccountIds((p) => ({ ...p, [item.id]: picked.saleAccountId ?? null }));
                                             // Picking an ItemType binds these fields to the catalog row.
                                             // Description switches to the item type's name and the
                                             // input goes read-only — same UX as the no-challan form.
@@ -1322,9 +1486,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                             setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
                                             setItemUoms((p) => ({ ...p, [item.id]: "" }));
                                             setItemFbrUomIds((p) => ({ ...p, [item.id]: null }));
+                                            setItemAccountIds((p) => ({ ...p, [item.id]: null }));
                                           }
                                         }}
-                                        placeholder="— optional —"
+                                        placeholder="— required —"
                                         style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                                       />
                                     </td>
@@ -1416,6 +1581,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                     <td style={{ ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
                                       {(item.quantity * price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
+                                    {glOn && (
+                                      <td style={styles.unifiedTd}>
+                                        <AccountSelect
+                                          accounts={accounts}
+                                          value={itemAccountIds[item.id] ?? null}
+                                          onChange={(v) => setItemAccountIds((p) => ({ ...p, [item.id]: v }))}
+                                          side="income"
+                                          disabled={!!itemNonInvIds[item.id]}
+                                          placeholder={itemNonInvIds[item.id] ? nonInvSaleAccountLabel(itemNonInvIds[item.id]) : defaultSaleAccountLabel}
+                                          style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.76rem" }}
+                                        />
+                                      </td>
+                                    )}
                                     {!billsMode && (
                                       <td
                                         style={{
@@ -1490,8 +1668,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           </table>
                         </div>
                         <p style={styles.fbrToggleHint}>
-                          <b>*</b> Unit Price is required. HS Code &amp; Sale Type are optional —
-                          needed only when submitting to FBR. They auto-fill when you pick an item.
+                          <b>*</b> Item Type (or a Non-Inventory item) and Unit Price are required on every line.
+                          HS Code &amp; Sale Type are optional — needed only when submitting to FBR. They auto-fill when you pick an item.
                           {!canCreateItemType && (
                             <span style={{ marginLeft: 8 }}>
                               · <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
@@ -1525,16 +1703,16 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
             )}
           </div>
           <div style={formStyles.footer}>
-            {allItems.length > 0 && !allPricesValid && (
+            {allItems.length > 0 && !allLinesComplete && (
               <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
-                All items must have a unit price greater than 0.
+                Every line needs an Item Type (or Non-Inventory item), a description, quantity &gt; 0 and unit price &gt; 0.
               </span>
             )}
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button
               type="submit"
-              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid ? 0.6 : 1 }}
-              disabled={saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid}
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !selectedClientId || selectedIds.length === 0 || !allLinesComplete ? 0.6 : 1 }}
+              disabled={saving || !selectedClientId || selectedIds.length === 0 || !allLinesComplete}
             >
               {saving ? "Creating..." : "Create Bill"}
             </button>
@@ -1565,6 +1743,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           companyId={companyId}
           scenarioCode={chosenScenario?.code}
           scenarioSaleType={chosenScenario?.saleType}
+          showGlMapping
+          defaultDivisionId={divisionId || null}
           onClose={() => { setShowAddItemType(false); setPendingItemTypeRowId(null); }}
           onSaved={(created) => onItemTypeCreated(created)}
         />

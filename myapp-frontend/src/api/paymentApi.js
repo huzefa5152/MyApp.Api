@@ -10,6 +10,10 @@ export const getPagedPayments = (dir, companyId, params = {}) =>
 export const getPaymentById = (dir, id) =>
   httpClient.get(`/payments/${dir}/${id}`);
 
+// Print-ready voucher DTO (branding + contact + allocations + amount-in-words).
+export const getPaymentPrintData = (dir, id) =>
+  httpClient.get(`/payments/${dir}/${id}/print`);
+
 export const createPayment = (dir, companyId, payload) =>
   httpClient.post(`/payments/${dir}/company/${companyId}`, payload);
 

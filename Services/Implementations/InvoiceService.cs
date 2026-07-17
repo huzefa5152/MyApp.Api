@@ -239,6 +239,10 @@ namespace MyApp.Api.Services.Implementations
                 DeliveryItemId = ii.DeliveryItemId,
                 ItemTypeId = ii.ItemTypeId,
                 ItemTypeName = ii.ItemType?.Name ?? ii.ItemTypeName,
+                NonInventoryItemId = ii.NonInventoryItemId,
+                NonInventoryItemName = ii.NonInventoryItem?.Name,
+                AccountId = ii.AccountId,
+                AccountName = ii.Account?.Name,
                 Description = ii.Description,
                 Quantity = ii.Quantity,
                 UOM = ii.UOM,
@@ -279,10 +283,16 @@ namespace MyApp.Api.Services.Implementations
             // Empty / whitespace-only entries are dropped before the
             // join so a single-challan bill with a blank PO doesn't
             // surface "" in the card.
-            PoNumber = string.Join("; ", inv.DeliveryChallans
-                .Select(dc => dc.PoNumber)
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Distinct()),
+            // Prefer the bill's own stored PO (set at create from the order /
+            // challan / manual entry); fall back to the challan-aggregated value
+            // for legacy bills saved before the invoice carried its own PO.
+            PoNumber = !string.IsNullOrWhiteSpace(inv.PoNumber)
+                ? inv.PoNumber
+                : string.Join("; ", inv.DeliveryChallans
+                    .Select(dc => dc.PoNumber)
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Distinct()),
+            PoDate = inv.PoDate ?? inv.DeliveryChallans.Select(dc => dc.PoDate).FirstOrDefault(d => d.HasValue),
             IndentNo = string.Join("; ", inv.DeliveryChallans
                 .Select(dc => dc.IndentNo)
                 .Where(s => !string.IsNullOrWhiteSpace(s))
@@ -479,6 +489,7 @@ namespace MyApp.Api.Services.Implementations
                     .ToDictionaryAsync(t => t.Id);
 
             // Build invoice items from delivery items + user-provided unit prices
+            var validAccountIds = await ValidCompanyAccountIdsAsync(dto.CompanyId, dto.Items.Select(i => i.AccountId));
             var invoiceItems = new List<InvoiceItem>();
             foreach (var itemDto in dto.Items)
             {
@@ -553,6 +564,18 @@ namespace MyApp.Api.Services.Implementations
                         ? itemType!.SaleType
                         : companyDefaultSaleType;
 
+                // Non-inventory: picked on the bill form OR inherited from the
+                // challan line. A non-inv line clears the item type + FBR fields.
+                var nonInvId = itemDto.NonInventoryItemId ?? deliveryItem.NonInventoryItemId;
+                var isNonInv = nonInvId.HasValue;
+                if (isNonInv) itemType = null;
+
+                // Each bill line must be classified — an inventory Item Type OR a
+                // Non-Inventory item (Freight/Discount). No unclassified lines.
+                if (!isNonInv && itemType == null)
+                    throw new InvalidOperationException(
+                        $"Line \"{description}\": pick an Item Type or a Non-Inventory item — every bill line must be classified.");
+
                 invoiceItems.Add(new InvoiceItem
                 {
                     DeliveryItemId = deliveryItem.Id,
@@ -562,16 +585,18 @@ namespace MyApp.Api.Services.Implementations
                     SalesOrderItemId = deliveryItem.SalesOrderItemId,
                     ItemTypeId = itemType?.Id,        // flow the catalog linkage through
                     ItemTypeName = itemType?.Name ?? "",
+                    NonInventoryItemId = nonInvId,
+                    AccountId = Coerce(itemDto.AccountId, validAccountIds),
                     Description = description,
                     Quantity = deliveryItem.Quantity,
                     UOM = effectiveUOM,
                     UnitPrice = itemDto.UnitPrice,
                     LineTotal = lineTotal,
-                    HSCode = effectiveHSCode,
-                    FbrUOMId = effectiveFbrUOMId,
-                    SaleType = effectiveSaleType,
-                    RateId = itemDto.RateId,
-                    FixedNotifiedValueOrRetailPrice = itemDto.FixedNotifiedValueOrRetailPrice
+                    HSCode = isNonInv ? null : effectiveHSCode,
+                    FbrUOMId = isNonInv ? null : effectiveFbrUOMId,
+                    SaleType = isNonInv ? null : effectiveSaleType,
+                    RateId = isNonInv ? null : itemDto.RateId,
+                    FixedNotifiedValueOrRetailPrice = isNonInv ? null : itemDto.FixedNotifiedValueOrRetailPrice
                 });
 
                 // Bump usage counter on the ItemType so favorites dropdowns show
@@ -612,6 +637,19 @@ namespace MyApp.Api.Services.Implementations
             var challanSoIds = challans.Where(c => c.SalesOrderId.HasValue)
                                        .Select(c => c.SalesOrderId!.Value).Distinct().ToList();
             int? headerSalesOrderId = challanSoIds.Count == 1 ? challanSoIds[0] : (int?)null;
+
+            // Bill PO: what the operator typed on the form wins; else prefill from
+            // the linked Sales Order's customer PO; else the source challans' own
+            // PO (first non-blank). (Challans are loaded with .Include(SalesOrder).)
+            var headerSo = headerSalesOrderId.HasValue
+                ? challans.FirstOrDefault(c => c.SalesOrderId == headerSalesOrderId)?.SalesOrder
+                : null;
+            var billPoNumber = !string.IsNullOrWhiteSpace(dto.PoNumber) ? dto.PoNumber.Trim()
+                : !string.IsNullOrWhiteSpace(headerSo?.CustomerPoNumber) ? headerSo!.CustomerPoNumber!.Trim()
+                : challans.Select(c => c.PoNumber).FirstOrDefault(p => !string.IsNullOrWhiteSpace(p));
+            var billPoDate = dto.PoDate
+                ?? headerSo?.CustomerPoDate
+                ?? challans.Select(c => c.PoDate).FirstOrDefault(d => d.HasValue);
 
             string? effectivePaymentMode = dto.PaymentMode;
             if (string.IsNullOrWhiteSpace(effectivePaymentMode))
@@ -688,6 +726,8 @@ namespace MyApp.Api.Services.Implementations
                     DocumentType = effectiveDocType,
                     PaymentMode = effectivePaymentMode,
                     SalesOrderId = headerSalesOrderId,
+                    PoNumber = billPoNumber,
+                    PoDate = billPoDate,
                     FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
                         ? nextInvoiceNumber.ToString()
                         : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
@@ -810,6 +850,22 @@ namespace MyApp.Api.Services.Implementations
             if (client.CompanyId != dto.CompanyId)
                 throw new InvalidOperationException("Client does not belong to this company.");
 
+            // Optional Sales Order lineage for a standalone bill: validate it
+            // belongs to this company (never trust the DTO), then prefill the
+            // customer PO from it unless the operator typed one on the form.
+            SalesOrder? standaloneSo = null;
+            if (dto.SalesOrderId is int soId)
+            {
+                standaloneSo = await _context.SalesOrders.FirstOrDefaultAsync(o => o.Id == soId);
+                if (standaloneSo == null) throw new KeyNotFoundException("Sales Order not found.");
+                if (standaloneSo.CompanyId != dto.CompanyId)
+                    throw new InvalidOperationException("Sales Order does not belong to this company.");
+            }
+            var billPoNumber = !string.IsNullOrWhiteSpace(dto.PoNumber) ? dto.PoNumber.Trim()
+                : !string.IsNullOrWhiteSpace(standaloneSo?.CustomerPoNumber) ? standaloneSo!.CustomerPoNumber!.Trim()
+                : null;
+            var billPoDate = dto.PoDate ?? standaloneSo?.CustomerPoDate;
+
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("At least one item is required.");
             if (dto.Items.Any(i => i.Quantity <= 0))
@@ -832,6 +888,11 @@ namespace MyApp.Api.Services.Implementations
             // and is already validated upstream).
             await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.UOM));
             await ValidateStandaloneItemDecimalQuantitiesAsync(dto.Items);
+            await ValidateNonInvLinesAsync(company, dto.Items.Select(i => i.NonInventoryItemId));
+            // Each bill line must be classified — an Item Type OR a Non-Inventory item.
+            if (dto.Items.Any(i => !i.ItemTypeId.HasValue && !i.NonInventoryItemId.HasValue))
+                throw new InvalidOperationException(
+                    "Every bill line must have an Item Type or a Non-Inventory item selected.");
 
             // Preload referenced ItemTypes in a single round-trip
             var referencedTypeIds = dto.Items
@@ -854,9 +915,30 @@ namespace MyApp.Api.Services.Implementations
                 ? company.FbrDefaultSaleType
                 : "Goods at Standard Rate (default)";
 
+            var validAccountIds = await ValidCompanyAccountIdsAsync(dto.CompanyId, dto.Items.Select(i => i.AccountId));
             var invoiceItems = new List<InvoiceItem>();
             foreach (var itemDto in dto.Items)
             {
+                // Non-inventory line (Freight/Discount): GL-account shortcut, no
+                // item type, no HS/UOM resolution, no FBR fields, no stock.
+                if (itemDto.NonInventoryItemId.HasValue)
+                {
+                    invoiceItems.Add(new InvoiceItem
+                    {
+                        DeliveryItemId = null,
+                        ItemTypeId = null,
+                        NonInventoryItemId = itemDto.NonInventoryItemId,
+                        AccountId = Coerce(itemDto.AccountId, validAccountIds),
+                        ItemTypeName = "",
+                        Description = itemDto.Description ?? "",
+                        Quantity = itemDto.Quantity,
+                        UOM = itemDto.UOM ?? "",
+                        UnitPrice = itemDto.UnitPrice,
+                        LineTotal = itemDto.Quantity * itemDto.UnitPrice,
+                    });
+                    continue;
+                }
+
                 ItemType? itemType = null;
                 if (itemDto.ItemTypeId.HasValue)
                     typeMap.TryGetValue(itemDto.ItemTypeId.Value, out itemType);
@@ -891,6 +973,7 @@ namespace MyApp.Api.Services.Implementations
                     DeliveryItemId = null,            // standalone — no source line
                     ItemTypeId = itemType?.Id,
                     ItemTypeName = itemType?.Name ?? "",
+                    AccountId = Coerce(itemDto.AccountId, validAccountIds),
                     Description = itemDto.Description ?? "",
                     Quantity = itemDto.Quantity,
                     UOM = effectiveUOM,
@@ -1001,6 +1084,9 @@ namespace MyApp.Api.Services.Implementations
                     PaymentTerms = finalPaymentTerms,
                     DocumentType = effectiveDocType,
                     PaymentMode = effectivePaymentMode,
+                    SalesOrderId = standaloneSo?.Id,
+                    PoNumber = billPoNumber,
+                    PoDate = billPoDate,
                     FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
                         ? nextInvoiceNumber.ToString()
                         : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
@@ -1101,6 +1187,31 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
+        // Validate non-inventory line refs: (1) FBR guard — non-inv lines have no
+        // HS code so FBR line-based submission can't carry them; block them on
+        // FBR-enabled companies for phase 1 (migrated/FBR-off companies are fine).
+        // (2) cross-tenant link guard — the item must belong to this company.
+        private async Task ValidateNonInvLinesAsync(Company company, IEnumerable<int?> ids)
+        {
+            var wanted = ids.Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+            if (wanted.Count == 0) return;
+            if (company.FbrEnabled)
+                throw new InvalidOperationException(
+                    "Non-inventory items (Freight, Discount, …) aren't supported on FBR-enabled companies yet — an FBR line needs an HS code. Use a regular item type, or add non-inventory lines on an FBR-off company.");
+            var valid = await _context.NonInventoryItems.AsNoTracking()
+                .Where(n => n.CompanyId == company.Id && wanted.Contains(n.Id))
+                .Select(n => n.Id).ToListAsync();
+            if (wanted.Any(w => !valid.Contains(w)))
+                throw new InvalidOperationException("A selected non-inventory item does not belong to this company.");
+        }
+
+        private async Task ValidateNonInvLinesAsync(int companyId, IEnumerable<int?> ids)
+        {
+            if (!ids.Any(x => x.HasValue)) return;
+            var company = await _context.Companies.AsNoTracking().FirstAsync(c => c.Id == companyId);
+            await ValidateNonInvLinesAsync(company, ids);
+        }
+
         public async Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto)
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
@@ -1195,6 +1306,10 @@ namespace MyApp.Api.Services.Implementations
                     invoice.ClientId = newClient.Id;
                 }
 
+                // Re-home to a different division when requested. GL + stock are
+                // re-derived below off invoice.DivisionId, so the move re-tags them.
+                await ApplyDivisionChangeAsync(invoice, dto.UpdateDivision, dto.DivisionId);
+
                 // Preload any referenced ItemTypes in one round-trip
                 var referencedTypeIds = dto.Items
                     .Where(i => i.ItemTypeId.HasValue)
@@ -1210,6 +1325,7 @@ namespace MyApp.Api.Services.Implementations
                 // Update existing items. If the line has an ItemTypeId set, re-derive
                 // UOM / HS Code / Sale Type / FbrUOMId from that ItemType — the user
                 // edits these indirectly by picking a different ItemType on the bill.
+                var validAccountIds = await ValidCompanyAccountIdsAsync(invoice.CompanyId, dto.Items.Select(i => i.AccountId));
                 foreach (var itemDto in dto.Items)
                 {
                     var existing = invoice.Items.First(ii => ii.Id == itemDto.Id);
@@ -1224,6 +1340,9 @@ namespace MyApp.Api.Services.Implementations
                     existing.UnitPrice = itemDto.UnitPrice;
                     existing.LineTotal = lineTotal;
                     existing.RateId = itemDto.RateId;
+                    // Per-line GL account override (design §3.3) — edit-driven, applies
+                    // to both the item-type and free-text branches below.
+                    existing.AccountId = Coerce(itemDto.AccountId, validAccountIds);
                     // 3rd-schedule retail price is always edit-driven (never inherited
                     // from the ItemType catalog), so it's applied the same way in both
                     // branches below.
@@ -1342,8 +1461,21 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException(
                     "A Debit/Credit Note cannot be edited. Void it and create a new return from the Return Invoices screen.");
 
+            // Invoices-tab edit is an FBR-classification flow. When the company's
+            // FBR integration is OFF there's nothing to classify — all edits must
+            // go through the Bills tab. Block it server-side (the Invoices-tab
+            // Edit button is also hidden for FBR-off companies). 2026-07-14.
+            var fbrOn = await _context.Companies.AsNoTracking()
+                .Where(c => c.Id == invoice.CompanyId).Select(c => c.FbrEnabled).FirstOrDefaultAsync();
+            if (!fbrOn)
+                throw new InvalidOperationException(
+                    "This company's FBR integration is off — edit the bill on the Bills tab. The Invoices tab is view-only here.");
+
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("At least one item is required.");
+
+            // Cross-tenant + FBR guard for any non-inventory refs on the rows.
+            await ValidateNonInvLinesAsync(invoice.CompanyId, dto.Items.Select(r => r.NonInventoryItemId));
 
             // Restriction F: zero unit price not allowed when the .qty
             // path is active (operator is editing prices, not just
@@ -1468,6 +1600,10 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                // Re-home to a different division when requested (GL + stock
+                // re-tag on the re-post below).
+                await ApplyDivisionChangeAsync(invoice, dto.UpdateDivision, dto.DivisionId);
+
                 // Pre-load existing overlays for these items so we upsert
                 // in one shot (no per-row roundtrip).
                 Dictionary<int, InvoiceItemAdjustment> existingOverlays =
@@ -1477,9 +1613,14 @@ namespace MyApp.Api.Services.Implementations
                             .ToDictionaryAsync(a => a.InvoiceItemId)
                         : new Dictionary<int, InvoiceItemAdjustment>();
 
+                var validAccountIds = await ValidCompanyAccountIdsAsync(invoice.CompanyId, dto.Items.Select(i => i.AccountId));
                 foreach (var row in dto.Items)
                 {
                     var existing = invoice.Items.First(ii => ii.Id == row.Id);
+                    // Per-line GL account (design §3.3) is bill data — like the
+                    // item type it's written straight to the InvoiceItem in both
+                    // Bill and Adjustment write-modes.
+                    existing.AccountId = Coerce(row.AccountId, validAccountIds);
 
                     if (asAdjustment)
                     {
@@ -1579,8 +1720,20 @@ namespace MyApp.Api.Services.Implementations
                     }
 
                     // ── Bill path (legacy) ──
-                    if (row.ItemTypeId.HasValue && typeMap.TryGetValue(row.ItemTypeId.Value, out var t2))
+                    if (row.NonInventoryItemId.HasValue)
                     {
+                        // Non-inventory line (Freight/Discount): GL-account
+                        // shortcut, no item type / HS / FBR classification.
+                        existing.NonInventoryItemId = row.NonInventoryItemId;
+                        existing.ItemTypeId = null;
+                        existing.ItemTypeName = "";
+                        existing.FbrUOMId = null;
+                        existing.HSCode = null;
+                        existing.SaleType = null;
+                    }
+                    else if (row.ItemTypeId.HasValue && typeMap.TryGetValue(row.ItemTypeId.Value, out var t2))
+                    {
+                        existing.NonInventoryItemId = null;   // item type + non-inv are exclusive
                         existing.ItemTypeId = t2.Id;
                         existing.ItemTypeName = t2.Name;
                         existing.UOM = t2.UOM ?? "";
@@ -1590,6 +1743,7 @@ namespace MyApp.Api.Services.Implementations
                     }
                     else if (!row.ItemTypeId.HasValue)
                     {
+                        existing.NonInventoryItemId = null;
                         // When the operator clears the Item Type, also blank
                         // the FBR-classification fields the catalog had been
                         // driving (HSCode, UOM, FbrUOMId, SaleType,
@@ -1881,38 +2035,17 @@ namespace MyApp.Api.Services.Implementations
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return false;
 
-            // Cannot delete FBR-submitted invoices
+            // Cannot delete FBR-submitted invoices — they're filed at FBR (with
+            // an IRN) and FBR has no delete; the correct reversal is a Credit
+            // Note. (For FBR-off companies this never triggers.)
             if (invoice.FbrStatus == "Submitted")
-                throw new InvalidOperationException("Cannot delete a bill that has been submitted to FBR.");
+                throw new InvalidOperationException("Cannot delete a bill that has been submitted to FBR — reverse it with a Credit Note instead.");
 
-            // Only the LAST bill (highest invoice number) can be deleted so
-            // numbering stays gap-free. Earlier bills must be edited in place.
-            // Demo bills (FBR Sandbox) live in their own 900000+ range and
-            // are excluded so the latest-real-bill rule isn't blocked by
-            // demo numbers. Demo deletes are gated by FbrSandboxService.
-            // 2026-07-02: Credit Notes and Debit Notes each run their own
-            // sequence, so the "latest" comparison is scoped to the
-            // document's own TYPE — Credit Note #3 is deletable even while
-            // sale bills sit at #3800+ or debit notes at #7.
-            var isNoteDoc = invoice.DocumentType == 9 || invoice.DocumentType == 10;
-            var maxNumber = invoice.IsDemo
-                ? await _context.Invoices
-                    .Where(i => i.CompanyId == invoice.CompanyId && i.IsDemo)
-                    .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0
-                : isNoteDoc
-                    ? await _context.Invoices
-                        .Where(i => i.CompanyId == invoice.CompanyId && !i.IsDemo
-                                 && i.DocumentType == invoice.DocumentType)
-                        .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0
-                    : await _context.Invoices
-                        .Where(i => i.CompanyId == invoice.CompanyId && !i.IsDemo
-                                 && i.DocumentType != 9 && i.DocumentType != 10)
-                        .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
-            if (invoice.InvoiceNumber != maxNumber)
-                throw new InvalidOperationException(
-                    $"Only the latest bill can be deleted (currently #{maxNumber}). " +
-                    $"To change bill #{invoice.InvoiceNumber}, edit it instead — " +
-                    "deleting earlier bills would leave gaps in the numbering.");
+            // 2026-07-14: the "only the latest bill can be deleted" rule was
+            // removed at the user's request — ANY bill/invoice can now be
+            // deleted, reverting its full GL + inventory impact (below) and
+            // freeing its challans. This intentionally allows a gap in the
+            // numbering sequence where the deleted document was.
 
             var companyId = invoice.CompanyId;
 
@@ -2124,8 +2257,26 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("This bill is cancelled — there is nothing to reverse at FBR.");
             if (original.IsDemo)
                 throw new InvalidOperationException("Sandbox (demo) bills cannot be reversed — they exist only for FBR scenario testing.");
-            if (original.FbrStatus != "Submitted" || string.IsNullOrWhiteSpace(original.FbrIRN))
-                throw new InvalidOperationException("Only an invoice that has been submitted to FBR can have a note issued against it. A non-submitted bill should be voided instead.");
+
+            // Eligibility depends on whether the company runs FBR (2026-07-14):
+            //   • FBR-ON  — the invoice must be filed to FBR; a note is the
+            //     formal IRIS adjustment (Credit/Debit Note against the IRN).
+            //   • FBR-OFF — no FBR document exists, so a note may be raised
+            //     against a fully PAID sale invoice instead. The note carries a
+            //     null OriginalInvoiceRefIRN and is never sent to FBR.
+            var companyFbrEnabled = await _context.Companies.AsNoTracking()
+                .Where(c => c.Id == original.CompanyId).Select(c => c.FbrEnabled).FirstOrDefaultAsync();
+            if (companyFbrEnabled)
+            {
+                if (original.FbrStatus != "Submitted" || string.IsNullOrWhiteSpace(original.FbrIRN))
+                    throw new InvalidOperationException("Only an invoice that has been submitted to FBR can have a note issued against it. A non-submitted bill should be voided instead.");
+            }
+            else
+            {
+                var status = PaymentStatusCalculator.Status(original.GrandTotal, original.AmountPaid, original.DueDate).ToString();
+                if (status != "Paid")
+                    throw new InvalidOperationException("Only a fully paid invoice can have a Credit/Debit Note issued against it (FBR is off for this company). Record the payment first, or void the bill instead.");
+            }
 
             // 10 = CREDIT NOTE (return / reversal / reduction — the default);
             // 9 = DEBIT NOTE (upward adjustment: undercharge, rate change,
@@ -2158,6 +2309,10 @@ namespace MyApp.Api.Services.Implementations
                 {
                     ItemTypeId   = src.ItemTypeId,
                     ItemTypeName = src.ItemTypeName,
+                    NonInventoryItemId = src.NonInventoryItemId,
+                    // Mirror the source line's GL account so the reversal note
+                    // debits the exact accounts the original sale credited.
+                    AccountId    = src.AccountId,
                     Description  = ov?.AdjustedDescription ?? src.Description,
                     Quantity     = qty,
                     UOM          = src.UOM,
@@ -2320,6 +2475,7 @@ namespace MyApp.Api.Services.Implementations
                 var attemptItems = noteItems
                     .Select(i => BuildLine(
                         new InvoiceItem { Id = 0, ItemTypeId = i.ItemTypeId, ItemTypeName = i.ItemTypeName,
+                            NonInventoryItemId = i.NonInventoryItemId, AccountId = i.AccountId,
                             Description = i.Description, Quantity = i.Quantity, UOM = i.UOM, UnitPrice = i.UnitPrice,
                             LineTotal = i.LineTotal, HSCode = i.HSCode, FbrUOMId = i.FbrUOMId, SaleType = i.SaleType,
                             RateId = i.RateId, FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
@@ -2441,8 +2597,8 @@ namespace MyApp.Api.Services.Implementations
                 Date = inv.Date,
                 ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
                 ChallanDates = inv.DeliveryChallans.Select(dc => dc.DeliveryDate).ToList(),
-                PoNumber = string.Join(", ", poNumbers),
-                PoDate = inv.DeliveryChallans.Select(dc => dc.PoDate).FirstOrDefault(),
+                PoNumber = !string.IsNullOrWhiteSpace(inv.PoNumber) ? inv.PoNumber : string.Join(", ", poNumbers),
+                PoDate = inv.PoDate ?? inv.DeliveryChallans.Select(dc => dc.PoDate).FirstOrDefault(),
                 ClientName = inv.Client?.Name ?? "",
                 ClientAddress = inv.Client?.Address,
                 ConcernDepartment = string.Join(", ", inv.DeliveryChallans
@@ -2504,7 +2660,7 @@ namespace MyApp.Api.Services.Implementations
                 InvoiceNumber = inv.InvoiceNumber,
                 Date = inv.Date,
                 ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
-                PoNumber = string.Join(", ", poNumbers),
+                PoNumber = !string.IsNullOrWhiteSpace(inv.PoNumber) ? inv.PoNumber : string.Join(", ", poNumbers),
                 Subtotal = inv.Subtotal,
                 GSTRate = inv.GSTRate,
                 GSTAmount = inv.GSTAmount,
@@ -2575,6 +2731,7 @@ namespace MyApp.Api.Services.Implementations
                                 Quantity = totalQty,
                                 UOM = g.First().UOM,
                                 Description = g.Key,
+                                UnitPrice = totalQty != 0 ? Math.Round(totalValue / totalQty, 2) : 0m,
                                 ValueExclTax = totalValue,
                                 GSTRate = inv.GSTRate,
                                 GSTAmount = gstAmt,
@@ -2599,6 +2756,7 @@ namespace MyApp.Api.Services.Implementations
                                 Quantity = qty,
                                 UOM = ii.UOM,
                                 Description = ii.Description,
+                                UnitPrice = ii.Adjustment?.AdjustedUnitPrice ?? ii.UnitPrice,
                                 ValueExclTax = lineTotal,
                                 GSTRate = inv.GSTRate,
                                 GSTAmount = gstAmt,
@@ -2998,6 +3156,61 @@ namespace MyApp.Api.Services.Implementations
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Returns the subset of <paramref name="candidates"/> that are ACTIVE
+        /// accounts of <paramref name="companyId"/>'s Chart of Accounts. Per-line
+        /// AccountId overrides (design §3.3) are validated against this so a
+        /// forged / foreign / inactive id is never persisted — the cross-tenant
+        /// account-link guard. Callers coerce a non-member id to null (the
+        /// posting engine then derives the account per §4).
+        /// </summary>
+        private async Task<HashSet<int>> ValidCompanyAccountIdsAsync(int companyId, IEnumerable<int?> candidates)
+        {
+            var ids = candidates.Where(x => x is > 0).Select(x => x!.Value).Distinct().ToList();
+            if (ids.Count == 0) return new HashSet<int>();
+            return (await _context.Accounts.AsNoTracking()
+                .Where(a => a.CompanyId == companyId && a.IsActive && ids.Contains(a.Id))
+                .Select(a => a.Id).ToListAsync()).ToHashSet();
+        }
+
+        private static int? Coerce(int? candidate, HashSet<int> validIds)
+            => candidate is int id && validIds.Contains(id) ? id : null;
+
+        /// <summary>
+        /// Re-home a bill to a different division (2026-07-14). No-op unless
+        /// <paramref name="update"/> is set and the division actually changes.
+        /// Validates the target belongs to the bill's company and that moving it
+        /// there won't clash with an existing document number in that division
+        /// (the unique index is CompanyId, DivisionId, NoteKind, InvoiceNumber).
+        /// The caller re-posts GL + re-syncs stock afterwards, so the new
+        /// division flows onto the journal lines and stock movements.
+        /// </summary>
+        private async Task ApplyDivisionChangeAsync(Invoice invoice, bool update, int? newDivisionId)
+        {
+            if (!update || invoice.DivisionId == newDivisionId) return;
+
+            if (newDivisionId.HasValue)
+            {
+                var ok = await _context.Divisions.AsNoTracking()
+                    .AnyAsync(d => d.Id == newDivisionId.Value && d.CompanyId == invoice.CompanyId);
+                if (!ok)
+                    throw new InvalidOperationException("Selected division does not belong to this company.");
+            }
+
+            var clash = await _context.Invoices.AsNoTracking().AnyAsync(i =>
+                i.Id != invoice.Id
+                && i.CompanyId == invoice.CompanyId
+                && i.DivisionId == newDivisionId
+                && i.NoteKind == invoice.NoteKind
+                && i.InvoiceNumber == invoice.InvoiceNumber);
+            if (clash)
+                throw new InvalidOperationException(
+                    $"The target division already has document #{invoice.InvoiceNumber}. Moving this bill " +
+                    "there would clash with that number — renumber or pick a different division.");
+
+            invoice.DivisionId = newDivisionId;
         }
     }
 }

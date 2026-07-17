@@ -7,6 +7,7 @@ import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import QuantityInput from "./QuantityInput";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
+import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { getQuoteItemRate } from "../api/salesQuoteApi";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
@@ -16,7 +17,7 @@ const colors = {
   inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1", teal: "#00897b",
 };
 
-const blankItem = () => ({ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "", unitPrice: 0, rateHint: "" });
+const blankItem = () => ({ id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "", unitPrice: 0, rateHint: "" });
 
 // Create + edit a Sales Quote. Pass `quote` to edit; omit to create.
 export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, defaultDivisionId }) {
@@ -43,11 +44,12 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
   const [notes, setNotes] = useState(quote?.notes || "");
   const [items, setItems] = useState(
     quote?.items?.length
-      ? quote.items.map((i) => ({ id: i.id, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, rateHint: "" }))
+      ? quote.items.map((i) => ({ id: i.id, itemTypeId: i.itemTypeId, nonInventoryItemId: i.nonInventoryItemId ?? null, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, rateHint: "" }))
       : [blankItem()]
   );
   const [units, setUnits] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
+  const [nonInvItems, setNonInvItems] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const rateTimers = useRef({});
@@ -55,11 +57,32 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
 
   useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
   useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
+  // Per-company Non-Inventory Items (GL-account shortcut lines: Freight, Discount, …).
+  // A company with GL off / no items just resolves to [] and the picker shows none.
+  useEffect(() => {
+    if (!companyId) { setNonInvItems([]); return; }
+    getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
+  }, [companyId]);
 
   // Picking an item type only TAGS the line (records ItemTypeId). It must NOT
   // overwrite the operator's typed description/unit — that auto-fill is reserved
   // for Invoice (FBR-classification) mode, not pre-sale quotes/orders/challans.
-  const pickItemType = (idx, newId) => setItem(idx, { itemTypeId: newId ? parseInt(newId) : null });
+  const pickItemType = (idx, newId) => setItem(idx, { itemTypeId: newId ? parseInt(newId) : null, nonInventoryItemId: null });
+
+  // Non-Inventory pick — mutually exclusive with an item type. Clears any
+  // itemTypeId, records the non-inv id, and prefills description / unit /
+  // price only when those fields are still empty (never clobbers typed input).
+  const pickNonInventory = (idx, n) => {
+    if (!n) { setItem(idx, { nonInventoryItemId: null }); return; }
+    setItems((prev) => prev.map((it, i) => {
+      if (i !== idx) return it;
+      const next = { ...it, nonInventoryItemId: n.id, itemTypeId: null };
+      if (!it.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
+      if (!it.unit?.trim()) next.unit = n.unitName || "";
+      if ((!it.unitPrice || Number(it.unitPrice) === 0) && n.defaultSalePrice != null) next.unitPrice = n.defaultSalePrice;
+      return next;
+    }));
+  };
 
   const setItem = (idx, patch) =>
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
@@ -126,6 +149,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
         items: valid.map((i) => ({
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
+          nonInventoryItemId: i.nonInventoryItemId || null,
           description: i.description.trim(),
           quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
           unit: i.unit,
@@ -208,9 +232,13 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
                       <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
                       <td style={{ ...s.td, verticalAlign: "top" }}>
                         <SearchableItemTypeSelect
+                          divisionId={divisionId}
                           items={itemTypes}
                           value={item.itemTypeId || ""}
                           onChange={(newId, picked) => pickItemType(idx, newId, picked)}
+                          nonInventoryItems={nonInvItems}
+                          nonInventoryValue={item.nonInventoryItemId || ""}
+                          onPickNonInventory={(n) => pickNonInventory(idx, n)}
                           placeholder="— optional —"
                           style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                         />

@@ -303,6 +303,226 @@ namespace MyApp.Api.Services.Implementations
             return ToDto(client, hasInvoices);
         }
 
+        public async Task<List<ClientSummaryDto>> GetSummaryByCompanyAsync(int companyId)
+        {
+            // Base set: every client of the company, so zero-activity clients
+            // still render a (zeroed) row.
+            var clients = await _context.Clients.AsNoTracking()
+                .Where(c => c.CompanyId == companyId)
+                .Select(c => new { c.Id, c.Name })
+                .ToListAsync();
+
+            // Document counts (one grouped query each; sequential — the context
+            // is not thread-safe). Sale-invoice count excludes demo / cancelled
+            // and credit+debit notes (DocumentType 9/10), matching the KPI
+            // conventions. EF Core translates the nullable `!=` null-aware, so
+            // regular invoices (DocumentType null/0) are included.
+            var quoteCounts = await _context.SalesQuotes
+                .Where(q => q.CompanyId == companyId)
+                .GroupBy(q => q.ClientId)
+                .Select(g => new { ClientId = g.Key, N = g.Count() })
+                .ToDictionaryAsync(x => x.ClientId, x => x.N);
+
+            var orderCounts = await _context.SalesOrders
+                .Where(o => o.CompanyId == companyId)
+                .GroupBy(o => o.ClientId)
+                .Select(g => new { ClientId = g.Key, N = g.Count() })
+                .ToDictionaryAsync(x => x.ClientId, x => x.N);
+
+            var invoiceCounts = await _context.Invoices
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                            && i.DocumentType != 9 && i.DocumentType != 10)
+                .GroupBy(i => i.ClientId)
+                .Select(g => new { ClientId = g.Key, N = g.Count() })
+                .ToDictionaryAsync(x => x.ClientId, x => x.N);
+
+            var creditNoteCounts = await _context.Invoices
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && i.DocumentType == 10)
+                .GroupBy(i => i.ClientId)
+                .Select(g => new { ClientId = g.Key, N = g.Count() })
+                .ToDictionaryAsync(x => x.ClientId, x => x.N);
+
+            var challanCounts = await _context.DeliveryChallans
+                .Where(dc => dc.CompanyId == companyId && !dc.IsDemo)
+                .GroupBy(dc => dc.ClientId)
+                .Select(g => new { ClientId = g.Key, N = g.Count() })
+                .ToDictionaryAsync(x => x.ClientId, x => x.N);
+
+            // Money: AR = Σ(GrandTotal − AmountPaid) over sale invoices.
+            var arByClient = await _context.Invoices
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                            && i.DocumentType != 9 && i.DocumentType != 10)
+                .GroupBy(i => i.ClientId)
+                .Select(g => new { ClientId = g.Key, Bal = g.Sum(i => i.GrandTotal - i.AmountPaid) })
+                .ToDictionaryAsync(x => x.ClientId, x => x.Bal);
+
+            var whtByClient = await _context.WithholdingTaxReceipts
+                .Where(r => r.CompanyId == companyId)
+                .GroupBy(r => r.ClientId)
+                .Select(g => new { ClientId = g.Key, Sum = g.Sum(r => r.Amount) })
+                .ToDictionaryAsync(x => x.ClientId, x => x.Sum);
+
+            // Qty to deliver = Σ(ordered − delivered) across non-cancelled orders.
+            var orderedByClient = await _context.SalesOrderItems
+                .Where(soi => soi.SalesOrder.CompanyId == companyId && soi.SalesOrder.Status != "Cancelled")
+                .GroupBy(soi => soi.SalesOrder.ClientId)
+                .Select(g => new { ClientId = g.Key, Q = g.Sum(x => x.Quantity) })
+                .ToDictionaryAsync(x => x.ClientId, x => x.Q);
+
+            var deliveredOnOrdersByClient = await _context.DeliveryItems
+                .Where(di => di.SalesOrderItemId != null
+                             && di.SalesOrderItem!.SalesOrder.CompanyId == companyId
+                             && di.SalesOrderItem.SalesOrder.Status != "Cancelled")
+                .GroupBy(di => di.SalesOrderItem!.SalesOrder.ClientId)
+                .Select(g => new { ClientId = g.Key, Q = g.Sum(x => x.Quantity) })
+                .ToDictionaryAsync(x => x.ClientId, x => x.Q);
+
+            // Qty to invoice = Σ delivered quantity on challans not yet billed.
+            var toInvoiceByClient = await _context.DeliveryItems
+                .Where(di => di.DeliveryChallan.CompanyId == companyId
+                             && di.DeliveryChallan.InvoiceId == null
+                             && !di.DeliveryChallan.IsDemo)
+                .GroupBy(di => di.DeliveryChallan.ClientId)
+                .Select(g => new { ClientId = g.Key, Q = g.Sum(x => x.Quantity) })
+                .ToDictionaryAsync(x => x.ClientId, x => x.Q);
+
+            var list = new List<ClientSummaryDto>(clients.Count);
+            foreach (var c in clients)
+            {
+                var ar = arByClient.GetValueOrDefault(c.Id);
+                var ordered = orderedByClient.GetValueOrDefault(c.Id);
+                var delivered = deliveredOnOrdersByClient.GetValueOrDefault(c.Id);
+                list.Add(new ClientSummaryDto
+                {
+                    ClientId = c.Id,
+                    ClientName = c.Name,
+                    SalesQuotes = quoteCounts.GetValueOrDefault(c.Id),
+                    SalesOrders = orderCounts.GetValueOrDefault(c.Id),
+                    SalesInvoices = invoiceCounts.GetValueOrDefault(c.Id),
+                    CreditNotes = creditNoteCounts.GetValueOrDefault(c.Id),
+                    DeliveryNotes = challanCounts.GetValueOrDefault(c.Id),
+                    QtyToDeliver = ordered - delivered,
+                    QtyToInvoice = toInvoiceByClient.GetValueOrDefault(c.Id),
+                    AccountsReceivable = ar,
+                    WithholdingTaxReceivable = whtByClient.GetValueOrDefault(c.Id),
+                    Status = ar > 0 ? "Unpaid" : (ar < 0 ? "Overpaid" : "Paid"),
+                });
+            }
+            return list;
+        }
+
+        public async Task<ClientDrilldownDto> GetDrilldownAsync(int clientId, string clientName)
+        {
+            // Cap each section so a heavy client (e.g. 600+ quotes) never ships
+            // thousands of rows; the popup shows "N of Total". Most-recent first.
+            const int CAP = 100;
+            var dto = new ClientDrilldownDto { ClientId = clientId, ClientName = clientName };
+
+            dto.Quotes.Total = await _context.SalesQuotes.CountAsync(q => q.ClientId == clientId);
+            dto.Quotes.Rows = await _context.SalesQuotes.AsNoTracking()
+                .Where(q => q.ClientId == clientId)
+                .OrderByDescending(q => q.QuoteNumber).Take(CAP)
+                .Select(q => new ClientDocRowDto { Id = q.Id, Number = q.QuoteNumber.ToString(), Date = q.Date, Amount = q.GrandTotal, Status = q.Status })
+                .ToListAsync();
+
+            dto.Orders.Total = await _context.SalesOrders.CountAsync(o => o.ClientId == clientId);
+            dto.Orders.Rows = await _context.SalesOrders.AsNoTracking()
+                .Where(o => o.ClientId == clientId)
+                .OrderByDescending(o => o.SalesOrderNumber).Take(CAP)
+                .Select(o => new ClientDocRowDto { Id = o.Id, Number = o.SalesOrderNumber.ToString(), Date = o.OrderDate, Status = o.Status })
+                .ToListAsync();
+
+            // Sale invoices (exclude demo / cancelled / credit+debit notes).
+            var invBase = _context.Invoices.Where(i => i.ClientId == clientId && !i.IsDemo && !i.IsCancelled && i.DocumentType != 9 && i.DocumentType != 10);
+            dto.Invoices.Total = await invBase.CountAsync();
+            dto.Invoices.Rows = await invBase.AsNoTracking()
+                .OrderByDescending(i => i.Date).ThenByDescending(i => i.InvoiceNumber).Take(CAP)
+                .Select(i => new ClientDocRowDto
+                {
+                    Id = i.Id,
+                    Number = i.InvoiceNumber.ToString(),
+                    Date = i.Date,
+                    Amount = i.GrandTotal,
+                    Balance = i.GrandTotal - i.AmountPaid,
+                    Status = (i.GrandTotal - i.AmountPaid) <= 0 ? "Paid" : (i.AmountPaid > 0 ? "Partial" : "Unpaid"),
+                })
+                .ToListAsync();
+
+            // Credit notes (DocumentType 10).
+            var cnBase = _context.Invoices.Where(i => i.ClientId == clientId && !i.IsDemo && i.DocumentType == 10);
+            dto.CreditNotes.Total = await cnBase.CountAsync();
+            dto.CreditNotes.Rows = await cnBase.AsNoTracking()
+                .OrderByDescending(i => i.Date).ThenByDescending(i => i.InvoiceNumber).Take(CAP)
+                .Select(i => new ClientDocRowDto { Id = i.Id, Number = i.InvoiceNumber.ToString(), Date = i.Date, Amount = i.GrandTotal, Status = i.FbrStatus })
+                .ToListAsync();
+
+            // Delivery challans (notes). Show "Billed" once linked to a bill.
+            var chBase = _context.DeliveryChallans.Where(dc => dc.ClientId == clientId && !dc.IsDemo);
+            dto.Challans.Total = await chBase.CountAsync();
+            dto.Challans.Rows = await chBase.AsNoTracking()
+                .OrderByDescending(dc => dc.ChallanNumber).Take(CAP)
+                .Select(dc => new ClientDocRowDto { Id = dc.Id, Number = dc.ChallanNumber.ToString(), Date = dc.DeliveryDate, Status = dc.InvoiceId != null ? "Billed" : dc.Status })
+                .ToListAsync();
+
+            dto.WithholdingReceipts.Total = await _context.WithholdingTaxReceipts.CountAsync(r => r.ClientId == clientId);
+            dto.WithholdingReceipts.Rows = await _context.WithholdingTaxReceipts.AsNoTracking()
+                .Where(r => r.ClientId == clientId)
+                .OrderByDescending(r => r.Date).ThenByDescending(r => r.ReceiptNumber).Take(CAP)
+                .Select(r => new ClientDocRowDto { Id = r.Id, Number = r.ReceiptNumber.ToString(), Date = r.Date, Amount = r.Amount, Status = r.Description })
+                .ToListAsync();
+
+            return dto;
+        }
+
+        public async Task<ClientStatementDto> GetStatementAsync(int clientId, string clientName)
+        {
+            const int CAP = 200;
+            var entries = new List<ClientStatementEntryDto>();
+
+            // Debits — sale invoices (exclude demo / cancelled / credit+debit notes).
+            var invoices = await _context.Invoices.AsNoTracking()
+                .Where(i => i.ClientId == clientId && !i.IsDemo && !i.IsCancelled && i.DocumentType != 9 && i.DocumentType != 10)
+                .Select(i => new { i.Id, i.InvoiceNumber, i.Date, i.GrandTotal })
+                .ToListAsync();
+            foreach (var i in invoices)
+                entries.Add(new ClientStatementEntryDto { Date = i.Date, Type = "Sales Invoice", Reference = "INV-" + i.InvoiceNumber, DocId = i.Id, Debit = i.GrandTotal });
+
+            // Credits — receipt allocations against this client's sale invoices.
+            // One row per allocation (matching the reference), so Σ credits ==
+            // Σ invoice AmountPaid → the running balance ends at the A/R figure.
+            var allocs = await (
+                from a in _context.PaymentAllocations.AsNoTracking()
+                join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
+                join inv in _context.Invoices.AsNoTracking() on a.InvoiceId equals inv.Id
+                where a.InvoiceId != null
+                      && inv.ClientId == clientId && !inv.IsDemo && !inv.IsCancelled && inv.DocumentType != 9 && inv.DocumentType != 10
+                      && p.Direction == MyApp.Api.Models.Accounting.PaymentDirection.Receipt && !p.IsCancelled
+                select new { p.Number, p.Date, p.BankAccountName, p.Description, a.Amount, a.Id }
+            ).ToListAsync();
+            foreach (var a in allocs)
+                entries.Add(new ClientStatementEntryDto { Date = a.Date, Type = "Receipt", Reference = "RCP-" + a.Number, DocId = a.Id, BankAccount = a.BankAccountName, Description = a.Description, Credit = a.Amount });
+
+            // Running balance oldest → newest; on the same date, debits (invoices)
+            // land before credits (receipts), mirroring the reference.
+            var ordered = entries.OrderBy(e => e.Date).ThenByDescending(e => e.Debit).ToList();
+            decimal bal = 0m;
+            foreach (var e in ordered) { bal += e.Debit - e.Credit; e.Balance = bal; }
+
+            var total = ordered.Count;
+            ordered.Reverse(); // newest-first for display
+            var shown = ordered.Take(CAP).ToList();
+
+            return new ClientStatementDto
+            {
+                ClientId = clientId,
+                ClientName = clientName,
+                ClosingBalance = bal,
+                Total = total,
+                Capped = total > shown.Count,
+                Entries = shown,
+            };
+        }
+
         public async Task<ClientDeleteImpactDto> GetDeleteImpactAsync(int id)
         {
             return new ClientDeleteImpactDto
@@ -371,6 +591,44 @@ namespace MyApp.Api.Services.Implementations
                         await _context.SaveChangesAsync();
                     }
                 }
+
+                // 2b. Accounting subledger + GL. A receipt allocated to one of
+                //     this client's invoices FK-blocks the invoice delete
+                //     (FK_PaymentAllocations_Invoices_InvoiceId — the observed
+                //     500). Clear those allocations, then the client's own
+                //     receipts, the GL journal entries posted from the
+                //     invoices/receipts (soft-ref: they don't block but would
+                //     leave phantom ledger postings), and the client's
+                //     withholding-tax receipts (Client-Restrict FK).
+                var clientPaymentIds = await _context.Payments
+                    .Where(p => p.ContactType == "Client" && p.ContactId == id)
+                    .Select(p => p.Id).ToListAsync();
+
+                if (invoiceIds.Count > 0)
+                    await _context.PaymentAllocations
+                        .Where(a => a.InvoiceId != null && invoiceIds.Contains(a.InvoiceId.Value))
+                        .ExecuteDeleteAsync();
+                if (clientPaymentIds.Count > 0)
+                {
+                    await _context.PaymentAllocations.Where(a => clientPaymentIds.Contains(a.PaymentId)).ExecuteDeleteAsync();
+                    await _context.Payments.Where(p => clientPaymentIds.Contains(p.Id)).ExecuteDeleteAsync();
+                }
+
+                if (invoiceIds.Count > 0 || clientPaymentIds.Count > 0)
+                {
+                    var jeIds = await _context.JournalEntries
+                        .Where(je =>
+                            (je.SourceDocType == MyApp.Api.Models.Accounting.SourceDocType.Invoice && je.SourceDocId != null && invoiceIds.Contains(je.SourceDocId.Value)) ||
+                            (je.SourceDocType == MyApp.Api.Models.Accounting.SourceDocType.Payment && je.SourceDocId != null && clientPaymentIds.Contains(je.SourceDocId.Value)))
+                        .Select(je => je.Id).ToListAsync();
+                    if (jeIds.Count > 0)
+                    {
+                        await _context.JournalLines.Where(l => jeIds.Contains(l.JournalEntryId)).ExecuteDeleteAsync();
+                        await _context.JournalEntries.Where(je => jeIds.Contains(je.Id)).ExecuteDeleteAsync();
+                    }
+                }
+
+                await _context.WithholdingTaxReceipts.Where(r => r.ClientId == id).ExecuteDeleteAsync();
 
                 // 3. Invoices: purge their stock movements (else on-hand skews),
                 //    then items, then the invoices.
