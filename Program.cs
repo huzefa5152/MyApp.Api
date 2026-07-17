@@ -677,9 +677,9 @@ using (var scope = app.Services.CreateScope())
         await db.SaveChangesAsync();
     }
 
-    // Seed the starter catalog of FBR-mapped item types (idempotent — skips
-    // any HS code / name already present, so it's safe to run on every boot)
-    await MyApp.Api.Data.ItemTypeSeeder.SeedAsync(db);
+    // Item types are NOT auto-seeded — operators curate their own catalog
+    // (an FBR-off business has no use for the FBR-mapped starter categories).
+    // The Demo environment still seeds them below so its demo data has stock.
 
     // Sales Quote / Sales Order template merge fields — idempotent runtime
     // seed (keyed by TemplateType+FieldExpression). Not HasData: hard-coded
@@ -705,6 +705,8 @@ using (var scope = app.Services.CreateScope())
     // call this path; their DBs stay untouched.
     if (string.Equals(app.Environment.EnvironmentName, "Demo", StringComparison.OrdinalIgnoreCase))
     {
+        // Demo needs the FBR-mapped starter item types for its stock/challan data.
+        await MyApp.Api.Data.ItemTypeSeeder.SeedAsync(db);
         await MyApp.Api.Data.DemoDataSeeder.SeedAsync(db);
     }
 

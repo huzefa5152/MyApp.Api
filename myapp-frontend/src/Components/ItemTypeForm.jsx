@@ -97,6 +97,9 @@ export default function ItemTypeForm({
   // the new item type is registered against the same division by default.
   defaultDivisionId = null,
   existingHsCodes = [],
+  // FBR-off companies don't use HS codes — the field is hidden for them.
+  // Defaults true so other callers (quick-add from documents) are unchanged.
+  fbrOn = true,
   onClose,
   onSaved,
 }) {
@@ -431,6 +434,7 @@ export default function ItemTypeForm({
               />
             </div>
 
+            {fbrOn && (
             <div style={formStyles.formGroup}>
               <label style={styles.label}>
                 HS Code{" "}
@@ -510,6 +514,7 @@ export default function ItemTypeForm({
                 <span style={styles.compactNote}>{hsHints.notes[0]}</span>
               )}
             </div>
+            )}
 
             <div style={styles.row}>
               <div style={{ flex: 1 }}>

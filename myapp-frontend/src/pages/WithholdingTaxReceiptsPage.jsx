@@ -221,7 +221,23 @@ export default function WithholdingTaxReceiptsPage() {
                   <td style={styles.tdMoney}>{money(r.amount)}</td>
                   <td style={styles.tdActions}>
                     <div style={styles.actionRow}>
-                      <button style={{ ...styles.iconBtn, ...styles.view }} title="View / Print" onClick={() => setViewReceipt(r)}><MdVisibility size={16} /></button>
+                      <button style={{ ...styles.iconBtn, ...styles.view }} title="View" onClick={() => setViewReceipt(r)}><MdVisibility size={16} /></button>
+                      {canPrint && (
+                        <button
+                          style={{ ...styles.iconBtn, ...styles.view, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                          disabled={tplPicker.noTemplate}
+                          title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print certificate"}
+                          onClick={() => handlePrint(r)}
+                        ><MdPrint size={16} /></button>
+                      )}
+                      {canPrint && (
+                        <button
+                          style={{ ...styles.iconBtn, ...styles.view, ...((tplPicker.noTemplate || exportingId === r.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                          disabled={tplPicker.noTemplate || exportingId === r.id}
+                          title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}
+                          onClick={() => handleExportPdf(r)}
+                        ><MdPictureAsPdf size={16} /></button>
+                      )}
                       {canUpdate && <button style={{ ...styles.iconBtn, ...styles.edit }} title="Edit" onClick={() => { setEditReceipt(r); setShowForm(true); }}><MdEdit size={16} /></button>}
                       {canDelete && r.isLatest && <button style={{ ...styles.iconBtn, ...styles.del }} title="Delete (latest only)" onClick={() => handleDelete(r)}><MdDelete size={16} /></button>}
                     </div>

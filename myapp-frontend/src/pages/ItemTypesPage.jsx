@@ -65,6 +65,10 @@ export default function ItemTypesPage() {
   const canCreate = has("itemtypes.manage.create");
   const canUpdate = has("itemtypes.manage.update");
   const canDelete = has("itemtypes.manage.delete");
+  // FBR-off companies don't use the FBR catalog (HS Code / Sale Type), so the
+  // FBR guidance banner + the HS Code field are hidden for them. Default to ON
+  // when no company is picked yet (undefined !== false).
+  const fbrOn = selectedCompany?.fbrEnabled !== false;
   const [itemTypes, setItemTypes] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState(null);
@@ -190,12 +194,13 @@ export default function ItemTypesPage() {
         </div>
       )}
 
-      <div style={styles.infoBox}>
-        <MdInfo size={16} style={{ flexShrink: 0 }} />
-        <div>
-          All items must come from <b>FBR's official catalog</b> — each has a valid HS Code, UOM, and Sale Type so bills pass FBR validation automatically.
-          &nbsp;The app seeded 19 common categories for pneumatic / hardware / general-order-supply on first run; add more by picking from the FBR HS Code search.</div>
-      </div>
+      {fbrOn && (
+        <div style={styles.infoBox}>
+          <MdInfo size={16} style={{ flexShrink: 0 }} />
+          <div>
+            For FBR-validated bills, give each item a valid <b>HS Code</b>, UOM, and Sale Type from FBR's official catalog so bills pass validation automatically — pick from the FBR HS Code search when adding an item.</div>
+        </div>
+      )}
 
       {itemTypes.length > 5 && (
         <div style={styles.searchWrap}>
@@ -393,6 +398,7 @@ export default function ItemTypesPage() {
           /* This screen edits the per-company overlay (division + GL accounts),
              so the form is bound to the selected company. */
           companyId={companyId}
+          fbrOn={fbrOn}
           showFavoriteToggle
           showRichHints
           showGlMapping
