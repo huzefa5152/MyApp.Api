@@ -231,6 +231,10 @@ export default function InvoicePage({ mode = "invoices" }) {
 
   useEffect(() => {
     if (selectedCompany) {
+      // Clear on company switch so the spinner shows for the fresh load
+      // rather than briefly displaying the previous company's invoices
+      // (the refetch path now keeps the list mounted to preserve scroll).
+      setInvoices([]);
       fetchClients(selectedCompany.id);
       setPage(1);
       fetchInvoices(selectedCompany.id, 1);
@@ -891,7 +895,11 @@ export default function InvoicePage({ mode = "invoices" }) {
         <div style={styles.emptyState}><p style={{ color: colors.textSecondary }}>No companies available.</p></div>
       )}
 
-      {loadingInvoices ? (
+      {/* Spinner ONLY on the initial/empty load. During a REFETCH (validate,
+          submit, edit-save, delete, void…) we keep the existing list mounted
+          so the browser preserves the scroll position — unmounting it here was
+          why the page jumped to the top after every action. */}
+      {loadingInvoices && invoices.length === 0 ? (
         <div style={styles.loadingContainer}><div style={styles.spinner} /></div>
       ) : invoices.length === 0 && selectedCompany ? (
         <div style={styles.emptyState}>
