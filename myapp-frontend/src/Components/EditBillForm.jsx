@@ -16,6 +16,7 @@ import { useAuth } from "../contexts/AuthContext";
 import LookupAutocomplete from "./LookupAutocomplete";
 import RichText from "./RichText";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import BulkItemTypeBar from "./BulkItemTypeBar";
 import ItemTypeForm from "./ItemTypeForm";
 import AttachmentManager from "./AttachmentManager";
 
@@ -1296,93 +1297,20 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                       - "Empty rows only": fills only rows that don't have one
                     Available to narrow-perm users too — it's still just an
                     Item Type pick. Hidden in Bills mode. */}
-                {!billsMode && !lockItemType && items.length > 1 && (
-                  <div style={styles.bulkApplyBar}>
-                    <span style={styles.bulkApplyLabel}>
-                      Apply same Item Type to:
-                    </span>
-                    <select
-                      value={bulkApplyMode}
-                      onChange={(e) => setBulkApplyMode(e.target.value)}
-                      style={{ ...styles.tableInput, maxWidth: 180 }}
-                    >
-                      <option value="all">All {items.length} rows</option>
-                      <option value="empty">Only empty rows</option>
-                    </select>
-                    <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
-                      <SearchableItemTypeSelect
-                        divisionId={divisionId}
-                        items={filteredItemTypes}
-                        // value derived from the rows themselves so the
-                        // dropdown reflects the applied selection. When
-                        // all rows share an Item Type, that one shows;
-                        // when they diverge (e.g. partial apply, manual
-                        // edits) the placeholder returns.
-                        value={commonItemTypeId}
-                        nonInventoryItems={nonInvItems}
-                        nonInventoryValue=""
-                        onPickNonInventory={(n) => { if (n) applyNonInvToAll(n, bulkApplyMode); }}
-                        onChange={(newId, picked) => {
-                          // Clearing the picker (× icon) wipes the row
-                          // selection too — same behaviour as the
-                          // dedicated "Clear from all" button below.
-                          if (!newId) {
-                            applyItemTypeToAll(null, null, bulkApplyMode);
-                            return;
-                          }
-                          applyItemTypeToAll(parseInt(newId), picked, bulkApplyMode);
-                        }}
-                        placeholder={bulkApplyMode === "all"
-                          ? "— pick to apply to all —"
-                          : "— pick to fill empty rows —"}
-                        style={styles.tableInput}
-                      />
-                    </div>
-                    {/* Dedicated "Clear from all" — clears Item Type +
-                        UoM + HS Code + Sale Type on every row in scope.
-                        Disabled when there's nothing to clear so the
-                        button doesn't pretend to be active. Important:
-                        the row-level clear (× on each row's picker)
-                        already wipes those fields per-row; this is the
-                        same operation in bulk. */}
-                    {(() => {
-                      const hasAnyItemType = items.some((r) => r.itemTypeId);
-                      return (
-                        <button
-                          type="button"
-                          // Always passes mode="all" — clearing only "empty"
-                          // rows is a no-op (they're already empty), so the
-                          // button intent is unambiguous: wipe ItemType +
-                          // HS Code + UoM + Sale Type from every row.
-                          onClick={() => applyItemTypeToAll(null, null, "all")}
-                          disabled={!hasAnyItemType}
-                          style={{
-                            ...styles.inlineAddBtn,
-                            color: hasAnyItemType ? "#c62828" : "#98a4b3",
-                            borderColor: hasAnyItemType ? "#ef9a9a" : "#dde1e6",
-                            backgroundColor: hasAnyItemType ? "#fff5f5" : "#f5f7fa",
-                            cursor: hasAnyItemType ? "pointer" : "not-allowed",
-                          }}
-                          title="Clear Item Type, HS Code, UoM, and Sale Type from every row"
-                        >
-                          Clear from all
-                        </button>
-                      );
-                    })()}
-                    {/* "+ New Item Type" — placed AFTER the item-type
-                        picker so the operator's natural left-to-right
-                        flow is "try to find it → can't → add it here". */}
-                    {forceItemTypeAndQty && canCreateItemType && (
-                      <button
-                        type="button"
-                        onClick={() => setShowAddItemType(true)}
-                        style={styles.inlineAddBtn}
-                        title="Add a new Item Type to your catalog without leaving this form"
-                      >
-                        <MdAdd size={14} /> New Item Type
-                      </button>
-                    )}
-                  </div>
+                {/* Bulk "apply same Item Type to all lines" — shared component
+                    (retains the picked value; carries the inline create shortcut).
+                    Hidden in Bills mode / when item type is locked. */}
+                {!billsMode && !lockItemType && (
+                  <BulkItemTypeBar
+                    itemCount={items.length}
+                    itemTypes={filteredItemTypes}
+                    nonInventoryItems={nonInvItems}
+                    divisionId={divisionId}
+                    onApplyItemType={(id, picked, mode) => applyItemTypeToAll(id, picked, mode)}
+                    onApplyNonInv={(n, mode) => applyNonInvToAll(n, mode)}
+                    onClearAll={() => applyItemTypeToAll(null, null, "all")}
+                    anyTagged={items.some((r) => r.itemTypeId)}
+                  />
                 )}
 
                 <div style={styles.tableWrap}>

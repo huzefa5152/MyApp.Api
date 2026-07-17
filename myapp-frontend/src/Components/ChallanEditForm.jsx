@@ -2,10 +2,14 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { MdAdd, MdDelete, MdInfo, MdContentCopy } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import QuantityInput from "./QuantityInput";
+import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import BulkItemTypeBar from "./BulkItemTypeBar";
 import { updateChallan } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
+import { getItemTypes } from "../api/itemTypeApi";
+import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
 
@@ -69,6 +73,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     challan.items.map((i) => ({
       id: i.id,
       itemTypeId: i.itemTypeId || null,
+      nonInventoryItemId: i.nonInventoryItemId || null,
       description: i.description,
       quantity: i.quantity,
       unit: i.unit,
@@ -79,6 +84,8 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   const [clients, setClients] = useState([]);
   // Units list — gates each row's quantity input on the picked UOM.
   const [units, setUnits] = useState([]);
+  const [itemTypes, setItemTypes] = useState([]);
+  const [nonInvItems, setNonInvItems] = useState([]);
 
   // ── UI state ──
   const [error, setError] = useState("");
@@ -89,6 +96,8 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   useEffect(() => {
     if (challan.companyId) {
       getClientsByCompany(challan.companyId).then(({ data }) => setClients(data)).catch(() => {});
+      getItemTypes(challan.companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([]));
+      getNonInventoryItemsByCompany(challan.companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
     }
     getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
   }, [challan.companyId]);
@@ -144,8 +153,26 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     }
   };
 
+  // Item Type only TAGS the line (records ItemTypeId); it does NOT overwrite the
+  // typed description/unit. Mutually exclusive with a non-inventory item.
+  const pickItemType = (index, newId) => {
+    const next = [...items];
+    next[index] = { ...next[index], itemTypeId: newId ? parseInt(newId) : null, nonInventoryItemId: null };
+    setItems(next);
+  };
+  const pickNonInventory = (index, n) => {
+    setItems((prev) => prev.map((it, i) => {
+      if (i !== index) return it;
+      if (!n) return { ...it, nonInventoryItemId: null };
+      const nx = { ...it, nonInventoryItemId: n.id, itemTypeId: null };
+      if (!it.description?.trim()) nx.description = n.defaultLineDescription || n.name || "";
+      if (!it.unit?.trim()) nx.unit = n.unitName || "";
+      return nx;
+    }));
+  };
+
   const addItem = () => {
-    setItems([...items, { id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }]);
+    setItems([...items, { id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "" }]);
   };
 
   const removeItem = (index) => {
@@ -194,10 +221,10 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         deliveryDate: new Date(deliveryDate).toISOString(),
         items: validItems.map((i) => ({
           id: i.id || 0,
-          // Preserved from the row for legacy challans whose lines were
-          // typed pre-split. New rows have itemTypeId=null. Either way the
-          // backend stores it as-is; classification happens on Invoices.
-          itemTypeId: i.itemTypeId ? parseInt(i.itemTypeId) : null,
+          // Item type tags the line (optional). A non-inventory line is mutually
+          // exclusive with an item type; the backend nulls the other side.
+          itemTypeId: i.nonInventoryItemId ? null : (i.itemTypeId ? parseInt(i.itemTypeId) : null),
+          nonInventoryItemId: i.nonInventoryItemId || null,
           description: i.description.trim(),
           // parseFloat preserves decimals (12.5, 0.0004) — server-side
           // validation rejects fractions for integer-only UOMs.
@@ -385,14 +412,30 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
             {/* ── Items ── */}
             <label style={{ ...styles.label, marginTop: "0.75rem" }}>Items *</label>
 
-            {/* Item Type lives on the Invoices tab now — challans capture
-                description / qty / unit only. Operators classify each line
-                by Item Type when preparing the bill for FBR submission. */}
+            {/* Bulk "apply same Item Type to all lines" — shows only for 2+ lines. */}
+            <BulkItemTypeBar items={items} setItems={setItems} itemTypes={itemTypes} nonInventoryItems={nonInvItems} divisionId={challan.divisionId || null} />
+
+            {/* Optional Item Type per line (matches New Challan). Tags the line
+                for inventory / FBR classification; item type can still be
+                (re)classified on the Invoices tab. */}
 
             <div ref={containerRef} style={styles.itemsContainer}>
               {items.map((item, idx) => (
                 <div key={idx} style={styles.itemRow}>
                   <div style={styles.itemIndex}>{idx + 1}</div>
+                  <div style={{ width: 190, flexShrink: 0 }}>
+                    <SearchableItemTypeSelect
+                      divisionId={challan.divisionId || null}
+                      items={itemTypes}
+                      value={item.itemTypeId || ""}
+                      onChange={(newId) => pickItemType(idx, newId)}
+                      nonInventoryItems={nonInvItems}
+                      nonInventoryValue={item.nonInventoryItemId || ""}
+                      onPickNonInventory={(n) => pickNonInventory(idx, n)}
+                      placeholder="— item type (optional) —"
+                      style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                    />
+                  </div>
                   <div style={{ flex: 2, minWidth: 0 }}>
                     <LookupAutocomplete
                       label="Description"

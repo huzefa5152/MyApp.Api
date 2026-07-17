@@ -12,6 +12,7 @@ import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import BulkItemTypeBar from "./BulkItemTypeBar";
 import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
 import AccountSelect from "./AccountSelect";
@@ -456,6 +457,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
                   <MdAdd size={14} /> Add line
                 </button>
               </div>
+              <BulkItemTypeBar items={items} setItems={setItems} itemTypes={itemTypes} nonInventoryItems={nonInvItems} divisionId={divisionId} />
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                   <thead>

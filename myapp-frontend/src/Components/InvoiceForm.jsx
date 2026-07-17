@@ -14,6 +14,7 @@ import { todayYmd } from "../utils/dateInput";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import BulkItemTypeBar from "./BulkItemTypeBar";
 import AccountSelect from "./AccountSelect";
 import ClientForm from "./ClientForm";
 import DivisionSelect from "./DivisionSelect";
@@ -1344,64 +1345,20 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           </div>
                         )}
 
-                        {/* Bulk Item Type apply — single dropdown sets the
-                            same catalog row across all lines. Saves 20+
-                            picks when every item on the bill is the same
-                            FBR category. Visible in Bills mode too — a type
-                            picked at bill time persists to the Invoices tab. */}
-                        {allItems.length > 1 && (
-                          <div style={{
-                            display: "flex", alignItems: "center", gap: "0.65rem",
-                            flexWrap: "wrap", padding: "0.55rem 0.85rem",
-                            marginBottom: "0.5rem", borderRadius: 8,
-                            border: `1px solid ${colors.cardBorder}`,
-                            backgroundColor: "#f8faff",
-                          }}>
-                            <span style={{ fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 500 }}>
-                              Apply same Item Type to:
-                            </span>
-                            <select
-                              value={bulkApplyMode}
-                              onChange={(e) => setBulkApplyMode(e.target.value)}
-                              style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", maxWidth: 180 }}
-                            >
-                              <option value="all">All {allItems.length} rows</option>
-                              <option value="empty">Only empty rows</option>
-                            </select>
-                            <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
-                              <SearchableItemTypeSelect
-                                divisionId={divisionId}
-                                items={filteredItemTypes}
-                                value=""
-                                nonInventoryItems={nonInvItems}
-                                nonInventoryValue=""
-                                onPickNonInventory={(n) => { if (n) applyNonInvToAll(n, bulkApplyMode); }}
-                                onChange={(newId, picked) => {
-                                  if (!newId || !picked) return;
-                                  applyItemTypeToAll(parseInt(newId), picked, bulkApplyMode);
-                                }}
-                                placeholder={bulkApplyMode === "all"
-                                  ? "— pick to apply to all —"
-                                  : "— pick to fill empty rows —"}
-                                style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                              />
-                            </div>
-                            {/* Clear all — drops the Item Type binding (+ HS
-                                / UOM / SaleType / Description) on every
-                                row. Disabled until at least one row carries
-                                an Item Type so the button never offers a
-                                no-op. */}
-                            <button
-                              type="button"
-                              style={styles.bulkClearBtn}
-                              onClick={clearAllItemTypes}
-                              disabled={!Object.values(itemTypeIds).some(Boolean)}
-                              title="Drop the Item Type binding from every row"
-                            >
-                              Clear all
-                            </button>
-                          </div>
-                        )}
+                        {/* Bulk "apply same Item Type to all lines" — shared
+                            component (retains the picked value). Visible in Bills
+                            mode too — a type picked at bill time persists to the
+                            Invoices tab. */}
+                        <BulkItemTypeBar
+                          itemCount={allItems.length}
+                          itemTypes={filteredItemTypes}
+                          nonInventoryItems={nonInvItems}
+                          divisionId={divisionId}
+                          onApplyItemType={(id, picked, mode) => applyItemTypeToAll(id, picked, mode)}
+                          onApplyNonInv={(n, mode) => applyNonInvToAll(n, mode)}
+                          onClearAll={() => clearAllItemTypes()}
+                          anyTagged={Object.values(itemTypeIds).some(Boolean)}
+                        />
 
                         <div style={styles.unifiedTableWrap}>
                           <table style={styles.unifiedTable}>

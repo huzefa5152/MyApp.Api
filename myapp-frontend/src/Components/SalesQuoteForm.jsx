@@ -4,6 +4,7 @@ import LookupAutocomplete from "./LookupAutocomplete";
 import SelectDropdown from "./SelectDropdown";
 import DivisionSelect from "./DivisionSelect";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import BulkItemTypeBar from "./BulkItemTypeBar";
 import QuantityInput from "./QuantityInput";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
@@ -212,6 +213,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
             </div>
 
             <label style={{ ...s.label, marginBottom: "0.5rem" }}>Items <span style={{ fontWeight: 400, fontSize: "0.72rem", color: colors.textSecondary }}>— descriptions allow line breaks and {"<b>"}bold{"</b>"} / {"<i>"}italic{"</i>"}</span></label>
+            <BulkItemTypeBar items={items} setItems={setItems} itemTypes={itemTypes} nonInventoryItems={nonInvItems} divisionId={divisionId} />
             <div style={s.tableWrap}>
               <table style={s.table}>
                 <thead>

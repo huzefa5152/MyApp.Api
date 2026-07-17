@@ -420,7 +420,9 @@ export default function ItemTypeForm({
               Adds an entry to your product catalog.{" "}
               {scenarioCode
                 ? `Sale Type is locked to ${scenarioCode}'s rule; UOM auto-fills from FBR's HS-UOM mapping.`
-                : "Pick an HS code to auto-fill UOM, sale type, and rate."}
+                : fbrOn
+                  ? "Pick an HS code to auto-fill UOM, sale type, and rate."
+                  : ""}
             </p>
 
             <div style={formStyles.formGroup}>
@@ -575,6 +577,10 @@ export default function ItemTypeForm({
                   />
                 )}
               </div>
+              {/* Sale Type is FBR metadata — hidden when the company's FBR
+                  integration is off (a non-FBR catalog needs neither HS nor
+                  sale type). Defaults to standard rate for the save either way. */}
+              {fbrOn && (
               <div style={{ flex: 1 }}>
                 <label style={styles.label}>
                   Sale Type
@@ -601,6 +607,7 @@ export default function ItemTypeForm({
                   </select>
                 )}
               </div>
+              )}
             </div>
 
             {saleTypeMismatch && (

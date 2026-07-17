@@ -9,6 +9,7 @@ import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import BulkItemTypeBar from "./BulkItemTypeBar";
 import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
 import AttachmentManager from "./AttachmentManager";
@@ -198,6 +199,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                   <MdAdd size={14} /> Add line
                 </button>
               </div>
+              <BulkItemTypeBar items={items} setItems={setItems} itemTypes={itemTypes} nonInventoryItems={nonInvItems} divisionId={divisionId} />
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                 <thead>
                   <tr style={{ backgroundColor: "#f5f8fc" }}>

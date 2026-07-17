@@ -3,6 +3,7 @@ import { MdAdd, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SelectDropdown from "./SelectDropdown";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import BulkItemTypeBar from "./BulkItemTypeBar";
 import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
 import QuantityInput from "./QuantityInput";
@@ -235,6 +236,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
             </div>
 
             <label style={{ ...s.label, marginBottom: "0.5rem" }}>Items (quantity ordered)</label>
+            <BulkItemTypeBar items={items} setItems={setItems} itemTypes={itemTypes} nonInventoryItems={nonInvItems} divisionId={divisionId} />
             <div style={s.tableWrap}>
               <table style={s.table}>
                 <thead>

@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { MdArrowDropDown, MdSearch, MdStar } from "react-icons/md";
+import { MdArrowDropDown, MdSearch, MdStar, MdAddCircleOutline } from "react-icons/md";
+import ItemTypeForm from "./ItemTypeForm";
+import { useCompany } from "../contexts/CompanyContext";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 /**
  * Dropdown for picking an Item Type (FBR-mapped catalog entry). Designed to
@@ -34,10 +37,31 @@ export default function SearchableItemTypeSelect({
   items, value, onChange, placeholder, style, disabled = false,
   nonInventoryItems = [], nonInventoryValue = "", onPickNonInventory,
   divisionId = null,
+  // When companyId is set, the dropdown shows a "＋ Create new item type"
+  // shortcut that opens the item-type form inline; on save the new type is
+  // added to the list, auto-selected, and (optionally) bubbled to the parent.
+  companyId = null, onItemTypeCreated, fbrOn = null,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightIdx, setHighlightIdx] = useState(-1);
+  const [showCreate, setShowCreate] = useState(false);
+  // Item types created via the inline shortcut this session — merged into the
+  // list so the new one is immediately visible/selectable without the parent
+  // having to refetch (deduped by id against the parent's `items`).
+  const [createdItems, setCreatedItems] = useState([]);
+  // The company to create against: an explicit prop wins; otherwise the app's
+  // selected company (every document form operates on it). Null → no shortcut.
+  const { selectedCompany } = useCompany();
+  const { has } = usePermissions();
+  // The inline create shortcut needs a company AND the create permission —
+  // never render an action the operator would get a 403 on (house rule).
+  const canCreateItemType = has("itemtypes.manage.create");
+  const effectiveCompanyId = (companyId ?? selectedCompany?.id ?? null);
+  const canQuickCreate = !!effectiveCompanyId && canCreateItemType;
+  // FBR-off companies get a lean create form (no HS Code / Sale Type). Explicit
+  // prop wins; otherwise read the selected company's FBR flag.
+  const effectiveFbrOn = fbrOn != null ? fbrOn : (selectedCompany?.fbrEnabled !== false);
   // triggerRect drives the portaled dropdown's position. We recompute it on
   // every ancestor scroll + viewport resize so the list stays glued to the
   // trigger even when the dashboard layout (and not <body>) is the scroller.
@@ -46,10 +70,27 @@ export default function SearchableItemTypeSelect({
   const searchRef = useRef(null);
   const wrapperRef = useRef(null);
 
+  // Parent list + any inline-created types (deduped by id).
+  const mergedItems = useMemo(() => {
+    const base = items || [];
+    if (!createdItems.length) return base;
+    const seen = new Set(base.map((i) => i.id));
+    return [...base, ...createdItems.filter((c) => !seen.has(c.id))];
+  }, [items, createdItems]);
+
   const selected = useMemo(
-    () => (items || []).find((it) => String(it.id) === String(value)),
-    [items, value]
+    () => mergedItems.find((it) => String(it.id) === String(value)),
+    [mergedItems, value]
   );
+
+  const handleItemTypeCreated = (saved) => {
+    if (!saved) { setShowCreate(false); return; }
+    setCreatedItems((prev) => [saved, ...prev.filter((p) => p.id !== saved.id)]);
+    if (selectedNonInv) onPickNonInventory?.(null);
+    onChange?.(saved.id, saved);          // auto-select the new type
+    onItemTypeCreated?.(saved);           // let the parent add it to its own list
+    setShowCreate(false);
+  };
 
   // Non-inventory item selection (mutually exclusive with an item type).
   const selectedNonInv = useMemo(
@@ -73,11 +114,11 @@ export default function SearchableItemTypeSelect({
   // division. `selected`/`selectedNonInv` above intentionally search the FULL
   // `items` so a line whose item is out-of-scope still renders its name.
   const scopedItems = useMemo(() => {
-    const arr = items || [];
+    const arr = mergedItems;
     if (!divisionId) return arr;
     const dv = String(divisionId);
     return arr.filter((it) => it.divisionId == null || String(it.divisionId) === dv);
-  }, [items, divisionId]);
+  }, [mergedItems, divisionId]);
 
   const sortedItems = useMemo(() => {
     const arr = [...(scopedItems || [])];
@@ -349,7 +390,28 @@ export default function SearchableItemTypeSelect({
               </div>
             </div>
           )}
+
+          {/* Sticky footer: create a new item type without leaving the form. */}
+          {canQuickCreate && (
+            <div style={styles.createRow} onMouseDown={(e) => { e.preventDefault(); setOpen(false); setShowCreate(true); }}>
+              <MdAddCircleOutline size={16} />
+              <span>Create new item type{query.trim() ? ` "${query.trim()}"` : ""}</span>
+            </div>
+          )}
         </div>,
+        document.body
+      )}
+
+      {/* Inline item-type create — portaled to <body> so it escapes this
+          picker's deep table-cell nesting and reliably stacks above the form. */}
+      {showCreate && canQuickCreate && createPortal(
+        <ItemTypeForm
+          companyId={effectiveCompanyId}
+          defaultDivisionId={divisionId || null}
+          fbrOn={effectiveFbrOn}
+          onClose={() => setShowCreate(false)}
+          onSaved={handleItemTypeCreated}
+        />,
         document.body
       )}
     </div>
@@ -542,4 +604,10 @@ const styles = {
     marginLeft: 4,
   },
   empty: { padding: "0.8rem 0.8rem", color: "#5f6d7e", fontSize: "0.82rem" },
+  createRow: {
+    flexShrink: 0, display: "flex", alignItems: "center", gap: "0.45rem",
+    padding: "0.55rem 0.75rem", borderTop: "1px solid #e8edf3",
+    backgroundColor: "#f0f7ff", color: "#0d47a1", fontWeight: 700,
+    fontSize: "0.8rem", cursor: "pointer",
+  },
 };

@@ -3,6 +3,7 @@ import { MdAdd, MdClose, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import BulkItemTypeBar from "./BulkItemTypeBar";
 import SearchableSelect from "./SearchableSelect";
 import RichText from "./RichText";
 import SelectDropdown from "./SelectDropdown";
@@ -529,6 +530,9 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
             {!fromOrder && (
             <div style={{ marginTop: "0.25rem" }}>
               <label style={{ ...styles.label, marginBottom: "0.5rem" }}>Items</label>
+
+              {/* Bulk "apply same Item Type to all lines" — shows only for 2+ lines. */}
+              <BulkItemTypeBar items={items} setItems={setItems} itemTypes={itemTypes} nonInventoryItems={nonInvItems} divisionId={divisionId} />
 
               {/* Each line has an optional Item Type (its own column), then
                   description / qty / unit. Item Type can still be (re)classified

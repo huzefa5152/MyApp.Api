@@ -12,6 +12,7 @@ import { todayYmd } from "../utils/dateInput";
 import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import BulkItemTypeBar from "./BulkItemTypeBar";
 import AccountSelect from "./AccountSelect";
 import LookupAutocomplete from "./LookupAutocomplete";
 import ClientForm from "./ClientForm";
@@ -1093,45 +1094,16 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                           row count = 1. Available in Bills mode too —
                           the pick is optional there but persists and
                           shows on the Invoices tab. */}
-                      {rows.length > 1 && (
-                        <div style={styles.bulkApplyBar}>
-                          <span style={{ fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 500 }}>
-                            Apply same Item Type to:
-                          </span>
-                          <select
-                            value={bulkApplyMode}
-                            onChange={(e) => setBulkApplyMode(e.target.value)}
-                            style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", maxWidth: 180 }}
-                          >
-                            <option value="all">All {rows.length} rows</option>
-                            <option value="empty">Only empty rows</option>
-                          </select>
-                          <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
-                            <SearchableItemTypeSelect
-                              divisionId={divisionId}
-                              items={filteredItemTypes}
-                              value=""
-                              nonInventoryItems={nonInvItems}
-                              nonInventoryValue=""
-                              onPickNonInventory={(n) => { if (n) applyNonInvToRows(n, bulkApplyMode); }}
-                              onChange={(_, picked) => applyItemTypeToRows(picked, bulkApplyMode)}
-                              placeholder={bulkApplyMode === "all"
-                                ? "— pick to apply to all —"
-                                : "— pick to fill empty rows —"}
-                              style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            style={styles.bulkClearBtn}
-                            onClick={clearAllItemTypes}
-                            disabled={!rows.some((r) => r.itemTypeId)}
-                            title="Drop the Item Type binding from every row"
-                          >
-                            <MdDelete size={14} /> Clear all
-                          </button>
-                        </div>
-                      )}
+                      <BulkItemTypeBar
+                        itemCount={rows.length}
+                        itemTypes={filteredItemTypes}
+                        nonInventoryItems={nonInvItems}
+                        divisionId={divisionId}
+                        onApplyItemType={(id, picked, mode) => applyItemTypeToRows(picked, mode)}
+                        onApplyNonInv={(n, mode) => applyNonInvToRows(n, mode)}
+                        onClearAll={() => clearAllItemTypes()}
+                        anyTagged={rows.some((r) => r.itemTypeId)}
+                      />
 
                       <div style={styles.unifiedTableWrap}>
                         <table style={styles.unifiedTable}>
