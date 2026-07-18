@@ -83,6 +83,32 @@ namespace MyApp.Api.DTOs
         public string? SupplierPhone { get; set; }
         public string? SupplierLogoPath { get; set; }
 
+        // The SAME issuer (our company / its division), ALSO exposed under the
+        // company*/division* token names. TaxInvoice / Credit-Note / Debit-Note
+        // templates all share this DTO, and a template may print the letterhead
+        // logo via {{companyLogoPath}} / {{divisionLogoPath}} rather than
+        // {{supplierLogoPath}} (e.g. the hand-authored Al-Qahera "Default"
+        // templates do). Populating both makes the logo + letterhead render
+        // regardless of which convention the active template was authored with.
+        // (Cause of the "logo missing on Sales Tax Invoice print" bug — the
+        // template referenced {{companyLogoPath}} but the DTO only filled
+        // {{supplierLogoPath}}.) DivisionLogoPath is null for a company-level
+        // invoice so a {{#if divisionLogoPath}}…{{else}}{{companyLogoPath}}…
+        // {{/if}} falls back to the company logo.
+        public string CompanyBrandName { get; set; } = "";
+        public string? CompanyLogoPath { get; set; }
+        public string? CompanyAddress { get; set; }
+        public string? CompanyPhone { get; set; }
+        public string? CompanyNTN { get; set; }
+        public string? CompanySTRN { get; set; }
+        public string? DivisionName { get; set; }
+        public string? DivisionBrandName { get; set; }
+        public string? DivisionLogoPath { get; set; }
+        public string? DivisionAddress { get; set; }
+        public string? DivisionPhone { get; set; }
+        public string? DivisionNTN { get; set; }
+        public string? DivisionSTRN { get; set; }
+
         // Buyer (client) details
         public string BuyerName { get; set; } = "";
         public string? BuyerAddress { get; set; }
@@ -352,6 +378,30 @@ namespace MyApp.Api.DTOs
         public string? SupplierPhone { get; set; }
         public string? SupplierNTN { get; set; }
         public string? SupplierSTRN { get; set; }
+        // The SAME issuer, ALSO exposed under the company*/division* token names.
+        // The "DebitNote" print template type is shared: the built-in starter binds
+        // the issuer via {{supplier*}}, but hand-authored/company templates (e.g. the
+        // Al-Qahera "Default", which prints the logo via {{companyLogoPath}}) use the
+        // company-letterhead convention. Populating both makes the logo + issuer
+        // block render regardless of which convention the active template uses.
+        // (Was the cause of the "logo missing on purchase debit note print" bug —
+        // the template referenced {{companyLogoPath}} but the DTO only filled
+        // {{supplierLogoPath}}.) DivisionLogoPath stays null for a company-level note
+        // so a {{#if divisionLogoPath}}…{{else}}{{companyLogoPath}}…{{/if}} falls back.
+        public int? DivisionId { get; set; }
+        public string CompanyBrandName { get; set; } = "";
+        public string? CompanyLogoPath { get; set; }
+        public string? CompanyAddress { get; set; }
+        public string? CompanyPhone { get; set; }
+        public string? CompanyNTN { get; set; }
+        public string? CompanySTRN { get; set; }
+        public string? DivisionName { get; set; }
+        public string? DivisionBrandName { get; set; }
+        public string? DivisionLogoPath { get; set; }
+        public string? DivisionAddress { get; set; }
+        public string? DivisionPhone { get; set; }
+        public string? DivisionNTN { get; set; }
+        public string? DivisionSTRN { get; set; }
         // Counterparty — the supplier being debited → template {{buyer*}}
         public string BuyerName { get; set; } = "";
         public string? BuyerAddress { get; set; }

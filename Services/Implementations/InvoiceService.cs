@@ -2651,6 +2651,23 @@ namespace MyApp.Api.Services.Implementations
                 SupplierSTRN = inv.Company?.STRN,
                 SupplierPhone = inv.Company?.Phone,
                 SupplierLogoPath = inv.Company?.LogoPath,
+                // Same issuer under the company*/division* token names so a
+                // TaxInvoice/Note template that prints the letterhead via
+                // {{companyLogoPath}} / {{divisionLogoPath}} (not {{supplierLogoPath}})
+                // still shows the logo.
+                CompanyBrandName = (string.IsNullOrWhiteSpace(inv.Company?.BrandName) ? inv.Company?.Name : inv.Company?.BrandName) ?? "",
+                CompanyLogoPath = inv.Company?.LogoPath,
+                CompanyAddress = inv.Company?.FullAddress,
+                CompanyPhone = inv.Company?.Phone,
+                CompanyNTN = inv.Company?.NTN,
+                CompanySTRN = inv.Company?.STRN,
+                DivisionName = inv.Division?.Name,
+                DivisionBrandName = inv.Division?.BrandName,
+                DivisionLogoPath = inv.Division?.LogoPath,
+                DivisionAddress = inv.Division?.FullAddress,
+                DivisionPhone = inv.Division?.Phone,
+                DivisionNTN = inv.Division?.NTN,
+                DivisionSTRN = inv.Division?.STRN,
                 BuyerName = inv.Client?.Name ?? "",
                 BuyerAddress = inv.Client?.Address,
                 BuyerPhone = inv.Client?.Phone,

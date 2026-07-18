@@ -104,6 +104,23 @@ namespace MyApp.Api.Services.Implementations
                 SupplierPhone = d.Division?.Phone ?? d.Company?.Phone,
                 SupplierNTN = d.Division?.NTN ?? d.Company?.NTN,
                 SupplierSTRN = d.Division?.STRN ?? d.Company?.STRN,
+                // Same issuer under the company*/division* token names so a
+                // DebitNote template that prints the letterhead via {{companyLogoPath}}
+                // / {{divisionLogoPath}} (not {{supplierLogoPath}}) still shows the logo.
+                DivisionId = d.DivisionId,
+                CompanyBrandName = (string.IsNullOrWhiteSpace(d.Company?.BrandName) ? d.Company?.Name : d.Company?.BrandName) ?? "",
+                CompanyLogoPath = d.Company?.LogoPath,
+                CompanyAddress = d.Company?.FullAddress,
+                CompanyPhone = d.Company?.Phone,
+                CompanyNTN = d.Company?.NTN,
+                CompanySTRN = d.Company?.STRN,
+                DivisionName = d.Division?.Name,
+                DivisionBrandName = d.Division?.BrandName,
+                DivisionLogoPath = d.Division?.LogoPath,
+                DivisionAddress = d.Division?.FullAddress,
+                DivisionPhone = d.Division?.Phone,
+                DivisionNTN = d.Division?.NTN,
+                DivisionSTRN = d.Division?.STRN,
                 BuyerName = d.Supplier?.Name ?? "",
                 BuyerAddress = d.Supplier?.Address,
                 BuyerPhone = d.Supplier?.Phone,

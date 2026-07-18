@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { MdReceiptLong, MdSearch, MdVisibility, MdDelete, MdPrint, MdPictureAsPdf, MdEdit, MdAdd } from "react-icons/md";
 import { getPurchaseDebitNotesByCompany, deletePurchaseDebitNote, getPurchaseDebitNotePrintData } from "../api/purchaseDebitNoteApi";
 import DivisionSelect from "../Components/DivisionSelect";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import PurchaseDebitNoteForm from "../Components/PurchaseDebitNoteForm";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { useCompany } from "../contexts/CompanyContext";
@@ -145,6 +146,7 @@ export default function PurchaseDebitNotesPage() {
           {(companies || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <DivisionSelect companyId={selectedCompany?.id} value={divisionFilter} onChange={setDivisionFilter} style={dropdownStyles.base} wrapStyle={{ minWidth: 180 }} />
+        <PrintTemplateSelect picker={tplPicker} />
         <div style={styles.searchWrap}>
           <MdSearch size={18} color={colors.textSecondary} style={{ position: "absolute", left: 10, top: 10 }} />
           <input style={styles.searchInput} placeholder="Search supplier / description / #…" value={search} onChange={(e) => setSearch(e.target.value)} />
