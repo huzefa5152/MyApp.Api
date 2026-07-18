@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>pdf_text_dump</AssemblyName>
+    <!-- Offline PdfPig text extractor — replicates POParserService.ExtractTextFromPdf
+         verbatim, same custom PdfPig version, so the emitted text (with its 2-space
+         column boundaries) matches exactly what the running backend feeds the parser.
+         Used to inspect real uploaded PDFs and build corpus cases without hitting the
+         rate-limited parse-pdf endpoint. Not part of the app build. -->
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
+  </ItemGroup>
+</Project>

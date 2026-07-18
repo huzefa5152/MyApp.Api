@@ -1,0 +1,217 @@
+[
+  {
+    "id": "prod-123-meko-denim-fabrics",
+    "category": "meko-denim-fabrics",
+    "descHeader": "Item Name",
+    "qtyHeader": "Qty",
+    "unitHeader": "Unit",
+    "rawText": "MEKO DENIM MILLS (PVT) LTD.\nA-MAIN STORE. KOTRI\nPurchase Order\nINDENT\nP. O. No  270091  Account Code  10100113  ST No  42301-4020795-9\nDate  16-JUL-26\nSupplier Title  ROSHAN TRADERS\nDlv Date\nContact\nCONSUMEABLE\nVALID  Address  F-44 FALAK CITY TOWER KARACHI\nWEAVING MDM\nTelephone No  +92-333-1665253\nCode  Item Name  Unit  Qty  Rate  Excl-Tax AmoST RateS/Tax AmoET Rate ET Amt Total Amount\n33010072 S.S JUBLEE CLIP 2\"  PC  10  215.00  2,150 18.00  387  0  2,537\n93030080 SAMAD BOND 3.75LTR  TIN  1  5640.00  5,640 18.00  1,015  0  6,655\n33010092 S.S JUBLEE CLIP 1 1/2\"  PC  10  180.00  1,800 18.00  324  0  2,124\nTotal  9,590\nSales Tax Amount  1,726\nET Amount  0\nGrand Total  11,316\nRupees Eleven Thousand Three Hundred Sixteen Only\nRemarks\nPayment Terms\nFor Meko Denim (Private) Limited\nDirector / Purchase Officer\nHead Office : Plot No. F - 131, Hub River Road , S.I.T.E Karachi.\nEmail: info@mekodenim.com.pk\nPrinted On\n16-JUL-26 11:23 AM",
+    "expectedItems": [
+      {
+        "description": "S.S JUBLEE CLIP 2\"",
+        "quantity": 10,
+        "unit": "Pcs"
+      },
+      {
+        "description": "SAMAD",
+        "quantity": 3,
+        "unit": "Bond"
+      },
+      {
+        "description": "S.S JUBLEE CLIP 1 1/2\"",
+        "quantity": 10,
+        "unit": "Pcs"
+      }
+    ]
+  },
+  {
+    "id": "prod-2-meko-denim-fabrics",
+    "category": "meko-denim-fabrics",
+    "descHeader": "Item Name",
+    "qtyHeader": "Qty",
+    "unitHeader": "Unit",
+    "rawText": "MEKO DENIM MILLS (PVT) LTD.\nG-GARMENT-2\nPurchase Order\nINDENT\nP. O. No  260102  Account Code  10100113  ST No  42301-4020795-9\nDate  09-MAY-26\nSupplier Title  ROSHAN TRADERS\nDlv Date\nContact\nCAPITAL\nVALID  Address  F-44 FALAK CITY TOWER KARACHI\nMDM GARMENTS\nTelephone No  +92-333-1665253\nCode  Item Name  Unit  Qty  Rate  Excl-Tax AmoST RateS/Tax AmoET Rate ET Amt Total Amount\n25040123 M.S NUT 10MM  PC  200  8.00  1,600 18.00  288  0  1,888\n31010375 HOLSAW 18MM DIAMOND TIP  PC  10  1200.00  12,000 18.00  2,160  0  14,160\n25040573 M.S NUT BOLT 8MMX3/4\" W/WASHER KG  10  620.00  6,200 18.00  1,116  0  7,316\n25040358 G.I PLAIN WASHER 10MM  PC  400  4.00  1,600 18.00  288  0  1,888\nTotal  21,400\nSales Tax Amount  3,852\nET Amount  0\nGrand Total  25,252\nRupees Twenty-Five Thousand Two Hundred Fifty-Two Only\nRemarks\nPayment Terms\nFor Meko Denim (Private) Limited\nDirector / Purchase Officer\nHead Office : Plot No. F - 131, Hub River Road , S.I.T.E Karachi.\nEmail: info@mekodenim.com.pk\nPrinted On\n09-MAY-26 02:43 PM",
+    "expectedItems": [
+      {
+        "description": "M.S NUT 10MM",
+        "quantity": 200,
+        "unit": "Pcs"
+      },
+      {
+        "description": "HOLSAW 18MM DIAMOND TIP",
+        "quantity": 10,
+        "unit": "Pcs"
+      },
+      {
+        "description": "M.S NUT BOLT 8MMX3/4\" W/WASHER",
+        "quantity": 10,
+        "unit": "Kg"
+      },
+      {
+        "description": "G.I PLAIN WASHER 10MM",
+        "quantity": 400,
+        "unit": "Pcs"
+      }
+    ]
+  },
+  {
+    "id": "prod-6-meko-denim-fabrics",
+    "category": "meko-denim-fabrics",
+    "descHeader": "Item Name",
+    "qtyHeader": "Qty",
+    "unitHeader": "Unit",
+    "rawText": "MEKO DENIM MILLS (PVT) LTD.\nA-MAIN STORE. KOTRI\nPurchase Order\nINDENT\nP. O. No  262661  Account Code  10100113  ST No  42301-4020795-9\nDate  12-MAY-26\nSupplier Title  ROSHAN TRADERS\nDlv Date\nContact\nCONSUMEABLE\nVALID  Address  F-44 FALAK CITY TOWER KARACHI\nSTORE MDM\nTelephone No  +92-333-1665253\nCode  Item Name  Unit  Qty  Rate  Excl-Tax AmoST RateS/Tax AmoET Rate ET Amt Total Amount\n31010053 RED SILICONE TUBE LARGE  PC  6  425.00  2,550 18.00  459  0  3,009\n93030185 MAGIC DEPOXY LARGE TUBE  PC  6  1260.00  7,560 18.00  1,361  0  8,921\n93030058 ELFY BIG GIMSA 50gms  PC  6  335.00  2,010 18.00  362  0  2,372\n93030006 W.D 40 SPRAY  PC  10  1100.00  11,000 18.00  1,980  0  12,980\nTotal  23,120\nSales Tax Amount  4,162\nET Amount  0\nGrand Total  27,282\nRupees Twenty-Seven Thousand Two Hundred Eighty-Two Only\nRemarks\nPayment Terms\nFor Meko Denim (Private) Limited\nDirector / Purchase Officer\nHead Office : Plot No. F - 131, Hub River Road , S.I.T.E Karachi.\nEmail: info@mekodenim.com.pk\nPrinted On\n12-MAY-26 11:02 AM",
+    "expectedItems": [
+      {
+        "description": "RED SILICONE TUBE LARGE",
+        "quantity": 6,
+        "unit": "Pcs"
+      },
+      {
+        "description": "MAGIC DEPOXY LARGE TUBE",
+        "quantity": 6,
+        "unit": "Pcs"
+      },
+      {
+        "description": "ELFY BIG GIMSA 50gms",
+        "quantity": 6,
+        "unit": "Pcs"
+      },
+      {
+        "description": "W.D 40 SPRAY",
+        "quantity": 10,
+        "unit": "Pcs"
+      }
+    ]
+  },
+  {
+    "id": "prod-14-meko-fabric",
+    "category": "meko-fabric",
+    "descHeader": "Item Name",
+    "qtyHeader": "Qty",
+    "unitHeader": "Unit",
+    "rawText": "MEKO FABRIC (PVT) LTD\nNTN # 8655568\nPurchase Order\nSPINNING UNIT-KOTRI\nINDENT\nP. O. No  S 260816  Account Code  0500100035 ST No\nDate  13-MAY-26\nSupplier Title  ROSHAN TRADERS\nDlv Date\nContact\nMAIN STORE SPINNING UNIT\nVALID  Address  F-44 FALAK CITY TOWER KARACHI\nTelephone No  +92-333-1665253\nLocal\nCode  Item Name  Unit  Qty  Rate  Excl-Tax AmoST RateS/Tax AmoET Rate ET Amt Total Amount\n16030066 SURF (BONUS)  KGS.  20  270.00  5,400 18.00  972  0  6,372\n16030125 ELFY LARGE SIZE (20GRAM)  PC  25  145.00  3,625 18.00  653  0  4,278\n16030122 CEMENTEX SOLUTION 600gm  PC  10  660.00  6,600 18.00  1,188  0  7,788\n16030068 W.D 40 SPRAY (330)  BOTTLE  30  1050.00  31,500 18.00  5,670  0  37,170\nTotal  47,125\nSales Tax Amount  8,483\nET Amount  0\nGrand Total  55,608\nRupees Fifty-Five Thousand Six Hundred Eight Only\nRemarks\nPayment Terms\nFor Meko Fabrics (Private) Limited\nM.SIDDIQUI  ROHAIL  CEO\nApproved By  Approved By  Approved By\nManager Purchase  Director  C.E.O\nNOTE : This is system generated P.O and does not required signature\nPrinted On\n14-MAY-26 12:07 PM  Head Office : WH 25,3/A Korangi Creek Industrial Park,Karachi.",
+    "expectedItems": [
+      {
+        "description": "SURF (BONUS)",
+        "quantity": 20,
+        "unit": "Kg"
+      },
+      {
+        "description": "ELFY LARGE SIZE (20GRAM)",
+        "quantity": 25,
+        "unit": "Pcs"
+      },
+      {
+        "description": "CEMENTEX SOLUTION 600gm",
+        "quantity": 10,
+        "unit": "Pcs"
+      },
+      {
+        "description": "W.D 40 SPRAY (330)",
+        "quantity": 30,
+        "unit": "Bottle"
+      }
+    ]
+  },
+  {
+    "id": "prod-77-meko-fabric-pvt",
+    "category": "meko-fabric-pvt",
+    "descHeader": "Item Name",
+    "qtyHeader": "Qty",
+    "unitHeader": "Unit",
+    "rawText": "MEKO FABRIC (PVT) LTD\nNTN # 8655568\nPurchase Order\nWEAVING UNIT-KOTRI\nINDENT\nP. O. No  W 260511  Account Code  0500100175 ST No\nDate  03-JUN-26\nSupplier Title  HAKIMI TRADERS\nDlv Date\nContact\nWEAVING MAINT (KOTRI)\nVALID  Address  Office # 111, 1st Floor Industrial Tower Plaza Sarai\nRoad Karachi\nTelephone No\nLocal\nCode  Item Name  Unit  Qty  Rate  Excl-Tax AmoST RateS/Tax AmoET Rate ET Amt Total Amount\n27010051 PNEUMATIC PIPE 6X4MM  RFT  50  28.00  1,400 18.00  252  0  1,652\nTotal  1,400\nSales Tax Amount  252\nET Amount  0\nGrand Total  1,652\nRupees One Thousand Six Hundred Fifty-Two Only\nRemarks\nPayment Terms\nFor Meko Fabrics (Private) Limited\nM.SIDDIQUI  ROHAIL  ROHAIL\nApproved By  Approved By  Approved By\nManager Purchase  Director  C.E.O\nNOTE : This is system generated P.O and does not required signature\nPrinted On\n11-JUN-26 10:45 AM  Head Office : WH 25,3/A Korangi Creek Industrial Park,Karachi.",
+    "expectedItems": [
+      {
+        "description": "PNEUMATIC PIPE 6X4MM",
+        "quantity": 50,
+        "unit": "Rft"
+      }
+    ]
+  },
+  {
+    "id": "prod-76-innovative-aqua",
+    "category": "innovative-aqua",
+    "descHeader": "Item Name",
+    "qtyHeader": "Qty",
+    "unitHeader": "Unit",
+    "rawText": "Innovative Aqua Solution\nPurchase Orde\nP. O. No  000038  Account Code  13702  ST No  42301-4020795-9\nIndent No\n000029\nDate  09-JUN-26  Supplier Title  ROSHAN TRADERS\n09-JUN-\nDlv Date  Contact  Mr. Hussain Muhammad Ibrahim\n26.000038\nAddress  F-44 FALAK CITY TOWER KARACHI\nTelephone No  +92-333-1665253\nCode  Item Name  Unit  Qty  Rate  ST Rate  S/Tax Amount Excl-Tax Amount Total Amount\n040621 CUTTING DISC 4'' 1MM  PCS  25  180  18  810  4,500  5,310\n810\nSales Tax Amount\nTotal  4,500\nGrand Total  5,310\nRupees Five Thousand Three Hundred Ten Only\nRemarks\nPayment Terms\nFor Innovative Aqua Solutions.\nDirector / Purchase Officer\nPlot No. 495 Deh Landhi, Main National Highway Karachi.\nPhone NOs. 5014099, 5015453, 5015592 Fax No. (92-21)5018298 Email: mekotex@cyber.net.pk\nPrinted On\n09-JUN-26 05:54 PM",
+    "expectedItems": [
+      {
+        "description": "CUTTING DISC 4'' 1MM",
+        "quantity": 25,
+        "unit": "Pcs"
+      }
+    ]
+  },
+  {
+    "id": "prod-25-innovative-aqua-footer-leak",
+    "category": "innovative-aqua-footer-leak",
+    "descHeader": "Item Name",
+    "qtyHeader": "Qty",
+    "unitHeader": "Unit",
+    "rawText": "Innovative Aqua Solution\nPurchase Orde\nP. O. No  000027  Account Code  13702  ST No  42301-4020795-9\nIndent No\n000024\nDate  18-MAY-26  Supplier Title  ROSHAN TRADERS\n18-MAY-\nDlv Date  Contact  Mr. Hussain Muhammad Ibrahim\n26.000027\nAddress  F-44 FALAK CITY TOWER KARACHI\nTelephone No  +92-333-1665253\nCode  Item Name  Unit  Qty  Rate  ST Rate  S/Tax Amount Excl-Tax Amount Total Amount\n040613 AC GAS R 410 (HONEYWELL)  PCS  1  58000  18  10,440  58,000  68,440\n10,440\nSales Tax Amount\nTotal  58,000\nGrand Total  68,440\nRupees Sixty-Eight Thousand Four Hundred Forty Only\nRemarks\nPayment Terms\nFor Innovative Aqua Solutions.\nDirector / Purchase Officer\nPlot No. 495 Deh Landhi, Main National Highway Karachi.\nPhone NOs. 5014099, 5015453, 5015592 Fax No. (92-21)5018298 Email: mekotex@cyber.net.pk\nPrinted On\n18-MAY-26 11:44 AM",
+    "expectedItems": [
+      {
+        "description": "AC GAS R 410 (HONEYWELL)",
+        "quantity": 1,
+        "unit": "Pcs"
+      }
+    ]
+  },
+  {
+    "id": "prod-79-lotte-non-inventory",
+    "category": "lotte-non-inventory",
+    "descHeader": "Item Name",
+    "qtyHeader": "Quantity",
+    "unitHeader": "Unit",
+    "rawText": "LOTTE Kolson (Pvt.) Limited\nL-14,Block 21,F.B.Industrial Area Karachi.\nPhone # (021) (92-21) 111 577 577 Fax # (021) (92-21) 36374811\nG.S.T. No: 02-03-2100-001-82 N.T.N. No: 0710818-4\nPurchase Order for Non-Inventory Items  SCM - 03 - 15\nSupplier Name:  Hakimi Traders  P.O. #  POGI-001-2626-0000774\nAddress:  First Floor Office # F23 Falak Coperate City Seria Road  P.O. Date  13/06/2026\nKarachi\nPur. Req. #  001-222-2626-0000686\nLocation :\nUnit - 2\nS.No.  Item Id.  Item Name  Required  Quantity  Unit  Unit  Total\nDelivery Date  Price  Price\n1  027342  Mineral Water Pakola 330ml  396.00  PCS  Rs.  36.0000  14,256.00\n2  004632  Register 300 Pages( Ruled )  7.00  PCS  Rs.  320.0000  2,240.00\n3  023841  Masking Tape  6.00  PCS  Rs.  80.0000  480.00\n4  002986  Plastic Folder A4 Pack Size 12 Pcs/Pack  3.00  PAK  Rs.  290.0000  870.00\n5  026740  Cup Saucer Set Design  6.00  PCS  Rs.  600.0000  3,600.00\n6  004567  Leather Gloves 12\"  5.00  PIR  Rs.  450.0000  2,250.00\n7  023829  Scraper Small  4.00  PCS  Rs.  70.0000  280.00\n8  017691  Shopping Bag. Size 20\" X 30\" With 4 Side Gusset  10.00  KGS  Rs.  600.0000  6,000.00\nP.E 25-30 Micron Single\n9  005643  Thermal Receipt Printer  2.00  PCS  Rs.  300.0000  600.00\nIn words:  Thirty-six thousand eighty Rupess ONLY  Sub-Total  30,576.00\nSales Tax @  5,503.68\nExcise Duty  .00\nAdmin Store:Demand Month Of June-2026 All Units Karachi & Hyd.\nRemarks:  Freight / Cartage Chg.\nTotal Amount  36,080.00\nDiscount Amount  .00\nPayable Amount  36,080.00\nSpecial Instructions :\nNoman Aslam  Imran\nPrepared By  Verified By  U/S 23 of Sales Tax Act 1990, every\n15-JUN-26 12:05:58 PM  15-JUN-26 02:47:04 PM  registered person must issue Sales T\nTerms :\n1) Payment will be subject to deduction of withholding taxes as per Income Tax Ordinance 2001 (except when tax exemption Letter is a\n2) Payment will be made in 30 Days  after receipt of supplier's invoice/bill and receipt of goods throught crossed banking instruments.\n3) Supplier must mention our Purchase Order No. on their Invoice/Bill, or attach a copy of our purchase Order.\n4) Supplier must mention their GST No., NTN No., and business Bank Account No. as notified to collection of Sales Tax on Invoice.\n5) Lotte Kolson (Pvt.) Purchase Specification Form (QAD/RAW/SP) is the integral part of this document.\n6) Documents Required a) Certificate of Analysis b) Shelf Life Certifcate c) Halal Certificate / Declaration ( where applicable).\nPrinted By :  Noman Aslam  Page No :1 of 1\nPrint Date : 15-JUN-2026 15:17:38  It's a Product of LOTTE Kolson (Pvt.) Limited",
+    "expectedItems": [
+      {
+        "description": "Mineral Water Pakola 330ml",
+        "quantity": 396.0,
+        "unit": "Pcs"
+      },
+      {
+        "description": "Register 300 Pages( Ruled )",
+        "quantity": 7.0,
+        "unit": "Pcs"
+      },
+      {
+        "description": "Masking Tape",
+        "quantity": 6.0,
+        "unit": "Pcs"
+      },
+      {
+        "description": "Plastic Folder A4 Pack Size",
+        "quantity": 12,
+        "unit": "Pcs"
+      },
+      {
+        "description": "Cup Saucer Set Design",
+        "quantity": 6.0,
+        "unit": "Pcs"
+      },
+      {
+        "description": "Leather Gloves 12\"",
+        "quantity": 5.0,
+        "unit": "Pir"
+      },
+      {
+        "description": "Scraper Small",
+        "quantity": 4.0,
+        "unit": "Pcs"
+      },
+      {
+        "description": "Shopping Bag. Size 20\" X 30\" With 4 Side Gusset P.E 25-30 Micron Single",
+        "quantity": 10.0,
+        "unit": "Kg"
+      },
+      {
+        "description": "Thermal Receipt Printer",
+        "quantity": 2.0,
+        "unit": "Pcs"
+      }
+    ]
+  }
+]
