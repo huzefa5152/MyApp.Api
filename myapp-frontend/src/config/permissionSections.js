@@ -88,6 +88,7 @@ export const PERMISSION_SECTIONS = [
       { key: "NonInventoryItems", label: "Non-Inventory Items" },
       { key: "Configuration", label: "Lookups" },
       { key: "POFormats", label: "PO Formats" },
+      { key: "ImportFeedback", label: "Import Feedback" },
       { key: "PrintTemplates", label: "Print Templates" },
       { key: "FBR" },
       // The Configuration → Navigation Menu document library: folders plus

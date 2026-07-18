@@ -1,0 +1,1539 @@
+[
+ {
+  "id": "wrap-3col-01",
+  "category": "multiline-wrap-3col",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "note": "Item 1's description wraps onto 'Insulation PVC / Colour Red / Grade A' which splits into 3 cells; qty-column cell 'Colour Red' is non-numeric, so it isn't a data row and the algorithm SKIPS it (3+ cols), truncating the description to just the first line.",
+  "rawText": "POWER TECH ENGINEERING (PVT) LTD\nPurchase Order\n\nPO No: PTE-4471          Date: 12-07-2026\nVendor: Karachi Cables Co.\n\nSr   Description                    Qty    Unit    Rate\n1    Copper Flexible Cable 2.5mm    150    Rolls   1850\n     Insulation PVC   Colour Red    Grade A\n2    Copper Flexible Cable 4.0mm    80     Rolls   2650\n3    Earthing Wire 6.0mm Green      40     Rolls   3100\n\nSub Total                                          925000\nAmount in Words: Rupees Nine Lac Twenty Five Thousand Only",
+  "expectedItems": [
+   {
+    "description": "Copper Flexible Cable 2.5mm Insulation PVC Colour Red Grade A",
+    "quantity": 150,
+    "unit": "Rolls"
+   },
+   {
+    "description": "Copper Flexible Cable 4.0mm",
+    "quantity": 80,
+    "unit": "Rolls"
+   },
+   {
+    "description": "Earthing Wire 6.0mm Green",
+    "quantity": 40,
+    "unit": "Rolls"
+   }
+  ]
+ },
+ {
+  "id": "wrap-3col-02",
+  "category": "multiline-wrap-3col",
+  "descHeader": "Item Description",
+  "qtyHeader": "Quantity",
+  "unitHeader": "UOM",
+  "note": "Compressor's spec wrap 'Tank Mounted / Air Cooled / Warranty 1yr' is 3 cells; qty column ('Air Cooled') is text so it's skipped, losing the spec tail from item 1's description.",
+  "rawText": "UNITED TEXTILE MILLS\nPurchase Order   PO-2026-0912\n\nItem Description                  Quantity   UOM     Unit Price\nAir Compressor Screw Type 15HP    2          Set     420000\nTank Mounted   Air Cooled         Warranty 1yr\nCooling Tower FRP 20 Ton          1          Set     385000\n\nGrand Total                                          1225000",
+  "expectedItems": [
+   {
+    "description": "Air Compressor Screw Type 15HP Tank Mounted Air Cooled Warranty 1yr",
+    "quantity": 2,
+    "unit": "Set"
+   },
+   {
+    "description": "Cooling Tower FRP 20 Ton",
+    "quantity": 1,
+    "unit": "Set"
+   }
+  ]
+ },
+ {
+  "id": "wrap-3col-03",
+  "category": "multiline-wrap-3col",
+  "descHeader": "Particulars",
+  "qtyHeader": "Qnty",
+  "unitHeader": "Units",
+  "note": "BOTH items wrap into 3-column spec lines ('Matt Finish/Rectified Edge/Batch B7' and 'Deformed/ISI Marked/Length 12m'); each qty-column cell is text, so both wraps are skipped and both descriptions lose their spec detail.",
+  "rawText": "AL-NOOR BUILDERS\nPURCHASE ORDER No. ANB/PO/778\n\nParticulars                        Qnty    Units   Rate\nCeramic Floor Tile 600x600         500     Sqm     240\nMatt Finish   Rectified Edge       Batch B7\nTMT Steel Bar Grade 60 16mm        1200    Kg      285\nDeformed   ISI Marked   Length 12m\n\nSub Total                                          708000",
+  "expectedItems": [
+   {
+    "description": "Ceramic Floor Tile 600x600 Matt Finish Rectified Edge Batch B7",
+    "quantity": 500,
+    "unit": "Sqm"
+   },
+   {
+    "description": "TMT Steel Bar Grade 60 16mm Deformed ISI Marked Length 12m",
+    "quantity": 1200,
+    "unit": "Kg"
+   }
+  ]
+ },
+ {
+  "id": "wrap-3col-04",
+  "category": "multiline-wrap-3col",
+  "descHeader": "Product",
+  "qtyHeader": "Nos",
+  "unitHeader": null,
+  "note": "No unit column. Paracetamol wrap 'Blister Pack / Sealed Foil / Expiry 2028' is 3 cells; qty column ('Sealed Foil') is text so it's skipped. The 'Expiry 2028' number sits in a non-qty column so it doesn't misfire as a data row — the wrap is simply dropped.",
+  "rawText": "CITY CARE PHARMACY\nPurchase Order  #CCP-33418\n\nProduct                              Nos     Rate\nParacetamol 500mg Tablets            2000    2\nBlister Pack   Sealed Foil   Expiry 2028\nAmoxicillin 250mg Capsules           1500    4\n\nNet Total                                    12000",
+  "expectedItems": [
+   {
+    "description": "Paracetamol 500mg Tablets Blister Pack Sealed Foil Expiry 2028",
+    "quantity": 2000,
+    "unit": null
+   },
+   {
+    "description": "Amoxicillin 250mg Capsules",
+    "quantity": 1500,
+    "unit": null
+   }
+  ]
+ },
+ {
+  "id": "wrap-3col-05",
+  "category": "multiline-wrap-3col",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "note": "Classic 'Voltage 220V 50Hz' spec wrap. The voltage/frequency stays one cell (single spaces), then '/ Copper Coil / Anti Rust' add columns → 4 cells with a leading indent; qty-column cell 'Copper Coil' is text, so the whole electrical spec wrap is skipped.",
+  "rawText": "FROSTLINE COOLING SOLUTIONS\nPurchase Order\n\nS.No  Description                       Qty    Unit    Amount\n1     Split AC Inverter 1.5 Ton         6      Nos     138000\n      Voltage 220V 50Hz   Copper Coil   Anti Rust\n2     Cassette AC 4 Ton                 3      Nos     265000\n\nTotal                                          1623000",
+  "expectedItems": [
+   {
+    "description": "Split AC Inverter 1.5 Ton Voltage 220V 50Hz Copper Coil Anti Rust",
+    "quantity": 6,
+    "unit": "Nos"
+   },
+   {
+    "description": "Cassette AC 4 Ton",
+    "quantity": 3,
+    "unit": "Nos"
+   }
+  ]
+ },
+ {
+  "id": "wrap-3col-06",
+  "category": "multiline-wrap-mixed",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "note": "Two continuation lines on the server: the first ('Dual Xeon Gold Processor', 1 col) is correctly appended, but the second '64GB RAM / Rack Mount / 2TB SSD' splits into 3 cells and is skipped — so the algorithm produces a partially-correct description missing the second wrap. Qty column ('Rack Mount') is text, avoiding a false data-row.",
+  "rawText": "NEXGEN SYSTEMS\nPurchase Order  NGS-5521\n\nDescription                          Qty    Unit    Price\nDell PowerEdge R750 Server           4      Nos     980000\nDual Xeon Gold Processor\n64GB RAM   Rack Mount   2TB SSD\nHP ProLiant DL380 Server             2      Nos     870000\n\nSub Total                                   6260000",
+  "expectedItems": [
+   {
+    "description": "Dell PowerEdge R750 Server Dual Xeon Gold Processor 64GB RAM Rack Mount 2TB SSD",
+    "quantity": 4,
+    "unit": "Nos"
+   },
+   {
+    "description": "HP ProLiant DL380 Server",
+    "quantity": 2,
+    "unit": "Nos"
+   }
+  ]
+ },
+ {
+  "id": "wrap-3col-07",
+  "category": "multiline-wrap-3col",
+  "descHeader": "Material",
+  "qtyHeader": "Ordered Qty",
+  "unitHeader": "Unit",
+  "note": "Two-word qty header 'Ordered Qty' plus a 4-column wrap 'Ventilated / Coated / Bolt Pattern 5 / OEM Spec'. Qty-column cell 'Coated' is text so the wrap is skipped; the brake-disc description loses all four spec tokens.",
+  "rawText": "SPEEDWAY AUTO PARTS\nPURCHASE ORDER\n\nMaterial                             Ordered Qty   Unit    Rate\nBrake Disc Rotor Front               60            Pcs     3200\nVentilated   Coated   Bolt Pattern 5   OEM Spec\nShock Absorber Rear Gas              45            Pcs     4100\n\nGross Total                                        376500",
+  "expectedItems": [
+   {
+    "description": "Brake Disc Rotor Front Ventilated Coated Bolt Pattern 5 OEM Spec",
+    "quantity": 60,
+    "unit": "Pcs"
+   },
+   {
+    "description": "Shock Absorber Rear Gas",
+    "quantity": 45,
+    "unit": "Pcs"
+   }
+  ]
+ },
+ {
+  "id": "wrap-3col-08",
+  "category": "multiline-wrap-3col",
+  "descHeader": "Nomenclature",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "note": "The LAST item wraps: 'Adjustable Arms / Lumbar Support / Nylon Base' is 3 cells with a text qty-column, so it's skipped and the final chair item's description is truncated with no following line to hint the loss.",
+  "rawText": "OFFICE INTERIORS LTD\nPurchase Order OIL-2211\n\nNomenclature                         Qty    Unit    Rate\nExecutive Desk 1800mm Walnut         10     Nos     45000\nErgonomic Mesh Chair High Back       25     Nos     28000\nAdjustable Arms   Lumbar Support     Nylon Base\n\nGrand Total                                  1150000",
+  "expectedItems": [
+   {
+    "description": "Executive Desk 1800mm Walnut",
+    "quantity": 10,
+    "unit": "Nos"
+   },
+   {
+    "description": "Ergonomic Mesh Chair High Back Adjustable Arms Lumbar Support Nylon Base",
+    "quantity": 25,
+    "unit": "Nos"
+   }
+  ]
+ },
+ {
+  "id": "wrap-3col-09",
+  "category": "multiline-wrap-3col",
+  "descHeader": "Goods",
+  "qtyHeader": "Units",
+  "unitHeader": "UOM",
+  "note": "Header uses 'Units' as the QUANTITY column and 'UOM' as the unit column. Caustic soda wraps into 'Industrial Grade / Non Toxic / HS 281511'; the qty-column cell 'Non Toxic' is text so the wrap (with its HS code) is skipped.",
+  "rawText": "HORIZON CHEMICALS\nPurchase Order HC-9087\n\nGoods                                Units   UOM     Rate\nCaustic Soda Flakes 98%              200     Bags    9500\nIndustrial Grade   Non Toxic   HS 281511\nSulphuric Acid 98%                   150     Drums   7200\n\nSub Total                                    2980000",
+  "expectedItems": [
+   {
+    "description": "Caustic Soda Flakes 98% Industrial Grade Non Toxic HS 281511",
+    "quantity": 200,
+    "unit": "Bags"
+   },
+   {
+    "description": "Sulphuric Acid 98%",
+    "quantity": 150,
+    "unit": "Drums"
+   }
+  ]
+ },
+ {
+  "id": "wrap-3col-10",
+  "category": "multiline-wrap-3col",
+  "descHeader": "Details",
+  "qtyHeader": "Quantity",
+  "unitHeader": "Unit",
+  "note": "Packaging PO. Corrugated-box wrap 'Kraft Brown / Flexo Printed / 2 Colour / Glued' is 4 cells; qty-column cell 'Flexo Printed' is text so the wrap is skipped and the print spec ('2 Colour', a non-qty column) is lost with it.",
+  "rawText": "BRIGHT PACK PRINTERS\nPurchase Order BPP-3390\n\nDetails                              Quantity   Unit    Rate\nCorrugated Box 12x8x6 5 Ply          5000       Pcs     32\nKraft Brown   Flexo Printed          2 Colour   Glued\nMono Carton Art Card 300gsm          10000      Pcs     18\n\nSub Total                                       340000",
+  "expectedItems": [
+   {
+    "description": "Corrugated Box 12x8x6 5 Ply Kraft Brown Flexo Printed 2 Colour Glued",
+    "quantity": 5000,
+    "unit": "Pcs"
+   },
+   {
+    "description": "Mono Carton Art Card 300gsm",
+    "quantity": 10000,
+    "unit": "Pcs"
+   }
+  ]
+ },
+ {
+  "id": "wrap-3col-11",
+  "category": "multiline-wrap-mixed",
+  "descHeader": "Item",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "note": "Contrast case: item 1's wrap 'Pouch Pack / Halal Certified / Grade A' is 3 cells and is wrongly skipped, while item 2's wrap 'Long Grain Aged / Premium Quality' is only 2 cells and is correctly appended. Same PO, one wrap lost and one kept — the extractor is inconsistent purely on column count.",
+  "rawText": "FRESHMART DISTRIBUTION\nPurchase Order FM-7742\n\nItem                                 Qty    Unit    Rate\nRefined Sunflower Oil 5L             300    Cartons 4800\nPouch Pack   Halal Certified   Grade A\nBasmati Rice Premium 25kg            120    Bags    9200\nLong Grain Aged   Premium Quality\n\nGrand Total                                  2544000",
+  "expectedItems": [
+   {
+    "description": "Refined Sunflower Oil 5L Pouch Pack Halal Certified Grade A",
+    "quantity": 300,
+    "unit": "Cartons"
+   },
+   {
+    "description": "Basmati Rice Premium 25kg Long Grain Aged Premium Quality",
+    "quantity": 120,
+    "unit": "Bags"
+   }
+  ]
+ },
+ {
+  "id": "wrap-3col-12",
+  "category": "multiline-wrap-3col",
+  "descHeader": "Description",
+  "qtyHeader": "Quantity",
+  "unitHeader": "Unit",
+  "note": "Engineering spare with dimensional wrap 'Bore 80mm / Seal Kit Included / Stroke 500mm'. The numeric specs (80mm, 500mm) are deliberately in non-qty columns and the qty column ('Seal Kit Included') is text, so the wrap is skipped rather than misread as a data row — the cylinder's bore/stroke spec is dropped.",
+  "rawText": "MEGA INDUSTRIES\nPurchase Order MI-6620\n\nDescription                          Quantity   Unit    Rate\nHydraulic Cylinder Double Acting     8          Nos     56000\nBore 80mm   Seal Kit Included   Stroke 500mm\nGear Pump Cast Iron 40 LPM           5          Nos     42000\n\nSub Total                                       658000",
+  "expectedItems": [
+   {
+    "description": "Hydraulic Cylinder Double Acting Bore 80mm Seal Kit Included Stroke 500mm",
+    "quantity": 8,
+    "unit": "Nos"
+   },
+   {
+    "description": "Gear Pump Cast Iron 40 LPM",
+    "quantity": 5,
+    "unit": "Nos"
+   }
+  ]
+ },
+ {
+  "id": "blank-in-item-01",
+  "category": "blank-after-data-row",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "                    ABC TEXTILE MILLS\n              Purchase Order  PO-2025-0912\n\nSupplier: Falcon Yarn Traders\nDate: 12-Aug-2025\n\nSr   Description                      Qty     Unit\n1    Combed Cotton Yarn 30/1          200     Bags\n\nRing Spun, Weaving Grade\nGrand Total                          200",
+  "note": "A single blank line sits between the data row and its own wrapped tail 'Ring Spun, Weaving Grade'. The blank flushes the item, so the continuation is dropped and the description is truncated.",
+  "expectedItems": [
+   {
+    "description": "Combed Cotton Yarn 30/1 Ring Spun, Weaving Grade",
+    "quantity": 200,
+    "unit": "Bags"
+   }
+  ]
+ },
+ {
+  "id": "blank-in-item-02",
+  "category": "blank-mid-wrap",
+  "descHeader": "Item Description",
+  "qtyHeader": "Quantity",
+  "unitHeader": "UOM",
+  "rawText": "Nishat Apparel (Pvt) Ltd\nPurchase Order No: PO/APP/5533\n\nItem Description                     Quantity    UOM\nPolyester Viscose Blended Fabric     1200        Mtr\nTwill Weave 2/1\n\n58 inch width, Dyed Charcoal\nSub Total                            1200",
+  "note": "The wrap is three visual lines; the first continuation ('Twill Weave 2/1') is appended, then a blank line flushes the item, so the second continuation ('58 inch width, Dyed Charcoal') is lost. Description ends up half-built.",
+  "expectedItems": [
+   {
+    "description": "Polyester Viscose Blended Fabric Twill Weave 2/1 58 inch width, Dyed Charcoal",
+    "quantity": 1200,
+    "unit": "Mtr"
+   }
+  ]
+ },
+ {
+  "id": "blank-in-item-03",
+  "category": "multi-item-blank-truncation",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "Al-Karam Trading Co.\nPURCHASE ORDER\n\nDescription                          Qty    Unit\nStainless Steel Sheet 304 Grade      50     Sheet\n\nThickness 1.2mm, Size 4x8 ft\nMild Steel Angle Bar 2 inch          120    Nos\n\nLength 20 ft each, ASTM A36\nTotal                                170",
+  "note": "Both items carry a spec continuation separated by a blank line. Each blank flushes before the spec can attach, truncating both descriptions to their first line.",
+  "expectedItems": [
+   {
+    "description": "Stainless Steel Sheet 304 Grade Thickness 1.2mm, Size 4x8 ft",
+    "quantity": 50,
+    "unit": "Sheet"
+   },
+   {
+    "description": "Mild Steel Angle Bar 2 inch Length 20 ft each, ASTM A36",
+    "quantity": 120,
+    "unit": "Nos"
+   }
+  ]
+ },
+ {
+  "id": "blank-in-item-04",
+  "category": "blank-before-packing-line",
+  "descHeader": "Product",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "Metro Cash & Carry - Procurement\nPO Number: MCC-88221\n\nProduct                              Qty     Unit\nRefined Sunflower Cooking Oil        480     Ctn\n\nPouch 1 Litre x 12 per carton\nAmount in Words: Four Hundred Eighty",
+  "note": "The packing detail that completes the product name is preceded by a blank line, so it is flushed away before it can be appended.",
+  "expectedItems": [
+   {
+    "description": "Refined Sunflower Cooking Oil Pouch 1 Litre x 12 per carton",
+    "quantity": 480,
+    "unit": "Ctn"
+   }
+  ]
+ },
+ {
+  "id": "blank-in-item-05",
+  "category": "multiple-blanks-in-wrap",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "Service Fabrics Ltd\nPurchase Order\n\nNo   Description                     Qty     Unit\n1    Cotton Lycra Rib Fabric         300     Kg\n\n\nSingle Jersey, 220 GSM\nPeached Finish\nNet Total                           300",
+  "note": "Two consecutive blank lines follow the data row; by the time the two continuation lines arrive the item is already flushed, so the entire multi-line spec is dropped.",
+  "expectedItems": [
+   {
+    "description": "Cotton Lycra Rib Fabric Single Jersey, 220 GSM Peached Finish",
+    "quantity": 300,
+    "unit": "Kg"
+   }
+  ]
+ },
+ {
+  "id": "blank-in-item-06",
+  "category": "blank-splits-two-continuations",
+  "descHeader": "Material Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "Karachi Electric Supply\nPurchase Order KE-4471\n\nMaterial Description                  Qty    Unit\nCopper Cable 4 Core 16 sqmm           800    Mtr\nPVC Insulated, 600/1000V\n\nArmoured, Fire Retardant\nGrand Total                           800",
+  "note": "First continuation attaches, then a blank splits the wrap; the second continuation ('Armoured, Fire Retardant') is flushed away, dropping a material-critical attribute.",
+  "expectedItems": [
+   {
+    "description": "Copper Cable 4 Core 16 sqmm PVC Insulated, 600/1000V Armoured, Fire Retardant",
+    "quantity": 800,
+    "unit": "Mtr"
+   }
+  ]
+ },
+ {
+  "id": "blank-in-item-07",
+  "category": "blank-before-pack-detail",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "City Pharma Distributors\nPO No: CPD-7781\n\nDescription                          Qty     Unit\nParacetamol 500mg Tablets            1000    Box\n\nBlister 10x10, Batch Pending\nGrand Total                          1000",
+  "note": "The blister/pack line completing the SKU description sits after a blank line and is dropped, truncating the pharma item name.",
+  "expectedItems": [
+   {
+    "description": "Paracetamol 500mg Tablets Blister 10x10, Batch Pending",
+    "quantity": 1000,
+    "unit": "Box"
+   }
+  ]
+ },
+ {
+  "id": "blank-in-item-08",
+  "category": "middle-item-blank-only",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "Gul Ahmed Textile Mills\nPurchase Order\n\nSr   Description                    Qty     Unit\n1    Grey Fabric Cotton 20x20       500     Mtr\n2    Dyed Poplin White              300     Mtr\n\nMercerized, Sanforized\n3    Canvas Fabric Heavy            150     Mtr\nTotal                              950",
+  "note": "Only the middle item wraps, and its continuation is preceded by a blank. Items 1 and 3 parse fine; item 2 is silently truncated to 'Dyed Poplin White'.",
+  "expectedItems": [
+   {
+    "description": "Grey Fabric Cotton 20x20",
+    "quantity": 500,
+    "unit": "Mtr"
+   },
+   {
+    "description": "Dyed Poplin White Mercerized, Sanforized",
+    "quantity": 300,
+    "unit": "Mtr"
+   },
+   {
+    "description": "Canvas Fabric Heavy",
+    "quantity": 150,
+    "unit": "Mtr"
+   }
+  ]
+ },
+ {
+  "id": "blank-in-item-09",
+  "category": "blank-before-size-color",
+  "descHeader": "Item",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "Imtiaz Super Market\nPurchase Order ISM-9932\n\nItem                                 Qty    Unit\nLaundry Detergent Powder Blue        360    Bag\n\n25 Kg Sack, Lemon Fragrance\nSub Total                            360",
+  "note": "The size/fragrance line that distinguishes this SKU follows a blank line and is flushed off, truncating the FMCG description.",
+  "expectedItems": [
+   {
+    "description": "Laundry Detergent Powder Blue 25 Kg Sack, Lemon Fragrance",
+    "quantity": 360,
+    "unit": "Bag"
+   }
+  ]
+ },
+ {
+  "id": "blank-in-item-10",
+  "category": "blank-before-model-number",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "TechZone Distributors\nPO: TZ-2211\n\nDescription                          Qty     Unit\nLED Panel Light 40W Recessed         250     Pcs\n\nModel TZ-LP40, 6500K Daylight\nGrand Total                          250",
+  "note": "The model number and colour temperature (needed to identify the exact SKU) sit after a blank line and are lost, truncating the item description.",
+  "expectedItems": [
+   {
+    "description": "LED Panel Light 40W Recessed Model TZ-LP40, 6500K Daylight",
+    "quantity": 250,
+    "unit": "Pcs"
+   }
+  ]
+ },
+ {
+  "id": "blank-in-item-11",
+  "category": "multi-item-blank-truncation",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "Sapphire Fibres Ltd\nPURCHASE ORDER No. SF-6644\n\nSr  Description                     Qty      Unit\n1   Melange Yarn 20/1 Grey          400      Bags\n\nBlend 85/15 Cotton Poly\n2   Slub Yarn 16/1 Ecru             250      Bags\n\nOpen End Spun, Knitting\nGrand Total                         650",
+  "note": "Two yarn items each wrap onto a blend/spinning line that is separated by a blank line; both continuations are flushed, truncating both descriptions.",
+  "expectedItems": [
+   {
+    "description": "Melange Yarn 20/1 Grey Blend 85/15 Cotton Poly",
+    "quantity": 400,
+    "unit": "Bags"
+   },
+   {
+    "description": "Slub Yarn 16/1 Ecru Open End Spun, Knitting",
+    "quantity": 250,
+    "unit": "Bags"
+   }
+  ]
+ },
+ {
+  "id": "blank-in-item-12",
+  "category": "blank-mid-wrap",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "Descon Engineering\nMaterial Requisition / PO\n\nDescription                          Qty     Unit\nWelding Electrode E6013 3.2mm        75      Ctn\nAWS Certified Grade\n\nPacking 20 Kg per Carton\nTotal                                75",
+  "note": "First continuation ('AWS Certified Grade') attaches, then a blank line flushes the item, so the packing line after the blank is dropped and the description is only half-complete.",
+  "expectedItems": [
+   {
+    "description": "Welding Electrode E6013 3.2mm AWS Certified Grade Packing 20 Kg per Carton",
+    "quantity": 75,
+    "unit": "Ctn"
+   }
+  ]
+ },
+ {
+  "id": "blank-in-item-13",
+  "category": "blank-after-data-row-no-unit",
+  "descHeader": "Description",
+  "qtyHeader": "Quantity",
+  "unitHeader": null,
+  "rawText": "Chenab Limited\nPurchase Order CH-3390\n\nDescription                                   Quantity\nTable Cloth Cotton Printed Floral             600\n\nSize 60x90 inch, Boxed\nGrand Total                                   600",
+  "note": "No unit column at all; the size/pack line completing the description follows a blank line and is flushed, truncating the item. Unit defaults to Pcs.",
+  "expectedItems": [
+   {
+    "description": "Table Cloth Cotton Printed Floral Size 60x90 inch, Boxed",
+    "quantity": 600,
+    "unit": null
+   }
+  ]
+ },
+ {
+  "id": "desc-with-2spaces-01",
+  "category": "wrong-quantity",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "                   ACME INDUSTRIAL SUPPLIES\n             Purchase Order  PO-4471   Date: 12/03/2026\n\nDescription                     Qty      Unit\nCentrifugal Pump   Series 200   5        Nos\nGate Valve 4 inch               20       Nos\nPressure Gauge   0-16 bar       8        Nos\n\nSub Total                       33\nGrand Total                     33",
+  "note": "Header maps desc=col0, qty=col1. 'Centrifugal Pump   Series 200' has a 3-space gap so it splits into an extra cell, pushing 'Series 200' into the qty column -> reads 200 instead of 5. 'Pressure Gauge   0-16 bar' splits so qty col holds '0-16 bar' (0, not positive) -> 4 cols, not a data row, SKIPPED -> item missing. Only Gate Valve parses correctly.",
+  "expectedItems": [
+   {
+    "description": "Centrifugal Pump Series 200",
+    "quantity": 5,
+    "unit": "Nos"
+   },
+   {
+    "description": "Gate Valve 4 inch",
+    "quantity": 20,
+    "unit": "Nos"
+   },
+   {
+    "description": "Pressure Gauge 0-16 bar",
+    "quantity": 8,
+    "unit": "Nos"
+   }
+  ]
+ },
+ {
+  "id": "desc-with-2spaces-02",
+  "category": "wrong-quantity",
+  "descHeader": "Description",
+  "qtyHeader": "Quantity",
+  "unitHeader": "UOM",
+  "rawText": "Sr    Description                Quantity     UOM\n1     Ball Bearing  6204ZZ Type    50           Pcs\n2     Oil Seal 35mm                100          Pcs\n3     Circlip External             200          Pcs\n\nTotal Quantity                     350",
+  "note": "Header maps sr=col0, desc=col1, qty=col2. 'Ball Bearing  6204ZZ Type' has a 2-space gap, so the row splits to [1][Ball Bearing][6204ZZ Type][50][Pcs]; qty col2='6204ZZ Type' -> first numeric 6204. Reads qty 6204 and description 'Ball Bearing' instead of 50 / 'Ball Bearing 6204ZZ Type'. Other two rows parse fine.",
+  "expectedItems": [
+   {
+    "description": "Ball Bearing 6204ZZ Type",
+    "quantity": 50,
+    "unit": "Pcs"
+   },
+   {
+    "description": "Oil Seal 35mm",
+    "quantity": 100,
+    "unit": "Pcs"
+   },
+   {
+    "description": "Circlip External",
+    "quantity": 200,
+    "unit": "Pcs"
+   }
+  ]
+ },
+ {
+  "id": "desc-with-2spaces-03",
+  "category": "missing-item",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "Description                   Qty     Unit\nCopper Wire   Insulated       25      Roll\nCable Gland   Brass Body      40      Nos\nCable Tie 200mm Black          10      Pack\n\nGrand Total                   75",
+  "note": "desc=col0, qty=col1. Both 'Copper Wire   Insulated' and 'Cable Gland   Brass Body' have internal 2-space gaps, so their real qty is pushed to col2 while col1 holds a non-numeric fragment ('Insulated' / 'Brass Body'). Each row therefore has 4 columns but no positive number in the qty column -> not a data row, and with 3+ columns it is SKIPPED (not appended) -> both items vanish. Only 'Cable Tie 200mm Black' (single spaces) survives.",
+  "expectedItems": [
+   {
+    "description": "Copper Wire Insulated",
+    "quantity": 25,
+    "unit": "Roll"
+   },
+   {
+    "description": "Cable Gland Brass Body",
+    "quantity": 40,
+    "unit": "Nos"
+   },
+   {
+    "description": "Cable Tie 200mm Black",
+    "quantity": 10,
+    "unit": "Pack"
+   }
+  ]
+ },
+ {
+  "id": "desc-with-2spaces-04",
+  "category": "wrong-quantity",
+  "descHeader": "Item Description",
+  "qtyHeader": "Qty",
+  "unitHeader": null,
+  "rawText": "Item Description                 Qty     Rate      Amount\nMS Plate   500 x 250 mm          12      450.00    5400.00\nAngle Iron 25mm                  30      120.00    3600.00\nRound Bar 16mm                   18      95.00     1710.00\n\nSub Total                                          10710.00",
+  "note": "No unit column (Qty/Rate/Amount). desc=col0, qty=col1. 'MS Plate   500 x 250 mm' splits on the 3-space gap, so col1='500 x 250 mm' -> first numeric 500. Reads qty 500 (real 12) and description just 'MS Plate'. The dimension inside a plate spec is a classic embedded-number trap.",
+  "expectedItems": [
+   {
+    "description": "MS Plate 500 x 250 mm",
+    "quantity": 12,
+    "unit": null
+   },
+   {
+    "description": "Angle Iron 25mm",
+    "quantity": 30,
+    "unit": null
+   },
+   {
+    "description": "Round Bar 16mm",
+    "quantity": 18,
+    "unit": null
+   }
+  ]
+ },
+ {
+  "id": "desc-with-2spaces-05",
+  "category": "wrong-quantity",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "Description                        Qty      Unit\nLaptop Charger   65W Type-C        40       Pcs\nUSB Cable 2m                       100      Pcs\nWireless Mouse   Model M185        25       Pcs\n\nTotal                              165",
+  "note": "desc=col0, qty=col1. Two product names carry a tab-like 2-3 space gap before a spec fragment that begins with digits: 'Laptop Charger   65W Type-C' -> col1='65W Type-C' -> 65 (real 40); 'Wireless Mouse   Model M185' -> col1='Model M185' -> 185 (real 25). Both descriptions are truncated to the first fragment. USB Cable parses correctly.",
+  "expectedItems": [
+   {
+    "description": "Laptop Charger 65W Type-C",
+    "quantity": 40,
+    "unit": "Pcs"
+   },
+   {
+    "description": "USB Cable 2m",
+    "quantity": 100,
+    "unit": "Pcs"
+   },
+   {
+    "description": "Wireless Mouse Model M185",
+    "quantity": 25,
+    "unit": "Pcs"
+   }
+  ]
+ },
+ {
+  "id": "desc-with-2spaces-06",
+  "category": "missing-item",
+  "descHeader": "Particulars",
+  "qtyHeader": "Ordered Qty",
+  "unitHeader": "Unit",
+  "rawText": "S.No   Particulars                 Ordered Qty    Unit\n1      Ceramic Tile   Glossy White    500          Sqft\n2      Grout Powder Grey              50           Kg\n3      Tile Spacer   2mm Cross        20           Box\n\nNet Total                            570",
+  "note": "Synonym headers: Particulars (desc) + Ordered Qty (qty). Layout maps sno=col0, desc=col1, qty=col2. 'Ceramic Tile   Glossy White' splits so col2='Glossy White' (non-numeric) -> 5 cols, not a data row -> SKIPPED -> missing. 'Tile Spacer   2mm Cross' -> col2='2mm Cross' -> 2, so qty reads 2 instead of 20. Grout Powder parses correctly.",
+  "expectedItems": [
+   {
+    "description": "Ceramic Tile Glossy White",
+    "quantity": 500,
+    "unit": "Sqft"
+   },
+   {
+    "description": "Grout Powder Grey",
+    "quantity": 50,
+    "unit": "Kg"
+   },
+   {
+    "description": "Tile Spacer 2mm Cross",
+    "quantity": 20,
+    "unit": "Box"
+   }
+  ]
+ },
+ {
+  "id": "desc-with-2spaces-07",
+  "category": "wrong-quantity",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "Description                      Qty      Unit\nBolt M10   Grade 8               200      Pcs\nNut M10   Grade 8                200      Pcs\nWasher M10   Flat Type           400      Pcs\n\nTotal Pcs                        800",
+  "note": "desc=col0, qty=col1. Subtle attack: 'Bolt M10   Grade 8' and 'Nut M10   Grade 8' split so col1='Grade 8' -> qty reads 8 (a plausible-looking small quantity) instead of 200 for both. 'Washer M10   Flat Type' -> col1='Flat Type' (non-numeric) -> 4 cols, SKIPPED -> missing. All three real items are broken; the small wrong number is the nastiest because it looks legitimate.",
+  "expectedItems": [
+   {
+    "description": "Bolt M10 Grade 8",
+    "quantity": 200,
+    "unit": "Pcs"
+   },
+   {
+    "description": "Nut M10 Grade 8",
+    "quantity": 200,
+    "unit": "Pcs"
+   },
+   {
+    "description": "Washer M10 Flat Type",
+    "quantity": 400,
+    "unit": "Pcs"
+   }
+  ]
+ },
+ {
+  "id": "desc-with-2spaces-08",
+  "category": "wrong-quantity",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "UOM",
+  "rawText": "Sr   Description                    Qty     UOM\n1    Hydrochloric Acid   32%         10      Ltr\n2    Sodium Hydroxide Pellets        25      Kg\n3    Acetone   99% Pure              5       Ltr\n\nGrand Total                         40",
+  "note": "sr=col0, desc=col1, qty=col2. Chemical concentrations embedded in names: 'Hydrochloric Acid   32%' -> col2='32%' -> 32 (real 10); 'Acetone   99% Pure' -> col2='99% Pure' -> 99 (real 5). Both quantities badly wrong and descriptions truncated. Sodium Hydroxide (single spaces) parses correctly.",
+  "expectedItems": [
+   {
+    "description": "Hydrochloric Acid 32%",
+    "quantity": 10,
+    "unit": "Ltr"
+   },
+   {
+    "description": "Sodium Hydroxide Pellets",
+    "quantity": 25,
+    "unit": "Kg"
+   },
+   {
+    "description": "Acetone 99% Pure",
+    "quantity": 5,
+    "unit": "Ltr"
+   }
+  ]
+ },
+ {
+  "id": "desc-with-2spaces-09",
+  "category": "missing-item",
+  "descHeader": "Description",
+  "qtyHeader": "Quantity",
+  "unitHeader": "Unit",
+  "rawText": "Description                       Quantity    Unit\nCotton Fabric   Bleached White     300        Mtr\nPolyester Thread   Black Spool     150        Cone\nDenim Roll Indigo                  80         Mtr\n\nTotal                              530",
+  "note": "desc=col0, qty=col1. Textile color/finish descriptors ('Cotton Fabric   Bleached White', 'Polyester Thread   Black Spool') carry a 2-space gap, so the qty column lands on a non-numeric fragment -> 4 columns, not data rows, SKIPPED -> both missing. Only 'Denim Roll Indigo' (single spaces) is extracted, so the parser returns 1 of 3 items.",
+  "expectedItems": [
+   {
+    "description": "Cotton Fabric Bleached White",
+    "quantity": 300,
+    "unit": "Mtr"
+   },
+   {
+    "description": "Polyester Thread Black Spool",
+    "quantity": 150,
+    "unit": "Cone"
+   },
+   {
+    "description": "Denim Roll Indigo",
+    "quantity": 80,
+    "unit": "Mtr"
+   }
+  ]
+ },
+ {
+  "id": "desc-with-2spaces-10",
+  "category": "wrong-quantity",
+  "descHeader": "Item Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "Item Description                    Qty      Unit     Price\nCircuit Breaker   63A Triple Pole    6        Nos      1200\nContactor 40A                        10       Nos      850\nMCB   32A Single Pole                24       Nos      180\n\nSub Total",
+  "note": "desc=col0, qty=col1, unit=col2 (Price is col3). Electrical current ratings embedded in names: 'Circuit Breaker   63A Triple Pole' -> col1='63A Triple Pole' -> 63 (real 6); 'MCB   32A Single Pole' -> col1='32A Single Pole' -> 32 (real 24). Both quantities wrong and unit column also mis-mapped. Contactor 40A parses correctly.",
+  "expectedItems": [
+   {
+    "description": "Circuit Breaker 63A Triple Pole",
+    "quantity": 6,
+    "unit": "Nos"
+   },
+   {
+    "description": "Contactor 40A",
+    "quantity": 10,
+    "unit": "Nos"
+   },
+   {
+    "description": "MCB 32A Single Pole",
+    "quantity": 24,
+    "unit": "Nos"
+   }
+  ]
+ },
+ {
+  "id": "desc-with-2spaces-11",
+  "category": "truncated-description",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "Description                        Qty     Unit\nIndustrial Shelving Unit           4       Set\n   Heavy Duty   Powder Coated   Grey Finish\nWorkbench Steel Top                2       Set\n   With Drawers   Lockable   Anti Rust\nStorage Cabinet Metal              6       Nos\n\nGrand Total                        12",
+  "note": "The main rows parse with correct qty, but each item's description wraps to a second physical line. Those wrap lines contain internal 2-space gaps ('Heavy Duty   Powder Coated   Grey Finish') so they split into 3+ columns. Continuation only appends lines that split into <=2 columns; a 3+ column non-data line is SKIPPED, so the wrapped detail is dropped and every description is truncated to its first line.",
+  "expectedItems": [
+   {
+    "description": "Industrial Shelving Unit Heavy Duty Powder Coated Grey Finish",
+    "quantity": 4,
+    "unit": "Set"
+   },
+   {
+    "description": "Workbench Steel Top With Drawers Lockable Anti Rust",
+    "quantity": 2,
+    "unit": "Set"
+   },
+   {
+    "description": "Storage Cabinet Metal",
+    "quantity": 6,
+    "unit": "Nos"
+   }
+  ]
+ },
+ {
+  "id": "desc-with-2spaces-12",
+  "category": "wrong-quantity",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "Description                     Qty      Unit\nPaint Enamel   Gloss 1.5 L      24       Tin\nThinner NC                      12       Ltr\nBrush 3 inch   Bristle Pro      50       Pcs\n\nTotal                           86",
+  "note": "desc=col0, qty=col1. 'Paint Enamel   Gloss 1.5 L' splits so col1='Gloss 1.5 L' -> first numeric 1.5 (decimals accepted) -> qty reads 1.5 instead of 24. 'Brush 3 inch   Bristle Pro' -> col1='Bristle Pro' (non-numeric) -> 4 cols SKIPPED -> missing. Thinner NC parses correctly. Demonstrates a decimal-fragment mis-read plus a drop in one PO.",
+  "expectedItems": [
+   {
+    "description": "Paint Enamel Gloss 1.5 L",
+    "quantity": 24,
+    "unit": "Tin"
+   },
+   {
+    "description": "Thinner NC",
+    "quantity": 12,
+    "unit": "Ltr"
+   },
+   {
+    "description": "Brush 3 inch Bristle Pro",
+    "quantity": 50,
+    "unit": "Pcs"
+   }
+  ]
+ },
+ {
+  "id": "desc-with-2spaces-13",
+  "category": "wrong-quantity",
+  "descHeader": "Description",
+  "qtyHeader": "Quantity",
+  "unitHeader": "UOM",
+  "rawText": "Sr   Description                     Quantity    UOM\n1    Rice Basmati   5 Kg Bag          200         Bag\n2    Sugar Refined White              500         Kg\n3    Cooking Oil   1 Ltr Pouch        300         Pouch\n\nGrand Total                          1000",
+  "note": "sr=col0, desc=col1, qty=col2. Pack-size fragments inside FMCG descriptions: 'Rice Basmati   5 Kg Bag' -> col2='5 Kg Bag' -> 5 (real 200); 'Cooking Oil   1 Ltr Pouch' -> col2='1 Ltr Pouch' -> 1 (real 300). The parser confuses the per-unit pack size with the ordered quantity. Sugar Refined White parses correctly.",
+  "expectedItems": [
+   {
+    "description": "Rice Basmati 5 Kg Bag",
+    "quantity": 200,
+    "unit": "Bag"
+   },
+   {
+    "description": "Sugar Refined White",
+    "quantity": 500,
+    "unit": "Kg"
+   },
+   {
+    "description": "Cooking Oil 1 Ltr Pouch",
+    "quantity": 300,
+    "unit": "Pouch"
+   }
+  ]
+ },
+ {
+  "id": "desc-with-2spaces-14",
+  "category": "missing-item",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "Description                        Qty     Unit\nDoor Hinge   Stainless Steel        120     Pair\nDrawer Slide   Soft Close           80      Pair\nCabinet Handle Brushed              200     Pcs\n\nSub Total                           400",
+  "note": "desc=col0, qty=col1. Material/finish descriptors with a 2-space gap ('Door Hinge   Stainless Steel', 'Drawer Slide   Soft Close') push the real qty to col2 and leave a non-numeric fragment in the qty column -> 4 columns, not data rows, SKIPPED -> both missing. Only 'Cabinet Handle Brushed' (single spaces) is returned, so 2 of 3 items are lost entirely.",
+  "expectedItems": [
+   {
+    "description": "Door Hinge Stainless Steel",
+    "quantity": 120,
+    "unit": "Pair"
+   },
+   {
+    "description": "Drawer Slide Soft Close",
+    "quantity": 80,
+    "unit": "Pair"
+   },
+   {
+    "description": "Cabinet Handle Brushed",
+    "quantity": 200,
+    "unit": "Pcs"
+   }
+  ]
+ },
+ {
+  "id": "stopword-items-01",
+  "category": "total-prefix-firstcol",
+  "descHeader": "Description",
+  "qtyHeader": "Quantity",
+  "unitHeader": "Unit",
+  "rawText": "SURVEY TECH INSTRUMENTS PVT LTD\nPurchase Order\n\nPO Number: STI-2026-0417\nDate: 12-Jul-2026\nVendor: Geomatics Supply Co.\n\nDescription                     Quantity   Unit\nTotal Station Theodolite        2          Nos\nAluminium Tripod Stand          3          Nos\nMini Prism Pole Set             4          Nos\n\nSub Total                       850,000.00\nGST 18%                         153,000.00\nGrand Total                     1,003,000.00\n\nAmount in Words: Ten Lakh Three Thousand Rupees Only",
+  "note": "Line 'Total Station Theodolite' is a genuine surveying instrument as the first column. A footer matcher that stops on a line starting with 'Total' drops the first real item.",
+  "expectedItems": [
+   {
+    "description": "Total Station Theodolite",
+    "quantity": 2,
+    "unit": "Nos"
+   },
+   {
+    "description": "Aluminium Tripod Stand",
+    "quantity": 3,
+    "unit": "Nos"
+   },
+   {
+    "description": "Mini Prism Pole Set",
+    "quantity": 4,
+    "unit": "Nos"
+   }
+  ]
+ },
+ {
+  "id": "stopword-items-02",
+  "category": "net-prefix-firstcol",
+  "descHeader": "Item Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "UOM",
+  "rawText": "AL NOOR STATIONERS\nPurchase Order  PO-4471\n\nItem Description         Qty    UOM\nNet Book A5 200 Pages    100    Pcs\nSpiral Notebook A4       150    Pcs\nSticky Note Pad 3x3      200    Pcs\n\nSub Total                45,000.00\nGST 18%                  8,100.00\nNet Payable              53,100.00",
+  "note": "'Net Book A5 200 Pages' is a real register product in the first column; a matcher stopping on leading 'Net' drops the first item. The genuine footer 'Net Payable' also starts with Net.",
+  "expectedItems": [
+   {
+    "description": "Net Book A5 200 Pages",
+    "quantity": 100,
+    "unit": "Pcs"
+   },
+   {
+    "description": "Spiral Notebook A4",
+    "quantity": 150,
+    "unit": "Pcs"
+   },
+   {
+    "description": "Sticky Note Pad 3x3",
+    "quantity": 200,
+    "unit": "Pcs"
+   }
+  ]
+ },
+ {
+  "id": "stopword-items-03",
+  "category": "gross-prefix-firstcol",
+  "descHeader": "Particulars",
+  "qtyHeader": "Quantity",
+  "unitHeader": "Unit",
+  "rawText": "WEIGHTECH SCALES & SYSTEMS\nPurchase Order\n\nParticulars                  Quantity   Unit\nGross Weight Scale 100kg     5          Nos\nDigital Kitchen Scale 5kg    10         Nos\nPlatform Weighing Scale      2          Nos\n\nBasic                        320,000.00\nGST 18%                      57,600.00\nGrand Total                  377,600.00",
+  "note": "'Gross Weight Scale 100kg' is a genuine weighing product in the first column; a matcher stopping on leading 'Gross' drops it entirely.",
+  "expectedItems": [
+   {
+    "description": "Gross Weight Scale 100kg",
+    "quantity": 5,
+    "unit": "Nos"
+   },
+   {
+    "description": "Digital Kitchen Scale 5kg",
+    "quantity": 10,
+    "unit": "Nos"
+   },
+   {
+    "description": "Platform Weighing Scale",
+    "quantity": 2,
+    "unit": "Nos"
+   }
+  ]
+ },
+ {
+  "id": "stopword-items-04",
+  "category": "gst-prefix-firstcol",
+  "descHeader": "Product",
+  "qtyHeader": "Qnty",
+  "unitHeader": "Unit",
+  "rawText": "TECHSOFT DISTRIBUTION\nPurchase Order  #TS-9920\n\nProduct                       Qnty   Unit\nGST Software License 1 Year   3      Licenses\nAntivirus Suite Enterprise    5      Licenses\nCloud Backup 500GB Plan       2      Licenses\n\nSub Total                     145,000.00\nGST 18%                       26,100.00\nGrand Total                   171,100.00",
+  "note": "'GST Software License 1 Year' is a real software SKU in the first column; a matcher treating any leading 'GST' as the tax footer drops the first real item.",
+  "expectedItems": [
+   {
+    "description": "GST Software License 1 Year",
+    "quantity": 3,
+    "unit": "Licenses"
+   },
+   {
+    "description": "Antivirus Suite Enterprise",
+    "quantity": 5,
+    "unit": "Licenses"
+   },
+   {
+    "description": "Cloud Backup 500GB Plan",
+    "quantity": 2,
+    "unit": "Licenses"
+   }
+  ]
+ },
+ {
+  "id": "stopword-items-05",
+  "category": "discount-prefix-firstcol",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "PRINTPRO MARKETING SUPPLIES\nPurchase Order\n\nDescription                   Qty    Unit\nDiscount Coupon Booklet 50s   500    Books\nLoyalty Card Printed          1000   Pcs\nGift Voucher A6 Perforated    300    Pads\n\nSub Total                     88,000.00\nDiscount: 5%                  4,400.00\nGrand Total                   83,600.00",
+  "note": "'Discount Coupon Booklet 50s' is a real printed product in the first column; a matcher stopping on leading 'Discount' drops it, and the true 'Discount: 5%' footer sits below.",
+  "expectedItems": [
+   {
+    "description": "Discount Coupon Booklet 50s",
+    "quantity": 500,
+    "unit": "Books"
+   },
+   {
+    "description": "Loyalty Card Printed",
+    "quantity": 1000,
+    "unit": "Pcs"
+   },
+   {
+    "description": "Gift Voucher A6 Perforated",
+    "quantity": 300,
+    "unit": "Pads"
+   }
+  ]
+ },
+ {
+  "id": "stopword-items-06",
+  "category": "subtotal-prefix-firstcol",
+  "descHeader": "Item",
+  "qtyHeader": "Quantity",
+  "unitHeader": "UOM",
+  "rawText": "OFFICE LEDGERS & FORMS CO.\nPurchase Order  OLF-2026-118\n\nItem                          Quantity   UOM\nSubtotal Ledger Register      50         Nos\nCash Book Bound 300 Pages     40         Nos\nJournal Register A4           30         Nos\n\nSub Total                     96,000.00\nGST 18%                       17,280.00\nGrand Total                   113,280.00",
+  "note": "'Subtotal Ledger Register' is a genuine accounting register product in the first column; a matcher stopping on leading 'Subtotal'/'Sub Total' drops the first real item.",
+  "expectedItems": [
+   {
+    "description": "Subtotal Ledger Register",
+    "quantity": 50,
+    "unit": "Nos"
+   },
+   {
+    "description": "Cash Book Bound 300 Pages",
+    "quantity": 40,
+    "unit": "Nos"
+   },
+   {
+    "description": "Journal Register A4",
+    "quantity": 30,
+    "unit": "Nos"
+   }
+  ]
+ },
+ {
+  "id": "stopword-items-07",
+  "category": "basic-prefix-firstcol",
+  "descHeader": "Material",
+  "qtyHeader": "Ordered Qty",
+  "unitHeader": "Unit",
+  "rawText": "BUILDMART HARDWARE\nPurchase Order\n\nMaterial                      Ordered Qty   Unit\nBasic Hand Tool Kit 12pc      20            Sets\nCordless Drill Machine        5             Nos\nMeasuring Tape 5m             50            Nos\n\nBasic                         210,000.00\nGST 18%                       37,800.00\nGrand Total                   247,800.00",
+  "note": "'Basic Hand Tool Kit 12pc' is a real tool product in the first column; a matcher stopping on leading 'Basic' drops it, and the true 'Basic' amount footer appears below.",
+  "expectedItems": [
+   {
+    "description": "Basic Hand Tool Kit 12pc",
+    "quantity": 20,
+    "unit": "Sets"
+   },
+   {
+    "description": "Cordless Drill Machine",
+    "quantity": 5,
+    "unit": "Nos"
+   },
+   {
+    "description": "Measuring Tape 5m",
+    "quantity": 50,
+    "unit": "Nos"
+   }
+  ]
+ },
+ {
+  "id": "stopword-items-08",
+  "category": "total-prefix-with-continuation",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "GEODESY EQUIPMENT TRADERS\nPurchase Order  GET-0093\n\nDescription                        Qty   Unit\nTotal Station Theodolite Kit       1     Set\n  with carrying case\nNet Weight Checker Bench           2     Nos\nGross Margin Analyzer Software      3     Licenses\nStandard Steel Ruler 30cm          100   Pcs\n\nSub Total\nGrand Total",
+  "note": "Trap first item 'Total Station Theodolite Kit' has a continuation line ('with carrying case'); if the header item is dropped on 'Total', the orphan continuation may misattach. Also 'Net...' and 'Gross...' real items start with footer words.",
+  "expectedItems": [
+   {
+    "description": "Total Station Theodolite Kit with carrying case",
+    "quantity": 1,
+    "unit": "Set"
+   },
+   {
+    "description": "Net Weight Checker Bench",
+    "quantity": 2,
+    "unit": "Nos"
+   },
+   {
+    "description": "Gross Margin Analyzer Software",
+    "quantity": 3,
+    "unit": "Licenses"
+   },
+   {
+    "description": "Standard Steel Ruler 30cm",
+    "quantity": 100,
+    "unit": "Pcs"
+   }
+  ]
+ },
+ {
+  "id": "stopword-items-09",
+  "category": "cgst-sgst-igst-prefix-firstcol",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "LEGAL BOOK HOUSE\nPurchase Order\n\nDescription                     Qty   Unit\nCGST Manual with Rules 2026     25    Books\nSGST Ready Reckoner 2026        25    Books\nIGST Law Commentary Vol 2       15    Books\nIncome Tax Bare Act             30    Books\n\nSub Total                       118,000.00\nCGST 9%                         10,620.00\nSGST 9%                         10,620.00\nGrand Total                     139,240.00",
+  "note": "The first three lines are genuine tax-law reference books whose titles begin with CGST/SGST/IGST — exactly the tax-line footer markers. A loose matcher drops three real items; the real CGST/SGST footers sit below.",
+  "expectedItems": [
+   {
+    "description": "CGST Manual with Rules 2026",
+    "quantity": 25,
+    "unit": "Books"
+   },
+   {
+    "description": "SGST Ready Reckoner 2026",
+    "quantity": 25,
+    "unit": "Books"
+   },
+   {
+    "description": "IGST Law Commentary Vol 2",
+    "quantity": 15,
+    "unit": "Books"
+   },
+   {
+    "description": "Income Tax Bare Act",
+    "quantity": 30,
+    "unit": "Books"
+   }
+  ]
+ },
+ {
+  "id": "stopword-items-10",
+  "category": "total-brand-numeric-firstcol",
+  "descHeader": "Description",
+  "qtyHeader": "Quantity",
+  "unitHeader": "Unit",
+  "rawText": "AUTOCARE LUBRICANTS\nPurchase Order  AL-5521\n\nDescription                     Quantity   Unit\nTotal 10W40 Engine Oil 5L       48         Cans\nTotal Quartz 9000 5W40 4L       24         Cans\nGrease Multipurpose 500g        60         Tubs\n\nSub Total                       412,000.00\nGST 18%                         74,160.00\nTotal 486,160.00",
+  "note": "'Total' is the real lubricant brand. 'Total 10W40...' begins with 'Total' followed by a number, matching the 'Total n' footer pattern exactly, and 'Total Quartz...' also leads with Total. Both are genuine SKUs; the real 'Total 486,160.00' footer is at the bottom.",
+  "expectedItems": [
+   {
+    "description": "Total 10W40 Engine Oil 5L",
+    "quantity": 48,
+    "unit": "Cans"
+   },
+   {
+    "description": "Total Quartz 9000 5W40 4L",
+    "quantity": 24,
+    "unit": "Cans"
+   },
+   {
+    "description": "Grease Multipurpose 500g",
+    "quantity": 60,
+    "unit": "Tubs"
+   }
+  ]
+ },
+ {
+  "id": "stopword-items-11",
+  "category": "net-brand-firstcol",
+  "descHeader": "Product",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "DIGITAL SECURITY DEPOT\nPurchase Order\n\nProduct                         Qty   Unit\nNet Protector Antivirus 2026    50    Keys\nQuick Heal Total Security       30    Keys\nFirewall Appliance SME          2     Nos\n\nSub Total                       97,000.00\nGST 18%                         17,460.00\nNet Total                       114,460.00",
+  "note": "'Net Protector Antivirus 2026' is a real antivirus brand leading with 'Net'. Second row 'Quick Heal Total Security' contains 'Total' mid-string (not a footer) and must stay. Real 'Net Total' footer at bottom.",
+  "expectedItems": [
+   {
+    "description": "Net Protector Antivirus 2026",
+    "quantity": 50,
+    "unit": "Keys"
+   },
+   {
+    "description": "Quick Heal Total Security",
+    "quantity": 30,
+    "unit": "Keys"
+   },
+   {
+    "description": "Firewall Appliance SME",
+    "quantity": 2,
+    "unit": "Nos"
+   }
+  ]
+ },
+ {
+  "id": "stopword-items-12",
+  "category": "basic-item-vs-basic-footer",
+  "descHeader": "Item Description",
+  "qtyHeader": "Quantity",
+  "unitHeader": "Unit",
+  "rawText": "METRO WHOLESALE FOODS\nPurchase Order  MWF-3310\n\nItem Description                Quantity   Unit\nBasic Salt Refined 1kg          500        Bags\nBasmati Rice Premium 5kg        200        Bags\nCooking Oil 5L Tin              100        Tins\n\nBasic Amount                    450,000.00\nGST 18%                         81,000.00\nTotal                           531,000.00",
+  "note": "'Basic Salt Refined 1kg' is a genuine grocery item leading with 'Basic'; the real 'Basic Amount' footer is separated by a blank line. A matcher stopping on any leading 'Basic' drops the first real item.",
+  "expectedItems": [
+   {
+    "description": "Basic Salt Refined 1kg",
+    "quantity": 500,
+    "unit": "Bags"
+   },
+   {
+    "description": "Basmati Rice Premium 5kg",
+    "quantity": 200,
+    "unit": "Bags"
+   },
+   {
+    "description": "Cooking Oil 5L Tin",
+    "quantity": 100,
+    "unit": "Tins"
+   }
+  ]
+ },
+ {
+  "id": "stopword-items-13",
+  "category": "multi-stopword-bulk",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "UOM",
+  "rawText": "INDUSTRIAL METROLOGY SUPPLIES\nPurchase Order\n\nDescription                       Qty   UOM\nGross Weight Indicator XL500      4     Nos\nNet Weight Labeller Automatic     2     Nos\nTotal Quality Manual ISO 9001     10    Books\nDiscount Structure Chart Set      5     Sets\n\nSub Total                         265,000.00\nGrand Total                       312,700.00",
+  "note": "Every one of the four real line items begins with a distinct footer word (Gross, Net, Total, Discount). A loose matcher can drop the entire item block, yielding zero extracted items from a valid PO.",
+  "expectedItems": [
+   {
+    "description": "Gross Weight Indicator XL500",
+    "quantity": 4,
+    "unit": "Nos"
+   },
+   {
+    "description": "Net Weight Labeller Automatic",
+    "quantity": 2,
+    "unit": "Nos"
+   },
+   {
+    "description": "Total Quality Manual ISO 9001",
+    "quantity": 10,
+    "unit": "Books"
+   },
+   {
+    "description": "Discount Structure Chart Set",
+    "quantity": 5,
+    "unit": "Sets"
+   }
+  ]
+ },
+ {
+  "id": "stopword-items-14",
+  "category": "total-prefix-first-datarow",
+  "descHeader": "Nomenclature",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "AQUA LAB INSTRUMENTS\nPurchase Order  ALI-7742\n\nNomenclature                    Qty   Unit\nTotal Dissolved Solids Meter    12    Nos\npH Test Strips Pack 100         40    Packs\nConductivity Probe Standard     8     Nos\n\nSub Total                       78,000.00\nGST 18%                         14,040.00\nGrand Total                     92,040.00",
+  "note": "The very first data row after the header, 'Total Dissolved Solids Meter' (a TDS meter), leads with 'Total'. If the matcher stops before the first item, the whole item table is missed even though every row is valid.",
+  "expectedItems": [
+   {
+    "description": "Total Dissolved Solids Meter",
+    "quantity": 12,
+    "unit": "Nos"
+   },
+   {
+    "description": "pH Test Strips Pack 100",
+    "quantity": 40,
+    "unit": "Packs"
+   },
+   {
+    "description": "Conductivity Probe Standard",
+    "quantity": 8,
+    "unit": "Nos"
+   }
+  ]
+ },
+ {
+  "id": "qty-ambiguity-01",
+  "category": "wrong-qty",
+  "descHeader": "Item Description",
+  "qtyHeader": "Qty",
+  "unitHeader": null,
+  "rawText": "PURCHASE ORDER                              No: PO-2214\nSupplier: Fauji Cement Depot\n\nItem Description               Qty      Rate      Amount\nPortland Cement 50kg           200      850       170,000\nFine River Sand (per truck)             4,500     4,500\nSteel Bars 12mm Grade 60       150      265       39,750\n\nGrand Total                                       214,250\nAmount in Words: Two Lac Fourteen Thousand Only",
+  "note": "Blank Qty cell on the Sand row. After a 2+-space split it becomes [desc, 4,500, 4,500], so the Rate value slides into column index 1 (the Qty column) and is read as quantity 4500 instead of the real 1 truck.",
+  "expectedItems": [
+   {
+    "description": "Portland Cement 50kg",
+    "quantity": 200
+   },
+   {
+    "description": "Fine River Sand (per truck)",
+    "quantity": 1
+   },
+   {
+    "description": "Steel Bars 12mm Grade 60",
+    "quantity": 150
+   }
+  ],
+  "allowedFailures": true
+ },
+ {
+  "id": "qty-ambiguity-02",
+  "category": "wrong-qty",
+  "descHeader": "Product Description",
+  "qtyHeader": "Order Qty",
+  "unitHeader": "UOM",
+  "rawText": "PURCHASE ORDER - MediCare Distributors\nPO No: MC-7781\n\nProduct Description           Pack Qty    Order Qty    UOM\nParacetamol 500mg Tablets     10          500          Box\nAmoxicillin 250mg Capsules    12          300          Box\nORS Sachets Orange            50          200          Box\n\nSub Total",
+  "note": "Two columns both contain the qty synonym 'Qty'. Neither is an exact 'Qty' match, so containment wins and 'Pack Qty' (column index 1, the leftmost match) is chosen. The extractor reads the pack size (10/12/50) instead of the real ordered quantity (500/300/200).",
+  "expectedItems": [
+   {
+    "description": "Paracetamol 500mg Tablets",
+    "quantity": 500,
+    "unit": "Box"
+   },
+   {
+    "description": "Amoxicillin 250mg Capsules",
+    "quantity": 300,
+    "unit": "Box"
+   },
+   {
+    "description": "ORS Sachets Orange",
+    "quantity": 200,
+    "unit": "Box"
+   }
+  ]
+ },
+ {
+  "id": "qty-ambiguity-03",
+  "category": "wrong-qty",
+  "descHeader": "Material Description",
+  "qtyHeader": "Quantity",
+  "unitHeader": "Unit",
+  "rawText": "SUPPLY ORDER\nM/s Al-Rehman Electricals\n\nNos    Material Description          Quantity    Unit\n1      Copper Wire 4mm               250         Coil\n2      PVC Conduit 20mm              400         Pcs\n3      Junction Box 4x4              150         Pcs\n\nNet Total",
+  "note": "The leftmost serial-number column is headed 'Nos', which is a qty synonym and matches exactly at index 0 — the same as 'Quantity' at index 2. Scanning columns left-to-right, 'Nos' is hit first, so the extractor reads the serial numbers 1/2/3 as quantities instead of 250/400/150.",
+  "expectedItems": [
+   {
+    "description": "Copper Wire 4mm",
+    "quantity": 250,
+    "unit": "Coil"
+   },
+   {
+    "description": "PVC Conduit 20mm",
+    "quantity": 400,
+    "unit": "Pcs"
+   },
+   {
+    "description": "Junction Box 4x4",
+    "quantity": 150,
+    "unit": "Pcs"
+   }
+  ]
+ },
+ {
+  "id": "qty-ambiguity-04",
+  "category": "wrong-qty",
+  "descHeader": "Item Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "UOM",
+  "rawText": "PURCHASE ORDER\nBuyer: Karachi Water Board\n\nItem Description               Qty     UOM\nGate Valve 4\"     Class 150    20      Nos\nBall Valve 2\"     Class 300    35      Nos\nCheck Valve 6\"    Class 150    12      Nos\n\nGrand Total",
+  "note": "The valve class rating ('Class 150') is separated from the description by 2+ spaces, so it becomes its own cell at column index 1 (the Qty column). The extractor reads the first numeric token of 'Class 150' as quantity 150 instead of the real 20, and the description loses its class suffix.",
+  "expectedItems": [
+   {
+    "description": "Gate Valve 4\" Class 150",
+    "quantity": 20,
+    "unit": "Nos"
+   },
+   {
+    "description": "Ball Valve 2\" Class 300",
+    "quantity": 35,
+    "unit": "Nos"
+   },
+   {
+    "description": "Check Valve 6\" Class 150",
+    "quantity": 12,
+    "unit": "Nos"
+   }
+  ]
+ },
+ {
+  "id": "qty-ambiguity-05",
+  "category": "missing-item",
+  "descHeader": "Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "PURCHASE ORDER - Site Materials\nProject: Gulberg Tower\n\nSr   Description                       Qty    Unit\n1    Cement OPC Bags                    500    Bag\n2    Washed Sand - 3 truck loads              Load\n3    Crush Aggregate 20mm              200    CFT\n\nSub Total",
+  "note": "The Sand line's Qty cell is blank (quantity is stated inside the description, '3 truck loads'). The row splits into 3 cells and the Qty column index holds 'Load' (no number), so it is not a data row; with 3+ columns it is skipped, not appended. The item is dropped entirely.",
+  "expectedItems": [
+   {
+    "description": "Cement OPC Bags",
+    "quantity": 500,
+    "unit": "Bag"
+   },
+   {
+    "description": "Washed Sand - 3 truck loads",
+    "quantity": 3,
+    "unit": "Load"
+   },
+   {
+    "description": "Crush Aggregate 20mm",
+    "quantity": 200,
+    "unit": "CFT"
+   }
+  ],
+  "allowedFailures": true
+ },
+ {
+  "id": "qty-ambiguity-06",
+  "category": "extra-item",
+  "descHeader": "Product",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "PURCHASE ORDER - Wellness Pharma\nPO: WP-3390\n\nProduct                       Qty    Free    Unit\nCough Syrup 100ml             100    10      Btl\nMultivitamin Tablets          200    20      Strip\nScheme: Buy 10 Get 1 Free     10     1       Offer\n\nGrand Total",
+  "note": "The pharma scheme/offer line is not an ordered item, but it splits into 4 cells with a positive number (10) at the Qty column, so the extractor treats it as a genuine data row and emits a phantom item.",
+  "expectedItems": [
+   {
+    "description": "Cough Syrup 100ml",
+    "quantity": 100,
+    "unit": "Btl"
+   },
+   {
+    "description": "Multivitamin Tablets",
+    "quantity": 200,
+    "unit": "Strip"
+   }
+  ],
+  "allowedFailures": true
+ },
+ {
+  "id": "qty-ambiguity-07",
+  "category": "wrong-qty",
+  "descHeader": "Material Description",
+  "qtyHeader": "Quantity",
+  "unitHeader": "Unit",
+  "rawText": "PURCHASE ORDER - Referenz 88231\nLieferant: Hamburg Fasteners GmbH\n\nMaterial Description           Quantity     Unit\nHex Bolt M8 Galvanized         10.000       Pcs\nFlat Washer M8 Stainless       25.000       Pcs\nHex Nut M8 Zinc Plated         5.500        Pcs\n\nGesamt / Total",
+  "note": "European supplier uses '.' as the thousands separator. The extractor treats '.' as a decimal point, so '10.000' parses to 10 and '5.500' to 5.5, instead of the real 10000 and 5500.",
+  "expectedItems": [
+   {
+    "description": "Hex Bolt M8 Galvanized",
+    "quantity": 10000,
+    "unit": "Pcs"
+   },
+   {
+    "description": "Flat Washer M8 Stainless",
+    "quantity": 25000,
+    "unit": "Pcs"
+   },
+   {
+    "description": "Hex Nut M8 Zinc Plated",
+    "quantity": 5500,
+    "unit": "Pcs"
+   }
+  ],
+  "allowedFailures": true
+ },
+ {
+  "id": "qty-ambiguity-08",
+  "category": "wrong-qty",
+  "descHeader": "Description",
+  "qtyHeader": "Quantity",
+  "unitHeader": "UOM",
+  "rawText": "PURCHASE ORDER - Shree Constructions Pvt Ltd\nPO No: SC/2026/114\n\nDescription                   Quantity     UOM\nPortland Cement OPC 43         1,00,000     Kg\nSteel TMT Bars Fe500           2,50,000     Kg\nRiver Sand Washed                50,000     Cft\n\nGrand Total",
+  "note": "Indian lakh grouping ('1,00,000'). A Western thousands-aware numeric regex (\\d{1,3}(,\\d{3})*) fails on the ',00,' group and captures only the leading '1'/'2', so the extractor reads 1 and 2 instead of 100000 and 250000. The standard-grouped '50,000' parses fine, masking the bug.",
+  "expectedItems": [
+   {
+    "description": "Portland Cement OPC 43",
+    "quantity": 100000,
+    "unit": "Kg"
+   },
+   {
+    "description": "Steel TMT Bars Fe500",
+    "quantity": 250000,
+    "unit": "Kg"
+   },
+   {
+    "description": "River Sand Washed",
+    "quantity": 50000,
+    "unit": "Cft"
+   }
+  ]
+ },
+ {
+  "id": "qty-ambiguity-09",
+  "category": "wrong-qty",
+  "descHeader": "Item Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "PURCHASE ORDER - Al-Noor Tiles\nPO: ANT-556\n\nItem Description              Qty        Unit\nVitrified Floor Tiles 60x60   10 x 12    Box\nCeramic Wall Tiles 30x60      8 x 12     Box\nSkirting Tiles 10x60          15         Box\n\nSub Total",
+  "note": "Quantity written as cartons x boxes-per-carton ('10 x 12'). Single spaces keep it in one cell, and 'first numeric token' captures only 10/8, dropping the multiplier. Real order total is 120/96 boxes. The plain '15' row parses correctly, hiding the pattern.",
+  "expectedItems": [
+   {
+    "description": "Vitrified Floor Tiles 60x60",
+    "quantity": 120,
+    "unit": "Box"
+   },
+   {
+    "description": "Ceramic Wall Tiles 30x60",
+    "quantity": 96,
+    "unit": "Box"
+   },
+   {
+    "description": "Skirting Tiles 10x60",
+    "quantity": 15,
+    "unit": "Box"
+   }
+  ],
+  "allowedFailures": true
+ },
+ {
+  "id": "qty-ambiguity-10",
+  "category": "wrong-qty",
+  "descHeader": "Item Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "PURCHASE ORDER - Stride Footwear\nPO: SF-2201\n\nItem Description              Qty      Unit\nMen Formal Shoes Black    10-12    240      Pair\nMen Casual Shoes Brown    8-10     180      Pair\nLadies Sandals Tan        6-8      150      Pair\n\nGrand Total",
+  "note": "An unlabelled size-range column ('10-12') sits between the description and the true quantity, and the header never accounts for it. Each row gains an extra cell, so the Qty column index holds the range; 'first numeric token' reads 10/8/6 instead of 240/180/150, and the real qty spills into the Unit column.",
+  "expectedItems": [
+   {
+    "description": "Men Formal Shoes Black (Size 10-12)",
+    "quantity": 240,
+    "unit": "Pair"
+   },
+   {
+    "description": "Men Casual Shoes Brown (Size 8-10)",
+    "quantity": 180,
+    "unit": "Pair"
+   },
+   {
+    "description": "Ladies Sandals Tan (Size 6-8)",
+    "quantity": 150,
+    "unit": "Pair"
+   }
+  ],
+  "allowedFailures": true
+ },
+ {
+  "id": "qty-ambiguity-11",
+  "category": "missing-item",
+  "descHeader": "Description",
+  "qtyHeader": "Units",
+  "unitHeader": null,
+  "rawText": "PURCHASE ORDER - Office Furniture\nPO: OF-889\n\nSr   Description                  Rate      Units\n1    Executive Desk Walnut        45,000    10\n2    Visitor Chair Leather x15    12,000\n3    Bookshelf Oak 5-Tier         22,000    8\n\nGrand Total",
+  "note": "The quantity column ('Units') is the last column. The Visitor Chair row omits it (qty is embedded as 'x15' in the description), so the row has too few cells to reach the Units column index and is skipped. The item is lost even though its quantity (15) is present in the text.",
+  "expectedItems": [
+   {
+    "description": "Executive Desk Walnut",
+    "quantity": 10
+   },
+   {
+    "description": "Visitor Chair Leather x15",
+    "quantity": 15
+   },
+   {
+    "description": "Bookshelf Oak 5-Tier",
+    "quantity": 8
+   }
+  ],
+  "allowedFailures": true
+ },
+ {
+  "id": "qty-ambiguity-12",
+  "category": "wrong-qty",
+  "descHeader": "Item Description",
+  "qtyHeader": "Qty",
+  "unitHeader": "Unit",
+  "rawText": "PURCHASE ORDER - MegaMart Retail\nPO: MM-4471\n\nItem Description                Qty     Unit\nLED TV Samsung 55\"    1200 x 700   30      Nos\nRefrigerator LG 260L  600 x 650    18      Nos\nMicrowave Oven 25L               45      Nos\n\nGrand Total",
+  "note": "Product carton dimensions ('1200 x 700') are wide-spaced off the description on some rows, forming an extra cell that lands in the Qty column; the extractor reads 1200/600 instead of 30/18. The Microwave row has no dimension, so its 45 parses correctly, showing the misalignment is row-dependent.",
+  "expectedItems": [
+   {
+    "description": "LED TV Samsung 55\"",
+    "quantity": 30,
+    "unit": "Nos"
+   },
+   {
+    "description": "Refrigerator LG 260L",
+    "quantity": 18,
+    "unit": "Nos"
+   },
+   {
+    "description": "Microwave Oven 25L",
+    "quantity": 45,
+    "unit": "Nos"
+   }
+  ],
+  "allowedFailures": true
+ }
+]

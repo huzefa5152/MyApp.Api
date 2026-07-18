@@ -111,6 +111,10 @@ namespace MyApp.Api.Data
         // the parser flow doesn't read this back. Stored bytes live on disk
         // under Data/uploads/po_imports — see PoImportArchive.StoredPath.
         public DbSet<PoImportArchive> PoImportArchives { get; set; }
+        // Parser-accuracy feedback on PO imports. Self-contained feature —
+        // table is created idempotently in raw SQL (Data/ParserFeedbackSchema),
+        // NOT via a migration, so the whole feature cherry-picks across branches.
+        public DbSet<ParserFeedback> ParserFeedbacks { get; set; }
 
         // RBAC
         public DbSet<Permission> Permissions { get; set; }

@@ -6,10 +6,12 @@ import { createSalesOrder } from "../api/salesOrderApi";
 import { createSalesQuote, getSalesQuotesForPicker } from "../api/salesQuoteApi";
 import { createDeliveryChallan } from "../api/challanApi";
 import { getAllUnits } from "../api/unitsApi";
+import { submitParserFeedback } from "../api/parserFeedbackApi";
 import { formStyles, modalSizes } from "../theme";
 import { todayYmd } from "../utils/dateInput";
 import LookupAutocomplete from "./LookupAutocomplete";
 import QuantityInput from "./QuantityInput";
+import ParserFeedback from "./ParserFeedback";
 
 const colors = {
   blue: "#0d47a1",
@@ -66,6 +68,10 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
   // we flip into manual-entry mode: the form fields start empty and a clear
   // error banner tells the operator what to do.
   const [noFormatMessage, setNoFormatMessage] = useState("");
+
+  // Parser-feedback verdict for THIS import ("Correct" | "Incorrect" | null).
+  // Optional — never blocks creating the document.
+  const [parserFeedback, setParserFeedback] = useState(null);
 
   // Lookups
   const [clients, setClients] = useState([]);
@@ -240,11 +246,12 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
       const clientId = parseInt(selectedClientId);
       const iso = (d) => (d ? new Date(d).toISOString() : null);
 
+      let created = null;
       if (target === "salesquote") {
         // Quote: description + qty + unit + price (operator prices in preview).
         // PO number/date map to the customer-enquiry reference fields — a
         // quote has no "customer PO" field of its own.
-        await createSalesQuote(companyId, {
+        created = await createSalesQuote(companyId, {
           clientId,
           divisionId: null,
           date: iso(deliveryDate),
@@ -266,7 +273,7 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
       } else if (target === "challan") {
         // Direct delivery challan (no sales order). Same shape the manual
         // "New Challan" form posts; qty-only, item types classified later.
-        await createDeliveryChallan(companyId, {
+        created = await createDeliveryChallan(companyId, {
           clientId,
           divisionId: null,
           clientName: selectedClient?.name || null,
@@ -290,7 +297,7 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
         const linkedQuote = salesQuoteId
           ? quotes.find((x) => String(x.id) === String(salesQuoteId))
           : null;
-        await createSalesOrder(companyId, {
+        created = await createSalesOrder(companyId, {
           clientId,
           salesQuoteId: salesQuoteId ? parseInt(salesQuoteId) : null,
           // The order lives in its source quote's division — same inheritance
@@ -310,6 +317,25 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
           })),
         });
       }
+
+      // Parser feedback — best-effort, never blocks. Only meaningful when a
+      // saved format actually parsed this import. The document is already
+      // created, so a feedback failure is swallowed.
+      if (parserFeedback && matchedFormatId) {
+        try {
+          await submitParserFeedback({
+            status: parserFeedback,
+            file: importMode === "pdf" ? selectedFile : null,
+            purchaseOrderId: created?.data?.id ?? null,
+            companyId,
+            parserVersion: matchedFormatName
+              ? `${matchedFormatName}${matchedFormatVersion ? ` (v${matchedFormatVersion})` : ""}`
+              : (matchedFormatVersion != null ? `v${matchedFormatVersion}` : null),
+            originalFileName: importMode === "pdf" ? (selectedFile?.name || null) : null,
+          });
+        } catch { /* feedback is best-effort — the document is already created */ }
+      }
+
       onSaved();
     } catch (err) {
       setError(err.response?.data?.error || `Failed to create ${cfg.doc.toLowerCase()}.`);
@@ -593,6 +619,13 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
                     {rawText}
                   </pre>
                 </details>
+              )}
+
+              {/* Parser feedback — only when a saved format actually parsed
+                  this import (otherwise there's nothing to judge). Sits directly
+                  above the Create button; optional and non-blocking. */}
+              {matchedFormatId && (
+                <ParserFeedback value={parserFeedback} onChange={setParserFeedback} disabled={saving} />
               )}
             </>
           )}

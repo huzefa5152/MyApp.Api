@@ -249,6 +249,11 @@ namespace MyApp.Api.Helpers
             new("poformats.import.create",      "POFormats", "Import",        "Create", "Upload a PO file and import its parsed items"),
             new("poformats.import.viewArchive", "POFormats", "Import Archive", "View",   "List archived PO PDFs (with parse outcome) and download originals for triage"),
 
+            // ── Import Feedback (parser-accuracy feedback on document imports) ─
+            new("importfeedback.manage.create", "ImportFeedback", "Manage", "Create",   "Record on the import Review screen whether a PO parsed correctly"),
+            new("importfeedback.list.view",     "ImportFeedback", "Review", "View",     "List imports flagged as incorrectly parsed and view accuracy statistics"),
+            new("importfeedback.download.view", "ImportFeedback", "Review", "Download", "Download the original PDF(s) of flagged imports (single or ZIP)"),
+
             // ── FBR Purchase Import (Annexure-A xls upload) ─────────────────
             new("fbrimport.purchase.preview", "FBR Import", "Purchase", "Preview", "Upload an FBR Annexure-A xls and view the per-row import preview (no writes)"),
             new("fbrimport.purchase.commit",  "FBR Import", "Purchase", "Commit",  "Commit an FBR Annexure-A import — auto-creates Suppliers, Purchase Bills, Item Types, and Stock Movements"),

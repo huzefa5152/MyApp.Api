@@ -328,6 +328,10 @@ builder.Services.AddSingleton<IPOFormatFingerprintService, POFormatFingerprintSe
 builder.Services.AddScoped<IPOFormatRegistry, POFormatRegistry>();
 builder.Services.AddSingleton<IRuleBasedPOParser, RuleBasedPOParser>();
 builder.Services.AddScoped<IRegressionService, RegressionService>();
+// Parser-feedback module (records whether a PO import parsed correctly +
+// retains the original PDF for triage). Self-contained; see Helpers/
+// ParserFeedbackServiceCollectionExtensions.
+builder.Services.AddParserFeedback();
 
 // ── FBR Purchase Import (Annexure-A xls upload, Phase 1: preview) ──
 // Parser + filter are stateless / Scoped because they don't hold any
@@ -522,6 +526,11 @@ using (var scope = app.Services.CreateScope())
     {
         Log.Information("Database:AutoMigrate is false — skipping db.Database.Migrate(). Run `dotnet ef database update` manually.");
     }
+
+    // Parser-feedback table — created idempotently in raw SQL (not a migration)
+    // so the feature stays in isolated files and cherry-picks across branches.
+    // Runs regardless of AutoMigrate so prod (AutoMigrate off) still gets it.
+    MyApp.Api.Data.ParserFeedbackSchema.EnsureCreated(db);
 
     // ── Unique indexes on (CompanyId, *Number) for Invoice / PurchaseBill /
     // GoodsReceipt — audit C-8 (2026-05-13). Pre-fix, two concurrent
