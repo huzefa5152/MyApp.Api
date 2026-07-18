@@ -446,7 +446,14 @@ namespace MyApp.Api.Services.Implementations
             //      with one of these words ("Total Station Theodolite", "CGST
             //      Compliant Widget", "Net Book A5") is NOT mistaken for a footer.
             //  (b) label markers — footer labels that stand alone.
-            @"^\s*(?:(?:Sub-?\s*Total|Subtotal|Grand\s+Total|Gross\s+(?:Amount|Total|Value)|Basic\s+(?:Amount|Value)|Net\s+(?:Amount|Total|Payable|Value)|Total\s+(?:Amount|Payable|Basic|Value|Invoice|Qty|Quantity|Before)|Payable\s+Amount|Invoice\s+Value|Sales\s+Tax|Excise\s+Duty|ET\s+Amount|CGST|SGST|IGST|GST|VAT|Discount|Freight\s*/?\s*Cartage)\s*[:%]?\s*(?:Rs\.?|PKR|USD|AED|EUR|GBP|INR|Rupees|AUD|CAD)?\s*[\p{Sc}]?\s*[\d,]|In\s+words|Amount\s+in\s+Words|Remarks?\s*:|Notes?\s*:|Rupees\s|For\s+Meko|HEAD\s+OFFICE|Email:)",
+            //  (c) bare "Total <amount>" at END OF LINE and "Sales Tax Amount":
+            //      the Meko/Innovative footer prints "Total  9,590" and "Sales
+            //      Tax Amount  1,726" on their own lines (no qualifier word), so
+            //      the (a) markers miss them and the amounts leaked into the last
+            //      item's description. The $ anchor keeps a product that merely
+            //      starts with "Total <number>…" ("Total 10W40 Engine Oil") safe,
+            //      because such a line has more text after the number.
+            @"^\s*(?:(?:Sub-?\s*Total|Subtotal|Grand\s+Total|Gross\s+(?:Amount|Total|Value)|Basic\s+(?:Amount|Value)|Net\s+(?:Amount|Total|Payable|Value)|Total\s+(?:Amount|Payable|Basic|Value|Invoice|Qty|Quantity|Before)|Payable\s+Amount|Invoice\s+Value|Sales\s+Tax|Excise\s+Duty|ET\s+Amount|CGST|SGST|IGST|GST|VAT|Discount|Freight\s*/?\s*Cartage)\s*[:%]?\s*(?:Rs\.?|PKR|USD|AED|EUR|GBP|INR|Rupees|AUD|CAD)?\s*[\p{Sc}]?\s*[\d,]|Total\s+[\p{Sc}]?[\d,]+(?:\.\d+)?\s*$|Sales\s+Tax\s+Amount\b|In\s+words|Amount\s+in\s+Words|Remarks?\s*:|Notes?\s*:|Rupees\s|For\s+Meko|HEAD\s+OFFICE|Email:)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         // Per-page chrome: header/footer lines that REPEAT on every page of
@@ -560,17 +567,41 @@ namespace MyApp.Api.Services.Implementations
             // synonyms, no unit column, wrapped descriptions and multi-page POs.
             if (!string.IsNullOrWhiteSpace(descHdr) && !string.IsNullOrWhiteSpace(qtyHdr))
             {
-                // The generic, position-based extractor is PRIMARY: it reads
-                // each field by its header's column index, so it never prepends
-                // a code column to the description, never trips over large
-                // quantities, and copes with arbitrary layouts. The legacy
-                // adjacency scanner runs only as a fallback (when a unit header
-                // was configured but the column reader found nothing) — a safety
-                // net for oddly-spaced tables where columns can't be split.
-                var extracted = ExtractSimpleItemsByColumns(lines, descHdr, qtyHdr, unitHdr);
-                if (extracted.Count == 0 && !string.IsNullOrWhiteSpace(unitHdr))
-                    extracted = ExtractSimpleItems(lines, descHdr, qtyHdr, unitHdr);
-                result.Items = extracted;
+                // The generic, position-based extractor is the DEFAULT: it reads
+                // each field by its header's column index, so it copes with
+                // arbitrary layouts (alpha item codes, any column order, header
+                // synonyms, no unit column, wrapped/multi-page tables) and beats
+                // the adjacency scanner when a quantity is buried in the
+                // description ("… 20 Gram" → qty 6, not 20).
+                var byColumns = ExtractSimpleItemsByColumns(lines, descHdr, qtyHdr, unitHdr);
+
+                // BUT the column reader assumes every header column is also
+                // present in every DATA row. Several tuned production layouts
+                // break that assumption and shift the data columns relative to
+                // the header, so the description lands on the Unit column and the
+                // quantity on the Rate column:
+                //   - Meko Denim/Fabric + Innovative Aqua merge the item Code
+                //     into the Item Name cell (two header columns, one data cell);
+                //   - Lotte's "Non-Inventory Items" layout leaves the "Required
+                //     Delivery Date" cell blank.
+                // The result is garbage: descriptions collapse to bare UOM tokens
+                // ("PC", "PCS", "TIN", "RFT") or leaked price runs, and/or most
+                // rows get dropped. The legacy adjacency scanner anchors on the
+                // Unit<->Quantity adjacency instead of header positions, so it
+                // stays correct on those layouts (it is what production has always
+                // run). When a unit header is configured, run it too and prefer
+                // whichever extraction yields more PLAUSIBLE items — descriptions
+                // that read as real product names rather than a mis-mapped UOM
+                // token or price run. On a well-aligned table both agree, so the
+                // column reader (and its buried-quantity win) is preserved; only
+                // when the column reader is clearly degenerate does adjacency win.
+                if (!string.IsNullOrWhiteSpace(unitHdr))
+                {
+                    var byAdjacency = ExtractSimpleItems(lines, descHdr, qtyHdr, unitHdr);
+                    if (PlausibleItemCount(byAdjacency) > PlausibleItemCount(byColumns))
+                        byColumns = byAdjacency;
+                }
+                result.Items = byColumns;
             }
 
             if (string.IsNullOrEmpty(result.PONumber))
@@ -1251,6 +1282,53 @@ namespace MyApp.Api.Services.Implementations
 
         private static bool IsRecognisedUnit(string token) =>
             !string.IsNullOrWhiteSpace(token) && RecognisedUnits.Contains(token);
+
+        // ── Extractor selection (column reader vs adjacency scanner) ──────────
+        // When the generic column reader mis-maps the description column onto the
+        // Unit column (a data row that dropped or merged a header column), its
+        // "descriptions" collapse to the artifacts below. Counting the items that
+        // do NOT look like that artifact tells us which extractor read the table
+        // correctly. Used ONLY to choose between the two — never to drop items.
+
+        // UOM tokens that, standing alone as a whole description, are the mis-map
+        // artifact — RecognisedUnits plus a few production spellings not in it.
+        private static readonly HashSet<string> UnitOnlyWords = new(RecognisedUnits, StringComparer.OrdinalIgnoreCase)
+        {
+            "TIN", "RFT", "PAK", "PIR", "PKT", "GRM", "CTN", "BTL", "NO",
+        };
+
+        // Unit ABBREVIATIONS that never legitimately begin a product name, so a
+        // description starting with one + more text is the Unit cell leaking into
+        // the front of the description ("PC AUTO DRAIN VALVE 1/2\"", "RFT BRIDGE
+        // STONE", "MTR 8X5MM"). Deliberately excludes words that DO start real
+        // product names (Box, Bag, Set, Can, Pair, Tin, Bottle, Sheet, Roll, …).
+        private static readonly Regex MismappedUnitLeadRegex = new(
+            @"^(?:PC|PCS|PKT|KGS|LTR|LTRS|MTR|RFT|NOS|PIR|PAK|CTN|GRM)\.?\s+\S",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // A description that is really the column reader's mis-map artifact:
+        //  (1) a bare unit token as the whole description ("PC", "TIN", "KGS.",
+        //      "BOTTLE"),
+        //  (2) a description that STARTS with an unambiguous UOM abbreviation
+        //      then more text (the Unit column bled into the description), or
+        //  (3) a leaked numeric run — qty/rate/amount/tax with a decimal rate and
+        //      almost no letters ("1 900.00 900 18.00", "5000 11.00 55,000 18.00").
+        private static bool DescriptionLooksMismapped(string? desc)
+        {
+            if (string.IsNullOrWhiteSpace(desc)) return true;
+            var s = desc.Trim();
+            if (!s.Contains(' ') && UnitOnlyWords.Contains(s.TrimEnd('.'))) return true;
+            if (MismappedUnitLeadRegex.IsMatch(s)) return true;
+            if (s.Count(char.IsLetter) <= 3)
+            {
+                var nums = Regex.Matches(s, @"\d[\d,]*(?:\.\d+)?").Count;
+                if (nums >= 3 && Regex.IsMatch(s, @"\d\.\d{2}\b")) return true;
+            }
+            return false;
+        }
+
+        private static int PlausibleItemCount(List<ParsedPOItemDto> items) =>
+            items.Count(i => !DescriptionLooksMismapped(i.Description));
 
         // True if position `idx` in `line` sits inside a (…) group. Used to
         // reject in-description specs like "Oil Paint (3.64 Ltr)" which
