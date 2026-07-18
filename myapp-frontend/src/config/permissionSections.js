@@ -74,6 +74,7 @@ export const PERMISSION_SECTIONS = [
       { key: "ItemTypes", label: "Item Types" },
       { key: "Configuration", label: "Lookups" },
       { key: "POFormats", label: "PO Formats" },
+      { key: "ImportFeedback", label: "Import Feedback" },
       { key: "PrintTemplates", label: "Print Templates" },
       { key: "FBR" },
     ],

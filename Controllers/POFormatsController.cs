@@ -170,10 +170,11 @@ namespace MyApp.Api.Controllers
                 return BadRequest(new { error = "name is required." });
             if (string.IsNullOrWhiteSpace(dto.RawText))
                 return BadRequest(new { error = "rawText is required — upload a sample PDF first." });
+            // Description + Quantity are the only required item columns. Unit is
+            // optional — many POs have no unit-of-measure column at all.
             if (string.IsNullOrWhiteSpace(dto.DescriptionHeader)
-                || string.IsNullOrWhiteSpace(dto.QuantityHeader)
-                || string.IsNullOrWhiteSpace(dto.UnitHeader))
-                return BadRequest(new { error = "descriptionHeader, quantityHeader and unitHeader are all required." });
+                || string.IsNullOrWhiteSpace(dto.QuantityHeader))
+                return BadRequest(new { error = "descriptionHeader and quantityHeader are required." });
 
             // Tenant guard — audit H-4 (2026-05-13).
             if (dto.CompanyId.HasValue)
@@ -234,10 +235,10 @@ namespace MyApp.Api.Controllers
         {
             var format = await _db.POFormats.FirstOrDefaultAsync(f => f.Id == id);
             if (format == null) return NotFound();
+            // Description + Quantity required; Unit optional (see CreateSimple).
             if (string.IsNullOrWhiteSpace(dto.DescriptionHeader)
-                || string.IsNullOrWhiteSpace(dto.QuantityHeader)
-                || string.IsNullOrWhiteSpace(dto.UnitHeader))
-                return BadRequest(new { error = "descriptionHeader, quantityHeader and unitHeader are all required." });
+                || string.IsNullOrWhiteSpace(dto.QuantityHeader))
+                return BadRequest(new { error = "descriptionHeader and quantityHeader are required." });
 
             // Tenant guard — audit H-4 (2026-05-13). Authorize against
             // the existing row's company first (body fields can't smuggle

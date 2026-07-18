@@ -281,6 +281,11 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-18 — Generic PO parser + Parser Feedback
+
+- **Generic PO parser — works for (almost) any PO layout** — item extraction was reworked to be layout-agnostic. Only **Description and Quantity are required** now; the Unit column is optional (defaults to `Pcs`), as are the PO number/date labels. A column-position reader parses each field by its header's column, so it handles arbitrary column order, **alphanumeric item codes** (`A100`, `SKU-9931`), **no unit-of-measure column**, header-word **synonyms**, thousands separators + decimals, currency in price columns, multi-line descriptions, and multi-page footers — and never confuses the quantity with a price/amount column. The legacy scanner remains as a fallback. Hardened over two adversarial rounds (**197/197** diverse + **57/65** adversarial layouts); a committed regression harness (`scripts/po_parser_harness`) and a production read-only check on real uploaded PDFs (`scripts/po_parser_prod_regression.py`) gate future changes. Runbook: `PO_IMPORT_PARSER_GUIDE.md`.
+- **Parser Feedback on PO imports** — when a PO parses, the import Review screen shows a **Parser Feedback** question above Create — *"Was this Purchase Order imported correctly?"* (Yes / No). Optional and non-blocking; the answer, the original PDF, and the parser version are retained. New `api/import-feedback` endpoints list flagged imports, download the original PDFs (single or ZIP), and report accuracy — a foundation for improving every document importer. Gated by `importfeedback.*` permissions.
+
 ### 2026-07-17 — Report client filters, Tax Sheet transfer, invoice-list scroll fix
 
 - **Client filter** (specific client name, e.g. "Lotte Kolson") on both the **Tax Sheet** and the **Sales** report, each carrying through to its **Excel export**. On the Sales report it sits alongside the existing buyer-type filter (they combine).

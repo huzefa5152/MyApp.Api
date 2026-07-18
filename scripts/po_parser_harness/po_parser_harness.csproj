@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>po_parser_harness</AssemblyName>
+    <!-- Standalone regression harness — never part of the app build. -->
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Link the REAL production parser + DTOs (relative to repo root) so the
+         harness exercises the exact code that ships, not a copy. -->
+    <Compile Include="..\..\DTOs\ParsedPODto.cs" />
+    <Compile Include="..\..\Services\Implementations\RuleBasedPOParser.cs" />
+  </ItemGroup>
+</Project>

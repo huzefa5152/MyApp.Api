@@ -435,15 +435,18 @@ namespace MyApp.Api.Services.Implementations
         // etc. which appear on every page's footer — that caused multi-page
         // POs to stop parsing at the bottom of page 1.)
         private static readonly Regex SimpleStopRegex = new(
-            // Footer markers — once any of these appear we know the items
-            // table has ended. Three Meko-specific markers were missing
-            // (`Total <amount>` on its own line, `Sales Tax Amount`, and
-            // `ET Amount`), which let footer text leak into the last
-            // item's description on Meko-format POs (e.g. "CUTTING DISK
-            // 4\" RODIUS Total 7,200 Sales Tax Amount 1,296 ET Amount 0").
-            // The new alternatives are tight enough to skip Lotte/Soorty
-            // data rows, which always start with a numeric S.No instead.
-            @"^\s*(In\s+words|Amount\s+in\s+Words|Sub-?\s*Total|Sales\s+Tax\s*@|Sales\s+Tax\s+Amount|ET\s+Amount|Excise\s+Duty|Grand\s+Total|Payable\s+Amount|Discount\s+Amount|Total\s+Amount|Total\s+[\d,]+(?:\.\d+)?\s*$|Freight\s*/?\s*Cartage|Remarks\s*:|For\s+Meko|HEAD\s+OFFICE|Email:|Rupees\s+Only)\b",
+            // Footer markers — once any of these appear at the START of a line
+            // the item table has ended. Kept specific so they can't fire inside
+            // a real item row: the tax markers require a following digit/@/colon
+            // (so "VAT Blue" the dye or "GST Registration" text won't match),
+            // and the money-word markers name a summary total, not a product.
+            // Two families:
+            //  (a) money-total markers — must be FOLLOWED by a number (optional
+            //      colon/percent/currency), so a real product whose name starts
+            //      with one of these words ("Total Station Theodolite", "CGST
+            //      Compliant Widget", "Net Book A5") is NOT mistaken for a footer.
+            //  (b) label markers — footer labels that stand alone.
+            @"^\s*(?:(?:Sub-?\s*Total|Subtotal|Grand\s+Total|Gross\s+(?:Amount|Total|Value)|Basic\s+(?:Amount|Value)|Net\s+(?:Amount|Total|Payable|Value)|Total\s+(?:Amount|Payable|Basic|Value|Invoice|Qty|Quantity|Before)|Payable\s+Amount|Invoice\s+Value|Sales\s+Tax|Excise\s+Duty|ET\s+Amount|CGST|SGST|IGST|GST|VAT|Discount|Freight\s*/?\s*Cartage)\s*[:%]?\s*(?:Rs\.?|PKR|USD|AED|EUR|GBP|INR|Rupees|AUD|CAD)?\s*[\p{Sc}]?\s*[\d,]|In\s+words|Amount\s+in\s+Words|Remarks?\s*:|Notes?\s*:|Rupees\s|For\s+Meko|HEAD\s+OFFICE|Email:)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         // Per-page chrome: header/footer lines that REPEAT on every page of
@@ -459,7 +462,7 @@ namespace MyApp.Api.Services.Implementations
         // No trailing word-boundary — many markers end in `#` or `:` which
         // are non-word characters and would break a trailing `\b`.
         private static readonly Regex PageChromeRegex = new(
-            @"(^\s*|\s)(Print\s+Date|Printed\s+By|Prepared\s+By|Special\s+Instructions|U\s*/\s*S\s+\d+\s+of\s+Sales\s+Tax|registered\s+person|It'?s\s+a\s+Product\s+of|\d+\s*\)\s+(Payment|Supplier|Documents|Lotte|Freight|Goods|Delivery|Shelf)|Terms\s*:|SCM\s*-|Purchase\s+Order\s+for|Documents\s+Required|Page\s+No|Page\s+\d+\s+of\s+\d+|Supplier\s+Name|Supplier\s+Address|Address\s*:|Location\s*:|P\.?O\.?\s*Date|P\.?O\.?\s*#|P\.?R\.?\s*#|Pur\.?\s*Req\.?|Purchase\s+Req|N\.?T\.?N\.?\s*No|G\.?S\.?T\.?\s*No|Phone\s*#|Fax\s*#|LOTTE\s+Kolson|MEKO\s+DENIM|SOORTY|Noman\s+Aslam|L-\d+\s*,\s*Block|F\.B\.?\s*Industrial|Rs\.\s*$|Item\s+Name\s*$|Item\s+Id|Unit\s+Price|Total\s+Price|Required\s+Delivery\s+Date|Payment\s+Terms|Delivery\s+Terms|Delivery\s+Location|Non-Inventory\s+Items|Dispensary\s*:)",
+            @"(^\s*|\s)(Print\s+Date|Printed\s+By|Prepared\s+By|Special\s+Instructions|U\s*/\s*S\s+\d+\s+of\s+Sales\s+Tax|registered\s+person|It'?s\s+a\s+Product\s+of|\d+\s*\)\s+(Payment|Supplier|Documents|Lotte|Freight|Goods|Delivery|Shelf)|Terms\s*:|SCM\s*-|Purchase\s+Order\s+for|Documents\s+Required|Page\s+No|Page\s+\d+\s+of\s+\d+|Continued\b|Supplier\s+Name|Supplier\s+Address|Address\s*:|Location\s*:|P\.?O\.?\s*Date|P\.?O\.?\s*#|P\.?R\.?\s*#|Pur\.?\s*Req\.?|Purchase\s+Req|N\.?T\.?N\.?\s*No|G\.?S\.?T\.?\s*No|Phone\s*#|Fax\s*#|LOTTE\s+Kolson|MEKO\s+DENIM|SOORTY|Noman\s+Aslam|L-\d+\s*,\s*Block|F\.B\.?\s*Industrial|Rs\.\s*$|Item\s+Name\s*$|Item\s+Id|Unit\s+Price|Total\s+Price|Required\s+Delivery\s+Date|Payment\s+Terms|Delivery\s+Terms|Delivery\s+Location|Non-Inventory\s+Items|Dispensary\s*:)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         // Standalone timestamp / page-printed-on stamp like
@@ -546,11 +549,28 @@ namespace MyApp.Api.Services.Implementations
             }
 
             // --- items ---
-            if (!string.IsNullOrWhiteSpace(descHdr) &&
-                !string.IsNullOrWhiteSpace(qtyHdr) &&
-                !string.IsNullOrWhiteSpace(unitHdr))
+            // Only DESCRIPTION and QUANTITY are required; the unit header is
+            // optional (many POs have no unit-of-measure column). When a unit
+            // header IS configured we first run the legacy adjacency scanner
+            // (which pins the existing production formats via their golden
+            // samples); if it finds nothing — or no unit header was given —
+            // the generic column-position extractor takes over. The generic
+            // path reads every field by its header's column index, so it works
+            // for arbitrary layouts: alpha item codes, any column order, header
+            // synonyms, no unit column, wrapped descriptions and multi-page POs.
+            if (!string.IsNullOrWhiteSpace(descHdr) && !string.IsNullOrWhiteSpace(qtyHdr))
             {
-                result.Items = ExtractSimpleItems(lines, descHdr, qtyHdr, unitHdr);
+                // The generic, position-based extractor is PRIMARY: it reads
+                // each field by its header's column index, so it never prepends
+                // a code column to the description, never trips over large
+                // quantities, and copes with arbitrary layouts. The legacy
+                // adjacency scanner runs only as a fallback (when a unit header
+                // was configured but the column reader found nothing) — a safety
+                // net for oddly-spaced tables where columns can't be split.
+                var extracted = ExtractSimpleItemsByColumns(lines, descHdr, qtyHdr, unitHdr);
+                if (extracted.Count == 0 && !string.IsNullOrWhiteSpace(unitHdr))
+                    extracted = ExtractSimpleItems(lines, descHdr, qtyHdr, unitHdr);
+                result.Items = extracted;
             }
 
             if (string.IsNullOrEmpty(result.PONumber))
@@ -801,6 +821,330 @@ namespace MyApp.Api.Services.Implementations
             if (current != null) items.Add(current);
             return items.Where(x => !string.IsNullOrWhiteSpace(x.Description) && x.Quantity > 0).ToList();
         }
+
+        // ==============================================================
+        //  simple-headers-v1 — generic column-position extractor
+        // --------------------------------------------------------------
+        //  A layout-agnostic table reader. Only DESCRIPTION and QUANTITY are
+        //  required; UNIT is optional (defaults to "Pcs" when the table has no
+        //  unit-of-measure column). It reads every field by the COLUMN INDEX of
+        //  its header, so — unlike the adjacency scanner — it never confuses the
+        //  quantity with a price / rate / amount column, and it copes with:
+        //    - data rows led by an alphanumeric item code (A100, SKU-9931, …)
+        //      or a numeric serial, or no leader at all,
+        //    - arbitrary column order and count,
+        //    - header-word SYNONYMS (Description/Item/Particulars/…, Qty/
+        //      Quantity/Nos/…) when the configured header isn't found verbatim,
+        //    - no unit column (Item / Description / Qty / Unit Price / Total),
+        //    - thousands separators / decimals in the quantity, currency in the
+        //      price columns,
+        //    - multi-line (wrapped) descriptions,
+        //    - repeated headers + page chrome + totals/terms footers on multi-
+        //      page POs.
+        //  PdfPig emits 2+ spaces at column boundaries, so rows split on \s{2,}.
+        // ==============================================================
+        private static List<ParsedPOItemDto> ExtractSimpleItemsByColumns(string[] lines, string descHdr, string qtyHdr, string unitHdr)
+        {
+            var items = new List<ParsedPOItemDto>();
+
+            var loc = FindHeaderRow(lines, descHdr, qtyHdr, unitHdr);
+            if (loc == null) return items;
+            var (headerIdx, descCol, qtyCol, unitCol) = loc.Value;
+
+            ParsedPOItemDto? current = null;
+
+            for (int i = headerIdx + 1; i < lines.Length; i++)
+            {
+                var line = lines[i].TrimEnd();
+                // Blank lines are skipped WITHOUT flushing, so a description that
+                // wraps across a blank separator stays with its item. Footer/spec
+                // text is kept out of the description by the stop markers and the
+                // note-label + data-row guards in the continuation branch below.
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                // Page chrome / bare timestamp / repeated column header →
+                // flush the item in progress and skip the line.
+                if (PageChromeRegex.IsMatch(line)) { FlushItem(items, ref current); continue; }
+                if (PageStampRegex.IsMatch(line) && !Regex.IsMatch(line, @"[A-Za-z]{3,}.*\d")) { FlushItem(items, ref current); continue; }
+
+                var cols = SplitColumns(line);
+                if (IsRepeatedHeaderRow(cols, qtyCol)) { FlushItem(items, ref current); continue; }
+
+                // Real end-of-table marker (Sub Total, Grand Total, Terms, …).
+                if (SimpleStopRegex.IsMatch(line)) { FlushItem(items, ref current); break; }
+
+                // A line whose first cell is PURELY a footer label — even when
+                // its amount happens to fall in the quantity column ("Basic
+                // 320,000", "Total Pcs 800") or it stands alone ("Sub Total") —
+                // is a total, never an item. A real product ("Total Station
+                // Theodolite", "Net Book A5") carries extra words, so it won't
+                // match and is read normally.
+                if (cols.Length > 0 && FooterLabelRegex.IsMatch(cols[0].Trim())) { FlushItem(items, ref current); continue; }
+
+                // Locate the quantity. Normally it sits exactly in the quantity
+                // column. If that cell isn't a number, the description spilled
+                // across a 2-space gap and pushed the quantity one or more cells
+                // to the right — scan rightward for the real number and merge the
+                // spilled cells back into the description.
+                int qtyIndex = -1;
+                string descCells = descCol < cols.Length ? cols[descCol] : "";
+                if (qtyCol >= 0 && qtyCol < cols.Length && IsQuantityNumber(cols[qtyCol]))
+                {
+                    qtyIndex = qtyCol;
+                }
+                else if (qtyCol < 0 || qtyCol >= cols.Length || !IsRecognisedUnit(cols[qtyCol]))
+                {
+                    // The quantity column holds description text (a 2-space gap in
+                    // the description pushed the real quantity to the right) — find
+                    // it and merge the spilled cells back into the description. But
+                    // if the quantity column instead holds a UNIT, the row's
+                    // quantity cell was blank and the columns shifted left — that's
+                    // NOT a spill, so leave qtyIndex = -1 and let the row be skipped.
+                    // A percentage ("32%") is never a quantity — it belongs to the
+                    // description (a concentration), so IsQuantityNumber excludes it.
+                    for (int k = (qtyCol < 0 ? 0 : qtyCol + 1); k < cols.Length; k++)
+                        if (IsQuantityNumber(cols[k])) { qtyIndex = k; break; }
+                    if (qtyIndex > descCol && descCol >= 0)
+                        descCells = string.Join(" ", cols.Skip(descCol).Take(qtyIndex - descCol));
+                }
+
+                var qty = qtyIndex >= 0 ? ParseQtyCell(cols[qtyIndex]) : 0m;
+                bool isDataRow = qtyIndex >= 0 && qtyIndex != descCol && qty > 0;
+
+                if (isDataRow)
+                {
+                    var desc = SanitiseDescription(descCells);
+                    if (string.IsNullOrWhiteSpace(desc)) continue;   // qty but no description text → not a real row
+
+                    // Unit: its own column when present; if that shifted with a
+                    // spill, take the cell right after the quantity.
+                    var unitRaw = (unitCol >= 0 && unitCol < cols.Length && unitCol != qtyIndex) ? cols[unitCol] : "";
+                    if (!LooksLikeUnitValue(unitRaw) && qtyIndex + 1 < cols.Length && LooksLikeUnitValue(cols[qtyIndex + 1]))
+                        unitRaw = cols[qtyIndex + 1];
+                    var unit = LooksLikeUnitValue(unitRaw) ? unitRaw : "Pcs";
+
+                    FlushItem(items, ref current);
+                    current = new ParsedPOItemDto
+                    {
+                        Description = desc,
+                        Quantity = qty,
+                        Unit = NormaliseUnit(unit),
+                    };
+                }
+                else if (current != null)
+                {
+                    // Continuation of a wrapped description. Append genuine text
+                    // wraps (any column count — specs often align into 2-3 sub-
+                    // cells), but SKIP a line that is really a data row in its own
+                    // right: one led by a bare-number serial, or carrying two or
+                    // more bare-number cells (the price/amount columns of a row
+                    // whose quantity cell was left blank). Also skip numeric tails.
+                    if (!Regex.IsMatch(line, "[A-Za-z]")) continue;
+                    if (LooksLikeDataRowAttempt(cols)) continue;
+                    if (NoteLabelRegex.IsMatch(line)) continue;   // "Spec:"/"Note:"/… footer, not a wrap
+                    // A "label … amount" line (text cells ending in a bare
+                    // number) is a footer total in a form the stop-markers don't
+                    // enumerate — e.g. "Total Before Tax  861,000", German
+                    // "Zwischensumme 10720.00". Never part of a description.
+                    if (cols.Length >= 2 && IsBareNumber(cols[cols.Length - 1])
+                        && cols.Take(cols.Length - 1).Any(c => Regex.IsMatch(c, "[A-Za-z]")))
+                        continue;
+                    var clean = SanitiseDescription(Regex.Replace(line.Trim(), @"^[\(\)\s,]+|[\(\)\s,]+$", ""));
+                    if (clean.Length > 0)
+                        current.Description = $"{current.Description} {clean}".Trim();
+                }
+            }
+
+            FlushItem(items, ref current);
+            return items.Where(x => !string.IsNullOrWhiteSpace(x.Description) && x.Quantity > 0).ToList();
+        }
+
+        private static void FlushItem(List<ParsedPOItemDto> items, ref ParsedPOItemDto? current)
+        {
+            if (current != null) { items.Add(current); current = null; }
+        }
+
+        // A cell that is purely a number (optional leading currency symbol,
+        // thousands separators, decimals, trailing percent) — i.e. a serial,
+        // quantity, price or amount value, NOT a word or a spec like "220V".
+        private static bool IsBareNumber(string? s) =>
+            !string.IsNullOrWhiteSpace(s) && Regex.IsMatch(s, @"^[\p{Sc}]?\s*\d[\d,]*(?:\.\d+)?\s*%?$");
+
+        // Like IsBareNumber but WITHOUT a trailing percent — a quantity is never
+        // a percentage (a "32%" cell is a concentration in the description).
+        private static bool IsQuantityNumber(string? s) =>
+            !string.IsNullOrWhiteSpace(s) && Regex.IsMatch(s, @"^[\p{Sc}]?\s*\d[\d,]*(?:\.\d+)?$");
+
+        // True when a non-data line is really a row in its own right rather than
+        // a wrapped-description fragment: it is led by a bare-number serial, or
+        // carries two or more bare-number cells (the price/amount columns of a
+        // row whose quantity cell was left blank). Such lines are skipped, not
+        // appended to the previous item's description.
+        private static bool LooksLikeDataRowAttempt(string[] cols)
+        {
+            if (cols.Length == 0) return false;
+            if (IsBareNumber(cols[0])) return true;
+            return cols.Count(IsBareNumber) >= 2;
+        }
+
+        // A footer label line ("Spec:", "Note:", "Remarks:", "Terms:", …) — never
+        // part of a wrapped item description. Requires a following : . or - so a
+        // real wrap ("Warranty 1yr", "Terms of trade in words") isn't caught.
+        private static readonly Regex NoteLabelRegex = new(
+            // Known note labels (any language handled by the generic 2nd branch:
+            // a single leading word followed by a colon — footers/notes are
+            // "Label: value", real description wraps are free text).
+            @"^\s*(?:Spec(?:ification)?s?|Notes?|Remarks?|Special\s+Instructions?|Instructions?|Terms|Payment\s+Terms|Delivery\s+Terms|Warranty)\s*[:.\-]|^\s*[\p{L}][\p{L}.]{1,18}\s*:\s",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // A cell that is PURELY a footer/total label (optionally with one
+        // qualifier word) — e.g. "Total", "Sub Total", "Basic", "Total Pcs",
+        // "Grand Total". Used to reject total lines whose amount lands in the
+        // quantity column. A real product name carries more/other words.
+        private static readonly Regex FooterLabelRegex = new(
+            @"^(?:Sub-?\s*Total|Subtotal|Grand\s+Total|Total|Net|Gross|Basic|Payable|Balance|Sales\s+Tax|CGST|SGST|IGST|GST|VAT|Discount|Excise\s+Duty|Freight|Carriage|Cartage|Zwischensumme|Gesamt|MwSt)(?:\s+(?:Amount|Value|Payable|Basic|Due|Tax|Total|Qty|Quantity|Pcs|Nos|Kgs?|Units?|Pieces|Before\s+Tax|in\s+Words))?\s*$",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // Locate the item-table header row and the column indices of the
+        // description, quantity and (optional) unit columns. Pass 1 uses the
+        // operator's configured headers; pass 2 falls back to a synonym scan so
+        // extraction still works when the configured strings don't exactly
+        // match the PDF (or weren't provided).
+        private static (int HeaderIdx, int DescCol, int QtyCol, int UnitCol)? FindHeaderRow(
+            string[] lines, string descHdr, string qtyHdr, string unitHdr)
+        {
+            if (!string.IsNullOrWhiteSpace(descHdr) && !string.IsNullOrWhiteSpace(qtyHdr))
+            {
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    var cols = SplitColumns(lines[i]);
+                    int dc = ColumnIndexOf(cols, descHdr);
+                    int qc = ColumnIndexOf(cols, qtyHdr);
+                    if (dc >= 0 && qc >= 0 && dc != qc)
+                    {
+                        int uc = !string.IsNullOrWhiteSpace(unitHdr) ? ColumnIndexOf(cols, unitHdr) : -1;
+                        if (uc < 0 || uc == dc || uc == qc) uc = AutoDetectUnitColumn(cols, dc, qc);
+                        return (i, dc, qc, uc);
+                    }
+                }
+            }
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var cols = SplitColumns(lines[i]);
+                if (cols.Length < 2) continue;
+                int dc = FirstColumnMatchingAny(cols, DescSynonyms);
+                int qc = FirstColumnMatchingAny(cols, QtySynonyms);
+                if (dc >= 0 && qc >= 0 && dc != qc)
+                {
+                    int uc = AutoDetectUnitColumn(cols, dc, qc);
+                    return (i, dc, qc, uc);
+                }
+            }
+            return null;
+        }
+
+        // Split a line into columns on runs of 2+ spaces (PdfPig's column
+        // boundary), trimming and dropping empties.
+        private static string[] SplitColumns(string line) =>
+            Regex.Split((line ?? "").Trim(), @"\s{2,}")
+                 .Select(s => s.Trim())
+                 .Where(s => s.Length > 0)
+                 .ToArray();
+
+        // Column index for a header. Prefers an EXACT cell match so a specific
+        // header ("Item") isn't captured by a broader neighbour ("Item Code");
+        // falls back to whole-word containment ("Description" in "Item
+        // Description"). -1 when not present.
+        private static int ColumnIndexOf(string[] cols, string header)
+        {
+            if (string.IsNullOrWhiteSpace(header)) return -1;
+            var h = header.Trim();
+            for (int i = 0; i < cols.Length; i++)
+                if (string.Equals(cols[i].Trim(), h, StringComparison.OrdinalIgnoreCase)) return i;
+            for (int i = 0; i < cols.Length; i++)
+                if (ContainsWord(cols[i], header)) return i;
+            return -1;
+        }
+
+        // First column matching any of `synonyms` (synonyms tried in order, so
+        // the list is ordered most-specific first).
+        private static int FirstColumnMatchingAny(string[] cols, string[] synonyms)
+        {
+            foreach (var syn in synonyms)
+            {
+                int idx = ColumnIndexOf(cols, syn);
+                if (idx >= 0) return idx;
+            }
+            return -1;
+        }
+
+        // A non-desc, non-qty column whose header names a unit of measure but is
+        // NOT a price/rate/amount column ("Unit Price" is a price, not a UOM).
+        private static int AutoDetectUnitColumn(string[] cols, int descCol, int qtyCol)
+        {
+            for (int i = 0; i < cols.Length; i++)
+            {
+                if (i == descCol || i == qtyCol) continue;
+                if (ContainsAnyWord(cols[i], UnitSynonyms) && !ContainsAnyWord(cols[i], PriceWords))
+                    return i;
+            }
+            return -1;
+        }
+
+        private static bool ContainsAnyWord(string haystack, string[] needles)
+        {
+            foreach (var n in needles)
+                if (ContainsWord(haystack, n)) return true;
+            return false;
+        }
+
+        // A repeated table header on page 2+ — the cell under the quantity
+        // column reads as a quantity header word rather than a number.
+        private static bool IsRepeatedHeaderRow(string[] cols, int qtyCol)
+        {
+            if (qtyCol < 0 || qtyCol >= cols.Length) return false;
+            return ContainsAnyWord(cols[qtyCol], QtySynonyms);
+        }
+
+        // First numeric token in a quantity cell → decimal. Handles thousands
+        // separators ("1,250"), decimals ("12.5") and a unit stuck to the qty
+        // ("250 Pcs" → 250). Returns 0 when the cell holds no number.
+        private static decimal ParseQtyCell(string? s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return 0m;
+            var m = Regex.Match(s, @"\d[\d,]*(?:\.\d+)?");
+            return m.Success ? ParseQuantity(m.Value) : 0m;
+        }
+
+        // The unit cell is a real UOM only when it carries letters and isn't
+        // just a number/price. Otherwise the caller defaults to "Pcs".
+        private static bool LooksLikeUnitValue(string s) =>
+            !string.IsNullOrWhiteSpace(s)
+            && Regex.IsMatch(s, "[A-Za-z]")
+            && !Regex.IsMatch(s, @"^\s*[\p{Sc}\d.,]+\s*$");
+
+        // Header-word synonyms for the generic detector — ordered most-specific
+        // first so multi-word headers win over the bare "Item".
+        private static readonly string[] DescSynonyms =
+        {
+            "Item Description", "Product Description", "Description of Goods", "Material Description",
+            "Description", "Particulars", "Particular", "Nomenclature", "Item Name", "Product Name",
+            "Product", "Material", "Goods", "Services", "Service", "Details", "Item",
+        };
+        private static readonly string[] QtySynonyms =
+        {
+            "Qty Ordered", "Ordered Qty", "Order Qty", "PO Qty", "Order Quantity", "Quantity",
+            "Qnty", "Q'ty", "Qty", "No. of Units", "No of Units", "Nos.", "Nos", "Units",
+        };
+        private static readonly string[] UnitSynonyms =
+        {
+            "UOM", "U.O.M", "U/M", "Unit of Measure", "Units", "Unit", "Pack", "Packing", "Packaging",
+        };
+        private static readonly string[] PriceWords =
+        {
+            "Price", "Cost", "Rate", "Value", "Amount", "Total",
+        };
 
         // Strip leading date / page-chrome fragments and trailing date/
         // timestamp columns from a description string. The PDF table has

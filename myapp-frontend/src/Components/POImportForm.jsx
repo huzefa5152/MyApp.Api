@@ -4,10 +4,12 @@ import { parsePdf, parseText, ensureLookups } from "../api/poImportApi";
 import { getClientsByCompany, getClientById } from "../api/clientApi";
 import { createDeliveryChallan } from "../api/challanApi";
 import { getAllUnits } from "../api/unitsApi";
+import { submitParserFeedback } from "../api/parserFeedbackApi";
 import { formStyles, modalSizes } from "../theme";
 import { todayYmd } from "../utils/dateInput";
 import LookupAutocomplete from "./LookupAutocomplete";
 import QuantityInput from "./QuantityInput";
+import ParserFeedback from "./ParserFeedback";
 
 const colors = {
   blue: "#0d47a1",
@@ -47,6 +49,10 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
   const [matchedFormatId, setMatchedFormatId] = useState(null);
   const [matchedFormatName, setMatchedFormatName] = useState("");
   const [matchedFormatVersion, setMatchedFormatVersion] = useState(null);
+
+  // Parser-feedback verdict for THIS import ("Correct" | "Incorrect" | null).
+  // Optional — never blocks creating the document.
+  const [parserFeedback, setParserFeedback] = useState(null);
 
   // When the server returns 422 (no format saved for this client's layout),
   // we flip into manual-entry mode: the form fields start empty and a clear
@@ -206,7 +212,26 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
         })),
       };
 
-      await createDeliveryChallan(companyId, payload);
+      const created = await createDeliveryChallan(companyId, payload);
+
+      // Parser feedback — best-effort, never blocks. Only meaningful when a
+      // saved format actually parsed this import. The challan is already
+      // created, so a feedback failure is swallowed.
+      if (parserFeedback && matchedFormatId) {
+        try {
+          await submitParserFeedback({
+            status: parserFeedback,
+            file: importMode === "pdf" ? selectedFile : null,
+            purchaseOrderId: created?.data?.id ?? null,
+            companyId,
+            parserVersion: matchedFormatName
+              ? `${matchedFormatName}${matchedFormatVersion ? ` (v${matchedFormatVersion})` : ""}`
+              : (matchedFormatVersion != null ? `v${matchedFormatVersion}` : null),
+            originalFileName: importMode === "pdf" ? (selectedFile?.name || null) : null,
+          });
+        } catch { /* feedback is best-effort — the challan is already created */ }
+      }
+
       onSaved();
     } catch (err) {
       setError(err.response?.data?.error || "Failed to create challan.");
@@ -463,6 +488,13 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                     {rawText}
                   </pre>
                 </details>
+              )}
+
+              {/* Parser feedback — only when a saved format actually parsed
+                  this import. Sits directly above the Create button; optional
+                  and non-blocking. */}
+              {matchedFormatId && (
+                <ParserFeedback value={parserFeedback} onChange={setParserFeedback} disabled={saving} />
               )}
             </>
           )}

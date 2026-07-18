@@ -199,8 +199,8 @@ export default function POFormatForm({ format, onClose, onSaved }) {
       return setError("This client has no per-company records yet — create one first via Clients.");
     }
     if (!name.trim()) return setError("Enter a name for this format.");
-    if (!descriptionHeader.trim() || !quantityHeader.trim() || !unitHeader.trim()) {
-      return setError("Fill the three column headers (Description, Quantity, Unit).");
+    if (!descriptionHeader.trim() || !quantityHeader.trim()) {
+      return setError("Fill the Description and Quantity column headers.");
     }
     if (!isEdit && !rawText) {
       return setError("Upload a sample PDF so we can lock in the layout fingerprint.");
@@ -372,7 +372,7 @@ export default function POFormatForm({ format, onClose, onSaved }) {
           {/* The 5 fields */}
           <h6 style={styles.sectionTitle}>Label / header strings</h6>
           <p style={styles.sectionHint}>
-            Enter the exact text that appears on the PDF. The system finds those strings, then extracts the value/column that follows.
+            Enter the exact text that appears on the PDF. Only the Description and Quantity column headers are required — the parser reads each item's description and quantity by column, so Unit and the PO labels are optional.
           </p>
 
           <div style={styles.row}>
@@ -416,12 +416,12 @@ export default function POFormatForm({ format, onClose, onSaved }) {
               />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={styles.label}>Unit column header *</label>
+              <label style={styles.label}>Unit column header (optional)</label>
               <input
                 style={styles.input}
                 value={unitHeader}
                 onChange={(e) => setUnitHeader(e.target.value)}
-                placeholder='e.g. "Unit" or "UOM"'
+                placeholder='e.g. "Unit" or "UOM" — leave blank if none'
               />
             </div>
           </div>
