@@ -20,6 +20,13 @@
         public string? Site { get; set; }
         public string Status { get; set; } = "Pending";
         public int? InvoiceId { get; set; }
+        /// <summary>
+        /// Set when this challan fulfils a Sales Order (raised via
+        /// "Create Challan from Order"). Null for ad-hoc challans. Each line's
+        /// <see cref="DeliveryItemDto.SalesOrderItemId"/> ties back to the
+        /// ordered line for fulfilment tracking.
+        /// </summary>
+        public int? SalesOrderId { get; set; }
         public string? InvoiceFbrStatus { get; set; }
         public bool IsEditable { get; set; }
         /// <summary>

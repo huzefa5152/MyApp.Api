@@ -81,6 +81,14 @@
         public int StartingGoodsReceiptNumber { get; set; }
         public int CurrentGoodsReceiptNumber { get; set; }
 
+        // Sales Quote and Sales Order each run their OWN per-company numbering
+        // sequence (same starting/current pattern as challan/invoice numbers).
+        // Existing rows default to 0; the allocator treats <=0 as "start at 1".
+        public int StartingSalesQuoteNumber { get; set; }
+        public int CurrentSalesQuoteNumber { get; set; }
+        public int StartingSalesOrderNumber { get; set; }
+        public int CurrentSalesOrderNumber { get; set; }
+
         // ── Tenant isolation ──
         // When false (default), any authenticated user with the right
         // RBAC permission can access this company's data — preserves
@@ -96,5 +104,7 @@
         public List<Invoice> Invoices { get; set; } = new();
         public List<PurchaseBill> PurchaseBills { get; set; } = new();
         public List<GoodsReceipt> GoodsReceipts { get; set; } = new();
+        public List<SalesQuote> SalesQuotes { get; set; } = new();
+        public List<SalesOrder> SalesOrders { get; set; } = new();
     }
 }

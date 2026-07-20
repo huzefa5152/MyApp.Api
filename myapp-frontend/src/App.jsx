@@ -7,6 +7,8 @@ import CompanyPage from "./pages/CompanyPage";
 import ChallansPage from "./pages/ChallanPage";
 import ImportChallansPage from "./pages/ImportChallansPage";
 import InvoicePage from "./pages/InvoicePage";
+import SalesQuotePage from "./pages/SalesQuotePage";
+import SalesOrderPage from "./pages/SalesOrderPage";
 import CreditDebitNotePage from "./pages/CreditDebitNotePage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
 import PurchaseBillsPage from "./pages/PurchaseBillsPage";
@@ -68,6 +70,8 @@ export default function App() {
           <Route path="/po-formats" element={<POFormatsPage />} />
           <Route path="/challans" element={<ChallansPage />} />
           <Route path="/challans/import" element={<ImportChallansPage />} />
+          <Route path="/sales-quotes" element={<SalesQuotePage />} />
+          <Route path="/sales-orders" element={<SalesOrderPage />} />
           {/* Bills tab — pre-FBR data entry. No item-type column, no FBR
               bulk actions, but shows a per-row "Submitted to FBR" badge so
               the operator knows which bills are locked. */}

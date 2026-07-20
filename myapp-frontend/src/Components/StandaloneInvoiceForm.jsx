@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { MdAdd, MdDelete, MdCheck, MdInfo, MdLock, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { createStandaloneInvoice } from "../api/invoiceApi";
+import { getSalesOrderInvoicePrefill, getSalesOrdersForPicker } from "../api/salesOrderApi";
+import SearchableSelect from "./SearchableSelect";
 import { getClientsByCompany } from "../api/clientApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { getItemTypes } from "../api/itemTypeApi";
@@ -137,6 +139,46 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [buyerOpen, setBuyerOpen] = useState(true);
   const [billHeaderOpen, setBillHeaderOpen] = useState(true);
   const [rows, setRows] = useState([blankRow()]);
+
+  // Optional "bill from a Sales Order" — bill mode only. Picking an order
+  // prefills the client, GST rate, and lines (with server-resolved prices),
+  // plus the PO. A standalone bill has no challan, so the PO is stored on the
+  // bill itself (poNumber/poDate, settable here at bill time).
+  const canUseOrders = has("salesorders.list.view");
+  const [billableOrders, setBillableOrders] = useState([]);
+  const [salesOrderId, setSalesOrderId] = useState("");
+  const [poNumber, setPoNumber] = useState("");
+  const [poDate, setPoDate] = useState("");
+
+  useEffect(() => {
+    if (!billsMode || !canUseOrders || !companyId) { setBillableOrders([]); return; }
+    getSalesOrdersForPicker(companyId)
+      .then((list) => setBillableOrders((list || []).filter((o) => (o.billableChallanCount ?? 0) > 0)))
+      .catch(() => setBillableOrders([]));
+  }, [companyId, billsMode, canUseOrders]);
+
+  // Prefill the whole bill from the picked order (client + GST + priced lines
+  // + PO). Clearing it leaves the current edits alone.
+  const selectOrder = async (id) => {
+    setSalesOrderId(id || "");
+    if (!id) return;
+    try {
+      const { data } = await getSalesOrderInvoicePrefill(id);
+      setSelectedClientId(String(data.clientId));
+      if (data.gstRate != null) setGstRate(data.gstRate);
+      setPoNumber(data.customerPoNumber || "");
+      setPoDate(data.customerPoDate ? data.customerPoDate.slice(0, 10) : "");
+      const mapped = (data.lines || []).map((l) => ({
+        ...blankRow(),
+        description: l.description || "",
+        itemTypeId: l.itemTypeId ? String(l.itemTypeId) : "",
+        uom: l.unit || "",
+        quantity: l.quantity != null ? String(l.quantity) : "",
+        unitPrice: l.unitPrice != null ? String(l.unitPrice) : "",
+      }));
+      setRows(mapped.length ? mapped : [blankRow()]);
+    } catch { /* leave the form as-is on prefill failure */ }
+  };
 
   // Bulk-apply mode for the "set Item Type on every row" toolbar — saves
   // the operator from picking the same catalog row N times when every
@@ -422,6 +464,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         scenarioId: scenarioCode || null,
         documentType: documentType || null,
         paymentMode: paymentMode || null,
+        // A standalone bill has no challan to carry the PO — store it here when
+        // the operator sets one (bill mode only).
+        poNumber: billsMode ? (poNumber.trim() || null) : null,
+        poDate: billsMode && poDate ? new Date(poDate).toISOString() : null,
         items: rows.map((r) => ({
           itemTypeId: r.itemTypeId ? parseInt(r.itemTypeId) : null,
           // Description in Invoices mode is the item type's name (locked).
@@ -495,6 +541,35 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
               <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading…</div>
             ) : (
               <>
+                {/* Bill from a Sales Order + PO (bill mode only). Picking an
+                    order prefills the client, GST and priced lines below; the
+                    PO is stored on this (challan-less) bill. */}
+                {billsMode && (
+                  <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "1rem", padding: "0.75rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, background: "#f8fafc" }}>
+                    {canUseOrders && (
+                      <div style={{ flex: 2, minWidth: 240 }}>
+                        <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>
+                          From Sales Order <span style={{ fontWeight: 400 }}>(optional — prefills lines + prices)</span>
+                        </label>
+                        <SearchableSelect
+                          items={billableOrders.map((o) => ({ id: o.id, label: `SO #${o.salesOrderNumber} — ${o.clientName}${o.customerPoNumber ? ` · PO ${o.customerPoNumber}` : ""}` }))}
+                          value={salesOrderId}
+                          onChange={(id) => selectOrder(id ? String(id) : "")}
+                          labelKey="label"
+                          placeholder={billableOrders.length ? "— not from an order —" : "No billable sales orders"}
+                        />
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 160 }}>
+                      <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>PO Number <span style={{ fontWeight: 400 }}>(optional)</span></label>
+                      <input type="text" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Set at bill time" style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: "#fff", color: colors.textPrimary, outline: "none", boxSizing: "border-box" }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 140 }}>
+                      <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>PO Date</label>
+                      <input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: "#fff", color: colors.textPrimary, outline: "none", boxSizing: "border-box" }} />
+                    </div>
+                  </div>
+                )}
                 {/* ── Step 1: Pick FBR scenario ───────────────
                     Collapsed by default — operator sees a one-line summary
                     of the auto-defaulted scenario and can expand to change

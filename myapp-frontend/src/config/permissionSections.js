@@ -36,6 +36,8 @@ export const PERMISSION_SECTIONS = [
   {
     section: "Sales",
     modules: [
+      { key: "SalesQuotes", label: "Sales Quotes" },
+      { key: "SalesOrders", label: "Sales Orders" },
       { key: "Challans", label: "Delivery Challans" },
       // Bills (data entry) and Invoices (FBR submission) are two views of
       // the same underlying bill data. Each has its own permission namespace

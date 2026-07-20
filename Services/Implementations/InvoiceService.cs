@@ -323,10 +323,15 @@ namespace MyApp.Api.Services.Implementations
             // Empty / whitespace-only entries are dropped before the
             // join so a single-challan bill with a blank PO doesn't
             // surface "" in the card.
-            PoNumber = string.Join("; ", inv.DeliveryChallans
-                .Select(dc => dc.PoNumber)
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Distinct()),
+            // A standalone bill stores its own PO (no challan to derive from);
+            // challan-linked bills roll it up from the linked challans.
+            PoNumber = !string.IsNullOrWhiteSpace(inv.PoNumber)
+                ? inv.PoNumber
+                : string.Join("; ", inv.DeliveryChallans
+                    .Select(dc => dc.PoNumber)
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Distinct()),
+            PoDate = inv.PoDate,
             IndentNo = string.Join("; ", inv.DeliveryChallans
                 .Select(dc => dc.IndentNo)
                 .Where(s => !string.IsNullOrWhiteSpace(s))
@@ -683,6 +688,10 @@ namespace MyApp.Api.Services.Implementations
                     PaymentTerms = dto.PaymentTerms,
                     DocumentType = effectiveDocType,
                     PaymentMode = effectivePaymentMode,
+                    // Optional bill-time PO override (blank → the DTO derives the
+                    // PO from the linked challans instead). FBR ignores the PO.
+                    PoNumber = string.IsNullOrWhiteSpace(dto.PoNumber) ? null : dto.PoNumber.Trim(),
+                    PoDate = dto.PoDate,
                     FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
                         ? nextInvoiceNumber.ToString()
                         : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
@@ -996,6 +1005,11 @@ namespace MyApp.Api.Services.Implementations
                     PaymentTerms = finalPaymentTerms,
                     DocumentType = effectiveDocType,
                     PaymentMode = effectivePaymentMode,
+                    // A standalone bill has no challan to carry the PO, so store
+                    // it on the invoice when the operator sets one at bill time
+                    // (e.g. billing directly from a Sales Order).
+                    PoNumber = string.IsNullOrWhiteSpace(dto.PoNumber) ? null : dto.PoNumber.Trim(),
+                    PoDate = dto.PoDate,
                     FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
                         ? nextInvoiceNumber.ToString()
                         : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",

@@ -74,6 +74,10 @@ namespace MyApp.Api.Data
         public DbSet<PurchaseItemSourceLine> PurchaseItemSourceLines { get; set; }
         public DbSet<GoodsReceipt> GoodsReceipts { get; set; }
         public DbSet<GoodsReceiptItem> GoodsReceiptItems { get; set; }
+        public DbSet<SalesQuote> SalesQuotes { get; set; }
+        public DbSet<SalesQuoteItem> SalesQuoteItems { get; set; }
+        public DbSet<SalesOrder> SalesOrders { get; set; }
+        public DbSet<SalesOrderItem> SalesOrderItems { get; set; }
         public DbSet<StockMovement> StockMovements { get; set; }
         public DbSet<OpeningStockBalance> OpeningStockBalances { get; set; }
 
@@ -999,6 +1003,91 @@ namespace MyApp.Api.Data
             // decimal(18,4).
             modelBuilder.Entity<StockMovement>().Property(sm => sm.Quantity).HasPrecision(18, 4);
             modelBuilder.Entity<OpeningStockBalance>().Property(osb => osb.Quantity).HasPrecision(18, 4);
+
+            // ── Sales Quote / Sales Order ───────────────────────────────────
+            // Pre-sale documents (neither is an FBR document). Numbering is
+            // per-company (mirrors Invoice/DeliveryChallan); Company/Client are
+            // Restrict so a master with quotes/orders can't be silently deleted.
+            modelBuilder.Entity<SalesQuote>()
+                .HasOne(q => q.Company).WithMany(c => c.SalesQuotes)
+                .HasForeignKey(q => q.CompanyId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SalesQuote>()
+                .HasOne(q => q.Client).WithMany()
+                .HasForeignKey(q => q.ClientId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SalesQuoteItem>()
+                .HasOne(i => i.SalesQuote).WithMany(q => q.Items)
+                .HasForeignKey(i => i.SalesQuoteId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<SalesQuoteItem>()
+                .HasOne(i => i.ItemType).WithMany()
+                .HasForeignKey(i => i.ItemTypeId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<SalesOrder>()
+                .HasOne(o => o.Company).WithMany(c => c.SalesOrders)
+                .HasForeignKey(o => o.CompanyId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SalesOrder>()
+                .HasOne(o => o.Client).WithMany()
+                .HasForeignKey(o => o.ClientId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SalesOrderItem>()
+                .HasOne(i => i.SalesOrder).WithMany(o => o.Items)
+                .HasForeignKey(i => i.SalesOrderId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<SalesOrderItem>()
+                .HasOne(i => i.ItemType).WithMany()
+                .HasForeignKey(i => i.ItemTypeId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+
+            // Quote <-> Order cross-links: two independent nullable FKs between
+            // the same pair of tables. Both NoAction to avoid a SET NULL /
+            // cascade cycle (SQL Server error 1785). The service clears these
+            // pointers before deleting either side.
+            modelBuilder.Entity<SalesOrder>()
+                .HasOne(o => o.SalesQuote).WithMany()
+                .HasForeignKey(o => o.SalesQuoteId)
+                .OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<SalesQuote>()
+                .HasOne(q => q.ConvertedToSalesOrder).WithMany()
+                .HasForeignKey(q => q.ConvertedToSalesOrderId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            // DeliveryChallan -> SalesOrder (optional; restrict so an order with
+            // challans can't be deleted out from under them — the service guards
+            // this explicitly with a clear message).
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasOne(dc => dc.SalesOrder).WithMany(o => o.DeliveryChallans)
+                .HasForeignKey(dc => dc.SalesOrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // DeliveryItem -> SalesOrderItem (optional; restrict — a delivered
+            // ordered line can't be removed while challan lines reference it).
+            modelBuilder.Entity<DeliveryItem>()
+                .HasOne(di => di.SalesOrderItem).WithMany(soi => soi.DeliveryItems)
+                .HasForeignKey(di => di.SalesOrderItemId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Status defaults mirror DeliveryChallan's pattern.
+            modelBuilder.Entity<SalesQuote>().Property(q => q.Status).HasDefaultValue("Draft");
+            // MaxLength(50) so Status is indexable. Statuses are short code
+            // words ("Open", "Partially Delivered", …).
+            modelBuilder.Entity<SalesOrder>().Property(o => o.Status).HasMaxLength(50).HasDefaultValue("Open");
+
+            // Decimal precision — money (18,2), GST rate (5,2), quantity (18,4).
+            modelBuilder.Entity<SalesQuote>().Property(q => q.Subtotal).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuote>().Property(q => q.GSTRate).HasPrecision(5, 2);
+            modelBuilder.Entity<SalesQuote>().Property(q => q.GSTAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuote>().Property(q => q.GrandTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.Quantity).HasPrecision(18, 4);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.UnitPrice).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.LineTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesOrderItem>().Property(i => i.Quantity).HasPrecision(18, 4);
+
+            // Unique numbering per company (concurrent-create race guard — the
+            // loser retries on the unique violation). Client index for filters.
+            modelBuilder.Entity<SalesQuote>()
+                .HasIndex(q => new { q.CompanyId, q.QuoteNumber }).IsUnique();
+            modelBuilder.Entity<SalesQuote>().HasIndex(q => q.ClientId);
+            modelBuilder.Entity<SalesOrder>()
+                .HasIndex(o => new { o.CompanyId, o.SalesOrderNumber }).IsUnique();
+            modelBuilder.Entity<SalesOrder>().HasIndex(o => o.ClientId);
+            modelBuilder.Entity<DeliveryChallan>().HasIndex(dc => dc.SalesOrderId);
+            modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.SalesOrderItemId);
         }
 
     }

@@ -210,6 +210,28 @@ namespace MyApp.Api.Helpers
             new("goodsreceipts.manage.update", "GoodsReceipts", "Manage", "Update", "Edit a goods-receipt note"),
             new("goodsreceipts.manage.delete", "GoodsReceipts", "Manage", "Delete", "Delete a goods-receipt note"),
 
+            // ── Sales Quotes (priced pre-sale quotation) ────────────────────
+            // Pre-sale documents — NOT FBR documents. A quote answers a
+            // customer enquiry with prices; it can be converted into a Sales
+            // Order (which then drives delivery challans).
+            new("salesquotes.list.view",     "SalesQuotes", "List",   "View",   "View the sales-quotes list"),
+            new("salesquotes.manage.create", "SalesQuotes", "Manage", "Create", "Create a sales quote"),
+            new("salesquotes.manage.update", "SalesQuotes", "Manage", "Update", "Edit a sales quote and change its status"),
+            new("salesquotes.manage.delete", "SalesQuotes", "Manage", "Delete", "Delete a sales quote"),
+            new("salesquotes.print.view",    "SalesQuotes", "Print",  "View",   "Print or download a sales quote"),
+
+            // ── Sales Orders (quantity-only confirmed order) ────────────────
+            // The internal representation of a customer PO. Delivery challans
+            // are raised against an order to track fulfilment. Converting a
+            // quote or importing a PO both create a Sales Order, so those
+            // actions are gated by salesorders.manage.create. Raising a challan
+            // from an order reuses challans.manage.create.
+            new("salesorders.list.view",     "SalesOrders", "List",   "View",   "View the sales-orders list"),
+            new("salesorders.manage.create", "SalesOrders", "Manage", "Create", "Create a sales order (incl. converting a quote or importing a PO)"),
+            new("salesorders.manage.update", "SalesOrders", "Manage", "Update", "Edit a sales order and change its status"),
+            new("salesorders.manage.delete", "SalesOrders", "Manage", "Delete", "Delete a sales order"),
+            new("salesorders.print.view",    "SalesOrders", "Print",  "View",   "Print or download a sales order"),
+
             // ── Inventory / Stock ───────────────────────────────────────────
             new("stock.dashboard.view",     "Inventory", "Dashboard",       "View",   "View on-hand stock dashboard"),
             new("stock.movements.view",     "Inventory", "Movements",       "View",   "View the stock-movement audit log"),

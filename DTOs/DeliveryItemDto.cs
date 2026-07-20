@@ -5,6 +5,8 @@
         public int Id { get; set; }
         public int? ItemTypeId { get; set; }
         public string ItemTypeName { get; set; } = "";
+        /// <summary>Set when this challan line fulfils a Sales Order line (delivered-qty roll-up). Null for ad-hoc challans.</summary>
+        public int? SalesOrderItemId { get; set; }
         public string Description { get; set; } = "";
         // Decimal so fractional UOMs (KG, Liter, etc.) round-trip correctly.
         // The frontend formats with at most 4 decimal places (trailing zeros

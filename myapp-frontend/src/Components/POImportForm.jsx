@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { MdUploadFile, MdTextSnippet, MdAdd, MdDelete, MdWarning, MdCheckCircle, MdArrowBack, MdArrowForward, MdVerified, MdErrorOutline } from "react-icons/md";
+import { MdUploadFile, MdTextSnippet, MdAdd, MdDelete, MdCheckCircle, MdArrowBack, MdArrowForward, MdVerified, MdErrorOutline } from "react-icons/md";
 import { parsePdf, parseText, ensureLookups } from "../api/poImportApi";
 import { getClientsByCompany, getClientById } from "../api/clientApi";
+import { createSalesOrder } from "../api/salesOrderApi";
+import { createSalesQuote, getSalesQuotesForPicker } from "../api/salesQuoteApi";
 import { createDeliveryChallan } from "../api/challanApi";
 import { getAllUnits } from "../api/unitsApi";
 import { submitParserFeedback } from "../api/parserFeedbackApi";
@@ -27,7 +29,18 @@ const colors = {
   warningLight: "#fff3e0",
 };
 
-export default function POImportForm({ companyId, onClose, onSaved }) {
+// Per-target wiring — one PO-import wizard drives three destinations.
+// `showQuoteLink` only makes sense for orders (an order links to a quote);
+// `showPrice` adds a unit-price column for quotes (a priced document);
+// `showIndent` keeps the challan's optional Indent No field.
+const TARGET_CONFIG = {
+  salesorder: { doc: "Sales Order", verb: "Create Sales Order", dateLabel: "Order Date *", showQuoteLink: true, showPrice: false, showIndent: false },
+  salesquote: { doc: "Sales Quote", verb: "Create Sales Quote", dateLabel: "Quote Date *", showQuoteLink: false, showPrice: true, showIndent: false },
+  challan: { doc: "Delivery Challan", verb: "Create Challan", dateLabel: "Delivery Date *", showQuoteLink: false, showPrice: false, showIndent: true },
+};
+
+export default function POImportForm({ companyId, target = "challan", onClose, onSaved }) {
+  const cfg = TARGET_CONFIG[target] || TARGET_CONFIG.challan;
   const [step, setStep] = useState(1); // 1=import, 2=preview
   const [importMode, setImportMode] = useState("pdf"); // "pdf" or "text"
   const [pastedText, setPastedText] = useState("");
@@ -42,6 +55,8 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
   const [deliveryDate, setDeliveryDate] = useState(todayYmd());
   const [selectedClientId, setSelectedClientId] = useState("");
   const [site, setSite] = useState("");
+  const [salesQuoteId, setSalesQuoteId] = useState("");
+  const [quotes, setQuotes] = useState([]);
   const [items, setItems] = useState([]);
   const [rawText, setRawText] = useState("");
 
@@ -50,19 +65,17 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
   const [matchedFormatName, setMatchedFormatName] = useState("");
   const [matchedFormatVersion, setMatchedFormatVersion] = useState(null);
 
-  // Parser-feedback verdict for THIS import ("Correct" | "Incorrect" | null).
-  // Optional — never blocks creating the document.
-  const [parserFeedback, setParserFeedback] = useState(null);
-
   // When the server returns 422 (no format saved for this client's layout),
   // we flip into manual-entry mode: the form fields start empty and a clear
   // error banner tells the operator what to do.
   const [noFormatMessage, setNoFormatMessage] = useState("");
 
+  // Parser-feedback verdict for THIS import ("Correct" | "Incorrect" | null).
+  // Optional — never blocks creating the document.
+  const [parserFeedback, setParserFeedback] = useState(null);
+
   // Lookups
   const [clients, setClients] = useState([]);
-  // Units list — drives whether each row's quantity input accepts decimals
-  // (KG, Liter, Carat) or only whole numbers (Pcs, SET, Pair).
   const [units, setUnits] = useState([]);
   const [saving, setSaving] = useState(false);
 
@@ -71,21 +84,24 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const [clientRes, unitsRes] = await Promise.all([
+        const [clientRes, unitsRes, quoteItems] = await Promise.all([
           getClientsByCompany(companyId),
           getAllUnits().catch(() => ({ data: [] })),
+          // Quote-link picker is order-only — skip the (paged) fetch otherwise.
+          cfg.showQuoteLink
+            ? getSalesQuotesForPicker(companyId).catch(() => [])
+            : Promise.resolve([]),
         ]);
         setClients(clientRes.data);
         setUnits(unitsRes.data || []);
+        setQuotes(quoteItems || []);
       } catch { /* ignore */ }
     };
     load();
-  }, [companyId]);
+  }, [companyId, cfg.showQuoteLink]);
 
   // If the parse response carries a matchedClientId but it's not in the
-  // current company's client list, fetch that one client and merge it in —
-  // otherwise the <select> can't render the pre-selected option and the
-  // operator sees a blank client field despite the match.
+  // current company's client list, fetch that one client and merge it in.
   const ensureClientInList = async (clientId) => {
     if (!clientId) return;
     try {
@@ -112,6 +128,9 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
       }
 
       const data = res.data;
+      // A fresh parse is a fresh PO — drop any quote link chosen for a
+      // previous preview.
+      setSalesQuoteId("");
       setPoNumber(data.poNumber || "");
       setPoDate(data.poDate ? data.poDate.split("T")[0] : "");
       setItems(data.items?.map((item, idx) => ({
@@ -119,14 +138,14 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
         description: item.description || "",
         quantity: item.quantity || 1,
         unit: item.unit || "Pcs",
+        unitPrice: 0,  // priced later (only surfaced for the quote target)
       })) || []);
       setRawText(data.rawText || "");
       setMatchedFormatId(data.matchedFormatId ?? null);
       setMatchedFormatName(data.matchedFormatName || "");
       setMatchedFormatVersion(data.matchedFormatVersion ?? null);
       // Pre-select the client from the matched POFormat so the operator
-      // doesn't have to re-pick it on every import. String-coerced because
-      // select options compare as strings.
+      // doesn't have to re-pick it on every import.
       if (data.matchedClientId) {
         await ensureClientInList(data.matchedClientId);
         setSelectedClientId(String(data.matchedClientId));
@@ -168,7 +187,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
   };
 
   const addItem = () => {
-    setItems((prev) => [...prev, { id: Date.now(), description: "", quantity: 1, unit: "Pcs" }]);
+    setItems((prev) => [...prev, { id: Date.now(), description: "", quantity: 1, unit: "Pcs", unitPrice: 0 }]);
   };
 
   const removeItem = (idx) => {
@@ -177,6 +196,25 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
 
   const selectedClient = clients.find((c) => c.id === parseInt(selectedClientId));
   const clientSites = selectedClient?.site ? selectedClient.site.split(";").map((s) => s.trim()).filter(Boolean) : [];
+  // Quote status on the paged list is DERIVED server-side — Active / Accepted
+  // / Expired. Only OPEN (Active) quotes are candidates for linking an
+  // imported PO — never Expired, never Accepted (already linked). Before a
+  // client is picked the list spans the whole company; once a client is set
+  // it narrows to that client's quotes.
+  const linkableQuotes = quotes.filter((q) =>
+    (q.status === "Active" || q.status === "Draft" || q.status === "Sent")
+    && (!selectedClientId || String(q.clientId) === String(selectedClientId)));
+
+  // Picking a quote first auto-fills the client from it.
+  const handleQuotePick = async (quoteId) => {
+    setSalesQuoteId(quoteId);
+    if (!quoteId) return;
+    const q = quotes.find((x) => String(x.id) === String(quoteId));
+    if (!q?.clientId || String(q.clientId) === String(selectedClientId)) return;
+    if (!clients.some((c) => c.id === q.clientId)) await ensureClientInList(q.clientId);
+    setSelectedClientId(String(q.clientId));
+    setSite(""); // site belongs to the previous client
+  };
 
   const canSubmit = selectedClientId && deliveryDate && items.length > 0 &&
     items.every((i) => i.description.trim() && i.quantity > 0);
@@ -189,34 +227,77 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
     try {
       // Auto-create missing lookup entries
       const descriptions = items.map((i) => i.description.trim()).filter(Boolean);
-      const units = items.map((i) => i.unit.trim()).filter(Boolean);
-      await ensureLookups(descriptions, units);
+      const unitNames = items.map((i) => i.unit.trim()).filter(Boolean);
+      await ensureLookups(descriptions, unitNames);
 
-      // Create the delivery challan
-      const payload = {
-        clientId: parseInt(selectedClientId),
-        clientName: selectedClient?.name || "",
-        site: site || null,
-        poNumber: poNumber.trim(),
-        poDate: poDate ? new Date(poDate).toISOString() : null,
-        indentNo: indentNo.trim() || null,
-        deliveryDate: new Date(deliveryDate).toISOString(),
-        items: items.map((i) => ({
-          description: i.description.trim(),
-          quantity: parseInt(i.quantity),
-          unit: i.unit.trim() || "Pcs",
-          // Item Type lives on the Invoices tab now — challans don't capture
-          // it. Operators classify each line by Item Type when preparing
-          // the bill for FBR submission.
-          itemTypeId: null,
-        })),
-      };
+      // Preserve fractional quantities (KG, Litre).
+      const qty = (i) => (typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1));
+      const clientId = parseInt(selectedClientId);
+      const iso = (d) => (d ? new Date(d).toISOString() : null);
 
-      const created = await createDeliveryChallan(companyId, payload);
+      let created = null;
+      if (target === "salesquote") {
+        // Quote: description + qty + unit + price (operator prices in preview).
+        // PO number/date map to the customer-enquiry reference fields — a
+        // quote has no "customer PO" field of its own (PO lives on the order).
+        created = await createSalesQuote(companyId, {
+          clientId,
+          date: iso(deliveryDate),
+          validUntil: null,
+          customerEnquiryRef: poNumber.trim() || null,
+          enquiryDate: iso(poDate),
+          gstRate: 0,
+          notes: null,
+          items: items.map((i) => ({
+            id: 0,
+            itemTypeId: null,
+            description: i.description.trim(),
+            quantity: qty(i),
+            unit: i.unit.trim() || "Pcs",
+            unitPrice: Number(i.unitPrice) || 0,
+          })),
+        });
+      } else if (target === "challan") {
+        // Direct delivery challan (no sales order). Qty-only; item types
+        // classified later at bill time.
+        created = await createDeliveryChallan(companyId, {
+          clientId,
+          clientName: selectedClient?.name || null,
+          site: site || null,
+          poNumber: poNumber.trim(),
+          poDate: iso(poDate),
+          indentNo: indentNo.trim() || null,
+          deliveryDate: iso(deliveryDate),
+          items: items.map((i) => ({
+            description: i.description.trim(),
+            quantity: qty(i),
+            unit: i.unit.trim() || "Pcs",
+            itemTypeId: null,
+          })),
+        });
+      } else {
+        // Sales Order (default target for the sales-order page). The customer's
+        // PO number/date carry onto the order; delivery challans are raised
+        // against it afterwards to track fulfilment.
+        created = await createSalesOrder(companyId, {
+          clientId,
+          salesQuoteId: salesQuoteId ? parseInt(salesQuoteId) : null,
+          customerPoNumber: poNumber.trim() || null,
+          customerPoDate: iso(poDate),
+          orderDate: iso(deliveryDate),
+          site: site || null,
+          isImported: true,
+          items: items.map((i) => ({
+            description: i.description.trim(),
+            quantity: qty(i),
+            unit: i.unit.trim() || "Pcs",
+            itemTypeId: null,
+          })),
+        });
+      }
 
       // Parser feedback — best-effort, never blocks. Only meaningful when a
-      // saved format actually parsed this import. The challan is already
-      // created, so a feedback failure is swallowed.
+      // saved format actually parsed this import.
       if (parserFeedback && matchedFormatId) {
         try {
           await submitParserFeedback({
@@ -229,12 +310,12 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
               : (matchedFormatVersion != null ? `v${matchedFormatVersion}` : null),
             originalFileName: importMode === "pdf" ? (selectedFile?.name || null) : null,
           });
-        } catch { /* feedback is best-effort — the challan is already created */ }
+        } catch { /* feedback is best-effort — the document is already created */ }
       }
 
       onSaved();
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to create challan.");
+      setError(err.response?.data?.error || `Failed to create ${cfg.doc.toLowerCase()}.`);
     } finally {
       setSaving(false);
     }
@@ -247,7 +328,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
       <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>
-            {step === 1 ? "Import Purchase Order" : "Review & Create Challan"}
+            {step === 1 ? "Import Purchase Order" : `Review & ${cfg.verb}`}
           </h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
@@ -307,7 +388,6 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                   />
                 </div>
               )}
-
             </>
           )}
 
@@ -339,13 +419,29 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                 </div>
               )}
 
-              {/* Header row: Client / Site / Delivery Date — same 2/1.5/1
-                  layout as Add and Edit Challan so the import preview feels
-                  identical to the regular create flow. */}
+              {/* Quote link is asked FIRST — picking one auto-fills the client
+                  below. Order-only; optional; narrows once a client is set. */}
+              {cfg.showQuoteLink && (
+                <div style={styles.row}>
+                  <div style={{ flex: 1, minWidth: 220 }}>
+                    <label style={styles.label}>Sales Quote (optional)</label>
+                    <select style={styles.select} value={salesQuoteId} onChange={(e) => handleQuotePick(e.target.value)}>
+                      <option value="">— not linked —</option>
+                      {linkableQuotes.map((q) => (
+                        <option key={q.id} value={q.id}>
+                          Quote #{q.quoteNumber} · {q.clientName}{q.status ? ` · ${q.status}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Header row: Client / Site / Date */}
               <div style={styles.row}>
                 <div style={{ flex: 2, minWidth: 220 }}>
                   <label style={styles.label}>Client *</label>
-                  <select style={styles.select} value={selectedClientId} onChange={(e) => { setSelectedClientId(e.target.value); setSite(""); }}>
+                  <select style={styles.select} value={selectedClientId} onChange={(e) => { setSelectedClientId(e.target.value); setSite(""); setSalesQuoteId(""); }}>
                     <option value="">— Select Client —</option>
                     {clients.map((cl) => (
                       <option key={cl.id} value={cl.id}>{cl.name}</option>
@@ -373,13 +469,12 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                   )}
                 </div>
                 <div style={{ flex: 1, minWidth: 150 }}>
-                  <label style={styles.label}>Delivery Date *</label>
+                  <label style={styles.label}>{cfg.dateLabel}</label>
                   <input type="date" style={styles.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
                 </div>
               </div>
 
-              {/* PO row: Number + Date + Indent No — same 1/1/1 (180/140/180)
-                  layout as Add and Edit Challan. */}
+              {/* PO row: Number + Date (+ Indent No for challan target) */}
               <div style={styles.row}>
                 <div style={{ flex: 1, minWidth: 180 }}>
                   <label style={styles.label}>PO Number</label>
@@ -389,12 +484,12 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                   <label style={styles.label}>PO Date</label>
                   <input type="date" style={styles.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
                 </div>
-                <div style={{ flex: 1, minWidth: 180 }}>
-                  <label style={styles.label}>
-                    Indent No <span style={{ color: "#5f6d7e", fontWeight: 400 }}>(optional)</span>
-                  </label>
-                  <input style={styles.input} value={indentNo} onChange={(e) => setIndentNo(e.target.value)} placeholder="Leave blank if not used" />
-                </div>
+                {cfg.showIndent && (
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <label style={styles.label}>Indent No</label>
+                    <input style={styles.input} value={indentNo} onChange={(e) => setIndentNo(e.target.value)} placeholder="Leave blank if not used" />
+                  </div>
+                )}
               </div>
 
               {/* Items Table */}
@@ -417,15 +512,12 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                    {/* Header — Item Type lives on the Invoices tab now,
-                        so the PO review stage just shows description / qty /
-                        unit. The operator classifies items by Item Type when
-                        preparing the bill for FBR submission. */}
                     <div style={styles.itemsHeader}>
                       <span style={{ flex: 0.5 }}>#</span>
                       <span style={{ flex: 2.5 }}>Description *</span>
                       <span style={{ flex: 0.6, textAlign: "center" }}>Qty *</span>
                       <span style={{ flex: 1 }}>Unit</span>
+                      {cfg.showPrice && <span style={{ flex: 1, textAlign: "right" }}>Unit Price</span>}
                       <span style={{ flex: 0.3 }}></span>
                     </div>
                     {items.map((item, idx) => (
@@ -439,10 +531,9 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                             onChange={(val) => handleItemChange(idx, "description", val)}
                             inputClassName=""
                             inputStyle={{ ...styles.input, padding: "0.35rem 0.5rem", fontSize: "0.85rem" }}
+                            multiline
                           />
                         </div>
-                        {/* Wider so 4-place decimals (0.0004, 1234.5678)
-                            stay fully visible alongside the spinner. */}
                         <div style={{ flex: 1.1 }}>
                           <QuantityInput
                             value={item.quantity}
@@ -462,6 +553,18 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
                             inputStyle={{ ...styles.input, padding: "0.35rem 0.5rem", fontSize: "0.85rem" }}
                           />
                         </div>
+                        {cfg.showPrice && (
+                          <div style={{ flex: 1 }}>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={item.unitPrice}
+                              onChange={(e) => handleItemChange(idx, "unitPrice", e.target.value)}
+                              style={{ ...styles.input, padding: "0.35rem 0.5rem", fontSize: "0.85rem", textAlign: "right" }}
+                            />
+                          </div>
+                        )}
                         <div style={{ flex: 0.3, display: "flex", alignItems: "center", justifyContent: "center" }}>
                           <button
                             type="button"
@@ -491,8 +594,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
               )}
 
               {/* Parser feedback — only when a saved format actually parsed
-                  this import. Sits directly above the Create button; optional
-                  and non-blocking. */}
+                  this import. Optional and non-blocking. */}
               {matchedFormatId && (
                 <ParserFeedback value={parserFeedback} onChange={setParserFeedback} disabled={saving} />
               )}
@@ -532,7 +634,7 @@ export default function POImportForm({ companyId, onClose, onSaved }) {
               disabled={!canSubmit || saving}
               onClick={handleSubmit}
             >
-              {saving ? "Creating..." : "Create Challan"}
+              {saving ? "Creating..." : cfg.verb}
             </button>
           )}
         </div>
@@ -548,7 +650,6 @@ const styles = {
   select: { width: "100%", padding: "0.6rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", cursor: "pointer" },
   textarea: { width: "100%", padding: "0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.85rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box", fontFamily: "monospace", resize: "vertical" },
   errorAlert: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, border: `1px solid ${colors.danger}30`, fontSize: "0.85rem" },
-  warningAlert: { display: "flex", alignItems: "flex-start", gap: "0.4rem", backgroundColor: colors.warningLight, color: "#5d4037", padding: "0.5rem 0.75rem", borderRadius: 6, fontSize: "0.82rem" },
   modeTabs: { display: "flex", gap: "0.5rem", marginBottom: "1.25rem" },
   modeTab: { display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.6rem 1.25rem", borderRadius: 8, border: `2px solid ${colors.cardBorder}`, backgroundColor: "#fff", fontSize: "0.88rem", fontWeight: 600, color: colors.textSecondary, cursor: "pointer", transition: "all 0.2s" },
   modeTabActive: { borderColor: colors.blue, color: colors.blue, backgroundColor: "#e3f2fd" },

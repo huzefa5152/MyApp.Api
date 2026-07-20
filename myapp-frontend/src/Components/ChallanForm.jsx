@@ -3,9 +3,12 @@ import { MdAdd, MdClose, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SelectDropdown from "./SelectDropdown";
+import SearchableSelect from "./SearchableSelect";
 import QuantityInput from "./QuantityInput";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
+import { getOpenSalesOrdersByCompany } from "../api/salesOrderApi";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { formStyles, modalSizes } from "../theme";
 
 const colors = {
@@ -23,12 +26,19 @@ const colors = {
 };
 
 export default function ChallanForm({ onClose, onSaved, companyId }) {
+  const { has } = usePermissions();
+  const canUseOrders = has("salesorders.list.view");
   const [client, setClient] = useState(null);
   const [site, setSite] = useState("");
   const [poNumber, setPoNumber] = useState("");
   const [poDate, setPoDate] = useState("");
   const [indentNo, setIndentNo] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
+  // Optional Sales Order this challan fulfils. When set, the header + lines
+  // are autofilled from the order and the challan is created via the order's
+  // fulfilment flow (linkage + auto-close).
+  const [openOrders, setOpenOrders] = useState([]);
+  const [salesOrderId, setSalesOrderId] = useState("");
   const [items, setItems] = useState([
     { description: "", quantity: 1, unit: "" },
   ]);
@@ -44,6 +54,35 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   useEffect(() => {
     getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
   }, []);
+
+  // Open sales orders (partial + undelivered) — powers the optional
+  // "From Sales Order" picker. Only fetched when the user can see orders.
+  useEffect(() => {
+    if (!canUseOrders || !companyId) { setOpenOrders([]); return; }
+    getOpenSalesOrdersByCompany(companyId).then(({ data }) => setOpenOrders(data || [])).catch(() => setOpenOrders([]));
+  }, [companyId, canUseOrders]);
+
+  // Picking a Sales Order autofills the challan from it: client, PO, site, and
+  // the order's still-undelivered lines (remaining qty, each linked back to its
+  // ordered line). Clearing it resets to a blank, ad-hoc challan.
+  const selectOrder = (id) => {
+    setSalesOrderId(id || "");
+    if (!id) {
+      setClient(null); setSite(""); setPoNumber(""); setPoDate("");
+      setItems([{ description: "", quantity: 1, unit: "" }]);
+      return;
+    }
+    const o = openOrders.find((x) => String(x.id) === String(id));
+    if (!o) return;
+    setClient({ id: o.clientId, label: o.clientName, site: null });
+    setSite(o.site || "");
+    setPoNumber(o.customerPoNumber || "");
+    setPoDate(o.customerPoDate ? o.customerPoDate.slice(0, 10) : "");
+    const lines = (o.items || [])
+      .filter((i) => (i.remainingQuantity ?? 0) > 0)
+      .map((i) => ({ salesOrderItemId: i.id, description: i.description, quantity: i.remainingQuantity, unit: i.unit }));
+    setItems(lines.length ? lines : [{ description: "", quantity: 1, unit: "" }]);
+  };
 
   useEffect(() => {
     if (itemsContainerRef.current) {
@@ -109,6 +148,9 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
     setSaving(true);
     try {
       await onSaved({
+        // When set, the parent creates the challan through the sales-order
+        // fulfilment flow (which links each line + auto-closes the order).
+        salesOrderId: salesOrderId ? parseInt(salesOrderId) : null,
         clientId: client.id,
         clientName: client.label,
         site: site || null,
@@ -117,7 +159,10 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
         indentNo: indentNo.trim() || null,
         deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : null,
         items: validItems.map((i) => ({
-          ...i,
+          description: i.description,
+          unit: i.unit,
+          // Ties the delivered line back to its ordered line (SO fulfilment).
+          salesOrderItemId: i.salesOrderItemId ?? null,
           // Item Type isn't captured on the challan side anymore — that
           // happens on the Invoices tab during FBR classification. Send
           // null so the backend stores DeliveryItem.ItemTypeId=null.
@@ -158,6 +203,26 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
             {error && <div style={styles.errorAlert}>{error}</div>}
+
+            {/* Optional: fulfil a Sales Order. Picking one autofills the client,
+                PO, site and the order's undelivered lines below, and links the
+                challan to the order (fulfilment tracking + auto-close). */}
+            {canUseOrders && (
+              <div style={styles.row}>
+                <div style={{ flex: 1, minWidth: 260 }}>
+                  <label style={styles.label}>
+                    From Sales Order <span style={{ color: colors.textSecondary, fontWeight: 400 }}>(optional — autofills the challan)</span>
+                  </label>
+                  <SearchableSelect
+                    items={openOrders.map((o) => ({ id: o.id, label: `SO #${o.salesOrderNumber} — ${o.clientName}${o.customerPoNumber ? ` · PO ${o.customerPoNumber}` : ""}` }))}
+                    value={salesOrderId}
+                    onChange={(id) => selectOrder(id ? String(id) : "")}
+                    labelKey="label"
+                    placeholder={openOrders.length ? "— not from an order —" : "No open sales orders for this company"}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Header row: Client / Site / Delivery Date — same layout as
                 Edit Challan so operators see identical shape on both flows.
@@ -213,12 +278,12 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                 ChallanEditForm's PO row so Add and Edit look identical. */}
             <div style={styles.row}>
               <div style={{ flex: 1, minWidth: 180 }}>
-                <label style={styles.label}>PO Number</label>
-                <input type="text" style={styles.input} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Enter PO number" />
+                <label style={styles.label}>PO Number{salesOrderId && <span style={{ color: colors.textSecondary, fontWeight: 400 }}> (from the order)</span>}</label>
+                <input type="text" style={{ ...styles.input, ...(salesOrderId ? { backgroundColor: "#eef1f5", cursor: "not-allowed" } : {}) }} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Enter PO number" disabled={!!salesOrderId} />
               </div>
               <div style={{ flex: 1, minWidth: 140 }}>
                 <label style={styles.label}>PO Date</label>
-                <input type="date" style={styles.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
+                <input type="date" style={{ ...styles.input, ...(salesOrderId ? { backgroundColor: "#eef1f5", cursor: "not-allowed" } : {}) }} value={poDate} onChange={(e) => setPoDate(e.target.value)} disabled={!!salesOrderId} />
               </div>
               <div style={{ flex: 1, minWidth: 180 }}>
                 <label style={styles.label}>

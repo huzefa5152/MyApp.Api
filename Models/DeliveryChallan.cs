@@ -40,11 +40,18 @@
         // for natively-created and imported challans.
         public int? DuplicatedFromId { get; set; }
 
+        // Optional link to the Sales Order this challan fulfils. Null for
+        // ad-hoc challans not raised against an order. Each line's
+        // DeliveryItem.SalesOrderItemId ties back to the ordered line so
+        // delivered-vs-ordered quantities roll up for fulfilment tracking.
+        public int? SalesOrderId { get; set; }
+
         // Navigation
         public Company Company { get; set; } = null!;
         public Client Client { get; set; } = null!;
         public Invoice? Invoice { get; set; }
         public DeliveryChallan? DuplicatedFrom { get; set; }
+        public SalesOrder? SalesOrder { get; set; }
         public ICollection<DeliveryItem> Items { get; set; } = new List<DeliveryItem>();
     }
 }

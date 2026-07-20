@@ -113,6 +113,15 @@ namespace MyApp.Api.Models
         /// </summary>
         public bool? NoteAffectsStock { get; set; }
 
+        // ── Purchase order (standalone bills) ────────────────────────────
+        // For a challan-linked bill the PO is DERIVED from the linked
+        // challans. A STANDALONE (no-challan) bill — including one billed
+        // directly from a Sales Order — has no challan to carry the PO, so it
+        // is stored here and set at bill time. Null for challan-linked bills
+        // (their DTO PoNumber still derives from the challans).
+        public string? PoNumber { get; set; }
+        public DateTime? PoDate { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation

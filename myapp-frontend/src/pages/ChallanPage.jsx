@@ -17,6 +17,7 @@ import {
   getChallanPrintData,
 } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
+import { createChallanFromOrder } from "../api/salesOrderApi";
 import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { defaultChallanTemplate } from "../utils/defaultTemplates";
@@ -159,7 +160,21 @@ export default function ChallanPage() {
 
   const handleSaveChallan = async (payload) => {
     if (!selectedCompany) return;
-    await createDeliveryChallan(selectedCompany.id, payload);
+    if (payload.salesOrderId) {
+      // Fulfil a Sales Order — route through its create-challan flow so the
+      // challan links back to each ordered line and the order auto-closes
+      // when fully delivered. Only ordered lines are delivered this way.
+      const lines = (payload.items || [])
+        .filter((i) => i.salesOrderItemId && Number(i.quantity) > 0)
+        .map((i) => ({ salesOrderItemId: i.salesOrderItemId, quantity: i.quantity }));
+      await createChallanFromOrder(payload.salesOrderId, {
+        deliveryDate: payload.deliveryDate,
+        site: payload.site,
+        lines,
+      });
+    } else {
+      await createDeliveryChallan(selectedCompany.id, payload);
+    }
     fetchChallans(selectedCompany.id, page);
     setShowModal(false);
   };

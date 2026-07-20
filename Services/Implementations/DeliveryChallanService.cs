@@ -112,11 +112,13 @@ namespace MyApp.Api.Services.Implementations
                 IsImported = dc.IsImported,
                 DuplicatedFromId = dc.DuplicatedFromId,
                 DuplicatedFromChallanNumber = dc.DuplicatedFrom?.ChallanNumber,
+                SalesOrderId = dc.SalesOrderId,
                 Items = dc.Items.Select(i => new DeliveryItemDto
                 {
                     Id = i.Id,
                     ItemTypeId = i.ItemTypeId,
                     ItemTypeName = i.ItemType?.Name ?? "",
+                    SalesOrderItemId = i.SalesOrderItemId,
                     Description = i.Description,
                     Quantity = i.Quantity,
                     Unit = i.Unit
@@ -284,9 +286,14 @@ namespace MyApp.Api.Services.Implementations
                 IndentNo = string.IsNullOrWhiteSpace(dto.IndentNo) ? null : dto.IndentNo.Trim(),
                 DeliveryDate = dto.DeliveryDate,
                 Status = status,
+                // Link to the Sales Order this challan fulfils (null for ad-hoc
+                // challans). Per-line SalesOrderItemId ties each line to its
+                // ordered line so delivered-vs-ordered quantities roll up.
+                SalesOrderId = dto.SalesOrderId,
                 Items = dto.Items.Select(i => new DeliveryItem
                 {
                     ItemTypeId = i.ItemTypeId,
+                    SalesOrderItemId = i.SalesOrderItemId,
                     Description = i.Description,
                     Quantity = i.Quantity,
                     Unit = i.Unit

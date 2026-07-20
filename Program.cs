@@ -244,6 +244,8 @@ builder.Services.AddScoped<IItemTypeRepository, ItemTypeRepository>();
 builder.Services.AddScoped<IPrintTemplateRepository, PrintTemplateRepository>();
 builder.Services.AddScoped<IMergeFieldRepository, MergeFieldRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+builder.Services.AddScoped<ISalesQuoteRepository, SalesQuoteRepository>();
+builder.Services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
 
 // Register Services
 builder.Services.AddScoped<ICompanyService, CompanyService>();
@@ -264,6 +266,11 @@ builder.Services.AddScoped<ISupplierGroupService, SupplierGroupService>();
 builder.Services.AddScoped<IPurchaseBillService, PurchaseBillService>();
 builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+// Sales Quote (priced quotation) + Sales Order (quantity-only). SalesQuote
+// depends on ISalesOrderService (convert-to-order); SalesOrder depends on
+// IDeliveryChallanService (create-challan-from-order). No true DI cycle.
+builder.Services.AddScoped<ISalesQuoteService, SalesQuoteService>();
+builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<IFbrService, FbrService>();

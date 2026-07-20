@@ -107,6 +107,8 @@ namespace MyApp.Api.DTOs
         // exist across the linked challans (rare in practice — most
         // bills cover one challan).
         public string? PoNumber { get; set; }
+        /// <summary>PO date for a standalone bill (stored on the invoice). Null when derived from challans.</summary>
+        public DateTime? PoDate { get; set; }
         public string? IndentNo { get; set; }
         public string? Site { get; set; }
     }
@@ -182,6 +184,11 @@ namespace MyApp.Api.DTOs
         public List<int> ChallanIds { get; set; } = new();
         public List<CreateInvoiceItemDto> Items { get; set; } = new();
         public Dictionary<int, DateTime> PoDateUpdates { get; set; } = new();
+        /// <summary>Optional PO number/date set at bill time. When provided it's
+        /// stored on the bill and overrides the value derived from the linked
+        /// challans; leave blank to keep deriving the PO from the challans.</summary>
+        public string? PoNumber { get; set; }
+        public DateTime? PoDate { get; set; }
     }
 
     public class CreateInvoiceItemDto
@@ -239,6 +246,10 @@ namespace MyApp.Api.DTOs
         /// items.
         /// </summary>
         public string? ScenarioId { get; set; }
+        /// <summary>Optional PO number/date set at bill time (a standalone bill has
+        /// no challan to carry the PO — e.g. billing directly from a Sales Order).</summary>
+        public string? PoNumber { get; set; }
+        public DateTime? PoDate { get; set; }
         public List<CreateStandaloneInvoiceItemDto> Items { get; set; } = new();
     }
 

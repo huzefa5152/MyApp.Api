@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { MdSearch, MdCheck, MdInfo, MdLock, MdAdd, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { getPendingChallansByCompany } from "../api/challanApi";
+import { getSalesOrdersForPicker, getSalesOrderChallans } from "../api/salesOrderApi";
+import SearchableSelect from "./SearchableSelect";
 import { createInvoice, getLastRatesForChallan } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getItemTypes } from "../api/itemTypeApi";
@@ -93,9 +95,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [allChallans, setAllChallans] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
+  // Optional "bill from a Sales Order" shortcut — picks the order's client and
+  // pre-ticks its billable challans in the list below.
+  const canUseOrders = has("salesorders.list.view");
+  const [billableOrders, setBillableOrders] = useState([]);
+  const [salesOrderId, setSalesOrderId] = useState("");
   const [itemPrices, setItemPrices] = useState({});
   const [itemDescriptions, setItemDescriptions] = useState({});
   const [commonPoDate, setCommonPoDate] = useState("");
+  // Optional bill-time PO number override (blank → the bill derives its PO from
+  // the linked challans). PO date reuses commonPoDate below.
+  const [poNumber, setPoNumber] = useState("");
   const [dcSearch, setDcSearch] = useState("");
   const [gstRate, setGstRate] = useState(18);
   const [paymentTerms, setPaymentTerms] = useState("");
@@ -411,6 +421,43 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     );
   };
 
+  // Load sales orders that have ≥1 billable challan, for the "bill from a
+  // Sales Order" picker (only when the user can see orders).
+  useEffect(() => {
+    if (!canUseOrders || !companyId) { setBillableOrders([]); return; }
+    getSalesOrdersForPicker(companyId)
+      .then((list) => setBillableOrders((list || []).filter((o) => (o.billableChallanCount ?? 0) > 0)))
+      .catch(() => setBillableOrders([]));
+  }, [companyId, canUseOrders]);
+
+  // Pick a Sales Order → set its client and pre-tick its billable
+  // (Pending/Imported, unbilled) challans that are in the pending list. The
+  // existing multi-challan bill flow (price prefill, PO roll-up) then applies.
+  const selectFromOrder = async (id) => {
+    setSalesOrderId(id || "");
+    if (!id) return;
+    const o = billableOrders.find((x) => String(x.id) === String(id));
+    if (!o) return;
+    setSelectedClientId(String(o.clientId));
+    setSelectedIds([]);
+    setItemPrices({});
+    setItemDescriptions({});
+    setCommonPoDate("");
+    setDcSearch("");
+    setError("");
+    setLastRates({});
+    setAutoFilledFromHistory(false);
+    setFetchedRateChallanIds(new Set());
+    try {
+      const { data } = await getSalesOrderChallans(id);
+      const billable = (data || [])
+        .filter((c) => (c.status === "Pending" || c.status === "Imported") && !c.invoiceId)
+        .map((c) => c.id)
+        .filter((cid) => allChallans.some((ac) => ac.id === cid));
+      setSelectedIds(billable);
+    } catch { /* leave nothing pre-ticked on failure */ }
+  };
+
   const selectAll = () => {
     const visible = filteredChallans.map((c) => c.id);
     const allSelected = visible.every((id) => selectedIds.includes(id));
@@ -539,6 +586,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
             : (itemSaleTypes[item.id]?.trim() || null),
         })),
         poDateUpdates,
+        // Optional bill-time PO override (blank → the bill derives the PO from
+        // its challans). PO date reuses commonPoDate.
+        poNumber: poNumber.trim() || null,
+        poDate: commonPoDate ? new Date(commonPoDate).toISOString() : null,
       });
 
       // ── Remember FBR defaults per item description ──
@@ -646,6 +697,34 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
               <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading...</div>
             ) : (
               <>
+                {/* Optional: bill from a Sales Order (bill mode). Picking one
+                    sets the buyer and pre-ticks its billable challans below. */}
+                {billsMode && (
+                  <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "1rem", padding: "0.75rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, background: "#f8fafc" }}>
+                    {canUseOrders && (
+                      <div style={{ flex: 2, minWidth: 240 }}>
+                        <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>
+                          Bill from Sales Order <span style={{ fontWeight: 400 }}>(optional — pre-ticks its billable challans)</span>
+                        </label>
+                        <SearchableSelect
+                          items={billableOrders.map((o) => ({ id: o.id, label: `SO #${o.salesOrderNumber} — ${o.clientName} · ${o.billableChallanCount} billable challan${o.billableChallanCount !== 1 ? "s" : ""}` }))}
+                          value={salesOrderId}
+                          onChange={(id) => selectFromOrder(id ? String(id) : "")}
+                          labelKey="label"
+                          placeholder={billableOrders.length ? "— not from an order —" : "No sales orders with billable challans"}
+                        />
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 160 }}>
+                      <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>PO Number <span style={{ fontWeight: 400 }}>(optional)</span></label>
+                      <input type="text" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Blank = from challan(s)" style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: "1px solid #d0d7e2", fontSize: "0.9rem", backgroundColor: "#fff", color: colors.textPrimary, outline: "none", boxSizing: "border-box" }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 140 }}>
+                      <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>PO Date</label>
+                      <input type="date" value={commonPoDate} onChange={(e) => setCommonPoDate(e.target.value)} style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: "1px solid #d0d7e2", fontSize: "0.9rem", backgroundColor: "#fff", color: colors.textPrimary, outline: "none", boxSizing: "border-box" }} />
+                    </div>
+                  </div>
+                )}
                 {/* Step 1 — Pick FBR scenario. Collapsed by default —
                     operator sees a one-line summary of the auto-defaulted
                     scenario and can expand to switch. Auto-collapses on
