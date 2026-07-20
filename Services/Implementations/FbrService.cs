@@ -42,9 +42,12 @@ namespace MyApp.Api.Services.Implementations
 
         // Max Rs. the FBR (overlay) subtotal may differ from the delivery-bill
         // subtotal before the dual-book adjustment is treated as "out of date"
-        // and Validate/Submit is blocked. Matches the default narrow-edit
-        // total-preservation tolerance in InvoiceService.
-        private const decimal AdjustmentDriftTolerancePkr = 2m;
+        // and Validate/Submit is blocked. The tax consultant's qty / unit-price
+        // adjustments routinely round a few rupees away from the delivery bill;
+        // that minor difference is acceptable and must not block submission.
+        // Operator-tunable via Invoice:NarrowEditTotalTolerancePkr (appsettings);
+        // InvoiceService reads the same key so the UI "out of date" flag agrees.
+        private readonly decimal _adjustmentTolerancePkr;
 
         // Province code → name cache (populated from reference API on first use)
         private static readonly ConcurrentDictionary<int, Dictionary<int, string>> _provinceCache = new();
@@ -187,7 +190,8 @@ namespace MyApp.Api.Services.Implementations
             ISensitiveDataRedactor redactor,
             ILogger<FbrService> logger,
             IFbrCommunicationLogService fbrComm,
-            IHttpContextAccessor http)
+            IHttpContextAccessor http,
+            Microsoft.Extensions.Configuration.IConfiguration config)
         {
             _invoiceRepo = invoiceRepo;
             _companyRepo = companyRepo;
@@ -200,6 +204,7 @@ namespace MyApp.Api.Services.Implementations
             _logger = logger;
             _fbrComm = fbrComm;
             _http = http;
+            _adjustmentTolerancePkr = config.GetValue<decimal?>("Invoice:NarrowEditTotalTolerancePkr") ?? 10m;
         }
 
         // ── Text sanitization for FBR payloads ──────────────────
@@ -661,7 +666,7 @@ namespace MyApp.Api.Services.Implementations
                         ? ii.Adjustment.AdjustedLineTotal.Value
                         : ii.LineTotal);
                 var drift = Math.Abs(billSubtotal - fbrSubtotal);
-                if (drift > AdjustmentDriftTolerancePkr)
+                if (drift > _adjustmentTolerancePkr)
                     errors.Add(
                         $"This bill was changed after it was adjusted for FBR. The delivery bill now totals " +
                         $"Rs. {billSubtotal:N2}, but the FBR adjustment totals Rs. {fbrSubtotal:N2} (off by Rs. {drift:N2}). " +

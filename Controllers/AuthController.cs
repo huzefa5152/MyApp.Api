@@ -158,7 +158,7 @@ namespace MyApp.Api.Controllers
                 // running diff and toast match what's actually enforced.
                 AppConfig = new
                 {
-                    NarrowEditTolerancePkr = _configuration.GetValue<int>("Invoice:NarrowEditTotalTolerancePkr", 2),
+                    NarrowEditTolerancePkr = _configuration.GetValue<int>("Invoice:NarrowEditTotalTolerancePkr", 10),
                 }
             });
         }

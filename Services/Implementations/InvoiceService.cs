@@ -18,6 +18,15 @@ namespace MyApp.Api.Services.Implementations
         private readonly IClientRepository _clientRepo;
         private readonly AppDbContext _context;
         private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
+        // Max Rs. the FBR (overlay) subtotal / a narrow edit may differ from the
+        // delivery-bill subtotal before it is treated as a real total change:
+        // an "out of date" adjustment (badge + blocked Validate/Submit) or a
+        // rejected narrow edit. The tax consultant's qty / unit-price tweaks
+        // round a few rupees away from the bill; that is acceptable and must not
+        // block submission. Operator-tunable via Invoice:NarrowEditTotalTolerancePkr
+        // (appsettings.json, default 10). FbrService reads the same key so its
+        // Validate/Submit gate always agrees with this flag.
+        private readonly decimal _totalTolerancePkr;
         private readonly IAuditLogService _auditLog;
         // 2026-05-12: injected so every invoice save (create / update /
         // narrow-edit) can sync the StockMovement rows for the bill.
@@ -52,6 +61,7 @@ namespace MyApp.Api.Services.Implementations
             _clientRepo = clientRepo;
             _context = context;
             _config = config;
+            _totalTolerancePkr = config.GetValue<decimal?>("Invoice:NarrowEditTotalTolerancePkr") ?? 10m;
             _logger = logger;
             _auditLog = auditLog;
             _stock = stock;
@@ -213,12 +223,7 @@ namespace MyApp.Api.Services.Implementations
             return ii.LineTotal;
         }
 
-        // Max Rs. the FBR (overlay) subtotal may drift from the bill subtotal
-        // before the dual-book adjustment is flagged "out of date". Matches
-        // the narrow-edit total-preservation default + FbrService's gate.
-        private const decimal AdjustmentDriftTolerancePkr = 2m;
-
-        private static InvoiceDto ToDto(Invoice inv)
+        private InvoiceDto ToDto(Invoice inv)
         {
             var missing = ComputeFbrMissing(inv);
             // Dual-book "adjustment out of date" detection: an overlay exists
@@ -233,7 +238,7 @@ namespace MyApp.Api.Services.Implementations
                         : ii.LineTotal)
                 : (decimal?)null;
             bool adjustmentStale = anyOverlay
-                && Math.Abs(fbrAdjustedSubtotal!.Value - inv.Subtotal) > AdjustmentDriftTolerancePkr;
+                && Math.Abs(fbrAdjustedSubtotal!.Value - inv.Subtotal) > _totalTolerancePkr;
             return new InvoiceDto
         {
             Id = inv.Id,
@@ -1662,7 +1667,7 @@ namespace MyApp.Api.Services.Implementations
                     {
                         newSubtotal = invoice.Items.Sum(ii => ii.LineTotal);
                     }
-                    var tolerance = _config.GetValue<decimal?>("Invoice:NarrowEditTotalTolerancePkr") ?? 2m;
+                    var tolerance = _totalTolerancePkr;
                     var diff = Math.Abs(newSubtotal - originalSubtotal);
                     if (diff > tolerance)
                     {

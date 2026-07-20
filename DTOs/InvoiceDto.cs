@@ -463,7 +463,10 @@ namespace MyApp.Api.DTOs
         /// (same gate as Quantity). The service then enforces a total-
         /// preservation rule: Σ (qty × unitPrice) across the new lines
         /// must equal the bill's original Subtotal within a small
-        /// tolerance (configurable, default 2 PKR). This lets the
+        /// tolerance (configurable via Invoice:NarrowEditTotalTolerancePkr,
+        /// default 10 PKR — the same window the FBR "out of date" gate
+        /// accepts, so a re-adjustment the gate would pass can also be
+        /// saved). This lets the
         /// operator re-distribute quantities and prices across lines
         /// (a common move during FBR classification — splitting one
         /// purchase into multiple HS-coded lines) without changing the

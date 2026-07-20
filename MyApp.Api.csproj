@@ -9,13 +9,21 @@
     <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 
-  <!-- scripts/ contains standalone dev tools (PdfDumper) that must not be
-       compiled into the main web API assembly — each has its own .csproj. -->
+  <!-- scripts/ and tools/ contain standalone dev tools (PdfDumper, PO-parser
+       harnesses, the ManagerImport ETL) that must not be compiled into the
+       main web API assembly — each has its own .csproj. Without excluding
+       them, once such a tool is built locally its generated obj/ AssemblyInfo
+       gets globbed into this project and duplicates the assembly attributes
+       (CS0579). obj/ is gitignored, so CI never hits this — only local builds. -->
   <ItemGroup>
     <Compile Remove="scripts/**/*.cs" />
     <Content Remove="scripts/**/*" />
     <None Remove="scripts/**/*" />
     <EmbeddedResource Remove="scripts/**/*" />
+    <Compile Remove="tools/**/*.cs" />
+    <Content Remove="tools/**/*" />
+    <None Remove="tools/**/*" />
+    <EmbeddedResource Remove="tools/**/*" />
   </ItemGroup>
 
   <ItemGroup>
