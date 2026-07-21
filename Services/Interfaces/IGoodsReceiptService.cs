@@ -10,6 +10,8 @@ namespace MyApp.Api.Services.Interfaces
             string? status = null,
             DateTime? dateFrom = null, DateTime? dateTo = null);
         Task<GoodsReceiptDto?> GetByIdAsync(int id);
+        /// <summary>Flat merge-data payload for the GoodsReceipt print templates.</summary>
+        Task<PrintGoodsReceiptDto?> GetPrintDataAsync(int id);
         Task<GoodsReceiptDto> CreateAsync(CreateGoodsReceiptDto dto);
         Task<GoodsReceiptDto?> UpdateAsync(int id, UpdateGoodsReceiptDto dto);
         Task<bool> DeleteAsync(int id);

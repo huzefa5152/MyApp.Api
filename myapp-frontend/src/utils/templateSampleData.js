@@ -1,0 +1,350 @@
+/**
+ * Shared print-template metadata + preview machinery.
+ *
+ * Single source of truth for: the document-type list, per-type sample merge
+ * data, the built-in default template per type, and the branding-enriched
+ * preview builder. Consumed by the Template Editor, the Starter Gallery, and
+ * the Apply-Starter comparison — so a live preview renders identically
+ * wherever it appears. (Division-free: master isolates by company only.)
+ *
+ * The newer types (Credit/Debit Note, PurchaseBill, GoodsReceipt, Receipt)
+ * have no dedicated default-template module, so their "default" is the first
+ * starter design for that type.
+ */
+import { mergeTemplate } from "./templateEngine";
+import {
+  defaultChallanTemplate, defaultBillTemplate, defaultTaxInvoiceTemplate,
+} from "./defaultTemplates";
+import { defaultQuoteTemplate, defaultOrderTemplate } from "./salesDocTemplates";
+import { creditNoteStarters } from "./starters/creditNote";
+import { debitNoteStarters } from "./starters/debitNote";
+import { purchaseBillStarters } from "./starters/purchaseBill";
+import { goodsReceiptStarters } from "./starters/goodsReceipt";
+import { receiptStarters } from "./starters/receipt";
+
+export const TEMPLATE_TYPES = [
+  { value: "Challan", label: "Delivery Challan" },
+  { value: "Bill", label: "Bill / Invoice" },
+  { value: "TaxInvoice", label: "Sales Tax Invoice" },
+  { value: "SalesQuote", label: "Sales Quote" },
+  { value: "SalesOrder", label: "Sales Order" },
+  { value: "CreditNote", label: "Credit Note" },
+  { value: "DebitNote", label: "Debit Note" },
+  { value: "PurchaseBill", label: "Purchase Bill" },
+  { value: "GoodsReceipt", label: "Goods Receipt" },
+  { value: "Receipt", label: "Receipt Voucher" },
+];
+
+export const TEMPLATE_TYPE_LABEL = Object.fromEntries(
+  TEMPLATE_TYPES.map((t) => [t.value, t.label])
+);
+
+const SAMPLE_BRANDING = {
+  companyBrandName: "SAMPLE COMPANY",
+  companyLogoPath: "",
+  companyAddress: "123 Business Street,\nCity, Country",
+  companyPhone: "0300-1234567",
+  companyNTN: "1234567-8",
+  companySTRN: "1234567890123",
+};
+
+export const SAMPLE_DATA = {
+  Receipt: {
+    ...SAMPLE_BRANDING,
+    reference: "RCV-12",
+    date: new Date().toISOString(),
+    contactType: "Client",
+    contactName: "Sample Client Pvt Ltd",
+    contactAddress: "Client Address,\nCity",
+    contactPhone: "0321-7654321",
+    method: "Bank Transfer",
+    bankAccountName: "Meezan Bank — Current 0123",
+    chequeNumber: "004521",
+    chequeDate: new Date().toISOString(),
+    description: "Payment received against outstanding invoices",
+    amount: 177000,
+    amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
+    allocations: [
+      { sNo: 1, documentLabel: "Invoice #501", date: new Date().toISOString(), amount: 100000 },
+      { sNo: 2, documentLabel: "Invoice #498", date: new Date().toISOString(), amount: 77000 },
+    ],
+  },
+  Challan: {
+    companyBrandName: "SAMPLE COMPANY",
+    companyLogoPath: "",
+    companyAddress: "123 Business Street,\nCity, Country",
+    companyPhone: "Contact Person\n0300-1234567",
+    challanNumber: 1001,
+    deliveryDate: new Date().toISOString(),
+    clientName: "Sample Client Pvt Ltd",
+    clientAddress: "Client Address",
+    poNumber: "PO-2025-001",
+    items: [
+      { quantity: 10, description: "Sample Item One" },
+      { quantity: 5, description: "Sample Item Two" },
+      { quantity: 8, description: "Sample Item Three" },
+    ],
+  },
+  Bill: {
+    companyBrandName: "SAMPLE COMPANY",
+    companyLogoPath: "",
+    companyAddress: "123 Business Street, City",
+    companyPhone: "0300-1234567",
+    companyNTN: "1234567-8",
+    companySTRN: "1234567890123",
+    invoiceNumber: 501,
+    date: new Date().toISOString(),
+    challanNumbers: [1001, 1002],
+    challanDates: [new Date().toISOString()],
+    poNumber: "PO-2025-001",
+    poDate: new Date().toISOString(),
+    clientName: "Sample Client Pvt Ltd",
+    clientNTN: "9876543-2",
+    clientSTRN: "9876543210987",
+    concernDepartment: "Main Office",
+    subtotal: 150000,
+    gstRate: 18,
+    gstAmount: 27000,
+    grandTotal: 177000,
+    amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
+    items: [
+      { sNo: 1, quantity: 10, description: "Sample Item One", itemTypeName: "Pneumatic", unitPrice: 8000, lineTotal: 80000 },
+      { sNo: 2, quantity: 5, description: "Sample Item Two", itemTypeName: "Pneumatic", unitPrice: 14000, lineTotal: 70000 },
+    ],
+  },
+  TaxInvoice: {
+    supplierName: "SAMPLE COMPANY",
+    supplierAddress: "123 Business Street, City",
+    supplierPhone: "0300-1234567",
+    supplierNTN: "1234567-8",
+    supplierSTRN: "1234567890123",
+    companyBrandName: "SAMPLE COMPANY",
+    companyLogoPath: "",
+    companyAddress: "123 Business Street, City",
+    companyPhone: "0300-1234567",
+    companyNTN: "1234567-8",
+    companySTRN: "1234567890123",
+    buyerName: "Sample Client Pvt Ltd",
+    buyerAddress: "Client Address, City",
+    buyerNTN: "9876543-2",
+    buyerSTRN: "9876543210987",
+    invoiceNumber: 501,
+    date: new Date().toISOString(),
+    challanNumbers: [1001, 1002],
+    poNumber: "PO-2025-001",
+    subtotal: 150000,
+    gstRate: 18,
+    gstAmount: 27000,
+    grandTotal: 177000,
+    amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
+    items: [
+      { quantity: 10, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", unitPrice: 8000, valueExclTax: 80000, gstRate: 18, gstAmount: 14400, totalInclTax: 94400 },
+      { quantity: 5, uom: "Pcs", description: "Sample Item Two", itemTypeName: "Hydraulic", unitPrice: 14000, valueExclTax: 70000, gstRate: 18, gstAmount: 12600, totalInclTax: 82600 },
+    ],
+  },
+  SalesQuote: {
+    companyBrandName: "SAMPLE COMPANY",
+    companyLogoPath: "",
+    companyAddress: "123 Business Street, City",
+    companyPhone: "0300-1234567",
+    companyNTN: "1234567-8",
+    companySTRN: "1234567890123",
+    quoteNumber: 12,
+    date: new Date().toISOString(),
+    validUntil: new Date().toISOString(),
+    customerEnquiryRef: "RFQ-2026-045",
+    enquiryDate: new Date().toISOString(),
+    clientName: "Sample Client Pvt Ltd",
+    clientAddress: "Client Address, City",
+    clientNTN: "9876543-2",
+    clientSTRN: "9876543210987",
+    subtotal: 150000,
+    gstRate: 18,
+    gstAmount: 27000,
+    grandTotal: 177000,
+    amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
+    notes: "Prices valid for 15 days. Delivery within 2 weeks of confirmed order.",
+    items: [
+      { sNo: 1, description: "Sample Item One", quantity: 10, uom: "Pcs", unitPrice: 8000, lineTotal: 80000 },
+      { sNo: 2, description: "Sample Item Two", quantity: 5, uom: "Pcs", unitPrice: 14000, lineTotal: 70000 },
+    ],
+  },
+  SalesOrder: {
+    companyBrandName: "SAMPLE COMPANY",
+    companyLogoPath: "",
+    companyAddress: "123 Business Street, City",
+    companyPhone: "0300-1234567",
+    salesOrderNumber: 7,
+    orderDate: new Date().toISOString(),
+    requiredDate: new Date().toISOString(),
+    customerPoNumber: "PO-2026-001",
+    customerPoDate: new Date().toISOString(),
+    status: "Partially Delivered",
+    clientName: "Sample Client Pvt Ltd",
+    clientAddress: "Client Address, City",
+    site: "Main Warehouse",
+    items: [
+      { sNo: 1, description: "Sample Item One", quantity: 10, uom: "Pcs", deliveredQuantity: 6, remainingQuantity: 4 },
+      { sNo: 2, description: "Sample Item Two", quantity: 5, uom: "Pcs", deliveredQuantity: 5, remainingQuantity: 0 },
+    ],
+  },
+  CreditNote: {
+    supplierName: "SAMPLE COMPANY",
+    supplierAddress: "123 Business Street, City",
+    supplierPhone: "0300-1234567",
+    supplierNTN: "1234567-8",
+    supplierSTRN: "1234567890123",
+    supplierLogoPath: "",
+    companyBrandName: "SAMPLE COMPANY",
+    companyLogoPath: "",
+    companyAddress: "123 Business Street, City",
+    companyPhone: "0300-1234567",
+    companyNTN: "1234567-8",
+    companySTRN: "1234567890123",
+    buyerName: "Sample Client Pvt Ltd",
+    buyerAddress: "Client Address, City",
+    buyerPhone: "0300-8887766",
+    buyerNTN: "9876543-2",
+    buyerSTRN: "9876543210987",
+    invoiceNumber: 3,
+    date: new Date().toISOString(),
+    noteKindLabel: "Credit Note",
+    originalInvoiceNumber: 501,
+    originalInvoiceDate: new Date().toISOString(),
+    originalInvoiceRefIRN: "3541DI7500892DI21",
+    noteReason: "Goods returned by buyer",
+    noteReasonRemarks: "",
+    subtotal: 50000,
+    gstRate: 18,
+    gstAmount: 9000,
+    grandTotal: 59000,
+    amountInWords: "Fifty Nine Thousand Rupees Only",
+    fbrIRN: "",
+    items: [
+      { quantity: 5, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", hsCode: "8481.1000", unitPrice: 8000, valueExclTax: 40000, gstRate: 18, gstAmount: 7200, totalInclTax: 47200 },
+      { quantity: 2, uom: "Pcs", description: "Sample Item Two", itemTypeName: "Hydraulic", hsCode: "8412.2100", unitPrice: 5000, valueExclTax: 10000, gstRate: 18, gstAmount: 1800, totalInclTax: 11800 },
+    ],
+  },
+  DebitNote: {
+    supplierName: "SAMPLE COMPANY",
+    supplierAddress: "123 Business Street, City",
+    supplierPhone: "0300-1234567",
+    supplierNTN: "1234567-8",
+    supplierSTRN: "1234567890123",
+    supplierLogoPath: "",
+    companyBrandName: "SAMPLE COMPANY",
+    companyLogoPath: "",
+    companyAddress: "123 Business Street, City",
+    companyPhone: "0300-1234567",
+    companyNTN: "1234567-8",
+    companySTRN: "1234567890123",
+    buyerName: "Sample Client Pvt Ltd",
+    buyerAddress: "Client Address, City",
+    buyerPhone: "0300-8887766",
+    buyerNTN: "9876543-2",
+    buyerSTRN: "9876543210987",
+    invoiceNumber: 2,
+    date: new Date().toISOString(),
+    noteKindLabel: "Debit Note",
+    originalInvoiceNumber: 501,
+    originalInvoiceDate: new Date().toISOString(),
+    originalInvoiceRefIRN: "3541DI7500892DI21",
+    noteReason: "Price escalation per contract",
+    noteReasonRemarks: "",
+    subtotal: 25000,
+    gstRate: 18,
+    gstAmount: 4500,
+    grandTotal: 29500,
+    amountInWords: "Twenty Nine Thousand Five Hundred Rupees Only",
+    fbrIRN: "",
+    items: [
+      { quantity: 10, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", hsCode: "8481.1000", unitPrice: 2500, valueExclTax: 25000, gstRate: 18, gstAmount: 4500, totalInclTax: 29500 },
+    ],
+  },
+  PurchaseBill: {
+    companyBrandName: "SAMPLE COMPANY",
+    companyLogoPath: "",
+    companyAddress: "123 Business Street, City",
+    companyPhone: "0300-1234567",
+    companyNTN: "1234567-8",
+    companySTRN: "1234567890123",
+    supplierName: "Sample Supplier & Co",
+    supplierAddress: "Supplier Market, City",
+    supplierPhone: "0321-9876543",
+    supplierNTN: "5556667-8",
+    supplierSTRN: "5556667778889",
+    purchaseBillNumber: 42,
+    date: new Date().toISOString(),
+    supplierBillNumber: "INV-8834",
+    supplierIRN: "3541DI7500892DI21",
+    paymentTerms: "30 Days",
+    goodsReceiptNumbers: [15, 16],
+    linkedSaleBillNumbers: [501],
+    subtotal: 120000,
+    gstRate: 18,
+    gstAmount: 21600,
+    grandTotal: 141600,
+    amountInWords: "One Hundred Forty One Thousand Six Hundred Rupees Only",
+    items: [
+      { sNo: 1, itemTypeName: "Pneumatic", description: "Sample Item One", quantity: 20, uom: "Pcs", unitPrice: 4000, lineTotal: 80000, hsCode: "8481.1000" },
+      { sNo: 2, itemTypeName: "Hydraulic", description: "Sample Item Two", quantity: 10, uom: "Pcs", unitPrice: 4000, lineTotal: 40000, hsCode: "8412.2100" },
+    ],
+  },
+  GoodsReceipt: {
+    companyBrandName: "SAMPLE COMPANY",
+    companyLogoPath: "",
+    companyAddress: "123 Business Street, City",
+    companyPhone: "0300-1234567",
+    supplierName: "Sample Supplier & Co",
+    supplierAddress: "Supplier Market, City",
+    supplierPhone: "0321-9876543",
+    goodsReceiptNumber: 15,
+    receiptDate: new Date().toISOString(),
+    supplierChallanNumber: "DC-2291",
+    purchaseBillNumber: 42,
+    site: "Main Warehouse",
+    status: "Pending",
+    items: [
+      { sNo: 1, itemTypeName: "Pneumatic", description: "Sample Item One", quantity: 20, unit: "Pcs" },
+      { sNo: 2, itemTypeName: "Hydraulic", description: "Sample Item Two", quantity: 10, unit: "Pcs" },
+    ],
+  },
+};
+
+export const DEFAULT_TEMPLATES = {
+  Challan: defaultChallanTemplate,
+  Bill: defaultBillTemplate,
+  TaxInvoice: defaultTaxInvoiceTemplate,
+  SalesQuote: defaultQuoteTemplate,
+  SalesOrder: defaultOrderTemplate,
+  CreditNote: creditNoteStarters[0]?.html || "",
+  DebitNote: debitNoteStarters[0]?.html || "",
+  PurchaseBill: purchaseBillStarters[0]?.html || "",
+  GoodsReceipt: goodsReceiptStarters[0]?.html || "",
+  Receipt: receiptStarters[0]?.html || "",
+};
+
+/**
+ * Merge a template body with the type's sample data, overlaying the REAL
+ * branding of the selected company so the preview shows what will actually
+ * print rather than the static "SAMPLE COMPANY" fixture. Returns a
+ * self-contained HTML string; on a template error returns a red error block
+ * instead of throwing, so callers can drop it straight into an iframe.
+ */
+export function buildTemplatePreviewHtml(templateType, html, { company } = {}) {
+  try {
+    const base = SAMPLE_DATA[templateType] || {};
+    const previewData = {
+      ...base,
+      companyBrandName: company?.brandName || company?.name || base.companyBrandName,
+      companyLogoPath: company?.logoPath || "",
+      companyAddress: company?.fullAddress || base.companyAddress,
+      companyPhone: company?.phone || base.companyPhone,
+      companyNTN: company?.ntn || base.companyNTN,
+      companySTRN: company?.strn || base.companySTRN,
+    };
+    return mergeTemplate(html || "", previewData);
+  } catch (e) {
+    return `<div style="color:#c62828;padding:20px;font-family:sans-serif"><h3>Template Error</h3><pre style="white-space:pre-wrap">${e.message}</pre></div>`;
+  }
+}

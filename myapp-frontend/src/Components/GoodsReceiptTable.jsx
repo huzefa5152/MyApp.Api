@@ -1,8 +1,8 @@
-import { MdVisibility, MdEdit, MdDelete } from "react-icons/md";
+import { MdVisibility, MdEdit, MdDelete, MdPrint, MdPictureAsPdf } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 
-export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onDelete }) {
+export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onDelete, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "" }) {
   const columns = [
     {
       key: "goodsReceiptNumber",
@@ -62,6 +62,26 @@ export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onD
           <MdEdit size={14} />
         </button>
       )}
+      {onPrint && (
+        <button
+          style={{ ...btn.print, opacity: printDisabled ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+          disabled={printDisabled}
+          onClick={() => onPrint(g)}
+          title={printDisabled ? printDisabledReason : "Print"}
+        >
+          <MdPrint size={14} />
+        </button>
+      )}
+      {onExportPdf && (
+        <button
+          style={{ ...btn.pdf, opacity: printDisabled || exportingId === g.id ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+          onClick={() => onExportPdf(g)}
+          disabled={printDisabled || !!exportingId}
+          title={printDisabled ? printDisabledReason : "Download PDF"}
+        >
+          <MdPictureAsPdf size={14} />
+        </button>
+      )}
       {perms.canDelete && (
         <button style={btn.delete} onClick={() => onDelete?.(g)} title="Delete">
           <MdDelete size={14} />
@@ -97,5 +117,7 @@ const baseBtn = {
 const btn = {
   view:   { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" },
   edit:   { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
+  print:  { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20" },
+  pdf:    { ...baseBtn, backgroundColor: "#f3e5f5", color: "#6a1b9a" },
   delete: { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
 };

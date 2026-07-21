@@ -57,7 +57,7 @@ function WarningTooltip({ warnings }) {
   );
 }
 
-export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, exportingId, duplicatingId }) {
+export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "" }) {
   const { has } = usePermissions();
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
@@ -203,17 +203,20 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                   </button>
                   {permPrint && (
                     <button
-                      style={{ ...styles.actionBtn, ...styles.printBtn }}
+                      style={{ ...styles.actionBtn, ...styles.printBtn, opacity: printDisabled ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+                      disabled={printDisabled}
                       onClick={() => onPrint?.(c)}
+                      title={printDisabled ? printDisabledReason : "Print"}
                     >
                       <MdPrint size={14} /> Print
                     </button>
                   )}
                   {permPrint && (
                     <button
-                      style={{ ...styles.actionBtn, ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }}
-                      disabled={!!exportingId}
+                      style={{ ...styles.actionBtn, ...styles.pdfBtn, opacity: printDisabled || exportingId ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+                      disabled={printDisabled || !!exportingId}
                       onClick={() => onExportPdf?.(c)}
+                      title={printDisabled ? printDisabledReason : "Export PDF"}
                     >
                       {exportingId === c.id + "-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} PDF
                     </button>

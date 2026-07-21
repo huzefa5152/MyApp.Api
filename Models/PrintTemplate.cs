@@ -4,7 +4,17 @@ namespace MyApp.Api.Models
     {
         public int Id { get; set; }
         public int CompanyId { get; set; }
-        public string TemplateType { get; set; } = ""; // Challan, Bill, TaxInvoice
+        public string TemplateType { get; set; } = ""; // See Helpers/PrintTemplateTypes.All (Challan, Bill, TaxInvoice, SalesQuote, SalesOrder, PurchaseBill, GoodsReceipt, DebitNote, CreditNote, Receipt)
+
+        // Operator-facing name distinguishing multiple templates of the same type
+        // within one company (e.g. "Default", "Modern Letterhead").
+        public string Name { get; set; } = "Default";
+
+        // Exactly one template per (CompanyId, TemplateType) is the default.
+        // Enforced by a filtered unique index in AppDbContext. The print/export
+        // paths resolve to this default unless the caller picks a specific template.
+        public bool IsDefault { get; set; } = true;
+
         public string HtmlContent { get; set; } = "";
         public string? TemplateJson { get; set; }
         public string? EditorMode { get; set; }

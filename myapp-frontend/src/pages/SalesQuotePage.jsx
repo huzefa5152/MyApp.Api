@@ -12,6 +12,8 @@ import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
 import { exportToPdf } from "../utils/exportUtils";
 import { defaultQuoteTemplate } from "../utils/salesDocTemplates";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -26,6 +28,7 @@ const STATUS_COLORS = { Active: "#1565c0", Expired: "#f57c00", Accepted: "#28a74
 export default function SalesQuotePage() {
   const confirm = useConfirm();
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const tplPicker = usePrintTemplates("SalesQuote");
   const { has } = usePermissions();
   const canCreate = has("salesquotes.manage.create");
   const canUpdate = has("salesquotes.manage.update");
@@ -115,23 +118,25 @@ export default function SalesQuotePage() {
   };
 
   const handlePrint = async (q) => {
+    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
     const w = window.open("", "_blank");
     if (!w) { notify("Popup blocked. Allow popups for this site.", "warning"); return; }
     w.document.write("<p>Loading quote...</p>");
     try {
       const { data } = await getSalesQuotePrintData(q.id);
-      const html = mergeTemplate(defaultQuoteTemplate, data);
+      const html = mergeTemplate(tplPicker.resolveTemplate(q)?.htmlContent || defaultQuoteTemplate, data);
       writeAndPrint(w, html);
     } catch { w.close(); notify("Failed to load print data.", "error"); }
   };
 
   const [exportingId, setExportingId] = useState(null);
   const handleExportPdf = async (q) => {
+    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
     if (exportingId) return;
     setExportingId(q.id);
     try {
       const { data } = await getSalesQuotePrintData(q.id);
-      const html = mergeTemplate(defaultQuoteTemplate, data);
+      const html = mergeTemplate(tplPicker.resolveTemplate(q)?.htmlContent || defaultQuoteTemplate, data);
       await exportToPdf(html, `Quote # ${q.quoteNumber} ${q.clientName}`);
     } catch { notify("Failed to export PDF.", "error"); }
     finally { setExportingId(null); }
@@ -177,6 +182,7 @@ export default function SalesQuotePage() {
                 <option value="">All Clients</option>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+              <div style={{ marginLeft: "auto" }}><PrintTemplateSelect picker={tplPicker} /></div>
             </div>
           )}
         </>
@@ -203,8 +209,8 @@ export default function SalesQuotePage() {
                 <div style={st.actions}>
                   <button style={st.actBtn} onClick={() => setViewQuote(q)} title="View"><MdVisibility size={16} /></button>
                   {canUpdate && q.isEditable && <button style={st.actBtn} onClick={() => { setEditQuote(q); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
-                  {canPrint && <button style={st.actBtn} onClick={() => handlePrint(q)} title="Print"><MdPrint size={16} /></button>}
-                  {canPrint && <button style={{ ...st.actBtn, opacity: exportingId === q.id ? 0.5 : 1 }} onClick={() => handleExportPdf(q)} disabled={!!exportingId} title="Download PDF"><MdPictureAsPdf size={16} /></button>}
+                  {canPrint && <button style={{ ...st.actBtn, opacity: tplPicker.noTemplate ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} onClick={() => handlePrint(q)} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}><MdPrint size={16} /></button>}
+                  {canPrint && <button style={{ ...st.actBtn, opacity: tplPicker.noTemplate || exportingId === q.id ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} onClick={() => handleExportPdf(q)} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={16} /></button>}
                   {canConvert && q.status !== "Accepted" && <button style={{ ...st.actBtn, color: colors.teal }} onClick={() => handleConvert(q)} title="Convert to Sales Order"><MdSwapHoriz size={16} /></button>}
                   {canDelete && <button style={{ ...st.actBtn, color: "#dc3545" }} onClick={() => handleDelete(q)} title="Delete"><MdDelete size={16} /></button>}
                 </div>

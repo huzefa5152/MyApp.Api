@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdInventory2, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight } from "react-icons/md";
-import { getGoodsReceiptsByCompanyPaged, deleteGoodsReceipt } from "../api/goodsReceiptApi";
+import { MdInventory2, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf } from "react-icons/md";
+import { getGoodsReceiptsByCompanyPaged, deleteGoodsReceipt, getGoodsReceiptPrintData } from "../api/goodsReceiptApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
@@ -11,6 +11,12 @@ import GoodsReceiptForm from "../Components/GoodsReceiptForm";
 import GoodsReceiptTable from "../Components/GoodsReceiptTable";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
+import { mergeTemplate } from "../utils/templateEngine";
+import { writeAndPrint } from "../utils/printDocument";
+import { exportToPdf } from "../utils/exportUtils";
+import { DEFAULT_TEMPLATES } from "../utils/templateSampleData";
 
 const colors = {
   blue: "#0d47a1",
@@ -25,14 +31,17 @@ export default function GoodsReceiptsPage() {
   const confirm = useConfirm();
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
+  const tplPicker = usePrintTemplates("GoodsReceipt");
   const canCreate = has("goodsreceipts.manage.create");
   const canUpdate = has("goodsreceipts.manage.update");
   const canDelete = has("goodsreceipts.manage.delete");
+  const canPrint = has("goodsreceipts.print.view");
   const [viewMode, setViewMode, isBigScreen] = useListViewMode("goodsReceipts");
 
   const [receipts, setReceipts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [exportingId, setExportingId] = useState(null);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -82,6 +91,30 @@ export default function GoodsReceiptsPage() {
     }
   };
 
+  const handlePrint = async (gr) => {
+    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
+    const w = window.open("", "_blank");
+    if (!w) { notify("Popup blocked. Allow popups for this site.", "warning"); return; }
+    w.document.write("<p>Loading goods receipt...</p>");
+    try {
+      const { data } = await getGoodsReceiptPrintData(gr.id);
+      const html = mergeTemplate(tplPicker.resolveTemplate(gr)?.htmlContent || DEFAULT_TEMPLATES.GoodsReceipt, data);
+      writeAndPrint(w, html);
+    } catch { w.close(); notify("Failed to load print data.", "error"); }
+  };
+
+  const handleExportPdf = async (gr) => {
+    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
+    if (exportingId) return;
+    setExportingId(gr.id);
+    try {
+      const { data } = await getGoodsReceiptPrintData(gr.id);
+      const html = mergeTemplate(tplPicker.resolveTemplate(gr)?.htmlContent || DEFAULT_TEMPLATES.GoodsReceipt, data);
+      await exportToPdf(html, `GRN # ${data.goodsReceiptNumber} ${data.supplierName}`);
+    } catch { notify("Failed to export PDF.", "error"); }
+    finally { setExportingId(null); }
+  };
+
   return (
     <div>
       <div style={styles.pageHeader}>
@@ -124,11 +157,12 @@ export default function GoodsReceiptsPage() {
                 <option value="">All Suppliers</option>
                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
-              {isBigScreen && (
-                <div style={{ marginLeft: "auto" }}>
+              <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                {canPrint && <PrintTemplateSelect picker={tplPicker} />}
+                {isBigScreen && (
                   <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Goods receipts view mode" />
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
 
@@ -148,6 +182,11 @@ export default function GoodsReceiptsPage() {
                   onView={(g) => { setEditingId(g.id); setShowForm(true); }}
                   onEdit={(g) => { setEditingId(g.id); setShowForm(true); }}
                   onDelete={handleDelete}
+                  onPrint={canPrint ? handlePrint : null}
+                  onExportPdf={canPrint ? handleExportPdf : null}
+                  exportingId={exportingId}
+                  printDisabled={tplPicker.noTemplate}
+                  printDisabledReason={tplPicker.noTemplateReason}
                 />
               ) : (
               <div className="card-grid">
@@ -170,6 +209,8 @@ export default function GoodsReceiptsPage() {
                       <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
                         <button style={btnView} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdVisibility size={14} /> View</button>
                         {canUpdate && <button style={btnEdit} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdEdit size={14} /> Edit</button>}
+                        {canPrint && <button style={{ ...btnPrint, opacity: tplPicker.noTemplate ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"} onClick={() => handlePrint(gr)}><MdPrint size={14} /> Print</button>}
+                        {canPrint && <button style={{ ...btnPdf, opacity: tplPicker.noTemplate || exportingId === gr.id ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} onClick={() => handleExportPdf(gr)} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Export PDF"}><MdPictureAsPdf size={14} /> PDF</button>}
                         {canDelete && <button style={btnDelete} onClick={() => handleDelete(gr)}><MdDelete size={14} /> Delete</button>}
                       </div>
                     </div>
@@ -217,4 +258,6 @@ const styles = {
 const baseBtn = { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer" };
 const btnView = { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" };
 const btnEdit = { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" };
+const btnPrint = { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20" };
+const btnPdf = { ...baseBtn, backgroundColor: "#f3e5f5", color: "#6a1b9a" };
 const btnDelete = { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" };

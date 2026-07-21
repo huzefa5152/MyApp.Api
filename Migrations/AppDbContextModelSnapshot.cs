@@ -2624,6 +2624,14 @@ namespace MyApp.Api.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("TemplateJson")
                         .HasColumnType("nvarchar(max)");
 
@@ -2636,8 +2644,11 @@ namespace MyApp.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CompanyId", "TemplateType")
-                        .IsUnique();
+                    b.HasIndex(new[] { "CompanyId", "TemplateType" }, "IX_PrintTemplates_CompanyId_TemplateType");
+
+                    b.HasIndex(new[] { "CompanyId", "TemplateType" }, "UX_PrintTemplates_DefaultPerScope")
+                        .IsUnique()
+                        .HasFilter("[IsDefault] = 1");
 
                     b.ToTable("PrintTemplates");
                 });

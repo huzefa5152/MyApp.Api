@@ -648,6 +648,14 @@ using (var scope = app.Services.CreateScope())
     // any HS code / name already present, so it's safe to run on every boot)
     await MyApp.Api.Data.ItemTypeSeeder.SeedAsync(db);
 
+    // Print-template merge-field catalogs for the newer document types (the
+    // field-picker shown in the Template Editor sidebar). Idempotent — keyed on
+    // the unique (TemplateType, FieldExpression) index, so re-running each boot
+    // is a no-op once seeded. (No DivisionMergeFieldSeeder here — master is
+    // Division-free.)
+    await MyApp.Api.Data.SalesMergeFieldSeeder.SeedAsync(db);          // SalesQuote / SalesOrder
+    await MyApp.Api.Data.NoteAndPurchaseMergeFieldSeeder.SeedAsync(db); // Credit/Debit Note, PurchaseBill, GoodsReceipt
+
     // Demo-environment data seeder. Runs ONLY when ASPNETCORE_ENVIRONMENT
     // is "Demo" (set by scripts/run-demo.ps1 which also points the
     // connection string at the DeliveryChallanDemo database). Lays down

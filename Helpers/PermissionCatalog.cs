@@ -159,6 +159,8 @@ namespace MyApp.Api.Helpers
             // ── Print Templates ─────────────────────────────────────────────
             new("printtemplates.manage.view",     "PrintTemplates", "Manage", "View",          "View print/merge templates"),
             new("printtemplates.manage.update",   "PrintTemplates", "Manage", "Update",        "Edit a print template"),
+            new("printtemplates.manage.delete",   "PrintTemplates", "Manage", "Delete",        "Delete a saved print template"),
+            new("printtemplates.starter.apply",   "PrintTemplates", "Manage", "Apply Starter", "Apply a starter design onto an existing template (replace its HTML or its whole layout)"),
             // Pin the Excel data sheet for import — separate from the broader
             // template-edit perm so a role can be allowed to fix the sheet
             // pin (a low-risk, recoverable change) without also gaining
@@ -209,6 +211,7 @@ namespace MyApp.Api.Helpers
             new("goodsreceipts.manage.create", "GoodsReceipts", "Manage", "Create", "Create a goods-receipt note"),
             new("goodsreceipts.manage.update", "GoodsReceipts", "Manage", "Update", "Edit a goods-receipt note"),
             new("goodsreceipts.manage.delete", "GoodsReceipts", "Manage", "Delete", "Delete a goods-receipt note"),
+            new("goodsreceipts.print.view",    "GoodsReceipts", "Print",  "View",   "Print or download goods-receipt notes"),
 
             // ── Sales Quotes (priced pre-sale quotation) ────────────────────
             // Pre-sale documents — NOT FBR documents. A quote answers a

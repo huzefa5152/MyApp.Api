@@ -20,8 +20,18 @@ worktree to read it, e.g. `git worktree add --detach ../_ref-customize customize
 |---|---|---|
 | 1 | Sales Quote + Sales Order (Division-free) | ✅ done (commit 8c3be52) |
 | 1.5 | PO import → SQ/SO, order→challan→bill wiring, PO threading, lifecycle, bill-time PO | ✅ done (commit 8c3be52) |
-| 2 | Print Template — multi-doc, Company-level | ⬜ not started |
+| 2 | Print Template — multi-doc, Company-level | ✅ CODE-COMPLETE (all stages A–F, uncommitted, awaiting merge permission) |
 | 3 | Receipt (Accounting), GL-stripped, both directions | ⬜ not started |
+
+**Phase 2 progress (2026-07-21, uncommitted on this branch):**
+- ✅ **Stage A — backend multi-template core**: PrintTemplate +Name/+IsDefault; `Helpers/PrintTemplateTypes.cs` (10 types); DTOs (Create/Update); repo id-based CRUD/set-default/delete/apply-starter/GetForExport; controller (id endpoints + audit, per-action `[AuthorizeCompany]`); perms `printtemplates.manage.delete`+`.starter.apply`; AppDbContext filtered-unique `UX_PrintTemplates_DefaultPerScope` on `(CompanyId,TemplateType)`; **idempotent migration `20260721084126_AddNameAndIsDefaultToPrintTemplate`** (guarded SQL, safe on db46684 which already had the columns + on true prod). Verified 24/24 smoke on db46684.
+- ✅ **Stage B — print data + seeders**: PrintDtos +Company* block/note fields on PrintTaxInvoiceDto, +UnitPrice on PrintTaxItemDto, +PrintPurchaseBillDto/+PrintGoodsReceiptDto (Division-free); InvoiceService tax-invoice mapping fills Company*/UnitPrice/note fields (NoteKind 1=Debit/2=Credit, OriginalInvoice nav); NEW print endpoints `GET /purchasebills/{id}/print` + `GET /goodsreceipts/{id}/print` (+ perm `goodsreceipts.print.view`); ported `SalesMergeFieldSeeder`+`NoteAndPurchaseMergeFieldSeeder` (skipped Division one) wired in Program.cs. Verified: merge fields seeded (SQ44/SO35/CN49/DN49/PB45/GR26), print endpoints return correct payloads on real data, GR 404s gracefully.
+- ✅ **Stage C — frontend infra**: `printTemplateApi` id-based fns; `usePrintTemplates` hook (no divisionId, localStorage `printTpl:{company}:{type}`); `PrintTemplateSelect`; `templateEngine.js` adopted customer superset (+fmtDMY/fmtQty/richText, MERGE_FIELDS trimmed to Challan/Bill/TaxInvoice/Receipt); `templateSampleData.js` (10 types, Division-stripped, new-type defaults from starters[0]); 10 starter files + aggregator ported (Division tokens stripped from purchaseBill×2/receipt×4). `salesDocTemplates.js` already Division-free. **Frontend `npm run build` green.**
+- ✅ **Stage D — management screen**: `PrintTemplatesPage.jsx` (Division-free 3-tab manage: Print/Starter/Excel) + `TemplateEditorPage.jsx` upgraded to multi-template/by-id (create+edit, name field, type locked, id-based Excel) + `StarterGallery`/`ApplyStarterModal`/`A4PreviewFrame` ported. Routes: `/templates`→PrintTemplatesPage, `/templates/edit`→editor. **Browser-verified**: management page + 139-starter gallery + editor load, zero console errors, Hakimi untouched.
+- ✅ **Stage E — selector on 9 screens**: `usePrintTemplates`+`PrintTemplateSelect` on Challan/Bill/TaxInvoice/CreditNote/DebitNote (InvoicePage mode-keyed type), SalesQuote, SalesOrder + NEW Print/PDF flow (card+table) on PurchaseBills/GoodsReceipts (+ `getPurchaseBillPrintData`/`getGoodsReceiptPrintData` api fns). Receipt deferred to Phase 3. Browser-verified: picker shows where a template exists (Challan), hides where none (PurchaseBill), no errors.
+- ✅ **Stage F — docs+verify**: README changelog; PRINT_TEMPLATE_GUIDE.md + scripts/print_templates ported (Division-free note prepended). Regression GREEN: backend build 0 err, frontend build clean (657 mod), audit 67/67, basic flows 37/37, tenant iso all-pass; **zero Division code confirmed** (only a comment stating Division-free). Optional not-yet-done: port `test_print_templates_multidoc.py` as a dedicated regression + explicit tenant-iso cases for the 3 new endpoints (behavior already covered by the suite + browser E2E).
+- **DB migration** `20260721084126_AddNameAndIsDefaultToPrintTemplate` (idempotent, applied to db46684). Backend server running on :5134 vs db46684. Recon maps in scratchpad (`wafhydde0.output`, `reconB_*.md`).
+- **⏳ AWAITING: user permission to commit + (later) merge.** Nothing committed. Do NOT commit/merge without explicit say-so.
 
 ---
 
@@ -57,54 +67,104 @@ worktree to read it, e.g. `git worktree add --detach ../_ref-customize customize
 
 ---
 
-## 2. TODO — Phase 2: Print Template (multi-doc, Company-level, Division-free)
+## 2. TODO — Phase 2: Print Template System (multi-doc, Company-level, Division-free)
 
-Master has the **old single-template** PrintTemplate (types: `Challan`, `Bill`,
-`TaxInvoice`, validated inline). The customer build has a **multi-template**
-version. Bring that in, Division-free, and add doc types **Sales Quote, Sales
-Order, Credit Note, Debit Note** (master's notes are reversed invoices —
-`Invoice.DocumentType` 9 = Debit, 10 = Credit, with `OriginalInvoiceId`).
+> **Authoritative spec (user-provided 2026-07-21).** Port the Print Template
+> enhancements from `customize-solution-for-other` into master, **Division-free**,
+> extending the template system from master's current 3 doc types to **10**.
 
-**Backend**
-- `Helpers/PrintTemplateTypes.cs` — create (master lacks it). Add the target
-  doc-type strings (`SalesQuote`, `SalesOrder`, `CreditNote`, `DebitNote`, plus
-  the existing 3). Frontend mirror = `utils/templateSampleData.js`.
-- `Models/PrintTemplate.cs` — add **`Name`** + **`IsDefault`** only (NOT
-  DivisionId). New migration: drop old unique `IX_PrintTemplates_CompanyId_TemplateType`;
-  add `IsDefault` (bit default 0) + `Name` (nvarchar(200) default 'Default');
-  `UPDATE PrintTemplates SET IsDefault=1`; create filtered-unique
-  `UX_PrintTemplates_DefaultPerScope` on `(CompanyId, TemplateType) WHERE IsDefault=1`.
-  **Strip the ParserFeedbacks CreateTable from the generated migration + the
-  ParserFeedback block from the snapshot** (see §4).
-- Replace `PrintTemplateRepository` / `PrintTemplatesController` /
-  `DTOs/PrintTemplateDto` with the customer versions, **Division-stripped** (drop
-  every `divisionId` param, `.Include(Division)`, and `IDivisionAccessGuard`
-  assert — keep `ICompanyAccessGuard`). Adds the id-based multi-template CRUD
-  surface master lacks: `GET /{id}`, `POST company/{cid}`, `PUT /{id}`,
-  `POST /{id}/apply-starter`, `PUT /{id}/default`, `DELETE /{id}`, and the id-based
-  excel endpoints. New permission keys: `printtemplates.manage.view/update/delete`,
+**Master today:** old single-template PrintTemplate — types `Challan`, `Bill`,
+`TaxInvoice` (Sales Tax Invoice), validated inline; documents always print the
+DEFAULT; there is no template dropdown.
+
+**Target — 10 supported doc types:**
+- Existing: **Delivery Challan, Bill, Sales Tax Invoice**.
+- Add: **Sales Quote, Sales Order, Purchase Invoice (Purchase Bill), Goods
+  Receipt, Debit Note, Credit Note, Receipt**.
+
+**Source:** the customer branch already has most of this — its multi-doc print
+work added Debit/Credit Note + Purchase Bill + Goods Receipt (~60 starters,
+~15/type) + a generic `usePrintTemplates` hook + `PrintTemplateSelect` dropdown on
+~9 doc screens (localStorage-remembered). Port that Division-stripped; add Sales
+Quote / Sales Order / Receipt on top. **Read repo `PRINT_TEMPLATE_GUIDE.md` +
+`scripts/print_templates/` FIRST** (mandatory for any print-template work) —
+author against real print-DTO fields, match the borderless Manager style, verify
+via JS DOM asserts (screenshots are broken on this machine).
+
+### Feature 1 — template support for each new doc type
+- Add each new type to the Print Template **management screen**; full
+  create/edit/delete/manage exactly like the existing types.
+- **~15 professionally designed starter templates PER new type** (7 new types →
+  ~105 starters). Research common business layouts; match the existing library's
+  quality + styling. Every template must support placeholders for totals, taxes,
+  company details, logos, signatures, and the document-specific fields.
+- Print + PDF for each document must only use templates belonging to **its own**
+  doc type.
+
+### Feature 2 — generic Template Selector on EVERY doc screen
+- Build ONE reusable **Print Template Selector** (generic `usePrintTemplates` hook
+  + `PrintTemplateSelect` component). The backend already stores multiple templates
+  per type once the multi-template upgrade lands — this only EXPOSES it on the UI.
+- Add it to all **10** doc screens: Sales Quote, Sales Order, Delivery Challan,
+  Bill, Sales Tax Invoice, Purchase Invoice, Goods Receipt, Debit Note, Credit
+  Note, Receipt.
+- Behaviour: list all ACTIVE templates for the current doc type; initially select
+  the DEFAULT; allow switching; **remember the user's last selection (localStorage)**;
+  use the selection for BOTH Print and PDF; fall back to the default when there is
+  no prior selection.
+- Generic + config-driven: a future doc type is added by CONFIG, not new code. No
+  hardcoded per-document behaviour; no duplicate code.
+
+### Backend port (Division-free)
+- `Helpers/PrintTemplateTypes.cs` (new) — the 10 type strings; frontend mirror
+  `utils/templateSampleData.js`.
+- `Models/PrintTemplate.cs` — add **`Name`** + **`IsDefault`** ONLY (NO DivisionId).
+  New migration: drop old unique `IX_PrintTemplates_CompanyId_TemplateType`; add
+  `IsDefault` (bit default 0) + `Name` (nvarchar(200) default 'Default'); backfill
+  `IsDefault=1`; filtered-unique `UX_PrintTemplates_DefaultPerScope` on
+  `(CompanyId, TemplateType) WHERE IsDefault=1`. **Strip ParserFeedbacks from the
+  migration + snapshot** (§4).
+- Replace `PrintTemplateRepository` / `PrintTemplatesController` / `PrintTemplateDto`
+  with the customer versions **Division-stripped** (drop every `divisionId` param,
+  `.Include(Division)`, `IDivisionAccessGuard` — keep `ICompanyAccessGuard`). Adds
+  the id-based multi-template CRUD master lacks (`GET /{id}`, `POST company/{cid}`,
+  `PUT /{id}`, `POST /{id}/apply-starter`, `PUT /{id}/default`, `DELETE /{id}`,
+  id-based excel endpoints). New perms: `printtemplates.manage.view/update/delete`,
   `printtemplates.starter.apply`, `printtemplates.manage.sheetpin`,
   `config.mergefields.manage`.
-- Merge-field seeders: port `Data/SalesMergeFieldSeeder.cs` (Quote/Order) +
-  `Data/NoteAndPurchaseMergeFieldSeeder.cs` (notes/purchase/goods-receipt); wire
-  into `Program.cs`. **SKIP `DivisionMergeFieldSeeder`.** `MergeFieldsController`
-  is byte-identical to master — no change.
-- Print DTOs: `PrintQuoteDto` / `PrintOrderDto` already exist (added this branch).
-  For sales Credit/Debit note printing there is **no dedicated DTO in the customer
-  build** (only `PrintPurchaseDebitNoteDto`); decide: reuse the existing
-  invoice/note print path (a note is a reversed invoice) vs author
-  `PrintCreditNoteDto`/`PrintDebitNoteDto`. Check master's existing note print
-  first.
+- Merge-field seeders (Sales, Note/Purchase) → wire into `Program.cs`; **SKIP**
+  `DivisionMergeFieldSeeder`. `MergeFieldsController` is byte-identical — no change.
+- Print DTOs / endpoints per type: `PrintQuoteDto`/`PrintOrderDto` exist. Need
+  print data for Purchase Invoice, Goods Receipt, Debit/Credit Note, and **Receipt**
+  (from Phase 3). Notes are reversed invoices — reuse the invoice/tax-invoice print
+  path or author `PrintCreditNoteDto`/`PrintDebitNoteDto` (check master's note print
+  first).
 
-**Frontend (new)**: `pages/PrintTemplatesPage.jsx`, `Components/PrintTemplateSelect.jsx`,
-`hooks/usePrintTemplates.js`, `utils/templateSampleData.js`, `utils/starters/*.js`
-(`quote`, `order`, `creditNote`, `debitNote`, …). Strip `divisionId` from
-`usePrintTemplates` (param, scopeKey, filter), `PrintTemplatesPage` (division
-picker + create-scope modal), `api/printTemplateApi` (`createTemplate` divisionId).
+### Frontend (new/ported, Division-stripped)
+`pages/PrintTemplatesPage.jsx`, `Components/PrintTemplateSelect.jsx`,
+`hooks/usePrintTemplates.js`, `utils/templateSampleData.js`, `utils/starters/*.js`.
+Strip every `divisionId` (hook param/scopeKey/filter; page division picker +
+create-scope modal; `printTemplateApi.createTemplate`). Wire the selector into all
+10 screens — this branch's sales screens currently use the built-in defaults in
+`utils/salesDocTemplates.js`; swap them to the DB-template picker.
 
-**Wire it up**: swap the built-in defaults in `utils/salesDocTemplates.js` for
-`usePrintTemplates("SalesQuote"|"SalesOrder")` + `PrintTemplateSelect` on the
-sales pages; add the note doc types to the credit/debit-note print screens.
+### ⚠ Cross-phase dependency — Receipt
+The **Receipt** template type needs the Receipt document (entity + print DTO +
+screen) from **Phase 3**. Either do Phase 3 first, or add the Receipt template
+TYPE + starters in Phase 2 and wire the selector-on-Receipt-screen once Phase 3
+lands. Everything else in Phase 2 is independent of Phase 3.
+
+### Regression (MANDATORY — this touches the whole printing system)
+Verify UNCHANGED: existing templates, Print, PDF, default-template behaviour,
+template management, existing permissions, existing reports. Verify each of the 10
+doc types individually; the selector behaves consistently on every screen; and
+**zero Division-related code exists anywhere** in the implementation.
+
+### Deliverables (per the spec)
+1. Architecture summary. 2. Modified-files list. 3. DB changes. 4. New reusable
+components/services. 5. Manual testing checklist. 6. Regression results.
+7. Confirmations: no Division introduced; existing functionality intact; Print +
+PDF work for all 10 doc types; follows master architecture and is production-ready.
 
 ---
 
@@ -221,8 +281,14 @@ Receipt is the money-in direction of a **unified `Payment`** entity
 
 ## 7. Merge to master (only when all phases done)
 
+> 🚫 **DO NOT MERGE WITHOUT THE USER'S EXPLICIT PERMISSION** — even after ALL
+> phases are complete and green. "All phases done" is a precondition for merging,
+> NOT authorization to merge. Ask, wait for a clear yes, then merge. Same for
+> pushing the branch. (User set 2026-07-21.)
+
 1. Merge current master into this branch; resolve the snapshot/ParserFeedback +
    migration lineage carefully.
 2. Run the full pre-merge suite above.
-3. Merge to master. **Master deploys to `hakimitraders` prod via CI** — verify
+3. **Ask the user for explicit permission to merge.** Only after a clear yes:
+   merge to master. **Master deploys to `hakimitraders` prod via CI** — verify
    the app end-to-end before merging (there is no staging).

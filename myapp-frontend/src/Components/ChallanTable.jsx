@@ -33,6 +33,8 @@ export default function ChallanTable({
   onDuplicate,
   exportingId,
   duplicatingId,
+  printDisabled = false,
+  printDisabledReason = "",
 }) {
   const { has } = usePermissions();
   const perms = {
@@ -125,16 +127,21 @@ export default function ChallanTable({
           <MdVisibility size={14} />
         </button>
         {perms.permPrint && (
-          <button style={btnStyles.print} onClick={() => onPrint?.(c)} title="Print">
+          <button
+            style={{ ...btnStyles.print, opacity: printDisabled ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+            disabled={printDisabled}
+            onClick={() => onPrint?.(c)}
+            title={printDisabled ? printDisabledReason : "Print"}
+          >
             <MdPrint size={14} />
           </button>
         )}
         {perms.permPrint && (
           <button
-            style={{ ...btnStyles.pdf, opacity: exportingId ? 0.55 : 1 }}
-            disabled={!!exportingId}
+            style={{ ...btnStyles.pdf, opacity: printDisabled || exportingId ? 0.55 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+            disabled={printDisabled || !!exportingId}
             onClick={() => onExportPdf?.(c)}
-            title="Export PDF"
+            title={printDisabled ? printDisabledReason : "Export PDF"}
           >
             {exportingId === c.id + "-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />}
           </button>

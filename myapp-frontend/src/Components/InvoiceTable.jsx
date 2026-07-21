@@ -53,6 +53,8 @@ export default function InvoiceTable({
   fbrValidated,
   fbrLoading,
   exportingId,
+  printDisabled = false,
+  printDisabledReason = "",
   // handlers (parent owns them; we just call them)
   onView,
   onPrintBill,
@@ -212,31 +214,41 @@ export default function InvoiceTable({
           </button>
         )}
         {isBillsMode && perms.canPrint && (
-          <button style={btn.print} onClick={() => onPrintBill?.(inv)} title="Print bill">
+          <button
+            style={{ ...btn.print, opacity: printDisabled ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+            disabled={printDisabled}
+            onClick={() => onPrintBill?.(inv)}
+            title={printDisabled ? printDisabledReason : "Print bill"}
+          >
             <MdPrint size={14} />
           </button>
         )}
         {!isBillsMode && perms.canPrint && (
-          <button style={btn.tax} onClick={() => onPrintTax?.(inv)} title="Print tax invoice">
+          <button
+            style={{ ...btn.tax, opacity: printDisabled ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+            disabled={printDisabled}
+            onClick={() => onPrintTax?.(inv)}
+            title={printDisabled ? printDisabledReason : "Print tax invoice"}
+          >
             <MdDescription size={14} />
           </button>
         )}
         {isBillsMode && perms.canPrint && (
           <button
-            style={{ ...btn.pdf, opacity: exportingId ? 0.55 : 1 }}
-            disabled={!!exportingId}
+            style={{ ...btn.pdf, opacity: printDisabled || exportingId ? 0.55 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+            disabled={printDisabled || !!exportingId}
             onClick={() => onExportBillPdf?.(inv)}
-            title="Export Bill PDF"
+            title={printDisabled ? printDisabledReason : "Export Bill PDF"}
           >
             {exportingId === inv.id + "-bill-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />}
           </button>
         )}
         {!isBillsMode && perms.canPrint && (
           <button
-            style={{ ...btn.pdf, opacity: exportingId ? 0.55 : 1 }}
-            disabled={!!exportingId}
+            style={{ ...btn.pdf, opacity: printDisabled || exportingId ? 0.55 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+            disabled={printDisabled || !!exportingId}
             onClick={() => onExportTaxPdf?.(inv)}
-            title="Export Tax Invoice PDF"
+            title={printDisabled ? printDisabledReason : "Export Tax Invoice PDF"}
           >
             {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />}
           </button>

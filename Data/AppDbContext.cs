@@ -424,16 +424,25 @@ namespace MyApp.Api.Data
                 .IsUnique()
                 .HasFilter("[IsDeleted] = 0");
 
-            // PrintTemplate: unique per (CompanyId, TemplateType)
+            // PrintTemplate: multiple templates per (CompanyId, TemplateType), one is
+            // the default. Non-unique lookup index drives type-filtered reads.
             modelBuilder.Entity<PrintTemplate>()
-                .HasIndex(pt => new { pt.CompanyId, pt.TemplateType })
-                .IsUnique();
+                .HasIndex(pt => new { pt.CompanyId, pt.TemplateType }, "IX_PrintTemplates_CompanyId_TemplateType");
+
+            // Exactly one default per (CompanyId, TemplateType). Filtered to
+            // IsDefault = 1 — same pattern as the ItemType (Name, HSCode) index.
+            modelBuilder.Entity<PrintTemplate>()
+                .HasIndex(pt => new { pt.CompanyId, pt.TemplateType }, "UX_PrintTemplates_DefaultPerScope")
+                .IsUnique()
+                .HasFilter("[IsDefault] = 1");
 
             modelBuilder.Entity<PrintTemplate>()
                 .HasOne(pt => pt.Company)
                 .WithMany()
                 .HasForeignKey(pt => pt.CompanyId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<PrintTemplate>().Property(pt => pt.Name).HasMaxLength(200);
 
             // DeliveryItem -> ItemType (optional, restrict)
             modelBuilder.Entity<DeliveryItem>()

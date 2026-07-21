@@ -137,6 +137,75 @@ namespace MyApp.Api.Services.Implementations
             return pb == null ? null : ToDto(pb);
         }
 
+        public async Task<PrintPurchaseBillDto?> GetPrintDataAsync(int id)
+        {
+            var pb = await _context.PurchaseBills
+                .AsNoTracking()
+                .Include(p => p.Company)
+                .Include(p => p.Supplier)
+                .Include(p => p.Items)
+                    .ThenInclude(pi => pi.ItemType)
+                .Include(p => p.Items)
+                    .ThenInclude(pi => pi.SourceLines)
+                        .ThenInclude(sl => sl.InvoiceItem!)
+                            .ThenInclude(ii => ii.Invoice)
+                .FirstOrDefaultAsync(p => p.Id == id);
+            if (pb == null) return null;
+
+            var grNumbers = await _context.GoodsReceipts
+                .AsNoTracking()
+                .Where(g => g.PurchaseBillId == id)
+                .OrderBy(g => g.GoodsReceiptNumber)
+                .Select(g => g.GoodsReceiptNumber)
+                .ToListAsync();
+
+            var sNo = 0;
+            return new PrintPurchaseBillDto
+            {
+                CompanyBrandName = pb.Company?.BrandName ?? pb.Company?.Name ?? "",
+                CompanyLogoPath = pb.Company?.LogoPath,
+                CompanyAddress = pb.Company?.FullAddress,
+                CompanyPhone = pb.Company?.Phone,
+                CompanyNTN = pb.Company?.NTN,
+                CompanySTRN = pb.Company?.STRN,
+                SupplierName = pb.Supplier?.Name ?? "",
+                SupplierAddress = pb.Supplier?.Address,
+                SupplierPhone = pb.Supplier?.Phone,
+                SupplierNTN = pb.Supplier?.NTN,
+                SupplierSTRN = pb.Supplier?.STRN,
+                PurchaseBillNumber = pb.PurchaseBillNumber,
+                Date = pb.Date,
+                SupplierBillNumber = pb.SupplierBillNumber,
+                SupplierIRN = pb.SupplierIRN,
+                PaymentTerms = pb.PaymentTerms,
+                // DueDate omitted — master's PurchaseBill has no DueDate field.
+                GoodsReceiptNumbers = grNumbers,
+                LinkedSaleBillNumbers = pb.Items?
+                    .SelectMany(i => i.SourceLines ?? new List<PurchaseItemSourceLine>())
+                    .Where(sl => sl.InvoiceItem?.Invoice != null)
+                    .Select(sl => sl.InvoiceItem!.Invoice!.InvoiceNumber)
+                    .Distinct()
+                    .OrderBy(n => n)
+                    .ToList() ?? new(),
+                Subtotal = pb.Subtotal,
+                GSTRate = pb.GSTRate,
+                GSTAmount = pb.GSTAmount,
+                GrandTotal = NumberToWordsConverter.RoundForDisplay(pb.GrandTotal),
+                AmountInWords = NumberToWordsConverter.Convert(pb.GrandTotal),
+                Items = pb.Items?.Select(i => new PrintPurchaseBillItemDto
+                {
+                    SNo = ++sNo,
+                    ItemTypeName = i.ItemType?.Name ?? i.ItemTypeName,
+                    Description = i.Description,
+                    Quantity = i.Quantity,
+                    UOM = i.UOM,
+                    UnitPrice = i.UnitPrice,
+                    LineTotal = i.LineTotal,
+                    HSCode = i.HSCode,
+                }).ToList() ?? new(),
+            };
+        }
+
         public async Task<PurchaseBillDto> CreateAsync(CreatePurchaseBillDto dto)
         {
             // Audit C-8 (2026-05-13): wrap the create in a retry loop so

@@ -18,7 +18,9 @@ import {
 } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { createChallanFromOrder } from "../api/salesOrderApi";
-import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
+import { hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { mergeTemplate } from "../utils/templateEngine";
 import { defaultChallanTemplate } from "../utils/defaultTemplates";
 import { exportToPdf } from "../utils/exportUtils";
@@ -44,6 +46,7 @@ const colors = {
 export default function ChallanPage() {
   const confirm = useConfirm();
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const tplPicker = usePrintTemplates("Challan");
   const { has } = usePermissions();
   const canCreate = has("challans.manage.create");
   const canUpdate = has("challans.manage.update");
@@ -224,17 +227,14 @@ export default function ChallanPage() {
   };
 
   const handlePrint = async (challan) => {
+    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
     if (!selectedCompany) { notify("No company selected.", "error"); return; }
     const w = window.open("", "_blank");
     if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
     w.document.write("<p>Loading challan...</p>");
     try {
       const { data } = await getChallanPrintData(challan.id);
-      let template = defaultChallanTemplate;
-      try {
-        const res = await getTemplate(selectedCompany.id, "Challan");
-        if (res.data?.htmlContent) template = res.data.htmlContent;
-      } catch { /* use default */ }
+      const template = tplPicker.resolveTemplate(challan)?.htmlContent || defaultChallanTemplate;
       const html = mergeTemplate(template, data);
       w.document.open();
       w.document.write(html);
@@ -298,15 +298,12 @@ export default function ChallanPage() {
   };
 
   const handleExportPdf = async (challan) => {
+    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
     if (exportingId) return;
     setExportingId(challan.id + "-pdf");
     try {
       const { data } = await getChallanPrintData(challan.id);
-      let template = defaultChallanTemplate;
-      try {
-        const res = await getTemplate(selectedCompany.id, "Challan");
-        if (res.data?.htmlContent) template = res.data.htmlContent;
-      } catch { /* use default */ }
+      const template = tplPicker.resolveTemplate(challan)?.htmlContent || defaultChallanTemplate;
       const html = mergeTemplate(template, data);
       const name = `DC # ${data.challanNumber} ${data.clientName}`;
       await exportToPdf(html, name);
@@ -423,11 +420,12 @@ export default function ChallanPage() {
               {hasFilters && (
                 <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>
               )}
-              {isBigScreen && (
-                <div style={{ marginLeft: "auto" }}>
+              <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <PrintTemplateSelect picker={tplPicker} />
+                {isBigScreen && (
                   <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Delivery challan view mode" />
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
         </>
@@ -465,6 +463,8 @@ export default function ChallanPage() {
               onDuplicate={handleDuplicate}
               exportingId={exportingId}
               duplicatingId={duplicatingId}
+              printDisabled={tplPicker.noTemplate}
+              printDisabledReason={tplPicker.noTemplateReason}
             />
           ) : (
             <ChallanList
@@ -479,6 +479,8 @@ export default function ChallanPage() {
               onDuplicate={handleDuplicate}
               exportingId={exportingId}
               duplicatingId={duplicatingId}
+              printDisabled={tplPicker.noTemplate}
+              printDisabledReason={tplPicker.noTemplateReason}
             />
           )}
           {/* Pagination */}

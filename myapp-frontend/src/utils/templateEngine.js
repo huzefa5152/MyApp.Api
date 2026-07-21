@@ -11,12 +11,28 @@ Handlebars.registerHelper("fmtDate", (d) => {
   return `${dd}-${mmm}-${yy}`;
 });
 
+// Numeric day/month/year (dd/mm/yyyy) — matches Manager's invoice-date format.
+Handlebars.registerHelper("fmtDMY", (d) => {
+  if (!d) return "";
+  const dt = new Date(d);
+  const dd = String(dt.getDate()).padStart(2, "0");
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${dt.getFullYear()}`;
+});
+
 Handlebars.registerHelper("fmt", (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 );
 
 Handlebars.registerHelper("fmtDec", (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+);
+
+// Quantity format: thousands separator, but keep decimals ONLY when present
+// (1000 -> "1,000", 500 -> "500", 2.5 -> "2.5"). Use for item quantities so
+// whole units read like Manager's "1,000" yet fractional units aren't rounded.
+Handlebars.registerHelper("fmtQty", (n) =>
+  Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })
 );
 
 // Audit H-13 (2026-05-13): pre-fix, nl2br only replaced \n with <br>
@@ -29,6 +45,18 @@ Handlebars.registerHelper("nl2br", (s) => {
   if (s == null) return "";
   const escaped = Handlebars.Utils.escapeExpression(String(s));
   return new Handlebars.SafeString(escaped.replace(/\n/g, "<br>"));
+});
+
+// Like nl2br, but ALSO re-allows a safe subset of inline formatting tags
+// (<b>/<i>/<u>) so item descriptions can carry simple bold/italic plus line
+// breaks. Everything else stays HTML-escaped (XSS-safe). Mirrors the React
+// renderRichTextHtml() util. Use as {{{richText this.description}}}.
+Handlebars.registerHelper("richText", (s) => {
+  if (s == null) return "";
+  let out = Handlebars.Utils.escapeExpression(String(s));
+  out = out.replace(/&lt;(\/?)(b|i|u)&gt;/gi, (_m, slash, tag) => `<${slash}${tag.toLowerCase()}>`);
+  out = out.replace(/\n/g, "<br>");
+  return new Handlebars.SafeString(out);
 });
 
 Handlebars.registerHelper("join", (arr, sep) =>
@@ -105,14 +133,33 @@ Handlebars.registerHelper("taxEmptyRows", (count) => {
 
 /**
  * Compile a Handlebars template and merge with data.
+ *
+ * Injects a <base> so relative asset URLs — notably the logo
+ * "/data/uploads/logos/…" from {{companyLogoPath}} — resolve against the app
+ * origin. Printing opens an about:blank popup and document.write's this HTML;
+ * an about:blank document has no origin to resolve a path-absolute URL against,
+ * so without an explicit base the logo silently renders blank in the
+ * print/preview. Resolving against window.location.origin works in production
+ * (same origin serves /data) and in dev (the Vite server proxies /data to the
+ * backend).
  */
 export function mergeTemplate(htmlTemplate, data) {
   const compiled = Handlebars.compile(htmlTemplate);
-  return compiled(data);
+  const html = compiled(data);
+  if (typeof window !== "undefined" && window.location?.origin) {
+    const base = `<base href="${window.location.origin}/">`;
+    return /<head[^>]*>/i.test(html)
+      ? html.replace(/<head[^>]*>/i, (m) => m + base)
+      : base + html;
+  }
+  return html;
 }
 
 /**
- * Merge field definitions for each template type.
+ * Static merge-field fallback for the original document types. The newer types
+ * (SalesQuote, SalesOrder, Credit/Debit Note, PurchaseBill, GoodsReceipt) get
+ * their editor field-picker catalogs from the DB (MergeField seeders); the
+ * Template Editor sidebar fetches those via the /mergefields API.
  */
 export const MERGE_FIELDS = {
   Challan: [
@@ -131,7 +178,9 @@ export const MERGE_FIELDS = {
     { field: "{{#each items}}", label: "Loop: Items Start" },
     { field: "{{/each}}", label: "Loop: End" },
     { field: "{{this.quantity}}", label: "Item Quantity (in loop)" },
-    { field: "{{this.description}}", label: "Item Description (in loop)" },
+    { field: "{{fmtQty this.quantity}}", label: "Item Quantity — formatted (1,000 / 2.5)" },
+    { field: "{{this.unit}}", label: "Item Unit (in loop)" },
+    { field: "{{{richText this.description}}}", label: "Item Description (in loop)" },
   ],
   Bill: [
     { field: "{{companyBrandName}}", label: "Company Brand Name" },
@@ -160,7 +209,7 @@ export const MERGE_FIELDS = {
     { field: "{{/each}}", label: "Loop: End" },
     { field: "{{this.sNo}}", label: "Item S# (in loop)" },
     { field: "{{this.quantity}}", label: "Item Quantity (in loop)" },
-    { field: "{{this.description}}", label: "Item Description (in loop)" },
+    { field: "{{{richText this.description}}}", label: "Item Description (in loop)" },
     { field: "{{this.itemTypeName}}", label: "Item Type Name (in loop)" },
     { field: "{{fmt this.unitPrice}}", label: "Item Unit Price (in loop)" },
     { field: "{{fmt this.lineTotal}}", label: "Item Line Total (in loop)" },
@@ -189,7 +238,7 @@ export const MERGE_FIELDS = {
     { field: "{{/each}}", label: "Loop: End" },
     { field: "{{this.quantity}}", label: "Item Quantity (in loop)" },
     { field: "{{this.uom}}", label: "Item UOM (in loop)" },
-    { field: "{{this.description}}", label: "Item Description (in loop)" },
+    { field: "{{{richText this.description}}}", label: "Item Description (in loop)" },
     { field: "{{fmtDec this.valueExclTax}}", label: "Value Excl Tax (in loop)" },
     { field: "{{this.gstRate}}", label: "GST Rate % (in loop)" },
     { field: "{{fmtDec this.gstAmount}}", label: "GST Amount (in loop)" },
@@ -202,5 +251,32 @@ export const MERGE_FIELDS = {
     //   <img src="{{{fbrQrPngDataUrl}}}" />
     { field: "{{{fbrQrPngDataUrl}}}", label: "FBR QR Code (base64 PNG)" },
     { field: "{{fbrLogoUrl}}", label: "FBR Logo URL" },
+  ],
+  Receipt: [
+    { field: "{{companyBrandName}}", label: "Company Brand Name" },
+    { field: "{{companyLogoPath}}", label: "Company Logo URL" },
+    { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },
+    { field: "{{{nl2br companyPhone}}}", label: "Company Phone (with line breaks)" },
+    { field: "{{companyNTN}}", label: "Company NTN" },
+    { field: "{{companySTRN}}", label: "Company STRN" },
+    { field: "{{reference}}", label: "Voucher Reference (RCV-#)" },
+    { field: "{{fmtDate date}}", label: "Receipt Date" },
+    { field: "{{contactName}}", label: "Received From (Name)" },
+    { field: "{{{nl2br contactAddress}}}", label: "Contact Address" },
+    { field: "{{contactPhone}}", label: "Contact Phone" },
+    { field: "{{method}}", label: "Payment Method" },
+    { field: "{{bankAccountName}}", label: "Bank/Cash Account" },
+    { field: "{{chequeNumber}}", label: "Cheque Number" },
+    { field: "{{fmtDate chequeDate}}", label: "Cheque Date" },
+    { field: "{{description}}", label: "Description" },
+    { field: "{{fmt amount}}", label: "Amount" },
+    { field: "{{amountInWords}}", label: "Amount In Words" },
+    { field: "{{#if allocations.length}}", label: "If: Has Allocations" },
+    { field: "{{/if}}", label: "End If" },
+    { field: "{{#each allocations}}", label: "Loop: Allocations Start" },
+    { field: "{{/each}}", label: "Loop: End" },
+    { field: "{{this.documentLabel}}", label: "Settled Document (in loop)" },
+    { field: "{{fmtDate this.date}}", label: "Document Date (in loop)" },
+    { field: "{{fmt this.amount}}", label: "Settled Amount (in loop)" },
   ],
 };

@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.Models;
@@ -10,24 +11,35 @@ namespace MyApp.Api.Repositories.Implementations
         private readonly AppDbContext _ctx;
         public PrintTemplateRepository(AppDbContext ctx) => _ctx = ctx;
 
+        // Rows in a single (CompanyId, TemplateType) scope.
+        private IQueryable<PrintTemplate> ScopeQuery(int companyId, string templateType)
+            => _ctx.PrintTemplates.Where(pt => pt.CompanyId == companyId && pt.TemplateType == templateType);
+
+        // ── Print/export resolver + legacy shims ──
+
         public async Task<PrintTemplate?> GetByCompanyAndTypeAsync(int companyId, string templateType)
         {
-            return await _ctx.PrintTemplates
-                .FirstOrDefaultAsync(pt => pt.CompanyId == companyId && pt.TemplateType == templateType);
+            // Default first (IsDefault desc), oldest row as fallback.
+            return await ScopeQuery(companyId, templateType)
+                .OrderByDescending(pt => pt.IsDefault)
+                .ThenBy(pt => pt.Id)
+                .FirstOrDefaultAsync();
         }
 
-        public async Task<List<PrintTemplate>> GetByCompanyAsync(int companyId)
+        public async Task<PrintTemplate?> GetForExportAsync(int companyId, string templateType)
         {
-            return await _ctx.PrintTemplates
-                .Where(pt => pt.CompanyId == companyId)
-                .OrderBy(pt => pt.TemplateType)
-                .ToListAsync();
+            // Only a template that actually has an Excel file on it counts for export
+            // resolution: default first, oldest Excel-bearing row as fallback.
+            return await ScopeQuery(companyId, templateType)
+                .Where(pt => pt.ExcelTemplatePath != null)
+                .OrderByDescending(pt => pt.IsDefault)
+                .ThenBy(pt => pt.Id)
+                .FirstOrDefaultAsync();
         }
 
         public async Task<PrintTemplate> UpsertAsync(int companyId, string templateType, string htmlContent, string? templateJson = null, string? editorMode = null)
         {
-            var existing = await _ctx.PrintTemplates
-                .FirstOrDefaultAsync(pt => pt.CompanyId == companyId && pt.TemplateType == templateType);
+            var existing = await GetByCompanyAndTypeAsync(companyId, templateType);
 
             if (existing != null)
             {
@@ -42,6 +54,8 @@ namespace MyApp.Api.Repositories.Implementations
                 {
                     CompanyId = companyId,
                     TemplateType = templateType,
+                    Name = "Default",
+                    IsDefault = true,
                     HtmlContent = htmlContent,
                     TemplateJson = templateJson,
                     EditorMode = editorMode,
@@ -56,8 +70,7 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<PrintTemplate> UpsertExcelPathAsync(int companyId, string templateType, string excelPath, string? sheetName = null)
         {
-            var existing = await _ctx.PrintTemplates
-                .FirstOrDefaultAsync(pt => pt.CompanyId == companyId && pt.TemplateType == templateType);
+            var existing = await GetByCompanyAndTypeAsync(companyId, templateType);
 
             if (existing != null)
             {
@@ -71,6 +84,8 @@ namespace MyApp.Api.Repositories.Implementations
                 {
                     CompanyId = companyId,
                     TemplateType = templateType,
+                    Name = "Default",
+                    IsDefault = true,
                     HtmlContent = "",
                     ExcelTemplatePath = excelPath,
                     ExcelSheetName = sheetName,
@@ -81,6 +96,159 @@ namespace MyApp.Api.Repositories.Implementations
 
             await _ctx.SaveChangesAsync();
             return existing;
+        }
+
+        // ── Scoped (multi-template) operations ──
+
+        public async Task<List<PrintTemplate>> GetByCompanyAsync(int companyId)
+        {
+            return await _ctx.PrintTemplates
+                .AsNoTracking()
+                .Where(pt => pt.CompanyId == companyId)
+                .OrderBy(pt => pt.TemplateType)
+                .ThenBy(pt => pt.Name)
+                .ToListAsync();
+        }
+
+        public async Task<PrintTemplate?> GetByIdAsync(int id)
+        {
+            // Tracked (no AsNoTracking): the id-based Excel upload/delete/sheet-pin
+            // endpoints load via this method, mutate, then SaveAsync.
+            return await _ctx.PrintTemplates.FirstOrDefaultAsync(pt => pt.Id == id);
+        }
+
+        public async Task<PrintTemplate> CreateAsync(int companyId, string templateType,
+            string name, string htmlContent, string? templateJson, string? editorMode, bool isDefault)
+        {
+            await using var tx = await _ctx.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                bool firstInScope = !await ScopeQuery(companyId, templateType).AnyAsync();
+                bool makeDefault = isDefault || firstInScope;
+
+                if (makeDefault)
+                {
+                    // Clear the existing default for this type first (filtered unique
+                    // index allows only one IsDefault row per (company, type)).
+                    var current = await ScopeQuery(companyId, templateType)
+                        .Where(pt => pt.IsDefault)
+                        .ToListAsync();
+                    if (current.Count > 0)
+                    {
+                        foreach (var c in current) c.IsDefault = false;
+                        await _ctx.SaveChangesAsync();
+                    }
+                }
+
+                var t = new PrintTemplate
+                {
+                    CompanyId = companyId,
+                    TemplateType = templateType,
+                    Name = string.IsNullOrWhiteSpace(name) ? "Untitled" : name.Trim(),
+                    IsDefault = makeDefault,
+                    HtmlContent = htmlContent,
+                    TemplateJson = templateJson,
+                    EditorMode = editorMode,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _ctx.PrintTemplates.Add(t);
+                await _ctx.SaveChangesAsync();
+                await tx.CommitAsync();
+                return t;
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        }
+
+        public async Task<PrintTemplate?> UpdateContentAsync(int id, string name, string htmlContent, string? templateJson, string? editorMode)
+        {
+            var t = await _ctx.PrintTemplates.FirstOrDefaultAsync(pt => pt.Id == id);
+            if (t == null) return null;
+
+            t.Name = string.IsNullOrWhiteSpace(name) ? t.Name : name.Trim();
+            t.HtmlContent = htmlContent;
+            t.TemplateJson = templateJson;
+            t.EditorMode = editorMode;
+            t.UpdatedAt = DateTime.UtcNow;
+            await _ctx.SaveChangesAsync();
+            return t;
+        }
+
+        public async Task<bool> SetDefaultAsync(int id)
+        {
+            await using var tx = await _ctx.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                var target = await _ctx.PrintTemplates.FirstOrDefaultAsync(pt => pt.Id == id);
+                if (target == null) { await tx.RollbackAsync(); return false; }
+                if (target.IsDefault) { await tx.CommitAsync(); return true; }
+
+                // Clear the current default(s) for the type, save, THEN set the target
+                // — two saves so the filtered unique index never sees two IsDefault rows.
+                var current = await ScopeQuery(target.CompanyId, target.TemplateType)
+                    .Where(pt => pt.IsDefault && pt.Id != target.Id)
+                    .ToListAsync();
+                if (current.Count > 0)
+                {
+                    foreach (var c in current) c.IsDefault = false;
+                    await _ctx.SaveChangesAsync();
+                }
+
+                target.IsDefault = true;
+                target.UpdatedAt = DateTime.UtcNow;
+                await _ctx.SaveChangesAsync();
+                await tx.CommitAsync();
+                return true;
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        }
+
+        public async Task<string?> DeleteAsync(int id)
+        {
+            await using var tx = await _ctx.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                var t = await _ctx.PrintTemplates.FirstOrDefaultAsync(pt => pt.Id == id);
+                if (t == null) { await tx.RollbackAsync(); return null; }
+
+                var path = t.ExcelTemplatePath;
+                bool wasDefault = t.IsDefault;
+                int companyId = t.CompanyId;
+                string type = t.TemplateType;
+
+                _ctx.PrintTemplates.Remove(t);
+                await _ctx.SaveChangesAsync();
+
+                if (wasDefault)
+                {
+                    // Promote the most-recently-updated remaining sibling so the type
+                    // keeps a default (if any siblings remain).
+                    var promote = await ScopeQuery(companyId, type)
+                        .OrderByDescending(pt => pt.UpdatedAt)
+                        .ThenByDescending(pt => pt.Id)
+                        .FirstOrDefaultAsync();
+                    if (promote != null)
+                    {
+                        promote.IsDefault = true;
+                        await _ctx.SaveChangesAsync();
+                    }
+                }
+
+                await tx.CommitAsync();
+                return path;
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task SaveAsync()

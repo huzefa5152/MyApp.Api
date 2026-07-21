@@ -103,6 +103,45 @@ namespace MyApp.Api.Services.Implementations
             return gr == null ? null : ToDto(gr);
         }
 
+        public async Task<PrintGoodsReceiptDto?> GetPrintDataAsync(int id)
+        {
+            var gr = await _context.GoodsReceipts
+                .AsNoTracking()
+                .Include(g => g.Company)
+                .Include(g => g.Supplier)
+                .Include(g => g.PurchaseBill)
+                .Include(g => g.Items)
+                    .ThenInclude(it => it.ItemType)
+                .FirstOrDefaultAsync(g => g.Id == id);
+            if (gr == null) return null;
+
+            var sNo = 0;
+            return new PrintGoodsReceiptDto
+            {
+                CompanyBrandName = gr.Company?.BrandName ?? gr.Company?.Name ?? "",
+                CompanyLogoPath = gr.Company?.LogoPath,
+                CompanyAddress = gr.Company?.FullAddress,
+                CompanyPhone = gr.Company?.Phone,
+                SupplierName = gr.Supplier?.Name ?? "",
+                SupplierAddress = gr.Supplier?.Address,
+                SupplierPhone = gr.Supplier?.Phone,
+                GoodsReceiptNumber = gr.GoodsReceiptNumber,
+                ReceiptDate = gr.ReceiptDate,
+                SupplierChallanNumber = gr.SupplierChallanNumber,
+                PurchaseBillNumber = gr.PurchaseBill?.PurchaseBillNumber,
+                Site = gr.Site,
+                Status = gr.Status,
+                Items = gr.Items?.Select(i => new PrintGoodsReceiptItemDto
+                {
+                    SNo = ++sNo,
+                    ItemTypeName = i.ItemType?.Name ?? "",
+                    Description = i.Description,
+                    Quantity = i.Quantity,
+                    Unit = i.Unit,
+                }).ToList() ?? new(),
+            };
+        }
+
         public async Task<GoodsReceiptDto> CreateAsync(CreateGoodsReceiptDto dto)
         {
             // Audit C-8 (2026-05-13): retry-on-conflict pattern. The new

@@ -59,6 +59,20 @@ namespace MyApp.Api.Controllers
             return Ok(gr);
         }
 
+        /// <summary>Flat merge-data payload for GoodsReceipt print templates —
+        /// same shape contract as the sales-side print endpoints.</summary>
+        [HttpGet("{id}/print")]
+        [HasPermission("goodsreceipts.print.view")]
+        public async Task<ActionResult<PrintGoodsReceiptDto>> GetPrintData(int id)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            var dto = await _service.GetPrintDataAsync(id);
+            if (dto == null) return NotFound();
+            return Ok(dto);
+        }
+
         [HttpPost]
         [HasPermission("goodsreceipts.manage.create")]
         public async Task<ActionResult<GoodsReceiptDto>> Create([FromBody] CreateGoodsReceiptDto dto)

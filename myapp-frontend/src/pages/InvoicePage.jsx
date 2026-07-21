@@ -16,7 +16,9 @@ import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
-import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
+import { hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { mergeTemplate } from "../utils/templateEngine";
 import { defaultBillTemplate, defaultTaxInvoiceTemplate } from "../utils/defaultTemplates";
 import { exportToPdf } from "../utils/exportUtils";
@@ -54,6 +56,12 @@ export default function InvoicePage({ mode = "invoices" }) {
   // (e.g. operator wants cards on Bills but table on Invoices).
   const [viewMode, setViewMode, isBigScreen] = useListViewMode(isBillsMode ? "bills" : isNotesMode ? mode : "invoices");
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  // Print-template picker, keyed on the mode: Bills print the "Bill" type;
+  // Invoices the "TaxInvoice" type; Credit/Debit notes their own distinct types.
+  const printTemplateType = isBillsMode
+    ? "Bill"
+    : (mode === "creditnotes" ? "CreditNote" : mode === "debitnotes" ? "DebitNote" : "TaxInvoice");
+  const tplPicker = usePrintTemplates(printTemplateType);
   const { has } = usePermissions();
   const confirm = useConfirm();
   const canCreate = has("bills.manage.create");
@@ -292,17 +300,13 @@ export default function InvoicePage({ mode = "invoices" }) {
   };
 
   const handlePrintBill = async (inv) => {
+    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
     const w = window.open("", "_blank");
     if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
     w.document.write("<p>Loading bill...</p>");
     try {
       const { data } = await getInvoicePrintBill(inv.id);
-      let template = defaultBillTemplate;
-      try {
-        const res = await getTemplate(selectedCompany.id, "Bill");
-        if (res.data?.htmlContent) template = res.data.htmlContent;
-      } catch { /* use default */ }
-      const html = mergeTemplate(template, data);
+      const html = mergeTemplate(tplPicker.resolveTemplate(inv)?.htmlContent || defaultBillTemplate, data);
       w.document.open();
       w.document.write(html);
       w.document.close();
@@ -312,17 +316,13 @@ export default function InvoicePage({ mode = "invoices" }) {
   };
 
   const handlePrintTax = async (inv) => {
+    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
     const w = window.open("", "_blank");
     if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
     w.document.write("<p>Loading tax invoice...</p>");
     try {
       const { data } = await getInvoicePrintTaxInvoice(inv.id);
-      let template = defaultTaxInvoiceTemplate;
-      try {
-        const res = await getTemplate(selectedCompany.id, "TaxInvoice");
-        if (res.data?.htmlContent) template = res.data.htmlContent;
-      } catch { /* use default */ }
-      const html = mergeTemplate(template, data);
+      const html = mergeTemplate(tplPicker.resolveTemplate(inv)?.htmlContent || defaultTaxInvoiceTemplate, data);
       w.document.open();
       w.document.write(html);
       w.document.close();
@@ -332,16 +332,12 @@ export default function InvoicePage({ mode = "invoices" }) {
   };
 
   const handleExportBillPdf = async (inv) => {
+    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
     if (exportingId) return;
     setExportingId(inv.id + "-bill-pdf");
     try {
       const { data } = await getInvoicePrintBill(inv.id);
-      let template = defaultBillTemplate;
-      try {
-        const res = await getTemplate(selectedCompany.id, "Bill");
-        if (res.data?.htmlContent) template = res.data.htmlContent;
-      } catch { /* use default */ }
-      const html = mergeTemplate(template, data);
+      const html = mergeTemplate(tplPicker.resolveTemplate(inv)?.htmlContent || defaultBillTemplate, data);
       await exportToPdf(html, `Bill # ${data.invoiceNumber} ${data.clientName}`);
     } catch { notify("Failed to export Bill PDF.", "error"); }
     finally { setExportingId(null); }
@@ -359,16 +355,12 @@ export default function InvoicePage({ mode = "invoices" }) {
   };
 
   const handleExportTaxPdf = async (inv) => {
+    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
     if (exportingId) return;
     setExportingId(inv.id + "-tax-pdf");
     try {
       const { data } = await getInvoicePrintTaxInvoice(inv.id);
-      let template = defaultTaxInvoiceTemplate;
-      try {
-        const res = await getTemplate(selectedCompany.id, "TaxInvoice");
-        if (res.data?.htmlContent) template = res.data.htmlContent;
-      } catch { /* use default */ }
-      const html = mergeTemplate(template, data);
+      const html = mergeTemplate(tplPicker.resolveTemplate(inv)?.htmlContent || defaultTaxInvoiceTemplate, data);
       // Tax invoice uses "INVOICE # ..." prefix to distinguish from the non-tax
       // Bill exports (which keep the "Bill # ..." prefix on lines 160 + 171 above).
       await exportToPdf(html, `INVOICE # ${data.invoiceNumber} ${data.buyerName || data.clientName}`);
@@ -879,15 +871,16 @@ export default function InvoicePage({ mode = "invoices" }) {
               {hasFilters && (
                 <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>
               )}
-              {isBigScreen && (
-                <div style={{ marginLeft: "auto" }}>
+              <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                {canPrint && <PrintTemplateSelect picker={tplPicker} />}
+                {isBigScreen && (
                   <ViewModeToggle
                     mode={viewMode}
                     onChange={setViewMode}
                     ariaLabel={isBillsMode ? "Bills view mode" : "Invoices view mode"}
                   />
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
         </>
@@ -934,6 +927,8 @@ export default function InvoicePage({ mode = "invoices" }) {
               fbrValidated={fbrValidated}
               fbrLoading={fbrLoading}
               exportingId={exportingId}
+              printDisabled={tplPicker.noTemplate}
+              printDisabledReason={tplPicker.noTemplateReason}
               onView={(inv) => setViewingId(inv.id)}
               onPrintBill={handlePrintBill}
               onPrintTax={handlePrintTax}
@@ -1135,22 +1130,32 @@ export default function InvoicePage({ mode = "invoices" }) {
                       </button>
                     )}
                     {isBillsMode && canPrint && (
-                      <button style={styles.printBtn} onClick={() => handlePrintBill(inv)}>
+                      <button
+                        style={{ ...styles.printBtn, opacity: tplPicker.noTemplate ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }}
+                        disabled={tplPicker.noTemplate}
+                        title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}
+                        onClick={() => handlePrintBill(inv)}
+                      >
                         <MdPrint size={14} /> Bill
                       </button>
                     )}
                     {!isBillsMode && canPrint && (
-                      <button style={styles.taxBtn} onClick={() => handlePrintTax(inv)}>
+                      <button
+                        style={{ ...styles.taxBtn, opacity: tplPicker.noTemplate ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }}
+                        disabled={tplPicker.noTemplate}
+                        title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}
+                        onClick={() => handlePrintTax(inv)}
+                      >
                         <MdDescription size={14} /> Tax Invoice
                       </button>
                     )}
                     {isBillsMode && canPrint && (
-                      <button style={{ ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportBillPdf(inv)}>
+                      <button style={{ ...styles.pdfBtn, opacity: tplPicker.noTemplate || exportingId ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Export PDF"} onClick={() => handleExportBillPdf(inv)}>
                         {exportingId === inv.id + "-bill-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Bill PDF
                       </button>
                     )}
                     {!isBillsMode && canPrint && (
-                      <button style={{ ...styles.pdfBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxPdf(inv)}>
+                      <button style={{ ...styles.pdfBtn, opacity: tplPicker.noTemplate || exportingId ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Export PDF"} onClick={() => handleExportTaxPdf(inv)}>
                         {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Tax PDF
                       </button>
                     )}

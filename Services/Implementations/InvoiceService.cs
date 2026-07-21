@@ -2466,6 +2466,16 @@ namespace MyApp.Api.Services.Implementations
                 SupplierSTRN = inv.Company?.STRN,
                 SupplierPhone = inv.Company?.Phone,
                 SupplierLogoPath = inv.Company?.LogoPath,
+                // Same issuer, ALSO under the company* token names so templates
+                // authored against {{companyLogoPath}} (rather than {{supplierLogoPath}})
+                // still render the letterhead. Credit/Debit note templates share
+                // this DTO and commonly use the company* convention.
+                CompanyBrandName = inv.Company?.BrandName ?? inv.Company?.Name ?? "",
+                CompanyLogoPath = inv.Company?.LogoPath,
+                CompanyAddress = inv.Company?.FullAddress,
+                CompanyPhone = inv.Company?.Phone,
+                CompanyNTN = inv.Company?.NTN,
+                CompanySTRN = inv.Company?.STRN,
                 BuyerName = inv.Client?.Name ?? "",
                 BuyerAddress = inv.Client?.Address,
                 BuyerPhone = inv.Client?.Phone,
@@ -2492,6 +2502,17 @@ namespace MyApp.Api.Services.Implementations
                 // pulled https://quickchart.io which broke under strict CSP /
                 // air-gapped networks and leaked the IRN to a third party).
                 FbrQrPngDataUrl = FbrQrCodeGenerator.BuildVerifyQrDataUrl(inv.FbrIRN),
+                // Credit / Debit note fields — populated only when this invoice is
+                // a note (NoteKind 1 = Debit, 2 = Credit; 0 = ordinary sale, leaves
+                // these null so plain TaxInvoice templates are unaffected). The
+                // CreditNote/DebitNote print templates bind these.
+                NoteKindLabel = inv.NoteKind == 1 ? "Debit Note"
+                              : inv.NoteKind == 2 ? "Credit Note" : null,
+                OriginalInvoiceNumber = inv.OriginalInvoice?.InvoiceNumber,
+                OriginalInvoiceDate = inv.OriginalInvoice?.Date,
+                OriginalInvoiceRefIRN = inv.OriginalInvoiceRefIRN,
+                NoteReason = inv.NoteKind != 0 ? inv.NoteReason : null,
+                NoteReasonRemarks = inv.NoteKind != 0 ? inv.NoteReasonRemarks : null,
                 // 2026-05-29: Tax Invoice print reads the
                 // InvoiceItemAdjustment overlay for Quantity / UnitPrice /
                 // LineTotal — same fallback shape FbrService uses when it
@@ -2536,6 +2557,7 @@ namespace MyApp.Api.Services.Implementations
                             {
                                 ItemTypeName = g.Key,
                                 Quantity = totalQty,
+                                UnitPrice = totalQty != 0 ? Math.Round(totalValue / totalQty, 2) : 0m,
                                 UOM = g.Select(x => x.Adjustment?.AdjustedUOM ?? x.UOM)
                                        .FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)) ?? "",
                                 Description = g.Key,
@@ -2561,6 +2583,7 @@ namespace MyApp.Api.Services.Implementations
                             {
                                 ItemTypeName = ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName,
                                 Quantity = qty,
+                                UnitPrice = qty != 0 ? Math.Round(lineTotal / qty, 2) : 0m,
                                 UOM = ii.Adjustment?.AdjustedUOM ?? ii.UOM,
                                 Description = ii.Description,
                                 ValueExclTax = lineTotal,

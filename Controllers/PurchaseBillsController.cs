@@ -69,6 +69,20 @@ namespace MyApp.Api.Controllers
             return Ok(pb);
         }
 
+        /// <summary>Flat merge-data payload for PurchaseBill print templates —
+        /// same shape contract as the sales-side print endpoints.</summary>
+        [HttpGet("{id}/print")]
+        [HasPermission("purchasebills.print.view")]
+        public async Task<ActionResult<PrintPurchaseBillDto>> GetPrintData(int id)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            var dto = await _service.GetPrintDataAsync(id);
+            if (dto == null) return NotFound();
+            return Ok(dto);
+        }
+
         [HttpPost]
         [HasPermission("purchasebills.manage.create")]
         public async Task<ActionResult<PurchaseBillDto>> Create([FromBody] CreatePurchaseBillDto dto)

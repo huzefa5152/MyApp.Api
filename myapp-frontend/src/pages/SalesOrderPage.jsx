@@ -12,6 +12,8 @@ import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
 import { exportToPdf } from "../utils/exportUtils";
 import { defaultOrderTemplate } from "../utils/salesDocTemplates";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -30,6 +32,7 @@ const INVOICE_COLORS = {
 export default function SalesOrderPage() {
   const confirm = useConfirm();
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const tplPicker = usePrintTemplates("SalesOrder");
   const { has } = usePermissions();
   const canView = has("salesorders.list.view");
   const canCreate = has("salesorders.manage.create");
@@ -101,22 +104,24 @@ export default function SalesOrderPage() {
   };
 
   const handlePrint = async (o) => {
+    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
     const w = window.open("", "_blank");
     if (!w) { notify("Popup blocked. Allow popups for this site.", "warning"); return; }
     w.document.write("<p>Loading order...</p>");
     try {
       const { data } = await getSalesOrderPrintData(o.id);
-      const html = mergeTemplate(defaultOrderTemplate, data);
+      const html = mergeTemplate(tplPicker.resolveTemplate(o)?.htmlContent || defaultOrderTemplate, data);
       writeAndPrint(w, html);
     } catch { w.close(); notify("Failed to load print data.", "error"); }
   };
 
   const handleExportPdf = async (o) => {
+    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
     if (exportingId) return;
     setExportingId(o.id);
     try {
       const { data } = await getSalesOrderPrintData(o.id);
-      const html = mergeTemplate(defaultOrderTemplate, data);
+      const html = mergeTemplate(tplPicker.resolveTemplate(o)?.htmlContent || defaultOrderTemplate, data);
       await exportToPdf(html, `SO # ${o.salesOrderNumber} ${o.clientName}`);
     } catch { notify("Failed to export PDF.", "error"); }
     finally { setExportingId(null); }
@@ -164,6 +169,7 @@ export default function SalesOrderPage() {
                 <option value="">All Status</option>
                 {["Open", "Closed", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}
               </select>
+              <div style={{ marginLeft: "auto" }}><PrintTemplateSelect picker={tplPicker} /></div>
             </div>
           )}
         </>
@@ -212,8 +218,8 @@ export default function SalesOrderPage() {
                     {canView && <button style={st.actBtn} onClick={() => setViewOrder(o)} title="View details"><MdVisibility size={16} /></button>}
                     {canDeliver && <button style={st.deliverBtn} onClick={() => setDeliverOrder(o)}><MdLocalShipping size={15} /> Deliver</button>}
                     {canUpdate && o.isEditable && <button style={st.actBtn} onClick={() => { setEditOrder(o); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
-                    {canPrint && <button style={st.actBtn} onClick={() => handlePrint(o)} title="Print"><MdPrint size={16} /></button>}
-                    {canPrint && <button style={{ ...st.actBtn, opacity: exportingId === o.id ? 0.5 : 1 }} onClick={() => handleExportPdf(o)} disabled={!!exportingId} title="Download PDF"><MdPictureAsPdf size={16} /></button>}
+                    {canPrint && <button style={{ ...st.actBtn, opacity: tplPicker.noTemplate ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} onClick={() => handlePrint(o)} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}><MdPrint size={16} /></button>}
+                    {canPrint && <button style={{ ...st.actBtn, opacity: tplPicker.noTemplate || exportingId === o.id ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} onClick={() => handleExportPdf(o)} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={16} /></button>}
                     {canUpdate && o.status !== "Cancelled" && (
                       <select style={st.statusSelect} value={o.status} onChange={(e) => handleStatus(o, e.target.value)} title="Set status">
                         {["Open", "Closed", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}
