@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { MdAdd, MdDelete, MdCheck, MdInfo, MdLock, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { createStandaloneInvoice } from "../api/invoiceApi";
 import { getSalesOrderInvoicePrefill, getSalesOrdersForPicker } from "../api/salesOrderApi";
@@ -14,6 +14,7 @@ import LookupAutocomplete from "./LookupAutocomplete";
 import ClientForm from "./ClientForm";
 import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
+import AttachmentManager from "./AttachmentManager";
 
 // Bill-without-challan flow ("Standalone Bill"). Per FBR DI-API V1.12:
 //   • §9 (Scenarios) — locks Sale Type per SN.
@@ -116,6 +117,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const { has } = usePermissions();
   const canCreateClient   = has("clients.manage.create");
   const canCreateItemType = has("itemtypes.manage.create");
+  const attachmentRef = useRef(null);
 
   const [clients, setClients] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -455,7 +457,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
     setSaving(true);
     try {
-      await createStandaloneInvoice({
+      const { data: createdInvoice } = await createStandaloneInvoice({
         date: new Date(invoiceDate).toISOString(),
         companyId,
         clientId: parseInt(selectedClientId),
@@ -494,6 +496,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           sroItemSerialNo: chosenScenario.meta.needsSRO ? r.sroItemSerialNo?.trim() || null : null,
         })),
       });
+      // Upload any files staged before the bill had an id. Best-effort —
+      // the bill is already created.
+      const savedId = createdInvoice?.id;
+      if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
       onSaved();
     } catch (err) {
       setError(err.response?.data?.message || err.response?.data?.error || "Failed to create bill.");
@@ -1135,6 +1141,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                 )}
               </>
             )}
+
+            <div style={{ marginTop: "1rem" }}>
+              <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="Invoice" entityId={null} mode="edit" />
+            </div>
           </div>
           <div style={formStyles.footer}>
             {!allRowsValid && rows.length > 0 && chosenScenario && selectedClientId && (

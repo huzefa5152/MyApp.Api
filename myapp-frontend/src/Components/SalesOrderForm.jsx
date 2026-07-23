@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SelectDropdown from "./SelectDropdown";
@@ -8,6 +8,7 @@ import QuantityInput from "./QuantityInput";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getSalesQuotesForPicker } from "../api/salesQuoteApi";
+import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 
 const colors = {
@@ -39,6 +40,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   const [salesQuoteId, setSalesQuoteId] = useState(order?.salesQuoteId ? String(order.salesQuoteId) : "");
   const [quotes, setQuotes] = useState([]);
   const [quoteLoadedMsg, setQuoteLoadedMsg] = useState("");
+  const attachmentRef = useRef(null);
 
   useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
   useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
@@ -101,7 +103,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
 
     setSaving(true);
     try {
-      await onSaved({
+      const saved = await onSaved({
         clientId: client.id,
         salesQuoteId: salesQuoteId ? parseInt(salesQuoteId) : null,
         orderDate: orderDate ? new Date(orderDate).toISOString() : null,
@@ -118,6 +120,10 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
           unit: i.unit,
         })),
       });
+      // Upload any files staged before the record had an id (no-op on edit /
+      // when nothing was staged). Best-effort — the order is already saved.
+      const savedId = saved?.id ?? order?.id;
+      if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
       onClose();
     } catch (err) {
       const msg = err.response?.data?.error || err.response?.data?.message;
@@ -239,6 +245,10 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
             <div style={{ marginTop: "1rem" }}>
               <label style={s.label}>Notes <span style={s.opt}>(optional)</span></label>
               <textarea style={{ ...s.input, minHeight: 56, resize: "vertical" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Internal notes for this order" />
+            </div>
+
+            <div style={{ marginTop: "1rem" }}>
+              <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="SalesOrder" entityId={order?.id ?? null} mode="edit" />
             </div>
           </div>
           <div style={formStyles.footer}>

@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MdUndo, MdSearch, MdReceipt, MdArrowBack } from "react-icons/md";
 import { getInvoicesByCompany, createNote } from "../api/invoiceApi";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
+import AttachmentManager from "../Components/AttachmentManager";
 
 const colors = {
   blue: "#0d47a1",
@@ -65,6 +66,7 @@ export default function CreditDebitNotePage() {
   const [affectsStock, setAffectsStock] = useState(isCredit); // derived default, operator-overridable
   const [stockTouched, setStockTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const attachmentRef = useRef(null);
 
   const pickInvoice = useCallback((inv) => {
     setSelected(inv);
@@ -163,6 +165,9 @@ export default function CreditDebitNotePage() {
         })),
       };
       const { data: note } = await createNote(payload);
+      // Upload any files staged before the note had an id. Best-effort — the
+      // note is already created.
+      if (note?.id) { try { await attachmentRef.current?.flush(note.id); } catch { /* attachments best-effort */ } }
       notify(`${label} #${note.invoiceNumber} created against bill #${selected.invoiceNumber}. Validate then submit it to FBR.`, "success");
       navigate(isCredit ? "/credit-notes" : "/debit-notes");
     } catch (err) {
@@ -330,6 +335,10 @@ export default function CreditDebitNotePage() {
               <span style={{ color: colors.textSecondary }}> (off = value-only adjustment, inventory untouched)</span>
             </span>
           </label>
+
+          <div style={{ marginTop: 16 }}>
+            <AttachmentManager ref={attachmentRef} companyId={selectedCompany.id} entityType="Invoice" entityId={null} mode="edit" />
+          </div>
 
           {/* Totals + submit */}
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 16 }}>

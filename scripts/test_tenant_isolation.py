@@ -266,6 +266,13 @@ endpoints_to_test = [
     ("GET",  "/api/payments/payments/company/{cid}/paged"),
     ("GET",  "/api/payments/company/{cid}/by-invoice/1"),
     ("GET",  "/api/payments/company/{cid}/by-bill/1"),
+    # Document folders + unified attachments — [AuthorizeCompany]-gated
+    # companyId routes; a forbidden company 403s before the action runs.
+    ("GET",  "/api/folders/company/{cid}"),
+    ("GET",  "/api/folders/company/{cid}/paged"),
+    ("GET",  "/api/attachments/company/{cid}/uncategorized"),
+    ("GET",  "/api/attachments/company/{cid}/folder/1"),
+    ("GET",  "/api/attachments/company/{cid}/entity/Invoice/1"),
 ]
 for username, forbidden in forbidden_for.items():
     if not forbidden:

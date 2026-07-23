@@ -247,6 +247,8 @@ builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<ISalesQuoteRepository, SalesQuoteRepository>();
 builder.Services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
+builder.Services.AddScoped<IFolderRepository, FolderRepository>();
+builder.Services.AddScoped<IAttachmentRepository, AttachmentRepository>();
 
 // Register Services
 builder.Services.AddScoped<ICompanyService, CompanyService>();
@@ -275,6 +277,11 @@ builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
 // Receipts (money in) + Payments (money out) — AR/AP subledger. GL-free port:
 // no IPostingService dependency (master has no Chart of Accounts).
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+// Unified attachments + document folders. AttachmentStorage is stateless
+// (just resolves paths under data/attachments) so it registers as a singleton.
+builder.Services.AddScoped<IFolderService, FolderService>();
+builder.Services.AddScoped<IAttachmentService, AttachmentService>();
+builder.Services.AddSingleton<MyApp.Api.Helpers.AttachmentStorage>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<IFbrService, FbrService>();
@@ -1872,6 +1879,24 @@ app.UseStaticFiles();
 // Serve user-uploaded files (logos, avatars) from persistent data/ folder
 var dataPath = Path.Combine(app.Environment.ContentRootPath, "data");
 Directory.CreateDirectory(dataPath);
+// Attachment bytes live under data/attachments (created up-front so the very
+// first upload doesn't race the directory into existence).
+Directory.CreateDirectory(Path.Combine(dataPath, "attachments"));
+
+// SECURITY: attachments are tenant-isolated business documents and must NOT be
+// reachable via the public /data static provider (logos/avatars are fine —
+// low-sensitivity). 404 any direct /data/attachments/* hit here, BEFORE the
+// static middleware below; downloads go through the authenticated
+// /api/attachments/{id}/download endpoint, which asserts company access.
+app.Use(async (ctx, next) =>
+{
+    if (ctx.Request.Path.StartsWithSegments("/data/attachments", StringComparison.OrdinalIgnoreCase))
+    {
+        ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+    await next();
+});
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(dataPath),

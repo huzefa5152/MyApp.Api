@@ -20,6 +20,7 @@ import { useAuth } from "../contexts/AuthContext";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import ItemTypeForm from "./ItemTypeForm";
+import AttachmentManager from "./AttachmentManager";
 
 const colors = {
   blue: "#0d47a1",
@@ -120,6 +121,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // re-renders that would also bump this. Set exactly once in the
   // load useEffect.
   const originalItemsRef = useRef([]);
+  const attachmentRef = useRef(null);
   const [itemTypes, setItemTypes] = useState([]);
   // Buyer reassignment — only meaningful for standalone bills (no
   // linked challan). Loaded lazily after the bill itself comes back so
@@ -1185,6 +1187,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           })),
         });
       }
+      // Uploads on this edit form attach immediately (the bill already has an
+      // id), so flush is a harmless no-op — kept for pattern consistency.
+      if (invoiceId) { try { await attachmentRef.current?.flush(invoiceId); } catch { /* attachments best-effort */ } }
       onSaved();
     } catch (err) {
       setError(err.response?.data?.error || "Failed to save bill.");
@@ -1871,6 +1876,16 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     ⓘ Editing this bill will clear its FBR validation status. You'll need to re-validate before submitting to FBR.
                   </div>
                 )}
+
+                <div style={{ marginTop: "1rem" }}>
+                  <AttachmentManager
+                    ref={attachmentRef}
+                    companyId={invoice.companyId}
+                    entityType="Invoice"
+                    entityId={invoiceId}
+                    mode={effectiveReadOnly ? "view" : "edit"}
+                  />
+                </div>
               </>
             )}
           </div>

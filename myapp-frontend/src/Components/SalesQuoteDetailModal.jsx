@@ -1,5 +1,6 @@
 import { MdClose, MdPrint, MdRequestQuote } from "react-icons/md";
 import { formStyles, modalSizes } from "../theme";
+import AttachmentManager from "./AttachmentManager";
 
 // Read-only view of a Sales Quote: header + meta + items + totals + notes.
 const colors = { blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3" };
@@ -21,7 +22,7 @@ const Meta = ({ label, value }) => (
   </div>
 );
 
-export default function SalesQuoteDetailModal({ quote, canPrint, onPrint, onClose }) {
+export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPrint, onClose }) {
   if (!quote) return null;
   const items = quote.items || [];
   return (
@@ -89,6 +90,12 @@ export default function SalesQuoteDetailModal({ quote, canPrint, onPrint, onClos
               <div style={st.sectionTitle}>Notes</div>
               <div style={st.notes}>{quote.notes}</div>
             </>
+          )}
+
+          {companyId && (
+            <div style={{ marginTop: "1rem" }}>
+              <AttachmentManager companyId={companyId} entityType="SalesQuote" entityId={quote.id} mode="view" />
+            </div>
           )}
         </div>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { MdSearch, MdCheck, MdInfo, MdLock, MdAdd, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { getPendingChallansByCompany } from "../api/challanApi";
 import { getSalesOrdersForPicker, getSalesOrderChallans } from "../api/salesOrderApi";
@@ -21,6 +21,7 @@ import PermissionLackedHint from "./PermissionLackedHint";
 // cell so operators get the saved-units suggestions instead of having
 // to retype "Pcs" / "KG" / etc. each line.
 import LookupAutocomplete from "./LookupAutocomplete";
+import AttachmentManager from "./AttachmentManager";
 
 const colors = {
   blue: "#0d47a1",
@@ -86,6 +87,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const { has } = usePermissions();
   const canCreateClient   = has("clients.manage.create");
   const canCreateItemType = has("itemtypes.manage.create");
+  const attachmentRef = useRef(null);
 
   const [clients, setClients] = useState([]);
   // Inline create modals — same affordances StandaloneInvoiceForm has
@@ -554,7 +556,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         ? `[${scenarioCode}] ${paymentTerms || chosenScenario?.description || ""}`.trim()
         : (paymentTerms || null);
 
-      await createInvoice({
+      const { data: createdInvoice } = await createInvoice({
         date: new Date(invoiceDate).toISOString(),
         companyId,
         clientId: parseInt(selectedClientId),
@@ -619,6 +621,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           }).catch(() => {});
         });
       await Promise.all(rememberPromises);
+
+      // Upload any files staged before the bill had an id. Best-effort —
+      // the bill is already created.
+      const savedId = createdInvoice?.id;
+      if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
 
       onSaved();
     } catch (err) {
@@ -1442,6 +1449,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                 )}
               </>
             )}
+
+            <div style={{ marginTop: "1rem" }}>
+              <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="Invoice" entityId={null} mode="edit" />
+            </div>
           </div>
           <div style={formStyles.footer}>
             {allItems.length > 0 && !allPricesValid && (

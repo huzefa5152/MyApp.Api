@@ -37,6 +37,7 @@ import {
   MdAccountBalanceWallet,
   MdReceiptLong,
   MdPayments,
+  MdFolder,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { Can, usePermissions } from "../contexts/PermissionsContext";
@@ -156,6 +157,7 @@ export default function DashboardLayout() {
     "config.units.manage",
     "poformats.manage.view",
     "printtemplates.manage.update",
+    "folders.list.view",
     "fbr.config.update",
     "fbr.sandbox.view",
   ];
@@ -219,7 +221,7 @@ export default function DashboardLayout() {
     if (p.startsWith("/reports")) return "reports";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
-      || p.startsWith("/templates") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor")) return "configuration";
+      || p.startsWith("/templates") || p.startsWith("/configuration/navigation-menu") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor")) return "configuration";
     if (p.startsWith("/users") || p.startsWith("/roles") || p.startsWith("/tenant-access") || p.startsWith("/audit-logs")) return "administration";
     return "main";
   }, [location.pathname]);
@@ -514,6 +516,12 @@ export default function DashboardLayout() {
                 <NavLink to="/templates" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdCode className="dl-subitem__icon" aria-hidden="true" />
                   <span>Print Templates</span>
+                </NavLink>
+              </Can>
+              <Can permission="folders.list.view">
+                <NavLink to="/configuration/navigation-menu" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdFolder className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Navigation Menu</span>
                 </NavLink>
               </Can>
               <Can permission="fbr.config.update">

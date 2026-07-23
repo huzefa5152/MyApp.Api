@@ -243,6 +243,7 @@ export default function SalesQuotePage() {
       {viewQuote && selectedCompany && (
         <SalesQuoteDetailModal
           quote={viewQuote}
+          companyId={selectedCompany.id}
           canPrint={canPrint}
           onPrint={(q) => { setViewQuote(null); handlePrint(q); }}
           onClose={() => setViewQuote(null)}

@@ -3,6 +3,7 @@ import {
   MdClose, MdPrint, MdLocalShipping, MdEdit, MdInventory2, MdReceiptLong,
 } from "react-icons/md";
 import { getSalesOrderChallans } from "../api/salesOrderApi";
+import AttachmentManager from "./AttachmentManager";
 
 const colors = {
   blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e",
@@ -22,7 +23,7 @@ const LINE_COLORS = { Pending: "#5f6d7e", Partial: "#f57c00", Complete: "#28a745
  * raised against the order (with the lines it delivered). Optional action
  * callbacks (print / edit / deliver) let the parent launch those flows.
  */
-export default function SalesOrderDetailModal({ order, onClose, onPrint, onEdit, onDeliver, canDeliver }) {
+export default function SalesOrderDetailModal({ order, companyId, onClose, onPrint, onEdit, onDeliver, canDeliver }) {
   const [challans, setChallans] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -154,6 +155,12 @@ export default function SalesOrderDetailModal({ order, onClose, onPrint, onEdit,
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {companyId && (
+            <div style={{ marginTop: "1rem" }}>
+              <AttachmentManager companyId={companyId} entityType="SalesOrder" entityId={order.id} mode="view" />
             </div>
           )}
         </div>

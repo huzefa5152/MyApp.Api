@@ -88,6 +88,12 @@ namespace MyApp.Api.Data
         public DbSet<MyApp.Api.Models.Accounting.Payment> Payments { get; set; }
         public DbSet<MyApp.Api.Models.Accounting.PaymentAllocation> PaymentAllocations { get; set; }
 
+        // ── Unified attachments + document folders ──
+        // One Attachment entity serves both the folder document-library and
+        // per-document transaction attachments (bytes on disk, never in the DB).
+        public DbSet<Folder> Folders { get; set; }
+        public DbSet<Attachment> Attachments { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             // Audit C-1 (2026-05-13): transparent encryption for the
@@ -1159,6 +1165,61 @@ namespace MyApp.Api.Data
             // AR/AP subledger columns on the settled documents (18,2 money).
             modelBuilder.Entity<Invoice>().Property(i => i.AmountPaid).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseBill>().Property(b => b.AmountPaid).HasPrecision(18, 2);
+
+            // ── Unified attachments + document folders (Division-free) ─────────
+            // Folder -> Company (cascade: a company's folders die with it).
+            modelBuilder.Entity<Folder>()
+                .HasOne(f => f.Company).WithMany()
+                .HasForeignKey(f => f.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Folder -> CreatedByUser (optional; NoAction so deleting a user
+            // doesn't cascade-delete their folders).
+            modelBuilder.Entity<Folder>()
+                .HasOne(f => f.CreatedByUser).WithMany()
+                .HasForeignKey(f => f.CreatedByUserId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Folder>().Property(f => f.Name).HasMaxLength(200);
+            modelBuilder.Entity<Folder>().Property(f => f.Description).HasMaxLength(1000);
+            // Folder names unique within a company (case-insensitive via the
+            // default SQL Server collation).
+            modelBuilder.Entity<Folder>()
+                .HasIndex(f => new { f.CompanyId, f.Name }).IsUnique();
+
+            // Attachment -> Company (restrict — never cascade business files away
+            // on a company delete; no other cascade path here, so SQL Server
+            // stays clear of multiple-cascade-path errors).
+            modelBuilder.Entity<Attachment>()
+                .HasOne(a => a.Company).WithMany()
+                .HasForeignKey(a => a.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Attachment -> Folder (optional; RESTRICT so FolderService.Delete
+            // decides each file's fate — entity-linked ones are un-linked,
+            // folder-only ones are deleted — rather than a blind DB cascade).
+            modelBuilder.Entity<Attachment>()
+                .HasOne(a => a.Folder).WithMany(f => f.Attachments)
+                .HasForeignKey(a => a.FolderId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Attachment -> UploadedByUser (optional; NoAction).
+            modelBuilder.Entity<Attachment>()
+                .HasOne(a => a.UploadedByUser).WithMany()
+                .HasForeignKey(a => a.UploadedByUserId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<Attachment>().Property(a => a.FileName).HasMaxLength(255);
+            modelBuilder.Entity<Attachment>().Property(a => a.StoredFileName).HasMaxLength(100);
+            modelBuilder.Entity<Attachment>().Property(a => a.StoragePath).HasMaxLength(500);
+            modelBuilder.Entity<Attachment>().Property(a => a.ContentType).HasMaxLength(150);
+            modelBuilder.Entity<Attachment>().Property(a => a.FileExtension).HasMaxLength(20);
+            modelBuilder.Entity<Attachment>().Property(a => a.ContentSha256).HasMaxLength(64);
+            modelBuilder.Entity<Attachment>().Property(a => a.EntityType).HasMaxLength(40);
+
+            // Lookup paths: "all attachments in folder X" (tenant-scoped) and
+            // "all attachments on SalesQuote 42".
+            modelBuilder.Entity<Attachment>().HasIndex(a => new { a.CompanyId, a.FolderId });
+            modelBuilder.Entity<Attachment>().HasIndex(a => new { a.EntityType, a.EntityId });
         }
 
     }

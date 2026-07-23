@@ -9,6 +9,7 @@ import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getOpenSalesOrdersByCompany } from "../api/salesOrderApi";
 import { usePermissions } from "../contexts/PermissionsContext";
+import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 
 const colors = {
@@ -50,6 +51,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const itemsContainerRef = useRef(null);
+  const attachmentRef = useRef(null);
 
   useEffect(() => {
     getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
@@ -147,7 +149,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
     setSaving(true);
     try {
-      await onSaved({
+      const saved = await onSaved({
         // When set, the parent creates the challan through the sales-order
         // fulfilment flow (which links each line + auto-closes the order).
         salesOrderId: salesOrderId ? parseInt(salesOrderId) : null,
@@ -173,6 +175,10 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
           quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
         })),
       });
+      // Upload any files staged before the challan had an id. Best-effort —
+      // the challan is already saved.
+      const savedId = saved?.id;
+      if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
       onClose();
     } catch (err) {
       // Server-supplied user-friendly message wins; otherwise show a
@@ -348,6 +354,10 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
               </div>
 
               <button type="button" style={styles.addItemBtn} onClick={addItem}><MdAdd size={16} /> Add Item</button>
+            </div>
+
+            <div style={{ marginTop: "1rem" }}>
+              <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="DeliveryChallan" entityId={null} mode="edit" />
             </div>
           </div>
 

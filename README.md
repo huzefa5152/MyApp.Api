@@ -281,6 +281,13 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-23 — Unified attachments + document folders (Navigation Menu), Division-free
+
+- **Folder document library.** A new **Configuration → Navigation Menu** screen manages per-company **folders**; each folder holds uploaded documents with **preview + download**. A permanent "Uncategorized" bucket collects files filed in no folder. Backed by `Folder` + a single unified `Attachment` entity (bytes on disk under `data/attachments/{folder}/…`, never in the DB; SHA-256 + disk-reconcile so a manually-deleted file prunes its row).
+- **Any business file type.** Upload images, PDF, Word, Excel, PowerPoint, text/CSV, ZIP — validated by an extension allowlist **+ magic-byte sniff** (renamed executables/scripts/HTML/SVG rejected), 25 MB cap.
+- **Attachments on every document.** A reusable `AttachmentManager` is wired into all document screens — Sales Quote, Sales Order, Delivery Challan (create + edit), Bill/Invoice (+ standalone + edit), Credit/Debit Notes, Purchase Bill, Goods Receipt, Receipt, Payment. In create/edit it uploads/stages + attaches; on read-only detail views it shows files **preview/download only**. Files staged before a new record exists are flushed against the new id after save.
+- **Security.** `/data/attachments/*` is **not** publicly served — a middleware 404s any direct hit; downloads go only through the authenticated, company-access-checked `GET /api/attachments/{id}/download`. Every upload cross-checks that the linked document belongs to the caller's company. 7 permissions (`folders.*` / `attachments.*`). GL/Division-free (the source build's Division tagging was stripped).
+
 ### 2026-07-23 — Accounting: Receipts & Payments (AR/AP subledger) + payment-status on invoices/bills
 
 - **Receipts (money in) and Payments (money out).** A single `Payment` entity models both directions, each with its own gap-free per-company numbering (RCP-#### / PMT-####) and one or more allocation lines that settle sales invoices (receipts) or purchase bills (payments). Cross-tenant guards on every referenced document, an over-allocation guard (a document can't be paid beyond its balance), and a cheque/PDC lifecycle (Pending → Deposited → Cleared / Bounced). This is the AR/AP payment subledger — **no General Ledger / Chart of Accounts** in this build; the bank/cash destination is a free-text name. Endpoints under `/api/payments/{receipts|payments}` gated by the eight `accounting.receipts.*` / `accounting.payments.*` keys; a print voucher endpoint (`/print`) with amount-in-words renders through the **Receipt** print-template type.

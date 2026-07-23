@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { MdAdd, MdDelete, MdReceipt } from "react-icons/md";
 import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById } from "../api/purchaseBillApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
@@ -10,6 +10,7 @@ import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import QuantityInput from "./QuantityInput";
+import AttachmentManager from "./AttachmentManager";
 
 const colors = {
   blue: "#0d47a1",
@@ -42,6 +43,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [saving, setSaving] = useState(false);
   // Source-bill metadata when in "Purchase Against Sale" mode
   const [sourceBill, setSourceBill] = useState(null);
+  const attachmentRef = useRef(null);
 
   function newRow() {
     return {
@@ -228,6 +230,10 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
         ? await updatePurchaseBill(billId, payload)
         : await createPurchaseBill(payload);
       notify(`Purchase bill ${isEdit ? "updated" : "created"}.`, "success");
+      // Upload any files staged before the bill had an id (no-op on edit /
+      // when nothing was staged). Best-effort — the bill is already saved.
+      const savedId = res.data?.id ?? billId;
+      if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
       onSaved(res.data);
       onClose();
     } catch (err) {
@@ -408,6 +414,17 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
             </div>
           </div>
           </fieldset>
+          {/* Outside the disabled fieldset so preview/download stay clickable
+              in read-only view; upload/delete are permission-gated inside. */}
+          <div style={{ padding: "0 1.25rem 0.5rem" }}>
+            <AttachmentManager
+              ref={attachmentRef}
+              companyId={companyId}
+              entityType="PurchaseBill"
+              entityId={billId ?? null}
+              mode={readOnly ? "view" : "edit"}
+            />
+          </div>
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>{readOnly ? "Close" : "Cancel"}</button>
             {!readOnly && (

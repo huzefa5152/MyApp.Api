@@ -6,6 +6,7 @@ import { updateChallan } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
+import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 
 const colors = {
@@ -415,6 +416,14 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
             <button type="button" style={styles.addItemBtn} onClick={addItem}>
               <MdAdd size={16} /> Add Item
             </button>
+
+            {/* Attachments — INSIDE the scrollable body (formStyles.body) so it
+                scrolls with the rest and never pushes the footer off-screen.
+                The challan already exists here (edit), so uploads attach
+                immediately to its id; no staging/flush needed. */}
+            <div style={{ marginTop: "1rem" }}>
+              <AttachmentManager companyId={challan.companyId} entityType="DeliveryChallan" entityId={challan.id} mode="edit" />
+            </div>
           </div>
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>

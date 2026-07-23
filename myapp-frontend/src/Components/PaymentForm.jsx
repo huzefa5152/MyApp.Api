@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { MdClose } from "react-icons/md";
 import { formStyles, modalSizes, colors, dropdownStyles } from "../theme";
 import SearchableSelect from "./SearchableSelect";
@@ -7,6 +7,7 @@ import { getClientsByCompany } from "../api/clientApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getPagedInvoicesByCompany } from "../api/invoiceApi";
 import { getPurchaseBillsByCompanyPaged } from "../api/purchaseBillApi";
+import AttachmentManager from "./AttachmentManager";
 
 const METHODS = ["Cash", "Bank Transfer", "Cheque", "Online", "Other"];
 
@@ -18,8 +19,9 @@ const METHODS = ["Cash", "Bank Transfer", "Cheque", "Online", "Other"];
  * input each; the payment total is the sum of the applied amounts.
  *
  * Master is GL-free: there is no Chart of Accounts, so the bank/cash
- * destination is a free-text name (not a picked account), and there is no
- * Division tag or attachment upload here.
+ * destination is a free-text name (not a picked account) and there is no
+ * Division tag. Attachments (entityType "Payment") ARE supported — staged on
+ * create and flushed against the new id after save.
  */
 export default function PaymentForm({ mode, companyId, preset, editPayment = null, onClose, onSaved }) {
   const isReceipt = mode === "receipts";
@@ -46,6 +48,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const attachmentRef = useRef(null);
 
   // Load the contact list once.
   useEffect(() => {
@@ -162,8 +165,16 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
           amount: x.amount,
         })),
       };
-      if (isEdit) await updatePayment(dir, editPayment.id, payload);
-      else await createPayment(dir, companyId, payload);
+      let savedId = editPayment?.id;
+      if (isEdit) {
+        await updatePayment(dir, editPayment.id, payload);
+      } else {
+        const { data: saved } = await createPayment(dir, companyId, payload);
+        savedId = saved?.id ?? savedId;
+      }
+      // Upload any files staged before the record had an id (no-op on edit /
+      // when nothing was staged). Best-effort — the record is already saved.
+      if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
       onSaved?.();
       onClose?.();
     } catch (err) {
@@ -284,6 +295,10 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", alignItems: "baseline", fontSize: "1.05rem", fontWeight: 700, color: colors.blue }}>
               <span style={{ color: colors.textSecondary, fontSize: "0.85rem", fontWeight: 600 }}>Total {isReceipt ? "received" : "paid"}:</span>
               <span>Rs {total.toLocaleString()}</span>
+            </div>
+
+            <div style={{ marginTop: "1rem" }}>
+              <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="Payment" entityId={editPayment?.id ?? null} mode="edit" />
             </div>
           </div>
 

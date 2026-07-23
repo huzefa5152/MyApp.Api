@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
 import { createGoodsReceipt, updateGoodsReceipt, getGoodsReceiptById } from "../api/goodsReceiptApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
@@ -8,6 +8,7 @@ import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import AttachmentManager from "./AttachmentManager";
 
 export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSaved }) {
   const isEdit = !!receiptId;
@@ -24,6 +25,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   const [items, setItems] = useState([{ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const attachmentRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -91,6 +93,10 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         ? await updateGoodsReceipt(receiptId, { ...payload, status: undefined })
         : await createGoodsReceipt(payload);
       notify(`Goods Receipt ${isEdit ? "updated" : "created"}.`, "success");
+      // Upload any files staged before the receipt had an id (no-op on edit /
+      // when nothing was staged). Best-effort — the receipt is already saved.
+      const savedId = res.data?.id ?? receiptId;
+      if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
       onSaved(res.data);
       onClose();
     } catch (err) {
@@ -190,6 +196,10 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            <div style={{ marginTop: "1rem" }}>
+              <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="GoodsReceipt" entityId={receiptId ?? null} mode="edit" />
             </div>
           </div>
           <div style={formStyles.footer}>

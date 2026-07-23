@@ -258,6 +258,7 @@ export default function SalesOrderPage() {
       {viewOrder && (
         <SalesOrderDetailModal
           order={viewOrder}
+          companyId={selectedCompany?.id}
           canDeliver={canMakeChallan && viewOrder.status === "Open" && viewOrder.fulfillmentStatus !== "Fully Delivered" && viewOrder.fulfillmentStatus !== "Over Delivered"}
           onClose={() => setViewOrder(null)}
           onPrint={canPrint ? handlePrint : undefined}

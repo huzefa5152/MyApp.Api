@@ -10,6 +10,7 @@ import InvoicePage from "./pages/InvoicePage";
 import SalesQuotePage from "./pages/SalesQuotePage";
 import SalesOrderPage from "./pages/SalesOrderPage";
 import PaymentsPage from "./pages/PaymentsPage";
+import NavigationMenuPage from "./pages/NavigationMenuPage";
 import CreditDebitNotePage from "./pages/CreditDebitNotePage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
 import PurchaseBillsPage from "./pages/PurchaseBillsPage";
@@ -112,6 +113,9 @@ export default function App() {
           <Route path="/tenant-access" element={<TenantAccessPage />} />
           <Route path="/templates" element={<PrintTemplatesPage />} />
           <Route path="/templates/edit" element={<TemplateEditorPage />} />
+          {/* Configuration → Navigation Menu: the folder document library +
+              uploaded attachments (create folders, upload/preview/download). */}
+          <Route path="/configuration/navigation-menu" element={<NavigationMenuPage />} />
           <Route path="/fbr-settings" element={<FbrSettingsPage />} />
           <Route path="/fbr-sandbox" element={<FbrSandboxPage />} />
           <Route path="/fbr-monitor" element={<FbrMonitorPage />} />

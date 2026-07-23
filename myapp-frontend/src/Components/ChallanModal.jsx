@@ -1,5 +1,6 @@
 import { MdPerson, MdReceipt, MdCalendarToday, MdLocationOn, MdAssignmentTurnedIn, MdEventNote } from "react-icons/md";
 import { formStyles, modalSizes } from "../theme";
+import AttachmentManager from "./AttachmentManager";
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "—");
 
@@ -127,6 +128,12 @@ export default function ChallanModal({ challan, onClose }) {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* Attachments — read-only (preview / download only). INSIDE the
+              scrollable body so it never pushes the footer off-screen. */}
+          <div style={{ marginTop: "1.25rem" }}>
+            <AttachmentManager companyId={challan.companyId} entityType="DeliveryChallan" entityId={challan.id} mode="view" />
           </div>
         </div>
 

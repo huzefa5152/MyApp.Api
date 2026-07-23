@@ -253,6 +253,18 @@ namespace MyApp.Api.Helpers
             // list screens. A user without this key sees no payment-status badge.
             new("accounting.paymentstatus.view", "Accounting", "Payment Status", "View", "See the payment-status badge (paid / partial / overdue / balance due) on invoices and bills"),
 
+            // ── Document folders + attachments (unified attachment system) ───
+            // Folders group library documents; attachments also link to business
+            // documents via (EntityType, EntityId). Download is gated by
+            // attachments.list.view — if you can list it, you can download it.
+            new("folders.list.view",          "Folders",     "List",   "View",   "View folders and their contents"),
+            new("folders.manage.create",      "Folders",     "Manage", "Create", "Create a folder"),
+            new("folders.manage.update",      "Folders",     "Manage", "Update", "Rename a folder"),
+            new("folders.manage.delete",      "Folders",     "Manage", "Delete", "Delete a folder (folder-only documents are removed)"),
+            new("attachments.list.view",      "Attachments", "List",   "View",   "View and download attachments"),
+            new("attachments.manage.upload",  "Attachments", "Manage", "Upload", "Upload an attachment"),
+            new("attachments.manage.delete",  "Attachments", "Manage", "Delete", "Delete an attachment"),
+
             // ── Inventory / Stock ───────────────────────────────────────────
             new("stock.dashboard.view",     "Inventory", "Dashboard",       "View",   "View on-hand stock dashboard"),
             new("stock.movements.view",     "Inventory", "Movements",       "View",   "View the stock-movement audit log"),

@@ -7,6 +7,7 @@ import QuantityInput from "./QuantityInput";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getQuoteItemRate } from "../api/salesQuoteApi";
+import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 
 const colors = {
@@ -45,6 +46,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const rateTimers = useRef({});
+  const attachmentRef = useRef(null);
 
   useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
   useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
@@ -107,7 +109,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
 
     setSaving(true);
     try {
-      await onSaved({
+      const saved = await onSaved({
         clientId: client.id,
         date: date ? new Date(date).toISOString() : null,
         validUntil: validForDays && date ? new Date(new Date(date).getTime() + Number(validForDays) * 86400000).toISOString() : null,
@@ -124,6 +126,10 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
           unitPrice: Number(i.unitPrice) || 0,
         })),
       });
+      // Upload any files staged before the record had an id (no-op in edit
+      // mode / when nothing was staged). Best-effort — the quote is saved.
+      const savedId = saved?.id ?? quote?.id;
+      if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
       onClose();
     } catch (err) {
       const msg = err.response?.data?.error || err.response?.data?.message;
@@ -233,6 +239,10 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
             <div style={{ marginTop: "1rem" }}>
               <label style={s.label}>Notes / Terms <span style={s.opt}>(optional)</span></label>
               <textarea style={{ ...s.input, minHeight: 56, resize: "vertical" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Terms printed at the foot of the quote" />
+            </div>
+
+            <div style={{ marginTop: "1rem" }}>
+              <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="SalesQuote" entityId={quote?.id ?? null} mode="edit" />
             </div>
           </div>
           <div style={formStyles.footer}>

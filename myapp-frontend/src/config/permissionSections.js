@@ -86,6 +86,10 @@ export const PERMISSION_SECTIONS = [
       { key: "POFormats", label: "PO Formats" },
       { key: "ImportFeedback", label: "Import Feedback" },
       { key: "PrintTemplates", label: "Print Templates" },
+      // The Configuration → Navigation Menu document library: folders plus
+      // the uploaded attachments they hold (also linked to documents).
+      { key: "Folders", label: "Navigation Menu (Folders)" },
+      { key: "Attachments" },
       { key: "FBR" },
     ],
   },

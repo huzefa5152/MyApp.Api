@@ -163,6 +163,7 @@ export default function ChallanPage() {
 
   const handleSaveChallan = async (payload) => {
     if (!selectedCompany) return;
+    let created;
     if (payload.salesOrderId) {
       // Fulfil a Sales Order — route through its create-challan flow so the
       // challan links back to each ordered line and the order auto-closes
@@ -170,16 +171,20 @@ export default function ChallanPage() {
       const lines = (payload.items || [])
         .filter((i) => i.salesOrderItemId && Number(i.quantity) > 0)
         .map((i) => ({ salesOrderItemId: i.salesOrderItemId, quantity: i.quantity }));
-      await createChallanFromOrder(payload.salesOrderId, {
+      const { data } = await createChallanFromOrder(payload.salesOrderId, {
         deliveryDate: payload.deliveryDate,
         site: payload.site,
         lines,
       });
+      created = data;
     } else {
-      await createDeliveryChallan(selectedCompany.id, payload);
+      const { data } = await createDeliveryChallan(selectedCompany.id, payload);
+      created = data;
     }
     fetchChallans(selectedCompany.id, page);
-    setShowModal(false);
+    // Return the created challan so the form can flush staged attachments
+    // against the new id, then the form closes itself via onClose.
+    return created;
   };
 
   const handleCancel = async (challan) => {
