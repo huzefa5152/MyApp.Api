@@ -2,11 +2,11 @@ import { useState, useRef, useEffect } from "react";
 import { MdAdd, MdClose, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
-import SelectDropdown from "./SelectDropdown";
 import SearchableSelect from "./SearchableSelect";
 import QuantityInput from "./QuantityInput";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
+import { getClientsByCompany } from "../api/clientApi";
 import { getOpenSalesOrdersByCompany } from "../api/salesOrderApi";
 import { usePermissions } from "../contexts/PermissionsContext";
 import AttachmentManager from "./AttachmentManager";
@@ -48,6 +48,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   // once on mount; cheap (≤50 rows) and the operator can flip flags via
   // the Units admin page (changes only need a re-open of this form).
   const [units, setUnits] = useState([]);
+  const [clients, setClients] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const itemsContainerRef = useRef(null);
@@ -56,6 +57,14 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   useEffect(() => {
     getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
   }, []);
+
+  // Client list for the searchable picker (replaces the old fetch-inside-
+  // SelectDropdown). The picked option is the full client row, so client.site
+  // still drives the Site dropdown below.
+  useEffect(() => {
+    if (!companyId) { setClients([]); return; }
+    getClientsByCompany(companyId).then(({ data }) => setClients(data || [])).catch(() => setClients([]));
+  }, [companyId]);
 
   // Open sales orders (partial + undelivered) — powers the optional
   // "From Sales Order" picker. Only fetched when the user can see orders.
@@ -236,13 +245,12 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                 otherwise so one-offs still work. */}
             <div style={styles.row}>
               <div style={{ flex: 2, minWidth: 220 }}>
-                <SelectDropdown
-                  label="Client"
-                  endpoint={`/clients/company/${companyId}`}
-                  value={client}
-                  onChange={(val) => { setClient(val); setSite(""); }}
-                  placeholder="Choose client"
-                  className=""
+                <label style={styles.label}>Client</label>
+                <SearchableSelect
+                  items={clients}
+                  value={client?.id || ""}
+                  onChange={(id, item) => { setClient(item); setSite(""); }}
+                  placeholder="— Select Client —"
                 />
               </div>
               <div style={{ flex: 1.5, minWidth: 180 }}>

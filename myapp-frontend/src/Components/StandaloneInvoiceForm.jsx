@@ -726,18 +726,22 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                 clients yet.
                               </div>
                             ) : (
-                              <select
-                                style={{ ...styles.select, flex: 1 }}
-                                value={selectedClientId}
-                                onChange={(e) => setSelectedClientId(e.target.value)}
-                              >
-                                <option value="">— Choose a buyer —</option>
-                                {filteredClients.map((cl) => (
-                                  <option key={cl.id} value={cl.id}>
-                                    {cl.name} ({cl.registrationType || "—"}{cl.ntn ? ` · NTN ${cl.ntn}` : cl.cnic ? ` · CNIC ${cl.cnic}` : ""})
-                                  </option>
-                                ))}
-                              </select>
+                              <div style={{ flex: 1 }}>
+                                <SearchableSelect
+                                  items={filteredClients.map((cl) => ({
+                                    id: cl.id,
+                                    label: `${cl.name} (${cl.registrationType || "—"}${cl.ntn ? ` · NTN ${cl.ntn}` : cl.cnic ? ` · CNIC ${cl.cnic}` : ""})`,
+                                    name: cl.name,
+                                    ntn: cl.ntn,
+                                    cnic: cl.cnic,
+                                  }))}
+                                  value={selectedClientId}
+                                  onChange={(id) => setSelectedClientId(id ? String(id) : "")}
+                                  labelKey="label"
+                                  searchKeys={["name", "ntn", "cnic", "label"]}
+                                  placeholder="— Choose a buyer —"
+                                />
+                              </div>
                             )}
                             {/* Inline-create. Hidden when caller can't create
                                 clients — replaced by an inline hint instead. */}

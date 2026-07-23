@@ -251,8 +251,11 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
+          {/* Scrollable body WRAPS the fieldset so the Attachments section can
+              sit inside the scroll region (never clipped) yet outside the
+              disabled fieldset (so view-mode preview/download stay clickable). */}
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+          <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
             {error && <div style={formStyles.error}>{error}</div>}
 
             {sourceBill && (
@@ -412,10 +415,10 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               <span></span>
               <strong style={{ fontSize: "1.05rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
             </div>
-          </div>
           </fieldset>
-          {/* Outside the disabled fieldset so preview/download stay clickable
-              in read-only view; upload/delete are permission-gated inside. */}
+          {/* Inside the scrollable body (never clipped), but outside the
+              disabled fieldset so view-mode preview/download stay clickable;
+              upload/delete remain permission-gated inside the component. */}
           <div style={{ padding: "0 1.25rem 0.5rem" }}>
             <AttachmentManager
               ref={attachmentRef}
@@ -424,6 +427,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               entityId={billId ?? null}
               mode={readOnly ? "view" : "edit"}
             />
+          </div>
           </div>
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>{readOnly ? "Close" : "Cancel"}</button>

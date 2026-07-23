@@ -1,11 +1,14 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
-import SelectDropdown from "./SelectDropdown";
+import SearchableSelect from "./SearchableSelect";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import ItemTypeForm from "./ItemTypeForm";
 import QuantityInput from "./QuantityInput";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
+import { getClientsByCompany } from "../api/clientApi";
 import { getQuoteItemRate } from "../api/salesQuoteApi";
 import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
@@ -19,6 +22,8 @@ const blankItem = () => ({ id: 0, itemTypeId: null, description: "", quantity: 1
 
 // Create + edit a Sales Quote. Pass `quote` to edit; omit to create.
 export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
+  const { has } = usePermissions();
+  const canCreateItemType = has("itemtypes.manage.create");
   const isEdit = !!quote;
   const [client, setClient] = useState(quote ? { id: quote.clientId, label: quote.clientName } : null);
   const [date, setDate] = useState(quote?.date ? quote.date.slice(0, 10) : new Date().toISOString().slice(0, 10));
@@ -43,6 +48,11 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   );
   const [units, setUnits] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [showAddItemType, setShowAddItemType] = useState(false);
+  // Bulk-apply mode for the "set Item Type on every row" bar above the grid —
+  // "all" overwrites every line, "empty" only fills untagged rows.
+  const [bulkApplyMode, setBulkApplyMode] = useState("all");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const rateTimers = useRef({});
@@ -50,11 +60,31 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
 
   useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
   useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
+  useEffect(() => { getClientsByCompany(companyId).then(({ data }) => setClients(data || [])).catch(() => setClients([])); }, [companyId]);
+
+  // A quote is a pre-sale document (never sent to FBR), so — like Bill mode —
+  // it only offers item types WITHOUT an HS code (HS-coded types are the
+  // FBR-classification set used on the Invoices tab).
+  const nonHsItemTypes = useMemo(
+    () => itemTypes.filter((it) => !(it.hsCode && String(it.hsCode).trim())),
+    [itemTypes]
+  );
 
   // Picking an item type only TAGS the line (records ItemTypeId). It must NOT
   // overwrite the operator's typed description/unit — that auto-fill is reserved
   // for Invoice (FBR-classification) mode, not pre-sale quotes.
   const pickItemType = (idx, newId) => setItem(idx, { itemTypeId: newId ? parseInt(newId) : null });
+
+  // Stamp one Item Type onto every line (or only the untagged ones) in a
+  // single pick — saves repetitive per-row selection when the whole quote is
+  // one product family. Simplified vs InvoiceForm: quotes only tag ItemTypeId,
+  // there's no HS/UOM/SaleType inheritance to fan out.
+  const applyItemTypeToAll = (newId) => {
+    if (!newId) return;
+    const id = parseInt(newId);
+    setItems((prev) => prev.map((it) => (bulkApplyMode === "empty" && it.itemTypeId) ? it : { ...it, itemTypeId: id }));
+  };
+  const clearAllItemTypes = () => setItems((prev) => prev.map((it) => ({ ...it, itemTypeId: null })));
 
   const setItem = (idx, patch) =>
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
@@ -152,7 +182,13 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
             {error && <div style={s.err}>{error}</div>}
             <div style={s.row}>
               <div style={{ flex: 2, minWidth: 220 }}>
-                <SelectDropdown label="Client" endpoint={`/clients/company/${companyId}`} value={client} onChange={setClient} placeholder="Choose client" />
+                <label style={s.label}>Client</label>
+                <SearchableSelect
+                  items={clients}
+                  value={client?.id || ""}
+                  onChange={(id, item) => setClient(item)}
+                  placeholder="— Select Client —"
+                />
               </div>
               <div style={{ flex: 1, minWidth: 140 }}>
                 <label style={s.label}>Issue Date</label>
@@ -178,7 +214,39 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
               </div>
             </div>
 
-            <label style={{ ...s.label, marginBottom: "0.5rem" }}>Items <span style={{ fontWeight: 400, fontSize: "0.72rem", color: colors.textSecondary }}>— unit price is required per line and remembered for later billing</span></label>
+            <div style={s.itemsHeaderBar}>
+              <label style={{ ...s.label, margin: 0 }}>Items <span style={{ fontWeight: 400, fontSize: "0.72rem", color: colors.textSecondary }}>— unit price is required per line and remembered for later billing</span></label>
+              {canCreateItemType && (
+                <button type="button" style={s.inlineAddBtn} onClick={() => setShowAddItemType(true)} title="Add a new item type to your catalog">
+                  <MdAdd size={14} /> New Item Type
+                </button>
+              )}
+            </div>
+
+            {/* Bulk-apply — stamp one Item Type across every line (or just the
+                empty ones) in a single pick. Shown once there are 2+ rows. */}
+            {items.length > 1 && (
+              <div style={s.bulkApplyBar}>
+                <span style={{ fontSize: "0.82rem", color: "#1a2332", fontWeight: 500 }}>Apply same Item Type to:</span>
+                <select value={bulkApplyMode} onChange={(e) => setBulkApplyMode(e.target.value)} style={{ ...s.input, width: "auto", padding: "0.3rem 0.5rem", fontSize: "0.8rem", maxWidth: 160 }}>
+                  <option value="all">All {items.length} rows</option>
+                  <option value="empty">Only empty rows</option>
+                </select>
+                <div style={{ flex: "1 1 200px", maxWidth: 280 }}>
+                  <SearchableItemTypeSelect
+                    items={nonHsItemTypes}
+                    value={""}
+                    onChange={(newId) => applyItemTypeToAll(newId)}
+                    placeholder={bulkApplyMode === "all" ? "— pick to apply to all —" : "— pick to fill empty rows —"}
+                    style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                  />
+                </div>
+                <button type="button" style={s.bulkClearBtn} onClick={clearAllItemTypes} disabled={!items.some((it) => it.itemTypeId)} title="Drop the Item Type binding from every row">
+                  Clear all
+                </button>
+              </div>
+            )}
+
             <div style={s.tableWrap}>
               <table style={s.table}>
                 <thead>
@@ -199,7 +267,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
                       <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
                       <td style={{ ...s.td, verticalAlign: "top" }}>
                         <SearchableItemTypeSelect
-                          items={itemTypes}
+                          items={nonHsItemTypes}
                           value={item.itemTypeId || ""}
                           onChange={(newId) => pickItemType(idx, newId)}
                           placeholder="— optional —"
@@ -251,12 +319,24 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
           </div>
         </form>
       </div>
+
+      {showAddItemType && (
+        <ItemTypeForm
+          companyId={companyId}
+          onClose={() => setShowAddItemType(false)}
+          onSaved={() => { setShowAddItemType(false); getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => {}); }}
+        />
+      )}
     </div>
   );
 }
 
 const s = {
   row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
+  itemsHeaderBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" },
+  inlineAddBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.45rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.teal}`, backgroundColor: "#fff", color: colors.teal, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
+  bulkApplyBar: { display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", padding: "0.55rem 0.85rem", marginBottom: "0.5rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff" },
+  bulkClearBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
   label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
   opt: { color: colors.textSecondary, fontWeight: 400 },
   input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },

@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createChallanFromOrder } from "../api/salesOrderApi";
+import { getClientsByCompany } from "../api/clientApi";
 import { formStyles, modalSizes } from "../theme";
 
 const colors = {
@@ -10,7 +11,7 @@ const colors = {
 // Raise a delivery challan that fulfils a Sales Order. Pre-fills each line's
 // quantity with what's still remaining; the operator can deliver less (partial)
 // or more (over-delivery is allowed and flagged on the order afterwards).
-export default function CreateChallanFromOrderModal({ order, onClose, onCreated }) {
+export default function CreateChallanFromOrderModal({ order, companyId, onClose, onCreated }) {
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().slice(0, 10));
   const [site, setSite] = useState(order?.site || "");
   const [qtys, setQtys] = useState(() => {
@@ -18,8 +19,19 @@ export default function CreateChallanFromOrderModal({ order, onClose, onCreated 
     (order?.items || []).forEach((i) => { m[i.id] = i.remainingQuantity > 0 ? i.remainingQuantity : 0; });
     return m;
   });
+  const [clients, setClients] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Load the company's clients so the Site field can offer this order's
+  // client's configured sites (";"-separated) as a dropdown — same UX as
+  // the Delivery Challan form. Falls back to free text when none configured.
+  useEffect(() => {
+    getClientsByCompany(companyId).then(({ data }) => setClients(data || [])).catch(() => {});
+  }, [companyId]);
+
+  const client = clients.find((c) => String(c.id) === String(order?.clientId));
+  const sites = client?.site ? client.site.split(";").map((x) => x.trim()).filter(Boolean) : [];
 
   const setQty = (id, val) => setQtys((p) => ({ ...p, [id]: val }));
   const anyToDeliver = Object.values(qtys).some((q) => Number(q) > 0);
@@ -61,7 +73,14 @@ export default function CreateChallanFromOrderModal({ order, onClose, onCreated 
             </div>
             <div style={{ flex: 2, minWidth: 180 }}>
               <label style={s.label}>Site / Department <span style={{ fontWeight: 400 }}>(optional)</span></label>
-              <input type="text" style={s.input} value={site} onChange={(e) => setSite(e.target.value)} placeholder="Optional" />
+              {sites.length > 0 ? (
+                <select style={s.input} value={site} onChange={(e) => setSite(e.target.value)}>
+                  <option value="">(none)</option>
+                  {sites.map((x) => <option key={x} value={x}>{x}</option>)}
+                </select>
+              ) : (
+                <input type="text" style={s.input} value={site} onChange={(e) => setSite(e.target.value)} placeholder="Optional" />
+              )}
             </div>
           </div>
 

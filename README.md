@@ -281,6 +281,13 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-23 — Sales/UI refinements: searchable client pickers, SQ/SO item-type UX, site dropdowns, attachment scroll fix
+
+- **Searchable client pickers.** The document forms that select a client (Sales Quote, Sales Order, Delivery Challan create + edit, Standalone Bill) now use the same type-ahead `SearchableSelect` the Receipts/Payments screen uses, instead of a long plain `<select>` — much faster on companies with many clients.
+- **Sales Quote / Sales Order item types.** Their item-type picker now lists only **non-HS** item types (matching Bill mode; HS-coded types are the FBR-classification set used on the Invoices tab). Both forms also gained the Bill-mode bulk UX: a **"+ New Item Type"** shortcut (opens the catalog form inline, permission-gated) and, when a document has more than one line, an **"Apply same Item Type to all / only-empty rows"** picker with **Clear all**.
+- **Site dropdown from the client's configured sites.** The Sales Order create/edit form and the **Deliver Sales Order** modal now offer the client's saved sites as a dropdown (like Delivery Challan), with a free-text fallback when the client has none — fixing the earlier free-text-only / empty-in-edit behaviour.
+- **Fixed attachment section clipped on Purchase Bill.** The Purchase Bill create/edit/view modal placed the attachments section outside its scrollable body (its body sat inside a disabled `<fieldset>`), so the section and the footer were cut off with no scroll. The scrollable body now wraps the fieldset with the attachments inside it (an audit confirmed every other document form was already correct).
+
 ### 2026-07-23 — Unified attachments + document folders (Navigation Menu), Division-free
 
 - **Folder document library.** A new **Configuration → Navigation Menu** screen manages per-company **folders**; each folder holds uploaded documents with **preview + download**. A permanent "Uncategorized" bucket collects files filed in no folder. Backed by `Folder` + a single unified `Attachment` entity (bytes on disk under `data/attachments/{folder}/…`, never in the DB; SHA-256 + disk-reconcile so a manually-deleted file prunes its row).

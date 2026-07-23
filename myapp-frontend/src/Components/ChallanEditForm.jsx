@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { MdAdd, MdDelete, MdInfo, MdContentCopy } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
+import SearchableSelect from "./SearchableSelect";
 import QuantityInput from "./QuantityInput";
 import { updateChallan } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
@@ -263,18 +264,14 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                   Client *
                   {isDuplicate && <span style={styles.lockedHint}> (locked — inherited)</span>}
                 </label>
-                <select
-                  style={isDuplicate ? { ...styles.input, ...styles.lockedInput } : styles.input}
+                <SearchableSelect
+                  items={clients}
                   value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
-                  required
+                  onChange={(id) => setClientId(id ? String(id) : "")}
+                  placeholder="— Select Client —"
                   disabled={isDuplicate}
-                >
-                  <option value="">Select a client</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                  style={isDuplicate ? styles.lockedInput : undefined}
+                />
               </div>
               <div style={{ flex: 1.5, minWidth: 180 }}>
                 <label style={styles.label}>

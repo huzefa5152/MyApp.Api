@@ -253,7 +253,7 @@ export default function SalesOrderPage() {
         />
       )}
       {deliverOrder && (
-        <CreateChallanFromOrderModal order={deliverOrder} onClose={() => setDeliverOrder(null)} onCreated={onChallanCreated} />
+        <CreateChallanFromOrderModal order={deliverOrder} companyId={selectedCompany?.id} onClose={() => setDeliverOrder(null)} onCreated={onChallanCreated} />
       )}
       {viewOrder && (
         <SalesOrderDetailModal
