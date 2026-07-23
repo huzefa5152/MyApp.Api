@@ -57,11 +57,13 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        // Optional ?source= filters by origin: "Direct" (folder-only uploads) or
+        // a canonical entity type (e.g. "SalesQuote"); omit / "All" = everything.
         [HttpGet("company/{companyId}/folder/{folderId}")]
         [HasPermission("attachments.list.view")]
         [AuthorizeCompany]
-        public async Task<ActionResult<List<AttachmentDto>>> GetByFolder(int companyId, int folderId)
-            => Ok(await _service.GetByFolderAsync(companyId, folderId));
+        public async Task<ActionResult<List<AttachmentDto>>> GetByFolder(int companyId, int folderId, [FromQuery] string? source = null)
+            => Ok(await _service.GetByFolderAsync(companyId, folderId, source));
 
         // The always-present "Uncategorized" bucket — attachments not filed in
         // any folder (FolderId == null). Used by the Folders library's permanent
@@ -69,8 +71,22 @@ namespace MyApp.Api.Controllers
         [HttpGet("company/{companyId}/uncategorized")]
         [HasPermission("attachments.list.view")]
         [AuthorizeCompany]
-        public async Task<ActionResult<List<AttachmentDto>>> GetUncategorized(int companyId)
-            => Ok(await _service.GetUncategorizedAsync(companyId));
+        public async Task<ActionResult<List<AttachmentDto>>> GetUncategorized(int companyId, [FromQuery] string? source = null)
+            => Ok(await _service.GetUncategorizedAsync(companyId, source));
+
+        // Source-breakdown counts powering the folder view's filter chips:
+        // { "Direct": 3, "SalesQuote": 2, ... } — only non-zero entries.
+        [HttpGet("company/{companyId}/folder/{folderId}/source-summary")]
+        [HasPermission("attachments.list.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<Dictionary<string, int>>> GetFolderSourceSummary(int companyId, int folderId)
+            => Ok(await _service.GetFolderSourceSummaryAsync(companyId, folderId));
+
+        [HttpGet("company/{companyId}/uncategorized/source-summary")]
+        [HasPermission("attachments.list.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<Dictionary<string, int>>> GetUncategorizedSourceSummary(int companyId)
+            => Ok(await _service.GetUncategorizedSourceSummaryAsync(companyId));
 
         [HttpGet("company/{companyId}/entity/{entityType}/{entityId}")]
         [HasPermission("attachments.list.view")]

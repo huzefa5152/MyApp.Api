@@ -15,6 +15,9 @@ import { useListViewMode } from "../hooks/useListViewMode";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import PaymentStatusBadge from "../Components/PaymentStatusBadge";
+import AttachmentBadge from "../Components/AttachmentBadge";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
 import { exportToPdf } from "../utils/exportUtils";
@@ -63,6 +66,8 @@ export default function PurchaseBillsPage() {
   const [loadingAwaiting, setLoadingAwaiting] = useState(false);
   const [prefillFromInvoiceId, setPrefillFromInvoiceId] = useState(null);
   const [pickerSearch, setPickerSearch] = useState("");
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "PurchaseBill", bills.map((b) => b.id));
 
   const fetchBills = useCallback(async (pg) => {
     if (!selectedCompany) return;
@@ -235,6 +240,8 @@ export default function PurchaseBillsPage() {
               {viewMode === "table" ? (
                 <PurchaseBillTable
                   bills={bills}
+                  attachCounts={attachCounts}
+                  onAttach={(b) => setAttachTarget(b)}
                   perms={{ canUpdate, canDelete }}
                   showPaymentStatus={canViewPaymentStatus}
                   onView={(b) => { setEditingId(b.id); setViewOnly(true); setShowForm(true); }}
@@ -254,10 +261,13 @@ export default function PurchaseBillsPage() {
                        onMouseLeave={(e) => Object.assign(e.currentTarget.style, { transform: "none", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" })}>
                     <div style={cardStyles.cardContent}>
                       <div>
-                        <h5 style={cardStyles.title}>
-                          <MdShoppingCart style={{ color: colors.purple, marginRight: 6 }} />
-                          PB #{b.purchaseBillNumber}
-                        </h5>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                          <h5 style={cardStyles.title}>
+                            <MdShoppingCart style={{ color: colors.purple, marginRight: 6 }} />
+                            PB #{b.purchaseBillNumber}
+                          </h5>
+                          <AttachmentBadge count={attachCounts[b.id]} onClick={() => setAttachTarget(b)} />
+                        </div>
                         <p style={cardStyles.text}><strong>Supplier:</strong> {b.supplierName}</p>
                         <p style={cardStyles.text}><strong>Date:</strong> {new Date(b.date).toLocaleDateString()}</p>
                         <p style={cardStyles.text}><strong>Grand Total:</strong> Rs. {b.grandTotal?.toLocaleString()}</p>
@@ -334,6 +344,16 @@ export default function PurchaseBillsPage() {
           prefillFromInvoiceId={prefillFromInvoiceId}
           onClose={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); setViewOnly(false); }}
           onSaved={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); setViewOnly(false); fetchBills(page); }}
+        />
+      )}
+
+      {attachTarget && selectedCompany && (
+        <AttachmentQuickModal
+          companyId={selectedCompany.id}
+          entityType="PurchaseBill"
+          entityId={attachTarget.id}
+          title={`Bill #${attachTarget.purchaseBillNumber} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
         />
       )}
 

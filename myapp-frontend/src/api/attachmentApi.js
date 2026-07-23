@@ -36,12 +36,25 @@ export const uploadAttachment = (companyId, { file, folderId, entityType, entity
   });
 };
 
-export const getAttachmentsByFolder = (companyId, folderId) =>
-  httpClient.get(`/attachments/company/${companyId}/folder/${folderId}`);
+// `source` optionally filters by origin: "Direct" (folder-only uploads) or a
+// canonical entity type (e.g. "SalesQuote"); omit for everything.
+export const getAttachmentsByFolder = (companyId, folderId, source) =>
+  httpClient.get(`/attachments/company/${companyId}/folder/${folderId}`, {
+    params: source ? { source } : undefined,
+  });
 
 // Attachments not filed in any folder (the always-present "Uncategorized" bucket).
-export const getUncategorizedAttachments = (companyId) =>
-  httpClient.get(`/attachments/company/${companyId}/uncategorized`);
+export const getUncategorizedAttachments = (companyId, source) =>
+  httpClient.get(`/attachments/company/${companyId}/uncategorized`, {
+    params: source ? { source } : undefined,
+  });
+
+// Source-breakdown counts for the folder view's filter chips → { "Direct": n, "SalesQuote": n, ... }.
+export const getFolderSourceSummary = (companyId, folderId) =>
+  httpClient.get(`/attachments/company/${companyId}/folder/${folderId}/source-summary`);
+
+export const getUncategorizedSourceSummary = (companyId) =>
+  httpClient.get(`/attachments/company/${companyId}/uncategorized/source-summary`);
 
 export const getAttachmentsByEntity = (companyId, entityType, entityId) =>
   httpClient.get(`/attachments/company/${companyId}/entity/${entityType}/${entityId}`);

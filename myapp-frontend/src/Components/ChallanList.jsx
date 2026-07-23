@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn, MdContentCopy } from "react-icons/md";
 import ChallanModal from "./ChallanModal";
+import AttachmentBadge from "./AttachmentBadge";
 import { cardStyles, cardHover } from "../theme";
 import { usePermissions } from "../contexts/PermissionsContext";
 
@@ -57,7 +58,7 @@ function WarningTooltip({ warnings }) {
   );
 }
 
-export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "" }) {
+export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", attachCounts = {}, onAttach }) {
   const { has } = usePermissions();
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
@@ -121,6 +122,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       Challan #{c.challanNumber}
                     </h5>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      <AttachmentBadge count={attachCounts?.[c.id]} onClick={() => onAttach?.(c)} />
                       {hasWarnings && <WarningTooltip warnings={c.warnings} />}
                       {/* DUPLICATE pill — shown when this row was created via
                           the Duplicate action, so operators can tell at a

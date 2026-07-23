@@ -7,6 +7,8 @@ import ChallanEditForm from "../Components/ChallanEditForm";
 import POImportForm from "../Components/POImportForm";
 import InvoiceForm from "../Components/InvoiceForm";
 import ViewModeToggle from "../Components/ViewModeToggle";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import { useListViewMode } from "../hooks/useListViewMode";
 import {
   getPagedChallansByCompany,
@@ -67,6 +69,11 @@ export default function ChallanPage() {
   // Generate-Bill shortcut: holds the challanId to prefill into InvoiceForm
   // when the user clicks the per-card button.
   const [generateBillChallanId, setGenerateBillChallanId] = useState(null);
+  // Quick-attachments: target challan for the modal, plus a shared count map
+  // over the currently-displayed rows (both card + table views render the
+  // same `challans` array, so one hook covers both).
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "DeliveryChallan", challans.map((c) => c.id));
 
   // Pagination & filters
   const [page, setPage] = useState(1);
@@ -470,6 +477,8 @@ export default function ChallanPage() {
               duplicatingId={duplicatingId}
               printDisabled={tplPicker.noTemplate}
               printDisabledReason={tplPicker.noTemplateReason}
+              attachCounts={attachCounts}
+              onAttach={(c) => setAttachTarget(c)}
             />
           ) : (
             <ChallanList
@@ -486,6 +495,8 @@ export default function ChallanPage() {
               duplicatingId={duplicatingId}
               printDisabled={tplPicker.noTemplate}
               printDisabledReason={tplPicker.noTemplateReason}
+              attachCounts={attachCounts}
+              onAttach={(c) => setAttachTarget(c)}
             />
           )}
           {/* Pagination */}
@@ -566,6 +577,16 @@ export default function ChallanPage() {
         onConfirm={handleDuplicateConfirm}
         onCancel={() => setDuplicateSource(null)}
       />
+
+      {attachTarget && selectedCompany && (
+        <AttachmentQuickModal
+          companyId={selectedCompany.id}
+          entityType="DeliveryChallan"
+          entityId={attachTarget.id}
+          title={`Challan #${attachTarget.challanNumber} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
+        />
+      )}
 
     </div>
   );

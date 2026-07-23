@@ -4,6 +4,9 @@ import SalesOrderForm from "../Components/SalesOrderForm";
 import CreateChallanFromOrderModal from "../Components/CreateChallanFromOrderModal";
 import SalesOrderDetailModal from "../Components/SalesOrderDetailModal";
 import POImportForm from "../Components/POImportForm";
+import AttachmentBadge from "../Components/AttachmentBadge";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import {
   getPagedSalesOrdersByCompany, createSalesOrder, updateSalesOrder,
   deleteSalesOrder, setSalesOrderStatus, getSalesOrderPrintData,
@@ -55,6 +58,8 @@ export default function SalesOrderPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "SalesOrder", orders.map((o) => o.id));
 
   const fetchOrders = useCallback(async (companyId, pg) => {
     if (!companyId) return;
@@ -188,7 +193,10 @@ export default function SalesOrderPage() {
                 <div key={o.id} style={st.card}>
                   <div style={st.cardTop}>
                     <span style={st.oNum}>SO #{o.salesOrderNumber}</span>
-                    <span style={{ ...st.badge, background: `${FULFIL_COLORS[o.fulfillmentStatus] || "#5f6d7e"}18`, color: FULFIL_COLORS[o.fulfillmentStatus] || "#5f6d7e" }}>{o.fulfillmentStatus}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <AttachmentBadge count={attachCounts[o.id]} onClick={() => setAttachTarget(o)} />
+                      <span style={{ ...st.badge, background: `${FULFIL_COLORS[o.fulfillmentStatus] || "#5f6d7e"}18`, color: FULFIL_COLORS[o.fulfillmentStatus] || "#5f6d7e" }}>{o.fulfillmentStatus}</span>
+                    </div>
                   </div>
                   <div style={st.client}>{o.clientName}</div>
                   <div style={st.metaRow}><span>{fmtDate(o.orderDate)}</span><span>{o.items?.length || 0} item{(o.items?.length || 0) !== 1 ? "s" : ""}</span></div>
@@ -239,6 +247,16 @@ export default function SalesOrderPage() {
             </div>
           )}
         </>
+      )}
+
+      {attachTarget && selectedCompany && (
+        <AttachmentQuickModal
+          companyId={selectedCompany.id}
+          entityType="SalesOrder"
+          entityId={attachTarget.id}
+          title={`SO #${attachTarget.salesOrderNumber} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
+        />
       )}
 
       {showForm && selectedCompany && (

@@ -9,6 +9,7 @@ import { fileIconFor, humanSize } from "../utils/fileIcons";
 import {
   getFolders, uploadAttachment, getAttachmentsByEntity, getAttachmentsByFolder,
   getUncategorizedAttachments, downloadAttachment, deleteAttachment,
+  getFolderSourceSummary, getUncategorizedSourceSummary,
 } from "../api/attachmentApi";
 import AttachmentPreviewModal from "./AttachmentPreviewModal";
 import FolderFormModal from "./FolderFormModal";
@@ -55,6 +56,8 @@ const AttachmentManager = forwardRef(function AttachmentManager(
   const [dragOver, setDragOver] = useState(false);
   const [preview, setPreview] = useState(null);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [sourceSummary, setSourceSummary] = useState({});   // { key: count } — folder mode filter chips
+  const [sourceFilter, setSourceFilter] = useState("All");  // "All" | "Direct" | entity type
   const fileInputRef = useRef(null);
 
   const loadExisting = useCallback(async () => {
@@ -62,12 +65,21 @@ const AttachmentManager = forwardRef(function AttachmentManager(
     if (inFolderMode) {
       setLoading(true);
       try {
-        const { data } = inUncategorized
-          ? await getUncategorizedAttachments(companyId)
-          : await getAttachmentsByFolder(companyId, folderContext);
-        setExisting(data || []);
+        const src = sourceFilter !== "All" ? sourceFilter : undefined;
+        const listP = inUncategorized
+          ? getUncategorizedAttachments(companyId, src)
+          : getAttachmentsByFolder(companyId, folderContext, src);
+        const sumP = inUncategorized
+          ? getUncategorizedSourceSummary(companyId)
+          : getFolderSourceSummary(companyId, folderContext);
+        const [{ data }, { data: sum }] = await Promise.all([listP, sumP]);
+        setExisting(Array.isArray(data) ? data : []);
+        // Guard against the SPA-fallback-404 gotcha: an old/absent backend serves
+        // index.html (200 text/html) for the source-summary route, so `sum` can be
+        // an HTML string. Only accept a plain object → otherwise the chips hide.
+        setSourceSummary(sum && typeof sum === "object" && !Array.isArray(sum) ? sum : {});
       }
-      catch { setExisting([]); }
+      catch { setExisting([]); setSourceSummary({}); }
       finally { setLoading(false); }
     } else if (savedEntity) {
       setLoading(true);
@@ -77,7 +89,7 @@ const AttachmentManager = forwardRef(function AttachmentManager(
     } else {
       setExisting([]); // new unsaved record — nothing server-side yet
     }
-  }, [companyId, inFolderMode, inUncategorized, folderContext, savedEntity, entityType, entityId]);
+  }, [companyId, inFolderMode, inUncategorized, folderContext, savedEntity, entityType, entityId, sourceFilter]);
 
   useEffect(() => { loadExisting(); }, [loadExisting]);
 
@@ -222,6 +234,24 @@ const AttachmentManager = forwardRef(function AttachmentManager(
         </div>
       )}
 
+      {/* Source filter chips — folder / uncategorized mode only, shown once a
+          folder mixes more than one origin (e.g. direct uploads + files carried
+          in from documents). */}
+      {inFolderMode && Object.keys(sourceSummary).length >= 2 && (
+        <div style={st.chipRow}>
+          {buildSourceChips(sourceSummary).map((c) => {
+            const active = sourceFilter === c.key;
+            return (
+              <button key={c.key} type="button"
+                style={{ ...st.chip, ...(active ? st.chipActive : null) }}
+                onClick={() => setSourceFilter(c.key)}>
+                {c.label} <span style={st.chipCount}>{c.count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {busy && (
         <div style={st.uploading}><span style={st.spin} /> Uploading…</div>
       )}
@@ -235,6 +265,7 @@ const AttachmentManager = forwardRef(function AttachmentManager(
           {existing.map((att) => (
             <Row key={`e-${att.id}`} name={att.fileName} ext={att.fileExtension} size={att.fileSizeBytes}
               folderName={!inFolderMode ? att.folderName : null} when={att.createdAt}
+              sourceLabel={inFolderMode ? att.sourceLabel : null} entityNumber={att.entityNumber}
               onPreview={() => previewExisting(att)} onDownload={() => downloadExisting(att)}
               onRemove={canDelete ? () => removeExisting(att) : null} />
           ))}
@@ -283,8 +314,30 @@ const fmtDate = (d) => {
   return `${String(dt.getDate()).padStart(2, "0")}-${m[dt.getMonth()]}-${String(dt.getFullYear()).slice(-2)}`;
 };
 
-function Row({ name, ext, size, folderName, when, pending, onPreview, onDownload, onRemove }) {
+// Fixed display order + labels for the source filter chips. Invoice / Payment
+// stay generic here (grouped by EntityType); a row's own chip shows the precise
+// sub-kind (Credit Note / Receipt) via its server-resolved sourceLabel.
+const SOURCE_ORDER = ["Direct", "SalesQuote", "SalesOrder", "DeliveryChallan", "Invoice", "PurchaseBill", "GoodsReceipt", "Payment"];
+const SOURCE_LABELS = {
+  Direct: "Direct", SalesQuote: "Sales Quote", SalesOrder: "Sales Order",
+  DeliveryChallan: "Delivery Challan", Invoice: "Invoice", PurchaseBill: "Purchase Bill",
+  GoodsReceipt: "Goods Receipt", Payment: "Payment",
+};
+
+// Builds the chip list from a { key: count } summary: an "All" chip (total),
+// then only the sources actually present, in a stable order.
+function buildSourceChips(summary) {
+  const total = Object.values(summary).reduce((a, b) => a + (b || 0), 0);
+  const chips = [{ key: "All", label: "All", count: total }];
+  for (const key of SOURCE_ORDER) {
+    if (summary[key] > 0) chips.push({ key, label: SOURCE_LABELS[key] || key, count: summary[key] });
+  }
+  return chips;
+}
+
+function Row({ name, ext, size, folderName, when, sourceLabel, entityNumber, pending, onPreview, onDownload, onRemove }) {
   const { Icon, color } = fileIconFor(ext || name);
+  const isDirect = sourceLabel === "Direct upload";
   return (
     <div style={st.row}>
       <div style={{ ...st.icoBox, color }}><Icon size={22} /></div>
@@ -293,6 +346,11 @@ function Row({ name, ext, size, folderName, when, pending, onPreview, onDownload
         <div style={st.rowMeta}>
           {humanSize(size)}{folderName ? ` · 📁 ${folderName}` : ""}{when ? ` · ${fmtDate(when)}` : ""}
         </div>
+        {sourceLabel && (
+          <span style={{ ...st.srcChip, ...(isDirect ? st.srcChipDirect : null) }} title={`Source: ${sourceLabel}${entityNumber ? ` #${entityNumber}` : ""}`}>
+            {isDirect ? "📁" : "📄"} {sourceLabel}{entityNumber ? ` #${entityNumber}` : ""}
+          </span>
+        )}
       </div>
       <div style={st.rowActions}>
         <button type="button" style={st.iconBtn} title="Preview" onClick={onPreview}><MdVisibility size={17} /></button>
@@ -316,6 +374,12 @@ const st = {
   folderLabel: { fontSize: "0.8rem", fontWeight: 600, color: colors.textSecondary },
   folderSelect: { flex: 1, minWidth: 160, maxWidth: 280, padding: "0.45rem 0.6rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: "0.85rem", color: colors.textPrimary, cursor: "pointer" },
   newFolderBtn: { display: "inline-flex", alignItems: "center", gap: 4, padding: "0.4rem 0.7rem", borderRadius: 8, border: `1px solid ${colors.teal}40`, background: `${colors.teal}12`, color: colors.teal, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
+  chipRow: { marginTop: "0.7rem", display: "flex", flexWrap: "wrap", gap: 6 },
+  chip: { display: "inline-flex", alignItems: "center", gap: 5, padding: "0.3rem 0.7rem", minHeight: 30, borderRadius: 20, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.textSecondary, fontSize: "0.76rem", fontWeight: 600, cursor: "pointer" },
+  chipActive: { border: `1px solid ${colors.blue}`, background: "#e3f0ff", color: colors.blue },
+  chipCount: { fontSize: "0.7rem", fontWeight: 700, opacity: 0.85 },
+  srcChip: { display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, padding: "0.1rem 0.5rem", borderRadius: 6, background: "#eef4ff", color: colors.blue, fontSize: "0.7rem", fontWeight: 600, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  srcChipDirect: { background: `${colors.teal}14`, color: colors.teal },
   list: { marginTop: "0.7rem", display: "flex", flexDirection: "column", gap: 8 },
   row: { display: "flex", alignItems: "center", gap: 10, padding: "0.5rem 0.6rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, background: colors.inputBg },
   icoBox: { display: "grid", placeItems: "center", width: 34, height: 34, flexShrink: 0 },

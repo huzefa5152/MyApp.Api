@@ -121,16 +121,54 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
-        public async Task<List<AttachmentDto>> GetByFolderAsync(int companyId, int folderId)
+        public async Task<List<AttachmentDto>> GetByFolderAsync(int companyId, int folderId, string? source = null)
         {
             var rows = await ReconcileAsync(await _repository.GetByFolderAsync(companyId, folderId));
-            return rows.Select(AttachmentMapper.ToDto).ToList();
+            return await BuildSourceAwareDtosAsync(rows, source);
         }
 
-        public async Task<List<AttachmentDto>> GetUncategorizedAsync(int companyId)
+        public async Task<List<AttachmentDto>> GetUncategorizedAsync(int companyId, string? source = null)
         {
             var rows = await ReconcileAsync(await _repository.GetUncategorizedAsync(companyId));
-            return rows.Select(AttachmentMapper.ToDto).ToList();
+            return await BuildSourceAwareDtosAsync(rows, source);
+        }
+
+        public async Task<Dictionary<string, int>> GetFolderSourceSummaryAsync(int companyId, int folderId)
+            => SourceSummary(await ReconcileAsync(await _repository.GetByFolderAsync(companyId, folderId)));
+
+        public async Task<Dictionary<string, int>> GetUncategorizedSourceSummaryAsync(int companyId)
+            => SourceSummary(await ReconcileAsync(await _repository.GetUncategorizedAsync(companyId)));
+
+        // Maps rows → DTOs, resolves each file's source (number + label), then
+        // applies the optional server-side source filter. Filtering happens after
+        // reconcile so a folder's listing and its summary counts always agree.
+        private async Task<List<AttachmentDto>> BuildSourceAwareDtosAsync(List<Attachment> rows, string? source)
+        {
+            var dtos = rows.Select(AttachmentMapper.ToDto).ToList();
+            await AttachmentSourceResolver.PopulateAsync(_context, dtos);
+
+            var key = NormalizeSource(source);
+            if (key == null) return dtos;                                  // All
+            if (key == AttachmentEntityTypes.DirectSource)
+                return dtos.Where(d => string.IsNullOrEmpty(d.EntityType)).ToList();
+            return dtos.Where(d => d.EntityType == key).ToList();
+        }
+
+        // Group reconciled rows by origin: "Direct" (no entity) or the EntityType.
+        private static Dictionary<string, int> SourceSummary(List<Attachment> rows) =>
+            rows.GroupBy(a => string.IsNullOrEmpty(a.EntityType) ? AttachmentEntityTypes.DirectSource : a.EntityType!)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+        // null = no filter (All). "Direct" passes through. A known entity type is
+        // canonicalized. Anything else (unknown/garbage) falls back to All.
+        private static string? NormalizeSource(string? source)
+        {
+            if (string.IsNullOrWhiteSpace(source)) return null;
+            var s = source.Trim();
+            if (string.Equals(s, "All", StringComparison.OrdinalIgnoreCase)) return null;
+            if (string.Equals(s, AttachmentEntityTypes.DirectSource, StringComparison.OrdinalIgnoreCase))
+                return AttachmentEntityTypes.DirectSource;
+            return AttachmentEntityTypes.Canonical(s);                     // null if unknown → All
         }
 
         public async Task<List<AttachmentDto>> GetByEntityAsync(int companyId, string entityType, int entityId)

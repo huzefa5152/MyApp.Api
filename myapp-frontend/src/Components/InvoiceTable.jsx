@@ -7,6 +7,7 @@ import {
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 import PaymentStatusBadge from "./PaymentStatusBadge";
+import AttachmentBadge from "./AttachmentBadge";
 
 // Renders the FBR-status pill in compact form for the table.
 function fbrStatusBadge(inv, isBillsMode) {
@@ -56,6 +57,8 @@ export default function InvoiceTable({
   exportingId,
   printDisabled = false,
   printDisabledReason = "",
+  attachCounts = {},
+  onAttach,
   // Gates the payment-status (AR) column — driven by accounting.paymentstatus.view.
   showPaymentStatus = false,
   // handlers (parent owns them; we just call them)
@@ -85,7 +88,10 @@ export default function InvoiceTable({
       accessor: (i) => Number(i.invoiceNumber) || i.invoiceNumber,
       render: (i) => (
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <strong>{i.invoiceNumber}</strong>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <strong>{i.invoiceNumber}</strong>
+            <AttachmentBadge count={attachCounts?.[i.id]} onClick={() => onAttach?.(i)} />
+          </div>
           {(i.documentType === 9 || i.documentType === 10) && (
             <span
               style={{

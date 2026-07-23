@@ -281,6 +281,11 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-23 — Attachment indicators on document lists + source categorization in folders
+
+- **Attachment count badge on every document list.** Sales Quotes, Sales Orders, Delivery Challans (card + table), Bills/Invoices/Notes (card + table), Purchase Bills (card + table), Goods Receipts (card + table) and Payments now show a paperclip + count badge on each card/row. The badge is hidden when a document has no files; clicking it opens a lightweight modal to view/download (and, with permission, add) that document's attachments without entering full edit. Counts come from the existing batch `entity-counts` endpoint (one call per page); new reusable `useEntityAttachmentCounts` hook + `AttachmentBadge` / `AttachmentQuickModal` components.
+- **Source categorization in the folder view.** Inside a folder (and the Uncategorized bucket) each file now shows where it came from — `📁 Direct upload` or the source document with its real number (`📄 Delivery Challan #262`, `Credit Note #3`, `Receipt #48`, …) — and, when a folder mixes sources, a filter-chip row (All · Direct · Sales Quote · …) filters the list server-side. Backend resolves the document number + label per source type (`AttachmentDto.EntityNumber`/`SourceLabel`, new `AttachmentSourceResolver`) and exposes a `source` filter + `source-summary` endpoints; the frontend hardens against a stale/absent backend (a 404 that the SPA fallback serves as `index.html` no longer leaks into the UI).
+
 ### 2026-07-23 — Sales/UI refinements: searchable client pickers, SQ/SO item-type UX, site dropdowns, attachment scroll fix
 
 - **Searchable client pickers.** The document forms that select a client (Sales Quote, Sales Order, Delivery Challan create + edit, Standalone Bill) now use the same type-ahead `SearchableSelect` the Receipts/Payments screen uses, instead of a long plain `<select>` — much faster on companies with many clients.

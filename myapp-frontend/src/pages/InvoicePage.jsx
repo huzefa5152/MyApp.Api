@@ -9,6 +9,9 @@ import FbrPreviewDialog from "../Components/FbrPreviewDialog";
 import BulkFbrPreviewDialog from "../Components/BulkFbrPreviewDialog";
 import InvoiceTable from "../Components/InvoiceTable";
 import ViewModeToggle from "../Components/ViewModeToggle";
+import AttachmentBadge from "../Components/AttachmentBadge";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import { useListViewMode } from "../hooks/useListViewMode";
 import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, cancelInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
@@ -139,6 +142,8 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [showBulkFbrPreview, setShowBulkFbrPreview] = useState(false);
   const [clients, setClients] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "Invoice", invoices.map((r) => r.id));
   const [showForm, setShowForm] = useState(false);
   // Separate visibility flag for the "Create Bill (No Challan)" modal so
   // it doesn't share state with the regular New Bill flow.
@@ -909,6 +914,8 @@ export default function InvoicePage({ mode = "invoices" }) {
           {viewMode === "table" ? (
             <InvoiceTable
               invoices={invoices}
+              attachCounts={attachCounts}
+              onAttach={(inv) => setAttachTarget(inv)}
               isBillsMode={isBillsMode}
               isReturnsMode={isNotesMode}
               noteDocType={noteDocType}
@@ -960,10 +967,13 @@ export default function InvoicePage({ mode = "invoices" }) {
               >
                 <div style={cardStyles.cardContent}>
                   <div>
-                    <h5 style={cardStyles.title}>
-                      <MdReceipt style={{ color: colors.blue, marginRight: 6 }} />
-                      {isNotesMode ? noteLabel : isBillsMode ? "Bill" : "Invoice"} #{inv.invoiceNumber}
-                    </h5>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                      <h5 style={cardStyles.title}>
+                        <MdReceipt style={{ color: colors.blue, marginRight: 6 }} />
+                        {isNotesMode ? noteLabel : isBillsMode ? "Bill" : "Invoice"} #{inv.invoiceNumber}
+                      </h5>
+                      <AttachmentBadge count={attachCounts[inv.id]} onClick={() => setAttachTarget(inv)} />
+                    </div>
                     <p style={cardStyles.text}><strong>Client:</strong> {inv.clientName}</p>
                     {/* PO Number / Indent No / Site come from the linked
                         DeliveryChallans (aggregated server-side). All
@@ -1455,6 +1465,16 @@ export default function InvoicePage({ mode = "invoices" }) {
         <BulkFbrPreviewDialog
           invoices={unsubmittedInvoices}
           onClose={() => setShowBulkFbrPreview(false)}
+        />
+      )}
+
+      {attachTarget && selectedCompany && (
+        <AttachmentQuickModal
+          companyId={selectedCompany.id}
+          entityType="Invoice"
+          entityId={attachTarget.id}
+          title={`#${attachTarget.invoiceNumber} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
         />
       )}
     </div>

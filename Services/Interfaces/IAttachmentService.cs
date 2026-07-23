@@ -11,9 +11,20 @@ namespace MyApp.Api.Services.Interfaces
         /// entity type must be one of <see cref="Helpers.AttachmentEntityTypes"/>.
         /// </summary>
         Task<AttachmentDto> UploadAsync(int companyId, IFormFile file, int? folderId, string? entityType, int? entityId, int userId);
-        Task<List<AttachmentDto>> GetByFolderAsync(int companyId, int folderId);
-        /// <summary>Attachments not filed in any folder (the "Uncategorized" bucket), disk-reconciled.</summary>
-        Task<List<AttachmentDto>> GetUncategorizedAsync(int companyId);
+
+        /// <summary>
+        /// Folder listing, disk-reconciled, with source (EntityNumber/SourceLabel)
+        /// populated. <paramref name="source"/> optionally filters by origin:
+        /// null/""/"All" = everything, "Direct" = folder-only uploads, or a
+        /// canonical entity type (e.g. "SalesQuote"). Invalid values fall back to All.
+        /// </summary>
+        Task<List<AttachmentDto>> GetByFolderAsync(int companyId, int folderId, string? source = null);
+        /// <summary>Uncategorized bucket (FolderId == null), disk-reconciled + source-populated + filtered.</summary>
+        Task<List<AttachmentDto>> GetUncategorizedAsync(int companyId, string? source = null);
+        /// <summary>Source key → count for a folder's filter chips ("Direct", "SalesQuote", …); only non-zero keys.</summary>
+        Task<Dictionary<string, int>> GetFolderSourceSummaryAsync(int companyId, int folderId);
+        /// <summary>Source key → count for the Uncategorized bucket's filter chips; only non-zero keys.</summary>
+        Task<Dictionary<string, int>> GetUncategorizedSourceSummaryAsync(int companyId);
         Task<List<AttachmentDto>> GetByEntityAsync(int companyId, string entityType, int entityId);
         /// <summary>entityId → attachment count (disk-reconciled), for list-card badges (e.g. Sales Quote list).</summary>
         Task<Dictionary<int, int>> GetCountsByEntityAsync(int companyId, string entityType, IEnumerable<int> entityIds);

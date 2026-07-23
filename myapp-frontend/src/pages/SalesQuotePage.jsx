@@ -3,6 +3,9 @@ import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRi
 import SalesQuoteForm from "../Components/SalesQuoteForm";
 import SalesQuoteDetailModal from "../Components/SalesQuoteDetailModal";
 import POImportForm from "../Components/POImportForm";
+import AttachmentBadge from "../Components/AttachmentBadge";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import {
   getPagedSalesQuotesByCompany, createSalesQuote, updateSalesQuote,
   deleteSalesQuote, convertQuoteToOrder, getSalesQuotePrintData,
@@ -50,6 +53,8 @@ export default function SalesQuotePage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [clientFilter, setClientFilter] = useState("");
   const [clients, setClients] = useState([]);
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "SalesQuote", quotes.map((q) => q.id));
 
   const fetchQuotes = useCallback(async (companyId, pg) => {
     if (!companyId) return;
@@ -197,7 +202,10 @@ export default function SalesQuotePage() {
               <div key={q.id} style={st.card}>
                 <div style={st.cardTop}>
                   <span style={st.qNum}>Quote #{q.quoteNumber}</span>
-                  <span style={{ ...st.badge, background: `${STATUS_COLORS[q.status] || "#5f6d7e"}18`, color: STATUS_COLORS[q.status] || "#5f6d7e" }}>{q.status}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <AttachmentBadge count={attachCounts[q.id]} onClick={() => setAttachTarget(q)} />
+                    <span style={{ ...st.badge, background: `${STATUS_COLORS[q.status] || "#5f6d7e"}18`, color: STATUS_COLORS[q.status] || "#5f6d7e" }}>{q.status}</span>
+                  </div>
                 </div>
                 <div style={st.client}>{q.clientName}</div>
                 <div style={st.metaRow}><span>{fmtDate(q.date)}</span><span>{q.items?.length || 0} item{(q.items?.length || 0) !== 1 ? "s" : ""}</span></div>
@@ -237,6 +245,16 @@ export default function SalesQuotePage() {
           target="salesquote"
           onClose={() => setShowImport(false)}
           onSaved={() => { setShowImport(false); reload(); notify("Sales Quote created from PO.", "success"); }}
+        />
+      )}
+
+      {attachTarget && selectedCompany && (
+        <AttachmentQuickModal
+          companyId={selectedCompany.id}
+          entityType="SalesQuote"
+          entityId={attachTarget.id}
+          title={`Quote #${attachTarget.quoteNumber} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
         />
       )}
 

@@ -29,6 +29,13 @@ namespace MyApp.Api.Helpers
         // type — mirroring how Invoice covers bills/invoices/notes.
         public const string Payment = "Payment";
 
+        /// <summary>
+        /// Pseudo-source meaning "no entity link" (EntityType IS NULL) — a file
+        /// uploaded straight into a folder. NOT a member of <see cref="All"/>;
+        /// used only as a source filter/summary key, never stored on a row.
+        /// </summary>
+        public const string DirectSource = "Direct";
+
         public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
         {
             SalesQuote, SalesOrder, DeliveryChallan, Invoice, PurchaseBill, GoodsReceipt, Payment

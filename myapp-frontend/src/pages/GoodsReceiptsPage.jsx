@@ -9,6 +9,9 @@ import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import GoodsReceiptForm from "../Components/GoodsReceiptForm";
 import GoodsReceiptTable from "../Components/GoodsReceiptTable";
+import AttachmentBadge from "../Components/AttachmentBadge";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
@@ -49,6 +52,8 @@ export default function GoodsReceiptsPage() {
   const [supplierFilter, setSupplierFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "GoodsReceipt", receipts.map((r) => r.id));
 
   const fetchReceipts = useCallback(async (pg) => {
     if (!selectedCompany) return;
@@ -187,6 +192,8 @@ export default function GoodsReceiptsPage() {
                   exportingId={exportingId}
                   printDisabled={tplPicker.noTemplate}
                   printDisabledReason={tplPicker.noTemplateReason}
+                  attachCounts={attachCounts}
+                  onAttach={(g) => setAttachTarget(g)}
                 />
               ) : (
               <div className="card-grid">
@@ -196,10 +203,13 @@ export default function GoodsReceiptsPage() {
                        onMouseLeave={(e) => Object.assign(e.currentTarget.style, { transform: "none", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" })}>
                     <div style={cardStyles.cardContent}>
                       <div>
-                        <h5 style={cardStyles.title}>
-                          <MdInventory2 style={{ color: colors.teal, marginRight: 6 }} />
-                          GR #{gr.goodsReceiptNumber}
-                        </h5>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: "0.5rem" }}>
+                          <h5 style={{ ...cardStyles.title, marginBottom: 0 }}>
+                            <MdInventory2 style={{ color: colors.teal, marginRight: 6 }} />
+                            GR #{gr.goodsReceiptNumber}
+                          </h5>
+                          <AttachmentBadge count={attachCounts[gr.id]} onClick={() => setAttachTarget(gr)} />
+                        </div>
                         <p style={cardStyles.text}><strong>Supplier:</strong> {gr.supplierName}</p>
                         <p style={cardStyles.text}><strong>Date:</strong> {new Date(gr.receiptDate).toLocaleDateString()}</p>
                         {gr.purchaseBillNumber && <p style={cardStyles.text}><strong>Linked PB:</strong> #{gr.purchaseBillNumber}</p>}
@@ -236,6 +246,16 @@ export default function GoodsReceiptsPage() {
           receiptId={editingId}
           onClose={() => { setShowForm(false); setEditingId(null); }}
           onSaved={() => { setShowForm(false); setEditingId(null); fetchReceipts(page); }}
+        />
+      )}
+
+      {attachTarget && selectedCompany && (
+        <AttachmentQuickModal
+          companyId={selectedCompany.id}
+          entityType="GoodsReceipt"
+          entityId={attachTarget.id}
+          title={`GRN #${attachTarget.goodsReceiptNumber} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
         />
       )}
     </div>

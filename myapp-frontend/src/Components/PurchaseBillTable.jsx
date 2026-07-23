@@ -2,15 +2,21 @@ import { MdVisibility, MdEdit, MdDelete, MdPrint, MdPictureAsPdf } from "react-i
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 import PaymentStatusBadge from "./PaymentStatusBadge";
+import AttachmentBadge from "./AttachmentBadge";
 
-export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "", showPaymentStatus = false }) {
+export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "", showPaymentStatus = false, attachCounts = {}, onAttach }) {
   const columns = [
     {
       key: "purchaseBillNumber",
       header: "PB #",
       width: 110,
       accessor: (b) => Number(b.purchaseBillNumber) || b.purchaseBillNumber,
-      render: (b) => <strong>{b.purchaseBillNumber}</strong>,
+      render: (b) => (
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <strong>{b.purchaseBillNumber}</strong>
+          <AttachmentBadge count={attachCounts?.[b.id]} onClick={() => onAttach?.(b)} />
+        </div>
+      ),
     },
     {
       key: "supplierName",
