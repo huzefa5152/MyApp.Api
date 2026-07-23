@@ -135,5 +135,25 @@ namespace MyApp.Api.Controllers
             if (!ok) return NotFound();
             return Ok(new { message = "Purchase bill deleted; stock movements reversed." });
         }
+
+        /// <summary>Set/clear the bill's payment due date (drives the Overdue /
+        /// Coming-due status). Gated by the payments permission — the due date
+        /// is an AP concern, set by whoever manages what the company owes.</summary>
+        [HttpPut("{id}/due-date")]
+        [HasPermission("accounting.payments.create")]
+        public async Task<ActionResult<PurchaseBillDto>> SetDueDate(int id, [FromBody] SetDueDateRequest body)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            var updated = await _service.SetDueDateAsync(id, body.DueDate);
+            if (updated == null) return NotFound(new { error = "Bill not found." });
+            return Ok(updated);
+        }
+
+        public class SetDueDateRequest
+        {
+            public DateTime? DueDate { get; set; }
+        }
     }
 }

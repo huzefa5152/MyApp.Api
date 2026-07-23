@@ -235,6 +235,24 @@ namespace MyApp.Api.Helpers
             new("salesorders.manage.delete", "SalesOrders", "Manage", "Delete", "Delete a sales order"),
             new("salesorders.print.view",    "SalesOrders", "Print",  "View",   "Print or download a sales order"),
 
+            // ── Accounting — Receipts & Payments (AR/AP subledger) ──────────
+            // Receipts (money in, settle sales invoices) and Payments (money
+            // out, settle purchase bills) are split into separate keys for
+            // separation of duties: a cashier may record receipts without being
+            // able to pay money out. GL-free — no Chart of Accounts in master.
+            new("accounting.receipts.view",   "Accounting", "Receipts", "View",   "View receipts (money in) and an invoice's settled payments"),
+            new("accounting.receipts.create", "Accounting", "Receipts", "Create", "Record a receipt against one or more sales invoices"),
+            new("accounting.receipts.delete", "Accounting", "Receipts", "Delete", "Delete a receipt"),
+            new("accounting.receipts.print",  "Accounting", "Receipts", "Print",  "Print or download a receipt voucher"),
+            new("accounting.payments.view",   "Accounting", "Payments", "View",   "View payments (money out) and a bill's settled payments"),
+            new("accounting.payments.create", "Accounting", "Payments", "Create", "Record a payment against one or more purchase bills"),
+            new("accounting.payments.delete", "Accounting", "Payments", "Delete", "Delete a payment"),
+            new("accounting.payments.print",  "Accounting", "Payments", "Print",  "Print or download a payment voucher"),
+            // Gates VISIBILITY of the payment-status badge (Paid / Partially Paid /
+            // Overdue / Unpaid + balance due) on the Invoice/Bill and Purchase Bill
+            // list screens. A user without this key sees no payment-status badge.
+            new("accounting.paymentstatus.view", "Accounting", "Payment Status", "View", "See the payment-status badge (paid / partial / overdue / balance due) on invoices and bills"),
+
             // ── Inventory / Stock ───────────────────────────────────────────
             new("stock.dashboard.view",     "Inventory", "Dashboard",       "View",   "View on-hand stock dashboard"),
             new("stock.movements.view",     "Inventory", "Movements",       "View",   "View the stock-movement audit log"),

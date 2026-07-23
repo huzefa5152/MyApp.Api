@@ -121,9 +121,14 @@ export function usePrintTemplates(templateType) {
     selectedTemplate,
     resolveAuto,
     resolveTemplate,
-    // Show the selector whenever the operator can view templates AND there is at
-    // least one template. None hides the picker (the screen also blocks Print/PDF
-    // via `noTemplate`).
-    canChoose: canViewTemplates && !noTemplate,
+    // Show the selector only once we've CONFIRMED (post-fetch) the type has at
+    // least one template. Gating on `templatesLoaded` (not just `!noTemplate`)
+    // matters: before the fetch resolves, `noTemplate` is false, so the old
+    // `!noTemplate` form reported canChoose=true prematurely — the picker
+    // mounted, then unmounted when the load returned zero templates, producing a
+    // visible flash + toolbar reflow ("jerk") on screens whose company has no
+    // template of that type (e.g. Receipts / Payments). Requiring
+    // `templatesLoaded && length>0` shows the picker only when it's real.
+    canChoose: canViewTemplates && templatesLoaded && templates.length > 0,
   };
 }

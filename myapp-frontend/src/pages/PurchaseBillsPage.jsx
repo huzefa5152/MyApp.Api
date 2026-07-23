@@ -14,6 +14,7 @@ import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
+import PaymentStatusBadge from "../Components/PaymentStatusBadge";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
 import { exportToPdf } from "../utils/exportUtils";
@@ -38,6 +39,8 @@ export default function PurchaseBillsPage() {
   const canUpdate = has("purchasebills.manage.update");
   const canDelete = has("purchasebills.manage.delete");
   const canPrint = has("purchasebills.print.view");
+  // Gates the payment-status badge (AP payments). No key → no badge.
+  const canViewPaymentStatus = has("accounting.paymentstatus.view");
   const [viewMode, setViewMode, isBigScreen] = useListViewMode("purchaseBills");
 
   const [bills, setBills] = useState([]);
@@ -233,6 +236,7 @@ export default function PurchaseBillsPage() {
                 <PurchaseBillTable
                   bills={bills}
                   perms={{ canUpdate, canDelete }}
+                  showPaymentStatus={canViewPaymentStatus}
                   onView={(b) => { setEditingId(b.id); setViewOnly(true); setShowForm(true); }}
                   onEdit={(b) => { setEditingId(b.id); setViewOnly(false); setShowForm(true); }}
                   onDelete={handleDelete}
@@ -265,6 +269,11 @@ export default function PurchaseBillsPage() {
                         <p style={{ ...cardStyles.text, fontSize: "0.74rem" }}>
                           {b.items?.length || 0} items · Status: {b.reconciliationStatus}
                         </p>
+                        {canViewPaymentStatus && b.paymentStatus && (
+                          <div style={{ marginTop: 6 }}>
+                            <PaymentStatusBadge status={b.paymentStatus} balanceDue={b.balanceDue} daysOverdue={b.daysOverdue} />
+                          </div>
+                        )}
                       </div>
                       <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
                         <button style={btnView} onClick={() => { setEditingId(b.id); setViewOnly(true); setShowForm(true); }}>

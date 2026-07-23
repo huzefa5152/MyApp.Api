@@ -34,6 +34,9 @@ import {
   MdAddShoppingCart,
   MdAssessment,
   MdFactCheck,
+  MdAccountBalanceWallet,
+  MdReceiptLong,
+  MdPayments,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { Can, usePermissions } from "../contexts/PermissionsContext";
@@ -173,6 +176,10 @@ export default function DashboardLayout() {
     "stock.dashboard.view",
     "fbrimport.purchase.preview",
   ];
+  const accountingKeys = [
+    "accounting.receipts.view",
+    "accounting.payments.view",
+  ];
   const reportsKeys = [
     "reports.sales.view",
     "reports.taxsheet.view",
@@ -186,6 +193,7 @@ export default function DashboardLayout() {
   const canSeeConfiguration = hasAny(configKeys);
   const canSeeSales         = hasAny(salesKeys);
   const canSeePurchases     = hasAny(purchasesKeys);
+  const canSeeAccounting    = hasAny(accountingKeys);
   const canSeeReports       = hasAny(reportsKeys);
   const canSeeAdmin         = hasAny(adminKeys);
 
@@ -194,6 +202,7 @@ export default function DashboardLayout() {
   // the badge always matches what the user can actually see beneath it.
   const salesCount         = salesKeys.filter(has).length;
   const purchasesCount     = purchasesKeys.filter(has).length;
+  const accountingCount    = accountingKeys.filter(has).length;
   const reportsCount       = reportsKeys.filter(has).length;
   const configurationCount = configKeys.filter(has).length;
   const administrationCount = adminKeys.filter(has).length;
@@ -206,6 +215,7 @@ export default function DashboardLayout() {
     const p = location.pathname.toLowerCase();
     if (p.startsWith("/challans") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history" || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders")) return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
+    if (p.startsWith("/receipts") || p.startsWith("/payments")) return "accounting";
     if (p.startsWith("/reports")) return "reports";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
@@ -402,6 +412,30 @@ export default function DashboardLayout() {
                 <NavLink to="/fbr-import/purchase" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdFileUpload className="dl-subitem__icon" aria-hidden="true" />
                   <span>FBR Purchase Import</span>
+                </NavLink>
+              </Can>
+            </NavGroup>
+          )}
+
+          {canSeeAccounting && (
+            <NavGroup
+              id="accounting"
+              icon={MdAccountBalanceWallet}
+              title="Accounting"
+              count={accountingCount}
+              defaultOpen={activeSection === "accounting"}
+              isChildActive={activeSection === "accounting"}
+            >
+              <Can permission="accounting.receipts.view">
+                <NavLink to="/receipts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdReceiptLong className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Receipts</span>
+                </NavLink>
+              </Can>
+              <Can permission="accounting.payments.view">
+                <NavLink to="/payments" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdPayments className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Payments</span>
                 </NavLink>
               </Can>
             </NavGroup>

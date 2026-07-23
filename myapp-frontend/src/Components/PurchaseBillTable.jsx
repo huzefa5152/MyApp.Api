@@ -1,8 +1,9 @@
 import { MdVisibility, MdEdit, MdDelete, MdPrint, MdPictureAsPdf } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
+import PaymentStatusBadge from "./PaymentStatusBadge";
 
-export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "" }) {
+export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "", showPaymentStatus = false }) {
   const columns = [
     {
       key: "purchaseBillNumber",
@@ -48,6 +49,15 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
         ? <StatusBadge status={b.reconciliationStatus} />
         : "—",
     },
+    ...(showPaymentStatus ? [{
+      key: "paymentStatus",
+      header: "Payment",
+      width: 150,
+      accessor: (b) => b.paymentStatus || "",
+      render: (b) => b.paymentStatus
+        ? <PaymentStatusBadge status={b.paymentStatus} balanceDue={b.balanceDue} daysOverdue={b.daysOverdue} />
+        : "—",
+    }] : []),
     {
       key: "supplierIRN",
       header: "Supplier IRN",

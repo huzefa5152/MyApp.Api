@@ -48,6 +48,13 @@ namespace MyApp.Api.Services.Implementations
             PaymentMode = pb.PaymentMode,
             ReconciliationStatus = pb.ReconciliationStatus,
             CreatedAt = pb.CreatedAt,
+            // AP subledger: AmountPaid stored; balance/status/days-overdue
+            // derived at read time (Pakistan calendar).
+            DueDate = pb.DueDate,
+            AmountPaid = pb.AmountPaid,
+            BalanceDue = MyApp.Api.Helpers.PaymentStatusCalculator.BalanceDue(pb.GrandTotal, pb.AmountPaid),
+            PaymentStatus = MyApp.Api.Helpers.PaymentStatusCalculator.Status(pb.GrandTotal, pb.AmountPaid, pb.DueDate).ToString(),
+            DaysOverdue = MyApp.Api.Helpers.PaymentStatusCalculator.DaysOverdue(pb.GrandTotal, pb.AmountPaid, pb.DueDate),
             Items = pb.Items?.Select(i => new PurchaseItemDto
             {
                 Id = i.Id,
@@ -135,6 +142,28 @@ namespace MyApp.Api.Services.Implementations
                             .ThenInclude(ii => ii.Invoice)
                 .FirstOrDefaultAsync(p => p.Id == id);
             return pb == null ? null : ToDto(pb);
+        }
+
+        /// <summary>Set/clear the bill's AP payment due date — drives the
+        /// Overdue/Coming-due status the payment flow surfaces. Pure metadata:
+        /// touches no totals, no stock.</summary>
+        public async Task<PurchaseBillDto?> SetDueDateAsync(int id, DateTime? dueDate)
+        {
+            var pb = await _context.PurchaseBills
+                .Include(p => p.Company)
+                .Include(p => p.Supplier)
+                .Include(p => p.Items)
+                    .ThenInclude(pi => pi.ItemType)
+                .Include(p => p.Items)
+                    .ThenInclude(pi => pi.SourceLines)
+                        .ThenInclude(sl => sl.InvoiceItem!)
+                            .ThenInclude(ii => ii.Invoice)
+                .FirstOrDefaultAsync(p => p.Id == id);
+            if (pb == null) return null;
+
+            pb.DueDate = dueDate?.Date;
+            await _context.SaveChangesAsync();
+            return ToDto(pb);
         }
 
         public async Task<PrintPurchaseBillDto?> GetPrintDataAsync(int id)

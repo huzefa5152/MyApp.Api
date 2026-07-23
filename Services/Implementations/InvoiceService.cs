@@ -277,6 +277,14 @@ namespace MyApp.Api.Services.Implementations
             FbrMissing = missing,
             FbrAdjustmentStale = adjustmentStale,
             FbrAdjustedSubtotal = fbrAdjustedSubtotal,
+            // AR subledger: AmountPaid is stored; balance/status/days-overdue
+            // are derived at read time (Pakistan calendar) so "Overdue" flips
+            // correctly without a write.
+            DueDate = inv.DueDate,
+            AmountPaid = inv.AmountPaid,
+            BalanceDue = MyApp.Api.Helpers.PaymentStatusCalculator.BalanceDue(inv.GrandTotal, inv.AmountPaid),
+            PaymentStatus = MyApp.Api.Helpers.PaymentStatusCalculator.Status(inv.GrandTotal, inv.AmountPaid, inv.DueDate).ToString(),
+            DaysOverdue = MyApp.Api.Helpers.PaymentStatusCalculator.DaysOverdue(inv.GrandTotal, inv.AmountPaid, inv.DueDate),
             Items = inv.Items.Select(ii => new InvoiceItemDto
             {
                 Id = ii.Id,
@@ -1889,6 +1897,27 @@ namespace MyApp.Api.Services.Implementations
                 catch { /* audit must never break the operation */ }
             }
 
+            return ToDto(invoice);
+        }
+
+        /// <summary>Set/clear the invoice's AR payment due date — drives the
+        /// Overdue/Coming-due status the receipt flow surfaces. Pure metadata:
+        /// touches no totals, no stock, no FBR state.</summary>
+        public async Task<InvoiceDto?> SetDueDateAsync(int id, DateTime? dueDate)
+        {
+            // Tracked fetch (repo uses AsNoTracking) with the includes ToDto needs.
+            var invoice = await _context.Invoices
+                .Include(i => i.Items).ThenInclude(it => it.ItemType)
+                .Include(i => i.Items).ThenInclude(it => it.Adjustment)
+                .Include(i => i.Company)
+                .Include(i => i.Client)
+                .Include(i => i.DeliveryChallans)
+                .Include(i => i.OriginalInvoice)
+                .FirstOrDefaultAsync(i => i.Id == id);
+            if (invoice == null) return null;
+
+            invoice.DueDate = dueDate?.Date;
+            await _context.SaveChangesAsync();
             return ToDto(invoice);
         }
 

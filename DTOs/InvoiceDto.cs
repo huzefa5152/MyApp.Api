@@ -96,6 +96,18 @@ namespace MyApp.Api.DTOs
         /// is true and the UI shows the "re-adjust" banner with both figures.
         /// </summary>
         public decimal? FbrAdjustedSubtotal { get; set; }
+
+        // ── AR subledger (receipts) ──────────────────────────────────────
+        // DueDate is operator-set; AmountPaid is synced by the receipt flow;
+        // BalanceDue / PaymentStatus / DaysOverdue are derived at read time so
+        // "Overdue" stays correct without a write. PaymentStatus is one of
+        // Unpaid / PartiallyPaid / Paid / Overdue (see PaymentStatusCalculator).
+        public DateTime? DueDate { get; set; }
+        public decimal AmountPaid { get; set; }
+        public decimal BalanceDue { get; set; }
+        public string PaymentStatus { get; set; } = "Unpaid";
+        public int DaysOverdue { get; set; }
+
         public List<InvoiceItemDto> Items { get; set; } = new();
         public List<int> ChallanNumbers { get; set; } = new();
 

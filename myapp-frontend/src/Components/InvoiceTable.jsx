@@ -6,6 +6,7 @@ import {
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
+import PaymentStatusBadge from "./PaymentStatusBadge";
 
 // Renders the FBR-status pill in compact form for the table.
 function fbrStatusBadge(inv, isBillsMode) {
@@ -55,6 +56,8 @@ export default function InvoiceTable({
   exportingId,
   printDisabled = false,
   printDisabledReason = "",
+  // Gates the payment-status (AR) column — driven by accounting.paymentstatus.view.
+  showPaymentStatus = false,
   // handlers (parent owns them; we just call them)
   onView,
   onPrintBill,
@@ -193,6 +196,16 @@ export default function InvoiceTable({
       accessor: (i) => i.fbrStatus || "",
       render: (i) => fbrStatusBadge(i, isBillsMode),
     },
+    // Payment status (AR) — gated by permission; not shown on the note tabs.
+    ...(showPaymentStatus && !isReturnsMode ? [{
+      key: "paymentStatus",
+      header: "Payment",
+      width: 150,
+      accessor: (i) => i.paymentStatus || "",
+      render: (i) => (i.isCancelled || !i.paymentStatus)
+        ? "—"
+        : <PaymentStatusBadge status={i.paymentStatus} balanceDue={i.balanceDue} daysOverdue={i.daysOverdue} />,
+    }] : []),
   ];
 
   const renderActions = (inv) => {

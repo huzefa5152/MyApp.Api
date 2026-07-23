@@ -21,6 +21,7 @@ import { debitNoteStarters } from "./starters/debitNote";
 import { purchaseBillStarters } from "./starters/purchaseBill";
 import { goodsReceiptStarters } from "./starters/goodsReceipt";
 import { receiptStarters } from "./starters/receipt";
+import { paymentStarters } from "./starters/payment";
 
 export const TEMPLATE_TYPES = [
   { value: "Challan", label: "Delivery Challan" },
@@ -33,6 +34,7 @@ export const TEMPLATE_TYPES = [
   { value: "PurchaseBill", label: "Purchase Bill" },
   { value: "GoodsReceipt", label: "Goods Receipt" },
   { value: "Receipt", label: "Receipt Voucher" },
+  { value: "Payment", label: "Payment Voucher" },
 ];
 
 export const TEMPLATE_TYPE_LABEL = Object.fromEntries(
@@ -67,6 +69,27 @@ export const SAMPLE_DATA = {
     allocations: [
       { sNo: 1, documentLabel: "Invoice #501", date: new Date().toISOString(), amount: 100000 },
       { sNo: 2, documentLabel: "Invoice #498", date: new Date().toISOString(), amount: 77000 },
+    ],
+  },
+  Payment: {
+    ...SAMPLE_BRANDING,
+    direction: "Payment",
+    reference: "PMT-8",
+    date: new Date().toISOString(),
+    contactType: "Supplier",
+    contactName: "Sample Supplier Pvt Ltd",
+    contactAddress: "Supplier Address,\nCity",
+    contactPhone: "0333-1122334",
+    method: "Bank Transfer",
+    bankAccountName: "Meezan Bank — Current 0123",
+    chequeNumber: "778812",
+    chequeDate: new Date().toISOString(),
+    description: "Payment made against outstanding purchase bills",
+    amount: 235000,
+    amountInWords: "Two Hundred Thirty Five Thousand Rupees Only",
+    allocations: [
+      { sNo: 1, documentLabel: "Bill #312", date: new Date().toISOString(), amount: 150000 },
+      { sNo: 2, documentLabel: "Bill #305", date: new Date().toISOString(), amount: 85000 },
     ],
   },
   Challan: {
@@ -322,6 +345,7 @@ export const DEFAULT_TEMPLATES = {
   PurchaseBill: purchaseBillStarters[0]?.html || "",
   GoodsReceipt: goodsReceiptStarters[0]?.html || "",
   Receipt: receiptStarters[0]?.html || "",
+  Payment: paymentStarters[0]?.html || "",
 };
 
 /**

@@ -481,6 +481,26 @@ namespace MyApp.Api.Controllers
             public bool Excluded { get; set; }
         }
 
+        /// <summary>Set/clear the invoice's payment due date (drives the
+        /// Overdue / Coming-due status). Gated by the receipts permission — the
+        /// due date is an AR concern, set by whoever manages collections.</summary>
+        [HttpPut("{id}/due-date")]
+        [HasPermission("accounting.receipts.create")]
+        public async Task<ActionResult<InvoiceDto>> SetDueDate(int id, [FromBody] SetDueDateRequest body)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            var updated = await _service.SetDueDateAsync(id, body.DueDate);
+            if (updated == null) return NotFound(new { error = "Bill not found." });
+            return Ok(updated);
+        }
+
+        public class SetDueDateRequest
+        {
+            public DateTime? DueDate { get; set; }
+        }
+
         [HttpGet("{id}/print/bill")]
         [HasPermission("bills.print.view")]
         public async Task<ActionResult<PrintBillDto>> GetPrintBill(int id)

@@ -21,6 +21,17 @@ namespace MyApp.Api.DTOs
         public string? PaymentMode { get; set; }
         public string ReconciliationStatus { get; set; } = "Pending";
         public DateTime CreatedAt { get; set; }
+
+        // ── AP subledger (payments) — mirror of InvoiceDto. AmountPaid is
+        // synced by the payment flow; BalanceDue / PaymentStatus / DaysOverdue
+        // are derived at read time. PaymentStatus ∈ Unpaid / PartiallyPaid /
+        // Paid / Overdue (see PaymentStatusCalculator).
+        public DateTime? DueDate { get; set; }
+        public decimal AmountPaid { get; set; }
+        public decimal BalanceDue { get; set; }
+        public string PaymentStatus { get; set; } = "Unpaid";
+        public int DaysOverdue { get; set; }
+
         public List<PurchaseItemDto> Items { get; set; } = new();
 
         /// <summary>

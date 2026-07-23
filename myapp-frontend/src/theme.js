@@ -1,6 +1,9 @@
 // src/theme.js — Blue/Teal color scheme matching Hakimi Traders dashboard
 
-const colors = {
+// Exported so screens can reference raw palette values directly (e.g. the
+// Payments/Receipts cards). Existing screens use the higher-level style objects
+// below; this export is purely additive.
+export const colors = {
   blue: "#0d47a1",
   blueDark: "#0a3680",
   blueLight: "#1565c0",

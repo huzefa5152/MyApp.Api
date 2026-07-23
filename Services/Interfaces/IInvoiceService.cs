@@ -83,6 +83,9 @@ namespace MyApp.Api.Services.Interfaces
         /// submit still work. Returns the updated bill or null if not found.
         /// </summary>
         Task<InvoiceDto?> SetFbrExcludedAsync(int id, bool excluded);
+        /// <summary>Set/clear the invoice's AR payment due date (drives the
+        /// Overdue / Coming-due status). Returns the updated bill or null.</summary>
+        Task<InvoiceDto?> SetDueDateAsync(int id, DateTime? dueDate);
         Task<PrintBillDto?> GetPrintBillAsync(int invoiceId);
         Task<PrintTaxInvoiceDto?> GetPrintTaxInvoiceAsync(int invoiceId);
         Task<int> GetTotalCountAsync();

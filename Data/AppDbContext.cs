@@ -81,6 +81,13 @@ namespace MyApp.Api.Data
         public DbSet<StockMovement> StockMovements { get; set; }
         public DbSet<OpeningStockBalance> OpeningStockBalances { get; set; }
 
+        // ── Payments / Receipts (AR/AP subledger, GL-free) ──
+        // Receipt (money in) + Payment (money out) documents and their
+        // allocation lines, which settle invoices/bills and drive balance-due +
+        // payment status. No Chart of Accounts / posting engine in master.
+        public DbSet<MyApp.Api.Models.Accounting.Payment> Payments { get; set; }
+        public DbSet<MyApp.Api.Models.Accounting.PaymentAllocation> PaymentAllocations { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             // Audit C-1 (2026-05-13): transparent encryption for the
@@ -1097,6 +1104,61 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<SalesOrder>().HasIndex(o => o.ClientId);
             modelBuilder.Entity<DeliveryChallan>().HasIndex(dc => dc.SalesOrderId);
             modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.SalesOrderItemId);
+
+            // ── Payments / Receipts (AR/AP subledger, GL-free) ─────────────────
+            // Payment header → Company (Restrict: a company's payment history
+            // can't be cascade-wiped). Direction + ChequeStatus persist as int.
+            // No Chart of Accounts here, so BankAccountId / allocation AccountId
+            // are plain FK-less columns (the operator picks a bank/cash name as
+            // free text).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .HasOne(p => p.Company).WithMany()
+                .HasForeignKey(p => p.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.Amount).HasPrecision(18, 2);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.ContactType).HasMaxLength(20);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.Method).HasMaxLength(30);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.BankAccountName).HasMaxLength(120);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.ChequeNumber).HasMaxLength(50);
+            // Unique numbering per (company, direction): receipts and payments
+            // each get their own gap-free sequence, and the loser of a concurrent
+            // create retries on the unique violation (NumberAllocationRetry).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .HasIndex(p => new { p.CompanyId, p.Direction, p.Number }).IsUnique();
+
+            // Allocation line → Payment (Cascade: lines die with their document).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasOne(a => a.Payment).WithMany(p => p.Allocations)
+                .HasForeignKey(a => a.PaymentId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // → Invoice / PurchaseBill (optional; Restrict so a settled document
+            // can't be hard-deleted out from under its allocations — and to avoid
+            // a multiple-cascade-path error via Company).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasOne(a => a.Invoice).WithMany()
+                .HasForeignKey(a => a.InvoiceId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasOne(a => a.PurchaseBill).WithMany()
+                .HasForeignKey(a => a.PurchaseBillId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .Property(a => a.Amount).HasPrecision(18, 2);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasIndex(a => a.InvoiceId);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasIndex(a => a.PurchaseBillId);
+
+            // AR/AP subledger columns on the settled documents (18,2 money).
+            modelBuilder.Entity<Invoice>().Property(i => i.AmountPaid).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(b => b.AmountPaid).HasPrecision(18, 2);
         }
 
     }

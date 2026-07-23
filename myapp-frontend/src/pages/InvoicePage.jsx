@@ -19,6 +19,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
+import PaymentStatusBadge from "../Components/PaymentStatusBadge";
 import { mergeTemplate } from "../utils/templateEngine";
 import { defaultBillTemplate, defaultTaxInvoiceTemplate } from "../utils/defaultTemplates";
 import { exportToPdf } from "../utils/exportUtils";
@@ -65,6 +66,8 @@ export default function InvoicePage({ mode = "invoices" }) {
   const { has } = usePermissions();
   const confirm = useConfirm();
   const canCreate = has("bills.manage.create");
+  // Gates the payment-status badge (AR receipts). No key → no badge, either mode.
+  const canViewPaymentStatus = has("accounting.paymentstatus.view");
   // Separate permission for the "Create Bill (No Challan)" flow — gates
   // the standalone create button. A role can be granted only this without
   // also gaining the regular create-from-challan flow, or vice-versa.
@@ -909,6 +912,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               isBillsMode={isBillsMode}
               isReturnsMode={isNotesMode}
               noteDocType={noteDocType}
+              showPaymentStatus={canViewPaymentStatus}
               perms={{
                 canPrint,
                 canFbrPreview,
@@ -990,6 +994,16 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdCancel size={14} color="#b71c1c" />
                         <span>Cancelled{inv.cancelReason ? ` — ${inv.cancelReason}` : ""}</span>
                       </div>
+                    )}
+                    {/* Payment status (AR) — gated by accounting.paymentstatus.view.
+                        Shown in BOTH Bills and Invoices modes; hidden on cancelled
+                        docs (their balance is moot) and on credit/debit notes. */}
+                    {canViewPaymentStatus && !inv.isCancelled && inv.documentType !== 9 && inv.documentType !== 10 && inv.paymentStatus && (
+                      <PaymentStatusBadge
+                        status={inv.paymentStatus}
+                        balanceDue={inv.balanceDue}
+                        daysOverdue={inv.daysOverdue}
+                      />
                     )}
                     {/* This document IS a credit/debit note — show what it adjusts. */}
                     {(inv.documentType === 9 || inv.documentType === 10) && (

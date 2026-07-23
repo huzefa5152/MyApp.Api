@@ -9,6 +9,7 @@ import ImportChallansPage from "./pages/ImportChallansPage";
 import InvoicePage from "./pages/InvoicePage";
 import SalesQuotePage from "./pages/SalesQuotePage";
 import SalesOrderPage from "./pages/SalesOrderPage";
+import PaymentsPage from "./pages/PaymentsPage";
 import CreditDebitNotePage from "./pages/CreditDebitNotePage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
 import PurchaseBillsPage from "./pages/PurchaseBillsPage";
@@ -73,6 +74,11 @@ export default function App() {
           <Route path="/challans/import" element={<ImportChallansPage />} />
           <Route path="/sales-quotes" element={<SalesQuotePage />} />
           <Route path="/sales-orders" element={<SalesOrderPage />} />
+          {/* Receipts (money in) / Payments (money out) — one component,
+              mounted twice with distinct keys so filter/search state doesn't
+              leak when switching between the two. */}
+          <Route path="/receipts" element={<PaymentsPage key="receipts" mode="receipts" />} />
+          <Route path="/payments" element={<PaymentsPage key="payments" mode="payments" />} />
           {/* Bills tab — pre-FBR data entry. No item-type column, no FBR
               bulk actions, but shows a per-row "Submitted to FBR" badge so
               the operator knows which bills are locked. */}

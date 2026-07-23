@@ -14,10 +14,12 @@ namespace MyApp.Api.Helpers
         {
             "Challan", "Bill", "TaxInvoice", "SalesQuote", "SalesOrder",
             "PurchaseBill", "GoodsReceipt", "DebitNote", "CreditNote",
-            // Receipt (money-in) is a template type now; the Receipt document +
-            // screen land in Phase 3 (Accounting), at which point its on-screen
-            // template selector is wired up.
-            "Receipt",
+            // Accounting vouchers. Receipt = money in (settles sales invoices),
+            // Payment = money out (settles purchase bills). Separate types so a
+            // payment voucher prints "Payment Voucher" (its own starters), not a
+            // mislabeled Receipt. Both bind the same PrintPaymentVoucherDto; the
+            // DTO's Direction distinguishes them.
+            "Receipt", "Payment",
         };
 
         /// <summary>Human-readable list for validation error messages.</summary>

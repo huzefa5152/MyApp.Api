@@ -259,6 +259,13 @@ endpoints_to_test = [
     ("GET",  "/api/fbr/scenarios/applicable/{cid}"),
     ("GET",  "/api/fbr/uom/{cid}"),
     ("GET",  "/api/printtemplates/company/{cid}"),
+    # Accounting — Receipts (money in) + Payments (money out). All four are
+    # [AuthorizeCompany]-gated companyId routes; a forbidden company 403s
+    # before the action runs (the by-invoice/by-bill dummy id is never read).
+    ("GET",  "/api/payments/receipts/company/{cid}/paged"),
+    ("GET",  "/api/payments/payments/company/{cid}/paged"),
+    ("GET",  "/api/payments/company/{cid}/by-invoice/1"),
+    ("GET",  "/api/payments/company/{cid}/by-bill/1"),
 ]
 for username, forbidden in forbidden_for.items():
     if not forbidden:

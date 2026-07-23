@@ -61,6 +61,14 @@ export const PERMISSION_SECTIONS = [
     ],
   },
   {
+    section: "Accounting",
+    modules: [
+      // Module string in PermissionCatalog.cs is "Accounting" — Receipts
+      // (money in) + Payments (money out), the AR/AP payment subledger.
+      { key: "Accounting" },
+    ],
+  },
+  {
     section: "Reports",
     modules: [
       // Module string in PermissionCatalog.cs is "Reports".

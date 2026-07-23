@@ -246,6 +246,7 @@ builder.Services.AddScoped<IMergeFieldRepository, MergeFieldRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<ISalesQuoteRepository, SalesQuoteRepository>();
 builder.Services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
+builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 
 // Register Services
 builder.Services.AddScoped<ICompanyService, CompanyService>();
@@ -271,6 +272,9 @@ builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 // IDeliveryChallanService (create-challan-from-order). No true DI cycle.
 builder.Services.AddScoped<ISalesQuoteService, SalesQuoteService>();
 builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
+// Receipts (money in) + Payments (money out) — AR/AP subledger. GL-free port:
+// no IPostingService dependency (master has no Chart of Accounts).
+builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<IFbrService, FbrService>();

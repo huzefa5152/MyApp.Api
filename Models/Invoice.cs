@@ -14,6 +14,14 @@ namespace MyApp.Api.Models
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }
 
+        // ── AR subledger (receipts) ──────────────────────────────────────
+        // Σ of non-cancelled receipt allocations against this invoice,
+        // reflowed by PaymentService. BalanceDue / payment status are derived
+        // at read time from (GrandTotal, AmountPaid, DueDate) — see
+        // PaymentStatusCalculator. DueDate is optional (net terms).
+        public decimal AmountPaid { get; set; }
+        public DateTime? DueDate { get; set; }
+
         // FBR Digital Invoicing
         public int? DocumentType { get; set; }
         public string? PaymentMode { get; set; }

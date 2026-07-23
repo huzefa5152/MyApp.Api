@@ -9,6 +9,9 @@ namespace MyApp.Api.Services.Interfaces
             string? search = null, int? supplierId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null);
         Task<PurchaseBillDto?> GetByIdAsync(int id);
+        /// <summary>Set/clear the bill's AP payment due date (drives the
+        /// Overdue / Coming-due status). Returns the updated bill or null.</summary>
+        Task<PurchaseBillDto?> SetDueDateAsync(int id, DateTime? dueDate);
         /// <summary>Flat merge-data payload for the PurchaseBill print templates.</summary>
         Task<PrintPurchaseBillDto?> GetPrintDataAsync(int id);
         Task<PurchaseBillDto> CreateAsync(CreatePurchaseBillDto dto);
