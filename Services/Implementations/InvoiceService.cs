@@ -761,36 +761,33 @@ namespace MyApp.Api.Services.Implementations
                         Items = itemsForAttempt
                     };
 
-                    var created = await _invoiceRepo.CreateAsync(invoice);
-
-                    // Transition challans to Invoiced + apply any PO date updates.
-                    // SURGICAL: the challan is already tracked, so mark ONLY its
-                    // own changed columns. Do NOT use _challanRepo.UpdateAsync
-                    // (DbSet.Update(dc)) here — that marks the entire loaded graph
-                    // (Client, Company, Invoice, DeliveryItems, ItemTypes,
-                    // DuplicatedFrom) Modified and fires a full-column UPDATE for
-                    // every one of them. That cascade is wasteful and was throwing
-                    // a DbUpdateException on the challan transition for challans
-                    // whose shared Client/Company rows don't round-trip a
-                    // full-column rewrite cleanly (prod #828, 2026-07-24).
+                    // 2026-07-24: insert the invoice AND link the challans (AND
+                    // flush the company number bump) in ONE SaveChanges.
+                    // Prod (SQL Server 2025 + MARS) does NOT reliably let a SECOND
+                    // SaveChanges see rows a FIRST SaveChanges inserted inside the
+                    // same user transaction, so the previous "insert invoice, then
+                    // UPDATE DeliveryChallans.InvoiceId in a separate save" failed
+                    // the FK — the challan UPDATE couldn't see the just-inserted
+                    // invoice (FK_DeliveryChallans_Invoices_InvoiceId, SQL 547;
+                    // prod #828/#829/#830). Linking each challan to the invoice via
+                    // its navigation and saving ONCE lets EF order INSERT(invoice →
+                    // new key) → UPDATE(challan FK) itself, with no cross-save
+                    // dependency. Setting properties on the already-tracked challans
+                    // marks only those columns (no full-graph DbSet.Update cascade);
+                    // company (CurrentInvoiceNumber) and any ItemType usage bump are
+                    // already tracked-Modified and flush in this same save.
+                    _context.Invoices.Add(invoice);
                     foreach (var dc in challans)
                     {
+                        if (_context.Entry(dc).State == EntityState.Detached)
+                            _context.Attach(dc);   // only after a rolled-back retry cleared the tracker
                         if (dto.PoDateUpdates.TryGetValue(dc.Id, out var poDate))
                             dc.PoDate = poDate;
                         dc.Status = "Invoiced";
-                        dc.InvoiceId = created.Id;
-
-                        if (_context.Entry(dc).State == EntityState.Detached)
-                            _context.Attach(dc);   // only after a rolled-back retry cleared the tracker
-                        var dcEntry = _context.Entry(dc);
-                        dcEntry.Property(x => x.Status).IsModified = true;
-                        dcEntry.Property(x => x.InvoiceId).IsModified = true;
-                        dcEntry.Property(x => x.PoDate).IsModified = true;
+                        dc.Invoice = invoice;      // nav link → EF fills InvoiceId with the new key in THIS save
                     }
                     await _context.SaveChangesAsync();
-
-                    // Update company invoice number
-                    await _companyRepo.UpdateAsync(company);
+                    var created = invoice;         // Id populated by the save above
 
                     // Auto-save new item descriptions for future use
                     var newDescs = dto.Items
