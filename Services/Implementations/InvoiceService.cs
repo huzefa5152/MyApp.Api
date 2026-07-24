@@ -789,23 +789,37 @@ namespace MyApp.Api.Services.Implementations
                     await _context.SaveChangesAsync();
                     var created = invoice;         // Id populated by the save above
 
-                    // Auto-save new item descriptions for future use
+                    // Auto-save new item descriptions for autocomplete. The unique
+                    // index IX_ItemDescriptions_Name uses a CI + trailing-space-
+                    // insensitive SQL collation, so we MUST dedup the same way
+                    // (Trim + OrdinalIgnoreCase). A plain C# Contains let an
+                    // existing row differing only by trailing space/case (e.g.
+                    // stored "…Klinger " vs typed "…Klinger") slip through: we
+                    // INSERTed a "duplicate", hit SQL 2601, and the outer
+                    // number-allocation retry loop mis-read that as an invoice-
+                    // number collision and failed the whole bill with "Could not
+                    // allocate a unique invoice number." (prod 2026-07-24)
                     var newDescs = dto.Items
                         .Where(i => !string.IsNullOrWhiteSpace(i.Description))
-                        .Select(i => i.Description!)
-                        .Distinct()
+                        .Select(i => i.Description!.Trim())
+                        .Where(d => d.Length > 0)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToList();
                     if (newDescs.Any())
                     {
-                        var existing = await _context.ItemDescriptions
-                            .Where(d => newDescs.Contains(d.Name))
-                            .Select(d => d.Name)
-                            .ToListAsync();
+                        var existing = (await _context.ItemDescriptions
+                                .Where(d => newDescs.Contains(d.Name))
+                                .Select(d => d.Name)
+                                .ToListAsync())
+                            .Select(n => n.Trim())
+                            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                        var addedDesc = false;
                         foreach (var desc in newDescs.Where(d => !existing.Contains(d)))
                         {
                             _context.ItemDescriptions.Add(new ItemDescription { Name = desc });
+                            addedDesc = true;
                         }
-                        await _context.SaveChangesAsync();
+                        if (addedDesc) await _context.SaveChangesAsync();
                     }
 
                     // 2026-05-12: stock-out on save (create path).
@@ -1111,22 +1125,33 @@ namespace MyApp.Api.Services.Implementations
                     var created = await _invoiceRepo.CreateAsync(invoice);
                     await _companyRepo.UpdateAsync(company);
 
-                    // Auto-save typed item descriptions for future autocomplete —
-                    // mirrors CreateAsync.
+                    // Auto-save typed item descriptions for autocomplete — mirrors
+                    // CreateAsync. Dedup Trim + OrdinalIgnoreCase to match the
+                    // CI/trailing-space-insensitive IX_ItemDescriptions_Name index,
+                    // else an existing "…name " vs typed "…name" slips past C#
+                    // Contains → INSERT dup → 2601 → the number-retry loop mis-reads
+                    // it and fails the bill with "Could not allocate…" (prod 2026-07-24).
                     var newDescs = dto.Items
                         .Where(i => !string.IsNullOrWhiteSpace(i.Description))
-                        .Select(i => i.Description!)
-                        .Distinct()
+                        .Select(i => i.Description!.Trim())
+                        .Where(d => d.Length > 0)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToList();
                     if (newDescs.Count > 0)
                     {
-                        var existing = await _context.ItemDescriptions
-                            .Where(d => newDescs.Contains(d.Name))
-                            .Select(d => d.Name)
-                            .ToListAsync();
+                        var existing = (await _context.ItemDescriptions
+                                .Where(d => newDescs.Contains(d.Name))
+                                .Select(d => d.Name)
+                                .ToListAsync())
+                            .Select(n => n.Trim())
+                            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                        var addedDesc = false;
                         foreach (var desc in newDescs.Where(d => !existing.Contains(d)))
+                        {
                             _context.ItemDescriptions.Add(new ItemDescription { Name = desc });
-                        await _context.SaveChangesAsync();
+                            addedDesc = true;
+                        }
+                        if (addedDesc) await _context.SaveChangesAsync();
                     }
 
                     // 2026-05-12: stock-out on save (standalone create path).
