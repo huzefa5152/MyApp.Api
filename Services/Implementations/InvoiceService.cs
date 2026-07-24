@@ -763,15 +763,31 @@ namespace MyApp.Api.Services.Implementations
 
                     var created = await _invoiceRepo.CreateAsync(invoice);
 
-                    // Transition challans to Invoiced + apply any PO date updates
+                    // Transition challans to Invoiced + apply any PO date updates.
+                    // SURGICAL: the challan is already tracked, so mark ONLY its
+                    // own changed columns. Do NOT use _challanRepo.UpdateAsync
+                    // (DbSet.Update(dc)) here — that marks the entire loaded graph
+                    // (Client, Company, Invoice, DeliveryItems, ItemTypes,
+                    // DuplicatedFrom) Modified and fires a full-column UPDATE for
+                    // every one of them. That cascade is wasteful and was throwing
+                    // a DbUpdateException on the challan transition for challans
+                    // whose shared Client/Company rows don't round-trip a
+                    // full-column rewrite cleanly (prod #828, 2026-07-24).
                     foreach (var dc in challans)
                     {
                         if (dto.PoDateUpdates.TryGetValue(dc.Id, out var poDate))
                             dc.PoDate = poDate;
                         dc.Status = "Invoiced";
                         dc.InvoiceId = created.Id;
-                        await _challanRepo.UpdateAsync(dc);
+
+                        if (_context.Entry(dc).State == EntityState.Detached)
+                            _context.Attach(dc);   // only after a rolled-back retry cleared the tracker
+                        var dcEntry = _context.Entry(dc);
+                        dcEntry.Property(x => x.Status).IsModified = true;
+                        dcEntry.Property(x => x.InvoiceId).IsModified = true;
+                        dcEntry.Property(x => x.PoDate).IsModified = true;
                     }
+                    await _context.SaveChangesAsync();
 
                     // Update company invoice number
                     await _companyRepo.UpdateAsync(company);
