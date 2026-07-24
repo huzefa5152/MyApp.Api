@@ -434,6 +434,27 @@ namespace MyApp.Api.Services.Implementations
             return dto;
         }
 
+        /// <summary>
+        /// Serialize per-company invoice-number allocation. All three create
+        /// paths (challan bill, standalone bill, credit/debit note) draw the
+        /// next number from the same per-company MAX(InvoiceNumber) sequence,
+        /// so they share ONE application-lock resource and run one-at-a-time
+        /// per company — removing the MAX+1 read/INSERT race that intermittently
+        /// surfaced as SQL 2601 (duplicate key), 1205 (deadlock), or an EF
+        /// "affected 0 rows" concurrency error (2026-07-24). Exclusive and
+        /// transaction-owned, so it auto-releases on commit/rollback; different
+        /// companies use different resources and never block each other. Must
+        /// be called inside an open transaction. A negative return value is a
+        /// lock-acquire timeout, surfaced as an exception rather than letting
+        /// an unserialized create proceed.
+        /// </summary>
+        private Task AcquireInvoiceNumberLockAsync(int companyId) =>
+            _context.Database.ExecuteSqlRawAsync(
+                "DECLARE @invAllocLock int; " +
+                "EXEC @invAllocLock = sp_getapplock @Resource = {0}, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 15000; " +
+                "IF @invAllocLock < 0 THROW 51000, 'Could not acquire invoice-number allocation lock', 1;",
+                $"invoice-alloc-{companyId}");
+
         public async Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto)
         {
             var company = await _companyRepo.GetByIdAsync(dto.CompanyId);
@@ -665,83 +686,157 @@ namespace MyApp.Api.Services.Implementations
             // new UNIQUE (CompanyId, InvoiceNumber) index now blocks the
             // second writer with a SQL 2601/2627; the retry recomputes
             // MAX(InvoiceNumber)+1 from a fresh read and tries again.
+            //
+            // 2026-07-24: the retry alone was not enough. Two bills created at
+            // the same instant for one company (operator double-click / client
+            // auto-retry) raced between the MAX(InvoiceNumber) read and the
+            // INSERT and surfaced intermittently as SQL 2601 (duplicate key),
+            // 1205 (deadlock), 544 (explicit IDENTITY_INSERT from a reused
+            // entity graph) or an EF "affected 0 rows" DbUpdateConcurrencyException
+            // — none of which the 2601/2627-only retry recovered, so the
+            // operator got a 500 "cannot create bill". Fix has two parts:
+            //   1. Serialize the allocation + insert per company with a
+            //      transaction-scoped sp_getapplock so the critical section
+            //      runs one-at-a-time per tenant (removes 2601 / 1205 races).
+            //   2. Build the invoice lines FRESH per attempt with no EF
+            //      navigation references, so a retry can never drag the
+            //      tracked challan graph into the invoice INSERT (removes
+            //      544 / the affected-0 concurrency error).
             const int maxAttempts = NumberAllocationRetry.DefaultMaxAttempts;
             DbUpdateException? lastConflict = null;
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                // Use MAX(InvoiceNumber) so a deleted trailing number is reused on the next
-                // create (no gaps after deleting the last bill). Falls back to StartingInvoiceNumber
-                // when the company has no invoices yet. IsDemo bills live in their
-                // own 900000+ range and must not influence the regular sequence.
-                int maxExistingInvoice = await _context.Invoices
-                    .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo)
-                    .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
-
-                int nextInvoiceNumber = maxExistingInvoice > 0
-                    ? maxExistingInvoice + 1
-                    : company.StartingInvoiceNumber;
-                company.CurrentInvoiceNumber = nextInvoiceNumber;
-
-                var invoice = new Invoice
-                {
-                    InvoiceNumber = nextInvoiceNumber,
-                    Date = dto.Date,
-                    CompanyId = dto.CompanyId,
-                    ClientId = dto.ClientId,
-                    Subtotal = subtotal,
-                    GSTRate = dto.GSTRate,
-                    GSTAmount = gstAmount,
-                    GrandTotal = grandTotal,
-                    AmountInWords = NumberToWordsConverter.Convert(grandTotal),
-                    PaymentTerms = dto.PaymentTerms,
-                    DocumentType = effectiveDocType,
-                    PaymentMode = effectivePaymentMode,
-                    // Optional bill-time PO override (blank → the DTO derives the
-                    // PO from the linked challans instead). FBR ignores the PO.
-                    PoNumber = string.IsNullOrWhiteSpace(dto.PoNumber) ? null : dto.PoNumber.Trim(),
-                    PoDate = dto.PoDate,
-                    FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
-                        ? nextInvoiceNumber.ToString()
-                        : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
-                    Items = invoiceItems
-                };
-
                 // Wrap invoice creation + challan transitions + company update in a single transaction
+                int nextInvoiceNumber = 0;
                 await using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
-                    var created = await _invoiceRepo.CreateAsync(invoice);
+                    // Serialize same-company allocation before reading MAX (see helper).
+                    await AcquireInvoiceNumberLockAsync(dto.CompanyId);
 
-                    // Transition challans to Invoiced + apply any PO date updates
+                    // Use MAX(InvoiceNumber) so a deleted trailing number is reused on the next
+                    // create (no gaps after deleting the last bill). Falls back to StartingInvoiceNumber
+                    // when the company has no invoices yet. IsDemo bills live in their
+                    // own 900000+ range and must not influence the regular sequence.
+                    // Read under the app-lock so the value can't be stale.
+                    int maxExistingInvoice = await _context.Invoices
+                        .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo)
+                        .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+
+                    nextInvoiceNumber = maxExistingInvoice > 0
+                        ? maxExistingInvoice + 1
+                        : company.StartingInvoiceNumber;
+                    company.CurrentInvoiceNumber = nextInvoiceNumber;
+
+                    // Fresh, navigation-free line clones for THIS attempt. The
+                    // canonical invoiceItems were built once above; reusing the
+                    // same instances let EF relationship-fixup wire each line to
+                    // the tracked DeliveryItem/ItemType (and through them the
+                    // DeliveryChallan + Company). On a rolled-back-then-retried
+                    // attempt that graph could be re-inserted with explicit
+                    // identity values (SQL 544) or trigger a phantom UPDATE (the
+                    // affected-0 error). Copying scalars only guarantees the
+                    // invoice INSERT touches Invoices/InvoiceItems and nothing else.
+                    var itemsForAttempt = invoiceItems.Select(src => new InvoiceItem
+                    {
+                        DeliveryItemId = src.DeliveryItemId,
+                        ItemTypeId = src.ItemTypeId,
+                        ItemTypeName = src.ItemTypeName,
+                        Description = src.Description,
+                        Quantity = src.Quantity,
+                        UOM = src.UOM,
+                        UnitPrice = src.UnitPrice,
+                        LineTotal = src.LineTotal,
+                        HSCode = src.HSCode,
+                        FbrUOMId = src.FbrUOMId,
+                        SaleType = src.SaleType,
+                        RateId = src.RateId,
+                        FixedNotifiedValueOrRetailPrice = src.FixedNotifiedValueOrRetailPrice
+                    }).ToList();
+
+                    var invoice = new Invoice
+                    {
+                        InvoiceNumber = nextInvoiceNumber,
+                        Date = dto.Date,
+                        CompanyId = dto.CompanyId,
+                        ClientId = dto.ClientId,
+                        Subtotal = subtotal,
+                        GSTRate = dto.GSTRate,
+                        GSTAmount = gstAmount,
+                        GrandTotal = grandTotal,
+                        AmountInWords = NumberToWordsConverter.Convert(grandTotal),
+                        PaymentTerms = dto.PaymentTerms,
+                        DocumentType = effectiveDocType,
+                        PaymentMode = effectivePaymentMode,
+                        // Optional bill-time PO override (blank → the DTO derives the
+                        // PO from the linked challans instead). FBR ignores the PO.
+                        PoNumber = string.IsNullOrWhiteSpace(dto.PoNumber) ? null : dto.PoNumber.Trim(),
+                        PoDate = dto.PoDate,
+                        FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
+                            ? nextInvoiceNumber.ToString()
+                            : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
+                        Items = itemsForAttempt
+                    };
+
+                    // 2026-07-24: insert the invoice AND link the challans (AND
+                    // flush the company number bump) in ONE SaveChanges.
+                    // Prod (SQL Server 2025 + MARS) does NOT reliably let a SECOND
+                    // SaveChanges see rows a FIRST SaveChanges inserted inside the
+                    // same user transaction, so the previous "insert invoice, then
+                    // UPDATE DeliveryChallans.InvoiceId in a separate save" failed
+                    // the FK — the challan UPDATE couldn't see the just-inserted
+                    // invoice (FK_DeliveryChallans_Invoices_InvoiceId, SQL 547;
+                    // prod #828/#829/#830). Linking each challan to the invoice via
+                    // its navigation and saving ONCE lets EF order INSERT(invoice →
+                    // new key) → UPDATE(challan FK) itself, with no cross-save
+                    // dependency. Setting properties on the already-tracked challans
+                    // marks only those columns (no full-graph DbSet.Update cascade);
+                    // company (CurrentInvoiceNumber) and any ItemType usage bump are
+                    // already tracked-Modified and flush in this same save.
+                    _context.Invoices.Add(invoice);
                     foreach (var dc in challans)
                     {
+                        if (_context.Entry(dc).State == EntityState.Detached)
+                            _context.Attach(dc);   // only after a rolled-back retry cleared the tracker
                         if (dto.PoDateUpdates.TryGetValue(dc.Id, out var poDate))
                             dc.PoDate = poDate;
                         dc.Status = "Invoiced";
-                        dc.InvoiceId = created.Id;
-                        await _challanRepo.UpdateAsync(dc);
+                        dc.Invoice = invoice;      // nav link → EF fills InvoiceId with the new key in THIS save
                     }
+                    await _context.SaveChangesAsync();
+                    var created = invoice;         // Id populated by the save above
 
-                    // Update company invoice number
-                    await _companyRepo.UpdateAsync(company);
-
-                    // Auto-save new item descriptions for future use
+                    // Auto-save new item descriptions for autocomplete. The unique
+                    // index IX_ItemDescriptions_Name uses a CI + trailing-space-
+                    // insensitive SQL collation, so we MUST dedup the same way
+                    // (Trim + OrdinalIgnoreCase). A plain C# Contains let an
+                    // existing row differing only by trailing space/case (e.g.
+                    // stored "…Klinger " vs typed "…Klinger") slip through: we
+                    // INSERTed a "duplicate", hit SQL 2601, and the outer
+                    // number-allocation retry loop mis-read that as an invoice-
+                    // number collision and failed the whole bill with "Could not
+                    // allocate a unique invoice number." (prod 2026-07-24)
                     var newDescs = dto.Items
                         .Where(i => !string.IsNullOrWhiteSpace(i.Description))
-                        .Select(i => i.Description!)
-                        .Distinct()
+                        .Select(i => i.Description!.Trim())
+                        .Where(d => d.Length > 0)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToList();
                     if (newDescs.Any())
                     {
-                        var existing = await _context.ItemDescriptions
-                            .Where(d => newDescs.Contains(d.Name))
-                            .Select(d => d.Name)
-                            .ToListAsync();
+                        var existing = (await _context.ItemDescriptions
+                                .Where(d => newDescs.Contains(d.Name))
+                                .Select(d => d.Name)
+                                .ToListAsync())
+                            .Select(n => n.Trim())
+                            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                        var addedDesc = false;
                         foreach (var desc in newDescs.Where(d => !existing.Contains(d)))
                         {
                             _context.ItemDescriptions.Add(new ItemDescription { Name = desc });
+                            addedDesc = true;
                         }
-                        await _context.SaveChangesAsync();
+                        if (addedDesc) await _context.SaveChangesAsync();
                     }
 
                     // 2026-05-12: stock-out on save (create path).
@@ -762,11 +857,11 @@ namespace MyApp.Api.Services.Implementations
                         "Invoice number {Number} for company {CompanyId} collided with a concurrent create; retrying (attempt {Attempt}).",
                         nextInvoiceNumber, dto.CompanyId, attempt);
                     await transaction.RollbackAsync();
-                    foreach (var entry in _context.ChangeTracker.Entries().ToList())
-                    {
-                        if (entry.State != EntityState.Unchanged)
-                            entry.State = EntityState.Detached;
-                    }
+                    // Full reset so no rolled-back tracked entity (invoice,
+                    // items, company, or the challan graph re-attached during
+                    // the transition step) leaks into the next attempt and gets
+                    // re-inserted with an explicit key or phantom-updated.
+                    _context.ChangeTracker.Clear();
                     if (attempt < maxAttempts)
                         await Task.Delay(10 * attempt);
                     continue;
@@ -987,65 +1082,97 @@ namespace MyApp.Api.Services.Implementations
             DbUpdateException? lastConflict = null;
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                // Share the regular numbering sequence — standalone bills are
-                // real bills, not demos. MAX(InvoiceNumber) excluding IsDemo
-                // matches CreateAsync.
-                int maxExistingInvoice = await _context.Invoices
-                    .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo)
-                    .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
-
-                int nextInvoiceNumber = maxExistingInvoice > 0
-                    ? maxExistingInvoice + 1
-                    : company.StartingInvoiceNumber;
-                company.CurrentInvoiceNumber = nextInvoiceNumber;
-
-                var invoice = new Invoice
-                {
-                    InvoiceNumber = nextInvoiceNumber,
-                    Date = dto.Date,
-                    CompanyId = dto.CompanyId,
-                    ClientId = dto.ClientId,
-                    Subtotal = subtotal,
-                    GSTRate = dto.GSTRate,
-                    GSTAmount = gstAmount,
-                    GrandTotal = grandTotal,
-                    AmountInWords = NumberToWordsConverter.Convert(grandTotal),
-                    PaymentTerms = finalPaymentTerms,
-                    DocumentType = effectiveDocType,
-                    PaymentMode = effectivePaymentMode,
-                    // A standalone bill has no challan to carry the PO, so store
-                    // it on the invoice when the operator sets one at bill time
-                    // (e.g. billing directly from a Sales Order).
-                    PoNumber = string.IsNullOrWhiteSpace(dto.PoNumber) ? null : dto.PoNumber.Trim(),
-                    PoDate = dto.PoDate,
-                    FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
-                        ? nextInvoiceNumber.ToString()
-                        : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
-                    Items = invoiceItems
-                };
-
+                int nextInvoiceNumber = 0;
                 await using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
+                    // Serialize same-company allocation before reading MAX (see helper).
+                    await AcquireInvoiceNumberLockAsync(dto.CompanyId);
+
+                    // Share the regular numbering sequence — standalone bills are
+                    // real bills, not demos. MAX(InvoiceNumber) excluding IsDemo
+                    // matches CreateAsync.
+                    int maxExistingInvoice = await _context.Invoices
+                        .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo)
+                        .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+
+                    nextInvoiceNumber = maxExistingInvoice > 0
+                        ? maxExistingInvoice + 1
+                        : company.StartingInvoiceNumber;
+                    company.CurrentInvoiceNumber = nextInvoiceNumber;
+
+                    // Fresh, navigation-free line clones per attempt (see CreateAsync).
+                    var itemsForAttempt = invoiceItems.Select(src => new InvoiceItem
+                    {
+                        DeliveryItemId = src.DeliveryItemId,
+                        ItemTypeId = src.ItemTypeId,
+                        ItemTypeName = src.ItemTypeName,
+                        Description = src.Description,
+                        Quantity = src.Quantity,
+                        UOM = src.UOM,
+                        UnitPrice = src.UnitPrice,
+                        LineTotal = src.LineTotal,
+                        HSCode = src.HSCode,
+                        FbrUOMId = src.FbrUOMId,
+                        SaleType = src.SaleType,
+                        RateId = src.RateId,
+                        FixedNotifiedValueOrRetailPrice = src.FixedNotifiedValueOrRetailPrice
+                    }).ToList();
+
+                    var invoice = new Invoice
+                    {
+                        InvoiceNumber = nextInvoiceNumber,
+                        Date = dto.Date,
+                        CompanyId = dto.CompanyId,
+                        ClientId = dto.ClientId,
+                        Subtotal = subtotal,
+                        GSTRate = dto.GSTRate,
+                        GSTAmount = gstAmount,
+                        GrandTotal = grandTotal,
+                        AmountInWords = NumberToWordsConverter.Convert(grandTotal),
+                        PaymentTerms = finalPaymentTerms,
+                        DocumentType = effectiveDocType,
+                        PaymentMode = effectivePaymentMode,
+                        // Standalone bill has no challan to carry the PO — store it
+                        // on the invoice when set at bill time (e.g. from a Sales Order).
+                        PoNumber = string.IsNullOrWhiteSpace(dto.PoNumber) ? null : dto.PoNumber.Trim(),
+                        PoDate = dto.PoDate,
+                        FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
+                            ? nextInvoiceNumber.ToString()
+                            : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
+                        Items = itemsForAttempt
+                    };
+
                     var created = await _invoiceRepo.CreateAsync(invoice);
                     await _companyRepo.UpdateAsync(company);
 
-                    // Auto-save typed item descriptions for future autocomplete —
-                    // mirrors CreateAsync.
+                    // Auto-save typed item descriptions for autocomplete — mirrors
+                    // CreateAsync. Dedup Trim + OrdinalIgnoreCase to match the
+                    // CI/trailing-space-insensitive IX_ItemDescriptions_Name index,
+                    // else an existing "…name " vs typed "…name" slips past C#
+                    // Contains → INSERT dup → 2601 → the number-retry loop mis-reads
+                    // it and fails the bill with "Could not allocate…" (prod 2026-07-24).
                     var newDescs = dto.Items
                         .Where(i => !string.IsNullOrWhiteSpace(i.Description))
-                        .Select(i => i.Description!)
-                        .Distinct()
+                        .Select(i => i.Description!.Trim())
+                        .Where(d => d.Length > 0)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToList();
                     if (newDescs.Count > 0)
                     {
-                        var existing = await _context.ItemDescriptions
-                            .Where(d => newDescs.Contains(d.Name))
-                            .Select(d => d.Name)
-                            .ToListAsync();
+                        var existing = (await _context.ItemDescriptions
+                                .Where(d => newDescs.Contains(d.Name))
+                                .Select(d => d.Name)
+                                .ToListAsync())
+                            .Select(n => n.Trim())
+                            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                        var addedDesc = false;
                         foreach (var desc in newDescs.Where(d => !existing.Contains(d)))
+                        {
                             _context.ItemDescriptions.Add(new ItemDescription { Name = desc });
-                        await _context.SaveChangesAsync();
+                            addedDesc = true;
+                        }
+                        if (addedDesc) await _context.SaveChangesAsync();
                     }
 
                     // 2026-05-12: stock-out on save (standalone create path).
@@ -1062,11 +1189,8 @@ namespace MyApp.Api.Services.Implementations
                         "Standalone invoice number {Number} for company {CompanyId} collided with a concurrent create; retrying (attempt {Attempt}).",
                         nextInvoiceNumber, dto.CompanyId, attempt);
                     await transaction.RollbackAsync();
-                    foreach (var entry in _context.ChangeTracker.Entries().ToList())
-                    {
-                        if (entry.State != EntityState.Unchanged)
-                            entry.State = EntityState.Detached;
-                    }
+                    // Full reset — no rolled-back tracked entity leaks into the next attempt.
+                    _context.ChangeTracker.Clear();
                     if (attempt < maxAttempts)
                         await Task.Delay(10 * attempt);
                     continue;
@@ -2307,64 +2431,68 @@ namespace MyApp.Api.Services.Implementations
             const int maxAttempts = NumberAllocationRetry.DefaultMaxAttempts;
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                // 2026-07-02: each note TYPE runs its own per-company
-                // sequence (Credit Note #1…, Debit Note #1…) — reversing
-                // bill #3821 must NOT consume sale-invoice number #3822.
-                // Uniqueness is enforced by the (CompanyId, NoteKind,
-                // InvoiceNumber) index, so Credit Note #1, Debit Note #1
-                // and sale bill #1 never collide.
-                int maxExistingNote = await _context.Invoices
-                    .Where(i => i.CompanyId == original.CompanyId && !i.IsDemo
-                             && i.DocumentType == docType)
-                    .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
-                var startingNumber = docType == 10
-                    ? (company.StartingCreditNoteNumber > 0 ? company.StartingCreditNoteNumber : 1)
-                    : (company.StartingDebitNoteNumber > 0 ? company.StartingDebitNoteNumber : 1);
-                int nextInvoiceNumber = maxExistingNote > 0 ? maxExistingNote + 1 : startingNumber;
-                if (docType == 10) company.CurrentCreditNoteNumber = nextInvoiceNumber;
-                else company.CurrentDebitNoteNumber = nextInvoiceNumber;
-
-                // Fresh line entities each attempt (a rolled-back attempt detaches them).
-                var attemptItems = noteItems
-                    .Select(i => BuildLine(
-                        new InvoiceItem { Id = 0, ItemTypeId = i.ItemTypeId, ItemTypeName = i.ItemTypeName,
-                            Description = i.Description, Quantity = i.Quantity, UOM = i.UOM, UnitPrice = i.UnitPrice,
-                            LineTotal = i.LineTotal, HSCode = i.HSCode, FbrUOMId = i.FbrUOMId, SaleType = i.SaleType,
-                            RateId = i.RateId, FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
-                            SroScheduleNo = i.SroScheduleNo, SroItemSerialNo = i.SroItemSerialNo },
-                        i.Quantity, i.UnitPrice, i.LineTotal))
-                    .ToList();
-
-                var note = new Invoice
-                {
-                    InvoiceNumber = nextInvoiceNumber,
-                    Date          = noteDate,
-                    CompanyId     = original.CompanyId,
-                    ClientId      = original.ClientId,
-                    Subtotal      = subtotal,
-                    GSTRate       = gstRate,
-                    GSTAmount     = gstAmount,
-                    GrandTotal    = grandTotal,
-                    AmountInWords = NumberToWordsConverter.Convert(grandTotal),
-                    PaymentTerms  = original.PaymentTerms,   // carries [SNxxx] scenario tag
-                    DocumentType  = docType,
-                    PaymentMode   = original.PaymentMode,
-                    OriginalInvoiceId     = original.Id,
-                    OriginalInvoiceRefIRN = original.FbrIRN,
-                    NoteReason            = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(),
-                    NoteReasonRemarks     = string.IsNullOrWhiteSpace(remarks) ? null : remarks.Trim(),
-                    NoteAffectsStock      = affectsStock,
-                    // "CN-"/"DN-" marks the per-type note sequence so the
-                    // display number can never be read as a sale-invoice number.
-                    FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
-                        ? $"{(docType == 10 ? "CN" : "DN")}-{nextInvoiceNumber}"
-                        : $"{company.InvoiceNumberPrefix}{(docType == 10 ? "CN" : "DN")}-{nextInvoiceNumber}",
-                    Items = attemptItems,
-                };
-
+                int nextInvoiceNumber = 0;
                 await using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
+                    // Serialize same-company allocation before reading MAX (see helper).
+                    await AcquireInvoiceNumberLockAsync(original.CompanyId);
+
+                    // 2026-07-02: each note TYPE runs its own per-company
+                    // sequence (Credit Note #1…, Debit Note #1…) — reversing
+                    // bill #3821 must NOT consume sale-invoice number #3822.
+                    // Uniqueness is enforced by the (CompanyId, NoteKind,
+                    // InvoiceNumber) index, so Credit Note #1, Debit Note #1
+                    // and sale bill #1 never collide.
+                    int maxExistingNote = await _context.Invoices
+                        .Where(i => i.CompanyId == original.CompanyId && !i.IsDemo
+                                 && i.DocumentType == docType)
+                        .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+                    var startingNumber = docType == 10
+                        ? (company.StartingCreditNoteNumber > 0 ? company.StartingCreditNoteNumber : 1)
+                        : (company.StartingDebitNoteNumber > 0 ? company.StartingDebitNoteNumber : 1);
+                    nextInvoiceNumber = maxExistingNote > 0 ? maxExistingNote + 1 : startingNumber;
+                    if (docType == 10) company.CurrentCreditNoteNumber = nextInvoiceNumber;
+                    else company.CurrentDebitNoteNumber = nextInvoiceNumber;
+
+                    // Fresh line entities each attempt (a rolled-back attempt detaches them).
+                    var attemptItems = noteItems
+                        .Select(i => BuildLine(
+                            new InvoiceItem { Id = 0, ItemTypeId = i.ItemTypeId, ItemTypeName = i.ItemTypeName,
+                                Description = i.Description, Quantity = i.Quantity, UOM = i.UOM, UnitPrice = i.UnitPrice,
+                                LineTotal = i.LineTotal, HSCode = i.HSCode, FbrUOMId = i.FbrUOMId, SaleType = i.SaleType,
+                                RateId = i.RateId, FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
+                                SroScheduleNo = i.SroScheduleNo, SroItemSerialNo = i.SroItemSerialNo },
+                            i.Quantity, i.UnitPrice, i.LineTotal))
+                        .ToList();
+
+                    var note = new Invoice
+                    {
+                        InvoiceNumber = nextInvoiceNumber,
+                        Date          = noteDate,
+                        CompanyId     = original.CompanyId,
+                        ClientId      = original.ClientId,
+                        Subtotal      = subtotal,
+                        GSTRate       = gstRate,
+                        GSTAmount     = gstAmount,
+                        GrandTotal    = grandTotal,
+                        AmountInWords = NumberToWordsConverter.Convert(grandTotal),
+                        PaymentTerms  = original.PaymentTerms,   // carries [SNxxx] scenario tag
+                        DocumentType  = docType,
+                        PaymentMode   = original.PaymentMode,
+                        OriginalInvoiceId     = original.Id,
+                        OriginalInvoiceRefIRN = original.FbrIRN,
+                        NoteReason            = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(),
+                        NoteReasonRemarks     = string.IsNullOrWhiteSpace(remarks) ? null : remarks.Trim(),
+                        NoteAffectsStock      = affectsStock,
+                        // "CN-"/"DN-" marks the per-type note sequence so the
+                        // display number can never be read as a sale-invoice number.
+                        FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
+                            ? $"{(docType == 10 ? "CN" : "DN")}-{nextInvoiceNumber}"
+                            : $"{company.InvoiceNumberPrefix}{(docType == 10 ? "CN" : "DN")}-{nextInvoiceNumber}",
+                        Items = attemptItems,
+                    };
+
                     var created = await _invoiceRepo.CreateAsync(note);
                     await _companyRepo.UpdateAsync(company);
 
@@ -2400,9 +2528,8 @@ namespace MyApp.Api.Services.Implementations
                         "Note number {Number} for company {CompanyId} collided; retrying (attempt {Attempt}).",
                         nextInvoiceNumber, original.CompanyId, attempt);
                     await transaction.RollbackAsync();
-                    foreach (var entry in _context.ChangeTracker.Entries().ToList())
-                        if (entry.State != EntityState.Unchanged)
-                            entry.State = EntityState.Detached;
+                    // Full reset — no rolled-back tracked entity leaks into the next attempt.
+                    _context.ChangeTracker.Clear();
                     if (attempt < maxAttempts)
                         await Task.Delay(10 * attempt);
                     continue;

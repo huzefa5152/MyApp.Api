@@ -205,6 +205,17 @@ namespace MyApp.Api.Middleware
                     context.User.Identity?.Name ?? "anonymous");
             }
 
+            // Flatten the inner-exception chain into the audit trail. For a
+            // DbUpdateException the outer message is generic ("see the inner
+            // exception for details"); the real cause — SQL error number,
+            // violated constraint, offending column — lives in the inner
+            // SqlException. Capturing it here makes an operator 500 diagnosable
+            // straight from the audit log, no repro needed.
+            var messageChain = ex.Message;
+            for (var inner = ex.InnerException; inner != null; inner = inner.InnerException)
+                messageChain += $"  ||  {inner.GetType().Name}: {inner.Message}";
+            if (messageChain.Length > 3000) messageChain = messageChain[..3000] + "…";
+
             // Build audit log entry
             var auditLog = new AuditLog
             {
@@ -216,8 +227,11 @@ namespace MyApp.Api.Middleware
                 QueryString = context.Request.QueryString.ToString(),
                 StatusCode = statusCode,
                 ExceptionType = ex.GetType().Name,
-                Message = ex.Message,
-                StackTrace = statusCode >= 500 ? ex.StackTrace : null,
+                Message = messageChain,
+                // ex.ToString() carries the full chain incl. inner stack traces.
+                StackTrace = statusCode >= 500
+                    ? (ex.ToString().Length > 8000 ? ex.ToString()[..8000] : ex.ToString())
+                    : null,
                 RequestBody = requestBody,
                 CorrelationId = CorrelationIdMiddleware.FromContext(context),
                 CompanyId = ResolveCompanyId(context),

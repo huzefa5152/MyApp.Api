@@ -1220,6 +1220,27 @@ namespace MyApp.Api.Data
             // "all attachments on SalesQuote 42".
             modelBuilder.Entity<Attachment>().HasIndex(a => new { a.CompanyId, a.FolderId });
             modelBuilder.Entity<Attachment>().HasIndex(a => new { a.EntityType, a.EntityId });
+
+            // 2026-07-24: SQL Server 2025 (DB compatibility level 170) breaks
+            // EF Core 9's OUTPUT-clause identity read-back — an INSERT's
+            // `OUTPUT INSERTED.Id` returns 0 rows there, so a store-generated
+            // key comes back as 0 and the next dependent write fails: bill
+            // creation set DeliveryChallans.InvoiceId = 0 → FK 547
+            // (FK_DeliveryChallans_Invoices_InvoiceId), and the same INSERT
+            // earlier surfaced as an "affected 0 rows" DbUpdateConcurrencyException.
+            // Forcing EF off the OUTPUT clause onto the classic
+            // INSERT + SELECT SCOPE_IDENTITY() path returns keys correctly on
+            // ANY server compatibility level, so this survives a DB reset back
+            // to 170 or a new tenant DB provisioned at 170. Applied to every
+            // entity because the whole create graph (Invoice → InvoiceItem →
+            // DeliveryChallan link) depends on generated keys. Safe: no entity
+            // uses a concurrency token that would need the OUTPUT read-back.
+            foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            {
+                if (entityType.IsOwned() || entityType.ClrType == null) continue;
+                modelBuilder.Entity(entityType.ClrType)
+                    .ToTable(tb => tb.UseSqlOutputClause(false));
+            }
         }
 
     }
