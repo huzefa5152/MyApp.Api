@@ -929,5 +929,92 @@ namespace MyApp.Api.Helpers
 
             return d;
         }
+
+        /// <summary>
+        /// Convert a PrintQuoteDto to a flat dictionary for template processing
+        /// (priced — mirrors BillToDict). Item lineTotal is data-computed
+        /// (qty*price); the uploaded template's Sub-total / GST / Net cells stay
+        /// live Excel formulas.
+        /// </summary>
+        public static Dictionary<string, object?> QuoteToDict(DTOs.PrintQuoteDto dto)
+        {
+            var d = new Dictionary<string, object?>
+            {
+                ["companyBrandName"] = dto.CompanyBrandName,
+                ["companyLogoPath"] = dto.CompanyLogoPath,
+                ["companyAddress"] = dto.CompanyAddress,
+                ["companyPhone"] = dto.CompanyPhone,
+                ["companyNTN"] = dto.CompanyNTN,
+                ["companySTRN"] = dto.CompanySTRN,
+                ["quoteNumber"] = dto.QuoteNumber,
+                ["date"] = dto.Date,
+                ["validUntil"] = dto.ValidUntil,
+                ["customerEnquiryRef"] = dto.CustomerEnquiryRef,
+                ["enquiryDate"] = dto.EnquiryDate,
+                ["clientName"] = dto.ClientName,
+                ["clientAddress"] = dto.ClientAddress,
+                ["clientNTN"] = dto.ClientNTN,
+                ["clientSTRN"] = dto.ClientSTRN,
+                ["subtotal"] = dto.Subtotal,
+                ["gstRate"] = dto.GSTRate,
+                ["gstAmount"] = dto.GSTAmount,
+                ["grandTotal"] = dto.GrandTotal,
+                ["amountInWords"] = dto.AmountInWords,
+                ["notes"] = dto.Notes,
+                ["itemCount"] = dto.Items.Count,
+            };
+
+            d["items"] = dto.Items.Select((item, idx) => new Dictionary<string, object?>
+            {
+                ["sNo"] = idx + 1,
+                ["itemTypeName"] = item.ItemTypeName,
+                ["description"] = item.Description,
+                ["quantity"] = item.Quantity,
+                ["uom"] = item.Uom,
+                ["unitPrice"] = item.UnitPrice,
+                ["lineTotal"] = item.LineTotal,
+            }).Cast<Dictionary<string, object?>>().ToList();
+
+            return d;
+        }
+
+        /// <summary>
+        /// Convert a PrintOrderDto to a flat dictionary for template processing
+        /// (quantity-only — Sales Orders carry no per-line price in this build,
+        /// so no unitPrice/lineTotal/totals fields).
+        /// </summary>
+        public static Dictionary<string, object?> OrderToDict(DTOs.PrintOrderDto dto)
+        {
+            var d = new Dictionary<string, object?>
+            {
+                ["companyBrandName"] = dto.CompanyBrandName,
+                ["companyLogoPath"] = dto.CompanyLogoPath,
+                ["companyAddress"] = dto.CompanyAddress,
+                ["companyPhone"] = dto.CompanyPhone,
+                ["salesOrderNumber"] = dto.SalesOrderNumber,
+                ["orderDate"] = dto.OrderDate,
+                ["requiredDate"] = dto.RequiredDate,
+                ["customerPoNumber"] = dto.CustomerPoNumber,
+                ["customerPoDate"] = dto.CustomerPoDate,
+                ["status"] = dto.Status,
+                ["clientName"] = dto.ClientName,
+                ["clientAddress"] = dto.ClientAddress,
+                ["site"] = dto.Site,
+                ["itemCount"] = dto.Items.Count,
+            };
+
+            d["items"] = dto.Items.Select((item, idx) => new Dictionary<string, object?>
+            {
+                ["sNo"] = idx + 1,
+                ["itemTypeName"] = item.ItemTypeName,
+                ["description"] = item.Description,
+                ["quantity"] = item.Quantity,
+                ["uom"] = item.Uom,
+                ["deliveredQuantity"] = item.DeliveredQuantity,
+                ["remainingQuantity"] = item.RemainingQuantity,
+            }).Cast<Dictionary<string, object?>>().ToList();
+
+            return d;
+        }
     }
 }

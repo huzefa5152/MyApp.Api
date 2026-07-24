@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdSwapHoriz, MdVisibility, MdUploadFile } from "react-icons/md";
+import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdSwapHoriz, MdVisibility, MdUploadFile, MdGridOn } from "react-icons/md";
+import { saveAs } from "file-saver";
+import { hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import SalesQuoteForm from "../Components/SalesQuoteForm";
 import SalesQuoteDetailModal from "../Components/SalesQuoteDetailModal";
 import POImportForm from "../Components/POImportForm";
@@ -53,6 +55,7 @@ export default function SalesQuotePage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [clientFilter, setClientFilter] = useState("");
   const [clients, setClients] = useState([]);
+  const [hasExcelTpl, setHasExcelTpl] = useState(false);
   const [attachTarget, setAttachTarget] = useState(null);
   const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "SalesQuote", quotes.map((q) => q.id));
 
@@ -77,7 +80,8 @@ export default function SalesQuotePage() {
     setPage(1); setSearch(""); setStatusFilter(""); setClientFilter("");
     if (selectedCompany) {
       getClientsByCompany(selectedCompany.id).then(({ data }) => setClients(data || [])).catch(() => setClients([]));
-    } else { setClients([]); setQuotes([]); }
+      hasExcelTemplate(selectedCompany.id, "SalesQuote").then((r) => setHasExcelTpl(!!r.data.hasExcelTemplate)).catch(() => setHasExcelTpl(false));
+    } else { setClients([]); setQuotes([]); setHasExcelTpl(false); }
   }, [selectedCompany]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch whenever the company, page, or any filter changes.
@@ -135,6 +139,18 @@ export default function SalesQuotePage() {
   };
 
   const [exportingId, setExportingId] = useState(null);
+
+  const handleExportExcel = async (q) => {
+    if (exportingId) return;
+    setExportingId(q.id + "-excel");
+    try {
+      const { data } = await getSalesQuotePrintData(q.id);
+      const res = await exportExcel(selectedCompany.id, "SalesQuote", data);
+      saveAs(res.data, `Quote # ${q.quoteNumber} ${q.clientName}.xlsx`);
+    } catch { notify("Failed to export Excel.", "error"); }
+    finally { setExportingId(null); }
+  };
+
   const handleExportPdf = async (q) => {
     if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
     if (exportingId) return;
@@ -219,6 +235,7 @@ export default function SalesQuotePage() {
                   {canUpdate && q.isEditable && <button style={st.actBtn} onClick={() => { setEditQuote(q); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
                   {canPrint && <button style={{ ...st.actBtn, opacity: tplPicker.noTemplate ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} onClick={() => handlePrint(q)} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}><MdPrint size={16} /></button>}
                   {canPrint && <button style={{ ...st.actBtn, opacity: tplPicker.noTemplate || exportingId === q.id ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} onClick={() => handleExportPdf(q)} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={16} /></button>}
+                  {canPrint && hasExcelTpl && <button style={{ ...st.actBtn, color: "#2e7d32", opacity: exportingId === q.id + "-excel" ? 0.5 : 1 }} onClick={() => handleExportExcel(q)} disabled={!!exportingId} title="Download Excel"><MdGridOn size={16} /></button>}
                   {canConvert && q.status !== "Accepted" && <button style={{ ...st.actBtn, color: colors.teal }} onClick={() => handleConvert(q)} title="Convert to Sales Order"><MdSwapHoriz size={16} /></button>}
                   {canDelete && <button style={{ ...st.actBtn, color: "#dc3545" }} onClick={() => handleDelete(q)} title="Delete"><MdDelete size={16} /></button>}
                 </div>

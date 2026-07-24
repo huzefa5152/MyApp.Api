@@ -281,6 +281,11 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-23 — Sales Quote / Sales Order Excel export + Sales Quote print template
+
+- **Excel export for Sales Quote & Sales Order** (parity with Challan/Bill/Tax-Invoice). New `ExcelTemplateEngine.QuoteToDict`/`OrderToDict` + `POST /printtemplates/company/{id}/SalesQuote|SalesOrder/export-excel` endpoints; a "Download Excel" button appears on the Sales Quote / Sales Order lists once an Excel template is uploaded for that company+type (gated by `hasExcelTemplate`). Fills the uploaded `.xlsx` template — item rows loop via `{{#each items}}`, and the template's Sub-total / GST / Net cells stay live Excel formulas (the `{{#each}}` row-expansion auto-grows a `SUM` that spans the item rows + a blank spacer row, so totals stay correct for any item count).
+- **Sales Quote print template** (Handlebars) matching the Hakimi/Roshan quotation format — seller block, "Quote To", Prepared-by, S.No/Description/Qty/Unit Price/Total columns, SUB TOTAL / GST (18%) / NET TOTAL, footer. Seller identity/prepared-by/email hardcoded per company; date, client and line items are merge fields. Seeded as the default `SalesQuote` template on both tenants.
+
 ### 2026-07-23 — Attachment indicators on document lists + source categorization in folders
 
 - **Attachment count badge on every document list.** Sales Quotes, Sales Orders, Delivery Challans (card + table), Bills/Invoices/Notes (card + table), Purchase Bills (card + table), Goods Receipts (card + table) and Payments now show a paperclip + count badge on each card/row. The badge is hidden when a document has no files; clicking it opens a lightweight modal to view/download (and, with permission, add) that document's attachments without entering full edit. Counts come from the existing batch `entity-counts` endpoint (one call per page); new reusable `useEntityAttachmentCounts` hook + `AttachmentBadge` / `AttachmentQuickModal` components.

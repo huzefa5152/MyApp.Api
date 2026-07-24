@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdVisibility, MdUploadFile } from "react-icons/md";
+import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdVisibility, MdUploadFile, MdGridOn } from "react-icons/md";
+import { saveAs } from "file-saver";
+import { hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import SalesOrderForm from "../Components/SalesOrderForm";
 import CreateChallanFromOrderModal from "../Components/CreateChallanFromOrderModal";
 import SalesOrderDetailModal from "../Components/SalesOrderDetailModal";
@@ -58,6 +60,7 @@ export default function SalesOrderPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [hasExcelTpl, setHasExcelTpl] = useState(false);
   const [attachTarget, setAttachTarget] = useState(null);
   const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "SalesOrder", orders.map((o) => o.id));
 
@@ -78,7 +81,9 @@ export default function SalesOrderPage() {
 
   useEffect(() => {
     setPage(1); setSearch(""); setStatusFilter("");
-    if (!selectedCompany) setOrders([]);
+    if (selectedCompany) {
+      hasExcelTemplate(selectedCompany.id, "SalesOrder").then((r) => setHasExcelTpl(!!r.data.hasExcelTemplate)).catch(() => setHasExcelTpl(false));
+    } else { setOrders([]); setHasExcelTpl(false); }
   }, [selectedCompany]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (selectedCompany) fetchOrders(selectedCompany.id, page);
@@ -118,6 +123,17 @@ export default function SalesOrderPage() {
       const html = mergeTemplate(tplPicker.resolveTemplate(o)?.htmlContent || defaultOrderTemplate, data);
       writeAndPrint(w, html);
     } catch { w.close(); notify("Failed to load print data.", "error"); }
+  };
+
+  const handleExportExcel = async (o) => {
+    if (exportingId) return;
+    setExportingId(o.id + "-excel");
+    try {
+      const { data } = await getSalesOrderPrintData(o.id);
+      const res = await exportExcel(selectedCompany.id, "SalesOrder", data);
+      saveAs(res.data, `SO # ${o.salesOrderNumber} ${o.clientName}.xlsx`);
+    } catch { notify("Failed to export Excel.", "error"); }
+    finally { setExportingId(null); }
   };
 
   const handleExportPdf = async (o) => {
@@ -228,6 +244,7 @@ export default function SalesOrderPage() {
                     {canUpdate && o.isEditable && <button style={st.actBtn} onClick={() => { setEditOrder(o); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
                     {canPrint && <button style={{ ...st.actBtn, opacity: tplPicker.noTemplate ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} onClick={() => handlePrint(o)} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}><MdPrint size={16} /></button>}
                     {canPrint && <button style={{ ...st.actBtn, opacity: tplPicker.noTemplate || exportingId === o.id ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} onClick={() => handleExportPdf(o)} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={16} /></button>}
+                    {canPrint && hasExcelTpl && <button style={{ ...st.actBtn, color: "#2e7d32", opacity: exportingId === o.id + "-excel" ? 0.5 : 1 }} onClick={() => handleExportExcel(o)} disabled={!!exportingId} title="Download Excel"><MdGridOn size={16} /></button>}
                     {canUpdate && o.status !== "Cancelled" && (
                       <select style={st.statusSelect} value={o.status} onChange={(e) => handleStatus(o, e.target.value)} title="Set status">
                         {["Open", "Closed", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}

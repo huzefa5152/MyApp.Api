@@ -570,6 +570,24 @@ namespace MyApp.Api.Controllers
                 $"Bill # {dto.InvoiceNumber} {dto.ClientName}");
         }
 
+        [HttpPost("company/{companyId}/SalesQuote/export-excel")]
+        [AuthorizeCompany]
+        [HasPermission("salesquotes.print.view")]
+        public async Task<IActionResult> ExportSalesQuoteExcel(int companyId, [FromBody] PrintQuoteDto dto)
+        {
+            return await ProcessExcelExport(companyId, "SalesQuote", ExcelTemplateEngine.QuoteToDict(dto),
+                $"Quote # {dto.QuoteNumber} {dto.ClientName}");
+        }
+
+        [HttpPost("company/{companyId}/SalesOrder/export-excel")]
+        [AuthorizeCompany]
+        [HasPermission("salesorders.print.view")]
+        public async Task<IActionResult> ExportSalesOrderExcel(int companyId, [FromBody] PrintOrderDto dto)
+        {
+            return await ProcessExcelExport(companyId, "SalesOrder", ExcelTemplateEngine.OrderToDict(dto),
+                $"SO # {dto.SalesOrderNumber} {dto.ClientName}");
+        }
+
         [HttpPost("company/{companyId}/TaxInvoice/export-excel")]
         [AuthorizeCompany]
         [HasPermission("invoices.print.view")]
