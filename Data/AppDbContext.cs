@@ -263,6 +263,16 @@ namespace MyApp.Api.Data
                 .HasForeignKey(i => i.OriginalInvoiceId)
                 .OnDelete(DeleteBehavior.NoAction);
 
+            // Invoice -> SupplementsInvoice (self-reference for delta bills that
+            // bill quantity under-reported on an FBR-submitted original).
+            // NoAction: deleting the original must not cascade into the delta bill.
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.SupplementsInvoice)
+                .WithMany()
+                .HasForeignKey(i => i.SupplementsInvoiceId)
+                .OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Invoice>().HasIndex(i => i.SupplementsInvoiceId);
+
             // Invoice -> InvoiceItems (cascade)
             modelBuilder.Entity<InvoiceItem>()
                 .HasOne(ii => ii.Invoice)

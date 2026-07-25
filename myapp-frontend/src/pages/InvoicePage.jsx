@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdUndo } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdUndo, MdPostAdd } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import StandaloneInvoiceForm from "../Components/StandaloneInvoiceForm";
 import EditBillForm from "../Components/EditBillForm";
@@ -8,6 +8,7 @@ import BulkFbrResultsDialog from "../Components/BulkFbrResultsDialog";
 import FbrPreviewDialog from "../Components/FbrPreviewDialog";
 import BulkFbrPreviewDialog from "../Components/BulkFbrPreviewDialog";
 import InvoiceTable from "../Components/InvoiceTable";
+import CorrectionWizard from "../Components/CorrectionWizard";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import AttachmentBadge from "../Components/AttachmentBadge";
 import AttachmentQuickModal from "../Components/AttachmentQuickModal";
@@ -143,6 +144,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [clients, setClients] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [attachTarget, setAttachTarget] = useState(null);
+  const [correctTarget, setCorrectTarget] = useState(null);
   const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "Invoice", invoices.map((r) => r.id));
   const [showForm, setShowForm] = useState(false);
   // Separate visibility flag for the "Create Bill (No Challan)" modal so
@@ -955,6 +957,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               onDelete={handleDeleteInvoice}
               onVoid={handleVoidInvoice}
               onReverse={handleReverseInvoice}
+              onCorrect={setCorrectTarget}
             />
           ) : (
           <div className="card-grid">
@@ -1347,6 +1350,16 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdUndo size={14} /> Reverse
                       </button>
                     )}
+                    {canReverse && inv.fbrStatus === "Submitted" && !inv.isCancelled &&
+                     inv.documentType !== 9 && inv.documentType !== 10 && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#d6eee8", color: "#0a5d50", border: "1px solid #b6ddd3" }}
+                        onClick={() => setCorrectTarget(inv)}
+                        title="Bill the balance quantity under-reported on this submitted bill — creates a new unclassified bill (+ same challan/PO) for the tax consultant to classify and submit to FBR."
+                      >
+                        <MdPostAdd size={14} /> Correct
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1401,6 +1414,19 @@ export default function InvoicePage({ mode = "invoices" }) {
           billsMode={isBillsMode}
           onClose={() => setShowStandaloneForm(false)}
           onSaved={() => { setShowStandaloneForm(false); handleCreated(); }}
+        />
+      )}
+
+      {correctTarget && (
+        <CorrectionWizard
+          invoice={correctTarget}
+          onClose={() => setCorrectTarget(null)}
+          onCreated={(bill) => {
+            setCorrectTarget(null);
+            if (selectedCompany) fetchInvoices(selectedCompany.id, page);
+            notify(`Bill #${bill.invoiceNumber} created for the balance quantity — classify it for FBR in Invoice mode.`, "success");
+            navigate(`/invoices?search=${bill.invoiceNumber}`);
+          }}
         />
       )}
 

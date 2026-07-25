@@ -87,6 +87,15 @@ namespace MyApp.Api.Models
         public int? OriginalInvoiceId { get; set; }
 
         /// <summary>
+        /// Local FK to the invoice this bill SUPPLEMENTS — a delta bill that
+        /// bills quantity under-reported on an FBR-submitted original (see the
+        /// post-submission correction flow). Null for ordinary bills and notes.
+        /// Distinct from <see cref="OriginalInvoiceId"/>, which links a
+        /// Credit/Debit note to the invoice it adjusts.
+        /// </summary>
+        public int? SupplementsInvoiceId { get; set; }
+
+        /// <summary>
         /// The ORIGINAL invoice's FBR IRN (22 digits NTN / 28 digits CNIC).
         /// Sent to FBR as `invoiceRefNo` for Debit/Credit Notes (FBR 0026).
         /// Distinct from <see cref="FbrIRN"/>, which is this note's own IRN.
@@ -140,5 +149,8 @@ namespace MyApp.Api.Models
 
         /// <summary>Self-reference to the original invoice a Credit/Debit Note adjusts. Null for ordinary invoices.</summary>
         public Invoice? OriginalInvoice { get; set; }
+
+        /// <summary>Self-reference to the invoice this delta bill supplements. Null for ordinary invoices.</summary>
+        public Invoice? SupplementsInvoice { get; set; }
     }
 }

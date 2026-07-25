@@ -77,6 +77,16 @@ namespace MyApp.Api.Services.Interfaces
         /// <see cref="CreateReversalNoteAsync"/> (which delegates here).
         /// </summary>
         Task<InvoiceDto?> CreateNoteAsync(CreateNoteDto dto, string? actorUserName = null);
+
+        /// <summary>
+        /// Bill the quantity under-reported on an FBR-submitted invoice as a NEW
+        /// unclassified sale bill (bill-mode item type, no HS/overlay) for the
+        /// delta, cloning + linking the original's delivery challan(s) at the
+        /// delta qty. The delta bill flows through the normal
+        /// bill→tax-consultant→FBR pipeline. Throws if the original isn't
+        /// FBR-submitted. Returns null if not found.
+        /// </summary>
+        Task<InvoiceDto?> CreateSupplementaryInvoiceAsync(int originalInvoiceId, CreateSupplementaryInvoiceDto dto, string? actorUserName = null);
         /// <summary>
         /// Flip the IsFbrExcluded flag. Excluded bills are skipped by the
         /// bulk Validate All / Submit All endpoints; per-bill validate and

@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import {
   MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
-  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdUndo,
+  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdUndo, MdPostAdd,
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
@@ -77,6 +77,7 @@ export default function InvoiceTable({
   onDelete,
   onVoid,
   onReverse,
+  onCorrect,
 }) {
   const navigate = useNavigate();
 
@@ -385,6 +386,16 @@ export default function InvoiceTable({
             title="Reverse this FBR-submitted bill — opens the Credit Note screen prefilled with its lines (trim for a partial return)."
           >
             <MdUndo size={14} />
+          </button>
+        )}
+        {perms.canReverse && isSubmitted && !inv.isCancelled &&
+         inv.documentType !== 9 && inv.documentType !== 10 && (
+          <button
+            style={btn.teal}
+            onClick={() => onCorrect?.(inv)}
+            title="Bill the balance quantity under-reported on this submitted bill — creates a new unclassified bill (+ same challan/PO) for the tax consultant to classify and submit to FBR."
+          >
+            <MdPostAdd size={14} />
           </button>
         )}
       </>

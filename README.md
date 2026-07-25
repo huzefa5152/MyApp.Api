@@ -281,6 +281,15 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-25 — Post-FBR-submission invoice correction ("Correct" wizard)
+
+A filed invoice can't be edited or cancelled at FBR, so corrections are now a guided flow. A **Correct** action on any FBR-submitted bill opens a wizard that issues the correct linked document from what the operator enters:
+- **More goods delivered (under-billed quantity)** → a new **unclassified** supplementary bill for the delta, carrying the original's delivery challan & PO (cloned, same number), handed to the tax consultant to classify (HS) and submit — replaces the manual SQL workaround for this case.
+- **Overcharged / goods returned** → a **Credit Note** (partial or full) at the original rate.
+- **Undercharged rate (same quantity)** → a **Debit Note** carrying the per-unit price delta.
+
+Backend: `Invoice.SupplementsInvoiceId` audit link + migration; `CreateSupplementaryInvoiceAsync` and `POST /invoices/{id}/supplement` (creates the delta bill + cloned challan in one SaveChanges; unclassified line, no dual-book overlay). Credit/Debit branches reuse the existing note engine (`POST /invoices/notes`). Gated by `invoices.note.create`. Verified end-to-end — 16/16 integration plus live UI for all three branches (supplement, credit, debit).
+
 ### 2026-07-23 — Sales Quote / Sales Order Excel export + Sales Quote print template
 
 - **Excel export for Sales Quote & Sales Order** (parity with Challan/Bill/Tax-Invoice). New `ExcelTemplateEngine.QuoteToDict`/`OrderToDict` + `POST /printtemplates/company/{id}/SalesQuote|SalesOrder/export-excel` endpoints; a "Download Excel" button appears on the Sales Quote / Sales Order lists once an Excel template is uploaded for that company+type (gated by `hasExcelTemplate`). Fills the uploaded `.xlsx` template — item rows loop via `{{#each items}}`, and the template's Sub-total / GST / Net cells stay live Excel formulas (the `{{#each}}` row-expansion auto-grows a `SUM` that spans the item rows + a blank spacer row, so totals stay correct for any item count).

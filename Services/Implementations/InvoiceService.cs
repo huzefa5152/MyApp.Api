@@ -270,6 +270,8 @@ namespace MyApp.Api.Services.Implementations
             OriginalInvoiceId = inv.OriginalInvoiceId,
             OriginalInvoiceNumber = inv.OriginalInvoice?.InvoiceNumber,
             OriginalInvoiceRefIRN = inv.OriginalInvoiceRefIRN,
+            SupplementsInvoiceId = inv.SupplementsInvoiceId,
+            SupplementsInvoiceNumber = inv.SupplementsInvoice?.InvoiceNumber,
             NoteReason = inv.NoteReason,
             NoteReasonRemarks = inv.NoteReasonRemarks,
             NoteAffectsStock = inv.NoteAffectsStock,
@@ -2537,6 +2539,213 @@ namespace MyApp.Api.Services.Implementations
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "InvoiceService: note transaction rolled back");
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            }
+            throw new InvalidOperationException(
+                "Could not allocate a unique invoice number after " + maxAttempts + " attempts.");
+        }
+
+        public async Task<InvoiceDto?> CreateSupplementaryInvoiceAsync(
+            int originalInvoiceId, CreateSupplementaryInvoiceDto dto, string? actorUserName = null)
+        {
+            // Snapshot the original (read-only) with items + linked challans.
+            var original = await _context.Invoices
+                .AsNoTracking()
+                .Include(i => i.Items)
+                .Include(i => i.DeliveryChallans).ThenInclude(dc => dc.Items)
+                .FirstOrDefaultAsync(i => i.Id == originalInvoiceId);
+            if (original == null) return null;
+
+            if (original.DocumentType == 9 || original.DocumentType == 10)
+                throw new InvalidOperationException("A Credit/Debit Note cannot be supplemented. Reference the original sale invoice instead.");
+            if (original.IsCancelled)
+                throw new InvalidOperationException("This bill is cancelled — there is nothing to supplement.");
+            if (original.IsDemo)
+                throw new InvalidOperationException("Sandbox (demo) bills cannot be supplemented.");
+            if (original.FbrStatus != "Submitted" || string.IsNullOrWhiteSpace(original.FbrIRN))
+                throw new InvalidOperationException("Only an FBR-submitted invoice can be supplemented. A non-submitted bill should be edited directly.");
+            if (dto.Lines == null || dto.Lines.Count == 0)
+                throw new InvalidOperationException("Select at least one line with a delta quantity greater than zero.");
+
+            var companyInfo = await _context.Companies.AsNoTracking().FirstOrDefaultAsync(c => c.Id == original.CompanyId)
+                ?? throw new InvalidOperationException("Company not found for the original invoice.");
+            if (companyInfo.StartingInvoiceNumber == 0)
+                throw new InvalidOperationException("Starting invoice number has not been set for this company. Please set it first.");
+
+            // UNCLASSIFIED delta lines from the base (bill-mode) invoice lines —
+            // base ItemTypeId ("Rubber"), NO HS / SaleType / overlay. The tax
+            // consultant classifies + tax-optimises downstream, same as any bill.
+            var byId = original.Items.ToDictionary(i => i.Id);
+            var plannedLines = new List<(int? ItemTypeId, string ItemTypeName, string Description, string UOM, decimal Quantity, decimal UnitPrice, decimal LineTotal)>();
+            foreach (var sel in dto.Lines)
+            {
+                if (!byId.TryGetValue(sel.InvoiceItemId, out var src)) continue;
+                var qty = sel.Quantity;
+                if (qty <= 0) continue;
+                var unitPrice = sel.UnitPrice.HasValue && sel.UnitPrice.Value > 0 ? sel.UnitPrice.Value : src.UnitPrice;
+                plannedLines.Add((src.ItemTypeId, src.ItemTypeName, src.Description, src.UOM, qty, unitPrice, Math.Round(qty * unitPrice, 2)));
+            }
+            if (plannedLines.Count == 0)
+                throw new InvalidOperationException("No positive delta quantity to bill.");
+
+            var subtotal   = plannedLines.Sum(l => l.LineTotal);
+            var gstRate    = original.GSTRate;
+            var gstAmount  = Math.Round(subtotal * gstRate / 100m, 2);
+            var grandTotal = subtotal + gstAmount;
+
+            // Which original challans to clone, matched to delta lines by description.
+            var plannedChallans = new List<(DeliveryChallan Src, List<(int? ItemTypeId, string Description, string Unit, decimal Quantity)> Items)>();
+            if (dto.CarryChallan)
+            {
+                foreach (var srcChallan in original.DeliveryChallans)
+                {
+                    var items = new List<(int? ItemTypeId, string Description, string Unit, decimal Quantity)>();
+                    foreach (var ci in srcChallan.Items)
+                    {
+                        var key = (ci.Description ?? "").Trim();
+                        var match = plannedLines.FirstOrDefault(l => string.Equals((l.Description ?? "").Trim(), key, StringComparison.OrdinalIgnoreCase));
+                        if (match.Description == null) continue;   // no delta line for this challan item
+                        items.Add((ci.ItemTypeId, ci.Description, ci.Unit, match.Quantity));
+                    }
+                    if (items.Count > 0)
+                        plannedChallans.Add((srcChallan, items));
+                }
+            }
+
+            var baseDate = (dto.Date ?? DateTime.UtcNow).Date;
+            var billDate = baseDate < original.Date.Date ? original.Date.Date : baseDate;
+            // A challan carries the PO; if none is cloned, keep the original's PO on the bill so it still prints.
+            var billPoNumber = plannedChallans.Count > 0 ? null : original.PoNumber;
+
+            const int maxAttempts = NumberAllocationRetry.DefaultMaxAttempts;
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                int nextInvoiceNumber = 0;
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    await AcquireInvoiceNumberLockAsync(original.CompanyId);
+
+                    // Tracked reload each attempt so the number bump flushes in this
+                    // save even after a rolled-back attempt cleared the tracker.
+                    var company = await _context.Companies.FirstOrDefaultAsync(c => c.Id == original.CompanyId)
+                        ?? throw new InvalidOperationException("Company not found for the original invoice.");
+
+                    int maxExistingInvoice = await _context.Invoices
+                        .Where(i => i.CompanyId == original.CompanyId && i.NoteKind == 0 && !i.IsDemo)
+                        .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+                    nextInvoiceNumber = maxExistingInvoice > 0 ? maxExistingInvoice + 1 : company.StartingInvoiceNumber;
+                    company.CurrentInvoiceNumber = nextInvoiceNumber;
+
+                    var invoice = new Invoice
+                    {
+                        InvoiceNumber = nextInvoiceNumber,
+                        Date = billDate,
+                        CompanyId = original.CompanyId,
+                        ClientId = original.ClientId,
+                        Subtotal = subtotal,
+                        GSTRate = gstRate,
+                        GSTAmount = gstAmount,
+                        GrandTotal = grandTotal,
+                        AmountInWords = NumberToWordsConverter.Convert(grandTotal),
+                        PaymentTerms = original.PaymentTerms,
+                        DocumentType = original.DocumentType,
+                        PaymentMode = original.PaymentMode,
+                        SupplementsInvoiceId = original.Id,
+                        PoNumber = billPoNumber,
+                        FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
+                            ? nextInvoiceNumber.ToString()
+                            : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
+                        Items = plannedLines.Select(l => new InvoiceItem
+                        {
+                            ItemTypeId   = l.ItemTypeId,
+                            ItemTypeName = l.ItemTypeName,
+                            Description  = l.Description,
+                            Quantity     = l.Quantity,
+                            UOM          = l.UOM,
+                            UnitPrice    = l.UnitPrice,
+                            LineTotal    = l.LineTotal,
+                            DeliveryItemId = null,
+                            // UNCLASSIFIED: no HSCode / SaleType / RateId — consultant sets these.
+                        }).ToList(),
+                    };
+                    _context.Invoices.Add(invoice);
+
+                    // Clone + link the challan(s) in the SAME SaveChanges (SQL 2025
+                    // read-back rule — see CreateAsync). Same ChallanNumber (non-unique
+                    // by design), DuplicatedFromId = root, no counter bump, no SO link.
+                    foreach (var pc in plannedChallans)
+                    {
+                        var clone = new DeliveryChallan
+                        {
+                            CompanyId = pc.Src.CompanyId,
+                            ChallanNumber = pc.Src.ChallanNumber,
+                            ClientId = pc.Src.ClientId,
+                            PoNumber = pc.Src.PoNumber,
+                            PoDate = pc.Src.PoDate,
+                            IndentNo = pc.Src.IndentNo,
+                            DeliveryDate = pc.Src.DeliveryDate,
+                            Site = pc.Src.Site,
+                            Status = "Invoiced",
+                            IsImported = pc.Src.IsImported,
+                            IsDemo = pc.Src.IsDemo,
+                            DuplicatedFromId = pc.Src.DuplicatedFromId ?? pc.Src.Id,
+                            SalesOrderId = null,
+                            Invoice = invoice,   // nav → EF fills InvoiceId with the new key in THIS save
+                            Items = pc.Items.Select(it => new DeliveryItem
+                            {
+                                ItemTypeId = it.ItemTypeId,
+                                Description = it.Description,
+                                Unit = it.Unit,
+                                Quantity = it.Quantity,
+                            }).ToList(),
+                        };
+                        _context.DeliveryChallans.Add(clone);
+                    }
+
+                    await _context.SaveChangesAsync();
+                    var created = invoice;
+
+                    // Stock: same pipeline as a normal bill. An unclassified (no-HS)
+                    // line records no movement until it is classified downstream.
+                    await _stock.SyncInvoiceStockMovementsAsync(created);
+                    await transaction.CommitAsync();
+
+                    try
+                    {
+                        await _auditLog.LogAsync(new AuditLog
+                        {
+                            Level         = "Info",
+                            UserName      = actorUserName,
+                            HttpMethod    = "POST",
+                            RequestPath   = $"/invoices/{original.Id}/supplement",
+                            StatusCode    = 200,
+                            ExceptionType = "Invoice.Supplement",
+                            Message       = $"Delta bill #{nextInvoiceNumber} created supplementing bill #{original.InvoiceNumber} (IRN {original.FbrIRN}); "
+                                          + $"{plannedLines.Count} line(s), {(dto.CarryChallan ? plannedChallans.Count : 0)} challan(s) cloned. Awaiting tax-consultant classification.",
+                        });
+                    }
+                    catch { /* audit must never break the operation */ }
+
+                    var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
+                    return loaded == null ? null : ToDto(loaded);
+                }
+                catch (DbUpdateException dupEx) when (NumberAllocationRetry.IsUniqueViolation(dupEx))
+                {
+                    _logger.LogWarning(
+                        "Supplementary bill number {Number} for company {CompanyId} collided; retrying (attempt {Attempt}).",
+                        nextInvoiceNumber, original.CompanyId, attempt);
+                    await transaction.RollbackAsync();
+                    _context.ChangeTracker.Clear();
+                    if (attempt < maxAttempts)
+                        await Task.Delay(10 * attempt);
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "InvoiceService: supplementary bill transaction rolled back");
                     await transaction.RollbackAsync();
                     throw;
                 }

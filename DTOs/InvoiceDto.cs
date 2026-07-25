@@ -53,6 +53,11 @@ namespace MyApp.Api.DTOs
         public int? OriginalInvoiceNumber { get; set; }
         /// <summary>The original invoice's FBR IRN this note references (sent to FBR as invoiceRefNo).</summary>
         public string? OriginalInvoiceRefIRN { get; set; }
+
+        /// <summary>FK to the invoice this delta bill supplements (post-FBR-submission correction). Null for ordinary bills/notes.</summary>
+        public int? SupplementsInvoiceId { get; set; }
+        /// <summary>The supplemented invoice's number, for a "Supplements #N" badge.</summary>
+        public int? SupplementsInvoiceNumber { get; set; }
         /// <summary>FBR reason for the note.</summary>
         public string? NoteReason { get; set; }
         /// <summary>Remarks (required by FBR when reason is "Others").</summary>
@@ -374,6 +379,24 @@ namespace MyApp.Api.DTOs
         /// original invoice rate, per FBR 0068).
         /// </summary>
         public decimal? UnitPrice { get; set; }
+    }
+
+    /// <summary>
+    /// Request to bill the quantity under-reported on an FBR-submitted invoice.
+    /// Creates a plain UNCLASSIFIED delta bill (bill-mode item type, no HS /
+    /// overlay) that re-enters the normal bill→tax-consultant→FBR pipeline, and
+    /// clones the original's delivery challan(s) at the delta quantity.
+    /// </summary>
+    public class CreateSupplementaryInvoiceDto
+    {
+        /// <summary>Lines to bill. InvoiceItemId = the ORIGINAL line; Quantity = the DELTA quantity to add (&gt; 0). UnitPrice optional (defaults to the original line's price).</summary>
+        public List<NoteLineDto> Lines { get; set; } = new();
+        /// <summary>Clone + link the original's delivery challan(s) at the delta qty so the delta bill prints the same DC#/PO. Default true.</summary>
+        public bool CarryChallan { get; set; } = true;
+        /// <summary>Optional note for the audit trail (e.g. "Balance quantity delivered").</summary>
+        public string? Reason { get; set; }
+        /// <summary>Delta bill date; defaults to today, never before the original.</summary>
+        public DateTime? Date { get; set; }
     }
 
     /// <summary>
