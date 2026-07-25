@@ -39,6 +39,51 @@ const TARGET_CONFIG = {
   challan: { doc: "Delivery Challan", verb: "Create Challan", dateLabel: "Delivery Date *", showQuoteLink: false, showPrice: false, showIndent: true },
 };
 
+// ── Generic "paste a plain list" parser ─────────────────────────────────
+// Fallback for the Paste-Text flow when no saved PO Format matches: turn a
+// pasted list (numbered / bulleted / one-per-line) into review line items so
+// the operator doesn't retype. Conservative about quantity — descriptions
+// carry embedded numbers (sizes like 1/2", Length 3"), so a trailing token is
+// taken as the quantity only when a clear delimiter (dash/colon or 2+ spaces)
+// separates it AND it is numeric. A trailing placeholder word ("Qty", "Nos")
+// or no number → quantity defaults to 1 for the operator to fill in.
+export function parsePlainList(text) {
+  const out = [];
+  for (const raw of (text || "").split(/\r?\n/)) {
+    let line = raw.trim();
+    if (!line) continue;
+    // Skip PO metadata / salutation lines.
+    if (/^(p\.?\s*o\.?\s*(no|number|#|date)\b|po\b|date\b|ref\b|reference\b|to\s*[:-]|from\s*[:-]|subject\b|dear\b|vendor\b|supplier\b|customer\b|quotation\b|purchase\s*order\b)/i.test(line)) continue;
+    // Skip a column-header row (Description AND Qty/Unit/Rate words, no leading item number).
+    if (/\b(description|item|particulars|product)\b/i.test(line) && /\b(qty|quantity|unit|uom|rate|amount)\b/i.test(line) && !/^\(?\s*\d+\s*[.)-]/.test(line)) continue;
+    // Strip a leading list marker: "1." "1)" "(1)" "1-" "- " "• " "* ".
+    line = line.replace(/^\(?\s*\d+\s*\)?\s*[.):-]\s+/, "").replace(/^[-•*·]\s+/, "").trim();
+    if (!line) continue;
+    let description = line, quantity = 1, unit = "Pcs", m;
+    if ((m = line.match(/^(.*\S)\s*[-:]\s*(?:qty|quantity|nos?|pcs?|units?)\.?\s*$/i))) {
+      description = m[1].trim();                       // trailing placeholder word, no number
+    } else if ((m = line.match(/^(.*\S)\s*[-:]\s+(\d[\d,]*(?:\.\d+)?)\s*([A-Za-z][A-Za-z.]{0,7})?\s*$/))) {
+      description = m[1].trim(); quantity = parseFloat(m[2].replace(/,/g, "")) || 1; if (m[3]) unit = m[3];
+    } else if ((m = line.match(/^(.*\S)\s{2,}(\d[\d,]*(?:\.\d+)?)\s*([A-Za-z][A-Za-z.]{0,7})?\s*$/))) {
+      description = m[1].trim(); quantity = parseFloat(m[2].replace(/,/g, "")) || 1; if (m[3]) unit = m[3];
+    } else {
+      description = line.replace(/\s*[-:]\s*$/, "").trim();   // strip a lone trailing dash
+    }
+    if (description) out.push({ description, quantity, unit });
+  }
+  return out;
+}
+
+// Best-effort PO number + date pulled from the pasted header lines.
+export function extractPoMeta(text) {
+  const t = text || "";
+  const poNo = (t.match(/\bp\.?\s*o\.?\s*(?:no|number|#)\.?\s*[:-]?\s*([A-Za-z0-9][A-Za-z0-9\-/]*)/i) || [])[1] || "";
+  let poDate = "";
+  const d = t.match(/\bdate\s*[:-]?\s*(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/i);
+  if (d) { let [, dd, mm, yy] = d; if (yy.length === 2) yy = "20" + yy; poDate = `${yy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`; }
+  return { poNo, poDate };
+}
+
 export default function POImportForm({ companyId, target = "challan", onClose, onSaved }) {
   const cfg = TARGET_CONFIG[target] || TARGET_CONFIG.challan;
   const [step, setStep] = useState(1); // 1=import, 2=preview
@@ -156,6 +201,30 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
       // Flip into manual-entry mode with an explicit error message.
       if (err.response?.status === 422) {
         const miss = err.response.data || {};
+        // Paste-Text fallback: no saved PO format matched, but the operator
+        // pasted a plain list — parse it generically so they still get line
+        // items to review (quantities / prices are theirs to set).
+        const listItems = importMode === "text" ? parsePlainList(pastedText) : [];
+        if (listItems.length > 0) {
+          const meta = extractPoMeta(pastedText);
+          setPoNumber(meta.poNo);
+          setPoDate(meta.poDate);
+          setIndentNo("");
+          setItems(listItems.map((it, idx) => ({
+            id: idx,
+            description: it.description,
+            quantity: it.quantity,
+            unit: it.unit,
+            unitPrice: 0,
+          })));
+          setMatchedFormatId(null);
+          setMatchedFormatName("");
+          setMatchedFormatVersion(null);
+          setRawText(miss.rawText || pastedText);
+          setNoFormatMessage(`No saved PO format matched — parsed ${listItems.length} line item(s) from the pasted text. Review the descriptions and set ${cfg.showPrice ? "quantities and prices" : "quantities"} below.`);
+          setStep(2);
+          return;
+        }
         setPoNumber("");
         setPoDate("");
         setIndentNo("");

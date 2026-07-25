@@ -281,6 +281,14 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-25 — Mobile-friendly line-item entry (Sales Quote)
+
+The Sales Quote form's line items were a horizontal table — cramped and side-scrolling on a phone. Below 760px they now render as **tap-friendly stacked cards** (description full-width; Qty / Unit / Unit Price in a row; amount + remove) with no horizontal scroll; desktop keeps the dense table, switching automatically on resize. Reuses the existing item-type picker, description autocomplete, last-rate auto-fill, validation, and save shape unchanged. First of the sales forms — Order / Challan / Bill to follow, plus a faster desktop quick-add. (`Components/SalesQuoteForm.jsx`.)
+
+### 2026-07-25 — Paste-a-list PO import (no PO Format required)
+
+The **Paste Text** import path no longer dead-ends when a client has no saved PO Format. When the format match misses (`422 no-format`), the pasted content is now parsed generically into review line items instead of forcing manual entry: each line becomes a row (leading `N.`/bullet stripped, embedded sizes like `1/2"` / `Length 3"` preserved), a trailing number is read as the quantity only when clearly delimited (dash/colon or 2+ spaces) else it defaults to `1`, and PO number/date are lifted from the header lines. Lets an operator paste a plain item list (e.g. a customer's emailed PO) straight into a Sales Quote / Order / Challan and just fill quantities & prices in the review step. Frontend-only fallback in `Components/POImportForm.jsx` (`parsePlainList` / `extractPoMeta`); the PDF format-matching path and the backend `RuleBasedPOParser` are unchanged — PO parser regression corpus still green. Verified live: a 21-line PO pasted into a Sales Quote produced 21 clean line items with PO#/date auto-filled.
+
 ### 2026-07-25 — Post-FBR-submission invoice correction ("Correct" wizard)
 
 A filed invoice can't be edited or cancelled at FBR, so corrections are now a guided flow. A **Correct** action on any FBR-submitted bill opens a wizard that issues the correct linked document from what the operator enters:

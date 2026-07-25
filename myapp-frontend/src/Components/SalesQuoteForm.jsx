@@ -55,12 +55,20 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const [bulkApplyMode, setBulkApplyMode] = useState("all");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  // Responsive: the horizontal items table is cramped on phones, so below
+  // 760px we render each line as a tap-friendly stacked card instead.
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
   const rateTimers = useRef({});
   const attachmentRef = useRef(null);
 
   useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
   useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
   useEffect(() => { getClientsByCompany(companyId).then(({ data }) => setClients(data || [])).catch(() => setClients([])); }, [companyId]);
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 760);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // A quote is a pre-sale document (never sent to FBR), so — like Bill mode —
   // it only offers item types WITHOUT an HS code (HS-coded types are the
@@ -247,55 +255,79 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
               </div>
             )}
 
-            <div style={s.tableWrap}>
-              <table style={s.table}>
-                <thead>
-                  <tr>
-                    <th style={{ ...s.th, width: 28, textAlign: "center" }}>#</th>
-                    <th style={{ ...s.th, width: 190 }}>Item Type</th>
-                    <th style={s.th}>Description</th>
-                    <th style={{ ...s.th, width: 92, textAlign: "right" }}>Qty</th>
-                    <th style={{ ...s.th, width: 120 }}>Unit</th>
-                    <th style={{ ...s.th, width: 120, textAlign: "right" }}>Unit Price</th>
-                    <th style={{ ...s.th, width: 110, textAlign: "right" }}>Amount</th>
-                    <th style={{ ...s.th, width: 40 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item, idx) => (
-                    <tr key={idx}>
-                      <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
-                      <td style={{ ...s.td, verticalAlign: "top" }}>
-                        <SearchableItemTypeSelect
-                          items={nonHsItemTypes}
-                          value={item.itemTypeId || ""}
-                          onChange={(newId) => pickItemType(idx, newId)}
-                          placeholder="— optional —"
-                          style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                        />
-                      </td>
-                      <td style={{ ...s.td, verticalAlign: "top" }}>
-                        <LookupAutocomplete label="Item description" endpoint="/lookup/items" value={item.description} onChange={(v) => handleDescChange(idx, v)} inputStyle={s.cellInput} multiline />
-                        {item.rateHint && <div style={s.hint}>{item.rateHint}</div>}
-                      </td>
-                      <td style={s.td}>
-                        <QuantityInput value={item.quantity} onChange={(v) => setItem(idx, { quantity: v })} unit={item.unit} units={units} style={{ ...s.cellInput, textAlign: "right" }} />
-                      </td>
-                      <td style={s.td}>
-                        <LookupAutocomplete label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(v) => setItem(idx, { unit: v })} inputStyle={s.cellInput} />
-                      </td>
-                      <td style={s.td}>
-                        <input type="number" min="0" step="0.01" style={{ ...s.cellInput, textAlign: "right" }} value={item.unitPrice} onChange={(e) => setItem(idx, { unitPrice: e.target.value })} />
-                      </td>
-                      <td style={{ ...s.td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>{lineTotal(item).toLocaleString()}</td>
-                      <td style={{ ...s.td, textAlign: "center" }}>
-                        {idx !== 0 && <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>}
-                      </td>
+            {isNarrow ? (
+              <div style={s.mcards}>
+                {items.map((item, idx) => (
+                  <div style={s.mcard} key={idx}>
+                    <div style={s.mcardHead}>
+                      <span style={s.mnum}>{idx + 1}</span>
+                      <div style={{ flex: 1 }}>
+                        <SearchableItemTypeSelect items={nonHsItemTypes} value={item.itemTypeId || ""} onChange={(newId) => pickItemType(idx, newId)} placeholder="— item type (optional) —" style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem" }} />
+                      </div>
+                      {idx !== 0 && <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>}
+                    </div>
+                    <LookupAutocomplete label="Item description" endpoint="/lookup/items" value={item.description} onChange={(v) => handleDescChange(idx, v)} inputStyle={{ ...s.cellInput, fontSize: "0.95rem" }} multiline />
+                    {item.rateHint && <div style={s.hint}>{item.rateHint}</div>}
+                    <div style={s.m3col}>
+                      <div><label style={s.mlabel}>Qty</label><QuantityInput value={item.quantity} onChange={(v) => setItem(idx, { quantity: v })} unit={item.unit} units={units} style={{ ...s.cellInput, textAlign: "right" }} /></div>
+                      <div><label style={s.mlabel}>Unit</label><LookupAutocomplete label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(v) => setItem(idx, { unit: v })} inputStyle={s.cellInput} /></div>
+                      <div><label style={s.mlabel}>Unit Price</label><input type="number" inputMode="decimal" min="0" step="0.01" style={{ ...s.cellInput, textAlign: "right" }} value={item.unitPrice} onChange={(e) => setItem(idx, { unitPrice: e.target.value })} /></div>
+                    </div>
+                    <div style={s.mamt}><span>Amount</span><b>Rs {lineTotal(item).toLocaleString()}</b></div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={s.tableWrap}>
+                <table style={s.table}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...s.th, width: 28, textAlign: "center" }}>#</th>
+                      <th style={{ ...s.th, width: 190 }}>Item Type</th>
+                      <th style={s.th}>Description</th>
+                      <th style={{ ...s.th, width: 92, textAlign: "right" }}>Qty</th>
+                      <th style={{ ...s.th, width: 120 }}>Unit</th>
+                      <th style={{ ...s.th, width: 120, textAlign: "right" }}>Unit Price</th>
+                      <th style={{ ...s.th, width: 110, textAlign: "right" }}>Amount</th>
+                      <th style={{ ...s.th, width: 40 }}></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {items.map((item, idx) => (
+                      <tr key={idx}>
+                        <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
+                        <td style={{ ...s.td, verticalAlign: "top" }}>
+                          <SearchableItemTypeSelect
+                            items={nonHsItemTypes}
+                            value={item.itemTypeId || ""}
+                            onChange={(newId) => pickItemType(idx, newId)}
+                            placeholder="— optional —"
+                            style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                          />
+                        </td>
+                        <td style={{ ...s.td, verticalAlign: "top" }}>
+                          <LookupAutocomplete label="Item description" endpoint="/lookup/items" value={item.description} onChange={(v) => handleDescChange(idx, v)} inputStyle={s.cellInput} multiline />
+                          {item.rateHint && <div style={s.hint}>{item.rateHint}</div>}
+                        </td>
+                        <td style={s.td}>
+                          <QuantityInput value={item.quantity} onChange={(v) => setItem(idx, { quantity: v })} unit={item.unit} units={units} style={{ ...s.cellInput, textAlign: "right" }} />
+                        </td>
+                        <td style={s.td}>
+                          <LookupAutocomplete label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(v) => setItem(idx, { unit: v })} inputStyle={s.cellInput} />
+                        </td>
+                        <td style={s.td}>
+                          <input type="number" min="0" step="0.01" style={{ ...s.cellInput, textAlign: "right" }} value={item.unitPrice} onChange={(e) => setItem(idx, { unitPrice: e.target.value })} />
+                        </td>
+                        <td style={{ ...s.td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>{lineTotal(item).toLocaleString()}</td>
+                        <td style={{ ...s.td, textAlign: "center" }}>
+                          {idx !== 0 && <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
             <button type="button" style={s.addBtn} onClick={addItem}><MdAdd size={16} /> Add Item</button>
 
             <div style={s.totals}>
@@ -352,4 +384,12 @@ const s = {
   totals: { marginTop: "1rem", marginLeft: "auto", width: 280 },
   tRow: { display: "flex", justifyContent: "space-between", padding: "0.25rem 0", fontSize: "0.9rem", color: colors.textSecondary },
   grand: { borderTop: "2px solid #0d47a1", marginTop: 4, paddingTop: 8, fontWeight: 800, fontSize: "1rem", color: "#0d47a1" },
+  // Mobile stacked-card line items (rendered below 760px instead of the table).
+  mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
+  mcard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
+  mcardHead: { display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" },
+  mnum: { flex: "0 0 auto", width: 24, height: 24, borderRadius: 7, background: "#f0f3f8", color: colors.textSecondary, display: "grid", placeItems: "center", fontSize: "0.78rem", fontWeight: 700 },
+  m3col: { display: "grid", gridTemplateColumns: "1fr 1fr 1.1fr", gap: "0.5rem", marginTop: "0.5rem" },
+  mlabel: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.2rem" },
+  mamt: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.55rem", paddingTop: "0.45rem", borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.85rem", color: colors.textSecondary },
 };
