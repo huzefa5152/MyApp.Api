@@ -108,10 +108,14 @@ namespace MyApp.Api.DTOs
         // "Overdue" stays correct without a write. PaymentStatus is one of
         // Unpaid / PartiallyPaid / Paid / Overdue (see PaymentStatusCalculator).
         public DateTime? DueDate { get; set; }
-        public decimal AmountPaid { get; set; }
-        public decimal BalanceDue { get; set; }
-        public string PaymentStatus { get; set; } = "Unpaid";
-        public int DaysOverdue { get; set; }
+        // Payment fields are NULLED server-side for callers without payment
+        // visibility (accounting.paymentstatus.view / receipts.*), so the data
+        // is genuinely access-controlled — not just hidden in the UI. See
+        // InvoicesController.ScrubPaymentIfDenied.
+        public decimal? AmountPaid { get; set; }
+        public decimal? BalanceDue { get; set; }
+        public string? PaymentStatus { get; set; }
+        public int? DaysOverdue { get; set; }
 
         public List<InvoiceItemDto> Items { get; set; } = new();
         public List<int> ChallanNumbers { get; set; } = new();

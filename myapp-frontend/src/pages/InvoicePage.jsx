@@ -31,6 +31,45 @@ import { saveAs } from "file-saver";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 
+// Compact status pills for the invoice/bill cards — the FBR lifecycle and any
+// note relationship collapse to a single small pill each (full detail on hover)
+// so the card stays short. Payment status lives in the Grand Total row.
+const PILL_BASE = { display: "inline-flex", alignItems: "center", gap: 4, fontSize: "0.72rem", fontWeight: 700, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap", lineHeight: 1.2 };
+const PILL_TONE = {
+  blue: { background: "#E6F1FB", color: "#0C447C" },
+  amber: { background: "#FAEEDA", color: "#633806" },
+  green: { background: "#E1F5EE", color: "#085041" },
+  red: { background: "#FCEBEB", color: "#791F1F" },
+  purple: { background: "#ede7f6", color: "#4527a0" },
+  teal: { background: "#e0f2f1", color: "#00695c" },
+  gray: { background: "#eceff1", color: "#37474f" },
+};
+function statusPill(tone, Icon, label, title) {
+  return (
+    <span style={{ ...PILL_BASE, ...PILL_TONE[tone] }} title={title}>
+      {Icon ? <Icon size={13} /> : null}
+      {label}
+    </span>
+  );
+}
+function renderFbrPill(inv, isBillsMode) {
+  if (inv.isCancelled) return statusPill("red", MdCancel, "Cancelled", inv.cancelReason ? `Cancelled — ${inv.cancelReason}` : "Cancelled (voided). Its delivery challan(s) were reverted to Pending.");
+  if (inv.fbrStatus === "Submitted") return statusPill("green", MdCheckCircle, "Submitted", inv.fbrIRN ? `Submitted to FBR — IRN ${inv.fbrIRN} (locked from edits)` : "Submitted to FBR (locked from edits)");
+  if (isBillsMode) return statusPill("amber", MdHourglassEmpty, "Pending", "Pending FBR submission — open the Invoices tab to validate & submit.");
+  if (inv.fbrStatus === "Failed") return statusPill("red", MdError, "Failed", inv.fbrErrorMessage || "FBR rejected this submission. Open View FBR for details.");
+  if (inv.fbrAdjustmentStale) return statusPill("amber", MdError, "Re-adjust", `Bill changed after FBR adjust — Bill Rs. ${Number(inv.subtotal).toLocaleString()} vs FBR Rs. ${Number(inv.fbrAdjustedSubtotal ?? inv.subtotal).toLocaleString()}. Reopen, re-adjust qty/price, then save.`);
+  if (!inv.fbrReady) return statusPill("amber", MdError, inv.fbrMissing?.length ? `Setup · ${inv.fbrMissing.length}` : "Setup", inv.fbrMissing?.length ? `FBR setup incomplete — missing:\n• ${inv.fbrMissing.join("\n• ")}` : "FBR setup incomplete");
+  if (inv.isFbrExcluded) return statusPill("gray", MdBlock, "Excluded", "Excluded from Validate All / Submit All bulk actions. Per-bill actions still work.");
+  return statusPill("blue", MdCheckCircle, "Ready", "All FBR fields set — Validate to dry-run, or Submit to issue the IRN.");
+}
+function renderNotePill(inv) {
+  if (inv.documentType === 10) return statusPill("purple", MdUndo, inv.originalInvoiceNumber ? `CN ↩#${inv.originalInvoiceNumber}` : "Credit Note", inv.originalInvoiceNumber ? `Credit Note against Bill #${inv.originalInvoiceNumber}${inv.originalInvoiceRefIRN ? ` (IRN ${inv.originalInvoiceRefIRN})` : ""}` : "Credit Note");
+  if (inv.documentType === 9) return statusPill("teal", MdUndo, inv.originalInvoiceNumber ? `DN ↩#${inv.originalInvoiceNumber}` : "Debit Note", inv.originalInvoiceNumber ? `Debit Note against Bill #${inv.originalInvoiceNumber}` : "Debit Note");
+  if (inv.reversedByCreditNoteNumber) return statusPill("purple", MdUndo, "Reversed", `Reversed by Credit Note #${inv.reversedByCreditNoteNumber}`);
+  if (inv.adjustedByDebitNoteNumber) return statusPill("teal", MdUndo, "Adjusted", `Adjusted by Debit Note #${inv.adjustedByDebitNoteNumber}`);
+  return null;
+}
+
 const colors = {
   blue: "#0d47a1",
   teal: "#00897b",
@@ -975,7 +1014,13 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdReceipt style={{ color: colors.blue, marginRight: 6 }} />
                         {isNotesMode ? noteLabel : isBillsMode ? "Bill" : "Invoice"} #{inv.invoiceNumber}
                       </h5>
-                      <AttachmentBadge count={attachCounts[inv.id]} onClick={() => setAttachTarget(inv)} />
+                      {/* FBR lifecycle + note relationship as compact pills;
+                          detail on hover. Payment status is in the total row. */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        {renderNotePill(inv)}
+                        {renderFbrPill(inv, isBillsMode)}
+                        <AttachmentBadge count={attachCounts[inv.id]} onClick={() => setAttachTarget(inv)} />
+                      </div>
                     </div>
                     {/* Client is the card's primary line. */}
                     <p style={cardStyles.cardLead}>{inv.clientName || "—"}</p>
@@ -991,145 +1036,23 @@ export default function InvoicePage({ mode = "invoices" }) {
                       <div><span style={cardStyles.metaLabel}>Lines</span><span style={cardStyles.metaValue}>{inv.items?.length || 0} item{inv.items?.length === 1 ? "" : "s"}</span></div>
                       {inv.challanNumbers?.length > 0 && <div><span style={cardStyles.metaLabel}>Challan</span><span style={cardStyles.metaValue}>#{inv.challanNumbers.join(", #")}</span></div>}
                     </div>
-                    <div style={cardStyles.amountBox}>
-                      <span style={cardStyles.amountLabel}>Grand Total</span>
-                      <span style={cardStyles.amount}>Rs. {inv.grandTotal?.toLocaleString()}</span>
+                    <div style={{ ...cardStyles.amountBox, alignItems: "center" }}>
+                      <span style={{ display: "flex", flexDirection: "column" }}>
+                        <span style={cardStyles.amountLabel}>Grand Total</span>
+                        <span style={cardStyles.amount}>Rs. {inv.grandTotal?.toLocaleString()}</span>
+                      </span>
+                      {/* Payment status (AR) sits with the amount — gated by
+                          accounting.paymentstatus.view; hidden on cancelled docs
+                          and credit/debit notes. FBR + note status are compact
+                          pills in the card header (renderFbrPill/renderNotePill). */}
+                      {canViewPaymentStatus && !inv.isCancelled && inv.documentType !== 9 && inv.documentType !== 10 && inv.paymentStatus && (
+                        <PaymentStatusBadge
+                          status={inv.paymentStatus}
+                          balanceDue={inv.balanceDue}
+                          daysOverdue={inv.daysOverdue}
+                        />
+                      )}
                     </div>
-                    {/* FBR status row — shows current status OR 'Setup Incomplete' when fields are missing.
-                        In Bills mode we keep only the binary "Submitted to FBR" / "Pending FBR submission"
-                        identifier as a pill so the operator sees at a glance which rows are locked.
-                        Workflow detail (Ready / Setup Incomplete / Excluded) lives on the Invoices tab. */}
-                    {/* 2026-05-08: Bills + Invoices modes now share the
-                        same green pill for Submitted. The Invoices mode
-                        previously rendered plain inline text so the
-                        styling was inconsistent with the other status
-                        pills (Ready / Validated / Failed / etc.). */}
-                    {inv.isCancelled && (
-                      <div
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#ffebee", color: "#b71c1c", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #ef9a9a" }}
-                        title={inv.cancelReason ? `Cancelled — ${inv.cancelReason}` : "This bill has been cancelled (voided). Its delivery challan(s) were reverted to Pending so they can be re-billed."}
-                      >
-                        <MdCancel size={14} color="#b71c1c" />
-                        <span>Cancelled{inv.cancelReason ? ` — ${inv.cancelReason}` : ""}</span>
-                      </div>
-                    )}
-                    {/* Payment status (AR) — gated by accounting.paymentstatus.view.
-                        Shown in BOTH Bills and Invoices modes; hidden on cancelled
-                        docs (their balance is moot) and on credit/debit notes. */}
-                    {canViewPaymentStatus && !inv.isCancelled && inv.documentType !== 9 && inv.documentType !== 10 && inv.paymentStatus && (
-                      <PaymentStatusBadge
-                        status={inv.paymentStatus}
-                        balanceDue={inv.balanceDue}
-                        daysOverdue={inv.daysOverdue}
-                      />
-                    )}
-                    {/* This document IS a credit/debit note — show what it adjusts. */}
-                    {(inv.documentType === 9 || inv.documentType === 10) && (
-                      <div
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#ede7f6", color: "#5e35b1", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #b39ddb" }}
-                        title={inv.originalInvoiceNumber ? `${inv.documentType === 10 ? "Credit" : "Debit"} Note against Bill #${inv.originalInvoiceNumber}${inv.originalInvoiceRefIRN ? ` (IRN ${inv.originalInvoiceRefIRN})` : ""}` : undefined}
-                      >
-                        <MdUndo size={14} color="#5e35b1" />
-                        <span>{inv.documentType === 10 ? "Credit Note" : "Debit Note"}{inv.originalInvoiceNumber ? ` ↩ against Bill #${inv.originalInvoiceNumber}` : ""}</span>
-                      </div>
-                    )}
-                    {/* This invoice HAS notes against it — clear indicators. */}
-                    {inv.documentType !== 9 && inv.documentType !== 10 && inv.reversedByCreditNoteNumber && (
-                      <div
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#ede7f6", color: "#5e35b1", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #b39ddb" }}
-                        title={`A Credit Note (#${inv.reversedByCreditNoteNumber}) has been created against this invoice. It reverses this sale.`}
-                      >
-                        <MdUndo size={14} color="#5e35b1" />
-                        <span>Reversed — Credit Note #{inv.reversedByCreditNoteNumber} created</span>
-                      </div>
-                    )}
-                    {inv.documentType !== 9 && inv.documentType !== 10 && inv.adjustedByDebitNoteNumber && (
-                      <div
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#e0f2f1", color: "#00695c", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #80cbc4" }}
-                        title={`A Debit Note (#${inv.adjustedByDebitNoteNumber}) adjusts this invoice upward.`}
-                      >
-                        <MdUndo size={14} color="#00695c" />
-                        <span>Adjusted — Debit Note #{inv.adjustedByDebitNoteNumber}</span>
-                      </div>
-                    )}
-                    {!inv.isCancelled && inv.fbrStatus === "Submitted" && (
-                      <div style={styles.fbrPillSubmitted} title={inv.fbrIRN ? `IRN: ${inv.fbrIRN}` : "This bill has been submitted to FBR and is locked from edits."}>
-                        <MdCheckCircle size={14} color="#1b5e20" />
-                        <span>{isBillsMode ? "Submitted to FBR" : "FBR: Submitted"}</span>
-                        {inv.fbrIRN && <span style={styles.fbrPillIrn}>IRN {inv.fbrIRN}</span>}
-                      </div>
-                    )}
-                    {isBillsMode && !inv.isCancelled && inv.fbrStatus !== "Submitted" && (
-                      <div style={styles.fbrPillPending} title="This bill hasn't been submitted to FBR yet. Open the Invoices tab to validate and submit.">
-                        <MdHourglassEmpty size={14} color="#b26a00" />
-                        <span>Pending FBR submission</span>
-                      </div>
-                    )}
-                    {!isBillsMode && !inv.isCancelled && inv.fbrStatus === "Failed" && (
-                      <div style={styles.fbrPillFailed} title={inv.fbrErrorMessage || "FBR rejected this submission. Open View FBR for details."}>
-                        <MdError size={14} color="#b71c1c" />
-                        <span>FBR Failed</span>
-                      </div>
-                    )}
-                    {!isBillsMode && !inv.isCancelled && inv.fbrStatus === "Failed" && inv.fbrErrorMessage && (
-                      <p style={{ fontSize: "0.72rem", color: "#c62828", marginTop: "0.35rem", wordBreak: "break-word", lineHeight: 1.35 }}>
-                        {inv.fbrErrorMessage}
-                      </p>
-                    )}
-                    {!isBillsMode && !inv.isCancelled && inv.fbrStatus !== "Submitted" && !inv.fbrReady && !inv.fbrAdjustmentStale && (
-                      <div
-                        style={styles.fbrPillIncomplete}
-                        title={inv.fbrMissing?.length ? `Missing:\n• ${inv.fbrMissing.join("\n• ")}` : ""}
-                      >
-                        <MdError size={14} color="#b26a00" style={{ flexShrink: 0 }} />
-                        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.3 }}>
-                          <span>FBR Setup Incomplete</span>
-                          {inv.fbrMissing?.length > 0 && (
-                            <span style={styles.fbrPillIncompleteHint}>
-                              {inv.fbrMissing.slice(0, 3).join(" · ")}
-                              {inv.fbrMissing.length > 3 && ` · +${inv.fbrMissing.length - 3} more`}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    {/* Dual-book "adjustment out of date": the bill was edited
-                        after this invoice was reconciled for FBR, so the
-                        overlay total no longer matches. Distinct from "Setup
-                        Incomplete" (which is genuinely missing fields). Open
-                        the invoice, re-adjust, Save; Validate/Submit blocked. */}
-                    {!isBillsMode && !inv.isCancelled && inv.fbrStatus !== "Submitted" && inv.fbrAdjustmentStale && (
-                      <div
-                        style={styles.fbrPillIncomplete}
-                        title={`The delivery bill was changed after this invoice was adjusted for FBR.\n` +
-                          `Bill total: Rs. ${Number(inv.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 2 })}\n` +
-                          `FBR adjustment: Rs. ${Number(inv.fbrAdjustedSubtotal ?? inv.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 2 })}\n` +
-                          `Open this invoice, re-adjust qty / unit price so they match, then Save. Validate & Submit are blocked until they match.`}
-                      >
-                        <MdError size={14} color="#e65100" style={{ flexShrink: 0 }} />
-                        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.3 }}>
-                          <span>Bill changed — re-adjust</span>
-                          <span style={styles.fbrPillIncompleteHint}>
-                            Bill Rs. {Number(inv.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 0 })} vs FBR Rs. {Number(inv.fbrAdjustedSubtotal ?? inv.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 0 })}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                    {!isBillsMode && !inv.isCancelled && inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded && (
-                      <div style={styles.fbrPillReady} title="All FBR fields are set. Click Validate to dry-run, or Submit to issue the IRN.">
-                        <MdCheckCircle size={14} color="#0d47a1" />
-                        <span>Ready to Validate</span>
-                      </div>
-                    )}
-                    {!isBillsMode && inv.fbrStatus !== "Submitted" && inv.isFbrExcluded && (
-                      <div
-                        style={styles.fbrPillExcluded}
-                        title="This bill is excluded from Validate All / Submit All bulk actions. Per-bill Validate / Submit still work."
-                      >
-                        <MdBlock size={14} color="#455a64" />
-                        <span>Excluded from FBR bulk</span>
-                      </div>
-                    )}
                   </div>
                   <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
                     {/* Bills card: View, Print Bill, Bill PDF, Bill XLS, Edit, Delete.

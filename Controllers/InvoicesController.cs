@@ -16,12 +16,14 @@ namespace MyApp.Api.Controllers
     {
         private readonly IInvoiceService _service;
         private readonly ICompanyAccessGuard _access;
+        private readonly IPermissionService _permissions;
         private readonly int _defaultPageSize;
 
-        public InvoicesController(IInvoiceService service, ICompanyAccessGuard access, IConfiguration configuration)
+        public InvoicesController(IInvoiceService service, ICompanyAccessGuard access, IPermissionService permissions, IConfiguration configuration)
         {
             _service = service;
             _access = access;
+            _permissions = permissions;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
 
@@ -29,6 +31,29 @@ namespace MyApp.Api.Controllers
             int.TryParse(
                 User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
                 out var id) ? id : 0;
+
+        // AR payment fields (AmountPaid / BalanceDue / PaymentStatus / DaysOverdue)
+        // are exposed only to callers who can see payment status OR settle
+        // receipts. For anyone else they're nulled BEFORE returning, so the data
+        // is access-controlled server-side — not merely hidden in the UI. The
+        // list endpoint is shared by the Receipts settle screen, hence the
+        // receipts.* allowance so that flow keeps its balances.
+        private async Task<bool> CanSeePaymentAsync() =>
+            await _permissions.HasPermissionAsync(CurrentUserId, "accounting.paymentstatus.view")
+            || await _permissions.HasPermissionAsync(CurrentUserId, "accounting.receipts.view")
+            || await _permissions.HasPermissionAsync(CurrentUserId, "accounting.receipts.create");
+
+        private async Task ScrubPaymentIfDenied(IEnumerable<InvoiceDto> rows)
+        {
+            if (rows == null || await CanSeePaymentAsync()) return;
+            foreach (var r in rows)
+            {
+                r.AmountPaid = null;
+                r.BalanceDue = null;
+                r.PaymentStatus = null;
+                r.DaysOverdue = null;
+            }
+        }
 
         [HttpGet("count")]
         [HasAnyPermission("bills.list.view", "invoices.list.view")]
@@ -55,6 +80,7 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<List<InvoiceDto>>> GetByCompany(int companyId)
         {
             var invoices = await _service.GetByCompanyAsync(companyId);
+            await ScrubPaymentIfDenied(invoices);
             return Ok(invoices);
         }
 
@@ -84,6 +110,7 @@ namespace MyApp.Api.Controllers
                           : null;
             var result = await _service.GetPagedByCompanyAsync(
                 companyId, clampedPage, size, search, clientId, dateFrom, dateTo, noteType, fbrFilter);
+            await ScrubPaymentIfDenied(result.Items);
             return Ok(result);
         }
 
@@ -94,6 +121,7 @@ namespace MyApp.Api.Controllers
             var invoice = await _service.GetByIdAsync(id);
             if (invoice == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, invoice.CompanyId);
+            await ScrubPaymentIfDenied(new[] { invoice });
             return Ok(invoice);
         }
 

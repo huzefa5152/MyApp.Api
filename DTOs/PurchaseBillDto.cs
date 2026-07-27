@@ -27,10 +27,13 @@ namespace MyApp.Api.DTOs
         // are derived at read time. PaymentStatus ∈ Unpaid / PartiallyPaid /
         // Paid / Overdue (see PaymentStatusCalculator).
         public DateTime? DueDate { get; set; }
-        public decimal AmountPaid { get; set; }
-        public decimal BalanceDue { get; set; }
-        public string PaymentStatus { get; set; } = "Unpaid";
-        public int DaysOverdue { get; set; }
+        // Nulled server-side for callers without payment visibility
+        // (accounting.paymentstatus.view / payments.*) — see
+        // PurchaseBillsController.ScrubPaymentIfDenied.
+        public decimal? AmountPaid { get; set; }
+        public decimal? BalanceDue { get; set; }
+        public string? PaymentStatus { get; set; }
+        public int? DaysOverdue { get; set; }
 
         public List<PurchaseItemDto> Items { get; set; } = new();
 

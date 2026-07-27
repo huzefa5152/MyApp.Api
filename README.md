@@ -281,6 +281,12 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-27 — Compact status pills on invoice/bill cards + payment-status now access-controlled server-side
+
+The invoice/bill list cards were tall — payment status and FBR status each rendered as a stacked block. They now collapse to compact pills: the **FBR lifecycle** (Ready / Pending / Setup·N / Submitted / Failed / Re-adjust / Excluded / Cancelled) and any **note relationship** (Credit/Debit note, Reversed, Adjusted) show as small pills in the card header; **payment status** (Unpaid / Part-paid / Paid) sits in the Grand Total row. Full detail — missing FBR fields, IRN, error text, balance, overdue days — moves to hover tooltips. Cards are markedly shorter with every status still readable by colour. (`pages/InvoicePage.jsx`.)
+
+Security fix found while verifying the payment pill: the payment fields (`AmountPaid` / `BalanceDue` / `PaymentStatus` / `DaysOverdue`) were only hidden in the UI — the invoices/bills list + get-by-id APIs returned them to anyone with list-view, so a user without `accounting.paymentstatus.view` could still read them via the API. They are now **nulled server-side** for callers lacking payment visibility (`accounting.paymentstatus.view`, or the relevant `receipts.*` / `payments.*` settle permission so the Receipts/Payments screen keeps its balances) — on invoices, bills, and purchase bills, list and get-by-id. DTO fields made nullable; controllers scrub before returning. New durable test `scripts/test_payment_status_permission.py` (5/5) proves the fields are populated for admin and null for a restricted user; tenant-isolation suite still green.
+
 ### 2026-07-27 — Shared line-item editor: fast desktop entry + mobile cards across every sales form
 
 Completed the Sales-Quote mobile work into one reusable component. `Components/LineItemsEditor.jsx` is now the single line-item grid behind **Sales Quote, Sales Order, and both Challan forms** (create + edit): a dense table on desktop, tap-friendly stacked cards below 760px, no horizontal scroll on phones. Each form opts into just the columns it needs — item-type picker + bulk-apply for Quote/Order, unit price + last-billed-rate auto-fill for Quote, quantity-only for Challan — and keeps its own totals, validation, save shape, and couplings (quote/SO prefill, delivered-qty lock, duplicate-mode, item-type passthrough) unchanged.

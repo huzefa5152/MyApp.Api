@@ -21,12 +21,14 @@ namespace MyApp.Api.Controllers
     {
         private readonly IPurchaseBillService _service;
         private readonly ICompanyAccessGuard _access;
+        private readonly IPermissionService _permissions;
         private readonly int _defaultPageSize;
 
-        public PurchaseBillsController(IPurchaseBillService service, ICompanyAccessGuard access, IConfiguration configuration)
+        public PurchaseBillsController(IPurchaseBillService service, ICompanyAccessGuard access, IPermissionService permissions, IConfiguration configuration)
         {
             _service = service;
             _access = access;
+            _permissions = permissions;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
 
@@ -34,6 +36,27 @@ namespace MyApp.Api.Controllers
             int.TryParse(
                 User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
                 out var id) ? id : 0;
+
+        // AP payment fields are exposed only to callers who can see payment
+        // status OR settle payments; otherwise nulled before returning so the
+        // data is access-controlled server-side, not just hidden in the UI.
+        // (payments.* is allowed because the list backs the Payments settle screen.)
+        private async Task<bool> CanSeePaymentAsync() =>
+            await _permissions.HasPermissionAsync(CurrentUserId, "accounting.paymentstatus.view")
+            || await _permissions.HasPermissionAsync(CurrentUserId, "accounting.payments.view")
+            || await _permissions.HasPermissionAsync(CurrentUserId, "accounting.payments.create");
+
+        private async Task ScrubPaymentIfDenied(IEnumerable<PurchaseBillDto> rows)
+        {
+            if (rows == null || await CanSeePaymentAsync()) return;
+            foreach (var r in rows)
+            {
+                r.AmountPaid = null;
+                r.BalanceDue = null;
+                r.PaymentStatus = null;
+                r.DaysOverdue = null;
+            }
+        }
 
         [HttpGet("count")]
         [HasPermission("purchasebills.list.view")]
@@ -56,6 +79,7 @@ namespace MyApp.Api.Controllers
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
             var result = await _service.GetPagedByCompanyAsync(companyId, clampedPage, size, search, supplierId, dateFrom, dateTo);
+            await ScrubPaymentIfDenied(result.Items);
             return Ok(result);
         }
 
@@ -66,6 +90,7 @@ namespace MyApp.Api.Controllers
             var pb = await _service.GetByIdAsync(id);
             if (pb == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, pb.CompanyId);
+            await ScrubPaymentIfDenied(new[] { pb });
             return Ok(pb);
         }
 
