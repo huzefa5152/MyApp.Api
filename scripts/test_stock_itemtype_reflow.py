@@ -275,6 +275,30 @@ def create_standalone(base, token, cid, client_id, items) -> tuple[int, Any]:
         "gstRate": 18, "items": items})
 
 
+def adjust(base, token, iid, items) -> tuple[int, Any]:
+    """Tax-consultant overlay edit (dual-book): writes InvoiceItemAdjustment,
+    leaves the physical InvoiceItem untouched. Each item row = {id, itemTypeId?,
+    quantity?, unitPrice?}."""
+    return http("PATCH", f"/api/invoices/{iid}/itemtypes-and-qty", base, token=token,
+                body={"writeMode": "adjustment", "items": items})
+
+
+def put_invoice(base, token, iid, items, gst=18) -> tuple[int, Any]:
+    """Bill-mode full edit — mutates the physical InvoiceItem. Never touches
+    the overlay, so stock resolves EffType/Qty = Adjusted?? physical."""
+    return http("PUT", f"/api/invoices/{iid}", base, token=token,
+                body={"gstRate": gst, "items": items})
+
+
+def line_of(inv, desc):
+    """InvoiceItem id for the line whose description matches (ids are stable
+    across overlay/PUT/challan edits, so capture once at create)."""
+    for it in inv.get("items", []):
+        if it.get("description") == desc:
+            return it["id"]
+    return inv["items"][0]["id"]
+
+
 # ── Suite 1 — Purchase bill IN + item-type reflow ──────────────────
 def suite_purchase_reflow(base, token, cid, supplier, suffix):
     s = "1. Purchase bill IN reflow"
@@ -721,6 +745,391 @@ def suite_deleted_item_hidden(base, token, cid, supplier, suffix):
           not in_grid(base, token, cid, eid), "still showing on grid")
 
 
+# ── Suite 8 — Invoice OUT reflow via FBR adjustment overlay ────────
+# Regression for the 2026-07-27 prod incident (HS 8467.2100 showed zero
+# OUT on the stock dashboard). The tax consultant reclassifies a non-HS
+# "product family" bill line to an HS-coded item type through the
+# dual-book adjustment overlay:
+#     PATCH /invoices/{id}/itemtypes-and-qty  {writeMode:"adjustment"}
+# The bill line (InvoiceItem.ItemTypeId) is NEVER mutated — the overlay
+# carries AdjustedItemTypeId. Stock OUT therefore has to key off the
+# EFFECTIVE type (AdjustedItemTypeId ?? ItemTypeId).
+#
+# Pre-fix, SyncInvoiceStockMovementsAsync read the physical type only:
+# the non-HS base was untracked (no OUT) and the adjusted HS type never
+# received the OUT, so the on-hand grid showed no movement even though
+# the consultant had "sold" the HS goods on the filed return.
+def suite_adjustment_overlay_reflow(base, token, cid, client, supplier, suffix):
+    s = "8. Invoice OUT reflow (FBR adjustment overlay type)"
+    print(f"\n=== {s} ===")
+    FAM = make_item_type(base, token, f"OV_FAM_{suffix}", hs=None)       # non-HS product family (bill line)
+    HS  = make_item_type(base, token, f"OV_HS_{suffix}",  hs=next_hs())  # HS reclassification target
+    if not (FAM and HS):
+        check(s, "item types created", False, "creation failed"); return
+
+    # 8.0 pre-stock the HS type +100 (purchases book directly on the HS type)
+    st, _ = prestock(base, token, cid, supplier["id"], [(HS, 100)])
+    check(s, "8.0 pre-stock HS +100 ok", st in (200, 201), f"{st}")
+    check(s, "8.0 HS on-hand = 100", approx(onhand(base, token, cid, HS["id"]), 100),
+          f"got {onhand(base, token, cid, HS['id'])}")
+
+    # 8.1 sell 30 on the NON-HS family line → NO OUT anywhere (base untracked)
+    st, inv = create_standalone(base, token, cid, client["id"], [
+        {"itemTypeId": FAM["id"], "description": "hardware items", "quantity": 30,
+         "uom": "Pcs", "unitPrice": 50}])
+    check(s, "8.1 sell FAM×30 ok", st in (200, 201), f"{st} {inv}")
+    if st not in (200, 201):
+        return
+    iid = inv["id"]
+    iline = inv["items"][0]["id"]
+    check(s, "8.1 HS on-hand still 100 (base non-HS, no OUT yet)",
+          approx(onhand(base, token, cid, HS["id"]), 100),
+          f"got {onhand(base, token, cid, HS['id'])}")
+    check(s, "8.1 FAM on-hand 0 (untracked family)",
+          approx(onhand(base, token, cid, FAM["id"]), 0),
+          f"got {onhand(base, token, cid, FAM['id'])}")
+
+    # 8.2 consultant reclassifies the line to the HS type via the overlay.
+    #     InvoiceItem stays untouched; AdjustedItemTypeId = HS. Stock OUT
+    #     must land on the ADJUSTED HS type → HS 100 − 30 = 70.
+    #     THIS is the check the pre-fix code failed (HS stayed at 100).
+    st, upd = http("PATCH", f"/api/invoices/{iid}/itemtypes-and-qty", base, token=token,
+                   body={"writeMode": "adjustment",
+                         "items": [{"id": iline, "itemTypeId": HS["id"]}]})
+    check(s, "8.2 overlay reclassify FAM→HS ok", st == 200, f"{st} {upd}")
+    check(s, "8.2 HS on-hand = 70 (OUT on ADJUSTED type)",
+          approx(onhand(base, token, cid, HS["id"]), 70),
+          f"got {onhand(base, token, cid, HS['id'])}")
+    check(s, "8.2 FAM on-hand still 0 (bill line untouched)",
+          approx(onhand(base, token, cid, FAM["id"]), 0),
+          f"got {onhand(base, token, cid, FAM['id'])}")
+
+    # 8.3 consultant reverts the overlay (re-picks the bill's own family type)
+    #     → overlay dropped → OUT reversed → HS back to 100.
+    st, upd = http("PATCH", f"/api/invoices/{iid}/itemtypes-and-qty", base, token=token,
+                   body={"writeMode": "adjustment",
+                         "items": [{"id": iline, "itemTypeId": FAM["id"]}]})
+    check(s, "8.3 overlay revert HS→FAM ok", st == 200, f"{st} {upd}")
+    check(s, "8.3 HS on-hand back to 100 (overlay OUT reversed)",
+          approx(onhand(base, token, cid, HS["id"]), 100),
+          f"got {onhand(base, token, cid, HS['id'])}")
+
+    # 8.4 re-apply the overlay → HS 70 again (repeat adjust must be clean)
+    st, upd = http("PATCH", f"/api/invoices/{iid}/itemtypes-and-qty", base, token=token,
+                   body={"writeMode": "adjustment",
+                         "items": [{"id": iline, "itemTypeId": HS["id"]}]})
+    check(s, "8.4 overlay re-apply FAM→HS ok", st == 200, f"{st} {upd}")
+    check(s, "8.4 HS on-hand = 70 again",
+          approx(onhand(base, token, cid, HS["id"]), 70),
+          f"got {onhand(base, token, cid, HS['id'])}")
+
+    # 8.5 overlay qty override: consultant files a smaller qty (20) at a
+    #     higher rate (75) so the line total stays 1500. OUT must reflow to
+    #     the ADJUSTED qty on the ADJUSTED type → HS 100 − 20 = 80.
+    st, upd = http("PATCH", f"/api/invoices/{iid}/itemtypes-and-qty", base, token=token,
+                   body={"writeMode": "adjustment",
+                         "items": [{"id": iline, "itemTypeId": HS["id"],
+                                    "quantity": 20, "unitPrice": 75}]})
+    check(s, "8.5 overlay qty 30→20 ok", st == 200, f"{st} {upd}")
+    check(s, "8.5 HS on-hand = 80 (OUT uses adjusted qty on adjusted type)",
+          approx(onhand(base, token, cid, HS["id"]), 80),
+          f"got {onhand(base, token, cid, HS['id'])}")
+
+    # 8.6 delete the invoice → overlay OUT reversed → HS restored to 100
+    st, _ = http("DELETE", f"/api/invoices/{iid}", base, token=token)
+    check(s, "8.6 delete invoice ok", st in (200, 204), f"{st}")
+    check(s, "8.6 HS on-hand = 100 (overlay OUT reversed on delete)",
+          approx(onhand(base, token, cid, HS["id"]), 100),
+          f"got {onhand(base, token, cid, HS['id'])}")
+
+
+# ── Suite 9 — Overlay type reclassification CHAIN (revert old, OUT new) ─
+# The consultant reclassifies an HS bill line to a DIFFERENT HS type, then
+# again to a third, then reverts. Each hop must reverse the OUT on the
+# previous type and re-record it on the new one — "if the item type / HS
+# code changes, revert the old stock OUT and record a new OUT on the new
+# HS code." Base line is itself HS here (unlike Suite 8's non-HS base), so
+# the bill already recorded an OUT at creation that must MOVE, not stack.
+def suite_overlay_type_chain(base, token, cid, client, supplier, suffix):
+    s = "9. Overlay type reclassification chain (revert old HS, OUT new HS)"
+    print(f"\n=== {s} ===")
+    A = make_item_type(base, token, f"CH9_A_{suffix}", hs=next_hs())
+    B = make_item_type(base, token, f"CH9_B_{suffix}", hs=next_hs())
+    C = make_item_type(base, token, f"CH9_C_{suffix}", hs=next_hs())
+    if not (A and B and C):
+        check(s, "item types created", False, "creation failed"); return
+    prestock(base, token, cid, supplier["id"], [(A, 1000), (B, 1000), (C, 1000)])
+
+    def oh(x): return onhand(base, token, cid, x["id"])
+
+    # 9.1 bill creation on an HS line → immediate OUT on A
+    st, inv = create_standalone(base, token, cid, client["id"], [
+        {"itemTypeId": A["id"], "description": "hammer", "quantity": 30,
+         "uom": "Pcs", "unitPrice": 100}])
+    check(s, "9.1 create (HS base) ok", st in (200, 201), f"{st} {inv}")
+    if st not in (200, 201):
+        return
+    iid, line = inv["id"], inv["items"][0]["id"]
+    check(s, "9.1 A=970 (OUT on bill creation), B=1000, C=1000",
+          approx(oh(A), 970) and approx(oh(B), 1000) and approx(oh(C), 1000),
+          f"A={oh(A)} B={oh(B)} C={oh(C)}")
+
+    # 9.2 overlay reclassify A → B: revert A's OUT, record OUT on B
+    st, _ = adjust(base, token, iid, [{"id": line, "itemTypeId": B["id"]}])
+    check(s, "9.2 overlay A→B ok", st == 200, f"{st}")
+    check(s, "9.2 A=1000 (reverted), B=970 (new OUT), C=1000",
+          approx(oh(A), 1000) and approx(oh(B), 970) and approx(oh(C), 1000),
+          f"A={oh(A)} B={oh(B)} C={oh(C)}")
+
+    # 9.3 re-adjust B → C: revert B, record OUT on C
+    st, _ = adjust(base, token, iid, [{"id": line, "itemTypeId": C["id"]}])
+    check(s, "9.3 overlay B→C ok", st == 200, f"{st}")
+    check(s, "9.3 A=1000, B=1000 (reverted), C=970 (new OUT)",
+          approx(oh(A), 1000) and approx(oh(B), 1000) and approx(oh(C), 970),
+          f"A={oh(A)} B={oh(B)} C={oh(C)}")
+
+    # 9.4 revert to base (pick the bill's own type A) → overlay dropped,
+    #     OUT falls back onto the physical type A.
+    st, _ = adjust(base, token, iid, [{"id": line, "itemTypeId": A["id"]}])
+    check(s, "9.4 overlay revert →A ok", st == 200, f"{st}")
+    check(s, "9.4 A=970 (OUT back on base), B=1000, C=1000",
+          approx(oh(A), 970) and approx(oh(B), 1000) and approx(oh(C), 1000),
+          f"A={oh(A)} B={oh(B)} C={oh(C)}")
+
+    # 9.5 delete → all restored
+    http("DELETE", f"/api/invoices/{iid}", base, token=token)
+    check(s, "9.5 all restored to 1000 after delete",
+          approx(oh(A), 1000) and approx(oh(B), 1000) and approx(oh(C), 1000),
+          f"A={oh(A)} B={oh(B)} C={oh(C)}")
+
+
+# ── Suite 10 — Bill edited underneath an active overlay ────────────
+# The overlay (FBR-filed values) is authoritative for stock: EffType =
+# AdjustedItemTypeId ?? physical, EffQty = AdjustedQuantity ?? physical.
+# So a bill (PUT) qty change flows to stock ONLY while the overlay has no
+# qty override; once the consultant fixes a filed qty, that wins over later
+# physical edits. Type stays on the overlay's type throughout.
+def suite_bill_edit_under_overlay(base, token, cid, client, supplier, suffix):
+    s = "10. Bill edit under an active overlay"
+    print(f"\n=== {s} ===")
+    A = make_item_type(base, token, f"OV10_A_{suffix}", hs=next_hs())
+    B = make_item_type(base, token, f"OV10_B_{suffix}", hs=next_hs())
+    if not (A and B):
+        check(s, "item types created", False, "creation failed"); return
+    prestock(base, token, cid, supplier["id"], [(A, 1000), (B, 1000)])
+
+    def oh(x): return onhand(base, token, cid, x["id"])
+
+    # 10.1 create HS_A qty50 price100 → OUT50 on A (subtotal 5000)
+    st, inv = create_standalone(base, token, cid, client["id"], [
+        {"itemTypeId": A["id"], "description": "widget", "quantity": 50,
+         "uom": "Pcs", "unitPrice": 100}])
+    check(s, "10.1 create ok", st in (200, 201), f"{st} {inv}")
+    if st not in (200, 201):
+        return
+    iid, line = inv["id"], inv["items"][0]["id"]
+    check(s, "10.1 A=950 (OUT 50), B=1000", approx(oh(A), 950) and approx(oh(B), 1000),
+          f"A={oh(A)} B={oh(B)}")
+
+    # 10.2 overlay reclassify A→B (type-only): A reverts, OUT 50 on B
+    st, _ = adjust(base, token, iid, [{"id": line, "itemTypeId": B["id"]}])
+    check(s, "10.2 overlay A→B ok", st == 200, f"{st}")
+    check(s, "10.2 A=1000, B=950 (OUT moved)", approx(oh(A), 1000) and approx(oh(B), 950),
+          f"A={oh(A)} B={oh(B)}")
+
+    # 10.3 BILL PUT qty 50→30 (physical type stays A). Overlay is type-only
+    #      (no filed qty) → stock follows the new physical qty on the overlay
+    #      type B → OUT 30 on B.  (subtotal now 3000)
+    st, upd = put_invoice(base, token, iid, [
+        {"id": line, "itemTypeId": A["id"], "description": "widget",
+         "quantity": 30, "uom": "Pcs", "unitPrice": 100}])
+    check(s, "10.3 bill PUT qty 50→30 ok", st == 200, f"{st} {upd}")
+    check(s, "10.3 B=970 (OUT reflowed to physical qty 30), A=1000",
+          approx(oh(B), 970) and approx(oh(A), 1000), f"A={oh(A)} B={oh(B)}")
+
+    # 10.4 consultant fixes a filed qty 20 @ 150 (line total 3000 = physical) →
+    #      overlay qty now authoritative → OUT 20 on B.
+    st, _ = adjust(base, token, iid, [
+        {"id": line, "itemTypeId": B["id"], "quantity": 20, "unitPrice": 150}])
+    check(s, "10.4 overlay qty→20 ok", st == 200, f"{st}")
+    check(s, "10.4 B=980 (OUT uses filed qty 20)", approx(oh(B), 980),
+          f"B={oh(B)}")
+
+    # 10.5 BILL PUT qty 30→45: overlay filed qty (20) still wins → stock does
+    #      NOT follow the physical change. B stays 980.
+    st, upd = put_invoice(base, token, iid, [
+        {"id": line, "itemTypeId": A["id"], "description": "widget",
+         "quantity": 45, "uom": "Pcs", "unitPrice": 100}])
+    check(s, "10.5 bill PUT qty 30→45 ok", st == 200, f"{st} {upd}")
+    check(s, "10.5 B=980 (filed qty authoritative over physical), A=1000",
+          approx(oh(B), 980) and approx(oh(A), 1000), f"A={oh(A)} B={oh(B)}")
+
+    # 10.6 delete → both restored
+    http("DELETE", f"/api/invoices/{iid}", base, token=token)
+    check(s, "10.6 A=1000,B=1000 after delete",
+          approx(oh(A), 1000) and approx(oh(B), 1000), f"A={oh(A)} B={oh(B)}")
+
+
+# ── Suite 11 — Quantity readjustment correctness (overlay qty) ─────
+# The consultant repeatedly re-decomposes the SAME line total into a
+# different qty×price (dual-book keeps the bill total constant). Stock OUT
+# must track the latest filed qty on every re-adjust, and snap back to the
+# physical qty when the overlay is reverted.
+def suite_qty_readjustment(base, token, cid, client, supplier, suffix):
+    s = "11. Quantity readjustment correctness (overlay qty, totals matched)"
+    print(f"\n=== {s} ===")
+    A = make_item_type(base, token, f"Q11_A_{suffix}", hs=next_hs())
+    if not A:
+        check(s, "item type created", False, "creation failed"); return
+    prestock(base, token, cid, supplier["id"], [(A, 1000)])
+
+    def oh(): return onhand(base, token, cid, A["id"])
+
+    # 11.1 create HS_A qty60 price100 → OUT 60 (subtotal 6000)
+    st, inv = create_standalone(base, token, cid, client["id"], [
+        {"itemTypeId": A["id"], "description": "bolt", "quantity": 60,
+         "uom": "Pcs", "unitPrice": 100}])
+    check(s, "11.1 create ok", st in (200, 201), f"{st} {inv}")
+    if st not in (200, 201):
+        return
+    iid, line = inv["id"], inv["items"][0]["id"]
+    check(s, "11.1 A=940 (OUT 60)", approx(oh(), 940), f"got {oh()}")
+
+    # 11.2 overlay qty 60→40 @150 (6000) → OUT 40
+    st, _ = adjust(base, token, iid, [{"id": line, "itemTypeId": A["id"], "quantity": 40, "unitPrice": 150}])
+    check(s, "11.2 overlay qty→40 ok", st == 200, f"{st}")
+    check(s, "11.2 A=960 (OUT 40)", approx(oh(), 960), f"got {oh()}")
+
+    # 11.3 re-adjust qty 40→30 @200 (6000) → OUT 30
+    st, _ = adjust(base, token, iid, [{"id": line, "itemTypeId": A["id"], "quantity": 30, "unitPrice": 200}])
+    check(s, "11.3 re-adjust qty→30 ok", st == 200, f"{st}")
+    check(s, "11.3 A=970 (OUT 30)", approx(oh(), 970), f"got {oh()}")
+
+    # 11.4 re-adjust qty 30→48 @125 (6000) → OUT 48
+    st, _ = adjust(base, token, iid, [{"id": line, "itemTypeId": A["id"], "quantity": 48, "unitPrice": 125}])
+    check(s, "11.4 re-adjust qty→48 ok", st == 200, f"{st}")
+    check(s, "11.4 A=952 (OUT 48)", approx(oh(), 952), f"got {oh()}")
+
+    # 11.5 revert (send the bill's own qty60 price100) → overlay dropped,
+    #      OUT snaps back to the physical qty 60.
+    st, _ = adjust(base, token, iid, [{"id": line, "itemTypeId": A["id"], "quantity": 60, "unitPrice": 100}])
+    check(s, "11.5 revert to base ok", st == 200, f"{st}")
+    check(s, "11.5 A=940 (OUT back to physical 60)", approx(oh(), 940), f"got {oh()}")
+
+    # 11.6 delete → restored
+    http("DELETE", f"/api/invoices/{iid}", base, token=token)
+    check(s, "11.6 A=1000 after delete", approx(oh(), 1000), f"got {oh()}")
+
+
+# ── Suite 12 — Multi-line invoice, mixed overlays (independence) ───
+# One line is a non-HS family reclassified to HS via overlay; a second line
+# is HS reclassified to a different HS. Adjusting one line must never
+# disturb the other's stock.
+def suite_multiline_overlays(base, token, cid, client, supplier, suffix):
+    s = "12. Multi-line invoice, mixed overlays (per-line independence)"
+    print(f"\n=== {s} ===")
+    FAM = make_item_type(base, token, f"ML_FAM_{suffix}", hs=None)
+    A = make_item_type(base, token, f"ML_A_{suffix}", hs=next_hs())
+    B = make_item_type(base, token, f"ML_B_{suffix}", hs=next_hs())
+    C = make_item_type(base, token, f"ML_C_{suffix}", hs=next_hs())
+    if not (FAM and A and B and C):
+        check(s, "item types created", False, "creation failed"); return
+    prestock(base, token, cid, supplier["id"], [(A, 500), (B, 500), (C, 500)])
+
+    def oh(x): return onhand(base, token, cid, x["id"])
+
+    # 12.1 create 2-line invoice: L1 non-HS family (no OUT), L2 HS_B (OUT 20)
+    st, inv = create_standalone(base, token, cid, client["id"], [
+        {"itemTypeId": FAM["id"], "description": "L1-family", "quantity": 30, "uom": "Pcs", "unitPrice": 100},
+        {"itemTypeId": B["id"],   "description": "L2-hs-b",   "quantity": 20, "uom": "Pcs", "unitPrice": 100}])
+    check(s, "12.1 create 2-line ok", st in (200, 201), f"{st} {inv}")
+    if st not in (200, 201):
+        return
+    iid = inv["id"]
+    l1, l2 = line_of(inv, "L1-family"), line_of(inv, "L2-hs-b")
+    check(s, "12.1 A=500, B=480 (L2 OUT), C=500, FAM=0",
+          approx(oh(A), 500) and approx(oh(B), 480) and approx(oh(C), 500) and approx(oh(FAM), 0),
+          f"A={oh(A)} B={oh(B)} C={oh(C)} FAM={oh(FAM)}")
+
+    # 12.2 overlay L1 family→A → OUT 30 on A; L2 (B) untouched
+    st, _ = adjust(base, token, iid, [{"id": l1, "itemTypeId": A["id"]}])
+    check(s, "12.2 overlay L1→A ok", st == 200, f"{st}")
+    check(s, "12.2 A=470 (L1 OUT), B=480 (unchanged)",
+          approx(oh(A), 470) and approx(oh(B), 480), f"A={oh(A)} B={oh(B)}")
+
+    # 12.3 overlay L2 B→C → revert B, OUT 20 on C; L1 (A) untouched
+    st, _ = adjust(base, token, iid, [{"id": l2, "itemTypeId": C["id"]}])
+    check(s, "12.3 overlay L2 B→C ok", st == 200, f"{st}")
+    check(s, "12.3 B=500 (reverted), C=480 (new OUT), A=470 (unchanged)",
+          approx(oh(B), 500) and approx(oh(C), 480) and approx(oh(A), 470),
+          f"A={oh(A)} B={oh(B)} C={oh(C)}")
+
+    # 12.4 revert L1 overlay (pick base family) → A restored; C untouched
+    st, _ = adjust(base, token, iid, [{"id": l1, "itemTypeId": FAM["id"]}])
+    check(s, "12.4 revert L1→family ok", st == 200, f"{st}")
+    check(s, "12.4 A=500 (restored), C=480 (unchanged)",
+          approx(oh(A), 500) and approx(oh(C), 480), f"A={oh(A)} C={oh(C)}")
+
+    # 12.5 delete → C restored, all back to 500
+    http("DELETE", f"/api/invoices/{iid}", base, token=token)
+    check(s, "12.5 A=500,B=500,C=500 after delete",
+          approx(oh(A), 500) and approx(oh(B), 500) and approx(oh(C), 500),
+          f"A={oh(A)} B={oh(B)} C={oh(C)}")
+
+
+# ── Suite 13 — Challan-driven bill + overlay reflow ────────────────
+# A bill built from a delivery challan (the only add/remove-lines path) that
+# then gets an FBR overlay: a later challan qty change must reflow the OUT
+# onto the OVERLAY's type at the new physical qty.
+def suite_challan_overlay(base, token, cid, client, supplier, suffix):
+    s = "13. Challan-driven bill + overlay reflow"
+    print(f"\n=== {s} ===")
+    A = make_item_type(base, token, f"CO_A_{suffix}", hs=next_hs())
+    B = make_item_type(base, token, f"CO_B_{suffix}", hs=next_hs())
+    if not (A and B):
+        check(s, "item types created", False, "creation failed"); return
+    prestock(base, token, cid, supplier["id"], [(A, 500), (B, 500)])
+
+    def oh(x): return onhand(base, token, cid, x["id"])
+
+    # 13.1 challan A(10) → bill → base HS_A OUT 10
+    st, ch = http("POST", f"/api/deliverychallans/company/{cid}", base, token=token, body={
+        "companyId": cid, "clientId": client["id"],
+        "poNumber": "PO-OV-13", "poDate": TODAY, "deliveryDate": TODAY,
+        "items": [{"itemTypeId": A["id"], "itemTypeName": A["name"], "description": "co A", "quantity": 10, "unit": "Pcs"}]})
+    check(s, "13.1 create challan ok", st in (200, 201), f"{st} {ch}")
+    if st not in (200, 201) or ch.get("status") != "Pending":
+        check(s, "13.1 challan billable", False, f"status={ch.get('status')}"); return
+    st, bill = http("POST", "/api/invoices", base, token=token, body={
+        "date": TODAY, "companyId": cid, "clientId": client["id"], "gstRate": 18,
+        "challanIds": [ch["id"]],
+        "items": [{"deliveryItemId": ch["items"][0]["id"], "unitPrice": 100, "description": "co A"}]})
+    check(s, "13.1 bill from challan ok", st in (200, 201), f"{st} {bill}")
+    if st not in (200, 201):
+        return
+    iid, line = bill["id"], bill["items"][0]["id"]
+    check(s, "13.1 A=490 (OUT 10 on base HS)", approx(oh(A), 490), f"A={oh(A)}")
+
+    # 13.2 overlay reclassify A→B → revert A, OUT 10 on B
+    st, _ = adjust(base, token, iid, [{"id": line, "itemTypeId": B["id"]}])
+    check(s, "13.2 overlay A→B ok", st == 200, f"{st}")
+    check(s, "13.2 A=500 (reverted), B=490 (new OUT)",
+          approx(oh(A), 500) and approx(oh(B), 490), f"A={oh(A)} B={oh(B)}")
+
+    # 13.3 challan qty A 10→4 → physical qty changes; overlay type-only → OUT
+    #      reflows to qty 4 on the OVERLAY type B.
+    st, upd = http("PUT", f"/api/deliverychallans/{ch['id']}/items", base, token=token, body=[
+        {"id": ch["items"][0]["id"], "itemTypeId": A["id"], "description": "co A", "quantity": 4, "unit": "Pcs"}])
+    check(s, "13.3 challan qty 10→4 ok", st == 200, f"{st} {upd}")
+    check(s, "13.3 B=496 (OUT reflowed to qty 4 on overlay type), A=500",
+          approx(oh(B), 496) and approx(oh(A), 500), f"A={oh(A)} B={oh(B)}")
+
+    # 13.4 delete bill → overlay OUT reversed
+    http("DELETE", f"/api/invoices/{iid}", base, token=token)
+    check(s, "13.4 A=500,B=500 after delete",
+          approx(oh(A), 500) and approx(oh(B), 500), f"A={oh(A)} B={oh(B)}")
+
+
 # ── Reporter ───────────────────────────────────────────────────────
 def print_report() -> int:
     by_suite: dict[str, list[tuple[str, str]]] = {}
@@ -765,6 +1174,12 @@ def main() -> int:
         suite_challan_reflow(args.base, token, cid, client, supplier, suffix)
         suite_noop_delta(args.base, token, cid, client, supplier, suffix)
         suite_deleted_item_hidden(args.base, token, cid, supplier, suffix)
+        suite_adjustment_overlay_reflow(args.base, token, cid, client, supplier, suffix)
+        suite_overlay_type_chain(args.base, token, cid, client, supplier, suffix)
+        suite_bill_edit_under_overlay(args.base, token, cid, client, supplier, suffix)
+        suite_qty_readjustment(args.base, token, cid, client, supplier, suffix)
+        suite_multiline_overlays(args.base, token, cid, client, supplier, suffix)
+        suite_challan_overlay(args.base, token, cid, client, supplier, suffix)
     finally:
         teardown(args.base, token, company, args.keep)
 
