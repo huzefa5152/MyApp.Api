@@ -281,6 +281,19 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-27 — Per-screen "rows per page" selector
+
+Added a Rows-per-page dropdown (10/20/50/100/200) to every paginated screen
+(Invoices/Bills/Notes, Sales Quotes, Sales Orders, Purchase Bills, Goods
+Receipts, Delivery Challans, Payments, Attachment Folders, Item Rate History,
+Audit Logs, FBR Monitor). The choice is remembered per screen in localStorage
+and reused on reload; screens left untouched fall back to the appsettings
+`Pagination:DefaultPageSize` (10), read back from the response so the dropdown
+shows the real default. Raised `PaginationHelper.DefaultMax` 100→200 so the 200
+option works on ordinary endpoints too — still bounded, so the audit C-11 DoS
+guard is intact. New shared `usePageSize` hook + `PageSizeSelect` component;
+FBR Monitor's fixed 25/page becomes the appsettings-driven default.
+
 ### 2026-07-27 — FBR monitor Bill column shows the real bill/invoice number, not the DB id
 
 - The FBR Communication Monitor's **Bill** column (and the detail line) rendered the invoice's raw database id (`#240`) instead of the bill/invoice **sequence number** the operator recognises (`#3819` — driven by the company's Starting/Current `InvoiceNumber`). `FbrCommunicationLog` stores only `InvoiceId`, so the real number was never surfaced. **Fix:** added `InvoiceNumber` to `FbrCommunicationLogDto`, resolved from `InvoiceId` in one batch query per page (and for the single-row detail fetch) in `FbrCommunicationLogService` — left null when the invoice was since deleted — and bound the monitor's Bill column + detail line to it. Verified on the prod-replica: rows now read `#3819 / #3816 / #3823` (the sequence) instead of `#240 / #237 / #455` (the ids).

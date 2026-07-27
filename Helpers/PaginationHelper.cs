@@ -16,7 +16,7 @@ namespace MyApp.Api.Helpers
     public static class PaginationHelper
     {
         /// <summary>Default upper bound on pageSize for ordinary list endpoints.</summary>
-        public const int DefaultMax = 100;
+        public const int DefaultMax = 200;
 
         /// <summary>Higher upper bound used for audit-log / monitor screens.</summary>
         public const int AuditMax = 200;

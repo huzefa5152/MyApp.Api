@@ -14,6 +14,8 @@ import AttachmentBadge from "../Components/AttachmentBadge";
 import AttachmentQuickModal from "../Components/AttachmentQuickModal";
 import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import { useListViewMode } from "../hooks/useListViewMode";
+import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
+import PageSizeSelect from "../Components/PageSizeSelect";
 import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, cancelInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
@@ -210,6 +212,10 @@ export default function InvoicePage({ mode = "invoices" }) {
 
   // Pagination & filters
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("invoices");
+  // Effective size echoed by the server when the user hasn't chosen one,
+  // so the dropdown shows the real backend default (appsettings) not a guess.
+  const [observedSize, setObservedSize] = useState(null);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [search, setSearch] = useState(() => searchParams.get("search") || "");
@@ -253,6 +259,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     setLoadingInvoices(true);
     try {
       const params = { page: pg || page };
+      if (pageSize) params.pageSize = pageSize;
       if (search) params.search = search;
       if (clientFilter) params.clientId = clientFilter;
       if (fbrFilter) params.fbrFilter = fbrFilter;
@@ -265,6 +272,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       setInvoices(data.items);
       setTotalCount(data.totalCount);
       setTotalPages(data.totalPages);
+      setObservedSize(data.pageSize ?? null);
       // Hydrate the in-memory "locally validated" Set from the
       // persisted FbrStatus. Pre-fix the Set was session-only, so a
       // bill that had been validated successfully (now persisted as
@@ -284,7 +292,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       });
     } catch { setInvoices([]); setTotalCount(0); setTotalPages(0); }
     finally { setLoadingInvoices(false); }
-  }, [page, search, clientFilter, fbrFilter, dateFrom, dateTo]);
+  }, [page, pageSize, search, clientFilter, fbrFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -311,7 +319,7 @@ export default function InvoicePage({ mode = "invoices" }) {
 
   useEffect(() => {
     if (selectedCompany) fetchInvoices(selectedCompany.id, page);
-  }, [page, search, clientFilter, fbrFilter, dateFrom, dateTo]);
+  }, [page, pageSize, search, clientFilter, fbrFilter, dateFrom, dateTo]);
 
   const resetFilters = () => {
     setSearch(""); setClientFilter(""); setFbrFilter(""); setDateFrom(""); setDateTo(""); setPage(1);
@@ -1295,25 +1303,33 @@ export default function InvoicePage({ mode = "invoices" }) {
           </div>
           )}
           {/* Pagination */}
-          {totalPages > 1 && (
+          {totalCount > PAGE_SIZE_OPTIONS[0] && (
             <div style={styles.pagination}>
-              <button
-                style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }}
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-              >
-                <MdChevronLeft size={20} /> Prev
-              </button>
-              <span style={styles.pageInfo}>
-                Page {page} of {totalPages} ({totalCount} total)
-              </span>
-              <button
-                style={{ ...styles.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }}
-                disabled={page >= totalPages}
-                onClick={() => setPage(page + 1)}
-              >
-                Next <MdChevronRight size={20} />
-              </button>
+              <PageSizeSelect
+                value={pageSize ?? observedSize}
+                onChange={(n) => { setPageSize(n); setPage(1); }}
+              />
+              {totalPages > 1 && (
+                <>
+                  <button
+                    style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }}
+                    disabled={page <= 1}
+                    onClick={() => setPage(page - 1)}
+                  >
+                    <MdChevronLeft size={20} /> Prev
+                  </button>
+                  <span style={styles.pageInfo}>
+                    Page {page} of {totalPages} ({totalCount} total)
+                  </span>
+                  <button
+                    style={{ ...styles.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }}
+                    disabled={page >= totalPages}
+                    onClick={() => setPage(page + 1)}
+                  >
+                    Next <MdChevronRight size={20} />
+                  </button>
+                </>
+              )}
             </div>
           )}
         </>

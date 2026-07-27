@@ -9,6 +9,8 @@ import { notify } from "../utils/notify";
 import { useConfirm } from "./ConfirmDialog";
 import { getPagedFolders, deleteFolder, getUncategorizedAttachments } from "../api/attachmentApi";
 import { dropdownStyles } from "../theme";
+import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
+import PageSizeSelect from "./PageSizeSelect";
 import FolderFormModal from "./FolderFormModal";
 import FolderDetailModal from "./FolderDetailModal";
 
@@ -29,6 +31,8 @@ export default function FoldersManager() {
   const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("folders");
+  const [observedSize, setObservedSize] = useState(null);
   const [totalPages, setTotalPages] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [search, setSearch] = useState("");
@@ -42,9 +46,10 @@ export default function FoldersManager() {
     setLoading(true);
     try {
       const params = { page: pg || page };
+      if (pageSize) params.pageSize = pageSize;
       if (search) params.search = search;
       const { data } = await getPagedFolders(companyId, params);
-      setFolders(data.items); setTotalCount(data.totalCount); setTotalPages(data.totalPages);
+      setFolders(data.items); setTotalCount(data.totalCount); setTotalPages(data.totalPages); setObservedSize(data.pageSize ?? null);
       // Count of attachments not filed in any folder — for the permanent
       // "Uncategorized" card (also reconciles against disk).
       getUncategorizedAttachments(companyId)
@@ -52,13 +57,13 @@ export default function FoldersManager() {
         .catch(() => setUncategorizedCount(0));
     } catch { setFolders([]); setTotalCount(0); setTotalPages(0); }
     finally { setLoading(false); }
-  }, [page, search]);
+  }, [page, pageSize, search]);
 
   useEffect(() => { setPage(1); setSearch(""); }, [selectedCompany]);
   useEffect(() => {
     if (selectedCompany) fetchFolders(selectedCompany.id, page);
     else setFolders([]);
-  }, [selectedCompany, page, search]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedCompany, page, pageSize, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reload = () => selectedCompany && fetchFolders(selectedCompany.id, page);
 
@@ -144,11 +149,14 @@ export default function FoldersManager() {
               ))}
             </div>
             {search && folders.length === 0 && <Empty label="No folders match your search." />}
-            {totalPages > 1 && (
+            {totalCount > PAGE_SIZE_OPTIONS[0] && (
               <div style={st.pagination}>
-                <button style={{ ...st.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}><MdChevronLeft size={20} /> Prev</button>
-                <span style={st.pageInfo}>Page {page} of {totalPages} ({totalCount} total)</span>
-                <button style={{ ...st.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next <MdChevronRight size={20} /></button>
+                <PageSizeSelect value={pageSize ?? observedSize} onChange={(n) => { setPageSize(n); setPage(1); }} />
+                {totalPages > 1 && (<>
+                  <button style={{ ...st.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}><MdChevronLeft size={20} /> Prev</button>
+                  <span style={st.pageInfo}>Page {page} of {totalPages} ({totalCount} total)</span>
+                  <button style={{ ...st.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next <MdChevronRight size={20} /></button>
+                </>)}
               </div>
             )}
           </>

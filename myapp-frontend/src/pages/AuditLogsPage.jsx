@@ -5,6 +5,8 @@ import { usePermissions } from "../contexts/PermissionsContext";
 // Shared backdrop / modal so this audit-log detail dialog matches every
 // other popup (blurred backdrop, centered, non-movable).
 import { formStyles, modalSizes } from "../theme";
+import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
+import PageSizeSelect from "../Components/PageSizeSelect";
 
 const colors = {
   blue: "#0d47a1",
@@ -46,6 +48,8 @@ export default function AuditLogsPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("auditLogs");
+  const [observedSize, setObservedSize] = useState(null);
   const [level, setLevel] = useState("");
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -59,16 +63,17 @@ export default function AuditLogsPage() {
       // Don't send pageSize — let the server apply Pagination:DefaultPageSize
       // from appsettings.json. The response carries page + pageSize +
       // totalPages back so the UI's pagination math stays accurate.
-      const { data } = await getAuditLogs(page, undefined, level || undefined, search || undefined);
+      const { data } = await getAuditLogs(page, pageSize || undefined, level || undefined, search || undefined);
       setLogs(data.items);
       setTotalCount(data.totalCount);
       setTotalPages(data.totalPages);
+      setObservedSize(data.pageSize ?? null);
     } catch {
       setLogs([]);
     } finally {
       setLoading(false);
     }
-  }, [page, level, search]);
+  }, [page, pageSize, level, search]);
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -263,25 +268,28 @@ export default function AuditLogsPage() {
         </div>
 
         {/* Pagination */}
-        {totalPages > 1 && (
+        {totalCount > PAGE_SIZE_OPTIONS[0] && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", padding: "12px", borderTop: `1px solid ${colors.cardBorder}` }}>
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-              style={pgBtn}
-            >
-              <MdChevronLeft size={18} />
-            </button>
-            <span style={{ fontSize: "0.85rem", color: colors.textSecondary, fontWeight: 500 }}>
-              Page {page} of {totalPages}
-            </span>
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              style={pgBtn}
-            >
-              <MdChevronRight size={18} />
-            </button>
+            <PageSizeSelect value={pageSize ?? observedSize} onChange={(n) => { setPageSize(n); setPage(1); }} />
+            {totalPages > 1 && (<>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                style={pgBtn}
+              >
+                <MdChevronLeft size={18} />
+              </button>
+              <span style={{ fontSize: "0.85rem", color: colors.textSecondary, fontWeight: 500 }}>
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                style={pgBtn}
+              >
+                <MdChevronRight size={18} />
+              </button>
+            </>)}
           </div>
         )}
       </div>

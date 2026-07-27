@@ -5,6 +5,8 @@ import { getItemTypes } from "../api/itemTypeApi";
 import { getClientsByCompany } from "../api/clientApi";
 import EditBillForm from "../Components/EditBillForm";
 import { dropdownStyles } from "../theme";
+import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
+import PageSizeSelect from "../Components/PageSizeSelect";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 
@@ -46,7 +48,8 @@ export default function ItemRateHistoryPage() {
   // pageSize on the request so the server applies the configured default,
   // and we read the value back from the response so totalPages is accurate.
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(null);
+  const [pageSize, setPageSize] = useState(null); // server-echoed size (drives page math)
+  const [userPageSize, setUserPageSize] = usePageSize("itemRateHistory"); // operator-chosen override
   const [totalCount, setTotalCount] = useState(0);
   const totalPages = useMemo(
     () => (pageSize && pageSize > 0 ? Math.ceil(totalCount / pageSize) : 0),
@@ -77,6 +80,7 @@ export default function ItemRateHistoryPage() {
       // configured Pagination:DefaultPageSize so we get a single source
       // of truth across pages and respect operator-tuned values.
       const params = { page };
+      if (userPageSize) params.pageSize = userPageSize;
       if (itemTypeId) params.itemTypeId = itemTypeId;
       else if (search) params.search = search;
       if (clientId) params.clientId = clientId;
@@ -100,7 +104,7 @@ export default function ItemRateHistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany, page, itemTypeId, search, clientId, dateFrom, dateTo]);
+  }, [selectedCompany, page, userPageSize, itemTypeId, search, clientId, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchRows();
@@ -408,27 +412,30 @@ export default function ItemRateHistoryPage() {
                 ))}
               </div>
 
-              {totalPages > 1 && (
+              {totalCount > PAGE_SIZE_OPTIONS[0] && (
                 <div className="irh-pagination">
-                  <button
-                    className="irh-page-btn"
-                    style={{ opacity: page <= 1 ? 0.4 : 1 }}
-                    disabled={page <= 1}
-                    onClick={() => setPage(page - 1)}
-                  >
-                    <MdChevronLeft size={20} /> Prev
-                  </button>
-                  <span className="irh-page-info">
-                    Page {page} of {totalPages} <span className="irh-page-info__count">({totalCount} total)</span>
-                  </span>
-                  <button
-                    className="irh-page-btn"
-                    style={{ opacity: page >= totalPages ? 0.4 : 1 }}
-                    disabled={page >= totalPages}
-                    onClick={() => setPage(page + 1)}
-                  >
-                    Next <MdChevronRight size={20} />
-                  </button>
+                  <PageSizeSelect value={userPageSize ?? pageSize} onChange={(n) => { setUserPageSize(n); setPage(1); }} />
+                  {totalPages > 1 && (<>
+                    <button
+                      className="irh-page-btn"
+                      style={{ opacity: page <= 1 ? 0.4 : 1 }}
+                      disabled={page <= 1}
+                      onClick={() => setPage(page - 1)}
+                    >
+                      <MdChevronLeft size={20} /> Prev
+                    </button>
+                    <span className="irh-page-info">
+                      Page {page} of {totalPages} <span className="irh-page-info__count">({totalCount} total)</span>
+                    </span>
+                    <button
+                      className="irh-page-btn"
+                      style={{ opacity: page >= totalPages ? 0.4 : 1 }}
+                      disabled={page >= totalPages}
+                      onClick={() => setPage(page + 1)}
+                    >
+                      Next <MdChevronRight size={20} />
+                    </button>
+                  </>)}
                 </div>
               )}
             </>

@@ -425,7 +425,7 @@ def check_live(base: str, admin_user: str, admin_pw: str) -> None:
     token: str = data["token"]
 
     # 2. Pagination clamp — request a huge pageSize, expect a non-500 result
-    #    with PageSize capped to 100 (or 200 for audit logs).
+    #    with PageSize capped to the bounded ceiling (200; audit logs also 200).
     status, data = http("GET", "/api/Invoices/count?companyId=1", base, token=token)
     record(phase, "invoices count endpoint reachable", status in (200, 400, 401), f"status={status}")
 

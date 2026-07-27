@@ -4,6 +4,8 @@ import { getPurchaseBillsByCompanyPaged, deletePurchaseBill, getPurchaseBillPrin
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getAwaitingPurchase } from "../api/invoiceApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
+import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
+import PageSizeSelect from "../Components/PageSizeSelect";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
@@ -51,6 +53,8 @@ export default function PurchaseBillsPage() {
   const [loading, setLoading] = useState(false);
   const [exportingId, setExportingId] = useState(null);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("purchaseBills");
+  const [observedSize, setObservedSize] = useState(null);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [search, setSearch] = useState("");
@@ -74,6 +78,7 @@ export default function PurchaseBillsPage() {
     setLoading(true);
     try {
       const params = { page: pg || page };
+      if (pageSize) params.pageSize = pageSize;
       if (search) params.search = search;
       if (supplierFilter) params.supplierId = supplierFilter;
       if (dateFrom) params.dateFrom = dateFrom;
@@ -82,12 +87,13 @@ export default function PurchaseBillsPage() {
       setBills(data.items || []);
       setTotalCount(data.totalCount || 0);
       setTotalPages(Math.ceil((data.totalCount || 0) / (data.pageSize || 10)));
+      setObservedSize(data.pageSize ?? null);
     } catch {
       setBills([]); setTotalCount(0); setTotalPages(0);
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany, page, search, supplierFilter, dateFrom, dateTo]);
+  }, [selectedCompany, page, pageSize, search, supplierFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -99,7 +105,7 @@ export default function PurchaseBillsPage() {
     }
   }, [selectedCompany]);
 
-  useEffect(() => { if (selectedCompany) fetchBills(page); }, [page, search, supplierFilter, dateFrom, dateTo]);
+  useEffect(() => { if (selectedCompany) fetchBills(page); }, [page, pageSize, search, supplierFilter, dateFrom, dateTo]);
 
   const onFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
   const hasFilters = search || supplierFilter || dateFrom || dateTo;
@@ -320,15 +326,18 @@ export default function PurchaseBillsPage() {
                 ))}
               </div>
               )}
-              {totalPages > 1 && (
+              {totalCount > PAGE_SIZE_OPTIONS[0] && (
                 <div style={styles.pagination}>
-                  <button style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}>
-                    <MdChevronLeft size={20} /> Prev
-                  </button>
-                  <span style={styles.pageInfo}>Page {page} of {totalPages} ({totalCount} total)</span>
-                  <button style={{ ...styles.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-                    Next <MdChevronRight size={20} />
-                  </button>
+                  <PageSizeSelect value={pageSize ?? observedSize} onChange={(n) => { setPageSize(n); setPage(1); }} />
+                  {totalPages > 1 && (<>
+                    <button style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                      <MdChevronLeft size={20} /> Prev
+                    </button>
+                    <span style={styles.pageInfo}>Page {page} of {totalPages} ({totalCount} total)</span>
+                    <button style={{ ...styles.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+                      Next <MdChevronRight size={20} />
+                    </button>
+                  </>)}
                 </div>
               )}
             </>

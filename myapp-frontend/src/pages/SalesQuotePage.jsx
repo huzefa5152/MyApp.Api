@@ -20,6 +20,8 @@ import { defaultQuoteTemplate } from "../utils/salesDocTemplates";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { dropdownStyles } from "../theme";
+import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
+import PageSizeSelect from "../Components/PageSizeSelect";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
@@ -49,6 +51,8 @@ export default function SalesQuotePage() {
   const [showImport, setShowImport] = useState(false);
   const [editQuote, setEditQuote] = useState(null);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("salesQuotes");
+  const [observedSize, setObservedSize] = useState(null);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [search, setSearch] = useState("");
@@ -64,6 +68,7 @@ export default function SalesQuotePage() {
     setLoading(true);
     try {
       const params = { page: pg || page };
+      if (pageSize) params.pageSize = pageSize;
       if (search) params.search = search;
       if (statusFilter) params.status = statusFilter;
       if (clientFilter) params.clientId = clientFilter;
@@ -71,9 +76,10 @@ export default function SalesQuotePage() {
       setQuotes(data.items);
       setTotalCount(data.totalCount);
       setTotalPages(data.totalPages);
+      setObservedSize(data.pageSize ?? null);
     } catch { setQuotes([]); setTotalCount(0); setTotalPages(0); }
     finally { setLoading(false); }
-  }, [page, search, statusFilter, clientFilter]);
+  }, [page, pageSize, search, statusFilter, clientFilter]);
 
   // Reset paging + filters and load the client list when the company changes.
   useEffect(() => {
@@ -88,7 +94,7 @@ export default function SalesQuotePage() {
   useEffect(() => {
     if (selectedCompany) fetchQuotes(selectedCompany.id, page);
     else setQuotes([]);
-  }, [selectedCompany, page, search, statusFilter, clientFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedCompany, page, pageSize, search, statusFilter, clientFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reload = () => selectedCompany && fetchQuotes(selectedCompany.id, page);
 
@@ -242,11 +248,14 @@ export default function SalesQuotePage() {
               </div>
             ))}
           </div>
-          {totalPages > 1 && (
+          {totalCount > PAGE_SIZE_OPTIONS[0] && (
             <div style={st.pagination}>
-              <button style={{ ...st.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}><MdChevronLeft size={20} /> Prev</button>
-              <span style={st.pageInfo}>Page {page} of {totalPages} ({totalCount} total)</span>
-              <button style={{ ...st.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next <MdChevronRight size={20} /></button>
+              <PageSizeSelect value={pageSize ?? observedSize} onChange={(n) => { setPageSize(n); setPage(1); }} />
+              {totalPages > 1 && (<>
+                <button style={{ ...st.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}><MdChevronLeft size={20} /> Prev</button>
+                <span style={st.pageInfo}>Page {page} of {totalPages} ({totalCount} total)</span>
+                <button style={{ ...st.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next <MdChevronRight size={20} /></button>
+              </>)}
             </div>
           )}
         </>

@@ -19,6 +19,8 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getFbrLogs, getFbrLogById, getFbrSummary } from "../api/fbrMonitorApi";
 import { notify } from "../utils/notify";
+import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
+import PageSizeSelect from "../Components/PageSizeSelect";
 import "./FbrMonitorPage.css";
 
 // Status -> visual config. Keys mirror FbrCommunicationLog.Status taxonomy.
@@ -58,7 +60,8 @@ export default function FbrMonitorPage() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(25);
+  const [pageSize, setPageSize] = usePageSize("fbrMonitor");
+  const [observedSize, setObservedSize] = useState(null);
   const [loading, setLoading] = useState(false);
   const [windowHours, setWindowHours] = useState(24);
   const [statusFilter, setStatusFilter] = useState("");
@@ -92,7 +95,7 @@ export default function FbrMonitorPage() {
       try {
         const since = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
         const r = await getFbrLogs({
-          page, pageSize, companyId,
+          page, pageSize: pageSize || undefined, companyId,
           status: statusFilter || undefined,
           action: actionFilter || undefined,
           since,
@@ -100,6 +103,7 @@ export default function FbrMonitorPage() {
         if (!cancelled) {
           setRows(r.data.items || []);
           setTotal(r.data.totalCount || 0);
+          setObservedSize(r.data.pageSize ?? null);
         }
       } catch (err) {
         if (!cancelled) notify(err.response?.data?.message || "Could not load FBR logs.", "error");
@@ -115,7 +119,8 @@ export default function FbrMonitorPage() {
   if (!canView) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>You don't have permission to view FBR monitor.</div></Shell>;
   if (!selectedCompany) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>Pick a company first.</div></Shell>;
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const effectiveSize = pageSize ?? observedSize ?? 10;
+  const totalPages = Math.max(1, Math.ceil(total / effectiveSize));
   const filteredCount = total;
 
   return (
@@ -161,7 +166,14 @@ export default function FbrMonitorPage() {
         }}
       />
 
-      <Pagination page={page} totalPages={totalPages} total={total} onPage={setPage} />
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        onPage={setPage}
+        value={pageSize ?? observedSize}
+        onSize={(n) => { setPageSize(n); setPage(1); }}
+      />
 
       {drawer && <Drawer row={drawer} onClose={() => setDrawer(null)} />}
     </Shell>
@@ -320,15 +332,20 @@ function RowsList({ rows, loading, onClickRow }) {
   );
 }
 
-function Pagination({ page, totalPages, total, onPage }) {
-  if (totalPages <= 1) return null;
+function Pagination({ page, totalPages, total, onPage, value, onSize }) {
+  if (total <= PAGE_SIZE_OPTIONS[0]) return null;
   return (
     <div className="fbr-mon-pagination" style={S.pagination}>
-      <button type="button" disabled={page <= 1} onClick={() => onPage(page - 1)} style={S.pageBtn}>← Prev</button>
-      <span style={{ fontSize: "0.82rem", color: "#5f6d7e" }}>
-        Page {page} of {totalPages} <span style={{ color: "#98a4b3" }}>({total.toLocaleString()} rows)</span>
-      </span>
-      <button type="button" disabled={page >= totalPages} onClick={() => onPage(page + 1)} style={S.pageBtn}>Next →</button>
+      <PageSizeSelect value={value} onChange={onSize} />
+      {totalPages > 1 && (
+        <>
+          <button type="button" disabled={page <= 1} onClick={() => onPage(page - 1)} style={S.pageBtn}>← Prev</button>
+          <span style={{ fontSize: "0.82rem", color: "#5f6d7e" }}>
+            Page {page} of {totalPages} <span style={{ color: "#98a4b3" }}>({total.toLocaleString()} rows)</span>
+          </span>
+          <button type="button" disabled={page >= totalPages} onClick={() => onPage(page + 1)} style={S.pageBtn}>Next →</button>
+        </>
+      )}
     </div>
   );
 }

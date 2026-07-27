@@ -28,6 +28,8 @@ import { defaultChallanTemplate } from "../utils/defaultTemplates";
 import { exportToPdf } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { dropdownStyles } from "../theme";
+import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
+import PageSizeSelect from "../Components/PageSizeSelect";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
@@ -79,7 +81,8 @@ export default function ChallanPage() {
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(10); // server-echoed size (drives page math)
+  const [userPageSize, setUserPageSize] = usePageSize("challans"); // operator-chosen override
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [clientFilter, setClientFilter] = useState("");
@@ -113,6 +116,7 @@ export default function ChallanPage() {
     setLoadingChallans(true);
     try {
       const params = { page: pg || page };
+      if (userPageSize) params.pageSize = userPageSize;
       if (search) params.search = search;
       if (statusFilter) params.status = statusFilter;
       if (clientFilter) params.clientId = clientFilter;
@@ -130,7 +134,7 @@ export default function ChallanPage() {
     } finally {
       setLoadingChallans(false);
     }
-  }, [page, search, statusFilter, clientFilter, dateFrom, dateTo]);
+  }, [page, userPageSize, search, statusFilter, clientFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -150,7 +154,7 @@ export default function ChallanPage() {
   // Re-fetch when filters or page change
   useEffect(() => {
     if (selectedCompany) fetchChallans(selectedCompany.id, page);
-  }, [page, search, statusFilter, clientFilter, dateFrom, dateTo]);
+  }, [page, userPageSize, search, statusFilter, clientFilter, dateFrom, dateTo]);
 
   const resetFilters = () => {
     setSearch("");
@@ -500,25 +504,28 @@ export default function ChallanPage() {
             />
           )}
           {/* Pagination */}
-          {totalPages > 1 && (
+          {totalCount > PAGE_SIZE_OPTIONS[0] && (
             <div style={styles.pagination}>
-              <button
-                style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }}
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-              >
-                <MdChevronLeft size={20} /> Prev
-              </button>
-              <span style={styles.pageInfo}>
-                Page {page} of {totalPages} ({totalCount} total)
-              </span>
-              <button
-                style={{ ...styles.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }}
-                disabled={page >= totalPages}
-                onClick={() => setPage(page + 1)}
-              >
-                Next <MdChevronRight size={20} />
-              </button>
+              <PageSizeSelect value={userPageSize ?? pageSize} onChange={(n) => { setUserPageSize(n); setPage(1); }} />
+              {totalPages > 1 && (<>
+                <button
+                  style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }}
+                  disabled={page <= 1}
+                  onClick={() => setPage(page - 1)}
+                >
+                  <MdChevronLeft size={20} /> Prev
+                </button>
+                <span style={styles.pageInfo}>
+                  Page {page} of {totalPages} ({totalCount} total)
+                </span>
+                <button
+                  style={{ ...styles.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }}
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(page + 1)}
+                >
+                  Next <MdChevronRight size={20} />
+                </button>
+              </>)}
             </div>
           )}
         </>

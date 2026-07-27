@@ -10,6 +10,8 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import { colors, dropdownStyles } from "../theme";
+import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
+import PageSizeSelect from "../Components/PageSizeSelect";
 import StatusBadge from "../Components/StatusBadge";
 import PaymentForm from "../Components/PaymentForm";
 import AttachmentManager from "../Components/AttachmentManager";
@@ -65,6 +67,8 @@ export default function PaymentsPage({ mode = "receipts" }) {
 
   const [rows, setRows] = useState([]);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("payments");
+  const [observedSize, setObservedSize] = useState(null);
   const [totalPages, setTotalPages] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [search, setSearch] = useState("");
@@ -83,17 +87,19 @@ export default function PaymentsPage({ mode = "receipts" }) {
     setLoading(true);
     try {
       const params = { page: pg || page };
+      if (pageSize) params.pageSize = pageSize;
       if (search.trim()) params.search = search.trim();
       const { data } = await getPagedPayments(dir, companyId, params);
       setRows(data.items || []);
       setTotalCount(data.totalCount || 0);
       setTotalPages(data.totalPages || 0);
+      setObservedSize(data.pageSize ?? null);
     } catch {
       setRows([]); setTotalCount(0); setTotalPages(0);
     } finally {
       setLoading(false);
     }
-  }, [companyId, dir, page, search]);
+  }, [companyId, dir, page, pageSize, search]);
 
   // Reset to page 1 on company / mode switch.
   useEffect(() => { setPage(1); setSearch(""); }, [companyId, dir]);
@@ -229,15 +235,18 @@ export default function PaymentsPage({ mode = "receipts" }) {
             </div>
           )}
 
-          {totalPages > 1 && (
+          {totalCount > PAGE_SIZE_OPTIONS[0] && (
             <div style={st.pagination}>
-              <button style={{ ...st.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}>
-                <MdChevronLeft size={20} /> Prev
-              </button>
-              <span style={st.pageInfo}>Page {page} of {totalPages} ({totalCount} total)</span>
-              <button style={{ ...st.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-                Next <MdChevronRight size={20} />
-              </button>
+              <PageSizeSelect value={pageSize ?? observedSize} onChange={(n) => { setPageSize(n); setPage(1); }} />
+              {totalPages > 1 && (<>
+                <button style={{ ...st.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                  <MdChevronLeft size={20} /> Prev
+                </button>
+                <span style={st.pageInfo}>Page {page} of {totalPages} ({totalCount} total)</span>
+                <button style={{ ...st.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+                  Next <MdChevronRight size={20} />
+                </button>
+              </>)}
             </div>
           )}
         </>
