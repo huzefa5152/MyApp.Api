@@ -281,6 +281,15 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-27 — Excel export: wrapped item descriptions no longer clip
+
+Item rows in Excel template exports now auto-grow to fit multi-line wrapped
+text (long product descriptions). ClosedXML copies the template row's fixed
+height onto every expanded item row, and Excel won't auto-fit rows carrying an
+explicit height — so a 2-line description showed only its first line. The
+engine now estimates each wrapped cell's line count from the (possibly merged)
+column width and bumps the row height to fit. Only grows rows, never shrinks.
+
 ### 2026-07-27 — Per-quotation Contact Person (sourced from the client)
 
 Clients now hold a semicolon-separated **Contact Persons** list (same pattern as

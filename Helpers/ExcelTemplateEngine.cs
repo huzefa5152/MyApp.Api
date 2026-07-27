@@ -303,6 +303,7 @@ namespace MyApp.Api.Helpers
                     {
                         int row = blockStart + tr;
                         ReplaceFieldsInRow(ws, row, itemData, itemIdx + 1);
+                        GrowRowForWrappedText(ws, row);
                     }
                 }
 
@@ -316,6 +317,65 @@ namespace MyApp.Api.Helpers
                         ClearFieldsInRow(ws, row);
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Grow a filled item row so a wrapped multi-line cell (typically the
+        /// Description column) isn't clipped. ClosedXML copies the template
+        /// row's fixed customHeight (e.g. 15pt) onto every expanded item row,
+        /// and Excel does NOT auto-fit rows that carry an explicit height — so
+        /// a 2-line description shows only its first line. Estimate the wrapped
+        /// line count from each wrap-enabled cell's text vs its (possibly
+        /// merged) column width and bump the row height to fit. Only ever grows
+        /// the row, never shrinks it.
+        /// </summary>
+        private static void GrowRowForWrappedText(IXLWorksheet ws, int row)
+        {
+            int lastCol = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
+            double current = ws.Row(row).Height;
+            int maxLines = 1;
+            double linePt = 15.0;
+
+            for (int c = 1; c <= lastCol; c++)
+            {
+                var cell = ws.Cell(row, c);
+                if (cell.HasFormula) continue;
+                if (!cell.Style.Alignment.WrapText) continue;
+                var text = cell.GetString();
+                if (string.IsNullOrEmpty(text)) continue;
+
+                // Use the full span width for a merged description so we don't
+                // over-count lines for a wide merged cell.
+                double colWidth = ws.Column(c).Width;
+                var merged = ws.MergedRanges.FirstOrDefault(mr =>
+                    mr.FirstRow().RowNumber() <= row && mr.LastRow().RowNumber() >= row &&
+                    mr.FirstColumn().ColumnNumber() <= c && mr.LastColumn().ColumnNumber() >= c);
+                if (merged != null)
+                {
+                    colWidth = 0;
+                    for (int mc = merged.FirstColumn().ColumnNumber(); mc <= merged.LastColumn().ColumnNumber(); mc++)
+                        colWidth += ws.Column(mc).Width;
+                }
+                if (colWidth <= 1) continue;
+
+                // Excel's column-width unit ≈ characters of the default font.
+                // Trim one char so proportional-font descriptions don't
+                // under-wrap (and clip). Honour explicit newlines too.
+                int perLine = Math.Max(1, (int)Math.Floor(colWidth) - 1);
+                int lines = 0;
+                foreach (var seg in text.Replace("\r", "").Split('\n'))
+                    lines += Math.Max(1, (int)Math.Ceiling(seg.Length / (double)perLine));
+
+                if (lines > maxLines) maxLines = lines;
+                double fs = cell.Style.Font.FontSize;
+                if (fs > 11) linePt = Math.Max(linePt, fs * 1.35);
+            }
+
+            if (maxLines > 1)
+            {
+                double needed = maxLines * linePt;
+                if (needed > current) ws.Row(row).Height = needed;
             }
         }
 
