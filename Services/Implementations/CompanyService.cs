@@ -75,6 +75,8 @@ namespace MyApp.Api.Services.Implementations
             CurrentPurchaseBillNumber = c.CurrentPurchaseBillNumber,
             StartingGoodsReceiptNumber = c.StartingGoodsReceiptNumber,
             CurrentGoodsReceiptNumber = c.CurrentGoodsReceiptNumber,
+            StartingSalesQuoteNumber = c.StartingSalesQuoteNumber,
+            StartingSalesOrderNumber = c.StartingSalesOrderNumber,
             IsTenantIsolated = c.IsTenantIsolated,
         };
 
@@ -148,6 +150,8 @@ namespace MyApp.Api.Services.Implementations
                 CurrentPurchaseBillNumber = 0,
                 StartingGoodsReceiptNumber = dto.StartingGoodsReceiptNumber,
                 CurrentGoodsReceiptNumber = 0,
+                StartingSalesQuoteNumber = dto.StartingSalesQuoteNumber > 0 ? dto.StartingSalesQuoteNumber : 1,
+                StartingSalesOrderNumber = dto.StartingSalesOrderNumber > 0 ? dto.StartingSalesOrderNumber : 1,
                 IsTenantIsolated = dto.IsTenantIsolated,
             };
 
@@ -208,6 +212,14 @@ namespace MyApp.Api.Services.Implementations
                 company.StartingGoodsReceiptNumber = dto.StartingGoodsReceiptNumber;
                 company.CurrentGoodsReceiptNumber = 0;
             }
+            // Sales Quote / Order seeds — only honoured while the company has no
+            // quotes / orders yet (mirrors the invoice/challan/PB/GR locks).
+            var hasQuotes = await _context.SalesQuotes.AnyAsync(q => q.CompanyId == id);
+            if (!hasQuotes)
+                company.StartingSalesQuoteNumber = dto.StartingSalesQuoteNumber > 0 ? dto.StartingSalesQuoteNumber : 1;
+            var hasOrders = await _context.SalesOrders.AnyAsync(o => o.CompanyId == id);
+            if (!hasOrders)
+                company.StartingSalesOrderNumber = dto.StartingSalesOrderNumber > 0 ? dto.StartingSalesOrderNumber : 1;
 
             // Only allow changing starting challan number if no challans exist
             var hasChallans = await _challanRepo.HasChallansForCompanyAsync(id);

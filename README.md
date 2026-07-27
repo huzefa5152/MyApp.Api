@@ -281,6 +281,16 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-27 — Company form: Sales Quote & Sales Order starting numbers
+
+The Company create/edit form now exposes "Starting Sales Quote #" and "Starting
+Sales Order #" inputs, mirroring the existing challan / invoice / note /
+purchase-bill / goods-receipt seeds. `Company.StartingSalesQuoteNumber` /
+`StartingSalesOrderNumber` already existed and drove the numbering services, but
+were never wired into `CreateCompanyDto` / `UpdateCompanyDto` / `CompanyDto` or
+the form — so the seed could previously only be set via a direct DB update.
+Honoured only while the company has no quotes / orders yet (server-side guard).
+
 ### 2026-07-27 — Excel export: wrapped item descriptions no longer clip
 
 Item rows in Excel template exports now auto-grow to fit multi-line wrapped

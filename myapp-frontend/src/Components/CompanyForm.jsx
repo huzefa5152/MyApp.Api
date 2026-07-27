@@ -57,6 +57,8 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         inventoryTrackingEnabled: false,
         startingPurchaseBillNumber: 0,
         startingGoodsReceiptNumber: 0,
+        startingSalesQuoteNumber: 1,
+        startingSalesOrderNumber: 1,
         // Tenant isolation — off by default to preserve "any user with the
         // right RBAC permission can reach this company" behaviour. When
         // flipped true, only users with a UserCompanies row pass the
@@ -128,6 +130,8 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 inventoryTrackingEnabled: !!freshCompany.inventoryTrackingEnabled,
                 startingPurchaseBillNumber: freshCompany.startingPurchaseBillNumber || 0,
                 startingGoodsReceiptNumber: freshCompany.startingGoodsReceiptNumber || 0,
+                startingSalesQuoteNumber: freshCompany.startingSalesQuoteNumber || 1,
+                startingSalesOrderNumber: freshCompany.startingSalesOrderNumber || 1,
                 isTenantIsolated: !!freshCompany.isTenantIsolated,
             });
         }
@@ -170,7 +174,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
             setForm({ ...form, [name]: value === "" ? "" : Number(value) });
             return;
         }
-        if (["startingChallanNumber", "currentChallanNumber", "startingInvoiceNumber", "currentInvoiceNumber", "startingDebitNoteNumber", "startingCreditNoteNumber", "startingPurchaseBillNumber", "startingGoodsReceiptNumber"].includes(name)) {
+        if (["startingChallanNumber", "currentChallanNumber", "startingInvoiceNumber", "currentInvoiceNumber", "startingDebitNoteNumber", "startingCreditNoteNumber", "startingPurchaseBillNumber", "startingGoodsReceiptNumber", "startingSalesQuoteNumber", "startingSalesOrderNumber"].includes(name)) {
             const numberValue = Number(value);
             if (isNaN(numberValue) || numberValue < 0 || numberValue > INT32_MAX) return;
             setForm({ ...form, [name]: numberValue });
@@ -394,6 +398,37 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                     Current credit note number: {company.currentCreditNoteNumber} (locked — notes exist)
                                 </span>
                             )}
+                        </div>
+
+                        <div className="form-grid-2col">
+                            <div style={formGroup}>
+                                <label style={label}>Starting Sales Quote #</label>
+                                <input
+                                    type="number"
+                                    name="startingSalesQuoteNumber"
+                                    min={1}
+                                    value={form.startingSalesQuoteNumber}
+                                    onChange={handleChange}
+                                    style={input}
+                                />
+                                <span style={{ fontSize: "0.72rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
+                                    Locks once sales quotes exist.
+                                </span>
+                            </div>
+                            <div style={formGroup}>
+                                <label style={label}>Starting Sales Order #</label>
+                                <input
+                                    type="number"
+                                    name="startingSalesOrderNumber"
+                                    min={1}
+                                    value={form.startingSalesOrderNumber}
+                                    onChange={handleChange}
+                                    style={input}
+                                />
+                                <span style={{ fontSize: "0.72rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
+                                    Locks once sales orders exist.
+                                </span>
+                            </div>
                         </div>
 
                         <div style={{ marginTop: "1rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #0d47a130", backgroundColor: "#e3f2fd" }}>

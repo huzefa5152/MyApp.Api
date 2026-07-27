@@ -32,6 +32,10 @@
         public bool InventoryTrackingEnabled { get; set; }
         public int StartingPurchaseBillNumber { get; set; }
         public int StartingGoodsReceiptNumber { get; set; }
+        /// <summary>Starting number for the Sales Quote sequence. Only honoured while the company has no quotes yet.</summary>
+        public int StartingSalesQuoteNumber { get; set; } = 1;
+        /// <summary>Starting number for the Sales Order sequence. Only honoured while the company has no orders yet.</summary>
+        public int StartingSalesOrderNumber { get; set; } = 1;
 
         // Tenant isolation flag. See CompanyDto for semantics.
         public bool IsTenantIsolated { get; set; }

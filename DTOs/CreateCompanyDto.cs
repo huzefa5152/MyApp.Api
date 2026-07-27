@@ -36,6 +36,10 @@
         public bool InventoryTrackingEnabled { get; set; }
         public int StartingPurchaseBillNumber { get; set; }
         public int StartingGoodsReceiptNumber { get; set; }
+        /// <summary>Starting number for the Sales Quote sequence. Defaults to 1.</summary>
+        public int StartingSalesQuoteNumber { get; set; } = 1;
+        /// <summary>Starting number for the Sales Order sequence. Defaults to 1.</summary>
+        public int StartingSalesOrderNumber { get; set; } = 1;
 
         // Tenant isolation flag. See CompanyDto for semantics. Defaults to
         // false on a newly created company so existing flows keep working.

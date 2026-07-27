@@ -42,6 +42,8 @@
         public int CurrentPurchaseBillNumber { get; set; }
         public int StartingGoodsReceiptNumber { get; set; }
         public int CurrentGoodsReceiptNumber { get; set; }
+        public int StartingSalesQuoteNumber { get; set; }
+        public int StartingSalesOrderNumber { get; set; }
 
         // ── Tenant isolation switch ─────────────────────────────────
         // false (default) → any authenticated user with the right RBAC
