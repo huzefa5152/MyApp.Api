@@ -1285,7 +1285,11 @@ namespace MyApp.Api.Services.Implementations
             }
             catch (Exception ex)
             {
-                var msg = $"Unexpected error: {ex.Message}";
+                // Audit H10: log the real exception server-side; never return raw
+                // ex.Message (SQL/EF/stack text) to the client on this token-
+                // sensitive path.
+                _logger.LogError(ex, "FBR {Action} failed unexpectedly for invoice {InvoiceId}", action, invoice.Id);
+                var msg = "An unexpected error occurred while contacting FBR. See the FBR monitor / server logs for details.";
                 await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg);
                 if (isSubmit) await PersistStatus(invoice, "Failed", null, msg);
                 return Fail(msg);

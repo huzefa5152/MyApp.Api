@@ -10,7 +10,12 @@ Full-system bug & business-flow audit of MyApp.Api (feat/sales-quote-order-flow)
 **Batch 2 — data-corruption fixes (FIXED + verified: reflow 140/140, basic 37/37, tenant-iso pass):**
 `H1` credit/debit note reverses stock against the **effective** type (`AdjustedItemTypeId ?? physical`) — no more restocking the wrong item (note-reversal path can't be exercised offline: note creation requires an FBR-submitted invoice + IRN, so this is a code-inspection fix mirroring the proven suites 8–13 overlay logic) · `H2` bounced cheques excluded from `AmountPaid`, and `SetChequeStatusAsync` reflows the settled documents on a bounce/un-bounce · `M3` FBR purchase-import records IN only for HS-tracked item types · `M4` stock re-sync backfill filter now includes type-only reclassifications.
 
-**Remaining** (H3/H4/H5 concurrency, H8-suppliers, H9 SQL-2025, H10 error-leaks, and the MEDIUM/LOW set) — being done in subsequent verified batches.
+**Batch 3 — concurrency + error-leaks (FIXED + verified: reflow 140/140, basic 37/37):**
+`H3` bill-create re-asserts each challan's billable status INSIDE the per-company app-locked section (fresh DB read) — a double-click can no longer bill one challan twice · `H4` `SalesOrderService.CreateAsync` blocks linking an already-converted quote (the no-concurrency double-order vector) · `H10` FBR-submit + bulk-challan-import log the real exception and return a generic message (no raw `ex.Message` to the client).
+
+**Deferred (needs a dedicated, FBR-sandbox-tested fix):** `H5` concurrent/timed-out FBR submit → duplicate IRN. Serialising submit per-invoice + timeout reconciliation touches the delicate PRAL POST path and can't be verified offline; rushing it risks worse FBR outcomes. Left documented above.
+
+**Remaining** (H4 unique-index migration, H8-suppliers, H9 SQL-2025 purchase paths, and the MEDIUM/LOW set) — for subsequent verified batches.
 
 ---
 

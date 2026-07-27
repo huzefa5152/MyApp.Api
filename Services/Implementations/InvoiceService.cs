@@ -716,6 +716,25 @@ namespace MyApp.Api.Services.Implementations
                     // Serialize same-company allocation before reading MAX (see helper).
                     await AcquireInvoiceNumberLockAsync(dto.CompanyId);
 
+                    // Audit H3: re-assert challan billable status INSIDE the locked
+                    // section. The load-time check above is a TOCTOU — a concurrent
+                    // Create for the same challan may have billed it between load and
+                    // here. The per-company app-lock serialises us, so a fresh read
+                    // now sees the other request's committed "Invoiced" status. The
+                    // Select projection reads the DB (not the tracked/stale entity).
+                    if (dto.ChallanIds != null && dto.ChallanIds.Count > 0)
+                    {
+                        var freshStatuses = await _context.DeliveryChallans
+                            .AsNoTracking()
+                            .Where(dc => dto.ChallanIds.Contains(dc.Id))
+                            .Select(dc => new { dc.Status, dc.ChallanNumber })
+                            .ToListAsync();
+                        var conflict = freshStatuses.FirstOrDefault(dc => dc.Status != "Pending" && dc.Status != "Imported");
+                        if (conflict != null)
+                            throw new InvalidOperationException(
+                                $"Challan {conflict.ChallanNumber} was just billed by another request — refresh and try again.");
+                    }
+
                     // Use MAX(InvoiceNumber) so a deleted trailing number is reused on the next
                     // create (no gaps after deleting the last bill). Falls back to StartingInvoiceNumber
                     // when the company has no invoices yet. IsDemo bills live in their

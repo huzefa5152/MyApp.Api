@@ -1039,7 +1039,10 @@ namespace MyApp.Api.Services.Implementations
             }
             catch (Exception ex)
             {
-                result.Error = ex.Message;
+                // Audit H10: log server-side; don't hand raw ex.Message (DB/EF text)
+                // back to the client in the import result.
+                _logger.LogError(ex, "Historical challan import failed for one row");
+                result.Error = "Import failed due to an unexpected error. See server logs.";
             }
             return result;
         }

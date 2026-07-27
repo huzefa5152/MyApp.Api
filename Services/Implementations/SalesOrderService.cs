@@ -243,6 +243,15 @@ namespace MyApp.Api.Services.Implementations
                     q => q.Id == dto.SalesQuoteId.Value && q.CompanyId == companyId);
                 if (!quoteOk)
                     throw new InvalidOperationException("The linked sales quote was not found for this company.");
+
+                // Audit H4: a quote converts to at most ONE order. Block linking a
+                // quote that already has an order — the no-concurrency double-link
+                // vector (ConvertToSalesOrderAsync has this guard; direct Create did
+                // not, and there is no unique index on SalesOrder.SalesQuoteId).
+                var alreadyLinked = await _context.SalesOrders
+                    .AnyAsync(o => o.SalesQuoteId == dto.SalesQuoteId.Value);
+                if (alreadyLinked)
+                    throw new InvalidOperationException("This sales quote has already been converted to an order.");
             }
 
             await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.Unit));
