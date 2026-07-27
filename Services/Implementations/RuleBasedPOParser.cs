@@ -1278,6 +1278,12 @@ namespace MyApp.Api.Services.Implementations
             "Set", "Sets", "Pair", "Pairs", "Bottle", "Bottles", "Can", "Cans", "Pack", "Packs", "Packet", "Packets",
             "Dozen", "Dozens", "Dzn", "Sheet", "Sheets", "Bundle", "Bundles",
             "SqM", "SqFt", "CBM", "SqY",
+            // Packaging units seen in production POs (Meko / Innovative Aqua etc.).
+            // Needed as adjacency ANCHORS so a "… PKT 50 …" row reads qty 50 rather
+            // than grabbing a size token from the description ("CABLE TIE 6\"" → 6").
+            // Already present in UnitOnlyWords (mis-map detection); adding here so
+            // the adjacency extractor also treats them as real units. 2026-07-27.
+            "PKT", "PKTS", "Tin", "Tins", "RFT",
         };
 
         private static bool IsRecognisedUnit(string token) =>
@@ -1319,6 +1325,12 @@ namespace MyApp.Api.Services.Implementations
             var s = desc.Trim();
             if (!s.Contains(' ') && UnitOnlyWords.Contains(s.TrimEnd('.'))) return true;
             if (MismappedUnitLeadRegex.IsMatch(s)) return true;
+            // (3b) a leaked "qty rate" run at the very START of the description —
+            // "1 4200.00 …", "5000 11.00 …" — the numeric qty/rate/amount columns
+            // spilled into the front of the description. Catches rows the
+            // <=3-letter guard below misses when a wrapped trailing description
+            // token (e.g. "TO 24VDC 30A MOD# P30") leaves >3 letters. 2026-07-27.
+            if (Regex.IsMatch(s, @"^\d[\d,]*\s+\d[\d,]*\.\d{2}")) return true;
             if (s.Count(char.IsLetter) <= 3)
             {
                 var nums = Regex.Matches(s, @"\d[\d,]*(?:\.\d+)?").Count;

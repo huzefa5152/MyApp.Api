@@ -13,9 +13,9 @@
         "unit": "Pcs"
       },
       {
-        "description": "SAMAD",
-        "quantity": 3,
-        "unit": "Bond"
+        "description": "SAMAD BOND 3.75LTR",
+        "quantity": 1,
+        "unit": "Tin"
       },
       {
         "description": "S.S JUBLEE CLIP 1 1/2\"",
@@ -210,6 +210,66 @@
       {
         "description": "Thermal Receipt Printer",
         "quantity": 2.0,
+        "unit": "Pcs"
+      }
+    ]
+  },
+  {
+    "id": "prod-270165-meko-cable-tie-pkt",
+    "category": "meko-denim-fabrics",
+    "descHeader": "Item Name",
+    "qtyHeader": "Qty",
+    "unitHeader": "Unit",
+    "rawText": "MEKO DENIM MILLS (PVT) LTD.\nA-MAIN STORE. KOTRI\nPurchase Order\nINDENT\nP. O. No  270165  Account Code  10100113  ST No  42301-4020795-9\nDate  27-JUL-26\nSupplier Title  ROSHAN TRADERS\nDlv Date\nContact\nCAPITAL\nVALID  Address  F-44 FALAK CITY TOWER KARACHI\nWEAVING MDM\nTelephone No  +92-333-1665253\nCode  Item Name  Unit  Qty  Rate  Excl-Tax AmoST RateS/Tax AmoET Rate ET Amt Total Amount\n33030032 CABLE TIE 6\"  PKT  50  170.00  8,500 18.00  1,530  0  10,030\n33030247 CABLE TIE 4\"  PKT  50  130.00  6,500 18.00  1,170  0  7,670\n33030035 CABLE TIE 24\"  PKT  12  1866.00  22,392 18.00  4,031  0  26,423\n33030034 CABLE TIE 12\"  PKT  50  480.00  24,000 18.00  4,320  0  28,320\nTotal  61,392\nSales Tax Amount  11,051\nET Amount  0\nGrand Total  72,443\nRupees Seventy-Two Thousand Four Hundred Forty-Three Only\nRemarks\nPayment Terms\nFor Meko Denim (Private) Limited\nDirector / Purchase Officer\nHead Office : Plot No. F - 131, Hub River Road , S.I.T.E Karachi.\nEmail: info@mekodenim.com.pk\nPrinted On\n27-JUL-26 03:22 PM",
+    "expectedItems": [
+      {
+        "description": "CABLE TIE 6\"",
+        "quantity": 50,
+        "unit": "Pkt"
+      },
+      {
+        "description": "CABLE TIE 4\"",
+        "quantity": 50,
+        "unit": "Pkt"
+      },
+      {
+        "description": "CABLE TIE 24\"",
+        "quantity": 12,
+        "unit": "Pkt"
+      },
+      {
+        "description": "CABLE TIE 12\"",
+        "quantity": 50,
+        "unit": "Pkt"
+      }
+    ]
+  },
+  {
+    "id": "prod-270147-meko-battery-charger",
+    "category": "meko-denim-fabrics",
+    "descHeader": "Item Name",
+    "qtyHeader": "Qty",
+    "unitHeader": "Unit",
+    "rawText": "MEKO DENIM MILLS (PVT) LTD.\nA-MAIN STORE. KOTRI\nPurchase Order\nINDENT\nP. O. No  270147  Account Code  10100113  ST No  42301-4020795-9\nDate  25-JUL-26\nSupplier Title  ROSHAN TRADERS\nDlv Date\nContact\nCONSUMEABLE\nVALID  Address  F-44 FALAK CITY TOWER KARACHI\nWEAVING MDM\nTelephone No  +92-333-1665253\nCode  Item Name  Unit  Qty  Rate  Excl-Tax AmoST RateS/Tax AmoET Rate ET Amt Total Amount\n05031175 SMART BATTERY CHARGER 220VAC PC  1  4200.00  4,200 18.00  756  0  4,956\nTO 24VDC 30A MOD# P30\nTotal  4,200\nSales Tax Amount  756\nET Amount  0\nGrand Total  4,956\nRupees Four Thousand Nine Hundred Fifty-Six Only\nRemarks\nPayment Terms\nFor Meko Denim (Private) Limited\nDirector / Purchase Officer\nHead Office : Plot No. F - 131, Hub River Road , S.I.T.E Karachi.\nEmail: info@mekodenim.com.pk\nPrinted On\n25-JUL-26 03:08 PM",
+    "expectedItems": [
+      {
+        "description": "SMART BATTERY CHARGER 220VAC TO 24VDC 30A MOD# P30",
+        "quantity": 1,
+        "unit": "Pcs"
+      }
+    ]
+  },
+  {
+    "id": "prod-270027-aqua-acgas",
+    "category": "innovative-aqua",
+    "descHeader": "Item Name",
+    "qtyHeader": "Qty",
+    "unitHeader": "Unit",
+    "rawText": "Innovative Aqua Solution\nPurchase Orde\nP. O. No  000027  Account Code  13702  ST No  42301-4020795-9\nIndent No\n000024\nDate  18-MAY-26  Supplier Title  ROSHAN TRADERS\n18-MAY-\nDlv Date  Contact  Mr. Hussain Muhammad Ibrahim\n26.000027\nAddress  F-44 FALAK CITY TOWER KARACHI\nTelephone No  +92-333-1665253\nCode  Item Name  Unit  Qty  Rate  ST Rate  S/Tax Amount Excl-Tax Amount Total Amount\n040613 AC GAS R 410 (HONEYWELL)  PCS  1  58000  18  10,440  58,000  68,440\n10,440\nSales Tax Amount\nTotal  58,000\nGrand Total  68,440\nRupees Sixty-Eight Thousand Four Hundred Forty Only\nRemarks\nPayment Terms\nFor Innovative Aqua Solutions.\nDirector / Purchase Officer\nPlot No. 495 Deh Landhi, Main National Highway Karachi.\nPhone NOs. 5014099, 5015453, 5015592 Fax No. (92-21)5018298 Email: mekotex@cyber.net.pk\nPrinted On\n18-MAY-26 11:44 AM",
+    "expectedItems": [
+      {
+        "description": "AC GAS R 410 (HONEYWELL)",
+        "quantity": 1,
         "unit": "Pcs"
       }
     ]

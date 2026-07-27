@@ -63,10 +63,11 @@ foreach (var e in manifest)
 {
     List<object> items = new();
     string? err = null;
+    string text = "";
     try
     {
         using var fs = File.OpenRead(e.Pdf!);
-        var text = ExtractTextFromPdf(fs);
+        text = ExtractTextFromPdf(fs);
         var ruleSet = JsonSerializer.Serialize(new
         {
             version = 1, engine = "simple-headers-v1",
@@ -76,7 +77,7 @@ foreach (var e in manifest)
         items = r.Items.Select(i => (object)new { description = i.Description, quantity = i.Quantity, unit = i.Unit }).ToList();
     }
     catch (Exception ex) { err = ex.Message; }
-    outRows.Add(new { id = e.Id, items, err });
+    outRows.Add(new { id = e.Id, text, items, err });
 }
 Console.OutputEncoding = Encoding.UTF8;
 Console.WriteLine(JsonSerializer.Serialize(outRows, new JsonSerializerOptions { WriteIndented = false }));
