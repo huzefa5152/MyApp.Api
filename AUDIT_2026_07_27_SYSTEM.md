@@ -7,7 +7,10 @@ Full-system bug & business-flow audit of MyApp.Api (feat/sales-quote-order-flow)
 **Batch 1 — security gates & cross-tenant holes (FIXED + verified green: reflow 140/140, basic 37/37, tenant-iso pass, static 67/67):**
 `C1` dashboard KPI tenant assert · `C2` common-client delete scoping + FBR-submitted-invoice guard · `C3` `/data` business-doc serving blocked (excel-templates / po_imports / parser_feedback; logos+avatars stay public) · `H6` FBR-token GETs tenant-asserted · `H7` PO-import + parser-feedback downloads tenant-scoped · `H8` common-client **update** scoped to accessible companies (clients) · `M5` create-path FBR-token gate · `M12` FBR v2 reference endpoints permission-gated.
 
-**Remaining** (H1 note-reversal stock, H2 cheque, H3/H4/H5 concurrency, H8-suppliers, H9 SQL-2025, H10 error-leaks, and the MEDIUM/LOW set) — each needs its own careful fix + (for the money/stock ones) a new regression test; being done in subsequent verified batches.
+**Batch 2 — data-corruption fixes (FIXED + verified: reflow 140/140, basic 37/37, tenant-iso pass):**
+`H1` credit/debit note reverses stock against the **effective** type (`AdjustedItemTypeId ?? physical`) — no more restocking the wrong item (note-reversal path can't be exercised offline: note creation requires an FBR-submitted invoice + IRN, so this is a code-inspection fix mirroring the proven suites 8–13 overlay logic) · `H2` bounced cheques excluded from `AmountPaid`, and `SetChequeStatusAsync` reflows the settled documents on a bounce/un-bounce · `M3` FBR purchase-import records IN only for HS-tracked item types · `M4` stock re-sync backfill filter now includes type-only reclassifications.
+
+**Remaining** (H3/H4/H5 concurrency, H8-suppliers, H9 SQL-2025, H10 error-leaks, and the MEDIUM/LOW set) — being done in subsequent verified batches.
 
 ---
 

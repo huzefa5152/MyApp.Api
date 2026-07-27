@@ -2305,8 +2305,11 @@ namespace MyApp.Api.Services.Implementations
 
             // Project each original line to its FBR-EFFECTIVE values (dual-book
             // overlay applied) — that's what was filed to FBR and what moved
-            // stock, so a note must reverse exactly those. Base ItemTypeId kept
-            // (the catalog item + HS code the original OUT was recorded against).
+            // stock, so a note must reverse exactly those, INCLUDING the item type
+            // (audit H1, 2026-07-27): the original OUT was recorded against the
+            // effective type AdjustedItemTypeId ?? ItemTypeId (StockService), so a
+            // note keyed to the physical base would restock the wrong (often
+            // untracked non-HS "family") item and leave the sold item depleted.
             var overlays = await _context.InvoiceItemAdjustments
                 .AsNoTracking()
                 .Where(a => a.InvoiceId == original.Id)
@@ -2317,8 +2320,8 @@ namespace MyApp.Api.Services.Implementations
                 overlays.TryGetValue(src.Id, out var ov);
                 return new InvoiceItem
                 {
-                    ItemTypeId   = src.ItemTypeId,
-                    ItemTypeName = src.ItemTypeName,
+                    ItemTypeId   = ov?.AdjustedItemTypeId ?? src.ItemTypeId,
+                    ItemTypeName = ov?.AdjustedItemTypeName ?? src.ItemTypeName,
                     Description  = ov?.AdjustedDescription ?? src.Description,
                     Quantity     = qty,
                     UOM          = src.UOM,

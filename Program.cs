@@ -1562,7 +1562,7 @@ using (var scope = app.Services.CreateScope())
     if (!stockOverlaySyncRan)
     {
         var adjustedInvoiceIds = await db.InvoiceItemAdjustments
-            .Where(a => a.AdjustedQuantity != null)
+            .Where(a => a.AdjustedItemTypeId != null || a.AdjustedQuantity != null)  // audit M4: include type-only reclassifications
             .Select(a => a.InvoiceId)
             .Distinct()
             .ToListAsync();

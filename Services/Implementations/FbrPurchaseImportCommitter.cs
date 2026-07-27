@@ -204,10 +204,18 @@ namespace MyApp.Api.Services.Implementations
                 //    PurchaseBillService.CreateAsync does — sourceType =
                 //    PurchaseBill so deletes can reverse via compensating
                 //    OUT entries.
+                // Audit M3: gate IN on the HS-code tracked set (matching
+                // PurchaseBillService + the OUT side) — an unclassified (no-HS)
+                // catalog item must not accrue a phantom IN that a later bill edit
+                // then reverses as a spurious OUT (silent on-hand drift).
+                var trackedTypes = await _stock.GetStockTrackedItemTypeIdsAsync(
+                    importableLines
+                        .Select(l => lineToItemType.GetValueOrDefault(l.SourceRowNumber))
+                        .Where(t => t.HasValue).Select(t => t!.Value));
                 foreach (var line in importableLines)
                 {
                     var itemTypeId = lineToItemType.GetValueOrDefault(line.SourceRowNumber);
-                    if (!itemTypeId.HasValue || line.Quantity <= 0) continue;
+                    if (!itemTypeId.HasValue || line.Quantity <= 0 || !trackedTypes.Contains(itemTypeId.Value)) continue;
                     await _stock.RecordMovementAsync(
                         companyId: companyId,
                         itemTypeId: itemTypeId.Value,

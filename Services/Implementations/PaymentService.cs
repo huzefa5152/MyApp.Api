@@ -382,6 +382,21 @@ namespace MyApp.Api.Services.Implementations
 
             payment.ChequeStatus = parsed;
             await _context.SaveChangesAsync();
+
+            // Audit H2 (2026-07-27): a bounce (or un-bounce) changes what the
+            // settled documents owe — reflow their paid totals, since the recompute
+            // helpers now exclude Bounced cheques from AmountPaid. Without this a
+            // bounced cheque would still read as fully paid and never re-enter
+            // Overdue. (Status is already committed above, so the recompute query
+            // sees the new ChequeStatus.)
+            var invoiceIds = payment.Allocations.Where(a => a.InvoiceId.HasValue)
+                .Select(a => a.InvoiceId!.Value).Distinct().ToList();
+            var billIds = payment.Allocations.Where(a => a.PurchaseBillId.HasValue)
+                .Select(a => a.PurchaseBillId!.Value).Distinct().ToList();
+            foreach (var iid in invoiceIds) await RecomputeInvoiceAsync(iid);
+            foreach (var bid in billIds) await RecomputePurchaseBillAsync(bid);
+            await _context.SaveChangesAsync();
+
             return await GetByIdAsync(id);
         }
 
@@ -392,7 +407,8 @@ namespace MyApp.Api.Services.Implementations
         private async Task RecomputeInvoiceAsync(int invoiceId)
         {
             var paid = await _context.PaymentAllocations
-                .Where(a => a.InvoiceId == invoiceId && !a.Payment.IsCancelled)
+                .Where(a => a.InvoiceId == invoiceId && !a.Payment.IsCancelled
+                         && a.Payment.ChequeStatus != ChequeStatus.Bounced)  // audit H2: bounced ≠ paid
                 .SumAsync(a => (decimal?)a.Amount) ?? 0m;
             var inv = await _context.Invoices.FirstOrDefaultAsync(i => i.Id == invoiceId);
             if (inv != null) inv.AmountPaid = paid;
@@ -401,7 +417,8 @@ namespace MyApp.Api.Services.Implementations
         private async Task RecomputePurchaseBillAsync(int billId)
         {
             var paid = await _context.PaymentAllocations
-                .Where(a => a.PurchaseBillId == billId && !a.Payment.IsCancelled)
+                .Where(a => a.PurchaseBillId == billId && !a.Payment.IsCancelled
+                         && a.Payment.ChequeStatus != ChequeStatus.Bounced)  // audit H2: bounced ≠ paid
                 .SumAsync(a => (decimal?)a.Amount) ?? 0m;
             var bill = await _context.PurchaseBills.FirstOrDefaultAsync(b => b.Id == billId);
             if (bill != null) bill.AmountPaid = paid;
