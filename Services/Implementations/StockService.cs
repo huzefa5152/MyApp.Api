@@ -298,28 +298,47 @@ namespace MyApp.Api.Services.Implementations
             // Load adjustments fresh from the DB to avoid relying on EF
             // nav-property fixup — the calling save may have just added
             // the overlay row in the same transaction.
-            var overlayQtyByItemId = await _context.InvoiceItemAdjustments
-                .Where(a => a.InvoiceId == invoice.Id && a.AdjustedQuantity != null)
-                .ToDictionaryAsync(a => a.InvoiceItemId, a => a.AdjustedQuantity!.Value);
+            // 2026-07-27: the dual-book overlay can reclassify BOTH the quantity
+            // AND the item type (the FBR classification the operator files). Stock
+            // must follow the FBR-filed values, mirroring FbrService.ApplyAdjustmentOverlay
+            // which uses AdjustedItemTypeId ?? ItemTypeId. Pre-fix this read only the
+            // adjusted qty and keyed movements off the PHYSICAL item type, so a line
+            // physically billed under a non-HS "product family" but FBR-classified to
+            // an HS item recorded NO stock OUT (and the HS item never decremented).
+            var overlays = await _context.InvoiceItemAdjustments
+                .Where(a => a.InvoiceId == invoice.Id)
+                .Select(a => new { a.InvoiceItemId, a.AdjustedQuantity, a.AdjustedItemTypeId })
+                .ToListAsync();
+            var overlayQtyByItemId = overlays
+                .Where(a => a.AdjustedQuantity != null)
+                .ToDictionary(a => a.InvoiceItemId, a => a.AdjustedQuantity!.Value);
+            var overlayTypeByItemId = overlays
+                .Where(a => a.AdjustedItemTypeId != null)
+                .ToDictionary(a => a.InvoiceItemId, a => a.AdjustedItemTypeId!.Value);
+            // Effective stock item type for a line: the FBR-adjusted type when the
+            // overlay set one, else the physical bill line's type.
+            int? EffType(int itemId, int? physicalTypeId) =>
+                overlayTypeByItemId.TryGetValue(itemId, out var t) ? t : physicalTypeId;
 
             // 2026-05-13: gate stock OUT on the ItemType being classified
             // (HSCode non-empty). Un-classified ItemTypes are drafts —
             // saving a bill against one must not decrement inventory.
             // See GetStockTrackedItemTypeIdsAsync for the policy.
             var trackedItemTypeIds = await GetStockTrackedItemTypeIdsAsync(
-                invoice.Items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
+                invoice.Items.Select(i => EffType(i.Id, i.ItemTypeId)).Where(t => t.HasValue).Select(t => t!.Value));
 
             // Desired net per ItemType from the current lines (overlay-aware,
             // classified-only) — exactly what the movements below would hold.
             var desired = new Dictionary<int, decimal>();
             foreach (var item in invoice.Items)
             {
-                if (!item.ItemTypeId.HasValue) continue;
-                if (!trackedItemTypeIds.Contains(item.ItemTypeId.Value)) continue;
+                var effType = EffType(item.Id, item.ItemTypeId);
+                if (!effType.HasValue) continue;
+                if (!trackedItemTypeIds.Contains(effType.Value)) continue;
                 var q = overlayQtyByItemId.TryGetValue(item.Id, out var adjQty) ? adjQty : item.Quantity;
                 if (q <= 0m) continue;
-                desired.TryGetValue(item.ItemTypeId.Value, out var cur);
-                desired[item.ItemTypeId.Value] = cur + q;
+                desired.TryGetValue(effType.Value, out var cur);
+                desired[effType.Value] = cur + q;
             }
 
             // What this invoice already posted (this direction), per ItemType.
@@ -360,8 +379,9 @@ namespace MyApp.Api.Services.Implementations
 
             foreach (var item in invoice.Items)
             {
-                if (!item.ItemTypeId.HasValue) continue;
-                if (!trackedItemTypeIds.Contains(item.ItemTypeId.Value)) continue;
+                var effType = EffType(item.Id, item.ItemTypeId);
+                if (!effType.HasValue) continue;
+                if (!trackedItemTypeIds.Contains(effType.Value)) continue;
                 var effectiveQty = overlayQtyByItemId.TryGetValue(item.Id, out var adjQty)
                     ? adjQty
                     : item.Quantity;
@@ -374,7 +394,7 @@ namespace MyApp.Api.Services.Implementations
                 _context.StockMovements.Add(new StockMovement
                 {
                     CompanyId    = invoice.CompanyId,
-                    ItemTypeId   = item.ItemTypeId.Value,
+                    ItemTypeId   = effType.Value,
                     Direction    = dir,
                     // 2026-05-12: stored at full decimal(18,4) precision.
                     // Previously truncated to int (lost fractional KG /
