@@ -1883,14 +1883,20 @@ Directory.CreateDirectory(dataPath);
 // first upload doesn't race the directory into existence).
 Directory.CreateDirectory(Path.Combine(dataPath, "attachments"));
 
-// SECURITY: attachments are tenant-isolated business documents and must NOT be
-// reachable via the public /data static provider (logos/avatars are fine —
-// low-sensitivity). 404 any direct /data/attachments/* hit here, BEFORE the
-// static middleware below; downloads go through the authenticated
-// /api/attachments/{id}/download endpoint, which asserts company access.
+// SECURITY (audit C3, 2026-07-27): tenant business documents under /data must
+// NOT be reachable via the public static provider — only low-sensitivity logos
+// (/data/uploads/logos) + avatars (/data/images/avatars) are public. 404
+// attachments, tenant Excel print-templates (predictable company_N names,
+// embed GL mappings), archived customer POs, and retained parser-feedback PDFs
+// BEFORE the static middleware — each has its own authenticated, company-
+// asserted download endpoint (or is read server-side from disk only).
 app.Use(async (ctx, next) =>
 {
-    if (ctx.Request.Path.StartsWithSegments("/data/attachments", StringComparison.OrdinalIgnoreCase))
+    var p = ctx.Request.Path;
+    if (p.StartsWithSegments("/data/attachments", StringComparison.OrdinalIgnoreCase)
+        || p.StartsWithSegments("/data/uploads/excel-templates", StringComparison.OrdinalIgnoreCase)
+        || p.StartsWithSegments("/data/uploads/po_imports", StringComparison.OrdinalIgnoreCase)
+        || p.StartsWithSegments("/data/uploads/parser_feedback", StringComparison.OrdinalIgnoreCase))
     {
         ctx.Response.StatusCode = StatusCodes.Status404NotFound;
         return;

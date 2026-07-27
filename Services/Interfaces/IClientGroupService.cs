@@ -46,7 +46,7 @@ namespace MyApp.Api.Services.Interfaces
         /// Propagate master-field changes to every <see cref="Client"/> in
         /// the group. Returns the cascade summary for the toast.
         /// </summary>
-        Task<CommonClientUpdateResultDto> UpdateAsync(int groupId, CommonClientUpdateDto dto);
+        Task<CommonClientUpdateResultDto> UpdateAsync(int groupId, CommonClientUpdateDto dto, IReadOnlyCollection<int> accessibleCompanyIds);
 
         /// <summary>
         /// Delete the Common Client across every tenant: removes each
@@ -60,7 +60,7 @@ namespace MyApp.Api.Services.Interfaces
         /// that fails to delete (transactional — partial deletes are
         /// rolled back).
         /// </summary>
-        Task<CommonClientUpdateResultDto> DeleteAsync(int groupId);
+        Task<CommonClientUpdateResultDto> DeleteAsync(int groupId, IReadOnlyCollection<int> accessibleCompanyIds);
 
         /// <summary>
         /// Pure helper exposed so other paths (the startup backfill, the

@@ -50,6 +50,11 @@ namespace MyApp.Api.Controllers
             if (companyId <= 0 || string.IsNullOrWhiteSpace(hsCode))
                 return BadRequest(new { error = "companyId and hsCode are required." });
 
+            // Tenant scope (audit H6): this drives a PRAL call with THIS company's
+            // FBR token — without the assert any user could bleed another tenant's
+            // token / burn their FBR quota by passing a foreign companyId.
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+
             var uoms = await _taxEngine.GetValidUomsForHsCodeAsync(companyId, hsCode);
             return Ok(uoms);
         }
@@ -68,6 +73,10 @@ namespace MyApp.Api.Controllers
         {
             if (companyId <= 0 || string.IsNullOrWhiteSpace(hsCode))
                 return BadRequest(new { error = "companyId and hsCode are required." });
+
+            // Tenant scope (audit H6): drives a PRAL call with this company's FBR
+            // token — assert access so a foreign companyId can't bleed the token.
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
 
             var hints = await _taxEngine.GetHsCodeHintsAsync(companyId, hsCode);
             return Ok(hints);

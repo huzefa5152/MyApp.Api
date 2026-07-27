@@ -140,13 +140,20 @@ namespace MyApp.Api.Services.Implementations
             if (fb == null || string.IsNullOrEmpty(fb.OriginalPdfLocation)) return null;
             var abs = Path.Combine(GetRoot(), fb.OriginalPdfLocation.Replace('/', Path.DirectorySeparatorChar));
             if (!File.Exists(abs)) return null;
-            return new ParserFeedbackPdf { FilePath = abs, FileName = SafePdfName(fb.OriginalFileName, fb.Id) };
+            return new ParserFeedbackPdf { FilePath = abs, FileName = SafePdfName(fb.OriginalFileName, fb.Id), CompanyId = fb.CompanyId };
         }
 
-        public async Task<byte[]?> GetBulkZipAsync(IReadOnlyCollection<int> ids)
+        public async Task<byte[]?> GetBulkZipAsync(IReadOnlyCollection<int> ids, IReadOnlyCollection<int> accessibleCompanyIds)
         {
             var rows = await _repo.GetManyAsync(ids);
-            var withPdf = rows.Where(r => !string.IsNullOrEmpty(r.OriginalPdfLocation)).ToList();
+            // Tenant scope (audit H7): only zip rows the caller can reach — a
+            // null-company (dev-only) row has no tenant to leak; a set company
+            // must be in the caller's accessible set.
+            var accessible = new HashSet<int>(accessibleCompanyIds);
+            var withPdf = rows
+                .Where(r => !string.IsNullOrEmpty(r.OriginalPdfLocation)
+                         && (r.CompanyId == null || accessible.Contains(r.CompanyId.Value)))
+                .ToList();
             if (withPdf.Count == 0) return null;
 
             using var ms = new MemoryStream();

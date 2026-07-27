@@ -81,7 +81,8 @@ namespace MyApp.Api.Controllers
             if (!ModelState.IsValid) return BadRequest(ModelState);
             try
             {
-                var result = await _groupService.UpdateAsync(groupId, dto);
+                var allowed = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+                var result = await _groupService.UpdateAsync(groupId, dto, allowed);
                 return Ok(result);
             }
             catch (KeyNotFoundException ex)
@@ -110,7 +111,8 @@ namespace MyApp.Api.Controllers
         {
             try
             {
-                var result = await _groupService.DeleteAsync(groupId);
+                var allowed = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+                var result = await _groupService.DeleteAsync(groupId, allowed);
                 return Ok(result);
             }
             catch (KeyNotFoundException ex)

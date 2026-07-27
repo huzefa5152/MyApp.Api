@@ -84,6 +84,16 @@ namespace MyApp.Api.Controllers
 
             try
             {
+                // FBR token is a separately-gated privileged field (audit M5 /
+                // CLAUDE.md §9). Strip it on create unless the caller holds
+                // companies.manage.fbrtoken — mirrors the update path. Without
+                // this, companies.manage.create alone could seed a tenant's token.
+                if (!string.IsNullOrEmpty(dto.FbrToken)
+                    && !await _permissions.HasPermissionAsync(CurrentUserId, "companies.manage.fbrtoken"))
+                {
+                    dto.FbrToken = null;
+                }
+
                 var createdCompany = await _companyService.CreateAsync(dto);
 
                 // Auto-grant the creator access to the company they just made.

@@ -296,18 +296,24 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
-        public async Task<CommonClientUpdateResultDto> UpdateAsync(int groupId, CommonClientUpdateDto dto)
+        public async Task<CommonClientUpdateResultDto> UpdateAsync(int groupId, CommonClientUpdateDto dto, IReadOnlyCollection<int> accessibleCompanyIds)
         {
             var group = await _db.ClientGroups.FirstOrDefaultAsync(g => g.Id == groupId)
                 ?? throw new KeyNotFoundException("Common client group not found.");
 
-            var members = await _db.Clients
+            // Tenant scope (audit H8): only propagate master fields to sibling
+            // clients in companies the caller can access — never overwrite another
+            // tenant's client NTN/STRN/contact data via a shared common-client group.
+            var allowed = new HashSet<int>(accessibleCompanyIds);
+            var members = (await _db.Clients
                 .Include(c => c.Company)
                 .Where(c => c.ClientGroupId == groupId)
-                .ToListAsync();
+                .ToListAsync())
+                .Where(c => allowed.Contains(c.CompanyId))
+                .ToList();
 
             if (members.Count == 0)
-                throw new InvalidOperationException("Common client group has no members.");
+                throw new InvalidOperationException("Common client group has no members you can edit.");
 
             // Propagate master fields to every sibling Client. Site is
             // included on purpose — sites are buyer-side master data
@@ -370,18 +376,21 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
-        public async Task<CommonClientUpdateResultDto> DeleteAsync(int groupId)
+        public async Task<CommonClientUpdateResultDto> DeleteAsync(int groupId, IReadOnlyCollection<int> accessibleCompanyIds)
         {
             var group = await _db.ClientGroups.FirstOrDefaultAsync(g => g.Id == groupId)
                 ?? throw new KeyNotFoundException("Common client group not found.");
 
-            // Snapshot member ids + company names BEFORE we start
-            // deleting — once ClientService.DeleteAsync removes the row
-            // its Company nav becomes useless.
-            var members = await _db.Clients
+            // Tenant scope (audit C2): only delete member clients in companies the
+            // caller can access — NEVER cascade-delete another tenant's clients
+            // (and their filed invoices/challans) via a shared common-client group.
+            var allowed = new HashSet<int>(accessibleCompanyIds);
+            var members = (await _db.Clients
                 .Include(c => c.Company)
                 .Where(c => c.ClientGroupId == groupId)
-                .ToListAsync();
+                .ToListAsync())
+                .Where(c => allowed.Contains(c.CompanyId))
+                .ToList();
 
             var companyNames = members
                 .Select(m => m.Company?.Name ?? $"Company #{m.CompanyId}")
@@ -406,8 +415,11 @@ namespace MyApp.Api.Services.Implementations
             // and the Common Clients panel refresh cleanly. Use a
             // fresh entity load (the prior reference may be stale
             // after the per-member deletes).
+            // Only drop the group row when no members remain in ANY company —
+            // scoped deletes may have left other tenants' members intact (audit C2).
             var groupRow = await _db.ClientGroups.FirstOrDefaultAsync(g => g.Id == groupId);
-            if (groupRow != null)
+            var remaining = await _db.Clients.CountAsync(c => c.ClientGroupId == groupId);
+            if (groupRow != null && remaining == 0)
             {
                 _db.ClientGroups.Remove(groupRow);
                 await _db.SaveChangesAsync();

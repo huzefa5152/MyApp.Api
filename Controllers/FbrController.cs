@@ -189,6 +189,7 @@ namespace MyApp.Api.Controllers
 
         [HttpGet("saletyperates/{companyId}")]
         [AuthorizeCompany]
+        [HasPermission("fbr.reference.read")]
         public async Task<IActionResult> GetSaleTypeRates(
             int companyId,
             [FromQuery] string date,
@@ -198,6 +199,7 @@ namespace MyApp.Api.Controllers
 
         [HttpGet("sroschedule/{companyId}")]
         [AuthorizeCompany]
+        [HasPermission("fbr.reference.read")]
         public async Task<IActionResult> GetSROSchedule(
             int companyId,
             [FromQuery] int rateId,
@@ -207,6 +209,7 @@ namespace MyApp.Api.Controllers
 
         [HttpGet("sroitems/{companyId}")]
         [AuthorizeCompany]
+        [HasPermission("fbr.reference.read")]
         public async Task<IActionResult> GetSROItems(
             int companyId,
             [FromQuery] string date,
@@ -215,6 +218,7 @@ namespace MyApp.Api.Controllers
 
         [HttpGet("hsuom/{companyId}")]
         [AuthorizeCompany]
+        [HasPermission("fbr.reference.read")]
         public async Task<IActionResult> GetHSCodeUOM(
             int companyId,
             [FromQuery] string hsCode,

@@ -113,6 +113,9 @@ namespace MyApp.Api.Controllers
         {
             var pdf = await _service.GetPdfAsync(id);
             if (pdf == null) return NotFound(new { error = "No retained PDF for this feedback." });
+            // Tenant scope (audit H7): don't serve another tenant's retained PO PDF.
+            if (pdf.CompanyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId, pdf.CompanyId.Value);
             var stream = new FileStream(pdf.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
             return File(stream, "application/pdf", pdf.FileName);
         }
@@ -124,7 +127,9 @@ namespace MyApp.Api.Controllers
         {
             if (body?.Ids == null || body.Ids.Count == 0)
                 return BadRequest(new { error = "Provide at least one id." });
-            var zip = await _service.GetBulkZipAsync(body.Ids);
+            // Tenant scope (audit H7): zip only PDFs the caller can reach.
+            var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            var zip = await _service.GetBulkZipAsync(body.Ids, accessible);
             if (zip == null) return NotFound(new { error = "None of the selected feedbacks have a retained PDF." });
             return File(zip, "application/zip", "parser-feedback-pdfs.zip");
         }

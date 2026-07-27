@@ -35,6 +35,7 @@ namespace MyApp.Api.Controllers
         private readonly IRuleBasedPOParser _ruleParser;
         private readonly AppDbContext _context;
         private readonly IWebHostEnvironment _env;
+        private readonly ICompanyAccessGuard _access;
         private readonly ILogger<POImportController> _logger;
 
         public POImportController(
@@ -43,6 +44,7 @@ namespace MyApp.Api.Controllers
             IRuleBasedPOParser ruleParser,
             AppDbContext context,
             IWebHostEnvironment env,
+            ICompanyAccessGuard access,
             ILogger<POImportController> logger)
         {
             _parser = parser;
@@ -50,6 +52,7 @@ namespace MyApp.Api.Controllers
             _ruleParser = ruleParser;
             _context = context;
             _env = env;
+            _access = access;
             _logger = logger;
         }
 
@@ -391,7 +394,19 @@ namespace MyApp.Api.Controllers
             if (pageSize < 1 || pageSize > 200) pageSize = 50;
 
             var q = _context.PoImportArchives.AsNoTracking().AsQueryable();
-            if (companyId.HasValue) q = q.Where(a => a.CompanyId == companyId.Value);
+            // Tenant scope (audit H7): a specified companyId must be reachable by
+            // the caller; without one, restrict to the caller's accessible set —
+            // never list every tenant's archived customer POs.
+            if (companyId.HasValue)
+            {
+                await _access.AssertAccessAsync(CurrentUserId() ?? 0, companyId.Value);
+                q = q.Where(a => a.CompanyId == companyId.Value);
+            }
+            else
+            {
+                var allowed = (await _access.GetAccessibleCompanyIdsAsync(CurrentUserId() ?? 0)).ToList();
+                q = q.Where(a => a.CompanyId != null && allowed.Contains(a.CompanyId.Value));
+            }
             if (!string.IsNullOrWhiteSpace(outcome)) q = q.Where(a => a.ParseOutcome == outcome);
             if (from.HasValue) q = q.Where(a => a.UploadedAt >= from.Value);
             if (to.HasValue) q = q.Where(a => a.UploadedAt < to.Value);
@@ -429,6 +444,13 @@ namespace MyApp.Api.Controllers
         {
             var row = await _context.PoImportArchives.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id);
             if (row == null) return NotFound();
+
+            // Tenant scope (audit H7): only serve the PDF if the caller can reach
+            // the owning company — otherwise any viewArchive holder could download
+            // another tenant's customer POs by id enumeration. (Null company =
+            // unattributed archive, no tenant to protect.)
+            if (row.CompanyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId() ?? 0, row.CompanyId.Value);
 
             var abs = Path.Combine(GetArchiveRoot(), row.StoredPath.Replace('/', Path.DirectorySeparatorChar));
             if (!System.IO.File.Exists(abs))
