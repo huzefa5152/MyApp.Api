@@ -221,18 +221,24 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
-        public async Task<CommonSupplierUpdateResultDto> UpdateAsync(int groupId, CommonSupplierUpdateDto dto)
+        public async Task<CommonSupplierUpdateResultDto> UpdateAsync(int groupId, CommonSupplierUpdateDto dto, IReadOnlyCollection<int> accessibleCompanyIds)
         {
             var group = await _db.SupplierGroups.FirstOrDefaultAsync(g => g.Id == groupId)
                 ?? throw new KeyNotFoundException("Common supplier group not found.");
 
-            var members = await _db.Suppliers
+            // Tenant scope (audit H8): only propagate to sibling suppliers in
+            // companies the caller can access — never overwrite another tenant's
+            // supplier NTN/STRN/contact data via a shared common-supplier group.
+            var allowed = new HashSet<int>(accessibleCompanyIds);
+            var members = (await _db.Suppliers
                 .Include(s => s.Company)
                 .Where(s => s.SupplierGroupId == groupId)
-                .ToListAsync();
+                .ToListAsync())
+                .Where(s => allowed.Contains(s.CompanyId))
+                .ToList();
 
             if (members.Count == 0)
-                throw new InvalidOperationException("Common supplier group has no members.");
+                throw new InvalidOperationException("Common supplier group has no members you can edit.");
 
             // Propagate every master field to every sibling Supplier.
             // Site is included on purpose — sees Common Clients commit.
@@ -283,15 +289,20 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
-        public async Task<CommonSupplierUpdateResultDto> DeleteAsync(int groupId)
+        public async Task<CommonSupplierUpdateResultDto> DeleteAsync(int groupId, IReadOnlyCollection<int> accessibleCompanyIds)
         {
             var group = await _db.SupplierGroups.FirstOrDefaultAsync(g => g.Id == groupId)
                 ?? throw new KeyNotFoundException("Common supplier group not found.");
 
-            var members = await _db.Suppliers
+            // Tenant scope (audit H8/C2): only delete members in companies the
+            // caller can access — never cascade another tenant's suppliers.
+            var allowed = new HashSet<int>(accessibleCompanyIds);
+            var members = (await _db.Suppliers
                 .Include(s => s.Company)
                 .Where(s => s.SupplierGroupId == groupId)
-                .ToListAsync();
+                .ToListAsync())
+                .Where(s => allowed.Contains(s.CompanyId))
+                .ToList();
 
             var companyNames = members
                 .Select(m => m.Company?.Name ?? $"Company #{m.CompanyId}")

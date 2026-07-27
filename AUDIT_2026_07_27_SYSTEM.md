@@ -15,7 +15,9 @@ Full-system bug & business-flow audit of MyApp.Api (feat/sales-quote-order-flow)
 
 **Deferred (needs a dedicated, FBR-sandbox-tested fix):** `H5` concurrent/timed-out FBR submit → duplicate IRN. Serialising submit per-invoice + timeout reconciliation touches the delicate PRAL POST path and can't be verified offline; rushing it risks worse FBR outcomes. Left documented above.
 
-**Remaining** (H4 unique-index migration, H8-suppliers, H9 SQL-2025 purchase paths, and the MEDIUM/LOW set) — for subsequent verified batches.
+**Batch 4 — last cross-tenant High (FIXED):** `H8-suppliers` common-supplier update + delete scoped to the caller's accessible companies (mirrors the client fix). **All cross-tenant CRITICAL/HIGH holes are now closed.**
+
+**Remaining** (H4 unique-index migration, H9 SQL-2025 purchase paths, and the MEDIUM/LOW set — M1/M2/M6/M7/M8/M9/M10/M11/M13/M14/M15/M16 + L1–L14) — lower-priority correctness/hardening; for subsequent verified batches.
 
 ---
 
