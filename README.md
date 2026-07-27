@@ -281,6 +281,10 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-27 — Paste-list now captures Unit (description, qty, unit, unit price)
+
+- The shared line-items editor's **Paste list** (Sales Quote, Sales Order, Delivery Challan) now reads a **Unit** column. Pasted rows follow a fixed column order — **description, quantity, unit, unit price** — tab- or comma-separated, each trailing column optional; the unit-price column is honoured only on priced documents (Quote/Bill), never a Sales Order / Challan. The parser peels the longest valid trailing tail matching `qty [unit] [price]` (qty/price numeric, unit the non-numeric token), so a number embedded in the description (a size like `12mm` or `1/2"`) stays in the description. Previously only qty + unit price were parsed and the unit was dropped. `POImportForm`'s PO-text paste already captured the unit, so every paste path now follows description → qty → unit → price.
+
 ### 2026-07-27 — Per-screen "rows per page" selector
 
 Added a Rows-per-page dropdown (10/20/50/100/200) to every paginated screen

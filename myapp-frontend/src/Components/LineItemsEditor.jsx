@@ -185,32 +185,49 @@ export default function LineItemsEditor({
     addItem(seed);
   };
 
-  // Parse pasted lines into rows. Each non-empty line becomes a row; a trailing
-  // tab/comma-separated number is read as qty, a second as unit price. Anything
-  // that doesn't parse cleanly is kept as a description with qty 1.
+  // Parse pasted lines into rows. Each non-empty line becomes a row. Columns are
+  // tab- (preferred, e.g. an Excel paste) or comma-separated in the fixed order
+  //   description, quantity, unit, unit price
+  // where quantity/price are numeric and unit is the non-numeric token between
+  // them. The unit-price column is read only when this document shows prices
+  // (Quote/Bill), never for a Sales Order / Challan. The trailing measurement
+  // block is optional per field — "desc, qty, unit, price", "desc, qty, unit",
+  // "desc, qty, price", "desc, qty" and a bare "desc" all read correctly. A
+  // number embedded in the description (a size like 12mm or 1/2") is left alone
+  // because only whole delimited cells at the END are peeled as measurements.
   const applyPaste = () => {
     const lines = pasteText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (!lines.length) { setPasteOpen(false); setPasteText(""); return; }
+    const isNum = (s) => /^[\d,]+(\.\d+)?$/.test(s);   // pure number (rejects "12mm", "1/2\"")
+    const num = (s) => parseFloat(s.replace(/,/g, ""));
     const parsed = lines.map((line) => {
-      let parts = line.includes("\t") ? line.split("\t") : line.split(",");
-      parts = parts.map((p) => p.trim()).filter((p) => p !== "");
       const row = makeBlankItem();
-      if (parts.length >= 2 && !isNaN(parseFloat(parts[parts.length - 1]))) {
-        // last numeric = price (if price shown) else qty; second-last numeric = qty
-        const nums = [];
-        while (parts.length > 1 && !isNaN(parseFloat(parts[parts.length - 1]))) {
-          nums.unshift(parseFloat(parts.pop()));
+      const parts = (line.includes("\t") ? line.split("\t") : line.split(","))
+        .map((p) => p.trim()).filter((p) => p !== "");
+      if (parts.length <= 1) { row.description = line; return row; }
+      const n = parts.length;
+      // Peel the longest valid trailing tail matching qty [unit] [price], in
+      // that order. `keep` = how many leading parts stay as the description.
+      let tail = null;
+      for (const len of (showUnitPrice ? [3, 2, 1] : [2, 1])) {
+        if (n - len < 1) continue;            // always leave >=1 part for the description
+        const t = parts.slice(n - len);
+        if (len === 1 && isNum(t[0])) { tail = { keep: n - 1, qty: num(t[0]) }; break; }
+        if (len === 2) {
+          if (isNum(t[0]) && !isNum(t[1])) { tail = { keep: n - 2, qty: num(t[0]), unit: t[1] }; break; }
+          if (showUnitPrice && isNum(t[0]) && isNum(t[1])) { tail = { keep: n - 2, qty: num(t[0]), price: num(t[1]) }; break; }
         }
-        row.description = parts.join(" ").trim() || line;
-        if (showUnitPrice && nums.length >= 2) {
-          row.quantity = nums[0];
-          row.unitPrice = nums[1];
-        } else {
-          row.quantity = nums[0];
-          if (showUnitPrice && nums.length === 1) { /* only qty given */ }
+        if (len === 3 && showUnitPrice && isNum(t[0]) && !isNum(t[1]) && isNum(t[2])) {
+          tail = { keep: n - 3, qty: num(t[0]), unit: t[1], price: num(t[2]) }; break;
         }
+      }
+      if (tail) {
+        row.description = parts.slice(0, tail.keep).join(" ").trim() || line;
+        if (tail.qty != null) row.quantity = tail.qty;
+        if (tail.unit) row.unit = tail.unit;
+        if (showUnitPrice && tail.price != null) row.unitPrice = tail.price;
       } else {
-        row.description = line;
+        row.description = parts.join(" ").trim() || line;
       }
       return row;
     });
@@ -267,14 +284,15 @@ export default function LineItemsEditor({
       {pasteOpen && (
         <div style={s.pastePanel}>
           <div style={s.pasteHintRow}>
-            Paste one item per line. Optional trailing numbers become
-            {showUnitPrice ? " qty and unit price" : " quantity"} (tab or comma separated).
+            Paste one item per line, columns in order —{" "}
+            {showUnitPrice ? "description, qty, unit, unit price" : "description, qty, unit"} (tab or comma
+            separated; trailing columns optional).
           </div>
           <textarea
             style={s.pasteArea}
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
-            placeholder={showUnitPrice ? "Steel rod 12mm, 10, 850\nCement bag\tapply\t..." : "Steel rod 12mm, 10\nCement bag"}
+            placeholder={showUnitPrice ? "Steel rod 12mm, 10, Pcs, 850\nCement bag, 5, Bag" : "Steel rod 12mm, 10, Pcs\nCement bag, 5, Bag"}
             rows={4}
             autoFocus
           />
