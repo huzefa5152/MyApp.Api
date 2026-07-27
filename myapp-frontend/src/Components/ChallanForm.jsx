@@ -1,9 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { MdAdd, MdClose, MdDelete } from "react-icons/md";
-import LookupAutocomplete from "./LookupAutocomplete";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableSelect from "./SearchableSelect";
-import QuantityInput from "./QuantityInput";
+import LineItemsEditor from "./LineItemsEditor";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getClientsByCompany } from "../api/clientApi";
@@ -51,7 +49,6 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const [clients, setClients] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const itemsContainerRef = useRef(null);
   const attachmentRef = useRef(null);
 
   useEffect(() => {
@@ -95,18 +92,6 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
     setItems(lines.length ? lines : [{ description: "", quantity: 1, unit: "" }]);
   };
 
-  useEffect(() => {
-    if (itemsContainerRef.current) {
-      itemsContainerRef.current.scrollTop = itemsContainerRef.current.scrollHeight;
-    }
-  }, [items]);
-
-  const handleItemChange = (index, field, value) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
-    setItems(newItems);
-  };
-
   // Fires when user picks from the SmartItemAutocomplete dropdown
   // (either a SAVED local item or an FBR catalog entry).
   // Fills description + unit in one shot, and also remembers the HS code /
@@ -128,18 +113,6 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       }).catch(() => {});
     }
   };
-
-  const addItem = () => {
-    const lastItem = items[items.length - 1];
-    if (!lastItem.description.trim()) {
-      setError("Please fill the description of the current item before adding a new one.");
-      return;
-    }
-    setError("");
-    setItems([...items, { description: "", quantity: 1, unit: "" }]);
-  };
-
-  const removeItem = (index) => setItems(items.filter((_, i) => i !== index));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -314,54 +287,13 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
             </div>
 
             <div style={{ marginTop: "0.25rem" }}>
-              <label style={{ ...styles.label, marginBottom: "0.5rem" }}>Items</label>
-
-              {/* Item Type lives on the Invoices tab now — challans capture
-                  description / qty / unit only. Operators classify each line
-                  by Item Type when preparing the bill for FBR submission. */}
-
-              <div ref={itemsContainerRef} style={styles.itemsContainer}>
-                {items.map((item, idx) => (
-                  <div key={idx} style={styles.itemRow}>
-                    <div style={styles.itemIndex}>{idx + 1}</div>
-
-                    <div style={{ flex: 2, minWidth: 0 }}>
-                      <LookupAutocomplete
-                        label="Description"
-                        endpoint="/lookup/items"
-                        value={item.description}
-                        onChange={(val) => handleItemChange(idx, "description", val)}
-                      />
-                    </div>
-
-                    {/* Wider column so 4-place decimals like "0.0004" or
-                        "1234.5678" stay fully visible alongside the input
-                        spinners. Right-aligned reads more naturally for
-                        numbers than centred. */}
-                    <div style={{ width: 130, flexShrink: 0 }}>
-                      <QuantityInput
-                        value={item.quantity}
-                        onChange={(val) => handleItemChange(idx, "quantity", val)}
-                        unit={item.unit}
-                        units={units}
-                        style={{ ...styles.input, textAlign: "right", padding: "0.55rem 0.5rem" }}
-                      />
-                    </div>
-
-                    <div style={{ width: 180, flexShrink: 0 }}>
-                      <LookupAutocomplete label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(val) => handleItemChange(idx, "unit", val)} />
-                    </div>
-
-                    <div style={{ flexShrink: 0 }}>
-                      {idx !== 0 && (
-                        <button type="button" style={styles.removeBtn} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <button type="button" style={styles.addItemBtn} onClick={addItem}><MdAdd size={16} /> Add Item</button>
+              <LineItemsEditor
+                items={items}
+                onItemsChange={setItems}
+                makeBlankItem={() => ({ description: "", quantity: 1, unit: "" })}
+                units={units}
+                itemsLabel="Items"
+              />
             </div>
 
             <div style={{ marginTop: "1rem" }}>

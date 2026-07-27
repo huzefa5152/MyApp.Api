@@ -141,6 +141,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [buyerOpen, setBuyerOpen] = useState(true);
   const [billHeaderOpen, setBillHeaderOpen] = useState(true);
   const [rows, setRows] = useState([blankRow()]);
+  // Responsive: the wide FBR line-item table side-scrolls on a phone, so below
+  // 760px each line renders as a tap-friendly stacked card instead.
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 760);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // Optional "bill from a Sales Order" — bill mode only. Picking an order
   // prefills the client, GST rate, and lines (with server-resolved prices),
@@ -931,6 +939,107 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         </div>
                       )}
 
+                      {isNarrow ? (
+                        <div style={styles.mcards}>
+                          {rows.map((r) => {
+                            const q = parseFloat(r.quantity) || 0;
+                            const p = parseFloat(r.unitPrice) || 0;
+                            const mrpTotal = (parseFloat(r.mrp) || 0) * q;
+                            return (
+                              <div key={r.localId} style={styles.mcard}>
+                                <div style={styles.mcardHead}>
+                                  <div style={{ flex: 1 }}>
+                                    <SearchableItemTypeSelect
+                                      items={filteredItemTypes}
+                                      value={r.itemTypeId}
+                                      onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
+                                      placeholder="Pick item… *"
+                                      style={{ ...styles.input, padding: "0.45rem 0.55rem", fontSize: "0.85rem", ...(r.itemTypeId ? {} : { borderColor: colors.warn }) }}
+                                    />
+                                    {!r.itemTypeId && (
+                                      <div style={{ marginTop: 2, fontSize: "0.62rem", color: colors.warn, fontWeight: 700 }}>Required</div>
+                                    )}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    style={{ ...styles.removeRowBtn, minWidth: 44, minHeight: 44, flexShrink: 0 }}
+                                    onClick={() => removeRow(r.localId)}
+                                    disabled={rows.length === 1}
+                                    title={rows.length === 1 ? "At least one row is required" : "Remove this row"}
+                                  >
+                                    <MdDelete size={16} />
+                                  </button>
+                                </div>
+                                <div style={{ marginBottom: "0.4rem" }}>
+                                  <label style={styles.mlabel}>Description{billsMode ? " *" : ""}</label>
+                                  {billsMode ? (
+                                    <LookupAutocomplete
+                                      label="Description"
+                                      endpoint="/lookup/items"
+                                      value={r.description || ""}
+                                      onChange={(val) => updateRow(r.localId, { description: val })}
+                                      inputStyle={{ ...styles.input, padding: "0.5rem 0.6rem", fontSize: "0.9rem" }}
+                                    />
+                                  ) : (
+                                    <div style={{ fontSize: "0.9rem", color: r.itemTypeName ? colors.textPrimary : colors.textSecondary, fontStyle: r.itemTypeName ? "normal" : "italic" }}>
+                                      {r.itemTypeName || "(pick an item type)"}
+                                    </div>
+                                  )}
+                                </div>
+                                <div style={styles.mgrid3}>
+                                  <div>
+                                    <label style={styles.mlabel}>Qty *</label>
+                                    <input type="number" min={0} step="any" style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} value={r.quantity} onChange={(e) => updateRow(r.localId, { quantity: e.target.value })} placeholder="0" />
+                                  </div>
+                                  <div>
+                                    <label style={styles.mlabel}>UOM</label>
+                                    {billsMode ? (
+                                      <LookupAutocomplete label="Unit" endpoint="/lookup/units" value={r.uom || ""} onChange={(val) => updateRow(r.localId, { uom: val })} inputStyle={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem" }} />
+                                    ) : (
+                                      <input type="text" readOnly={!!r.itemTypeId} style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", backgroundColor: r.itemTypeId ? "#eef5ff" : colors.inputBg, cursor: r.itemTypeId ? "not-allowed" : "text" }} value={r.uom} onChange={(e) => updateRow(r.localId, { uom: e.target.value })} placeholder="auto" title={r.itemTypeId ? "Inherited from the picked item type" : ""} />
+                                    )}
+                                  </div>
+                                  <div>
+                                    <label style={styles.mlabel}>Unit Price *</label>
+                                    <input type="number" min={0} step={0.01} style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} value={r.unitPrice} onChange={(e) => updateRow(r.localId, { unitPrice: e.target.value })} placeholder="0.00" />
+                                  </div>
+                                </div>
+                                {!billsMode && (
+                                  <div style={styles.mkv}>
+                                    <span style={styles.mlabel}>HS Code</span>
+                                    <span style={{ fontFamily: "monospace", fontSize: "0.82rem", color: r.hsCode ? colors.textPrimary : colors.textSecondary, fontStyle: r.hsCode ? "normal" : "italic" }} title="HS Code auto-fills from the picked Item Type">{r.hsCode || "—"}</span>
+                                  </div>
+                                )}
+                                {showMRP && (
+                                  <div style={styles.mgrid2}>
+                                    <div>
+                                      <label style={styles.mlabel}>MRP / unit *</label>
+                                      <input type="number" min={0} step={0.01} style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} value={r.mrp} onChange={(e) => updateRow(r.localId, { mrp: e.target.value })} placeholder="MRP / unit" title="Printed retail price PER UNIT. The MRP × Qty total is computed automatically." />
+                                    </div>
+                                    <div>
+                                      <label style={styles.mlabel}>MRP × Qty</label>
+                                      <div style={{ padding: "0.5rem 0", fontWeight: 600, fontSize: "0.9rem", textAlign: "right" }}>{mrpTotal > 0 ? mrpTotal.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "—"}</div>
+                                    </div>
+                                  </div>
+                                )}
+                                {showSRO && (
+                                  <div style={styles.mgrid2}>
+                                    <div>
+                                      <label style={styles.mlabel}>SRO Schedule *</label>
+                                      <input type="text" style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.85rem" }} value={r.sroScheduleNo} onChange={(e) => updateRow(r.localId, { sroScheduleNo: e.target.value })} placeholder='e.g. "SRO 297(I)/2023"' />
+                                    </div>
+                                    <div>
+                                      <label style={styles.mlabel}>SRO Item No *</label>
+                                      <input type="text" style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.85rem" }} value={r.sroItemSerialNo} onChange={(e) => updateRow(r.localId, { sroItemSerialNo: e.target.value })} placeholder="serial #" />
+                                    </div>
+                                  </div>
+                                )}
+                                <div style={styles.mamt}><span>Line Total</span><b>{(q * p).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
                       <div style={styles.unifiedTableWrap}>
                         <table style={styles.unifiedTable}>
                           <thead>
@@ -1125,6 +1234,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                           </tbody>
                         </table>
                       </div>
+                      )}
                       <p style={styles.fbrToggleHint}>
                         <b>*</b> required ·
                         <b> Description, UOM, HS Code, Sale Type</b> all auto-fill from the picked Item Type
@@ -1205,6 +1315,15 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 // so InvoiceForm (with-challan) can import the same pieces.
 
 const styles = {
+  // Mobile stacked-card line items (rendered below 760px instead of the table).
+  mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
+  mcard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
+  mcardHead: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem" },
+  mlabel: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.2rem" },
+  mgrid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "0.4rem" },
+  mgrid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginTop: "0.4rem" },
+  mkv: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.5rem" },
+  mamt: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.55rem", paddingTop: "0.45rem", borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.85rem", color: colors.textSecondary },
   row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
   inlineRow: { display: "flex", gap: "0.5rem", alignItems: "stretch", flexWrap: "wrap" },
   label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },

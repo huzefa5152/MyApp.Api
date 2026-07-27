@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import httpClient from "../api/httpClient";
 
-export default function LookupAutocomplete({ label, endpoint, value, onChange, inputClassName, inputStyle }) {
+export default function LookupAutocomplete({ label, endpoint, value, onChange, inputClassName, inputStyle, inputRef, autoFocus, onEnterKey }) {
     const [suggestions, setSuggestions] = useState([]);
     const [showDropdown, setShowDropdown] = useState(false);
     const [inputValue, setInputValue] = useState(value || "");
@@ -116,6 +116,19 @@ export default function LookupAutocomplete({ label, endpoint, value, onChange, i
     };
 
     const handleKeyDown = (e) => {
+        // Quick-add: when the caller wants Enter to commit the line (and the
+        // user isn't actively picking a suggestion), fire onEnterKey and stop
+        // the default form submit. Existing callers (no onEnterKey) are
+        // unaffected — the original dropdown-nav behaviour below still runs.
+        if (e.key === "Enter" && onEnterKey) {
+            const pickingSuggestion = showDropdown && suggestions.length > 0 && highlightIndex >= 0;
+            if (!pickingSuggestion) {
+                e.preventDefault();
+                onEnterKey();
+                return;
+            }
+        }
+
         if (!showDropdown || suggestions.length === 0) return;
 
         if (e.key === "ArrowDown") {
@@ -141,6 +154,8 @@ export default function LookupAutocomplete({ label, endpoint, value, onChange, i
     return (
         <div className="position-relative" ref={wrapperRef}>
             <input
+                ref={inputRef}
+                autoFocus={autoFocus}
                 type="text"
                 className={inputClassName !== undefined ? inputClassName : "form-control"}
                 style={inputStyle}

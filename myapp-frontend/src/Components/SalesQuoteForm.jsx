@@ -1,10 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { MdAdd, MdDelete } from "react-icons/md";
-import LookupAutocomplete from "./LookupAutocomplete";
 import SearchableSelect from "./SearchableSelect";
-import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import ItemTypeForm from "./ItemTypeForm";
-import QuantityInput from "./QuantityInput";
+import LineItemsEditor from "./LineItemsEditor";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
@@ -50,26 +47,13 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const [itemTypes, setItemTypes] = useState([]);
   const [clients, setClients] = useState([]);
   const [showAddItemType, setShowAddItemType] = useState(false);
-  // Bulk-apply mode for the "set Item Type on every row" bar above the grid —
-  // "all" overwrites every line, "empty" only fills untagged rows.
-  const [bulkApplyMode, setBulkApplyMode] = useState("all");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  // Responsive: the horizontal items table is cramped on phones, so below
-  // 760px we render each line as a tap-friendly stacked card instead.
-  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
-  const rateTimers = useRef({});
   const attachmentRef = useRef(null);
 
   useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
   useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
   useEffect(() => { getClientsByCompany(companyId).then(({ data }) => setClients(data || [])).catch(() => setClients([])); }, [companyId]);
-  useEffect(() => {
-    const onResize = () => setIsNarrow(window.innerWidth < 760);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
   // A quote is a pre-sale document (never sent to FBR), so — like Bill mode —
   // it only offers item types WITHOUT an HS code (HS-coded types are the
   // FBR-classification set used on the Invoices tab).
@@ -78,59 +62,18 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
     [itemTypes]
   );
 
-  // Picking an item type only TAGS the line (records ItemTypeId). It must NOT
-  // overwrite the operator's typed description/unit — that auto-fill is reserved
-  // for Invoice (FBR-classification) mode, not pre-sale quotes.
-  const pickItemType = (idx, newId) => setItem(idx, { itemTypeId: newId ? parseInt(newId) : null });
-
-  // Stamp one Item Type onto every line (or only the untagged ones) in a
-  // single pick — saves repetitive per-row selection when the whole quote is
-  // one product family. Simplified vs InvoiceForm: quotes only tag ItemTypeId,
-  // there's no HS/UOM/SaleType inheritance to fan out.
-  const applyItemTypeToAll = (newId) => {
-    if (!newId) return;
-    const id = parseInt(newId);
-    setItems((prev) => prev.map((it) => (bulkApplyMode === "empty" && it.itemTypeId) ? it : { ...it, itemTypeId: id }));
+  // Last-billed-rate lookup for the shared editor's price auto-fill. Returns
+  // { lastUnitPrice, hint } or null. The editor only fills when the row's price
+  // is still 0, so a typed price is never clobbered.
+  const getRate = async (description) => {
+    if (!companyId || !description?.trim()) return null;
+    const { data } = await getQuoteItemRate(companyId, { description });
+    if (data?.lastUnitPrice == null) return null;
+    return {
+      lastUnitPrice: data.lastUnitPrice,
+      hint: `Last billed: Rs ${Number(data.lastUnitPrice).toLocaleString()}${data.lastInvoiceNumber ? ` (Bill #${data.lastInvoiceNumber})` : ""}`,
+    };
   };
-  const clearAllItemTypes = () => setItems((prev) => prev.map((it) => ({ ...it, itemTypeId: null })));
-
-  const setItem = (idx, patch) =>
-    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
-
-  // Auto-fill price from the item's last billed rate (the operator's
-  // "if the item already has a price in the system" rule). Only fills when
-  // the row's price is still 0, so it never clobbers a typed price.
-  const fetchRate = async (idx, description) => {
-    if (!companyId || !description?.trim()) return;
-    try {
-      const { data } = await getQuoteItemRate(companyId, { description });
-      if (data?.lastUnitPrice != null) {
-        setItems((prev) => prev.map((it, i) => {
-          if (i !== idx) return it;
-          const hint = `Last billed: Rs ${Number(data.lastUnitPrice).toLocaleString()}${data.lastInvoiceNumber ? ` (Bill #${data.lastInvoiceNumber})` : ""}`;
-          return (!it.unitPrice || Number(it.unitPrice) === 0)
-            ? { ...it, unitPrice: data.lastUnitPrice, rateHint: hint }
-            : { ...it, rateHint: hint };
-        }));
-      }
-    } catch { /* no suggestion */ }
-  };
-
-  const handleDescChange = (idx, val) => {
-    setItem(idx, { description: val });
-    clearTimeout(rateTimers.current[idx]);
-    rateTimers.current[idx] = setTimeout(() => fetchRate(idx, val), 600);
-  };
-
-  const addItem = () => {
-    if (!items[items.length - 1].description.trim()) {
-      setError("Fill the current item's description before adding another.");
-      return;
-    }
-    setError("");
-    setItems([...items, blankItem()]);
-  };
-  const removeItem = (idx) => setItems(items.filter((_, i) => i !== idx));
 
   const lineTotal = (it) => Math.round((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0) * 100) / 100;
   const subtotal = items.reduce((s, it) => s + lineTotal(it), 0);
@@ -222,113 +165,20 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
               </div>
             </div>
 
-            <div style={s.itemsHeaderBar}>
-              <label style={{ ...s.label, margin: 0 }}>Items <span style={{ fontWeight: 400, fontSize: "0.72rem", color: colors.textSecondary }}>— unit price is required per line and remembered for later billing</span></label>
-              {canCreateItemType && (
-                <button type="button" style={s.inlineAddBtn} onClick={() => setShowAddItemType(true)} title="Add a new item type to your catalog">
-                  <MdAdd size={14} /> New Item Type
-                </button>
-              )}
-            </div>
-
-            {/* Bulk-apply — stamp one Item Type across every line (or just the
-                empty ones) in a single pick. Shown once there are 2+ rows. */}
-            {items.length > 1 && (
-              <div style={s.bulkApplyBar}>
-                <span style={{ fontSize: "0.82rem", color: "#1a2332", fontWeight: 500 }}>Apply same Item Type to:</span>
-                <select value={bulkApplyMode} onChange={(e) => setBulkApplyMode(e.target.value)} style={{ ...s.input, width: "auto", padding: "0.3rem 0.5rem", fontSize: "0.8rem", maxWidth: 160 }}>
-                  <option value="all">All {items.length} rows</option>
-                  <option value="empty">Only empty rows</option>
-                </select>
-                <div style={{ flex: "1 1 200px", maxWidth: 280 }}>
-                  <SearchableItemTypeSelect
-                    items={nonHsItemTypes}
-                    value={""}
-                    onChange={(newId) => applyItemTypeToAll(newId)}
-                    placeholder={bulkApplyMode === "all" ? "— pick to apply to all —" : "— pick to fill empty rows —"}
-                    style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                  />
-                </div>
-                <button type="button" style={s.bulkClearBtn} onClick={clearAllItemTypes} disabled={!items.some((it) => it.itemTypeId)} title="Drop the Item Type binding from every row">
-                  Clear all
-                </button>
-              </div>
-            )}
-
-            {isNarrow ? (
-              <div style={s.mcards}>
-                {items.map((item, idx) => (
-                  <div style={s.mcard} key={idx}>
-                    <div style={s.mcardHead}>
-                      <span style={s.mnum}>{idx + 1}</span>
-                      <div style={{ flex: 1 }}>
-                        <SearchableItemTypeSelect items={nonHsItemTypes} value={item.itemTypeId || ""} onChange={(newId) => pickItemType(idx, newId)} placeholder="— item type (optional) —" style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem" }} />
-                      </div>
-                      {idx !== 0 && <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>}
-                    </div>
-                    <LookupAutocomplete label="Item description" endpoint="/lookup/items" value={item.description} onChange={(v) => handleDescChange(idx, v)} inputStyle={{ ...s.cellInput, fontSize: "0.95rem" }} multiline />
-                    {item.rateHint && <div style={s.hint}>{item.rateHint}</div>}
-                    <div style={s.m3col}>
-                      <div><label style={s.mlabel}>Qty</label><QuantityInput value={item.quantity} onChange={(v) => setItem(idx, { quantity: v })} unit={item.unit} units={units} style={{ ...s.cellInput, textAlign: "right" }} /></div>
-                      <div><label style={s.mlabel}>Unit</label><LookupAutocomplete label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(v) => setItem(idx, { unit: v })} inputStyle={s.cellInput} /></div>
-                      <div><label style={s.mlabel}>Unit Price</label><input type="number" inputMode="decimal" min="0" step="0.01" style={{ ...s.cellInput, textAlign: "right" }} value={item.unitPrice} onChange={(e) => setItem(idx, { unitPrice: e.target.value })} /></div>
-                    </div>
-                    <div style={s.mamt}><span>Amount</span><b>Rs {lineTotal(item).toLocaleString()}</b></div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={s.tableWrap}>
-                <table style={s.table}>
-                  <thead>
-                    <tr>
-                      <th style={{ ...s.th, width: 28, textAlign: "center" }}>#</th>
-                      <th style={{ ...s.th, width: 190 }}>Item Type</th>
-                      <th style={s.th}>Description</th>
-                      <th style={{ ...s.th, width: 92, textAlign: "right" }}>Qty</th>
-                      <th style={{ ...s.th, width: 120 }}>Unit</th>
-                      <th style={{ ...s.th, width: 120, textAlign: "right" }}>Unit Price</th>
-                      <th style={{ ...s.th, width: 110, textAlign: "right" }}>Amount</th>
-                      <th style={{ ...s.th, width: 40 }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((item, idx) => (
-                      <tr key={idx}>
-                        <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
-                        <td style={{ ...s.td, verticalAlign: "top" }}>
-                          <SearchableItemTypeSelect
-                            items={nonHsItemTypes}
-                            value={item.itemTypeId || ""}
-                            onChange={(newId) => pickItemType(idx, newId)}
-                            placeholder="— optional —"
-                            style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                          />
-                        </td>
-                        <td style={{ ...s.td, verticalAlign: "top" }}>
-                          <LookupAutocomplete label="Item description" endpoint="/lookup/items" value={item.description} onChange={(v) => handleDescChange(idx, v)} inputStyle={s.cellInput} multiline />
-                          {item.rateHint && <div style={s.hint}>{item.rateHint}</div>}
-                        </td>
-                        <td style={s.td}>
-                          <QuantityInput value={item.quantity} onChange={(v) => setItem(idx, { quantity: v })} unit={item.unit} units={units} style={{ ...s.cellInput, textAlign: "right" }} />
-                        </td>
-                        <td style={s.td}>
-                          <LookupAutocomplete label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(v) => setItem(idx, { unit: v })} inputStyle={s.cellInput} />
-                        </td>
-                        <td style={s.td}>
-                          <input type="number" min="0" step="0.01" style={{ ...s.cellInput, textAlign: "right" }} value={item.unitPrice} onChange={(e) => setItem(idx, { unitPrice: e.target.value })} />
-                        </td>
-                        <td style={{ ...s.td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>{lineTotal(item).toLocaleString()}</td>
-                        <td style={{ ...s.td, textAlign: "center" }}>
-                          {idx !== 0 && <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <button type="button" style={s.addBtn} onClick={addItem}><MdAdd size={16} /> Add Item</button>
+            <LineItemsEditor
+              items={items}
+              onItemsChange={setItems}
+              makeBlankItem={blankItem}
+              units={units}
+              showItemType
+              itemTypes={nonHsItemTypes}
+              canCreateItemType={canCreateItemType}
+              onAddItemType={() => setShowAddItemType(true)}
+              showUnitPrice
+              getRate={getRate}
+              itemsLabel="Items"
+              itemsHint="unit price is required per line and remembered for later billing"
+            />
 
             <div style={s.totals}>
               <div style={s.tRow}><span>Subtotal</span><span>Rs {subtotal.toLocaleString()}</span></div>

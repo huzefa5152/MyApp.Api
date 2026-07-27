@@ -22,6 +22,14 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
   const [clients, setClients] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  // Responsive: the 5-col deliver grid clips the "Deliver now" input on a
+  // phone, so below 760px each order line renders as a stacked card instead.
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 760);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // Load the company's clients so the Site field can offer this order's
   // client's configured sites (";"-separated) as a dropdown — same UX as
@@ -84,6 +92,25 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
             </div>
           </div>
 
+          {isNarrow ? (
+            <div style={s.mcards}>
+              {(order.items || []).map((i) => (
+                <div key={i.id} style={s.mcard}>
+                  <div style={s.desc}>{i.description}</div>
+                  {i.unit && <div style={s.unit}>{i.unit}</div>}
+                  <div style={s.mgrid3}>
+                    <div><div style={s.mlabel}>Ordered</div><div>{i.quantity}</div></div>
+                    <div><div style={s.mlabel}>Delivered</div><div>{i.deliveredQuantity}</div></div>
+                    <div><div style={s.mlabel}>Remaining</div><div style={{ fontWeight: 700, color: i.remainingQuantity > 0 ? colors.blue : colors.teal }}>{i.remainingQuantity}</div></div>
+                  </div>
+                  <div style={{ marginTop: "0.6rem" }}>
+                    <label style={s.mlabel}>Deliver now</label>
+                    <input type="number" min="0" step="0.0001" style={{ ...s.input, textAlign: "right" }} value={qtys[i.id] ?? 0} onChange={(e) => setQty(i.id, e.target.value)} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (<>
           <div style={s.tableHead}>
             <div style={{ flex: 2 }}>Item</div>
             <div style={s.col}>Ordered</div>
@@ -105,6 +132,8 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
               </div>
             </div>
           ))}
+          </>
+          )}
         </div>
         <div style={formStyles.footer}>
           <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
@@ -126,4 +155,8 @@ const s = {
   col: { width: 90, flexShrink: 0, textAlign: "center", fontSize: "0.85rem" },
   desc: { fontSize: "0.88rem", fontWeight: 600, color: "#1a2332", whiteSpace: "pre-wrap" },
   unit: { fontSize: "0.75rem", color: colors.textSecondary },
+  mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
+  mcard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
+  mgrid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginTop: "0.5rem", textAlign: "center", fontSize: "0.85rem" },
+  mlabel: { fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.15rem" },
 };

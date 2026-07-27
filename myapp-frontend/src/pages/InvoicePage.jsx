@@ -970,26 +970,31 @@ export default function InvoicePage({ mode = "invoices" }) {
               >
                 <div style={cardStyles.cardContent}>
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                    <div style={cardStyles.cardHeader}>
                       <h5 style={cardStyles.title}>
                         <MdReceipt style={{ color: colors.blue, marginRight: 6 }} />
                         {isNotesMode ? noteLabel : isBillsMode ? "Bill" : "Invoice"} #{inv.invoiceNumber}
                       </h5>
                       <AttachmentBadge count={attachCounts[inv.id]} onClick={() => setAttachTarget(inv)} />
                     </div>
-                    <p style={cardStyles.text}><strong>Client:</strong> {inv.clientName}</p>
-                    {/* PO Number / Indent No / Site come from the linked
-                        DeliveryChallans (aggregated server-side). All
-                        three are optional — render only when present so
-                        sparse bills don't get noisy. */}
-                    {inv.poNumber && <p style={cardStyles.text}><strong>PO:</strong> {inv.poNumber}</p>}
-                    {inv.indentNo && <p style={cardStyles.text}><strong>Indent:</strong> {inv.indentNo}</p>}
-                    {inv.site && <p style={cardStyles.text}><strong>Site:</strong> {inv.site}</p>}
-                    <p style={cardStyles.text}><strong>Date:</strong> {new Date(inv.date).toLocaleDateString()}</p>
-                    <p style={cardStyles.text}><strong>Grand Total:</strong> Rs. {inv.grandTotal?.toLocaleString()}</p>
-                    <p style={{ ...cardStyles.text, fontSize: "0.78rem", color: colors.textSecondary }}>
-                      DC#{inv.challanNumbers?.join(", #")} | {inv.items?.length} items
-                    </p>
+                    {/* Client is the card's primary line. */}
+                    <p style={cardStyles.cardLead}>{inv.clientName || "—"}</p>
+                    {/* PO / Indent / Site / Date / Lines / Challan — compact
+                        labelled meta grid; the challan-sourced fields (PO /
+                        Indent / Site) render only when present so sparse bills
+                        stay clean. */}
+                    <div style={cardStyles.metaGrid}>
+                      {inv.poNumber && <div><span style={cardStyles.metaLabel}>PO</span><span style={cardStyles.metaValue}>{inv.poNumber}</span></div>}
+                      {inv.indentNo && <div><span style={cardStyles.metaLabel}>Indent</span><span style={cardStyles.metaValue}>{inv.indentNo}</span></div>}
+                      {inv.site && <div><span style={cardStyles.metaLabel}>Site</span><span style={cardStyles.metaValue}>{inv.site}</span></div>}
+                      <div><span style={cardStyles.metaLabel}>Date</span><span style={cardStyles.metaValue}>{new Date(inv.date).toLocaleDateString()}</span></div>
+                      <div><span style={cardStyles.metaLabel}>Lines</span><span style={cardStyles.metaValue}>{inv.items?.length || 0} item{inv.items?.length === 1 ? "" : "s"}</span></div>
+                      {inv.challanNumbers?.length > 0 && <div><span style={cardStyles.metaLabel}>Challan</span><span style={cardStyles.metaValue}>#{inv.challanNumbers.join(", #")}</span></div>}
+                    </div>
+                    <div style={cardStyles.amountBox}>
+                      <span style={cardStyles.amountLabel}>Grand Total</span>
+                      <span style={cardStyles.amount}>Rs. {inv.grandTotal?.toLocaleString()}</span>
+                    </div>
                     {/* FBR status row — shows current status OR 'Setup Incomplete' when fields are missing.
                         In Bills mode we keep only the binary "Submitted to FBR" / "Pending FBR submission"
                         identifier as a pill so the operator sees at a glance which rows are locked.

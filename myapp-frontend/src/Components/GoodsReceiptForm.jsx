@@ -23,6 +23,14 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   const [supplierChallanNumber, setSupplierChallanNumber] = useState("");
   const [site, setSite] = useState("");
   const [items, setItems] = useState([{ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }]);
+  // Responsive: the line-item table side-scrolls on a phone, so below 760px
+  // each line renders as a tap-friendly stacked card instead.
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 760);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
@@ -154,6 +162,50 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                   <MdAdd size={14} /> Add line
                 </button>
               </div>
+              {isNarrow ? (
+                <div style={mStyles.cards}>
+                  {items.map((it, idx) => (
+                    <div key={idx} style={mStyles.card}>
+                      <div style={mStyles.head}>
+                        <div style={{ flex: 1 }}>
+                          <SearchableItemTypeSelect
+                            items={itemTypes}
+                            value={it.itemTypeId || ""}
+                            onChange={(newId, picked) => {
+                              updateItem(idx, "itemTypeId", newId ? parseInt(newId) : null);
+                              if (picked) {
+                                if (!it.description?.trim()) updateItem(idx, "description", picked.name || "");
+                                if (picked.uom) updateItem(idx, "unit", picked.uom);
+                              }
+                            }}
+                            placeholder="— optional —"
+                            style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem" }}
+                          />
+                        </div>
+                        {items.length > 1 && (
+                          <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: "0.4rem", minWidth: 44, minHeight: 44, flexShrink: 0 }}>
+                            <MdDelete size={18} />
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ marginBottom: "0.4rem" }}>
+                        <label style={mStyles.label}>Description *</label>
+                        <input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
+                      </div>
+                      <div style={mStyles.grid2}>
+                        <div>
+                          <label style={mStyles.label}>Qty *</label>
+                          <input type="number" min={1} style={{ ...cellInput, textAlign: "right" }} value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} />
+                        </div>
+                        <div>
+                          <label style={mStyles.label}>UOM</label>
+                          <input type="text" style={cellInput} value={it.unit} onChange={e => updateItem(idx, "unit", e.target.value)} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                 <thead>
                   <tr style={{ backgroundColor: "#f5f8fc" }}>
@@ -196,6 +248,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                   ))}
                 </tbody>
               </table>
+              )}
             </div>
 
             <div style={{ marginTop: "1rem" }}>
@@ -217,3 +270,11 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
 const th = { textAlign: "left", padding: "0.45rem 0.55rem", borderBottom: "1px solid #e8edf3", fontSize: "0.74rem", fontWeight: 700, color: "#5f6d7e", textTransform: "uppercase", letterSpacing: "0.04em" };
 const td = { padding: "0.4rem 0.45rem", borderBottom: "1px solid #f3f5f9", verticalAlign: "top" };
 const cellInput = { width: "100%", padding: "0.3rem 0.5rem", fontSize: "0.8rem", border: "1px solid #d0d7e2", borderRadius: 6, backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none" };
+// Mobile stacked-card line items (rendered below 760px instead of the table).
+const mStyles = {
+  cards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
+  card: { border: "1px solid #e8edf3", borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
+  head: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem" },
+  label: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: "#5f6d7e", fontWeight: 700, marginBottom: "0.2rem" },
+  grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "0.4rem" },
+};

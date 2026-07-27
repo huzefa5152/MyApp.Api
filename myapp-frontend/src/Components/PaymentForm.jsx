@@ -45,6 +45,14 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   const [docs, setDocs] = useState([]);          // open documents for the contact
   const [alloc, setAlloc] = useState({});         // docId -> amount string
   const [loadingDocs, setLoadingDocs] = useState(false);
+  // Responsive: the settle-documents table side-scrolls on a phone, so below
+  // 760px each open document renders as a tap-friendly stacked card instead.
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 760);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -256,6 +264,29 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               ) : docs.length === 0 ? (
                 <div style={hintBox}>No open {docLabel.toLowerCase()}s with a balance due for this {contactLabel.toLowerCase()}.</div>
               ) : (
+                isNarrow ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                    {docs.map((d) => (
+                      <div key={d.id} style={{ border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.45rem" }}>
+                          <strong style={{ color: colors.textPrimary }}>#{d.number}</strong>
+                          <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem", color: colors.textSecondary, marginBottom: 2 }}><span>Total</span><span>{d.grandTotal.toLocaleString()}</span></div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem", color: colors.textSecondary, marginBottom: "0.55rem" }}><span>Balance due</span><span>{d.available.toLocaleString()}</span></div>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          <input
+                            type="number" min="0" step="0.01" style={{ ...formStyles.input, textAlign: "right", flex: 1 }}
+                            value={alloc[d.id] ?? ""}
+                            onChange={(e) => setAllocAmount(d.id, e.target.value)}
+                            placeholder="Apply amount"
+                          />
+                          <button type="button" style={{ ...fillBtn, minHeight: 44, padding: "0 0.75rem" }} onClick={() => fillBalance(d)} title="Apply full balance">Max</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
                 <div style={{ overflowX: "auto" }}>
                   <table style={tbl}>
                     <thead>
@@ -289,6 +320,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                     </tbody>
                   </table>
                 </div>
+                )
               )}
             </div>
 

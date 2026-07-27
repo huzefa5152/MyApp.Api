@@ -103,6 +103,14 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
   const [salesQuoteId, setSalesQuoteId] = useState("");
   const [quotes, setQuotes] = useState([]);
   const [items, setItems] = useState([]);
+  // Responsive: the flex-row review grid is cramped on a phone, so below 760px
+  // each parsed line renders as a tap-friendly stacked card instead.
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 760);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   const [rawText, setRawText] = useState("");
 
   // Format match metadata (populated when a saved POFormat handled this PDF)
@@ -580,6 +588,39 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                     No items detected. Click "Add Item" to add manually.
                   </div>
                 ) : (
+                  isNarrow ? (
+                    <div style={styles.mCards}>
+                      {items.map((item, idx) => (
+                        <div key={item.id} style={styles.mCard}>
+                          <div style={styles.mHead}>
+                            <span style={styles.mNum}>{idx + 1}</span>
+                            <span style={{ flex: 1 }} />
+                            <button type="button" style={styles.deleteItemBtn} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={18} /></button>
+                          </div>
+                          <div style={{ marginBottom: "0.4rem" }}>
+                            <label style={styles.mLabel}>Description *</label>
+                            <LookupAutocomplete label="Description" endpoint="/lookup/items" value={item.description} onChange={(val) => handleItemChange(idx, "description", val)} inputClassName="" inputStyle={{ ...styles.input, padding: "0.5rem 0.6rem", fontSize: "0.9rem" }} multiline />
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: cfg.showPrice ? "1fr 1fr 1fr" : "1fr 1fr", gap: "0.5rem" }}>
+                            <div>
+                              <label style={styles.mLabel}>Qty *</label>
+                              <QuantityInput value={item.quantity} onChange={(val) => handleItemChange(idx, "quantity", val)} unit={item.unit} units={units} style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} />
+                            </div>
+                            <div>
+                              <label style={styles.mLabel}>Unit</label>
+                              <LookupAutocomplete label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(val) => handleItemChange(idx, "unit", val)} inputClassName="" inputStyle={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem" }} />
+                            </div>
+                            {cfg.showPrice && (
+                              <div>
+                                <label style={styles.mLabel}>Unit Price</label>
+                                <input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(e) => handleItemChange(idx, "unitPrice", e.target.value)} style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                     <div style={styles.itemsHeader}>
                       <span style={{ flex: 0.5 }}>#</span>
@@ -647,6 +688,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                       </div>
                     ))}
                   </div>
+                  )
                 )}
               </div>
 
@@ -713,6 +755,12 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
 }
 
 const styles = {
+  // Mobile stacked-card line items (rendered below 760px instead of flex rows).
+  mCards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
+  mCard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
+  mHead: { display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem" },
+  mNum: { flex: "0 0 auto", width: 24, height: 24, borderRadius: 7, background: "#f0f3f8", color: colors.textSecondary, display: "grid", placeItems: "center", fontSize: "0.78rem", fontWeight: 700 },
+  mLabel: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.2rem" },
   row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
   label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
   input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },

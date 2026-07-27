@@ -281,6 +281,14 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-27 — Shared line-item editor: fast desktop entry + mobile cards across every sales form
+
+Completed the Sales-Quote mobile work into one reusable component. `Components/LineItemsEditor.jsx` is now the single line-item grid behind **Sales Quote, Sales Order, and both Challan forms** (create + edit): a dense table on desktop, tap-friendly stacked cards below 760px, no horizontal scroll on phones. Each form opts into just the columns it needs — item-type picker + bulk-apply for Quote/Order, unit price + last-billed-rate auto-fill for Quote, quantity-only for Challan — and keeps its own totals, validation, save shape, and couplings (quote/SO prefill, delivered-qty lock, duplicate-mode, item-type passthrough) unchanged.
+
+**Faster desktop entry** (the per-cell table was slow for long lists): **Enter** in any row commits and advances — on the last row it appends a fresh line and focuses the description, otherwise it jumps to the next row — so it's type · Enter · type · Enter down the list. Plus **Repeat last** (clones the previous line's item type / unit / price) and **Paste list** (one item per line; a trailing tab/comma number becomes qty, a second becomes unit price). `LookupAutocomplete` gained optional `inputRef` / `autoFocus` / `onEnterKey` props (backward-compatible) to drive this.
+
+The three FBR bill forms — `InvoiceForm`, `StandaloneInvoiceForm`, `EditBillForm` — also render their line items as responsive stacked cards below 760px, mirroring their existing columns (HS code, sale type, MRP/SRO, per-cell locks) with **no change** to their FBR / challan-projection / adjustment logic (EditBill cards the individual-lines view; the grouped lens stays a table).
+
 ### 2026-07-25 — Mobile-friendly line-item entry (Sales Quote)
 
 The Sales Quote form's line items were a horizontal table — cramped and side-scrolling on a phone. Below 760px they now render as **tap-friendly stacked cards** (description full-width; Qty / Unit / Unit Price in a row; amount + remove) with no horizontal scroll; desktop keeps the dense table, switching automatically on resize. Reuses the existing item-type picker, description autocomplete, last-rate auto-fill, validation, and save shape unchanged. First of the sales forms — Order / Challan / Bill to follow, plus a faster desktop quick-add. (`Components/SalesQuoteForm.jsx`.)

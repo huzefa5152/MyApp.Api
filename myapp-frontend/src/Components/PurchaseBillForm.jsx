@@ -39,6 +39,14 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [paymentTerms, setPaymentTerms] = useState("");
   const [paymentMode, setPaymentMode] = useState("");
   const [items, setItems] = useState([newRow()]);
+  // Responsive: the wide line-item table side-scrolls on a phone, so below
+  // 760px each line renders as a tap-friendly stacked card instead.
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 760);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   // Source-bill metadata when in "Purchase Against Sale" mode
@@ -333,6 +341,61 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                   <MdAdd size={14} /> Add line
                 </button>
               </div>
+              {isNarrow ? (
+                <div style={mStyles.cards}>
+                  {items.map((it, idx) => {
+                    const lineTotal = (parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0);
+                    const linkedToSale = (it.sourceInvoiceItemIds?.length || 0) > 0;
+                    return (
+                      <div key={idx} style={mStyles.card}>
+                        <div style={mStyles.head}>
+                          <div style={{ flex: 1 }}>
+                            <SearchableItemTypeSelect
+                              items={eligibleItemTypes}
+                              value={it.itemTypeId || ""}
+                              onChange={(newId, picked) => pickItemType(idx, newId, picked)}
+                              placeholder={isAgainstSale ? "— pick item with HS Code —" : "— optional —"}
+                              style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem", ...(isAgainstSale && !it.itemTypeId ? { borderColor: "#dc3545" } : {}) }}
+                            />
+                            {linkedToSale && (
+                              <div style={{ fontSize: "0.7rem", color: "#5f6d7e", marginTop: 2 }}>
+                                {it._saleLineCount > 1
+                                  ? `${it._saleLineCount} sale lines, was: ${it._originalItemTypeName || "—"}`
+                                  : `1 sale line, was: ${it._originalItemTypeName || "—"}`}
+                                {it._saleProcuredQty > 0 && ` · already procured ${it._saleProcuredQty} of ${it._saleSoldQty}`}
+                              </div>
+                            )}
+                          </div>
+                          {items.length > 1 && (
+                            <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: "0.4rem", minWidth: 44, minHeight: 44, flexShrink: 0 }}>
+                              <MdDelete size={18} />
+                            </button>
+                          )}
+                        </div>
+                        <div style={{ marginBottom: "0.4rem" }}>
+                          <label style={mStyles.label}>Description *</label>
+                          <input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
+                        </div>
+                        <div style={mStyles.grid3}>
+                          <div>
+                            <label style={mStyles.label}>Qty *</label>
+                            <QuantityInput value={it.quantity} onChange={val => updateItem(idx, "quantity", val)} unit={it.uom} units={units} style={{ ...cellInput, textAlign: "right" }} />
+                          </div>
+                          <div>
+                            <label style={mStyles.label}>Unit Price *</label>
+                            <input type="number" min={0} step={0.01} style={{ ...cellInput, textAlign: "right" }} value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
+                          </div>
+                          <div>
+                            <label style={mStyles.label}>UOM</label>
+                            <input type="text" style={cellInput} value={it.uom} onChange={e => updateItem(idx, "uom", e.target.value)} />
+                          </div>
+                        </div>
+                        <div style={mStyles.amt}><span>Line Total</span><b>Rs. {lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                   <thead>
@@ -402,6 +465,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                   </tbody>
                 </table>
               </div>
+              )}
             </div>
 
             <div style={{ marginTop: "1rem", padding: "0.75rem 1rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff", display: "grid", gridTemplateColumns: "1fr auto auto", rowGap: "0.35rem", columnGap: "1rem" }}>
@@ -446,3 +510,12 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
 const th = { textAlign: "left", padding: "0.45rem 0.55rem", borderBottom: "1px solid #e8edf3", fontSize: "0.74rem", fontWeight: 700, color: "#5f6d7e", textTransform: "uppercase", letterSpacing: "0.04em" };
 const td = { padding: "0.4rem 0.45rem", borderBottom: "1px solid #f3f5f9", verticalAlign: "top" };
 const cellInput = { width: "100%", padding: "0.3rem 0.5rem", fontSize: "0.8rem", border: "1px solid #d0d7e2", borderRadius: 6, backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none" };
+// Mobile stacked-card line items (rendered below 760px instead of the table).
+const mStyles = {
+  cards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
+  card: { border: "1px solid #e8edf3", borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
+  head: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem" },
+  label: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: "#5f6d7e", fontWeight: 700, marginBottom: "0.2rem" },
+  grid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginTop: "0.4rem" },
+  amt: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.55rem", paddingTop: "0.45rem", borderTop: "1px dashed #e8edf3", fontSize: "0.85rem", color: "#5f6d7e" },
+};

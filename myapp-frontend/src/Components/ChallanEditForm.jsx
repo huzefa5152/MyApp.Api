@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { MdAdd, MdDelete, MdInfo, MdContentCopy } from "react-icons/md";
-import LookupAutocomplete from "./LookupAutocomplete";
+import { MdInfo, MdContentCopy } from "react-icons/md";
 import SearchableSelect from "./SearchableSelect";
-import QuantityInput from "./QuantityInput";
+import LineItemsEditor from "./LineItemsEditor";
 import { updateChallan } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
@@ -84,7 +83,6 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // ── UI state ──
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const containerRef = useRef(null);
 
   // Load lookups once
   useEffect(() => {
@@ -93,10 +91,6 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     }
     getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
   }, [challan.companyId]);
-
-  useEffect(() => {
-    if (containerRef.current) containerRef.current.scrollTop = containerRef.current.scrollHeight;
-  }, [items.length]);
 
   // Derive the site options from the selected client's semicolon-separated list.
   // Null-safe: if the client has no sites the dropdown collapses to a free-text
@@ -122,12 +116,6 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Item handlers ──
-  const handleItemChange = (index, field, value) => {
-    const next = [...items];
-    next[index][field] = value;
-    setItems(next);
-  };
-
   const handleItemPick = (index, picked) => {
     const next = [...items];
     if (picked.name) next[index].description = picked.name;
@@ -143,15 +131,6 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         uom: picked.uom || null,
       }).catch(() => {});
     }
-  };
-
-  const addItem = () => {
-    setItems([...items, { id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }]);
-  };
-
-  const removeItem = (index) => {
-    if (items.length <= 1) return;
-    setItems(items.filter((_, i) => i !== index));
   };
 
   // ── Preview the status the backend WILL set, so the operator sees the
@@ -363,56 +342,13 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
             </div>
 
             {/* ── Items ── */}
-            <label style={{ ...styles.label, marginTop: "0.75rem" }}>Items *</label>
-
-            {/* Item Type lives on the Invoices tab now — challans capture
-                description / qty / unit only. Operators classify each line
-                by Item Type when preparing the bill for FBR submission. */}
-
-            <div ref={containerRef} style={styles.itemsContainer}>
-              {items.map((item, idx) => (
-                <div key={idx} style={styles.itemRow}>
-                  <div style={styles.itemIndex}>{idx + 1}</div>
-                  <div style={{ flex: 2, minWidth: 0 }}>
-                    <LookupAutocomplete
-                      label="Description"
-                      endpoint="/lookup/items"
-                      value={item.description}
-                      onChange={(val) => handleItemChange(idx, "description", val)}
-                    />
-                  </div>
-                  {/* Wider column so 4-place decimals (0.0004, 1234.5678)
-                      stay fully visible alongside the spinner controls. */}
-                  <div style={{ width: 130, flexShrink: 0 }}>
-                    <QuantityInput
-                      value={item.quantity}
-                      onChange={(val) => handleItemChange(idx, "quantity", val === "" ? 1 : val)}
-                      unit={item.unit}
-                      units={units}
-                      style={{ ...styles.input, textAlign: "right", padding: "0.55rem 0.5rem" }}
-                    />
-                  </div>
-                  <div style={{ width: 180, flexShrink: 0 }}>
-                    <LookupAutocomplete
-                      label="Unit"
-                      endpoint="/lookup/units"
-                      value={item.unit}
-                      onChange={(val) => handleItemChange(idx, "unit", val)}
-                    />
-                  </div>
-                  <div style={{ flexShrink: 0 }}>
-                    {items.length > 1 && (
-                      <button type="button" style={styles.removeBtn} onClick={() => removeItem(idx)}>
-                        <MdDelete size={16} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button type="button" style={styles.addItemBtn} onClick={addItem}>
-              <MdAdd size={16} /> Add Item
-            </button>
+            <LineItemsEditor
+              items={items}
+              onItemsChange={setItems}
+              makeBlankItem={() => ({ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" })}
+              units={units}
+              itemsLabel="Items *"
+            />
 
             {/* Attachments — INSIDE the scrollable body (formStyles.body) so it
                 scrolls with the rest and never pushes the footer off-screen.

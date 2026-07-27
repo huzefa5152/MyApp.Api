@@ -523,7 +523,7 @@ const s = {
     background: "#fff",
     border: "1px solid #f0f3f7",
   },
-  memberCompany: { display: "inline-flex", alignItems: "center", gap: "0.25rem", fontWeight: 600, color: "#1a2332" },
+  memberCompany: { display: "inline-flex", alignItems: "center", gap: "0.25rem", fontWeight: 600, color: "#1a2332", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   memberSite: { color: "#5f6d7e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   memberFlag: { color: "#5f6d7e", fontSize: "0.78rem" },
   fieldHelp: {

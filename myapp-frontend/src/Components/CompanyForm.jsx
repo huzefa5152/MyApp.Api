@@ -551,7 +551,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 </span>
                             </label>
 
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                            <div className="form-grid-2col">
                                 <div style={formGroup}>
                                     <label style={label}>Starting Purchase Bill #</label>
                                     <input

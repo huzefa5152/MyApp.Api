@@ -212,6 +212,14 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // material price has gone up since last bill).
   const [lastRates, setLastRates] = useState({});
   const [autoFilledFromHistory, setAutoFilledFromHistory] = useState(false);
+  // Responsive: the wide FBR line-item table side-scrolls on a phone, so below
+  // 760px each challan line renders as a tap-friendly stacked card instead.
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 760);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   // Memo of challan ids we've already queried last-rates for, so toggling
   // the same challan on/off doesn't re-hit the API every time.
   const [fetchedRateChallanIds, setFetchedRateChallanIds] = useState(() => new Set());
@@ -1212,6 +1220,118 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           </div>
                         )}
 
+                        {isNarrow ? (
+                          <div style={styles.mcards}>
+                            {allItems.map((item) => {
+                              const price = parseFloat(itemPrices[item.id]) || 0;
+                              const displayUom = itemUoms[item.id] ?? item.unit;
+                              return (
+                                <div key={item.id} style={styles.mcard}>
+                                  <div style={styles.mcardHead}>
+                                    <span style={styles.mdc}>DC #{item.challanNumber}</span>
+                                    <div style={{ flex: 1, minWidth: 160 }}>
+                                      <SearchableItemTypeSelect
+                                        items={filteredItemTypes}
+                                        value={itemTypeIds[item.id] || ""}
+                                        onChange={(newId, picked) => {
+                                          setItemTypeIds((p) => ({ ...p, [item.id]: newId ? parseInt(newId) : null }));
+                                          if (picked) {
+                                            if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [item.id]: picked.hsCode }));
+                                            if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [item.id]: picked.saleType }));
+                                          } else {
+                                            setItemHsCodes((p) => ({ ...p, [item.id]: "" }));
+                                            setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
+                                          }
+                                        }}
+                                        placeholder="Pick item… *"
+                                        style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem", ...(itemTypeIds[item.id] ? {} : { borderColor: colors.warn }) }}
+                                      />
+                                      {!itemTypeIds[item.id] && (
+                                        <div style={{ marginTop: 2, fontSize: "0.62rem", color: colors.warn, fontWeight: 700 }}>Required</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div style={{ marginBottom: "0.4rem" }}>
+                                    <label style={styles.mlabel}>Description</label>
+                                    <SmartItemAutocomplete
+                                      companyId={companyId}
+                                      value={itemDescriptions[item.id] ?? item.description}
+                                      onChange={(v) => handleDescriptionChange(item.id, v)}
+                                      onPick={(picked) => handleItemPick(item.id, picked)}
+                                      style={{ ...styles.input, padding: "0.5rem 0.6rem", fontSize: "0.9rem" }}
+                                      placeholder="Search or type item…"
+                                    />
+                                  </div>
+                                  <div style={styles.mgrid3}>
+                                    <div>
+                                      <label style={styles.mlabel}>Qty</label>
+                                      <div style={{ padding: "0.5rem 0", fontSize: "0.9rem", textAlign: "right", fontWeight: 600 }}>{parseFloat(Number(item.quantity || 0).toFixed(4)).toString()}</div>
+                                    </div>
+                                    <div>
+                                      <label style={styles.mlabel}>UOM</label>
+                                      <LookupAutocomplete endpoint="/lookup/units" value={displayUom || ""} onChange={(val) => setItemUoms((p) => ({ ...p, [item.id]: val }))} />
+                                    </div>
+                                    <div>
+                                      <label style={styles.mlabel}>Unit Price *</label>
+                                      <input type="number" min={0} step={0.01} style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} value={itemPrices[item.id] || ""} onChange={(e) => handlePriceChange(item.id, e.target.value)} placeholder="0.00" />
+                                      {lastRates[item.id]?.lastUnitPrice != null && (
+                                        <div style={{
+                                          fontSize: "0.68rem", marginTop: 2, lineHeight: 1.2,
+                                          color: parseFloat(itemPrices[item.id]) === parseFloat(lastRates[item.id].lastUnitPrice) ? "#5f6d7e" : "#2e7d32",
+                                        }}
+                                        title={`Last billed Rs. ${Number(lastRates[item.id].lastUnitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                                          + ` on bill #${lastRates[item.id].lastInvoiceNumber}`
+                                          + (lastRates[item.id].lastInvoiceDate ? ` (${new Date(lastRates[item.id].lastInvoiceDate).toLocaleDateString()})` : "")
+                                          + ` — matched by ${lastRates[item.id].matchedBy}`
+                                        }>
+                                          Last Rs.{Number(lastRates[item.id].lastUnitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                          {lastRates[item.id].lastInvoiceDate && (<> · #{lastRates[item.id].lastInvoiceNumber}</>)}
+                                          {parseFloat(itemPrices[item.id]) !== parseFloat(lastRates[item.id].lastUnitPrice) && (<> · <b>edited</b></>)}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {!billsMode && (
+                                    <div style={styles.mkv}>
+                                      <span style={styles.mlabel}>HS Code</span>
+                                      <span style={{ fontFamily: "monospace", fontSize: "0.82rem", color: itemHsCodes[item.id] ? colors.textPrimary : colors.textSecondary, fontStyle: itemHsCodes[item.id] ? "normal" : "italic" }} title="HS Code auto-fills from the picked Item Type">{itemHsCodes[item.id] || "—"}</span>
+                                    </div>
+                                  )}
+                                  {!billsMode && (
+                                    <div style={{ marginTop: "0.4rem" }}>
+                                      <label style={styles.mlabel}>Sale Type</label>
+                                      {chosenScenario ? (
+                                        <input type="text" readOnly value={chosenScenario.saleType} style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.85rem", backgroundColor: "#eef5ff", cursor: "not-allowed" }} title={`Locked by ${chosenScenario.code}`} />
+                                      ) : (
+                                        <select style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.85rem" }} value={itemSaleTypes[item.id] || ""} onChange={(e) => setItemSaleTypes((p) => ({ ...p, [item.id]: e.target.value }))}>
+                                          <option value="">— select —</option>
+                                          <option>Goods at standard rate (default)</option>
+                                          <option>Goods at Reduced Rate</option>
+                                          <option>Goods at zero-rate</option>
+                                          <option>Exempt goods</option>
+                                          <option>3rd Schedule Goods</option>
+                                          <option>Services</option>
+                                          <option>Services (FED in ST Mode)</option>
+                                          <option>Goods (FED in ST Mode)</option>
+                                          <option>Steel Melting and re-rolling</option>
+                                          <option>Toll Manufacturing</option>
+                                          <option>Mobile Phones</option>
+                                          <option>Petroleum Products</option>
+                                          <option>Electric Vehicle</option>
+                                          <option>Cement /Concrete Block</option>
+                                          <option>Processing/Conversion of Goods</option>
+                                          <option>Cotton Ginners</option>
+                                          <option>Non-Adjustable Supplies</option>
+                                        </select>
+                                      )}
+                                    </div>
+                                  )}
+                                  <div style={styles.mamt}><span>Line Total</span><b>{(item.quantity * price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
                         <div style={styles.unifiedTableWrap}>
                           <table style={styles.unifiedTable}>
                             <thead>
@@ -1425,6 +1545,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             </tbody>
                           </table>
                         </div>
+                        )}
                         <p style={styles.fbrToggleHint}>
                           <b>*</b> Unit Price is required. HS Code &amp; Sale Type are optional —
                           needed only when submitting to FBR. They auto-fill when you pick an item.
@@ -1508,6 +1629,15 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 }
 
 const styles = {
+  // Mobile stacked-card line items (rendered below 760px instead of the table).
+  mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
+  mcard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
+  mcardHead: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem", flexWrap: "wrap" },
+  mdc: { fontSize: "0.7rem", fontWeight: 700, color: "#0d47a1", background: "#e3f2fd", borderRadius: 6, padding: "0.15rem 0.45rem", flexShrink: 0 },
+  mlabel: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.2rem" },
+  mgrid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginTop: "0.4rem" },
+  mkv: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.5rem" },
+  mamt: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.55rem", paddingTop: "0.45rem", borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.85rem", color: colors.textSecondary },
   row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
   label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
   input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },

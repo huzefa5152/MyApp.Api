@@ -100,13 +100,21 @@ const { has } = usePermissions();
 Action buttons that the user can't activate **must not render**. Don't show a
 button that 403s on click.
 
-### 3. Mobile-first UI
+### 3. Responsive UI — MANDATORY on every screen
 
-- Grids: `gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))"` — collapses to one column on phones with no media queries
-- Test at **375px** (phone), **768px** (tablet), **1280px** (desktop)
-- Long names: `display: "-webkit-box"; WebkitLineClamp: 2; WebkitBoxOrient: "vertical"` — DO NOT use `whiteSpace: "nowrap"` + `textOverflow: "ellipsis"` on user-supplied strings (it collapsed "MEKO FABRICS" and "MEKO DENIM" into identical-looking rows, see dashboard incident 2026-05-13)
-- Tap targets ≥ 44×44 px
-- Picker dropdowns: full-width on phone (`flex: 1`), capped on desktop (`maxWidth: 260`)
+**Every new feature screen, form, modal, table and list MUST be designed for
+all three breakpoints and give the best UX for the flow on each — this is a
+hard standard, not a nice-to-have.** Full patterns + recipes live in
+`RESPONSIVE_UI_GUIDE.md` (read it before building any UI). The essentials:
+
+- Test at **375px** (phone), **768px** (tablet), **1280px** (desktop). **No horizontal page scroll on a phone**, ever.
+- Grids: `gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))"` — collapses to one column on phones with no media queries. NEVER hardcode `"1fr 1fr 1fr"` on a form grid.
+- **Line-item entry** → use the shared **`Components/LineItemsEditor.jsx`** (responsive table/cards + desktop keyboard quick-add) for any new quote/order/challan-style grid. For FBR/complex tables that can't adopt it, render a responsive branch `{isNarrow ? <stacked cards> : <existing table>}` (breakpoint 760px, `resize` listener) — reuse the existing cells/handlers, change no logic, keep the desktop `<table>` intact. Wide tables (`overflowX:auto` + `minWidth`) are a phone anti-pattern — give them a card view.
+- **Modals** → use the shared `formStyles` from `theme.js` (backdrop `position:fixed; inset:0; display:flex; overflowY:auto; padding`; modal `maxHeight:96vh`; body `overflowY:auto; flex:1`). This never clips. **Never** use `display:grid; placeItems:center` with no `overflowY` on an overlay — a card taller than the viewport gets its top clipped unreachable (CorrectionWizard bug, 2026-07-27).
+- **Icon buttons**: `display:grid; placeItems:center; padding:0; boxShadow:none` — the `padding:0`/`boxShadow:none` override the global `button` rule in index.css that otherwise off-centres the glyph and adds a shadow. Tap targets ≥ 44×44 px.
+- Long names: `display: "-webkit-box"; WebkitLineClamp: 2; WebkitBoxOrient: "vertical"` — DO NOT use `whiteSpace: "nowrap"` + `textOverflow: "ellipsis"` on user-supplied strings (it collapsed "MEKO FABRICS" and "MEKO DENIM" into identical-looking rows, see dashboard incident 2026-05-13).
+- Picker dropdowns: full-width on phone (`flex: 1`), capped on desktop (`maxWidth: 260`).
+- **Verify** every UI change at 375/768/1280 (browser or `resize_window`) before calling it done — compile ≠ verified.
 
 ### 4. Data integrity
 

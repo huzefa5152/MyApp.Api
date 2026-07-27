@@ -242,12 +242,17 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
 }
 
 const s = {
-  overlay: { position: "fixed", inset: 0, background: "rgba(15,22,32,.5)", display: "grid", placeItems: "center", padding: 16, zIndex: 1000 },
-  card: { background: "#fff", borderRadius: 12, width: "min(720px,100%)", maxHeight: "92vh", overflowY: "auto", boxShadow: "0 20px 60px -20px rgba(0,0,0,.4)", padding: 20 },
+  // Overlay scrolls (overflowY) and the card uses margin:auto so it centres
+  // when it fits and pins to the top (fully reachable, never clipped) when it's
+  // taller than the viewport. zIndex 1100 sits above the fixed sidebar (1040).
+  overlay: { position: "fixed", inset: 0, background: "rgba(15,22,32,.5)", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "24px 16px", zIndex: 1100, overflowY: "auto" },
+  card: { background: "#fff", borderRadius: 12, width: "min(720px,100%)", margin: "auto", boxShadow: "0 20px 60px -20px rgba(0,0,0,.4)", padding: 20 },
   head: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 },
   eyebrow: { fontSize: 11, letterSpacing: ".12em", textTransform: "uppercase", color: "#0a5d50", fontWeight: 700 },
   title: { margin: "2px 0 0", fontSize: 20, color: "#16202b", lineHeight: 1.15 },
-  iconBtn: { display: "grid", placeItems: "center", width: 34, height: 34, border: "1px solid #dce2e8", background: "#fff", borderRadius: 8, cursor: "pointer", color: "#46586b" },
+  // padding:0 + boxShadow:none override the global `button` rule (index.css
+  // padding .8em 1.6em) that otherwise off-centres the icon and adds a shadow.
+  iconBtn: { display: "grid", placeItems: "center", width: 34, height: 34, padding: 0, border: "1px solid #dce2e8", background: "#fff", borderRadius: 8, boxShadow: "none", cursor: "pointer", color: "#46586b", flexShrink: 0 },
   info: { display: "flex", gap: 10, background: "#eef1f4", color: "#46586b", borderRadius: 8, padding: "11px 13px", fontSize: 13, lineHeight: 1.45, marginBottom: 14 },
   err: { background: "#fdecea", color: "#a5384a", border: "1px solid #f5c6cb", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 12 },
   opts: { display: "grid", gap: 10 },

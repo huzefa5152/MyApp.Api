@@ -99,6 +99,15 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
 
   const [invoice, setInvoice] = useState(null);
   const [items, setItems] = useState([]);
+  // Responsive: the wide FBR line-item table side-scrolls on a phone, so below
+  // 760px the individual-lines view renders as tap-friendly stacked cards
+  // instead (grouped view keeps the table — it's a summary lens).
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 760);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // Bill-mode source-of-truth snapshot (2026-05-11).
   //
@@ -1622,6 +1631,94 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                   </div>
                 )}
 
+                {isNarrow && !renderGrouped ? (
+                  <div style={styles.mcards}>
+                    {items.map((item, idx) => {
+                      const hasItemType = !!item.itemTypeId;
+                      return (
+                        <div key={item.id || `new-${idx}`} style={styles.mcard}>
+                          <div style={styles.mcardHead}>
+                            <span style={styles.mnum}>{idx + 1}</span>
+                            <div style={{ flex: 1 }}>
+                              {lockItemType ? (
+                                <div style={styles.readOnlyText}>{item.itemTypeName || <span style={styles.muted}>—</span>}</div>
+                              ) : (
+                                <>
+                                  <SearchableItemTypeSelect
+                                    items={pickerItemsWithCurrent(item.itemTypeId)}
+                                    value={item.itemTypeId || ""}
+                                    onChange={(newId, picked) => updateItemType(idx, newId ? parseInt(newId) : null, picked)}
+                                    placeholder="Pick item…"
+                                    style={{ ...styles.tableInput, ...(hasItemType ? {} : { borderColor: colors.warn }) }}
+                                  />
+                                  {!hasItemType && (
+                                    <div style={styles.requiredHint}>Required</div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ marginBottom: "0.4rem" }}>
+                            <label style={styles.mlabel}>Description</label>
+                            {lockNonItemType ? (
+                              <div style={styles.readOnlyText}>{item.description || <span style={styles.muted}>—</span>}</div>
+                            ) : (
+                              <LookupAutocomplete
+                                label="Description"
+                                endpoint="/lookup/items"
+                                value={item.description || ""}
+                                onChange={(v) => updateItem(idx, "description", v)}
+                                inputClassName=""
+                                inputStyle={styles.tableInput}
+                              />
+                            )}
+                          </div>
+                          <div style={styles.mgrid3}>
+                            <div>
+                              <label style={styles.mlabel}>Qty</label>
+                              <QuantityInput
+                                value={item.quantity ?? 0}
+                                onChange={(val) => updateItem(idx, "quantity", val)}
+                                unit={item.uom}
+                                units={units}
+                                disabled={lockQty}
+                                readOnly={lockQty}
+                                style={{ ...styles.tableInput, ...(lockQty ? styles.readOnlyInput : {}), textAlign: "right" }}
+                              />
+                            </div>
+                            <div>
+                              <label style={styles.mlabel}>UOM</label>
+                              <div style={{ ...styles.readOnlyText }} title="Comes from Item Type">{item.uom || <span style={styles.muted}>—</span>}</div>
+                            </div>
+                            <div>
+                              <label style={styles.mlabel}>Unit Price</label>
+                              <input
+                                type="number"
+                                style={{ ...styles.tableInput, ...(lockPrice ? styles.readOnlyInput : {}), textAlign: "right" }}
+                                value={item.unitPrice ?? 0}
+                                onChange={(e) => updateItem(idx, "unitPrice", e.target.value)}
+                                min={0}
+                                step={0.01}
+                                readOnly={lockPrice}
+                              />
+                            </div>
+                          </div>
+                          {!billsMode && (
+                            <div style={styles.mkv}>
+                              <span style={styles.mlabel}>HS Code</span>
+                              <span style={{ fontFamily: "monospace", fontSize: "0.82rem" }} title="Comes from Item Type">{item.hsCode || <span style={styles.muted}>—</span>}</span>
+                            </div>
+                          )}
+                          <div style={styles.mkv}>
+                            <span style={styles.mlabel}>Sale Type</span>
+                            <span style={{ fontSize: "0.75rem" }} title="Comes from Item Type">{item.saleType || <span style={styles.muted}>—</span>}</span>
+                          </div>
+                          <div style={styles.mamt}><span>Line Total</span><b>Rs. {(parseFloat(item.lineTotal) || 0).toLocaleString()}</b></div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
                 <div style={styles.tableWrap}>
                   <table style={styles.table}>
                     <thead>
@@ -1812,6 +1909,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     </tbody>
                   </table>
                 </div>
+                )}
 
                 {/* Totals */}
                 <div style={styles.totalsBox}>
@@ -2628,6 +2726,15 @@ function RowStat({ label, qty, value, extra, fmtMoney, fmtQty, highlight = false
 }
 
 const styles = {
+  // Mobile stacked-card line items (individual view, rendered below 760px).
+  mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
+  mcard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
+  mcardHead: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem" },
+  mnum: { flex: "0 0 auto", width: 24, height: 24, borderRadius: 7, background: "#f0f3f8", color: colors.textSecondary, display: "grid", placeItems: "center", fontSize: "0.78rem", fontWeight: 700 },
+  mlabel: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.2rem" },
+  mgrid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginTop: "0.4rem" },
+  mkv: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.5rem" },
+  mamt: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.55rem", paddingTop: "0.45rem", borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.85rem", color: colors.textSecondary },
   errorAlert: { padding: "0.7rem 1rem", backgroundColor: colors.dangerLight, color: colors.danger, borderRadius: 6, marginBottom: "1rem", fontSize: "0.85rem" },
   warnNote: { padding: "0.7rem 1rem", backgroundColor: colors.warnBg, color: colors.warn, borderRadius: 6, marginTop: "1rem", fontSize: "0.82rem", border: `1px solid ${colors.warnBorder}` },
   infoBox: {
