@@ -180,6 +180,19 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 
 ## Test discipline — required before any push
 
+> ### 🔴 HARD PRE-PUSH GATE — inventory flow (non-negotiable)
+> **Claude runs every push and deploy for this repo — the operator does not.**
+> So this gate lives here, not in CI. **Before ANY `git push` that reaches
+> `master`** (a direct push, or a merge/PR that lands on it), you MUST:
+> 1. have a backend running against a schema-current DB, and
+> 2. run `python scripts/test_stock_itemtype_reflow.py` and see **`all checks
+>    passed`** (currently **140/140**).
+>
+> If it is **red**, or you **cannot run it**, **DO NOT PUSH.** A broken inventory
+> in/out flow must never reach master — ever. Run it even when the change looks
+> unrelated to stock (stock reflow is reachable from invoice, bill, challan, and
+> the FBR dual-book overlay paths). No exceptions, no "it's a tiny change."
+
 | Check | Command | Must show |
 |---|---|---|
 | Backend build | `dotnet build MyApp.Api.csproj` | `0 Error(s)` |
@@ -187,7 +200,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
-| Stock item-type reflow | `python scripts/test_stock_itemtype_reflow.py` | `52/52 checks passed` |
+| Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `140/140`) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
 
@@ -219,6 +232,7 @@ tracking-enabled company and asserts on-hand after each edit:
 - Purchase bill: create IN, change item type (reverse old + add new), change qty, switch to an un-classified (no-HS) item (no IN), delete (reverse).
 - Classify-after-create **phantom guard**: a bill created against a no-HS item records no IN; classifying the item then editing must NOT fabricate a negative reversal.
 - Invoice OUT via **narrow** item-type edit (`PATCH /itemtypes`), **full** edit (`PUT /{id}`), and the **challan-driven** add/remove/qty path — each reverses the old item's OUT and re-records on the new, restores on clear/remove, and reverses on delete.
+- **FBR dual-book overlay matrix (suites 8–13)** — the tax-consultant adjustment path (`PATCH /invoices/{id}/itemtypes-and-qty` `writeMode:"adjustment"`, which writes `InvoiceItemAdjustment.AdjustedItemTypeId`/`AdjustedQuantity` and leaves the physical line untouched). Stock keys off the **effective** type/qty (`Adjusted?? physical`, mirroring `FbrService`): a non-HS base reclassified to HS gets its OUT on the HS type; an HS→HS→HS reclassification chain reverts the old type and OUTs the new each hop; a bill (PUT) edit under an overlay reflows physical qty only while no filed qty is set, then the filed qty wins; repeated qty re-adjustment tracks the latest; multi-line overlays stay independent; challan qty changes reflow onto the overlay type; every case reverses on revert-to-base and on delete.
 
 ---
 
