@@ -48,6 +48,7 @@ namespace MyApp.Api.Services.Implementations
                 CustomerEnquiryRef = q.CustomerEnquiryRef,
                 EnquiryDate = q.EnquiryDate,
                 Notes = q.Notes,
+                ContactPerson = q.ContactPerson,
                 Subtotal = q.Subtotal,
                 GSTRate = q.GSTRate,
                 GSTAmount = q.GSTAmount,
@@ -181,6 +182,7 @@ namespace MyApp.Api.Services.Implementations
                     CustomerEnquiryRef = string.IsNullOrWhiteSpace(dto.CustomerEnquiryRef) ? null : dto.CustomerEnquiryRef.Trim(),
                     EnquiryDate = dto.EnquiryDate,
                     Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
+                    ContactPerson = string.IsNullOrWhiteSpace(dto.ContactPerson) ? null : dto.ContactPerson.Trim(),
                     Status = "Draft",
                     Items = dto.Items.Select(i => new SalesQuoteItem
                     {
@@ -239,6 +241,7 @@ namespace MyApp.Api.Services.Implementations
             quote.CustomerEnquiryRef = string.IsNullOrWhiteSpace(dto.CustomerEnquiryRef) ? null : dto.CustomerEnquiryRef.Trim();
             quote.EnquiryDate = dto.EnquiryDate;
             quote.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
+            quote.ContactPerson = string.IsNullOrWhiteSpace(dto.ContactPerson) ? null : dto.ContactPerson.Trim();
 
             await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.Unit));
 
@@ -376,6 +379,7 @@ namespace MyApp.Api.Services.Implementations
                 ValidUntil = q.ValidUntil,
                 CustomerEnquiryRef = q.CustomerEnquiryRef,
                 EnquiryDate = q.EnquiryDate,
+                ContactPerson = q.ContactPerson,
                 ClientName = client?.Name ?? "",
                 ClientAddress = client?.Address,
                 ClientNTN = client?.NTN,

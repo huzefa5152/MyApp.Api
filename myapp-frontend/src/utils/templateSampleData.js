@@ -177,6 +177,7 @@ export const SAMPLE_DATA = {
     validUntil: new Date().toISOString(),
     customerEnquiryRef: "RFQ-2026-045",
     enquiryDate: new Date().toISOString(),
+    contactPerson: "Ali Khan",
     clientName: "Sample Client Pvt Ltd",
     clientAddress: "Client Address, City",
     clientNTN: "9876543-2",

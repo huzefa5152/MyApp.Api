@@ -183,6 +183,8 @@ namespace MyApp.Api.DTOs
         public DateTime? ValidUntil { get; set; }
         public string? CustomerEnquiryRef { get; set; }
         public DateTime? EnquiryDate { get; set; }
+        /// <summary>Optional per-quotation contact person ({{contactPerson}}).</summary>
+        public string? ContactPerson { get; set; }
         public string ClientName { get; set; } = "";
         public string? ClientAddress { get; set; }
         public string? ClientNTN { get; set; }

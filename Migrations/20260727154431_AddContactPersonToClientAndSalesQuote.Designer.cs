@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyApp.Api.Data;
 
@@ -11,9 +12,11 @@ using MyApp.Api.Data;
 namespace MyApp.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260727154431_AddContactPersonToClientAndSalesQuote")]
+    partial class AddContactPersonToClientAndSalesQuote
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -100,6 +103,8 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("Payments");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Accounting.PaymentAllocation", b =>
@@ -135,6 +140,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("PurchaseBillId");
 
                     b.ToTable("PaymentAllocations");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Attachment", b =>
@@ -207,6 +214,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("EntityType", "EntityId");
 
                     b.ToTable("Attachments");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.AuditLog", b =>
@@ -284,6 +293,8 @@ namespace MyApp.Api.Migrations
                         .HasFilter("[Fingerprint] IS NOT NULL");
 
                     b.ToTable("AuditLogs");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Client", b =>
@@ -344,6 +355,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("CompanyId");
 
                     b.ToTable("Clients");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.ClientGroup", b =>
@@ -385,6 +398,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("NormalizedNtn");
 
                     b.ToTable("ClientGroups");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Company", b =>
@@ -510,6 +525,8 @@ namespace MyApp.Api.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Companies");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.DeliveryChallan", b =>
@@ -581,6 +598,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("CompanyId", "ChallanNumber");
 
                     b.ToTable("DeliveryChallans");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.DeliveryItem", b =>
@@ -621,6 +640,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("SalesOrderItemId");
 
                     b.ToTable("DeliveryItems");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.FbrCommunicationLog", b =>
@@ -694,6 +715,8 @@ namespace MyApp.Api.Migrations
                         .IsDescending(false, true);
 
                     b.ToTable("FbrCommunicationLogs");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.FbrLookup", b =>
@@ -725,6 +748,8 @@ namespace MyApp.Api.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("FbrLookups");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
 
                     b.HasData(
                         new
@@ -1141,6 +1166,8 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("Folders");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.GoodsReceipt", b =>
@@ -1194,6 +1221,8 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("GoodsReceipts");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.GoodsReceiptItem", b =>
@@ -1228,6 +1257,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("ItemTypeId");
 
                     b.ToTable("GoodsReceiptItems");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Invoice", b =>
@@ -1354,16 +1385,18 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("CompanyId");
 
+                    b.HasIndex("SupplementsInvoiceId");
+
                     b.HasIndex("OriginalInvoiceId", "DocumentType")
                         .IsUnique()
                         .HasFilter("[OriginalInvoiceId] IS NOT NULL AND [IsCancelled] = 0");
-
-                    b.HasIndex("SupplementsInvoiceId");
 
                     b.HasIndex("CompanyId", "NoteKind", "InvoiceNumber")
                         .IsUnique();
 
                     b.ToTable("Invoices");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.InvoiceItem", b =>
@@ -1437,6 +1470,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("ItemTypeId");
 
                     b.ToTable("InvoiceItems");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.InvoiceItemAdjustment", b =>
@@ -1515,6 +1550,8 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("InvoiceItemAdjustments");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.ItemDescription", b =>
@@ -1556,6 +1593,8 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("ItemDescriptions");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.ItemType", b =>
@@ -1610,6 +1649,8 @@ namespace MyApp.Api.Migrations
                         .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("ItemTypes");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.MergeField", b =>
@@ -1644,6 +1685,8 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("MergeFields");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
 
                     b.HasData(
                         new
@@ -2574,6 +2617,8 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("OpeningStockBalances");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.POFormat", b =>
@@ -2640,6 +2685,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("CompanyId", "IsActive");
 
                     b.ToTable("POFormats");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.POFormatVersion", b =>
@@ -2675,6 +2722,8 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("POFormatVersions");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.POGoldenSample", b =>
@@ -2726,12 +2775,51 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("POFormatId", "Status");
 
                     b.ToTable("POGoldenSamples");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
-            // NOTE: MyApp.Api.Models.ParserFeedback entity intentionally stripped
-            // from the snapshot — that table is raw-SQL-managed
-            // (Data/ParserFeedbackSchema.cs) and deliberately excluded from
-            // migrations so the feature cherry-picks cleanly across branches.
+            modelBuilder.Entity("MyApp.Api.Models.ParserFeedback", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("FeedbackStatus")
+                        .HasColumnType("int");
+
+                    b.Property<long>("FileSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("OriginalFileName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OriginalPdfLocation")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ParserVersion")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("PurchaseOrderId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ParserFeedbacks");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
 
             modelBuilder.Entity("MyApp.Api.Models.Permission", b =>
                 {
@@ -2771,6 +2859,8 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("Permissions");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.PoImportArchive", b =>
@@ -2841,6 +2931,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("CompanyId", "UploadedAt");
 
                     b.ToTable("PoImportArchives");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.PrintTemplate", b =>
@@ -2894,6 +2986,8 @@ namespace MyApp.Api.Migrations
                         .HasFilter("[IsDefault] = 1");
 
                     b.ToTable("PrintTemplates");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.PurchaseBill", b =>
@@ -2986,6 +3080,8 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("PurchaseBills");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.PurchaseItem", b =>
@@ -3068,6 +3164,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("PurchaseBillId");
 
                     b.ToTable("PurchaseItems");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.PurchaseItemSourceLine", b =>
@@ -3083,6 +3181,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("InvoiceItemId");
 
                     b.ToTable("PurchaseItemSourceLines");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Role", b =>
@@ -3117,6 +3217,8 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("Roles");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.RolePermission", b =>
@@ -3132,6 +3234,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("PermissionId");
 
                     b.ToTable("RolePermissions");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.SalesOrder", b =>
@@ -3195,6 +3299,8 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("SalesOrders");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.SalesOrderItem", b =>
@@ -3230,6 +3336,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("SalesOrderId");
 
                     b.ToTable("SalesOrderItems");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.SalesQuote", b =>
@@ -3309,6 +3417,8 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("SalesQuotes");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.SalesQuoteItem", b =>
@@ -3352,6 +3462,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("SalesQuoteId");
 
                     b.ToTable("SalesQuoteItems");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.StockMovement", b =>
@@ -3399,6 +3511,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("SourceType", "SourceId");
 
                     b.ToTable("StockMovements");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Supplier", b =>
@@ -3461,6 +3575,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("SupplierGroupId");
 
                     b.ToTable("Suppliers");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.SupplierGroup", b =>
@@ -3502,6 +3618,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("NormalizedNtn");
 
                     b.ToTable("SupplierGroups");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Unit", b =>
@@ -3525,6 +3643,8 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("Units");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.User", b =>
@@ -3578,6 +3698,8 @@ namespace MyApp.Api.Migrations
 
                     b.ToTable("Users");
 
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+
                     b.HasData(
                         new
                         {
@@ -3611,6 +3733,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("CompanyId");
 
                     b.ToTable("UserCompanies");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.UserRole", b =>
@@ -3632,6 +3756,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("RoleId");
 
                     b.ToTable("UserRoles");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Accounting.Payment", b =>

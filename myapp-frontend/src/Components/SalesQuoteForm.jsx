@@ -38,6 +38,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const [enquiryDate, setEnquiryDate] = useState(quote?.enquiryDate ? quote.enquiryDate.slice(0, 10) : "");
   const [gstRate, setGstRate] = useState(quote?.gstRate ?? 18);
   const [notes, setNotes] = useState(quote?.notes || "");
+  const [contactPerson, setContactPerson] = useState(quote?.contactPerson || "");
   const [items, setItems] = useState(
     quote?.items?.length
       ? quote.items.map((i) => ({ id: i.id, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, rateHint: "" }))
@@ -98,6 +99,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
         enquiryDate: enquiryDate ? new Date(enquiryDate).toISOString() : null,
         gstRate: Number(gstRate) || 0,
         notes: notes.trim() || null,
+        contactPerson: contactPerson || null,
         items: valid.map((i) => ({
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
@@ -120,6 +122,13 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   };
 
   const disabled = !client || items.every((i) => !i.description.trim()) || saving;
+
+  // Contact-person dropdown options come from the selected client's
+  // semicolon-separated ContactPerson list (mirrors the challan Site dropdown).
+  const contactOptions = useMemo(() => {
+    const sel = clients.find((c) => String(c.id) === String(client?.id));
+    return sel?.contactPerson ? sel.contactPerson.split(";").map((x) => x.trim()).filter(Boolean) : [];
+  }, [clients, client]);
 
   return (
     <div style={formStyles.backdrop}>
@@ -162,6 +171,18 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
               <div style={{ flex: 1, minWidth: 120 }}>
                 <label style={s.label}>GST Rate (%)</label>
                 <input type="number" min="0" max="100" step="0.01" style={{ ...s.input, textAlign: "right" }} value={gstRate} onChange={(e) => setGstRate(e.target.value)} />
+              </div>
+              <div style={{ flex: 1.5, minWidth: 180 }}>
+                <label style={s.label}>Contact Person <span style={s.opt}>(optional)</span></label>
+                {contactOptions.length > 0 ? (
+                  <select style={s.input} value={contactPerson} onChange={(e) => setContactPerson(e.target.value)}>
+                    <option value="">(none)</option>
+                    {contactPerson && !contactOptions.includes(contactPerson) && <option value={contactPerson}>{contactPerson}</option>}
+                    {contactOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                ) : (
+                  <input type="text" style={s.input} value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder={client ? "Optional (client has no saved contacts)" : "Pick a client first"} disabled={!client} />
+                )}
               </div>
             </div>
 

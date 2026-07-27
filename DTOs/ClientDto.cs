@@ -10,6 +10,8 @@ namespace MyApp.Api.DTOs
         public string? NTN { get; set; }
         public string? STRN { get; set; }
         public string? Site { get; set; }
+        /// <summary>Semicolon-separated contact-person list (dropdown source on Sales Quote).</summary>
+        public string? ContactPerson { get; set; }
         public string? RegistrationType { get; set; }
         public string? CNIC { get; set; }
         public int? FbrProvinceCode { get; set; }

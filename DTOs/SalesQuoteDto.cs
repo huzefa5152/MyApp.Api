@@ -19,6 +19,8 @@ namespace MyApp.Api.DTOs
         public string? CustomerEnquiryRef { get; set; }
         public DateTime? EnquiryDate { get; set; }
         public string? Notes { get; set; }
+        /// <summary>Optional per-quotation contact person (rendered as {{contactPerson}}).</summary>
+        public string? ContactPerson { get; set; }
 
         public decimal Subtotal { get; set; }
         public decimal GSTRate { get; set; }

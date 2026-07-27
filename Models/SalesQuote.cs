@@ -34,6 +34,13 @@ namespace MyApp.Api.Models
         /// <summary>Free-text terms / notes printed at the foot of the quote.</summary>
         public string? Notes { get; set; }
 
+        /// <summary>
+        /// Optional contact person for THIS quotation. Lives on the quote (not
+        /// the Client) because the same client's contact can differ per quote.
+        /// Rendered on the print via the {{contactPerson}} merge token.
+        /// </summary>
+        public string? ContactPerson { get; set; }
+
         // Priced totals — same money precision contract as Invoice.
         public decimal Subtotal { get; set; }
         public decimal GSTRate { get; set; }

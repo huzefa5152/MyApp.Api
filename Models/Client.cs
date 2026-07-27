@@ -11,6 +11,14 @@
         public string? STRN { get; set; }
         public string? Site { get; set; }
 
+        /// <summary>
+        /// Semicolon-separated list of contact persons for this client
+        /// (e.g. "Ali ; Bilal ; Sara"). Mirrors <see cref="Site"/>: the values
+        /// populate a dropdown on the Sales Quote form so operators pick a
+        /// contact instead of retyping it each time.
+        /// </summary>
+        public string? ContactPerson { get; set; }
+
         // FBR Digital Invoicing
         public string? RegistrationType { get; set; }
         public string? CNIC { get; set; }

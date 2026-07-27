@@ -37,6 +37,7 @@ namespace MyApp.Api.Data
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{clientAddress}}", Label = "Client Address", Category = "Client", SortOrder = 21 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{clientNTN}}", Label = "Client NTN", Category = "Client", SortOrder = 22 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{clientSTRN}}", Label = "Client STRN/GST", Category = "Client", SortOrder = 23 },
+                new() { TemplateType = "SalesQuote", FieldExpression = "{{contactPerson}}", Label = "Contact Person", Category = "Client", SortOrder = 24 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{fmt subtotal}}", Label = "Subtotal (formatted)", Category = "Totals", SortOrder = 30 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{gstRate}}", Label = "GST Rate %", Category = "Totals", SortOrder = 31 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{fmt gstAmount}}", Label = "GST Amount (formatted)", Category = "Totals", SortOrder = 32 },

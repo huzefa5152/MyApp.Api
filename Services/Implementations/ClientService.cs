@@ -36,6 +36,7 @@ namespace MyApp.Api.Services.Implementations
             NTN = c.NTN,
             STRN = c.STRN,
             Site = c.Site,
+            ContactPerson = c.ContactPerson,
             RegistrationType = c.RegistrationType,
             CNIC = c.CNIC,
             FbrProvinceCode = c.FbrProvinceCode,
@@ -83,6 +84,7 @@ namespace MyApp.Api.Services.Implementations
                 NTN = dto.NTN,
                 STRN = dto.STRN,
                 Site = dto.Site,
+                ContactPerson = dto.ContactPerson,
                 RegistrationType = dto.RegistrationType,
                 CNIC = dto.CNIC,
                 FbrProvinceCode = dto.FbrProvinceCode,
@@ -261,6 +263,7 @@ namespace MyApp.Api.Services.Implementations
             client.NTN = dto.NTN;
             client.STRN = dto.STRN;
             client.Site = dto.Site;
+            client.ContactPerson = dto.ContactPerson;
             client.RegistrationType = dto.RegistrationType;
             client.CNIC = dto.CNIC;
             client.FbrProvinceCode = dto.FbrProvinceCode;
@@ -304,6 +307,16 @@ namespace MyApp.Api.Services.Implementations
         {
             var client = await _repo.GetByIdAsync(id);
             if (client == null) return;
+
+            // Data-integrity guard (audit C2): never hard-delete a client that has
+            // FBR-submitted invoices — those are filed tax records. Force the
+            // operator to handle them first rather than silently destroying them.
+            var hasSubmitted = await _context.Invoices
+                .AnyAsync(i => i.ClientId == id && i.FbrStatus == "Submitted");
+            if (hasSubmitted)
+                throw new InvalidOperationException(
+                    "Cannot delete a client that has FBR-submitted invoices (filed tax records). " +
+                    "Reassign or handle those invoices first.");
 
             // Cascade delete in a single transaction for atomicity
             await using var transaction = await _context.Database.BeginTransactionAsync();

@@ -41,8 +41,8 @@ const {
 export default function ClientForm({ client, companyId, companies = [], onClose, onSaved }) {
   const [formData, setFormData] = useState(
     client
-      ? { ...client, ntn: client.ntn || "", strn: client.strn || "", site: client.site || "", registrationType: client.registrationType || "", cnic: client.cnic || "", fbrProvinceCode: client.fbrProvinceCode ?? "" }
-      : { id: null, name: "", address: "", email: "", phone: "", ntn: "", strn: "", site: "", registrationType: "", cnic: "", fbrProvinceCode: "" }
+      ? { ...client, ntn: client.ntn || "", strn: client.strn || "", site: client.site || "", contactPerson: client.contactPerson || "", registrationType: client.registrationType || "", cnic: client.cnic || "", fbrProvinceCode: client.fbrProvinceCode ?? "" }
+      : { id: null, name: "", address: "", email: "", phone: "", ntn: "", strn: "", site: "", contactPerson: "", registrationType: "", cnic: "", fbrProvinceCode: "" }
   );
   const [errors, setErrors] = useState({});
   const [provinces, setProvinces] = useState([]);
@@ -76,7 +76,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
   };
 
   useEffect(() => {
-    if (client) setFormData({ ...client, ntn: client.ntn || "", strn: client.strn || "", site: client.site || "", registrationType: client.registrationType || "", cnic: client.cnic || "", fbrProvinceCode: client.fbrProvinceCode ?? "" });
+    if (client) setFormData({ ...client, ntn: client.ntn || "", strn: client.strn || "", site: client.site || "", contactPerson: client.contactPerson || "", registrationType: client.registrationType || "", cnic: client.cnic || "", fbrProvinceCode: client.fbrProvinceCode ?? "" });
   }, [client]);
 
   useEffect(() => {
@@ -374,6 +374,12 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
               <label style={label}>Sites</label>
               <input type="text" name="site" value={formData.site} onChange={handleChange} style={input} placeholder="e.g. Site-A ; Site-B ; Site-C" />
               <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.25rem", display: "block" }}>Separate multiple sites with semicolons (;). These will appear as dropdown options when creating a delivery challan.</span>
+            </div>
+
+            <div style={formGroup}>
+              <label style={label}>Contact Persons</label>
+              <input type="text" name="contactPerson" value={formData.contactPerson} onChange={handleChange} style={input} placeholder="e.g. Ali ; Bilal ; Sara" />
+              <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.25rem", display: "block" }}>Separate multiple contacts with semicolons (;). These appear as a dropdown when creating a Sales Quote.</span>
             </div>
 
           </div>
