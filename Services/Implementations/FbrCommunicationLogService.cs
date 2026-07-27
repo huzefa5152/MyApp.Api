@@ -80,6 +80,8 @@ namespace MyApp.Api.Services.Implementations
                 .Select(f => ToDto(f))
                 .ToListAsync();
 
+            await ResolveInvoiceNumbersAsync(items);
+
             return new PagedResult<FbrCommunicationLogDto>
             {
                 Items = items,
@@ -93,7 +95,33 @@ namespace MyApp.Api.Services.Implementations
         {
             var row = await _context.FbrCommunicationLogs.AsNoTracking()
                 .FirstOrDefaultAsync(f => f.Id == id);
-            return row == null ? null : ToDto(row);
+            if (row == null) return null;
+            var dto = ToDto(row);
+            await ResolveInvoiceNumbersAsync(new List<FbrCommunicationLogDto> { dto });
+            return dto;
+        }
+
+        // Resolve each row's InvoiceId → the invoice's real sequence number (the
+        // number driven by the company's Starting/Current InvoiceNumber) in ONE
+        // batch query, so the monitor shows the bill/invoice number the operator
+        // recognises rather than the raw DB id. Left null when the invoice no
+        // longer exists (deleted) or the log isn't tied to one.
+        private async Task ResolveInvoiceNumbersAsync(List<FbrCommunicationLogDto> items)
+        {
+            var ids = items.Where(i => i.InvoiceId.HasValue)
+                           .Select(i => i.InvoiceId!.Value)
+                           .Distinct()
+                           .ToList();
+            if (ids.Count == 0) return;
+
+            var map = await _context.Invoices.AsNoTracking()
+                .Where(inv => ids.Contains(inv.Id))
+                .Select(inv => new { inv.Id, inv.InvoiceNumber })
+                .ToDictionaryAsync(x => x.Id, x => x.InvoiceNumber);
+
+            foreach (var it in items)
+                if (it.InvoiceId.HasValue && map.TryGetValue(it.InvoiceId.Value, out var n))
+                    it.InvoiceNumber = n;
         }
 
         public async Task<FbrCommunicationSummaryDto> GetSummaryAsync(

@@ -6,6 +6,13 @@ namespace MyApp.Api.DTOs
         public DateTime Timestamp { get; set; }
         public int CompanyId { get; set; }
         public int? InvoiceId { get; set; }
+        /// <summary>
+        /// The linked bill/invoice's real sequence number (the number defined by
+        /// the company's Starting/Current InvoiceNumber) — what the operator sees
+        /// on the document, NOT the DB id. Null when the log has no invoice or the
+        /// invoice was since deleted. Resolved from InvoiceId at read time.
+        /// </summary>
+        public int? InvoiceNumber { get; set; }
         public string? CorrelationId { get; set; }
         public string Action { get; set; } = "";
         public string Endpoint { get; set; } = "";

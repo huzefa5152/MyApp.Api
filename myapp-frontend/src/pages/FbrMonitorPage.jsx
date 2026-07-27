@@ -303,7 +303,7 @@ function RowsList({ rows, loading, onClickRow }) {
             </span>
             <span className="fbr-mon-row__action" style={{ width: 90, fontSize: "0.82rem", fontWeight: 600 }}>{r.action}</span>
             <span className="fbr-mon-row__bill" style={{ width: 90, fontSize: "0.82rem", color: "#0d47a1", fontFamily: "ui-monospace, monospace" }}>
-              {r.invoiceId ? `#${r.invoiceId}` : "—"}
+              {r.invoiceNumber != null ? `#${r.invoiceNumber}` : "—"}
             </span>
             <span className="fbr-mon-row__http" style={{ width: 70, textAlign: "right", fontSize: "0.82rem", fontFamily: "ui-monospace, monospace" }}>
               {r.httpStatusCode ?? "—"}
@@ -342,7 +342,7 @@ function Drawer({ row, onClose }) {
           <div>
             <h2 style={{ margin: 0, fontSize: "1.1rem" }}>FBR call detail</h2>
             <div style={{ fontSize: "0.8rem", color: "#5f6d7e" }}>
-              {fmtDate(row.timestamp)} · {row.action} · invoice {row.invoiceId ? `#${row.invoiceId}` : "—"}
+              {fmtDate(row.timestamp)} · {row.action} · invoice {row.invoiceNumber != null ? `#${row.invoiceNumber}` : "—"}
             </div>
           </div>
           <button type="button" onClick={onClose} style={S.drawerClose} title="Close">×</button>
