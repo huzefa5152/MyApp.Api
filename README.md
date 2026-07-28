@@ -281,6 +281,23 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-28 — Tax Sheet accuracy + attachment-module permission gating
+
+- **Tax Sheet** now lists only invoices that still need the tax consultant's
+  classification. An invoice drops off once it is submitted to FBR
+  (`FbrSubmittedAt` set) or fully classified and current — where "classified"
+  honours the dual-book overlay (`InvoiceItemAdjustment.AdjustedHSCode`), not
+  just the physical line / item-type HS. If the delivery bill is edited after
+  the overlay was reconciled (overlay total drifts beyond the FBR tolerance),
+  the invoice re-appears for re-adjustment. Same predicate applied to the
+  tax-sheet "transfer to next month" action. (Previously a bill filed to FBR
+  via the overlay still showed as "pending HS" — e.g. invoice 3855.)
+- **Attachments**: a role with bill/invoice access but no `attachments.list.view`
+  (e.g. a tax consultant) no longer gets a 403 "permission" warning when opening
+  an invoice/bill form. `AttachmentManager` skips the attachment/folder list
+  fetches and renders nothing when the view permission is absent (the folder
+  picker is also gated on `folders.list.view`).
+
 ### 2026-07-28 — Mobile responsiveness sweep: pagination, layout overflow, forms & modals
 
 Frontend audit of every screen for phone / tablet / desktop, verified at 393 px

@@ -1,5 +1,6 @@
 using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
@@ -14,10 +15,15 @@ namespace MyApp.Api.Services.Implementations
     public class ReportService : IReportService
     {
         private readonly AppDbContext _context;
+        private readonly decimal _adjustmentTolerancePkr;
 
-        public ReportService(AppDbContext context)
+        public ReportService(AppDbContext context, IConfiguration config)
         {
             _context = context;
+            // Same key FbrService + InvoiceService use for the dual-book
+            // "adjustment out of date" drift gate — so all three agree on when a
+            // bill edit invalidates the FBR overlay.
+            _adjustmentTolerancePkr = config.GetValue<decimal?>("Invoice:NarrowEditTotalTolerancePkr") ?? 10m;
         }
 
         public async Task<SalesReportDto> GetSalesReportAsync(int companyId, int? year, int? month, string buyerType,
@@ -367,11 +373,17 @@ namespace MyApp.Api.Services.Implementations
                 .AsNoTracking()
                 .Include(i => i.Client)
                 .Include(i => i.Items).ThenInclude(it => it.ItemType)
+                .Include(i => i.Items).ThenInclude(it => it.Adjustment)
                 .Where(i => i.CompanyId == companyId
                          && i.Date >= from && i.Date < toExclusive
                          && i.NoteKind == 0
                          && !i.IsCancelled
                          && !i.IsDemo
+                         // Already filed to FBR → no longer the consultant's
+                         // pending work, so it drops off the Tax Sheet. (If the
+                         // bill is later edited it re-appears via the
+                         // un-classified / out-of-date test below.)
+                         && i.FbrSubmittedAt == null
                          && (clientId == null || i.ClientId == clientId.Value))
                 .OrderBy(i => i.Date).ThenBy(i => i.InvoiceNumber)
                 .ToListAsync();
@@ -389,14 +401,22 @@ namespace MyApp.Api.Services.Implementations
 
             foreach (var inv in invoices)
             {
-                // Group this invoice's UN-classified lines (no valid HS code on
-                // the line or its item type) by item-type name, preserving order.
+                // The bill was edited AFTER the consultant reconciled the FBR
+                // overlay → the overlay no longer sums to the bill, so the whole
+                // invoice needs re-adjustment and every line counts as pending
+                // again (mirrors FbrService's Validate/Submit out-of-date gate).
+                var outOfDate = IsAdjustmentOutOfDate(inv);
+
+                // Group this invoice's still-pending lines by item-type name,
+                // preserving order. A line is pending when it has no EFFECTIVE HS
+                // (physical line, dual-book overlay, or item type) OR the whole
+                // invoice's overlay is out of date.
                 var order = new List<string>();
                 var groups = new Dictionary<string, (decimal qty, decimal amount, decimal tax, string uom)>();
                 foreach (var item in inv.Items)
                 {
-                    var effHs = !string.IsNullOrWhiteSpace(item.HSCode) ? item.HSCode : item.ItemType?.HSCode;
-                    if (!string.IsNullOrWhiteSpace(effHs)) continue; // already classified — not our concern
+                    if (!outOfDate && !string.IsNullOrWhiteSpace(EffectiveHs(item)))
+                        continue; // classified + current — not our concern
                     var name = !string.IsNullOrWhiteSpace(item.ItemTypeName) ? item.ItemTypeName
                              : (!string.IsNullOrWhiteSpace(item.ItemType?.Name) ? item.ItemType!.Name : item.Description);
                     if (string.IsNullOrWhiteSpace(name)) name = "(unnamed)";
@@ -406,7 +426,7 @@ namespace MyApp.Api.Services.Implementations
                     groups[name] = (g.qty + item.Quantity, g.amount + item.LineTotal, g.tax + tax,
                         string.IsNullOrWhiteSpace(g.uom) ? (item.UOM ?? "") : g.uom);
                 }
-                if (groups.Count == 0) continue; // invoice fully classified — skip
+                if (groups.Count == 0) continue; // invoice fully classified + current — skip
 
                 var ntn = inv.Client?.NTN ?? "";
                 var party = inv.Client?.Name ?? "";
@@ -539,11 +559,13 @@ namespace MyApp.Api.Services.Implementations
             // Tracked query — same predicate as GetTaxSheetAsync.
             var invoices = await _context.Invoices
                 .Include(i => i.Items).ThenInclude(it => it.ItemType)
+                .Include(i => i.Items).ThenInclude(it => it.Adjustment)
                 .Where(i => i.CompanyId == companyId
                          && i.Date >= from && i.Date < toExclusive
                          && i.NoteKind == 0
                          && !i.IsCancelled
                          && !i.IsDemo
+                         && i.FbrSubmittedAt == null
                          && (clientId == null || i.ClientId == clientId.Value))
                 .ToListAsync();
 
@@ -554,11 +576,8 @@ namespace MyApp.Api.Services.Implementations
             foreach (var inv in invoices)
             {
                 // Only invoices that still carry an un-classified line are "remaining".
-                var hasUnclassified = inv.Items.Any(item =>
-                {
-                    var effHs = !string.IsNullOrWhiteSpace(item.HSCode) ? item.HSCode : item.ItemType?.HSCode;
-                    return string.IsNullOrWhiteSpace(effHs);
-                });
+                var hasUnclassified = IsAdjustmentOutOfDate(inv)
+                    || inv.Items.Any(item => string.IsNullOrWhiteSpace(EffectiveHs(item)));
                 if (!hasUnclassified) continue;
 
                 // A submitted / cancelled invoice can't be re-dated (already filed
@@ -623,6 +642,32 @@ namespace MyApp.Api.Services.Implementations
             var n = qty == Math.Truncate(qty) ? qty.ToString("0.##") : qty.ToString("0.####");
             var u = (uom ?? "").Trim();
             return (u.Length > 0 && !GenericUnits.Contains(u)) ? $"{n} {u}" : n;
+        }
+
+        // Effective HS for classification purposes: the physical line's own HS,
+        // else the dual-book overlay's adjusted HS (what the consultant filed to
+        // FBR), else the item type's catalog HS. Empty ⇒ still un-classified.
+        private static string? EffectiveHs(InvoiceItem item)
+        {
+            if (!string.IsNullOrWhiteSpace(item.HSCode)) return item.HSCode;
+            if (!string.IsNullOrWhiteSpace(item.Adjustment?.AdjustedHSCode)) return item.Adjustment!.AdjustedHSCode;
+            return item.ItemType?.HSCode;
+        }
+
+        // True when the delivery bill was edited AFTER the FBR overlay was
+        // reconciled, so the overlay no longer sums to the bill total (drift
+        // beyond tolerance). Such an invoice needs the consultant to re-adjust,
+        // so it belongs back on the Tax Sheet. Only meaningful when at least one
+        // line carries an overlay. Mirrors FbrService's out-of-date gate.
+        private bool IsAdjustmentOutOfDate(Invoice inv)
+        {
+            if (inv.Items == null || !inv.Items.Any(ii => ii.Adjustment != null)) return false;
+            var billSubtotal = inv.Items.Sum(ii => ii.LineTotal);
+            var fbrSubtotal = inv.Items.Sum(ii =>
+                ii.Adjustment != null && ii.Adjustment.AdjustedLineTotal.HasValue
+                    ? ii.Adjustment.AdjustedLineTotal.Value
+                    : ii.LineTotal);
+            return Math.Abs(billSubtotal - fbrSubtotal) > _adjustmentTolerancePkr;
         }
 
         // Per-line sales tax — mirrors FbrService.ComputeFbrTaxes for the two
