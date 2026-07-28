@@ -285,7 +285,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 - **Tax Sheet** now lists only invoices that still need the tax consultant's
   classification. An invoice drops off once it is submitted to FBR
-  (`FbrSubmittedAt` set) or fully classified and current — where "classified"
+  (`FbrSubmittedAt` set), marked skip / exclude-from-FBR (`IsFbrExcluded`), or
+  fully classified and current — where "classified"
   honours the dual-book overlay (`InvoiceItemAdjustment.AdjustedHSCode`), not
   just the physical line / item-type HS. If the delivery bill is edited after
   the overlay was reconciled (overlay total drifts beyond the FBR tolerance),

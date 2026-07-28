@@ -384,6 +384,9 @@ namespace MyApp.Api.Services.Implementations
                          // bill is later edited it re-appears via the
                          // un-classified / out-of-date test below.)
                          && i.FbrSubmittedAt == null
+                         // Operator marked this bill "skip / exclude from FBR" — it
+                         // will never be filed, so it isn't pending classification.
+                         && !i.IsFbrExcluded
                          && (clientId == null || i.ClientId == clientId.Value))
                 .OrderBy(i => i.Date).ThenBy(i => i.InvoiceNumber)
                 .ToListAsync();
@@ -566,6 +569,7 @@ namespace MyApp.Api.Services.Implementations
                          && !i.IsCancelled
                          && !i.IsDemo
                          && i.FbrSubmittedAt == null
+                         && !i.IsFbrExcluded
                          && (clientId == null || i.ClientId == clientId.Value))
                 .ToListAsync();
 
