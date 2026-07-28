@@ -181,9 +181,13 @@ namespace MyApp.Api.Controllers
         [HasPermission("reports.outstanding.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<OutstandingLedgerDto>> GetOutstandingLedger(
-            int companyId, [FromQuery] int? clientId = null, [FromQuery] string status = "unpaid")
+            int companyId, [FromQuery] int? clientId = null, [FromQuery] string status = "unpaid",
+            [FromQuery] int? year = null, [FromQuery] int? month = null,
+            [FromQuery] DateTime? dateFrom = null, [FromQuery] DateTime? dateTo = null)
         {
-            var report = await _reports.GetOutstandingLedgerAsync(companyId, clientId, status);
+            if (ValidatePeriod(year, month, dateFrom, dateTo) is { } err)
+                return BadRequest(new { message = err });
+            var report = await _reports.GetOutstandingLedgerAsync(companyId, clientId, status, year, month, dateFrom, dateTo);
             return Ok(report);
         }
 
@@ -192,9 +196,13 @@ namespace MyApp.Api.Controllers
         [HasPermission("reports.outstanding.export")]
         [AuthorizeCompany]
         public async Task<IActionResult> GetOutstandingLedgerExcel(
-            int companyId, [FromQuery] int? clientId = null, [FromQuery] string status = "unpaid")
+            int companyId, [FromQuery] int? clientId = null, [FromQuery] string status = "unpaid",
+            [FromQuery] int? year = null, [FromQuery] int? month = null,
+            [FromQuery] DateTime? dateFrom = null, [FromQuery] DateTime? dateTo = null)
         {
-            var bytes = await _reports.GetOutstandingLedgerExcelAsync(companyId, clientId, status);
+            if (ValidatePeriod(year, month, dateFrom, dateTo) is { } err)
+                return BadRequest(new { message = err });
+            var bytes = await _reports.GetOutstandingLedgerExcelAsync(companyId, clientId, status, year, month, dateFrom, dateTo);
             var safeStatus = (status ?? "unpaid").Trim().ToLowerInvariant();
             var fileName = $"Outstanding-Ledger-{safeStatus}.xlsx";
             return File(bytes,

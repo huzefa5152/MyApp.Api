@@ -53,9 +53,11 @@ namespace MyApp.Api.Services.Interfaces
         /// invoice with amount / paid / balance / payment status and the receipts
         /// that settled it. <paramref name="status"/> = "all" | "unpaid" | "paid".
         /// </summary>
-        Task<OutstandingLedgerDto> GetOutstandingLedgerAsync(int companyId, int? clientId, string status);
+        Task<OutstandingLedgerDto> GetOutstandingLedgerAsync(int companyId, int? clientId, string status,
+            int? year, int? month, DateTime? dateFrom, DateTime? dateTo);
 
         /// <summary>Styled .xlsx of <see cref="GetOutstandingLedgerAsync"/>, matching the operator's manual outstanding sheet.</summary>
-        Task<byte[]> GetOutstandingLedgerExcelAsync(int companyId, int? clientId, string status);
+        Task<byte[]> GetOutstandingLedgerExcelAsync(int companyId, int? clientId, string status,
+            int? year, int? month, DateTime? dateFrom, DateTime? dateTo);
     }
 }

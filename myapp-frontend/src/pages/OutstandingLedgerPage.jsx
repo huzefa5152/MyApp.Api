@@ -43,6 +43,12 @@ const fmtDate = (s) => {
 };
 const statusText = (s) => (s === "PartiallyPaid" ? "Partial" : s);
 
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const NOW = new Date();
+const YEARS = Array.from({ length: 6 }, (_, i) => NOW.getFullYear() - i);
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const segBtn = (active) => ({ border: "none", background: active ? colors.blue : "transparent", color: active ? "#fff" : colors.textSecondary, padding: "9px 14px", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", minHeight: 40 });
+
 export default function OutstandingLedgerPage() {
   const { companies, selectedCompany, setSelectedCompany } = useCompany();
   const { has } = usePermissions();
@@ -57,6 +63,12 @@ export default function OutstandingLedgerPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState(""); // "excel" | "pdf" | ""
+  const [mode, setMode] = useState("period");     // "period" | "custom"
+  const [year, setYear] = useState(NOW.getFullYear());
+  const [month, setMonth] = useState(NOW.getMonth() + 1);
+  const [fullYear, setFullYear] = useState(true);
+  const [dateFrom, setDateFrom] = useState(ymd(new Date(NOW.getFullYear(), NOW.getMonth(), 1)));
+  const [dateTo, setDateTo] = useState(ymd(NOW));
 
   // Load clients on company switch; reset selection.
   useEffect(() => {
@@ -67,11 +79,23 @@ export default function OutstandingLedgerPage() {
       .catch(() => setClients([]));
   }, [selectedCompany?.id]);
 
+  const rangeInvalid = mode === "custom" && dateFrom && dateTo && dateFrom > dateTo;
+
+  // Period + client + status params — shared by the report and both exports.
+  const buildParams = useCallback(() => {
+    const p = mode === "custom" ? { dateFrom, dateTo } : { year, ...(fullYear ? {} : { month }) };
+    if (clientId) p.clientId = clientId;   // omit → all clients
+    p.status = status;
+    return p;
+  }, [mode, dateFrom, dateTo, year, month, fullYear, clientId, status]);
+
   const fetchReport = useCallback(async () => {
-    if (!selectedCompany || !canView || !clientId) { setReport(null); return; }
+    if (!selectedCompany || !canView) { setReport(null); return; }
+    if (mode === "custom" && (!dateFrom || !dateTo)) return;
+    if (rangeInvalid) { setError("Start date must be on or before the end date."); setReport(null); return; }
     setLoading(true); setError("");
     try {
-      const { data } = await getOutstandingLedger(selectedCompany.id, { clientId, status });
+      const { data } = await getOutstandingLedger(selectedCompany.id, buildParams());
       setReport(data);
     } catch (e) {
       setError(e?.response?.data?.message || "Failed to load the outstanding ledger.");
@@ -79,23 +103,23 @@ export default function OutstandingLedgerPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany, canView, clientId, status]);
+  }, [selectedCompany, canView, mode, dateFrom, dateTo, rangeInvalid, buildParams]);
 
   useEffect(() => { fetchReport(); }, [fetchReport]);
 
   const clientName = clients.find((c) => String(c.id) === String(clientId))?.name || "";
 
   const exportExcel = async () => {
-    if (!selectedCompany || !clientId) return;
+    if (!selectedCompany || rangeInvalid) return;
     setExporting("excel");
     try {
-      const { data } = await getOutstandingLedgerExcel(selectedCompany.id, { clientId, status });
+      const { data } = await getOutstandingLedgerExcel(selectedCompany.id, buildParams());
       const url = URL.createObjectURL(new Blob([data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       }));
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Outstanding-Ledger-${clientName || "client"}-${status}.xlsx`.replace(/\s+/g, "_");
+      a.download = `Outstanding-Ledger-${clientName || "All-Clients"}-${status}.xlsx`.replace(/\s+/g, "_");
       a.click();
       URL.revokeObjectURL(url);
       notify("Outstanding ledger exported.", "success");
@@ -110,7 +134,7 @@ export default function OutstandingLedgerPage() {
     if (!report || !report.rows?.length) return;
     setExporting("pdf");
     try {
-      await exportToPdf(buildLedgerHtml(report), `Outstanding-Ledger-${clientName || "client"}-${status}`);
+      await exportToPdf(buildLedgerHtml(report), `Outstanding-Ledger-${clientName || "All-Clients"}-${status}`);
       notify("PDF generated.", "success");
     } catch {
       notify("Failed to generate the PDF.", "error");
@@ -154,11 +178,44 @@ export default function OutstandingLedgerPage() {
               clients={clients}
               value={clientId}
               onChange={(id) => setClientId(id)}
-              placeholder="Select a client…"
-              allowClear={false}
+              placeholder="All clients"
+              allowClear={true}
             />
           </div>
         </Field>
+        <Field label="Period">
+          <div style={{ display: "inline-flex", border: `1px solid ${colors.inputBorder}`, borderRadius: 8, overflow: "hidden", background: "#fff" }}>
+            <button type="button" onClick={() => setMode("period")} style={segBtn(mode === "period")}>Month / Year</button>
+            <button type="button" onClick={() => setMode("custom")} style={segBtn(mode === "custom")}>Custom range</button>
+          </div>
+        </Field>
+        {mode === "period" ? (
+          <>
+            <Field label="Year">
+              <select style={dropdownStyles.base} value={year} onChange={(e) => setYear(parseInt(e.target.value))}>
+                {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </Field>
+            <Field label="Month">
+              <select style={{ ...dropdownStyles.base, opacity: fullYear ? 0.5 : 1 }} value={month} disabled={fullYear} onChange={(e) => setMonth(parseInt(e.target.value))}>
+                {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+              </select>
+            </Field>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", color: colors.textPrimary, paddingBottom: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={fullYear} onChange={(e) => setFullYear(e.target.checked)} />
+              Full year
+            </label>
+          </>
+        ) : (
+          <>
+            <Field label="From">
+              <input type="date" style={{ ...dropdownStyles.base, ...(rangeInvalid ? { borderColor: "#dc2626" } : {}) }} value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} />
+            </Field>
+            <Field label="To">
+              <input type="date" style={{ ...dropdownStyles.base, ...(rangeInvalid ? { borderColor: "#dc2626" } : {}) }} value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} />
+            </Field>
+          </>
+        )}
         <Field label="Status">
           <div style={seg.group} role="tablist" aria-label="Payment status filter">
             {STATUSES.map((s) => (
@@ -171,7 +228,7 @@ export default function OutstandingLedgerPage() {
           </div>
         </Field>
         <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
-          <button onClick={fetchReport} disabled={!clientId || loading} style={btn(colors.blue)}>
+          <button onClick={fetchReport} disabled={loading || rangeInvalid} style={btn(colors.blue)}>
             <MdRefresh size={16} /> {loading ? "Loading…" : "Refresh"}
           </button>
           {canExport && (
@@ -193,24 +250,20 @@ export default function OutstandingLedgerPage() {
         </div>
       )}
 
-      {!clientId ? (
-        <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>
-          Select a client to view its outstanding ledger.
-        </div>
-      ) : loading ? (
+      {loading ? (
         <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>Loading…</div>
       ) : report && (
         <div style={{ background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, overflow: "hidden" }}>
           <div style={{ padding: "12px 16px", borderBottom: `1px solid ${colors.cardBorder}` }}>
             <div style={{ fontWeight: 700, color: colors.textPrimary }}>{report.companyName}</div>
             <div style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>
-              Outstanding Ledger · {report.clientName || clientName} · {STATUSES.find((s) => s.value === status)?.label} · {report.invoiceCount} invoice(s)
+              {report.periodLabel} · {report.clientName || clientName || "All clients"} · {STATUSES.find((s) => s.value === status)?.label} · {report.invoiceCount} invoice(s)
             </div>
           </div>
 
           {report.rows.length === 0 ? (
             <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>
-              No {status === "paid" ? "paid" : status === "all" ? "" : "outstanding"} invoices for {report.clientName || clientName}.
+              No {status === "paid" ? "paid" : status === "all" ? "" : "outstanding"} invoices for {report.periodLabel}.
             </div>
           ) : isNarrow ? (
             /* ── Mobile: stacked cards ── */

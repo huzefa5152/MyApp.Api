@@ -54,6 +54,9 @@ namespace MyApp.Api.DTOs
         public int? ClientId { get; set; }
         public string ClientName { get; set; } = "";
         public string StatusFilter { get; set; } = "unpaid";   // all | unpaid | paid
+        public int? Year { get; set; }
+        public int? Month { get; set; }
+        public string PeriodLabel { get; set; } = "";
         public System.Collections.Generic.List<OutstandingLedgerRowDto> Rows { get; set; } = new();
         public decimal GrandAmount { get; set; }
         public decimal GrandPaid { get; set; }

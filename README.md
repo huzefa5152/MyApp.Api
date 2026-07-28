@@ -281,6 +281,15 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-28 — Outstanding Ledger: company + period filters, all-clients default
+
+The Outstanding Ledger now carries the same filter set as the Sales Report and
+Tax Sheet — a **Company** dropdown, an **all-clients-by-default** searchable
+**Client** picker, and a **period** control (Month/Year + "Full year" + Custom
+range, filtering on the invoice date). Opens on the current year, all clients.
+This is the standard for every Reports-module report going forward: Company +
+Client + period, plus any report-specific filters (here: All/Unpaid/Paid).
+
 ### 2026-07-28 — Multi-page print / PDF paginate with margins
 
 Multi-page documents (e.g. a Sales Quote with 50+ line items) no longer butt

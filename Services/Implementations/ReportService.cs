@@ -636,10 +636,31 @@ namespace MyApp.Api.Services.Implementations
         }
 
         // ── Outstanding Ledger — per-client receivables + settling receipts ──
-        public async Task<OutstandingLedgerDto> GetOutstandingLedgerAsync(int companyId, int? clientId, string status)
+        public async Task<OutstandingLedgerDto> GetOutstandingLedgerAsync(int companyId, int? clientId, string status,
+            int? year, int? month, DateTime? dateFrom, DateTime? dateTo)
         {
             status = (status ?? "unpaid").Trim().ToLowerInvariant();
             if (status != "all" && status != "paid") status = "unpaid";
+
+            // Same period model as the Sales report / Tax Sheet: custom range,
+            // month+year, or a whole year. Filters on the invoice date.
+            var customRange = dateFrom.HasValue && dateTo.HasValue;
+            DateTime from, toExclusive;
+            string periodLabel;
+            if (customRange)
+            {
+                from = dateFrom!.Value.Date;
+                toExclusive = dateTo!.Value.Date.AddDays(1);
+                periodLabel = $"{from:dd-MM-yyyy} – {dateTo.Value.Date:dd-MM-yyyy}";
+                year = null; month = null;
+            }
+            else
+            {
+                var y = year ?? DateTime.UtcNow.Year;
+                year = y;
+                if (month.HasValue) { from = new DateTime(y, month.Value, 1); toExclusive = from.AddMonths(1); periodLabel = $"{from:MMMM yyyy}"; }
+                else { from = new DateTime(y, 1, 1); toExclusive = from.AddYears(1); periodLabel = $"Year {y}"; }
+            }
 
             var company = await _context.Companies.AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == companyId);
@@ -647,7 +668,8 @@ namespace MyApp.Api.Services.Implementations
             var q = _context.Invoices.AsNoTracking()
                 .Include(i => i.Client)
                 .Include(i => i.DeliveryChallans)
-                .Where(i => i.CompanyId == companyId && i.NoteKind == 0 && !i.IsCancelled && !i.IsDemo);
+                .Where(i => i.CompanyId == companyId && i.NoteKind == 0 && !i.IsCancelled && !i.IsDemo
+                         && i.Date >= from && i.Date < toExclusive);
             if (clientId.HasValue) q = q.Where(i => i.ClientId == clientId.Value);
 
             var invoices = await q.OrderBy(i => i.Date).ThenBy(i => i.InvoiceNumber).ToListAsync();
@@ -674,6 +696,9 @@ namespace MyApp.Api.Services.Implementations
                 ClientId = clientId,
                 ClientName = clientId.HasValue ? (invoices.FirstOrDefault()?.Client?.Name ?? "") : "",
                 StatusFilter = status,
+                Year = year,
+                Month = month,
+                PeriodLabel = periodLabel,
             };
 
             int sn = 0;
@@ -768,9 +793,10 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Styled Excel — mirrors the operator's manual outstanding sheet:
         // company-name banner, bold centered header, per-invoice rows, grand total.
-        public async Task<byte[]> GetOutstandingLedgerExcelAsync(int companyId, int? clientId, string status)
+        public async Task<byte[]> GetOutstandingLedgerExcelAsync(int companyId, int? clientId, string status,
+            int? year, int? month, DateTime? dateFrom, DateTime? dateTo)
         {
-            var report = await GetOutstandingLedgerAsync(companyId, clientId, status);
+            var report = await GetOutstandingLedgerAsync(companyId, clientId, status, year, month, dateFrom, dateTo);
 
             const int COLS = 11;
             const string MONEY = "#,##0.00";
@@ -798,7 +824,7 @@ namespace MyApp.Api.Services.Implementations
             sub.Style.Font.FontSize = 14; sub.Style.Font.Bold = true; sub.Style.Fill.BackgroundColor = grey;
             sub.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center; r++;
 
-            ws.Cell(r, 1).Value = $"{statusLabel}  ·  {report.InvoiceCount} invoice(s)";
+            ws.Cell(r, 1).Value = $"{report.PeriodLabel}  ·  {statusLabel}  ·  {report.InvoiceCount} invoice(s)";
             var meta = ws.Range(r, 1, r, COLS).Merge();
             meta.Style.Font.Italic = true; meta.Style.Font.FontColor = XLColor.FromHtml("#5F6D7E");
             meta.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center; r += 2;
