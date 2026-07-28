@@ -8,6 +8,7 @@ import BulkFbrResultsDialog from "../Components/BulkFbrResultsDialog";
 import FbrPreviewDialog from "../Components/FbrPreviewDialog";
 import BulkFbrPreviewDialog from "../Components/BulkFbrPreviewDialog";
 import InvoiceTable from "../Components/InvoiceTable";
+import Pagination from "../Components/Pagination";
 import CorrectionWizard from "../Components/CorrectionWizard";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import AttachmentBadge from "../Components/AttachmentBadge";
@@ -1304,33 +1305,14 @@ export default function InvoicePage({ mode = "invoices" }) {
           )}
           {/* Pagination */}
           {totalCount > PAGE_SIZE_OPTIONS[0] && (
-            <div style={styles.pagination}>
-              <PageSizeSelect
-                value={pageSize ?? observedSize}
-                onChange={(n) => { setPageSize(n); setPage(1); }}
-              />
-              {totalPages > 1 && (
-                <>
-                  <button
-                    style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }}
-                    disabled={page <= 1}
-                    onClick={() => setPage(page - 1)}
-                  >
-                    <MdChevronLeft size={20} /> Prev
-                  </button>
-                  <span style={styles.pageInfo}>
-                    Page {page} of {totalPages} ({totalCount} total)
-                  </span>
-                  <button
-                    style={{ ...styles.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }}
-                    disabled={page >= totalPages}
-                    onClick={() => setPage(page + 1)}
-                  >
-                    Next <MdChevronRight size={20} />
-                  </button>
-                </>
-              )}
-            </div>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={totalCount}
+              onPage={setPage}
+              pageSize={pageSize ?? observedSize}
+              onPageSize={(n) => { setPageSize(n); setPage(1); }}
+            />
           )}
         </>
       )}

@@ -4,6 +4,7 @@ import { saveAs } from "file-saver";
 import { hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import SalesQuoteForm from "../Components/SalesQuoteForm";
 import SalesQuoteDetailModal from "../Components/SalesQuoteDetailModal";
+import Pagination from "../Components/Pagination";
 import POImportForm from "../Components/POImportForm";
 import AttachmentBadge from "../Components/AttachmentBadge";
 import AttachmentQuickModal from "../Components/AttachmentQuickModal";
@@ -249,14 +250,14 @@ export default function SalesQuotePage() {
             ))}
           </div>
           {totalCount > PAGE_SIZE_OPTIONS[0] && (
-            <div style={st.pagination}>
-              <PageSizeSelect value={pageSize ?? observedSize} onChange={(n) => { setPageSize(n); setPage(1); }} />
-              {totalPages > 1 && (<>
-                <button style={{ ...st.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}><MdChevronLeft size={20} /> Prev</button>
-                <span style={st.pageInfo}>Page {page} of {totalPages} ({totalCount} total)</span>
-                <button style={{ ...st.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next <MdChevronRight size={20} /></button>
-              </>)}
-            </div>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={totalCount}
+              onPage={setPage}
+              pageSize={pageSize ?? observedSize}
+              onPageSize={(n) => { setPageSize(n); setPage(1); }}
+            />
           )}
         </>
       )}

@@ -281,6 +281,41 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-28 — Mobile responsiveness sweep: pagination, layout overflow, forms & modals
+
+Frontend audit of every screen for phone / tablet / desktop, verified at 393 px
+(Infinix Note 30 Pro) against the local prod replica.
+
+- **Fixed horizontal page scroll on phones (root cause).** The layout content
+  column (`.dl-content-wrapper` / `.dl-main`) was a flex child with the default
+  `min-width:auto`, so a wide table (Sales Report, Tax Sheet, credit/debit-note
+  builder) stretched the whole content column — and the page — sideways instead
+  of scrolling inside its own wrapper. Added `min-width:0` to both; wide tables
+  now scroll within their container (contained side-scroll) and the page never
+  scrolls horizontally.
+- **Shared `<Pagination>` component** (`Components/Pagination.jsx` + `.css`)
+  replaces ~11 copy-pasted inline pagination bars (Invoices, Bills, Purchase
+  Bills, Goods Receipts, Payments, Sales Quotes/Orders, Item Rate History, Audit
+  Logs, FBR Monitor, Stock movements). On a phone it wraps to a full-width nav
+  row (Prev · page · Next) plus a rows-per-page line, ≥44 px tap targets, and
+  drops the long "(n total)" suffix to save space.
+- **Purchase Bill & Goods Receipt forms** — hardcoded header field grids
+  (`2fr 1fr 1fr`, `1fr 1fr 1fr`, `1fr 1fr`) replaced with `auto-fit` so they
+  collapse to one column on a phone instead of cramping.
+- **Modals** — Stock opening-balance/adjustment `SmallModal` and the Tax Sheet
+  transfer dialog now use `overflowY:auto` on the overlay + `maxHeight` on the
+  card, so a tall modal can't clip its top on a short viewport.
+- **Reports readable on phones with no side-scroll.** Sales Report and Tax Sheet
+  render as stacked cards below 768px (Sales Report keeps tap-to-expand line
+  items); the wide table stays for tablet/desktop. New shared
+  `hooks/useIsNarrow.js` consolidates the duplicated `innerWidth` breakpoint
+  logic.
+- **Card/Table toggle now on every viewport.** `useListViewMode` no longer hides
+  the toggle below 1280px, so Invoices, Challans, Purchase Bills and Goods
+  Receipts can switch to the dense table on a phone (it scrolls inside its own
+  container); card stays the default.
+- Removed a duplicate `padding` key in the Stock `TabBtn` style.
+
 ### 2026-07-27 — Company form: Sales Quote & Sales Order starting numbers
 
 The Company create/edit form now exposes "Starting Sales Quote #" and "Starting

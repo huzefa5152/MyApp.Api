@@ -124,7 +124,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
             {error && <div style={formStyles.error}>{error}</div>}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier *</label>
                 <select style={formStyles.input} value={supplierId} onChange={e => setSupplierId(e.target.value)}>
@@ -144,7 +144,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                 </select>
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier Challan #</label>
                 <input type="text" style={formStyles.input} value={supplierChallanNumber} onChange={e => setSupplierChallanNumber(e.target.value)} />

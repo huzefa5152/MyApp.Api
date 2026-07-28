@@ -7,6 +7,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { formStyles, modalSizes } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
 import PageSizeSelect from "../Components/PageSizeSelect";
+import Pagination from "../Components/Pagination";
 
 const colors = {
   blue: "#0d47a1",
@@ -269,28 +270,14 @@ export default function AuditLogsPage() {
 
         {/* Pagination */}
         {totalCount > PAGE_SIZE_OPTIONS[0] && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", padding: "12px", borderTop: `1px solid ${colors.cardBorder}` }}>
-            <PageSizeSelect value={pageSize ?? observedSize} onChange={(n) => { setPageSize(n); setPage(1); }} />
-            {totalPages > 1 && (<>
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                style={pgBtn}
-              >
-                <MdChevronLeft size={18} />
-              </button>
-              <span style={{ fontSize: "0.85rem", color: colors.textSecondary, fontWeight: 500 }}>
-                Page {page} of {totalPages}
-              </span>
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                style={pgBtn}
-              >
-                <MdChevronRight size={18} />
-              </button>
-            </>)}
-          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={totalCount}
+            onPage={setPage}
+            pageSize={pageSize ?? observedSize}
+            onPageSize={(n) => { setPageSize(n); setPage(1); }}
+          />
         )}
       </div>
 

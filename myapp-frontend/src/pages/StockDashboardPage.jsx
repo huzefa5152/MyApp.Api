@@ -11,6 +11,7 @@ import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import { isDecimalUnit } from "../utils/formatQuantity";
 import SearchableItemTypeSelect from "../Components/SearchableItemTypeSelect";
+import Pagination from "../Components/Pagination";
 
 const colors = {
   blue: "#0d47a1",
@@ -624,14 +625,12 @@ export default function StockDashboardPage() {
                   </div>
 
                   {movPageSize > 0 && movTotal > movPageSize && (
-                    <div className="irh-pagination">
-                      <button className="irh-page-btn" disabled={movPage <= 1} onClick={() => setMovPage(movPage - 1)}>Prev</button>
-                      <span className="irh-page-info">
-                        Page {movPage} of {Math.ceil(movTotal / movPageSize)}{" "}
-                        <span className="irh-page-info__count">({movTotal} total)</span>
-                      </span>
-                      <button className="irh-page-btn" disabled={movPage * movPageSize >= movTotal} onClick={() => setMovPage(movPage + 1)}>Next</button>
-                    </div>
+                    <Pagination
+                      page={movPage}
+                      totalPages={Math.ceil(movTotal / movPageSize)}
+                      total={movTotal}
+                      onPage={setMovPage}
+                    />
                   )}
                 </>
               )}
@@ -789,7 +788,7 @@ function DrillPanel({ rows, loading, uom }) {
 function TabBtn({ active, children, onClick }) {
   return (
     <button onClick={onClick} style={{
-      padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid #d0d7e2", cursor: "pointer",
+      borderRadius: 8, border: "1px solid #d0d7e2", cursor: "pointer",
       backgroundColor: active ? "#0d47a1" : "#fff", color: active ? "#fff" : "#1a2332",
       fontSize: "0.85rem", fontWeight: 600, boxShadow: "none", padding: "0.45rem 0.95rem"
     }}>{children}</button>
@@ -798,8 +797,8 @@ function TabBtn({ active, children, onClick }) {
 
 function SmallModal({ title, children, onClose, onSubmit }) {
   return (
-    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(15,20,30,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, padding: "2vh 1rem" }}>
-      <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 480, padding: "1.25rem", boxShadow: "0 20px 60px rgba(13,71,161,0.2)" }}>
+    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(15,20,30,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, padding: "2vh 1rem", overflowY: "auto" }}>
+      <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 480, maxHeight: "94vh", overflowY: "auto", padding: "1.25rem", boxShadow: "0 20px 60px rgba(13,71,161,0.2)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
           <h3 style={{ margin: 0, fontSize: "1.05rem", color: "#1a2332" }}>{title}</h3>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#5f6d7e", cursor: "pointer", padding: 0, fontSize: "1.5rem", lineHeight: 1 }}>×</button>

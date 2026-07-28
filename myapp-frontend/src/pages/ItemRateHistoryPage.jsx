@@ -7,6 +7,7 @@ import EditBillForm from "../Components/EditBillForm";
 import { dropdownStyles } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
 import PageSizeSelect from "../Components/PageSizeSelect";
+import Pagination from "../Components/Pagination";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 
@@ -413,30 +414,14 @@ export default function ItemRateHistoryPage() {
               </div>
 
               {totalCount > PAGE_SIZE_OPTIONS[0] && (
-                <div className="irh-pagination">
-                  <PageSizeSelect value={userPageSize ?? pageSize} onChange={(n) => { setUserPageSize(n); setPage(1); }} />
-                  {totalPages > 1 && (<>
-                    <button
-                      className="irh-page-btn"
-                      style={{ opacity: page <= 1 ? 0.4 : 1 }}
-                      disabled={page <= 1}
-                      onClick={() => setPage(page - 1)}
-                    >
-                      <MdChevronLeft size={20} /> Prev
-                    </button>
-                    <span className="irh-page-info">
-                      Page {page} of {totalPages} <span className="irh-page-info__count">({totalCount} total)</span>
-                    </span>
-                    <button
-                      className="irh-page-btn"
-                      style={{ opacity: page >= totalPages ? 0.4 : 1 }}
-                      disabled={page >= totalPages}
-                      onClick={() => setPage(page + 1)}
-                    >
-                      Next <MdChevronRight size={20} />
-                    </button>
-                  </>)}
-                </div>
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  total={totalCount}
+                  onPage={setPage}
+                  pageSize={userPageSize ?? pageSize}
+                  onPageSize={(n) => { setUserPageSize(n); setPage(1); }}
+                />
               )}
             </>
           ) : (

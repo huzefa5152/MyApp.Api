@@ -20,7 +20,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { getFbrLogs, getFbrLogById, getFbrSummary } from "../api/fbrMonitorApi";
 import { notify } from "../utils/notify";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
-import PageSizeSelect from "../Components/PageSizeSelect";
+import Pagination from "../Components/Pagination";
 import "./FbrMonitorPage.css";
 
 // Status -> visual config. Keys mirror FbrCommunicationLog.Status taxonomy.
@@ -166,14 +166,17 @@ export default function FbrMonitorPage() {
         }}
       />
 
-      <Pagination
-        page={page}
-        totalPages={totalPages}
-        total={total}
-        onPage={setPage}
-        value={pageSize ?? observedSize}
-        onSize={(n) => { setPageSize(n); setPage(1); }}
-      />
+      {total > PAGE_SIZE_OPTIONS[0] && (
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          onPage={setPage}
+          pageSize={pageSize ?? observedSize}
+          onPageSize={(n) => { setPageSize(n); setPage(1); }}
+          unit="rows"
+        />
+      )}
 
       {drawer && <Drawer row={drawer} onClose={() => setDrawer(null)} />}
     </Shell>
@@ -329,24 +332,6 @@ function RowsList({ rows, loading, onClickRow }) {
         );
       })}
     </section>
-  );
-}
-
-function Pagination({ page, totalPages, total, onPage, value, onSize }) {
-  if (total <= PAGE_SIZE_OPTIONS[0]) return null;
-  return (
-    <div className="fbr-mon-pagination" style={S.pagination}>
-      <PageSizeSelect value={value} onChange={onSize} />
-      {totalPages > 1 && (
-        <>
-          <button type="button" disabled={page <= 1} onClick={() => onPage(page - 1)} style={S.pageBtn}>← Prev</button>
-          <span style={{ fontSize: "0.82rem", color: "#5f6d7e" }}>
-            Page {page} of {totalPages} <span style={{ color: "#98a4b3" }}>({total.toLocaleString()} rows)</span>
-          </span>
-          <button type="button" disabled={page >= totalPages} onClick={() => onPage(page + 1)} style={S.pageBtn}>Next →</button>
-        </>
-      )}
-    </div>
   );
 }
 

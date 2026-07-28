@@ -6,6 +6,7 @@ import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
+import useIsNarrow from "../hooks/useIsNarrow";
 
 const colors = {
   blue: "#0d47a1",
@@ -43,6 +44,7 @@ export default function TaxSheetPage() {
   const canView = has("reports.taxsheet.view");
   const canExport = has("reports.taxsheet.export");
   const canTransfer = has("reports.taxsheet.transfer");
+  const isNarrow = useIsNarrow();
 
   const [mode, setMode] = useState("period"); // "period" | "custom"
   const [year, setYear] = useState(NOW.getFullYear());
@@ -288,6 +290,36 @@ export default function TaxSheetPage() {
             <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>
               No invoices pending HS classification for {periodLabel}. 🎉
             </div>
+          ) : isNarrow ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "4px 2px" }}>
+              {report.rows.map((row, idx) => (
+                <div key={idx} style={tsCard}>
+                  <div style={tsCardTop}>
+                    <span style={{ fontWeight: 700, color: colors.blue }}>{row.documentNumber}</span>
+                    <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>{new Date(row.documentDate).toLocaleDateString()}</span>
+                  </div>
+                  <div style={{ fontSize: "0.88rem", fontWeight: 600, color: colors.textPrimary, ...clamp2 }}>{row.partyName}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", margin: "2px 0 2px" }}>
+                    <span style={{ fontFamily: "monospace", fontSize: "0.74rem", color: colors.textSecondary }}>{row.ntn}</span>
+                    <span style={{ background: colors.pill, color: colors.pillText, padding: "2px 8px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 600 }}>{row.itemTypeName}</span>
+                  </div>
+                  <div style={tsCardMeta}>
+                    <div><span style={tsLbl}>Qty</span><span style={tsVal}>{row.quantityLabel}</span></div>
+                    <div><span style={tsLbl}>Excl. Amount</span><span style={tsVal}>{money(row.excludingAmount)}</span></div>
+                    <div><span style={tsLbl}>Sales Tax</span><span style={tsVal}>{money(row.salesTax)}</span></div>
+                    <div><span style={tsLbl}>Total</span><span style={{ ...tsVal, fontWeight: 700, color: colors.blue }}>{money(row.total)}</span></div>
+                  </div>
+                </div>
+              ))}
+              <div style={{ ...tsCard, background: colors.totalBg, borderColor: colors.blue }}>
+                <div style={{ fontWeight: 800, color: colors.blue, marginBottom: 4 }}>TOTAL</div>
+                <div style={tsCardMeta}>
+                  <div><span style={tsLbl}>Excl. Amount</span><span style={{ ...tsVal, fontWeight: 800 }}>{money(report.grandExcluding)}</span></div>
+                  <div><span style={tsLbl}>Sales Tax</span><span style={{ ...tsVal, fontWeight: 800 }}>{money(report.grandTax)}</span></div>
+                  <div><span style={tsLbl}>Total</span><span style={{ ...tsVal, fontWeight: 800, color: colors.blue }}>{money(report.grandTotal)}</span></div>
+                </div>
+              </div>
+            </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
               <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 860, fontSize: "0.82rem" }}>
@@ -370,11 +402,20 @@ export default function TaxSheetPage() {
 const overlay = {
   position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)",
   display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16,
+  overflowY: "auto",
 };
 const modalBox = {
   background: "#fff", borderRadius: 12, padding: 20, width: "min(460px, 100%)",
+  maxHeight: "94vh", overflowY: "auto",
   boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
 };
+
+// Mobile card styles (phones get stacked cards instead of the wide table).
+const tsCard = { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.7rem 0.8rem", background: "#fff", display: "flex", flexDirection: "column", gap: 3 };
+const tsCardTop = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 };
+const tsCardMeta = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(120px, 100%), 1fr))", gap: "0.35rem 0.8rem", marginTop: 4 };
+const tsLbl = { display: "block", fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary };
+const tsVal = { display: "block", fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary };
 
 function Field({ label, icon, children }) {
   return (

@@ -5,6 +5,7 @@ import { getSuppliersByCompany } from "../api/supplierApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
 import PageSizeSelect from "../Components/PageSizeSelect";
+import Pagination from "../Components/Pagination";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
@@ -235,14 +236,14 @@ export default function GoodsReceiptsPage() {
               </div>
               )}
               {totalCount > PAGE_SIZE_OPTIONS[0] && (
-                <div style={styles.pagination}>
-                  <PageSizeSelect value={pageSize ?? observedSize} onChange={(n) => { setPageSize(n); setPage(1); }} />
-                  {totalPages > 1 && (<>
-                    <button style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}><MdChevronLeft size={20} /> Prev</button>
-                    <span style={styles.pageInfo}>Page {page} of {totalPages}</span>
-                    <button style={{ ...styles.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next <MdChevronRight size={20} /></button>
-                  </>)}
-                </div>
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  total={totalCount}
+                  onPage={setPage}
+                  pageSize={pageSize ?? observedSize}
+                  onPageSize={(n) => { setPageSize(n); setPage(1); }}
+                />
               )}
             </>
           )}

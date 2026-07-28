@@ -287,7 +287,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "0.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier *</label>
                 <select style={formStyles.input} value={supplierId} onChange={e => setSupplierId(e.target.value)}>
@@ -305,7 +305,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier Bill #</label>
                 <input type="text" style={formStyles.input} value={supplierBillNumber} onChange={e => setSupplierBillNumber(e.target.value)} placeholder="Their invoice number" />
@@ -316,7 +316,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Payment Mode</label>
                 <select style={formStyles.input} value={paymentMode} onChange={e => setPaymentMode(e.target.value)}>

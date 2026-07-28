@@ -7,6 +7,7 @@ import ChallanEditForm from "../Components/ChallanEditForm";
 import POImportForm from "../Components/POImportForm";
 import InvoiceForm from "../Components/InvoiceForm";
 import ViewModeToggle from "../Components/ViewModeToggle";
+import Pagination from "../Components/Pagination";
 import AttachmentQuickModal from "../Components/AttachmentQuickModal";
 import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import { useListViewMode } from "../hooks/useListViewMode";
@@ -505,28 +506,14 @@ export default function ChallanPage() {
           )}
           {/* Pagination */}
           {totalCount > PAGE_SIZE_OPTIONS[0] && (
-            <div style={styles.pagination}>
-              <PageSizeSelect value={userPageSize ?? pageSize} onChange={(n) => { setUserPageSize(n); setPage(1); }} />
-              {totalPages > 1 && (<>
-                <button
-                  style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }}
-                  disabled={page <= 1}
-                  onClick={() => setPage(page - 1)}
-                >
-                  <MdChevronLeft size={20} /> Prev
-                </button>
-                <span style={styles.pageInfo}>
-                  Page {page} of {totalPages} ({totalCount} total)
-                </span>
-                <button
-                  style={{ ...styles.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }}
-                  disabled={page >= totalPages}
-                  onClick={() => setPage(page + 1)}
-                >
-                  Next <MdChevronRight size={20} />
-                </button>
-              </>)}
-            </div>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={totalCount}
+              onPage={setPage}
+              pageSize={userPageSize ?? pageSize}
+              onPageSize={(n) => { setUserPageSize(n); setPage(1); }}
+            />
           )}
         </>
       )}
