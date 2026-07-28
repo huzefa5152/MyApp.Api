@@ -38,9 +38,15 @@ const AttachmentManager = forwardRef(function AttachmentManager(
   const confirm = useConfirm();
 
   const isView = mode === "view";
+  // View gates — a role without these (e.g. a tax consultant with only
+  // bill/invoice perms) must not even trigger the attachment/folder list
+  // fetches, or the global 403 interceptor fires a "permission" warning toast
+  // on every bill/invoice form. See the canView early-return below.
+  const canView = has("attachments.list.view");
+  const canViewFolders = has("folders.list.view");
   const canUpload = !isView && has("attachments.manage.upload");
   const canDelete = !isView && has("attachments.manage.delete");
-  const canCreateFolder = has("folders.manage.create");
+  const canCreateFolder = canViewFolders && has("folders.manage.create");
 
   const inUncategorized = uncategorized === true;       // the always-present "Uncategorized" bucket (FolderId == null)
   const inFolderMode = folderContext != null || inUncategorized; // folder-library use (named folder OR uncategorized)
@@ -62,6 +68,8 @@ const AttachmentManager = forwardRef(function AttachmentManager(
 
   const loadExisting = useCallback(async () => {
     if (!companyId) return;
+    // No attachment-view permission → don't fetch (avoids a 403 warning toast).
+    if (!canView) { setExisting([]); setSourceSummary({}); return; }
     if (inFolderMode) {
       setLoading(true);
       try {
@@ -89,15 +97,15 @@ const AttachmentManager = forwardRef(function AttachmentManager(
     } else {
       setExisting([]); // new unsaved record — nothing server-side yet
     }
-  }, [companyId, inFolderMode, inUncategorized, folderContext, savedEntity, entityType, entityId, sourceFilter]);
+  }, [companyId, canView, inFolderMode, inUncategorized, folderContext, savedEntity, entityType, entityId, sourceFilter]);
 
   useEffect(() => { loadExisting(); }, [loadExisting]);
 
   // Folder dropdown — only in entity mode (folder mode is pinned to its folder).
   useEffect(() => {
-    if (inFolderMode || !hasEntity || isView) return;
+    if (inFolderMode || !hasEntity || isView || !canViewFolders) return;
     getFolders(companyId).then(({ data }) => setFolders(data || [])).catch(() => setFolders([]));
-  }, [companyId, inFolderMode, hasEntity, isView]);
+  }, [companyId, inFolderMode, hasEntity, isView, canViewFolders]);
 
   // Imperative API for the parent form's create flow: flush staged uploads
   // once the record has been saved and has a real id.
@@ -122,6 +130,13 @@ const AttachmentManager = forwardRef(function AttachmentManager(
 
   // Revoke staged object URLs on unmount.
   useEffect(() => () => { staged.forEach((s) => s.localUrl && URL.revokeObjectURL(s.localUrl)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // No attachment-view permission → render nothing. The list/folder fetches
+  // above are already guarded, so hiding the module means a role without
+  // attachments.list.view (e.g. a tax consultant) sees no attachment UI and
+  // fires no 403 "permission" toast on a bill/invoice form. This sits AFTER
+  // every hook, so the conditional return is safe.
+  if (!canView) return null;
 
   const onPickFiles = async (fileList) => {
     const files = Array.from(fileList || []);
