@@ -19,6 +19,7 @@ import StockDashboardPage from "./pages/StockDashboardPage";
 import FbrPurchaseImportPage from "./pages/FbrPurchaseImportPage";
 import SalesReportPage from "./pages/SalesReportPage";
 import TaxSheetPage from "./pages/TaxSheetPage";
+import OutstandingLedgerPage from "./pages/OutstandingLedgerPage";
 import ClientsPage from "./pages/ClientsPage";
 import SuppliersPage from "./pages/SuppliersPage";
 import ItemTypesPage from "./pages/ItemTypesPage";
@@ -107,6 +108,7 @@ export default function App() {
           {/* Reports */}
           <Route path="/reports/sales" element={<SalesReportPage />} />
           <Route path="/reports/tax-sheet" element={<TaxSheetPage />} />
+          <Route path="/reports/outstanding" element={<OutstandingLedgerPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/roles" element={<RolesPage />} />

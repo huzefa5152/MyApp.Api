@@ -47,5 +47,15 @@ namespace MyApp.Api.Services.Interfaces
         Task<TaxSheetTransferResultDto> TransferTaxSheetInvoicesAsync(
             int companyId, int? year, int? month, DateTime? dateFrom, DateTime? dateTo,
             int? clientId, DateTime targetDate, string? actorUserName);
+
+        /// <summary>
+        /// Outstanding Ledger for a company + (optional) client: every sale
+        /// invoice with amount / paid / balance / payment status and the receipts
+        /// that settled it. <paramref name="status"/> = "all" | "unpaid" | "paid".
+        /// </summary>
+        Task<OutstandingLedgerDto> GetOutstandingLedgerAsync(int companyId, int? clientId, string status);
+
+        /// <summary>Styled .xlsx of <see cref="GetOutstandingLedgerAsync"/>, matching the operator's manual outstanding sheet.</summary>
+        Task<byte[]> GetOutstandingLedgerExcelAsync(int companyId, int? clientId, string status);
     }
 }

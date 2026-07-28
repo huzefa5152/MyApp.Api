@@ -185,6 +185,7 @@ export default function DashboardLayout() {
   const reportsKeys = [
     "reports.sales.view",
     "reports.taxsheet.view",
+    "reports.outstanding.view",
   ];
   const adminKeys = [
     "users.manage.view",
@@ -462,6 +463,12 @@ export default function DashboardLayout() {
                 <NavLink to="/reports/tax-sheet" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdFactCheck className="dl-subitem__icon" aria-hidden="true" />
                   <span>Tax Sheet</span>
+                </NavLink>
+              </Can>
+              <Can permission="reports.outstanding.view">
+                <NavLink to="/reports/outstanding" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdAccountBalanceWallet className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Outstanding Ledger</span>
                 </NavLink>
               </Can>
             </NavGroup>

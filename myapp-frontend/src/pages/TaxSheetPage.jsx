@@ -3,6 +3,7 @@ import { MdFactCheck, MdBusiness, MdRefresh, MdDownload, MdPerson, MdEventRepeat
 import { getTaxSheet, getTaxSheetExcel, transferTaxSheet } from "../api/reportApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { dropdownStyles } from "../theme";
+import SearchableClientSelect from "../Components/SearchableClientSelect";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
@@ -197,14 +198,13 @@ export default function TaxSheetPage() {
         </Field>
 
         <Field label="Client" icon={<MdPerson size={15} />}>
-          <select
-            style={{ ...dropdownStyles.base, minWidth: 180, maxWidth: 240 }}
+          <SearchableClientSelect
+            clients={clients}
             value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
-          >
-            <option value="">All clients</option>
-            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+            onChange={(id) => setClientId(id)}
+            placeholder="All clients"
+            style={{ minWidth: 180, maxWidth: 240 }}
+          />
         </Field>
 
         <Field label="Period">

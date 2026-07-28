@@ -171,5 +171,35 @@ namespace MyApp.Api.Controllers
                 dto.ClientId, dto.TargetDate, User.Identity?.Name);
             return Ok(result);
         }
+
+        /// <summary>
+        /// Outstanding Ledger: per-client receivables (amount / paid / balance /
+        /// payment status + the receipts that settled each bill).
+        /// <paramref name="status"/> = "all" | "unpaid" (default) | "paid".
+        /// </summary>
+        [HttpGet("company/{companyId}/outstanding")]
+        [HasPermission("reports.outstanding.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<OutstandingLedgerDto>> GetOutstandingLedger(
+            int companyId, [FromQuery] int? clientId = null, [FromQuery] string status = "unpaid")
+        {
+            var report = await _reports.GetOutstandingLedgerAsync(companyId, clientId, status);
+            return Ok(report);
+        }
+
+        /// <summary>Styled .xlsx of the Outstanding Ledger. Gated by the export permission.</summary>
+        [HttpGet("company/{companyId}/outstanding/excel")]
+        [HasPermission("reports.outstanding.export")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> GetOutstandingLedgerExcel(
+            int companyId, [FromQuery] int? clientId = null, [FromQuery] string status = "unpaid")
+        {
+            var bytes = await _reports.GetOutstandingLedgerExcelAsync(companyId, clientId, status);
+            var safeStatus = (status ?? "unpaid").Trim().ToLowerInvariant();
+            var fileName = $"Outstanding-Ledger-{safeStatus}.xlsx";
+            return File(bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                fileName);
+        }
     }
 }

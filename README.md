@@ -281,6 +281,34 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-28 — Multi-page print / PDF paginate with margins
+
+Multi-page documents (e.g. a Sales Quote with 50+ line items) no longer butt
+page-to-page. The PDF export (`utils/exportUtils.js:exportToPdf`) now leaves an
+8mm top+bottom margin on every sliced A4 page — page 1 ends with a bottom margin
+and the next page starts with a top margin (previously the tall canvas was
+sliced edge-to-edge, so the break looked "combined" and rows were cut flush).
+The print popup (`utils/printDocument.js:writeAndPrint`) injects a default
+`@page{size:A4;margin:12mm}` + `page-break-inside:avoid` (rows) + a repeating
+`thead` for any template that doesn't define its own `@page` (Hakimi/Roshan's
+Sales Quote templates had none).
+
+### 2026-07-28 — Outstanding Ledger report + searchable client picker
+
+- **New Outstanding Ledger report** (Reports module, per-client): each sale bill
+  with its amount / paid / balance / payment status and the receipts that
+  settled it (cheque #, online ref, date, amount). Filter **All / Unpaid /
+  Paid**. Excel export styled to match the operator's manual sheet (company-name
+  banner, bold header, grand total) plus a matching PDF. The **P.O number is
+  derived from the linked delivery challan(s)** (a bill can have several
+  challans, each carrying a PO); D.C # lists the challan numbers. Permissions
+  `reports.outstanding.view` / `reports.outstanding.export`; responsive
+  table/cards at 375/768/1280.
+- **Searchable client picker** (`Components/SearchableClientSelect.jsx`) — the
+  new standard for client dropdowns (type to search by name / NTN / phone,
+  portaled so it escapes overflow/modals). Adopted on the Sales Report, Tax
+  Sheet and Outstanding Ledger filters.
+
 ### 2026-07-28 — Tax Sheet accuracy + attachment-module permission gating
 
 - **Tax Sheet** now lists only invoices that still need the tax consultant's

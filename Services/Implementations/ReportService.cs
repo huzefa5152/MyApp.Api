@@ -4,6 +4,8 @@ using Microsoft.Extensions.Configuration;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
+using MyApp.Api.Models.Accounting;
+using MyApp.Api.Helpers;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Services.Implementations
@@ -631,6 +633,228 @@ namespace MyApp.Api.Services.Implementations
                 catch { /* audit is non-critical */ }
             }
             return result;
+        }
+
+        // ── Outstanding Ledger — per-client receivables + settling receipts ──
+        public async Task<OutstandingLedgerDto> GetOutstandingLedgerAsync(int companyId, int? clientId, string status)
+        {
+            status = (status ?? "unpaid").Trim().ToLowerInvariant();
+            if (status != "all" && status != "paid") status = "unpaid";
+
+            var company = await _context.Companies.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == companyId);
+
+            var q = _context.Invoices.AsNoTracking()
+                .Include(i => i.Client)
+                .Include(i => i.DeliveryChallans)
+                .Where(i => i.CompanyId == companyId && i.NoteKind == 0 && !i.IsCancelled && !i.IsDemo);
+            if (clientId.HasValue) q = q.Where(i => i.ClientId == clientId.Value);
+
+            var invoices = await q.OrderBy(i => i.Date).ThenBy(i => i.InvoiceNumber).ToListAsync();
+
+            // Receipts (money-in) allocated to any of these invoices → the per-row
+            // payment detail (cheque # / online ref / amount / date).
+            var invIds = invoices.Select(i => i.Id).ToList();
+            var allocations = invIds.Count == 0
+                ? new List<PaymentAllocation>()
+                : await _context.Set<PaymentAllocation>().AsNoTracking()
+                    .Include(a => a.Payment)
+                    .Where(a => a.InvoiceId != null && invIds.Contains(a.InvoiceId.Value)
+                             && a.Payment.Direction == PaymentDirection.Receipt
+                             && !a.Payment.IsCancelled)
+                    .ToListAsync();
+            var payByInvoice = allocations
+                .GroupBy(a => a.InvoiceId!.Value)
+                .ToDictionary(g => g.Key, g => g.OrderBy(a => a.Payment.Date).ToList());
+
+            var report = new OutstandingLedgerDto
+            {
+                CompanyId = companyId,
+                CompanyName = company?.Name ?? "",
+                ClientId = clientId,
+                ClientName = clientId.HasValue ? (invoices.FirstOrDefault()?.Client?.Name ?? "") : "",
+                StatusFilter = status,
+            };
+
+            int sn = 0;
+            foreach (var inv in invoices)
+            {
+                var balance = PaymentStatusCalculator.BalanceDue(inv.GrandTotal, inv.AmountPaid);
+                var isPaid = balance <= 0m;
+                if (status == "unpaid" && isPaid) continue;
+                if (status == "paid" && !isPaid) continue;
+
+                var st = PaymentStatusCalculator.Status(inv.GrandTotal, inv.AmountPaid, inv.DueDate);
+                var challans = inv.DeliveryChallans ?? new List<DeliveryChallan>();
+                var dc = string.Join("/", challans.Select(c => c.ChallanNumber).Where(n => n > 0).Distinct().OrderBy(n => n));
+                DateTime? delivery = challans.Where(c => c.DeliveryDate.HasValue)
+                    .Select(c => (DateTime?)c.DeliveryDate!.Value.Date)
+                    .OrderBy(d => d).FirstOrDefault();
+                // PO lives on the challan(s) for challan-linked bills — derive it
+                // from the linked challans (distinct), falling back to the bill's
+                // own PoNumber for standalone / no-challan invoices.
+                var poFromChallans = string.Join("/", challans
+                    .Select(c => c.PoNumber).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct());
+                var po = !string.IsNullOrWhiteSpace(poFromChallans) ? poFromChallans : (inv.PoNumber ?? "");
+
+                var row = new OutstandingLedgerRowDto
+                {
+                    InvoiceId = inv.Id,
+                    SerialNo = ++sn,
+                    PoNumber = po,
+                    DeliveryDate = delivery,
+                    InvoiceDate = inv.Date.Date,
+                    DcNumbers = dc,
+                    BillNumber = inv.InvoiceNumber.ToString(),
+                    Amount = Round2(inv.GrandTotal),
+                    Paid = Round2(inv.AmountPaid),
+                    Balance = Round2(balance),
+                    Status = st.ToString(),
+                };
+
+                if (payByInvoice.TryGetValue(inv.Id, out var pays))
+                {
+                    foreach (var a in pays)
+                    {
+                        var p = a.Payment;
+                        var pd = new OutstandingLedgerPaymentDto
+                        {
+                            Number = $"RCP-{p.Number}",
+                            Date = p.Date.Date,
+                            Method = p.Method ?? "",
+                            ChequeNumber = p.ChequeNumber,
+                            ChequeDate = p.ChequeDate?.Date,
+                            ChequeStatus = p.ChequeStatus == ChequeStatus.None ? null : p.ChequeStatus.ToString(),
+                            Reference = p.BankAccountName,
+                            Amount = Round2(a.Amount),
+                        };
+                        pd.Label = BuildPaymentLabel(pd);
+                        row.Payments.Add(pd);
+                    }
+                    row.PaymentSummary = string.Join("  |  ", row.Payments.Select(x => x.Label));
+                }
+
+                report.Rows.Add(row);
+            }
+
+            report.GrandAmount = report.Rows.Sum(r => r.Amount);
+            report.GrandPaid = report.Rows.Sum(r => r.Paid);
+            report.GrandBalance = report.Rows.Sum(r => r.Balance);
+            report.InvoiceCount = report.Rows.Count;
+            return report;
+        }
+
+        private static string BuildPaymentLabel(OutstandingLedgerPaymentDto p)
+        {
+            var parts = new List<string> { p.Number };
+            if (string.Equals(p.Method, "Cheque", StringComparison.OrdinalIgnoreCase))
+            {
+                var chq = "Cheque" + (string.IsNullOrWhiteSpace(p.ChequeNumber) ? "" : $" #{p.ChequeNumber}");
+                if (p.ChequeDate.HasValue) chq += $" ({p.ChequeDate.Value:dd-MMM})";
+                if (!string.IsNullOrWhiteSpace(p.ChequeStatus)
+                    && !string.Equals(p.ChequeStatus, "Cleared", StringComparison.OrdinalIgnoreCase))
+                    chq += $" [{p.ChequeStatus}]";
+                parts.Add(chq);
+            }
+            else
+            {
+                parts.Add(string.IsNullOrWhiteSpace(p.Method) ? "Payment" : p.Method);
+                if (!string.IsNullOrWhiteSpace(p.Reference)) parts.Add(p.Reference!);
+            }
+            parts.Add($"Rs {p.Amount:#,##0}");
+            parts.Add($"on {p.Date:dd-MMM}");
+            return string.Join(" · ", parts);
+        }
+
+        // ── Styled Excel — mirrors the operator's manual outstanding sheet:
+        // company-name banner, bold centered header, per-invoice rows, grand total.
+        public async Task<byte[]> GetOutstandingLedgerExcelAsync(int companyId, int? clientId, string status)
+        {
+            var report = await GetOutstandingLedgerAsync(companyId, clientId, status);
+
+            const int COLS = 11;
+            const string MONEY = "#,##0.00";
+            var grey = XLColor.FromHtml("#EBEBEB");
+            var headers = new[] { "S.No", "P.O Number", "Delivery Date", "Invoice Receiving Date",
+                "D.C #", "Bill #", "Amount Receivable", "Paid", "Balance", "Status", "Payment Details" };
+            var moneyCols = new[] { 7, 8, 9 };
+
+            using var wb = new XLWorkbook();
+            var ws = wb.Worksheets.Add("Outstanding Ledger");
+            double[] widths = { 6, 20, 14, 16, 16, 9, 15, 14, 15, 13, 46 };
+            for (int c = 1; c <= COLS; c++) ws.Column(c).Width = widths[c - 1];
+
+            int r = 1;
+            ws.Cell(r, 1).Value = report.CompanyName;
+            var title = ws.Range(r, 1, r, COLS).Merge();
+            title.Style.Font.FontSize = 22; title.Style.Font.Bold = true;
+            title.Style.Fill.BackgroundColor = grey;
+            title.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            ws.Row(r).Height = 30; r++;
+
+            var statusLabel = report.StatusFilter switch { "paid" => "Paid", "all" => "All invoices", _ => "Outstanding (Unpaid)" };
+            ws.Cell(r, 1).Value = $"Outstanding Ledger — {(string.IsNullOrWhiteSpace(report.ClientName) ? "All Clients" : report.ClientName)}";
+            var sub = ws.Range(r, 1, r, COLS).Merge();
+            sub.Style.Font.FontSize = 14; sub.Style.Font.Bold = true; sub.Style.Fill.BackgroundColor = grey;
+            sub.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center; r++;
+
+            ws.Cell(r, 1).Value = $"{statusLabel}  ·  {report.InvoiceCount} invoice(s)";
+            var meta = ws.Range(r, 1, r, COLS).Merge();
+            meta.Style.Font.Italic = true; meta.Style.Font.FontColor = XLColor.FromHtml("#5F6D7E");
+            meta.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center; r += 2;
+
+            for (int c = 1; c <= COLS; c++)
+            {
+                var hc = ws.Cell(r, c);
+                hc.Value = headers[c - 1];
+                hc.Style.Font.Bold = true;
+                hc.Style.Fill.BackgroundColor = grey;
+                hc.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                hc.Style.Alignment.WrapText = true;
+                hc.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+                hc.Style.Border.TopBorder = XLBorderStyleValues.Thin;
+            }
+            var headerRow = r; r++;
+
+            foreach (var row in report.Rows)
+            {
+                ws.Cell(r, 1).Value = row.SerialNo;
+                ws.Cell(r, 2).Value = row.PoNumber;
+                if (row.DeliveryDate.HasValue) { ws.Cell(r, 3).Value = row.DeliveryDate.Value; ws.Cell(r, 3).Style.DateFormat.Format = "dd/mm/yyyy"; }
+                ws.Cell(r, 4).Value = row.InvoiceDate; ws.Cell(r, 4).Style.DateFormat.Format = "dd/mm/yyyy";
+                ws.Cell(r, 5).Value = row.DcNumbers;
+                ws.Cell(r, 6).Value = row.BillNumber;
+                ws.Cell(r, 7).Value = row.Amount;
+                ws.Cell(r, 8).Value = row.Paid;
+                ws.Cell(r, 9).Value = row.Balance;
+                ws.Cell(r, 10).Value = row.Status;
+                ws.Cell(r, 11).Value = row.PaymentSummary;
+                foreach (var c in moneyCols) ws.Cell(r, c).Style.NumberFormat.Format = MONEY;
+                ws.Cell(r, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Cell(r, 6).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Cell(r, 10).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Cell(r, 11).Style.Alignment.WrapText = true;
+                r++;
+            }
+
+            ws.Cell(r, 1).Value = "TOTAL";
+            var totalLabel = ws.Range(r, 1, r, 6).Merge();
+            totalLabel.Style.Font.Bold = true;
+            totalLabel.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+            ws.Cell(r, 7).Value = report.GrandAmount;
+            ws.Cell(r, 8).Value = report.GrandPaid;
+            ws.Cell(r, 9).Value = report.GrandBalance;
+            foreach (var c in moneyCols) ws.Cell(r, c).Style.NumberFormat.Format = MONEY;
+            var totalRow = ws.Range(r, 1, r, COLS);
+            totalRow.Style.Font.Bold = true;
+            totalRow.Style.Fill.BackgroundColor = grey;
+            totalRow.Style.Border.TopBorder = XLBorderStyleValues.Double;
+
+            ws.SheetView.FreezeRows(headerRow);
+
+            using var ms = new MemoryStream();
+            wb.SaveAs(ms);
+            return ms.ToArray();
         }
 
         // Generic piece-type units we DON'T suffix onto the quantity label
