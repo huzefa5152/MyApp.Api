@@ -22,6 +22,7 @@ import PermissionLackedHint from "./PermissionLackedHint";
 // to retype "Pcs" / "KG" / etc. each line.
 import LookupAutocomplete from "./LookupAutocomplete";
 import AttachmentManager from "./AttachmentManager";
+import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
   blue: "#0d47a1",
@@ -116,6 +117,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // before 5am.
   const [invoiceDate, setInvoiceDate] = useState(todayYmd());
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -753,7 +755,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "70vh", overflowY: "auto" }}>
-            {error && <div style={styles.errorAlert}>{error}</div>}
+            {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {loading ? (
               <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading...</div>

@@ -27,6 +27,7 @@
 //   onSaved           — called with the saved item type after a 2xx
 
 import { useEffect, useRef, useState } from "react";
+import useScrollToError from "../hooks/useScrollToError";
 import { MdLock, MdInfo, MdInventory2 } from "react-icons/md";
 import { createItemType, updateItemType, getItemTypeFbrHints } from "../api/itemTypeApi";
 import { getFbrHsUom } from "../api/fbrApi";
@@ -104,6 +105,7 @@ export default function ItemTypeForm({
   const [fbrDescription, setFbrDescription] = useState(editItem?.fbrDescription || "");
   const [isFavorite, setIsFavorite] = useState(editItem?.isFavorite ?? true);
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
 
   // FBR hint bundle for the currently-typed HS code: valid UOMs,
@@ -336,7 +338,7 @@ export default function ItemTypeForm({
 
         <form onSubmit={submit}>
           <div style={formStyles.body}>
-            {error && <div style={styles.errorAlert}>{error}</div>}
+            {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             <p style={styles.intro}>
               Adds an entry to your product catalog.{" "}

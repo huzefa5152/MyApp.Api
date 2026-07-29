@@ -12,6 +12,7 @@ import { todayYmd } from "../utils/dateInput";
 import LookupAutocomplete from "./LookupAutocomplete";
 import QuantityInput from "./QuantityInput";
 import ParserFeedback from "./ParserFeedback";
+import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
   blue: "#0d47a1",
@@ -92,6 +93,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
   const [selectedFile, setSelectedFile] = useState(null);
   const [parsing, setParsing] = useState(false);
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
 
   // Parsed data (editable in step 2)
   const [poNumber, setPoNumber] = useState("");
@@ -411,7 +413,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
         </div>
 
         <div style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
-          {error && <div style={styles.errorAlert}>{error}</div>}
+          {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
           {step === 1 && (
             <>

@@ -9,6 +9,7 @@ import { getClientsByCompany } from "../api/clientApi";
 import { getQuoteItemRate } from "../api/salesQuoteApi";
 import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
+import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
   textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
@@ -49,6 +50,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const [clients, setClients] = useState([]);
   const [showAddItemType, setShowAddItemType] = useState(false);
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
 
@@ -139,7 +141,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div style={s.err}>{error}</div>}
+            {error && <div ref={errRef} style={s.err}>{error}</div>}
             <div style={s.row}>
               <div style={{ flex: 2, minWidth: 220 }}>
                 <label style={s.label}>Client</label>

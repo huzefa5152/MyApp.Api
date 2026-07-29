@@ -379,10 +379,26 @@ export default function ChallanPage() {
 
   const hasFilters = search || statusFilter || clientFilter || dateFrom || dateTo || salesOrderFilter;
 
-  const orderOptions = orders.map((o) => ({
-    id: o.id,
-    label: `SO #${o.salesOrderNumber} — ${o.clientName}`,
-  }));
+  // SO dropdown respects the client filter: all clients → every SO; a client
+  // selected → only that client's SOs.
+  const orderOptions = orders
+    .filter((o) => !clientFilter || String(o.clientId) === String(clientFilter))
+    .map((o) => ({
+      id: o.id,
+      label: `SO #${o.salesOrderNumber} — ${o.clientName}`,
+    }));
+
+  // Changing the client filter clears a selected SO that belongs to a different
+  // client (so the SO filter never contradicts the client filter).
+  const handleClientFilter = (e) => {
+    const val = e.target.value;
+    setClientFilter(val);
+    setPage(1);
+    if (val && salesOrderFilter) {
+      const so = orders.find((o) => String(o.id) === String(salesOrderFilter));
+      if (!so || String(so.clientId) !== String(val)) handleSalesOrderFilter("");
+    }
+  };
 
   return (
     <div>
@@ -461,7 +477,7 @@ export default function ChallanPage() {
                 <option value="Cancelled">Cancelled</option>
               </select>
               {canViewClients && (
-                <select className="filter-select" value={clientFilter} onChange={handleFilterChange(setClientFilter)}>
+                <select className="filter-select" value={clientFilter} onChange={handleClientFilter}>
                   <option value="">All Clients</option>
                   {clients.map((cl) => <option key={cl.id} value={cl.id}>{cl.name}</option>)}
                 </select>

@@ -135,7 +135,7 @@ export default function ChallanTable({
   const renderActions = (c) => {
     const flags = evalRowFlags(c, perms);
     const isDuplicating = duplicatingId === c.id;
-    const canLink = onLinkOrder && !c.salesOrderId && !c.invoiceId && c.status !== "Cancelled";
+    const canLink = onLinkOrder && c.status === "No PO" && !c.salesOrderId && !c.invoiceId;
     return (
       <>
         <button style={btnStyles.view} onClick={() => setSelectedChallan(c)} title="View challan">

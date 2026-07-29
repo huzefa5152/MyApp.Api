@@ -8,6 +8,7 @@ import { useConfirm } from "./ConfirmDialog";
 import { formStyles, modalSizes } from "../theme";
 import CopyToCompaniesDialog from "./CopyToCompaniesDialog";
 import { notify } from "../utils/notify";
+import useScrollToError from "../hooks/useScrollToError";
 
 /**
  * Mirror of <see cref="CommonClientForm"/> for the purchase side.
@@ -30,6 +31,7 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved, onChange
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [detail, setDetail] = useState(null);
   const [provinces, setProvinces] = useState([]);
   const [form, setForm] = useState({
@@ -217,7 +219,7 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved, onChange
               <div style={s.notice}>Loading…</div>
             ) : (
               <>
-                {error && <div style={formStyles.error}>{error}</div>}
+                {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
                 {detail && (
                   <div style={s.cascadeBanner}>

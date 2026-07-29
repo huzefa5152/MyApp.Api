@@ -27,14 +27,19 @@ export default function QuantityInput({
   disabled = false,
   style = {},
   placeholder,
+  // Optional lower bound. When set (e.g. the already-delivered qty on a Sales
+  // Order line) it takes precedence over the UOM default, so the spinner can't
+  // step below it. Falls back to 0 (decimal UOM) / 1 (integer UOM).
+  min,
   ...rest
 }) {
   const allowsDecimal = isDecimalUnit(unit, units);
+  const effectiveMin = min != null ? min : (allowsDecimal ? 0 : 1);
 
   return (
     <input
       type="number"
-      min={allowsDecimal ? 0 : 1}
+      min={effectiveMin}
       step={allowsDecimal ? "0.0001" : "1"}
       value={value ?? ""}
       onChange={(e) => {

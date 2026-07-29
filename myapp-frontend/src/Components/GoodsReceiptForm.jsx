@@ -9,6 +9,7 @@ import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import AttachmentManager from "./AttachmentManager";
+import useScrollToError from "../hooks/useScrollToError";
 
 export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSaved }) {
   const isEdit = !!receiptId;
@@ -32,6 +33,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
     return () => window.removeEventListener("resize", onResize);
   }, []);
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
 
@@ -123,7 +125,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
-            {error && <div style={formStyles.error}>{error}</div>}
+            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier *</label>

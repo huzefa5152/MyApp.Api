@@ -15,6 +15,7 @@ import ClientForm from "./ClientForm";
 import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 import AttachmentManager from "./AttachmentManager";
+import useScrollToError from "../hooks/useScrollToError";
 
 // Bill-without-challan flow ("Standalone Bill"). Per FBR DI-API V1.12:
 //   • §9 (Scenarios) — locks Sale Type per SN.
@@ -197,6 +198,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [bulkApplyMode, setBulkApplyMode] = useState("all");
 
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -549,7 +551,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
-            {error && <div style={styles.errorAlert}>{error}</div>}
+            {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {loading ? (
               <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading…</div>

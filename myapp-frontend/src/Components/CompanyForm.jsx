@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { createCompany, updateCompany, uploadCompanyLogo, getCompanyById } from "../api/companyApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { formStyles, modalSizes } from "../theme";
+import useScrollToError from "../hooks/useScrollToError";
 
 const {
     backdrop,
@@ -68,6 +69,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
     });
     const [logoFile, setLogoFile] = useState(null);
     const [error, setError] = useState("");
+    const errRef = useScrollToError(error);
     const [provinces, setProvinces] = useState([]);
     const [activities, setActivities] = useState([]);
     const [sectors, setSectors] = useState([]);
@@ -249,7 +251,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div style={{ ...body, maxHeight: "65vh", overflowY: "auto" }}>
-                        {error && <div style={errorStyle}>{error}</div>}
+                        {error && <div ref={errRef} style={errorStyle}>{error}</div>}
 
                         <div style={formGroup}>
                             <label style={label}>Company Name *</label>

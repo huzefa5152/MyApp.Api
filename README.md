@@ -281,6 +281,24 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-29 — Form UX: scroll-to-error + delivered-qty guard
+
+- **Auto-scroll to the error on submit.** Create/edit forms live in a scrollable
+  modal with the submit button at the bottom and the error banner at the top, so
+  a validation error could fire off-screen. A shared `useScrollToError` hook now
+  scrolls the banner into view the moment an error appears — wired into every
+  such form (Sales Quote/Order, Challan, Bill/Invoice, Purchase Bill, Goods
+  Receipt, Payment, PO import/format, Item Type, Company, Common Client/Supplier,
+  Folder, attach/deliver modals).
+- **Sales Order edit can't drop a line below its delivered qty on the client.**
+  Each delivered line's quantity input is floored at the already-delivered
+  quantity (`min`), so the spinner stops there and the browser blocks a
+  below-delivered submit before it reaches the server. The backend guard remains
+  the backstop.
+- Challans page: **"Link to Order"** now shows only on **No-PO** challans (a
+  Pending challan already carries its own PO), and the **Sales Order** filter's
+  dropdown respects the client filter (a selected client narrows the SO list).
+
 ### 2026-07-29 — Sales Order ↔ Challan ↔ Bill linkage
 
 Three connected improvements to the Sales Order flow:

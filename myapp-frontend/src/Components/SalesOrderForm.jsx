@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import SearchableSelect from "./SearchableSelect";
 import ItemTypeForm from "./ItemTypeForm";
 import LineItemsEditor from "./LineItemsEditor";
+import useScrollToError from "../hooks/useScrollToError";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
@@ -39,6 +40,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   const [clients, setClients] = useState([]);
   const [showAddItemType, setShowAddItemType] = useState(false);
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   const [salesQuoteId, setSalesQuoteId] = useState(order?.salesQuoteId ? String(order.salesQuoteId) : "");
   const [quotes, setQuotes] = useState([]);
@@ -145,7 +147,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div style={s.err}>{error}</div>}
+            {error && <div ref={errRef} style={s.err}>{error}</div>}
             <div style={s.row}>
               <div style={{ flex: "1 1 100%", minWidth: 220 }}>
                 <label style={s.label}>Sales Quote <span style={s.opt}>(optional — picking one pre-fills the order)</span></label>
@@ -219,6 +221,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
               itemsLabel="Items (unit price optional — pre-fills the bill)"
               isRowLocked={(it) => isEdit && it.id > 0 && it.delivered > 0}
               rowLockHint={(it) => (isEdit && it.id > 0 && it.delivered > 0) ? `${it.delivered} already delivered — qty can't go below that` : null}
+              getRowMin={(it) => (isEdit && it.id > 0 && Number(it.delivered) > 0) ? Number(it.delivered) : undefined}
             />
 
             <div style={{ marginTop: "1rem" }}>

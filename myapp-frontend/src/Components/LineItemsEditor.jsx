@@ -45,6 +45,9 @@ export default function LineItemsEditor({
   getRate,
   isRowLocked,
   rowLockHint,
+  // Optional per-row minimum quantity → floors the qty spinner (e.g. the
+  // already-delivered qty on a Sales Order line, so it can't step below it).
+  getRowMin,
   itemsLabel = "Items",
   itemsHint,
   enablePaste = true,
@@ -358,7 +361,7 @@ export default function LineItemsEditor({
                 <div style={showUnitPrice ? s.m3col : s.m2col}>
                   <div>
                     <label style={s.mlabel}>Qty</label>
-                    <QuantityInput value={item.quantity} onChange={(v) => setItem(idx, { quantity: v })} unit={item.unit} units={units} style={{ ...s.cellInput, textAlign: "right" }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }} />
+                    <QuantityInput value={item.quantity} onChange={(v) => setItem(idx, { quantity: v })} unit={item.unit} units={units} min={getRowMin ? getRowMin(item) : undefined} style={{ ...s.cellInput, textAlign: "right" }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }} />
                   </div>
                   <div>
                     <label style={s.mlabel}>Unit</label>
@@ -419,7 +422,7 @@ export default function LineItemsEditor({
                       {hint && <div style={s.lockHint}>{hint}</div>}
                     </td>
                     <td style={s.td}>
-                      <QuantityInput value={item.quantity} onChange={(v) => setItem(idx, { quantity: v })} unit={item.unit} units={units} style={{ ...s.cellInput, textAlign: "right" }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }} />
+                      <QuantityInput value={item.quantity} onChange={(v) => setItem(idx, { quantity: v })} unit={item.unit} units={units} min={getRowMin ? getRowMin(item) : undefined} style={{ ...s.cellInput, textAlign: "right" }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }} />
                     </td>
                     <td style={s.td}>
                       <LookupAutocomplete label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(v) => setItem(idx, { unit: v })} inputStyle={s.cellInput} onEnterKey={() => commitAndAdvance(idx)} />

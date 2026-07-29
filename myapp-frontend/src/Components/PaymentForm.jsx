@@ -8,6 +8,7 @@ import { getSuppliersByCompany } from "../api/supplierApi";
 import { getPagedInvoicesByCompany } from "../api/invoiceApi";
 import { getPurchaseBillsByCompanyPaged } from "../api/purchaseBillApi";
 import AttachmentManager from "./AttachmentManager";
+import useScrollToError from "../hooks/useScrollToError";
 
 const METHODS = ["Cash", "Bank Transfer", "Cheque", "Online", "Other"];
 
@@ -55,6 +56,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   }, []);
 
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
 
@@ -200,7 +202,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div style={formStyles.error}>{error}</div>}
+            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
             {/* Contact picker spans the full row so long client/supplier names
                 aren't truncated inside a narrow grid column. */}

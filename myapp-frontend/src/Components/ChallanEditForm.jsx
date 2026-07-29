@@ -8,6 +8,7 @@ import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
 import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
+import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
   textPrimary: "#1a2332",
@@ -82,6 +83,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
 
   // ── UI state ──
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
 
   // Load lookups once
@@ -207,7 +209,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div style={styles.errorAlert}>{error}</div>}
+            {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {/* Duplicate-mode banner — explains why so many fields are
                 read-only and what the operator IS allowed to change. */}

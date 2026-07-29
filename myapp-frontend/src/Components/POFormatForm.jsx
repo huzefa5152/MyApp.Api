@@ -8,6 +8,7 @@ import {
   listPoFormats,
 } from "../api/poFormatApi";
 import { formStyles, modalSizes } from "../theme";
+import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
   blue: "#0d47a1",
@@ -75,6 +76,7 @@ export default function POFormatForm({ format, onClose, onSaved }) {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const fileInputRef = useRef(null);
 
   // Set of group IDs that ALREADY have a PO format. The dropdown
@@ -263,7 +265,7 @@ export default function POFormatForm({ format, onClose, onSaved }) {
 
         <div style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
           {error && (
-            <div style={styles.errorAlert}>
+            <div ref={errRef} style={styles.errorAlert}>
               <MdWarning size={16} /> {error}
             </div>
           )}

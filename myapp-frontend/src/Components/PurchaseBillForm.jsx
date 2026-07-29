@@ -11,6 +11,7 @@ import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import QuantityInput from "./QuantityInput";
 import AttachmentManager from "./AttachmentManager";
+import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
   blue: "#0d47a1",
@@ -48,6 +49,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     return () => window.removeEventListener("resize", onResize);
   }, []);
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   // Source-bill metadata when in "Purchase Against Sale" mode
   const [sourceBill, setSourceBill] = useState(null);
@@ -264,7 +266,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               disabled fieldset (so view-mode preview/download stay clickable). */}
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
           <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
-            {error && <div style={formStyles.error}>{error}</div>}
+            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
             {sourceBill && (
               <div style={{

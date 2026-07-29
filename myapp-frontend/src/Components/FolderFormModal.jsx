@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { formStyles, modalSizes } from "../theme";
 import { createFolder, updateFolder } from "../api/attachmentApi";
+import useScrollToError from "../hooks/useScrollToError";
 
 // Create or rename a folder. Pass `folder` to rename; omit to create.
 // onSaved(savedFolderDto) receives the created/updated folder. Shared by the
@@ -11,6 +12,7 @@ export default function FolderFormModal({ companyId, folder, onClose, onSaved })
   const [name, setName] = useState(folder?.name || "");
   const [description, setDescription] = useState(folder?.description || "");
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
 
   const submit = async (e) => {
@@ -49,7 +51,7 @@ export default function FolderFormModal({ companyId, folder, onClose, onSaved })
         </div>
         <form onSubmit={submit}>
           <div style={formStyles.body}>
-            {error && <div style={formStyles.error}>{error}</div>}
+            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             <div style={formStyles.formGroup}>
               <label style={formStyles.label}>Folder Name</label>
               <input autoFocus style={formStyles.input} value={name} maxLength={200}

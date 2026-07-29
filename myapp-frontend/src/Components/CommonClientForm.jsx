@@ -8,6 +8,7 @@ import { useConfirm } from "./ConfirmDialog";
 import { formStyles, modalSizes } from "../theme";
 import CopyToCompaniesDialog from "./CopyToCompaniesDialog";
 import { notify } from "../utils/notify";
+import useScrollToError from "../hooks/useScrollToError";
 
 /**
  * Edit form for a "Common Client" (a ClientGroup row + its sibling
@@ -37,6 +38,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
   // other actions (bulk delete / save / cancel) without ambiguity.
   const [deletingMemberId, setDeletingMemberId] = useState(null);
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [detail, setDetail] = useState(null);
   // Province dropdown options — same FBR Lookup category the per-
   // company ClientForm uses, so the picker shape matches end-to-end.
@@ -332,7 +334,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
               <div style={s.notice}>Loading…</div>
             ) : (
               <>
-                {error && <div style={formStyles.error}>{error}</div>}
+                {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
                 {/* Cascade summary banner — sets expectations BEFORE the
                     operator saves: every change here applies to every

@@ -105,9 +105,10 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
           const canDuplicate = permDuplicate
             && !isDuplicate
             && (c.status === "Pending" || c.status === "Imported");
-          // Link to a Sales Order — only unlinked, unbilled, non-cancelled
-          // challans (e.g. a No-PO delivery raised before the PO arrived).
-          const canLink = onLinkOrder && !c.salesOrderId && !c.invoiceId && c.status !== "Cancelled";
+          // Link to a Sales Order — only "No PO" challans (a delivery raised
+          // before the PO arrived). A Pending challan already carries its own
+          // PO, so it isn't part of the attach-to-order flow.
+          const canLink = onLinkOrder && c.status === "No PO" && !c.salesOrderId && !c.invoiceId;
           return (
             <div
               key={c.id}

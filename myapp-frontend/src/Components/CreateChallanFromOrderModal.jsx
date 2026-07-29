@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { createChallanFromOrder } from "../api/salesOrderApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { formStyles, modalSizes } from "../theme";
+import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
   textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
@@ -21,6 +22,7 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
   });
   const [clients, setClients] = useState([]);
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   // Responsive: the 5-col deliver grid clips the "Deliver now" input on a
   // phone, so below 760px each order line renders as a stacked card instead.
@@ -72,7 +74,7 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <div style={formStyles.body}>
-          {error && <div style={s.err}>{error}</div>}
+          {error && <div ref={errRef} style={s.err}>{error}</div>}
           <p style={s.sub}>Quantities default to what's still remaining. Adjust to deliver a partial amount; a challan will be created and linked to this order.</p>
           <div style={s.row}>
             <div style={{ flex: 1, minWidth: 150 }}>

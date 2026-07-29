@@ -9,6 +9,7 @@ import { getOpenSalesOrdersByCompany } from "../api/salesOrderApi";
 import { usePermissions } from "../contexts/PermissionsContext";
 import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
+import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
   blue: "#0d47a1",
@@ -48,6 +49,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const [units, setUnits] = useState([]);
   const [clients, setClients] = useState([]);
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
 
@@ -190,7 +192,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div style={styles.errorAlert}>{error}</div>}
+            {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {/* Optional: fulfil a Sales Order. Picking one autofills the client,
                 PO, site and the order's undelivered lines below, and links the

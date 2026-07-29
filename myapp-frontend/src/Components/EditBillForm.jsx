@@ -21,6 +21,7 @@ import LookupAutocomplete from "./LookupAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import ItemTypeForm from "./ItemTypeForm";
 import AttachmentManager from "./AttachmentManager";
+import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
   blue: "#0d47a1",
@@ -157,6 +158,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const [groupedView, setGroupedView] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
 
   // ── FBR scenario lock — same UX as the bill-creation form ──────────
   // Picking a scenario filters the Item Type dropdown to catalog rows
@@ -1230,7 +1232,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
               </div>
             ) : (
               <>
-                {error && <div style={styles.errorAlert}>{error}</div>}
+                {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
                 {/* Dual-book "adjustment out of date" banner (2026-07-15).
                     Shows on the Invoices tab when the delivery bill was edited

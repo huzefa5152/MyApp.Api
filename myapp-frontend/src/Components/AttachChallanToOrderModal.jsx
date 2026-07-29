@@ -6,6 +6,7 @@ import {
 } from "../api/salesOrderApi";
 import SearchableSelect from "./SearchableSelect";
 import { formStyles, modalSizes } from "../theme";
+import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
   textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3",
@@ -53,6 +54,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
 
   const orderId = fromOrder ? order.id : (pickedOrderId ? Number(pickedOrderId) : null);
@@ -202,7 +204,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
         </div>
 
         <div style={formStyles.body}>
-          {error && <div style={s.err}>{error}</div>}
+          {error && <div ref={errRef} style={s.err}>{error}</div>}
           <p style={s.sub}>
             The delivered quantity was already recorded when the challan was created — attaching links its lines to the order (adding any items not on the order as new lines) and adopts the order's PO. No stock changes.
           </p>
