@@ -27,6 +27,8 @@
         /// ordered line for fulfilment tracking.
         /// </summary>
         public int? SalesOrderId { get; set; }
+        /// <summary>The linked Sales Order's human-facing number, for the SO# badge on the list. Null when unlinked.</summary>
+        public int? SalesOrderNumber { get; set; }
         public string? InvoiceFbrStatus { get; set; }
         public bool IsEditable { get; set; }
         /// <summary>

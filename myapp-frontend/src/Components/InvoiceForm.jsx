@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdSearch, MdCheck, MdInfo, MdLock, MdAdd, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { getPendingChallansByCompany } from "../api/challanApi";
-import { getSalesOrdersForPicker, getSalesOrderChallans } from "../api/salesOrderApi";
+import { getSalesOrdersForPicker, getSalesOrderChallans, getSalesOrderById } from "../api/salesOrderApi";
 import SearchableSelect from "./SearchableSelect";
 import { createInvoice, getLastRatesForChallan } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
@@ -75,7 +75,7 @@ const SCENARIO_META = {
   SN028: { buyerKind: "walk-in" },
 };
 
-export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId, billsMode = false }) {
+export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId, prefillSalesOrderId, billsMode = false }) {
   // billsMode: true when this form is mounted from the Bills tab. Hides
   // every FBR-classification control — Item Type column + picker, "+ New
   // Item Type" button, bulk-apply toolbar, HS Code column, Sale Type
@@ -253,6 +253,29 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
             setSelectedIds([dc.id]);
           }
         }
+
+        // "Generate Bill" launched from the Sales Order screen: pre-tick the
+        // order's billable (Pending/Imported, unbilled) challans that are in
+        // the pending list, and set the client. The operator can then un-tick
+        // to bill a subset — the same SO can be billed again for the rest.
+        // Mirrors selectFromOrder() without depending on the billableOrders
+        // list having loaded yet.
+        if (prefillSalesOrderId) {
+          try {
+            const { data: soChallans } = await getSalesOrderChallans(prefillSalesOrderId);
+            const billableIds = (soChallans || [])
+              .filter((c) => (c.status === "Pending" || c.status === "Imported") && !c.invoiceId)
+              .map((c) => c.id)
+              .filter((cid) => challanRes.data.some((ac) => ac.id === cid));
+            if (billableIds.length > 0) {
+              const first = challanRes.data.find((ac) => ac.id === billableIds[0]);
+              if (first) setSelectedClientId(String(first.clientId));
+              setSelectedIds(billableIds);
+              setSalesOrderId(String(prefillSalesOrderId));
+              await seedPricesFromOrder(prefillSalesOrderId, billableIds, challanRes.data);
+            }
+          } catch { /* leave nothing pre-ticked on failure */ }
+        }
       } catch {
         setError("Failed to load data.");
       } finally {
@@ -260,7 +283,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       }
     };
     load();
-  }, [companyId, prefillChallanId]);
+  }, [companyId, prefillChallanId, prefillSalesOrderId]);
 
   // Whenever a challan gets newly ticked (either via the Generate-Bill
   // prefill or a manual click in the Bills > New Bill flow), fetch the
@@ -440,6 +463,29 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       .catch(() => setBillableOrders([]));
   }, [companyId, canUseOrders]);
 
+  // Pre-fill bill prices from the Sales Order's OWN line prices: for each
+  // selected challan line linked to an order line that carries a UnitPrice,
+  // seed that price. Operator-typed prices always win (prev spread last); the
+  // last-billed-rate effect fills any line the order didn't price.
+  const seedPricesFromOrder = async (soId, billableIds, challanSource) => {
+    try {
+      const { data: so } = await getSalesOrderById(soId);
+      const priceBySoItem = {};
+      (so.items || []).forEach((it) => {
+        if (it.unitPrice != null && Number(it.unitPrice) > 0) priceBySoItem[it.id] = it.unitPrice;
+      });
+      if (Object.keys(priceBySoItem).length === 0) return;
+      const seed = {};
+      (challanSource || [])
+        .filter((c) => billableIds.includes(c.id))
+        .forEach((c) => (c.items || []).forEach((it) => {
+          if (it.salesOrderItemId && priceBySoItem[it.salesOrderItemId] != null)
+            seed[it.id] = String(priceBySoItem[it.salesOrderItemId]);
+        }));
+      if (Object.keys(seed).length) setItemPrices((prev) => ({ ...seed, ...prev }));
+    } catch { /* leave prices to the last-billed effect on failure */ }
+  };
+
   // Pick a Sales Order → set its client and pre-tick its billable
   // (Pending/Imported, unbilled) challans that are in the pending list. The
   // existing multi-challan bill flow (price prefill, PO roll-up) then applies.
@@ -465,6 +511,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         .map((c) => c.id)
         .filter((cid) => allChallans.some((ac) => ac.id === cid));
       setSelectedIds(billable);
+      await seedPricesFromOrder(id, billable, allChallans);
     } catch { /* leave nothing pre-ticked on failure */ }
   };
 

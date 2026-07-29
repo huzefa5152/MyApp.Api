@@ -34,7 +34,8 @@ namespace MyApp.Api.Repositories.Implementations
         public async Task<(List<DeliveryChallan> Items, int TotalCount)> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
-            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null)
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? salesOrderId = null)
         {
             var query = _context.DeliveryChallans
                 .Include(dc => dc.Items).ThenInclude(i => i.ItemType)
@@ -42,6 +43,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(dc => dc.Company)
                 .Include(dc => dc.Invoice)
                 .Include(dc => dc.DuplicatedFrom)
+                .Include(dc => dc.SalesOrder)
                 .Where(dc => dc.CompanyId == companyId && !dc.IsDemo);
 
             if (!string.IsNullOrWhiteSpace(status))
@@ -49,6 +51,9 @@ namespace MyApp.Api.Repositories.Implementations
 
             if (clientId.HasValue)
                 query = query.Where(dc => dc.ClientId == clientId.Value);
+
+            if (salesOrderId.HasValue)
+                query = query.Where(dc => dc.SalesOrderId == salesOrderId.Value);
 
             if (dateFrom.HasValue)
                 query = query.Where(dc => dc.DeliveryDate >= dateFrom.Value);
@@ -87,6 +92,7 @@ namespace MyApp.Api.Repositories.Implementations
                                  .Include(dc => dc.Invoice)
                                      .ThenInclude(inv => inv!.Items)
                                  .Include(dc => dc.DuplicatedFrom)
+                                 .Include(dc => dc.SalesOrder)
                                  .FirstOrDefaultAsync(dc => dc.Id == id);
         }
 

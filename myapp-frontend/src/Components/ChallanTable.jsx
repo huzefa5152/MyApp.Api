@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MdVisibility, MdEdit, MdPrint, MdPictureAsPdf, MdGridOn, MdRequestQuote, MdContentCopy, MdCancel, MdDelete, MdWarning } from "react-icons/md";
+import { MdVisibility, MdEdit, MdPrint, MdPictureAsPdf, MdGridOn, MdRequestQuote, MdContentCopy, MdCancel, MdDelete, MdWarning, MdLink } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import DataTable from "./DataTable";
 import StatusBadge, { toneForStatus } from "./StatusBadge";
@@ -32,6 +32,7 @@ export default function ChallanTable({
   onExportExcel,
   onGenerateBill,
   onDuplicate,
+  onLinkOrder,
   exportingId,
   duplicatingId,
   printDisabled = false,
@@ -84,6 +85,15 @@ export default function ChallanTable({
       render: (c) => c.poNumber || "—",
     },
     {
+      key: "salesOrderNumber",
+      header: "SO #",
+      width: 90,
+      accessor: (c) => c.salesOrderNumber || 0,
+      render: (c) => c.salesOrderNumber
+        ? <span style={{ color: "#0d47a1", fontWeight: 700 }}>#{c.salesOrderNumber}</span>
+        : "—",
+    },
+    {
       key: "indentNo",
       header: "Indent",
       width: 110,
@@ -125,6 +135,7 @@ export default function ChallanTable({
   const renderActions = (c) => {
     const flags = evalRowFlags(c, perms);
     const isDuplicating = duplicatingId === c.id;
+    const canLink = onLinkOrder && !c.salesOrderId && !c.invoiceId && c.status !== "Cancelled";
     return (
       <>
         <button style={btnStyles.view} onClick={() => setSelectedChallan(c)} title="View challan">
@@ -184,6 +195,11 @@ export default function ChallanTable({
             <MdRequestQuote size={14} />
           </button>
         )}
+        {canLink && (
+          <button style={btnStyles.link} onClick={() => onLinkOrder?.(c)} title="Link this challan to a Sales Order">
+            <MdLink size={14} />
+          </button>
+        )}
         {perms.permUpdate && flags.canCancel && (
           <button style={btnStyles.cancel} onClick={() => onCancel?.(c)} title="Cancel challan">
             <MdCancel size={14} />
@@ -233,6 +249,7 @@ const btnStyles = {
   edit:         { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
   duplicate:    { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0" },
   generateBill: { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },
+  link:         { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
   cancel:       { ...baseBtn, backgroundColor: "#fce4ec", color: "#c62828" },
   delete:       { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
 };

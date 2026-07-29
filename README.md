@@ -281,6 +281,39 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-29 — Sales Order ↔ Challan ↔ Bill linkage
+
+Three connected improvements to the Sales Order flow:
+
+- **Generate Bill from the Sales Order screen.** A **Bill** action on the SO
+  card + detail (shown whenever the order has ≥1 delivered, unbilled challan)
+  opens the bill form with the order's billable challans pre-ticked. Un-tick to
+  bill a subset, so one order can be billed across several bills (e.g. 4
+  challans → Bill A = 2, Bill B = 2). The detail modal now shows a billed-vs-left
+  summary and the bill number on each billed challan.
+- **Attach an existing No-PO challan to a Sales Order.** For the phone-order
+  workflow — deliveries raised with no PO before the formal PO arrives — a new
+  **Attach delivered challan** action (on the SO detail) and **Link to Sales
+  Order** action (on an unlinked challan row) open a mapping modal: each challan
+  line is auto-matched (by item type, then description) to an order line, with
+  manual override and a live preview. Only No-PO challans are attachable, and the
+  picker is searchable by item description with expandable per-challan line
+  detail. Attaching rolls matched quantities into fulfilment and **adds any
+  delivered item not on the order as a new order line** (ordered = delivered), so
+  the order shows everything delivered with no duplicates. It adopts the order's
+  PO (flipping a `No PO` challan to `Pending`/billable). No stock movement — the
+  challan's stock was already booked at creation.
+- **Challan ↔ Sales Order navigation.** The SO card/detail links straight to
+  its challans (`/challans?salesOrderId=`), and the Challans page gains a
+  searchable **Sales Order** filter plus an **SO #** badge/column on linked
+  challans.
+- **Optional unit price on Sales Order lines.** A Sales Order line can now carry
+  an optional unit price (`SalesOrderItem.UnitPrice`, nullable). When billing
+  from an order — the SO **Bill** button or the bill form's Sales Order picker —
+  a line's own price pre-fills the bill (price source `SalesOrder`, ahead of the
+  source quote and last-billed rate); lines left unpriced still require a price
+  at bill time. (PO import doesn't set prices yet — scheduled separately.)
+
 ### 2026-07-28 — Outstanding Ledger: company + period filters, all-clients default
 
 The Outstanding Ledger now carries the same filter set as the Sales Report and

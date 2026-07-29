@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { MdDescription, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
 import ChallanTable from "../Components/ChallanTable";
@@ -6,6 +7,8 @@ import ChallanForm from "../Components/ChallanForm";
 import ChallanEditForm from "../Components/ChallanEditForm";
 import POImportForm from "../Components/POImportForm";
 import InvoiceForm from "../Components/InvoiceForm";
+import AttachChallanToOrderModal from "../Components/AttachChallanToOrderModal";
+import SearchableSelect from "../Components/SearchableSelect";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import Pagination from "../Components/Pagination";
 import AttachmentQuickModal from "../Components/AttachmentQuickModal";
@@ -20,7 +23,7 @@ import {
   getChallanPrintData,
 } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
-import { createChallanFromOrder } from "../api/salesOrderApi";
+import { createChallanFromOrder, getSalesOrdersForPicker } from "../api/salesOrderApi";
 import { hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
@@ -89,6 +92,14 @@ export default function ChallanPage() {
   const [clientFilter, setClientFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  // Sales Order filter — driven by the searchable dropdown and by the
+  // ?salesOrderId= query param (the "View Challans" shortcut from the SO page).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [salesOrderFilter, setSalesOrderFilter] = useState(searchParams.get("salesOrderId") || "");
+  const [orders, setOrders] = useState([]);
+  // "Link to Sales Order" — attach an unlinked challan to an order.
+  const [linkChallan, setLinkChallan] = useState(null);
+  const canLinkOrder = canUpdate && has("salesorders.list.view");
   const [hasExcelTpl, setHasExcelTpl] = useState(false);
   const [exportingId, setExportingId] = useState(null);
   // Set to the challan id while a duplicate POST is in flight. Acts as
@@ -123,6 +134,7 @@ export default function ChallanPage() {
       if (clientFilter) params.clientId = clientFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
+      if (salesOrderFilter) params.salesOrderId = salesOrderFilter;
       const { data } = await getPagedChallansByCompany(companyId, params);
       setChallans(data.items);
       setTotalCount(data.totalCount);
@@ -135,7 +147,7 @@ export default function ChallanPage() {
     } finally {
       setLoadingChallans(false);
     }
-  }, [page, userPageSize, search, statusFilter, clientFilter, dateFrom, dateTo]);
+  }, [page, userPageSize, search, statusFilter, clientFilter, dateFrom, dateTo, salesOrderFilter]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -145,17 +157,25 @@ export default function ChallanPage() {
       hasExcelTemplate(selectedCompany.id, "Challan")
         .then(r => setHasExcelTpl(r.data.hasExcelTemplate))
         .catch(() => setHasExcelTpl(false));
+      // Sales Orders for the SO filter dropdown (searchable). Skipped for
+      // roles without salesorders.list.view.
+      if (has("salesorders.list.view")) {
+        getSalesOrdersForPicker(selectedCompany.id).then(setOrders).catch(() => setOrders([]));
+      } else {
+        setOrders([]);
+      }
     } else {
       setChallans([]);
       setClients([]);
       setHasExcelTpl(false);
+      setOrders([]);
     }
   }, [selectedCompany]);
 
   // Re-fetch when filters or page change
   useEffect(() => {
     if (selectedCompany) fetchChallans(selectedCompany.id, page);
-  }, [page, userPageSize, search, statusFilter, clientFilter, dateFrom, dateTo]);
+  }, [page, userPageSize, search, statusFilter, clientFilter, dateFrom, dateTo, salesOrderFilter]);
 
   const resetFilters = () => {
     setSearch("");
@@ -163,11 +183,23 @@ export default function ChallanPage() {
     setClientFilter("");
     setDateFrom("");
     setDateTo("");
+    setSalesOrderFilter("");
+    if (searchParams.get("salesOrderId")) setSearchParams({}, { replace: true });
     setPage(1);
   };
 
   const handleFilterChange = (setter) => (e) => {
     setter(e.target.value);
+    setPage(1);
+  };
+
+  // Sales Order filter: keep the URL query param in sync so the filter
+  // survives a refresh / is shareable, and reset to page 1.
+  const handleSalesOrderFilter = (id) => {
+    setSalesOrderFilter(id || "");
+    const next = new URLSearchParams(searchParams);
+    if (id) next.set("salesOrderId", id); else next.delete("salesOrderId");
+    setSearchParams(next, { replace: true });
     setPage(1);
   };
 
@@ -345,7 +377,12 @@ export default function ChallanPage() {
     }
   };
 
-  const hasFilters = search || statusFilter || clientFilter || dateFrom || dateTo;
+  const hasFilters = search || statusFilter || clientFilter || dateFrom || dateTo || salesOrderFilter;
+
+  const orderOptions = orders.map((o) => ({
+    id: o.id,
+    label: `SO #${o.salesOrderNumber} — ${o.clientName}`,
+  }));
 
   return (
     <div>
@@ -429,6 +466,18 @@ export default function ChallanPage() {
                   {clients.map((cl) => <option key={cl.id} value={cl.id}>{cl.name}</option>)}
                 </select>
               )}
+              {has("salesorders.list.view") && (
+                <div style={{ minWidth: 190, maxWidth: 240 }}>
+                  <SearchableSelect
+                    items={orderOptions}
+                    value={salesOrderFilter}
+                    onChange={(id) => handleSalesOrderFilter(id)}
+                    labelKey="label"
+                    searchKeys={["label"]}
+                    placeholder="All Sales Orders"
+                  />
+                </div>
+              )}
               <div className="filter-date-group">
                 <input type="date" className="filter-date-input" value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" />
                 <span className="filter-date-sep">–</span>
@@ -478,6 +527,7 @@ export default function ChallanPage() {
               onExportExcel={hasExcelTpl ? handleExportExcel : null}
               onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
               onDuplicate={handleDuplicate}
+              onLinkOrder={canLinkOrder ? (c) => setLinkChallan(c) : null}
               exportingId={exportingId}
               duplicatingId={duplicatingId}
               printDisabled={tplPicker.noTemplate}
@@ -496,6 +546,7 @@ export default function ChallanPage() {
               onExportExcel={hasExcelTpl ? handleExportExcel : null}
               onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
               onDuplicate={handleDuplicate}
+              onLinkOrder={canLinkOrder ? (c) => setLinkChallan(c) : null}
               exportingId={exportingId}
               duplicatingId={duplicatingId}
               printDisabled={tplPicker.noTemplate}
@@ -579,6 +630,19 @@ export default function ChallanPage() {
           entityId={attachTarget.id}
           title={`Challan #${attachTarget.challanNumber} — Attachments`}
           onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
+        />
+      )}
+
+      {linkChallan && selectedCompany && (
+        <AttachChallanToOrderModal
+          companyId={selectedCompany.id}
+          challan={linkChallan}
+          onClose={() => setLinkChallan(null)}
+          onAttached={(order) => {
+            setLinkChallan(null);
+            notify(`Challan linked to SO #${order?.salesOrderNumber ?? ""}.`, "success");
+            fetchChallans(selectedCompany.id, page);
+          }}
         />
       )}
 

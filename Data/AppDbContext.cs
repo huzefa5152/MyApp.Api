@@ -1109,6 +1109,7 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<SalesQuoteItem>().Property(i => i.UnitPrice).HasPrecision(18, 2);
             modelBuilder.Entity<SalesQuoteItem>().Property(i => i.LineTotal).HasPrecision(18, 2);
             modelBuilder.Entity<SalesOrderItem>().Property(i => i.Quantity).HasPrecision(18, 4);
+            modelBuilder.Entity<SalesOrderItem>().Property(i => i.UnitPrice).HasPrecision(18, 2);
 
             // Unique numbering per company (concurrent-create race guard — the
             // loser retries on the unique violation). Client index for filters.

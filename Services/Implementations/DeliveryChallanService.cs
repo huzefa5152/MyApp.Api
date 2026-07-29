@@ -113,6 +113,7 @@ namespace MyApp.Api.Services.Implementations
                 DuplicatedFromId = dc.DuplicatedFromId,
                 DuplicatedFromChallanNumber = dc.DuplicatedFrom?.ChallanNumber,
                 SalesOrderId = dc.SalesOrderId,
+                SalesOrderNumber = dc.SalesOrder?.SalesOrderNumber,
                 Items = dc.Items.Select(i => new DeliveryItemDto
                 {
                     Id = i.Id,
@@ -208,13 +209,14 @@ namespace MyApp.Api.Services.Implementations
         public async Task<PagedResult<DeliveryChallanDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
-            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null)
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
+            int? salesOrderId = null)
         {
             // Auto-clear "Setup Required" challans where FBR is now ready (runs once per page load)
             await ReEvaluateSetupRequiredAsync(companyId);
 
             var (items, totalCount) = await _repository.GetPagedByCompanyAsync(
-                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo);
+                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, salesOrderId);
 
             // Gate the Delete button client-side — only the highest-numbered
             // challan for this company is deletable.

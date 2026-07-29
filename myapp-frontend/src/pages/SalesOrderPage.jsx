@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdVisibility, MdUploadFile, MdGridOn } from "react-icons/md";
+import { useNavigate } from "react-router-dom";
+import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdVisibility, MdUploadFile, MdGridOn, MdReceiptLong, MdLink } from "react-icons/md";
 import { saveAs } from "file-saver";
 import { hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import SalesOrderForm from "../Components/SalesOrderForm";
 import CreateChallanFromOrderModal from "../Components/CreateChallanFromOrderModal";
+import AttachChallanToOrderModal from "../Components/AttachChallanToOrderModal";
+import InvoiceForm from "../Components/InvoiceForm";
 import SalesOrderDetailModal from "../Components/SalesOrderDetailModal";
 import Pagination from "../Components/Pagination";
 import POImportForm from "../Components/POImportForm";
@@ -39,6 +42,7 @@ const INVOICE_COLORS = {
 
 export default function SalesOrderPage() {
   const confirm = useConfirm();
+  const navigate = useNavigate();
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const tplPicker = usePrintTemplates("SalesOrder");
   const { has } = usePermissions();
@@ -48,6 +52,10 @@ export default function SalesOrderPage() {
   const canDelete = has("salesorders.manage.delete");
   const canPrint = has("salesorders.print.view");
   const canMakeChallan = has("challans.manage.create");
+  // Attach an unlinked challan = mutating the challan's linkage/PO/status.
+  const canAttach = has("challans.manage.update");
+  // Generate Bill uses the same permissions as the bill-creation forms.
+  const canBill = has("bills.manage.create") || has("bills.manage.create.standalone");
   const canImportPo = canCreate && has("poformats.import.create");
 
   const [orders, setOrders] = useState([]);
@@ -57,6 +65,8 @@ export default function SalesOrderPage() {
   const [showImport, setShowImport] = useState(false);
   const [editOrder, setEditOrder] = useState(null);
   const [deliverOrder, setDeliverOrder] = useState(null);
+  const [billOrder, setBillOrder] = useState(null);
+  const [attachOrder, setAttachOrder] = useState(null);
   const [viewOrder, setViewOrder] = useState(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = usePageSize("salesOrders");
@@ -161,6 +171,14 @@ export default function SalesOrderPage() {
     notify(`Delivery Challan #${challan.challanNumber} created from this order.`, "success");
   };
 
+  const onAttached = (updatedOrder) => {
+    setAttachOrder(null);
+    reload();
+    notify(`Challan attached to SO #${updatedOrder?.salesOrderNumber ?? ""}.`, "success");
+  };
+
+  const viewChallans = (o) => navigate(`/challans?salesOrderId=${o.id}`);
+
   return (
     <div>
       <div style={st.header}>
@@ -210,6 +228,8 @@ export default function SalesOrderPage() {
           <div style={st.grid}>
             {orders.map((o) => {
               const canDeliver = canMakeChallan && o.status === "Open" && o.fulfillmentStatus !== "Fully Delivered" && o.fulfillmentStatus !== "Over Delivered";
+              const canBillThis = canBill && (o.billableChallanCount || 0) > 0;
+              const canAttachThis = canAttach && o.status !== "Cancelled";
               const totalOrdered = (o.items || []).reduce((s, i) => s + (Number(i.quantity) || 0), 0);
               const totalDelivered = (o.items || []).reduce((s, i) => s + (Number(i.deliveredQuantity) || 0), 0);
               return (
@@ -243,11 +263,17 @@ export default function SalesOrderPage() {
                       <span style={{ ...st.statusPill, color: o.status === "Cancelled" ? "#dc3545" : o.status === "Closed" ? "#5f6d7e" : colors.teal }}>{o.status}</span>
                       <span style={{ ...st.invPill, color: INVOICE_COLORS[o.invoiceStatus] || "#5f6d7e", background: `${INVOICE_COLORS[o.invoiceStatus] || "#5f6d7e"}18` }}>{o.invoiceStatus}</span>
                     </span>
-                    {o.challanCount > 0 && <span style={st.challanCount}><MdLocalShipping size={13} /> {o.challanCount} challan{o.challanCount !== 1 ? "s" : ""}</span>}
+                    {o.challanCount > 0 && (
+                      <button style={st.challanCountBtn} onClick={() => viewChallans(o)} title="View this order's challans">
+                        <MdLocalShipping size={13} /> {o.challanCount} challan{o.challanCount !== 1 ? "s" : ""}
+                      </button>
+                    )}
                   </div>
                   <div style={st.actions}>
                     {canView && <button style={st.actBtn} onClick={() => setViewOrder(o)} title="View details"><MdVisibility size={16} /></button>}
                     {canDeliver && <button style={st.deliverBtn} onClick={() => setDeliverOrder(o)}><MdLocalShipping size={15} /> Deliver</button>}
+                    {canBillThis && <button style={st.billBtn} onClick={() => setBillOrder(o)} title="Generate a bill from this order's delivered challans"><MdReceiptLong size={15} /> Bill</button>}
+                    {canAttachThis && <button style={st.actBtn} onClick={() => setAttachOrder(o)} title="Attach an existing (No-PO) challan to this order"><MdLink size={16} /></button>}
                     {canUpdate && o.isEditable && <button style={st.actBtn} onClick={() => { setEditOrder(o); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
                     {canPrint && <button style={{ ...st.actBtn, opacity: tplPicker.noTemplate ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} onClick={() => handlePrint(o)} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}><MdPrint size={16} /></button>}
                     {canPrint && <button style={{ ...st.actBtn, opacity: tplPicker.noTemplate || exportingId === o.id ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} onClick={() => handleExportPdf(o)} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={16} /></button>}
@@ -300,15 +326,33 @@ export default function SalesOrderPage() {
       {deliverOrder && (
         <CreateChallanFromOrderModal order={deliverOrder} companyId={selectedCompany?.id} onClose={() => setDeliverOrder(null)} onCreated={onChallanCreated} />
       )}
+      {attachOrder && (
+        <AttachChallanToOrderModal order={attachOrder} companyId={selectedCompany?.id} onClose={() => setAttachOrder(null)} onAttached={onAttached} />
+      )}
+      {billOrder && selectedCompany && (
+        <InvoiceForm
+          companyId={selectedCompany.id}
+          company={selectedCompany}
+          prefillSalesOrderId={billOrder.id}
+          billsMode={true}
+          onClose={() => setBillOrder(null)}
+          onSaved={() => { setBillOrder(null); notify("Bill created.", "success"); reload(); }}
+        />
+      )}
       {viewOrder && (
         <SalesOrderDetailModal
           order={viewOrder}
           companyId={selectedCompany?.id}
           canDeliver={canMakeChallan && viewOrder.status === "Open" && viewOrder.fulfillmentStatus !== "Fully Delivered" && viewOrder.fulfillmentStatus !== "Over Delivered"}
+          canBill={canBill && (viewOrder.billableChallanCount || 0) > 0}
+          canAttach={canAttach && viewOrder.status !== "Cancelled"}
           onClose={() => setViewOrder(null)}
           onPrint={canPrint ? handlePrint : undefined}
           onEdit={canUpdate ? (o) => { setEditOrder(o); setShowForm(true); } : undefined}
           onDeliver={canMakeChallan ? (o) => setDeliverOrder(o) : undefined}
+          onGenerateBill={() => { setViewOrder(null); setBillOrder(viewOrder); }}
+          onAttach={() => { setViewOrder(null); setAttachOrder(viewOrder); }}
+          onViewChallans={() => { setViewOrder(null); viewChallans(viewOrder); }}
         />
       )}
     </div>
@@ -346,8 +390,10 @@ const st = {
   statusPill: { fontSize: "0.78rem", fontWeight: 700 },
   invPill: { fontSize: "0.7rem", fontWeight: 700, padding: "0.1rem 0.5rem", borderRadius: 20 },
   challanCount: { display: "inline-flex", alignItems: "center", gap: "0.2rem", fontSize: "0.75rem", color: colors.textSecondary },
+  challanCountBtn: { display: "inline-flex", alignItems: "center", gap: "0.2rem", fontSize: "0.75rem", color: colors.blue, background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 600, textDecoration: "underline", boxShadow: "none" },
   actions: { display: "flex", gap: "0.4rem", marginTop: "0.75rem", flexWrap: "wrap", alignItems: "center" },
   deliverBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.7rem", borderRadius: 8, border: "none", background: colors.teal, color: "#fff", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
+  billBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.7rem", borderRadius: 8, border: "none", background: colors.blue, color: "#fff", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
   actBtn: { display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.blue, cursor: "pointer" },
   statusSelect: { padding: "0.3rem 0.4rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.78rem", color: colors.textSecondary, background: "#fff", cursor: "pointer" },
   pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", padding: "1rem 0", marginTop: "0.5rem" },

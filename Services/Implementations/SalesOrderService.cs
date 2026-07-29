@@ -118,6 +118,7 @@ namespace MyApp.Api.Services.Implementations
                     Description = i.Description,
                     Quantity = i.Quantity,
                     Unit = i.Unit,
+                    UnitPrice = i.UnitPrice,
                     DeliveredQuantity = delivered,
                     RemainingQuantity = remaining,
                     LineStatus = LineStatusFor(i.Quantity, delivered)
@@ -154,6 +155,10 @@ namespace MyApp.Api.Services.Implementations
                 Items = items
             };
         }
+
+        // Treat a null/zero/negative price as "not priced" (null) so a stray 0
+        // never counts as a real unit price when pre-filling a bill.
+        private static decimal? NormalizePrice(decimal? p) => (p.HasValue && p.Value > 0) ? p : null;
 
         private static string LineStatusFor(decimal ordered, decimal delivered)
         {
@@ -283,7 +288,8 @@ namespace MyApp.Api.Services.Implementations
                         ItemTypeId = i.ItemTypeId,
                         Description = i.Description.Trim(),
                         Quantity = i.Quantity,
-                        Unit = i.Unit
+                        Unit = i.Unit,
+                        UnitPrice = NormalizePrice(i.UnitPrice)
                     }).ToList()
                 };
                 company.CurrentSalesOrderNumber = next;
@@ -394,6 +400,7 @@ namespace MyApp.Api.Services.Implementations
                     existing.Description = itemDto.Description.Trim();
                     existing.Quantity = itemDto.Quantity;
                     existing.Unit = itemDto.Unit;
+                    existing.UnitPrice = NormalizePrice(itemDto.UnitPrice);
                 }
                 else
                 {
@@ -403,7 +410,8 @@ namespace MyApp.Api.Services.Implementations
                         ItemTypeId = itemDto.ItemTypeId,
                         Description = itemDto.Description.Trim(),
                         Quantity = itemDto.Quantity,
-                        Unit = itemDto.Unit
+                        Unit = itemDto.Unit,
+                        UnitPrice = NormalizePrice(itemDto.UnitPrice)
                     });
                 }
             }
@@ -633,6 +641,17 @@ namespace MyApp.Api.Services.Implementations
                     Unit = item.Unit,
                 };
 
+                // Price precedence: the order line's OWN price (when the operator
+                // entered one) wins over any derived price, then the source quote,
+                // then the item's last billed rate, else 0 (operator types it).
+                if (item.UnitPrice.HasValue && item.UnitPrice.Value > 0)
+                {
+                    line.UnitPrice = item.UnitPrice.Value;
+                    line.PriceSource = "SalesOrder";
+                    lines.Add(line);
+                    continue;
+                }
+
                 var match = (item.ItemTypeId.HasValue
                         ? quoteItems.FirstOrDefault(qi => qi.ItemTypeId == item.ItemTypeId && qi.UnitPrice > 0)
                         : null)
@@ -722,6 +741,7 @@ namespace MyApp.Api.Services.Implementations
                 .AsNoTracking()
                 .Where(dc => dc.SalesOrderId == orderId)
                 .Include(dc => dc.Items)
+                .Include(dc => dc.Invoice)
                 .OrderBy(dc => dc.DeliveryDate)
                 .ThenBy(dc => dc.ChallanNumber)
                 .ToListAsync();
@@ -741,6 +761,7 @@ namespace MyApp.Api.Services.Implementations
                     Site = dc.Site,
                     IsImported = dc.IsImported,
                     InvoiceId = dc.InvoiceId,
+                    InvoiceNumber = dc.Invoice?.InvoiceNumber,
                     ItemCount = lines.Count,
                     TotalQuantity = lines.Sum(i => i.Quantity),
                     Lines = lines.Select(i => new SalesOrderChallanLineDto
@@ -751,6 +772,208 @@ namespace MyApp.Api.Services.Implementations
                     }).ToList()
                 };
             }).ToList();
+        }
+
+        // ── Attach an existing (unlinked) challan to this order ──────────────
+
+        public async Task<List<AttachableChallanDto>> GetAttachableChallansAsync(int orderId)
+        {
+            var order = await _repository.GetByIdAsync(orderId);
+            if (order == null) return new();
+
+            // Candidates: unlinked, unbilled, non-cancelled, non-demo challans
+            // for THIS order's client (and company) that carry NO PO of their
+            // own. The attach flow exists for deliveries raised BEFORE the PO
+            // arrived — a challan that already has a PO belongs to that PO, so
+            // it's excluded (a Pending+PO challan bills on its own PO).
+            var challans = await _context.DeliveryChallans
+                .AsNoTracking()
+                .Include(dc => dc.Items).ThenInclude(i => i.ItemType)
+                .Where(dc => dc.CompanyId == order.CompanyId
+                          && dc.ClientId == order.ClientId
+                          && dc.SalesOrderId == null
+                          && dc.InvoiceId == null
+                          && dc.Status != "Cancelled"
+                          && !dc.IsDemo
+                          && string.IsNullOrEmpty(dc.PoNumber))
+                .OrderBy(dc => dc.DeliveryDate)
+                .ThenBy(dc => dc.ChallanNumber)
+                .ToListAsync();
+
+            return challans.Select(dc => new AttachableChallanDto
+            {
+                Id = dc.Id,
+                ChallanNumber = dc.ChallanNumber,
+                DeliveryDate = dc.DeliveryDate,
+                Status = dc.Status,
+                PoNumber = dc.PoNumber,
+                Site = dc.Site,
+                IsImported = dc.IsImported,
+                Lines = dc.Items.Select(i => new AttachableChallanLineDto
+                {
+                    DeliveryItemId = i.Id,
+                    ItemTypeId = i.ItemTypeId,
+                    ItemTypeName = i.ItemType?.Name ?? "",
+                    Description = i.Description,
+                    Quantity = i.Quantity,
+                    Unit = i.Unit
+                }).ToList()
+            }).ToList();
+        }
+
+        public async Task<SalesOrderDto?> AttachChallanAsync(int orderId, AttachChallanRequestDto dto)
+        {
+            var order = await _repository.GetByIdAsync(orderId);
+            if (order == null) return null;
+            if (order.Status == "Cancelled")
+                throw new InvalidOperationException("Cannot attach a challan to a cancelled order.");
+
+            var challan = await _context.DeliveryChallans
+                .Include(dc => dc.Items)
+                .FirstOrDefaultAsync(dc => dc.Id == dto.ChallanId);
+            if (challan == null) throw new KeyNotFoundException("Challan not found.");
+
+            // Guards — a challan can only join an order of the SAME company AND
+            // the SAME client, and only when it's free to link and unbilled.
+            if (challan.CompanyId != order.CompanyId)
+                throw new InvalidOperationException("That challan belongs to a different company.");
+            if (challan.ClientId != order.ClientId)
+                throw new InvalidOperationException("That challan is for a different customer than this order.");
+            if (challan.SalesOrderId != null)
+                throw new InvalidOperationException("That challan is already linked to a sales order.");
+            if (challan.InvoiceId != null)
+                throw new InvalidOperationException("That challan has already been billed and can't be re-linked.");
+            if (challan.Status == "Cancelled")
+                throw new InvalidOperationException("A cancelled challan can't be attached.");
+
+            // Validate the line mapping: every mapped delivery item must be on
+            // this challan, and every target ordered line must be on this order.
+            var soItemIds = order.Items.Select(i => i.Id).ToHashSet();
+            var challanItemIds = challan.Items.Select(i => i.Id).ToHashSet();
+            var mappingByItem = new Dictionary<int, int?>();
+            foreach (var m in dto.LineMappings ?? new List<AttachLineMappingDto>())
+            {
+                if (!challanItemIds.Contains(m.DeliveryItemId))
+                    throw new InvalidOperationException("A line mapping refers to an item that isn't on this challan.");
+                if (m.SalesOrderItemId.HasValue && !soItemIds.Contains(m.SalesOrderItemId.Value))
+                    throw new InvalidOperationException("A line mapping refers to a line that isn't on this order.");
+                mappingByItem[m.DeliveryItemId] = m.SalesOrderItemId;
+            }
+
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // Targeted field updates only — do NOT route through the challan
+                // edit / stock-reflow path. The challan's stock OUT was already
+                // recorded at its creation; linking changes only FKs, PO, status.
+                //
+                // Resolve each challan line to an order line so the order reflects
+                // everything delivered, with no duplicates:
+                //   • explicit mapping        → link to that ordered line (roll-up).
+                //   • unmapped, matches an
+                //     existing line (item type,
+                //     else exact description)  → link to it (no duplicate).
+                //   • unmapped, new item       → ADD it as a NEW order line
+                //     (ordered qty = delivered qty), so it shows on the order.
+                var preExisting = order.Items.Where(i => i.Id > 0).ToList();
+                SalesOrderItem? FindExisting(DeliveryItem dl)
+                {
+                    if (dl.ItemTypeId.HasValue)
+                    {
+                        var byType = preExisting.FirstOrDefault(i => i.ItemTypeId == dl.ItemTypeId);
+                        if (byType != null) return byType;
+                    }
+                    var d = (dl.Description ?? "").Trim().ToLower();
+                    return preExisting.FirstOrDefault(i => (i.Description ?? "").Trim().ToLower() == d);
+                }
+
+                var newLineByKey = new Dictionary<string, SalesOrderItem>();
+                var targetByDeliveryItem = new Dictionary<int, SalesOrderItem>();
+                foreach (var item in challan.Items)
+                {
+                    if (mappingByItem.TryGetValue(item.Id, out var soItemId) && soItemId.HasValue)
+                    {
+                        targetByDeliveryItem[item.Id] = order.Items.First(i => i.Id == soItemId.Value);
+                        continue;
+                    }
+                    var existing = FindExisting(item);
+                    if (existing != null)
+                    {
+                        targetByDeliveryItem[item.Id] = existing;
+                        continue;
+                    }
+                    var key = (item.ItemTypeId?.ToString() ?? "") + "|" + (item.Description ?? "").Trim().ToLowerInvariant();
+                    if (!newLineByKey.TryGetValue(key, out var nl))
+                    {
+                        nl = new SalesOrderItem
+                        {
+                            SalesOrderId = order.Id,
+                            ItemTypeId = item.ItemTypeId,
+                            Description = (item.Description ?? "").Trim(),
+                            Quantity = 0m,
+                            Unit = item.Unit
+                        };
+                        newLineByKey[key] = nl;
+                        order.Items.Add(nl);
+                        _context.SalesOrderItems.Add(nl);
+                    }
+                    nl.Quantity += item.Quantity; // ordered = total delivered for the new item
+                    targetByDeliveryItem[item.Id] = nl;
+                }
+
+                // Persist the new order lines first so they receive ids, then link
+                // each challan line to its resolved order line.
+                if (newLineByKey.Count > 0)
+                    await _context.SaveChangesAsync();
+                foreach (var item in challan.Items)
+                    item.SalesOrderItemId = targetByDeliveryItem[item.Id].Id;
+
+                challan.SalesOrderId = order.Id;
+
+                // Copy the order's PO onto the challan (the order is authoritative
+                // for the chain). When the order has a PO, a "No PO" challan
+                // becomes billable → flip to "Pending" (mirrors
+                // PropagatePoToChallansAsync). When the order has NO PO yet, leave
+                // the challan's PO/status untouched — PropagatePoToChallansAsync
+                // applies it when the order's PO is later set.
+                var po = string.IsNullOrWhiteSpace(order.CustomerPoNumber) ? "" : order.CustomerPoNumber.Trim();
+                if (!string.IsNullOrEmpty(po))
+                {
+                    challan.PoNumber = po;
+                    challan.PoDate = order.CustomerPoDate;
+                    if (challan.Status == "No PO") challan.Status = "Pending";
+                }
+
+                await _context.SaveChangesAsync();
+
+                // Auto-close the order once every line is fully delivered
+                // (mirrors CreateChallanFromOrderAsync). Never re-opens.
+                if (order.Status == "Open")
+                {
+                    var soItemIdList = order.Items.Select(i => i.Id).ToList();
+                    var deliveredNow = await _context.DeliveryItems
+                        .Where(di => di.SalesOrderItemId != null
+                                  && soItemIdList.Contains(di.SalesOrderItemId.Value)
+                                  && di.DeliveryChallan.Status != "Cancelled")
+                        .GroupBy(di => di.SalesOrderItemId!.Value)
+                        .Select(g => new { g.Key, Qty = g.Sum(x => x.Quantity) })
+                        .ToDictionaryAsync(x => x.Key, x => x.Qty);
+                    if (order.Items.All(i => deliveredNow.GetValueOrDefault(i.Id, 0m) >= i.Quantity))
+                    {
+                        order.Status = "Closed";
+                        await _context.SaveChangesAsync();
+                    }
+                }
+
+                await tx.CommitAsync();
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+
+            return await MapOneAsync(await _repository.GetByIdAsync(orderId));
         }
 
         // ── Print ────────────────────────────────────────────────────────────

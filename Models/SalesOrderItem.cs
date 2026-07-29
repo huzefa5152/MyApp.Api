@@ -25,6 +25,14 @@ namespace MyApp.Api.Models
         public decimal Quantity { get; set; }
         public string Unit { get; set; } = "";
 
+        /// <summary>
+        /// OPTIONAL unit price. A Sales Order stays quantity-first — price is not
+        /// required — but when the operator knows it up front they can record it
+        /// here so it pre-fills the bill (bill still requires a price on any line
+        /// left blank). Null = not priced. decimal(18,2), same as InvoiceItem.
+        /// </summary>
+        public decimal? UnitPrice { get; set; }
+
         // Navigation
         public SalesOrder SalesOrder { get; set; } = null!;
         public ItemType? ItemType { get; set; }

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn, MdContentCopy } from "react-icons/md";
+import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn, MdContentCopy, MdLink, MdAssignment } from "react-icons/md";
 import ChallanModal from "./ChallanModal";
 import AttachmentBadge from "./AttachmentBadge";
 import { cardStyles, cardHover } from "../theme";
@@ -58,7 +58,7 @@ function WarningTooltip({ warnings }) {
   );
 }
 
-export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", attachCounts = {}, onAttach }) {
+export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, onLinkOrder, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", attachCounts = {}, onAttach }) {
   const { has } = usePermissions();
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
@@ -105,6 +105,9 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
           const canDuplicate = permDuplicate
             && !isDuplicate
             && (c.status === "Pending" || c.status === "Imported");
+          // Link to a Sales Order — only unlinked, unbilled, non-cancelled
+          // challans (e.g. a No-PO delivery raised before the PO arrived).
+          const canLink = onLinkOrder && !c.salesOrderId && !c.invoiceId && c.status !== "Cancelled";
           return (
             <div
               key={c.id}
@@ -168,6 +171,12 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                     <MdReceipt style={{ color: colors.textSecondary, flexShrink: 0 }} />
                     <strong>PO:</strong> {c.poNumber || "\u2014"}
                   </p>
+                  {c.salesOrderNumber && (
+                    <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem", color: colors.blue, fontWeight: 600 }}>
+                      <MdAssignment size={14} style={{ flexShrink: 0 }} />
+                      <strong>SO #{c.salesOrderNumber}</strong>
+                    </p>
+                  )}
                   {/* Indent No + Site \u2014 surfaced on the card so the
                       operator can scan a list and see "is this the
                       Soorty PO for Unit-2?" without having to open the
@@ -269,6 +278,15 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       <MdRequestQuote size={14} /> Generate Bill
                     </button>
                   )}
+                  {canLink && (
+                    <button
+                      style={{ ...styles.actionBtn, ...styles.linkBtn }}
+                      onClick={() => onLinkOrder?.(c)}
+                      title="Link this challan to a Sales Order"
+                    >
+                      <MdLink size={14} /> Link to Order
+                    </button>
+                  )}
                   {permUpdate && canCancel && (
                     <button
                       style={{ ...styles.actionBtn, ...styles.cancelBtn }}
@@ -363,6 +381,7 @@ const styles = {
   cancelBtn: { backgroundColor: "#fce4ec", color: "#c62828" },
   deleteBtn: { backgroundColor: "#ffebee", color: "#b71c1c" },
   generateBillBtn: { backgroundColor: "#e0f2f1", color: "#00695c" },
+  linkBtn: { backgroundColor: "#e3f2fd", color: "#0d47a1" },
   // Purple matches the "Duplicate of #N" subtitle and the DUPLICATE pill
   // so all three signals form one visual cue across the card.
   duplicateBtn: { backgroundColor: "#ede7f6", color: "#4527a0" },

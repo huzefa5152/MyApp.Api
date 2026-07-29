@@ -32,10 +32,15 @@ export default function SearchableSelect({
   disabled = false,
   loading = false,
   allowClear = true,
+  // Optional: when provided, each option gets an expand/collapse chevron and
+  // renderExpand(item) is shown beneath the row when expanded (e.g. a challan's
+  // line items). Toggling expand does NOT select the row.
+  renderExpand,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightIdx, setHighlightIdx] = useState(-1);
+  const [expandedKey, setExpandedKey] = useState(null);
   const [triggerRect, setTriggerRect] = useState(null);
   const triggerRef = useRef(null);
   const searchRef = useRef(null);
@@ -135,16 +140,36 @@ export default function SearchableSelect({
             {filtered.length === 0 && (
               <div style={styles.empty}>{(items || []).length === 0 ? "No options." : `No match for "${query}".`}</div>
             )}
-            {filtered.map((it, idx) => (
-              <div
-                key={it[valueKey]}
-                onMouseDown={() => pick(it)}
-                onMouseEnter={() => setHighlightIdx(idx)}
-                style={{ ...styles.row, backgroundColor: idx === highlightIdx ? "#e3f2fd" : "transparent" }}
-              >
-                {it[labelKey]}
-              </div>
-            ))}
+            {filtered.map((it, idx) => {
+              const k = it[valueKey];
+              const isExpanded = renderExpand && String(expandedKey) === String(k);
+              return (
+                <div key={k} style={styles.rowWrap}>
+                  <div
+                    onMouseDown={(e) => { e.preventDefault(); pick(it); }}
+                    onMouseEnter={() => setHighlightIdx(idx)}
+                    style={{ ...styles.row, ...(renderExpand ? styles.rowFlex : {}), backgroundColor: idx === highlightIdx ? "#e3f2fd" : "transparent" }}
+                  >
+                    {renderExpand && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setExpandedKey(isExpanded ? null : k); }}
+                        style={styles.expandBtn}
+                        title={isExpanded ? "Hide items" : "Show items"}
+                      >
+                        {isExpanded ? "▾" : "▸"}
+                      </button>
+                    )}
+                    <span style={{ flex: 1, minWidth: 0 }}>{it[labelKey]}</span>
+                  </div>
+                  {isExpanded && (
+                    <div style={styles.expandBody} onMouseDown={(e) => e.stopPropagation()}>
+                      {renderExpand(it)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>,
         document.body
@@ -183,6 +208,10 @@ const styles = {
   searchIcon: { position: "absolute", left: 12, color: "#94a3b8" },
   searchInput: { width: "100%", padding: "0.35rem 0.35rem 0.35rem 1.85rem", border: "1px solid #e8edf3", borderRadius: 6, fontSize: "0.85rem", outline: "none", backgroundColor: "#f8f9fb" },
   list: { overflowY: "auto", flex: 1 },
-  row: { padding: "0.5rem 0.7rem", cursor: "pointer", borderBottom: "1px solid #f0f4f8", fontSize: "0.88rem", color: "#1a2332", lineHeight: 1.35, whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" },
+  rowWrap: { borderBottom: "1px solid #f0f4f8" },
+  row: { padding: "0.5rem 0.7rem", cursor: "pointer", fontSize: "0.88rem", color: "#1a2332", lineHeight: 1.35, whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" },
+  rowFlex: { display: "flex", alignItems: "flex-start", gap: 8 },
+  expandBtn: { border: "none", background: "none", cursor: "pointer", color: "#5f6d7e", fontSize: "0.9rem", lineHeight: 1.35, padding: "0 2px", flexShrink: 0, boxShadow: "none" },
+  expandBody: { padding: "0 0.7rem 0.55rem 1.9rem", background: "#f8f9fb" },
   empty: { padding: "0.8rem", color: "#5f6d7e", fontSize: "0.85rem" },
 };

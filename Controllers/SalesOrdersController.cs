@@ -212,6 +212,47 @@ namespace MyApp.Api.Controllers
             return Ok(dto);
         }
 
+        /// <summary>
+        /// Challans that can be attached to this order — unlinked, unbilled,
+        /// non-cancelled deliveries for the order's client (e.g. No-PO challans
+        /// raised before the PO arrived).
+        /// </summary>
+        [HttpGet("{id}/attachable-challans")]
+        [HasPermission("salesorders.list.view")]
+        public async Task<ActionResult<List<AttachableChallanDto>>> GetAttachableChallans(int id)
+        {
+            var order = await _service.GetByIdAsync(id);
+            if (order == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, order.CompanyId);
+            return Ok(await _service.GetAttachableChallansAsync(id));
+        }
+
+        /// <summary>
+        /// Attach an existing challan to this order (map its lines onto the
+        /// ordered lines, adopt the order's PO). Gated by the challan-update
+        /// permission since it mutates the challan's linkage / PO / status.
+        /// </summary>
+        [HttpPost("{id}/attach-challan")]
+        [HasPermission("challans.manage.update")]
+        public async Task<ActionResult<SalesOrderDto>> AttachChallan(int id, [FromBody] AttachChallanRequestDto dto)
+        {
+            var order = await _service.GetByIdAsync(id);
+            if (order == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, order.CompanyId);
+            try
+            {
+                var updated = await _service.AttachChallanAsync(id, dto);
+                return updated == null ? NotFound() : Ok(updated);
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (KeyNotFoundException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Attach challan {ChallanId} to sales order {OrderId} failed", dto?.ChallanId, id);
+                return StatusCode(500, new { error = "Could not attach the challan to this order. Please try again." });
+            }
+        }
+
         [HttpGet("{id}/print")]
         [HasPermission("salesorders.print.view")]
         public async Task<ActionResult<PrintOrderDto>> GetPrintData(int id)

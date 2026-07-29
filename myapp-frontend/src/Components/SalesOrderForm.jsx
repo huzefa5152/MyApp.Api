@@ -15,7 +15,7 @@ const colors = {
   inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1", teal: "#00897b",
 };
 
-const blankItem = () => ({ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" });
+const blankItem = () => ({ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "", unitPrice: "" });
 
 // Create + edit a Sales Order (quantity-only). Pass `order` to edit.
 export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
@@ -31,7 +31,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   const [notes, setNotes] = useState(order?.notes || "");
   const [items, setItems] = useState(
     order?.items?.length
-      ? order.items.map((i) => ({ id: i.id, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit, delivered: i.deliveredQuantity }))
+      ? order.items.map((i) => ({ id: i.id, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice ?? "", delivered: i.deliveredQuantity }))
       : [blankItem()]
   );
   const [units, setUnits] = useState([]);
@@ -88,7 +88,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
     if (!q) return;
     if (q.clientId && (!client || client.id !== q.clientId)) setClient({ id: q.clientId, label: q.clientName });
     if (q.items?.length) {
-      setItems(q.items.map((i) => ({ id: 0, itemTypeId: i.itemTypeId || null, description: i.description, quantity: i.quantity, unit: i.unit })));
+      setItems(q.items.map((i) => ({ id: 0, itemTypeId: i.itemTypeId || null, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice ?? "" })));
       setQuoteLoadedMsg(`Loaded ${q.items.length} item${q.items.length !== 1 ? "s" : ""} from Quote #${q.quoteNumber} — edit as needed.`);
     }
   };
@@ -118,6 +118,8 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
           description: i.description.trim(),
           quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
           unit: i.unit,
+          // Optional — send null when left blank so the order stays price-free.
+          unitPrice: (i.unitPrice === "" || i.unitPrice == null) ? null : parseFloat(i.unitPrice),
         })),
       });
       // Upload any files staged before the record had an id (no-op on edit /
@@ -213,7 +215,8 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
               itemTypes={nonHsItemTypes}
               canCreateItemType={canCreateItemType}
               onAddItemType={() => setShowAddItemType(true)}
-              itemsLabel="Items (quantity ordered)"
+              showUnitPrice
+              itemsLabel="Items (unit price optional — pre-fills the bill)"
               isRowLocked={(it) => isEdit && it.id > 0 && it.delivered > 0}
               rowLockHint={(it) => (isEdit && it.id > 0 && it.delivered > 0) ? `${it.delivered} already delivered — qty can't go below that` : null}
             />

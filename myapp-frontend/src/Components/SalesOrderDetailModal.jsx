@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  MdClose, MdPrint, MdLocalShipping, MdEdit, MdInventory2, MdReceiptLong,
+  MdClose, MdPrint, MdLocalShipping, MdEdit, MdInventory2, MdReceiptLong, MdLink,
 } from "react-icons/md";
 import { getSalesOrderChallans } from "../api/salesOrderApi";
 import AttachmentManager from "./AttachmentManager";
@@ -23,7 +23,7 @@ const LINE_COLORS = { Pending: "#5f6d7e", Partial: "#f57c00", Complete: "#28a745
  * raised against the order (with the lines it delivered). Optional action
  * callbacks (print / edit / deliver) let the parent launch those flows.
  */
-export default function SalesOrderDetailModal({ order, companyId, onClose, onPrint, onEdit, onDeliver, canDeliver }) {
+export default function SalesOrderDetailModal({ order, companyId, onClose, onPrint, onEdit, onDeliver, canDeliver, canBill, canAttach, onGenerateBill, onAttach, onViewChallans }) {
   const [challans, setChallans] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -45,6 +45,9 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
   const totalDelivered = items.reduce((s, i) => s + (Number(i.deliveredQuantity) || 0), 0);
   const totalRemaining = items.reduce((s, i) => s + (Number(i.remainingQuantity) || 0), 0);
   const activeChallans = challans.filter((c) => c.status !== "Cancelled");
+  const billedChallans = activeChallans.filter((c) => c.invoiceId);
+  const billableChallans = activeChallans.filter((c) => !c.invoiceId && (c.status === "Pending" || c.status === "Imported"));
+  const distinctBills = new Set(billedChallans.map((c) => c.invoiceId)).size;
 
   return (
     <div style={st.backdrop} onClick={onClose}>
@@ -97,6 +100,9 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
                     <td style={st.td}>
                       <div style={st.itemDesc}>{i.description}</div>
                       {i.itemTypeName && <div style={st.itemType}>{i.itemTypeName}</div>}
+                      {i.unitPrice != null && Number(i.unitPrice) > 0 && (
+                        <div style={st.itemType}>@ Rs {Number(i.unitPrice).toLocaleString()}</div>
+                      )}
                     </td>
                     <td style={{ ...st.td, ...st.num }}>{fmtQty(i.quantity)} {i.unit}</td>
                     <td style={{ ...st.td, ...st.num, fontWeight: 700, color: colors.teal }}>{fmtQty(i.deliveredQuantity)}</td>
@@ -123,6 +129,14 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
           <div style={st.sectionTitle}>
             <MdLocalShipping size={16} color={colors.blue} /> Delivery Challans ({activeChallans.length})
           </div>
+          {activeChallans.length > 0 && (
+            <div style={st.billSummary}>
+              <span><strong>{billedChallans.length}</strong>/{activeChallans.length} billed{distinctBills > 0 ? ` · ${distinctBills} bill${distinctBills !== 1 ? "s" : ""}` : ""}</span>
+              <span style={{ color: billableChallans.length ? colors.teal : colors.textSecondary }}>
+                {billableChallans.length} billable now
+              </span>
+            </div>
+          )}
           {loading ? (
             <div style={st.dim}>Loading challans…</div>
           ) : challans.length === 0 ? (
@@ -140,7 +154,7 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
                         {c.status}{c.isImported ? " · Imported" : ""}
                       </span>
                       {c.invoiceId
-                        ? <span style={st.billedPill}>Billed</span>
+                        ? <span style={st.billedPill}>Billed{c.invoiceNumber ? ` · #${c.invoiceNumber}` : ""}</span>
                         : (!cancelled && <span style={st.unbilledPill}>Unbilled</span>)}
                       <span style={st.challanQty}>{fmtQty(c.totalQuantity)} delivered</span>
                     </div>
@@ -170,8 +184,11 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
           <button style={st.btnGhost} onClick={onClose}>Close</button>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
             {onEdit && order.isEditable && <button style={st.btnGhost} onClick={() => { onClose(); onEdit(order); }}><MdEdit size={15} /> Edit</button>}
+            {onViewChallans && activeChallans.length > 0 && <button style={st.btnGhost} onClick={() => onViewChallans(order)}><MdLocalShipping size={15} /> View Challans</button>}
+            {onAttach && canAttach && <button style={st.btnGhost} onClick={() => onAttach(order)}><MdLink size={15} /> Attach Challan</button>}
             {onPrint && <button style={st.btnGhost} onClick={() => onPrint(order)}><MdPrint size={15} /> Print</button>}
             {onDeliver && canDeliver && <button style={st.btnTeal} onClick={() => { onClose(); onDeliver(order); }}><MdLocalShipping size={15} /> Create Challan</button>}
+            {onGenerateBill && canBill && <button style={st.btnBlue} onClick={() => onGenerateBill(order)}><MdReceiptLong size={15} /> Generate Bill</button>}
           </div>
         </div>
       </div>
@@ -230,4 +247,6 @@ const st = {
   footer: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", padding: "0.85rem 1.25rem", borderTop: `1px solid ${colors.cardBorder}`, flexWrap: "wrap" },
   btnGhost: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", borderRadius: 9, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" },
   btnTeal: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", borderRadius: 9, border: "none", background: colors.teal, color: "#fff", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" },
+  btnBlue: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", borderRadius: 9, border: "none", background: colors.blue, color: "#fff", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" },
+  billSummary: { display: "flex", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap", fontSize: "0.8rem", color: colors.textSecondary, background: colors.bg, border: `1px solid ${colors.cardBorder}`, borderRadius: 8, padding: "0.5rem 0.75rem", marginBottom: "0.6rem" },
 };
