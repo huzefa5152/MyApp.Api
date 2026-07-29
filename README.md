@@ -298,6 +298,10 @@ Publish output optimized from 79 MB to 37 MB via:
 - Challans page: **"Link to Order"** now shows only on **No-PO** challans (a
   Pending challan already carries its own PO), and the **Sales Order** filter's
   dropdown respects the client filter (a selected client narrows the SO list).
+- **Create/Edit Sales Order modal widened** (`lg`→`xl`, matching the Quote/Challan
+  forms) so the item-line **Description** column isn't cramped after adding the
+  Unit Price/Amount columns; the Description column also has a min-width floor.
+  Still collapses to stacked cards on mobile.
 
 ### 2026-07-29 — Sales Order ↔ Challan ↔ Bill linkage
 

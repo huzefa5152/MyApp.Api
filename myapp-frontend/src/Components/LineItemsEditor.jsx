@@ -387,8 +387,8 @@ export default function LineItemsEditor({
             <thead>
               <tr>
                 <th style={{ ...s.th, width: 28, textAlign: "center" }}>#</th>
-                {showItemType && <th style={{ ...s.th, width: 190 }}>Item Type</th>}
-                <th style={s.th}>Description</th>
+                {showItemType && <th style={{ ...s.th, width: 180 }}>Item Type</th>}
+                <th style={{ ...s.th, minWidth: 260 }}>Description</th>
                 <th style={{ ...s.th, width: 92, textAlign: "right" }}>Qty</th>
                 <th style={{ ...s.th, width: 120 }}>Unit</th>
                 {showUnitPrice && <th style={{ ...s.th, width: 120, textAlign: "right" }}>Unit Price</th>}
