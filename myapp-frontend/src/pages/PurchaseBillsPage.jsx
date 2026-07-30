@@ -348,7 +348,7 @@ export default function PurchaseBillsPage() {
           billId={editingId}
           readOnly={viewOnly}
           prefillFromInvoiceId={prefillFromInvoiceId}
-          onClose={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); setViewOnly(false); }}
+          onClose={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); setViewOnly(false); refreshAttachCounts(); }}
           onSaved={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); setViewOnly(false); fetchBills(page); }}
         />
       )}

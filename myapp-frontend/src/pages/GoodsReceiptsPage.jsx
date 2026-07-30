@@ -254,8 +254,8 @@ export default function GoodsReceiptsPage() {
         <GoodsReceiptForm
           companyId={selectedCompany.id}
           receiptId={editingId}
-          onClose={() => { setShowForm(false); setEditingId(null); }}
-          onSaved={() => { setShowForm(false); setEditingId(null); fetchReceipts(page); }}
+          onClose={() => { setShowForm(false); setEditingId(null); refreshAttachCounts(); }}
+          onSaved={() => { setShowForm(false); setEditingId(null); fetchReceipts(page); refreshAttachCounts(); }}
         />
       )}
 

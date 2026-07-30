@@ -281,6 +281,18 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-07-30 — Attachment badge refreshes without a full page reload
+
+- **List badges now update the moment a document form closes.** Uploading a file
+  inside a create/edit form (or removing one) attaches it via the shared
+  `AttachmentManager`, but the list's paperclip-count hook only re-fetched when
+  the set of visible ids changed — so editing an existing record and adding a
+  file left the badge stale until a full page refresh. Every listing that shows
+  the badge (Sales Quote, Sales Order, Delivery Challan, Invoice/Bill, Purchase
+  Bill, Goods Receipt, Payment/Receipt) now calls `refreshAttachCounts()` on the
+  form's post-save/close path (the same hook the quick-attach modal already
+  used), covering both the card and table views. No backend change.
+
 ### 2026-07-29 — Form UX: scroll-to-error + delivered-qty guard
 
 - **Auto-scroll to the error on submit.** Create/edit forms live in a scrollable

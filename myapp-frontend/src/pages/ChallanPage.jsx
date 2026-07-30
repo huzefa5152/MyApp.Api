@@ -300,6 +300,7 @@ export default function ChallanPage() {
   const handleEditSaved = () => {
     setEditChallan(null);
     fetchChallans(selectedCompany.id, page);
+    refreshAttachCounts();
   };
 
   // Click handler: open the count-input dialog. Defensive bail if a
@@ -588,7 +589,7 @@ export default function ChallanPage() {
       {showModal && selectedCompany && (
         <ChallanForm
           companyId={selectedCompany.id}
-          onClose={() => setShowModal(false)}
+          onClose={() => { setShowModal(false); refreshAttachCounts(); }}
           onSaved={handleSaveChallan}
         />
       )}
@@ -604,7 +605,7 @@ export default function ChallanPage() {
       {editChallan && (
         <ChallanEditForm
           challan={editChallan}
-          onClose={() => setEditChallan(null)}
+          onClose={() => { setEditChallan(null); refreshAttachCounts(); }}
           onSaved={handleEditSaved}
         />
       )}

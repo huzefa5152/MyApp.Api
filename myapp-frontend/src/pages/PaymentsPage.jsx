@@ -250,7 +250,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
       )}
 
       {showForm && companyId && (
-        <PaymentForm mode={mode} companyId={companyId} onClose={() => setShowForm(false)} onSaved={onSaved} />
+        <PaymentForm mode={mode} companyId={companyId} onClose={() => { setShowForm(false); refreshAttachCounts(); }} onSaved={onSaved} />
       )}
 
       {editing && companyId && (
@@ -258,8 +258,8 @@ export default function PaymentsPage({ mode = "receipts" }) {
           mode={mode}
           companyId={companyId}
           editPayment={editing}
-          onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); fetchRows(page); notify(`${isReceipt ? "Receipt" : "Payment"} updated.`, "success"); }}
+          onClose={() => { setEditing(null); refreshAttachCounts(); }}
+          onSaved={() => { setEditing(null); fetchRows(page); notify(`${isReceipt ? "Receipt" : "Payment"} updated.`, "success"); refreshAttachCounts(); }}
         />
       )}
 

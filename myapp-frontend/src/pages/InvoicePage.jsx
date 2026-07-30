@@ -332,6 +332,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     setShowForm(false);
     setPage(1);
     fetchInvoices(selectedCompany.id, 1);
+    refreshAttachCounts();
   };
 
   // Print only once every image in the popup has finished loading. Without
@@ -1365,11 +1366,12 @@ export default function InvoicePage({ mode = "invoices" }) {
           // and reflect whatever was last saved on the Bills tab. Set on
           // the Invoice card's Edit button only.
           forceItemTypeAndQty={!isBillsMode}
-          onClose={() => setEditingId(null)}
+          onClose={() => { setEditingId(null); refreshAttachCounts(); }}
           onSaved={() => {
             setEditingId(null);
             notify("Bill updated.", "success");
             fetchInvoices(selectedCompany.id, page);
+            refreshAttachCounts();
             // clear any stale validation state for this bill
             setFbrValidated((prev) => {
               const next = new Set(prev);

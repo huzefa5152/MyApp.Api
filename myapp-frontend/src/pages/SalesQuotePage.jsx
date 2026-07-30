@@ -263,7 +263,7 @@ export default function SalesQuotePage() {
       )}
 
       {showForm && selectedCompany && (
-        <SalesQuoteForm companyId={selectedCompany.id} quote={editQuote} onClose={() => { setShowForm(false); setEditQuote(null); }} onSaved={handleSave} />
+        <SalesQuoteForm companyId={selectedCompany.id} quote={editQuote} onClose={() => { setShowForm(false); setEditQuote(null); refreshAttachCounts(); }} onSaved={handleSave} />
       )}
 
       {showImport && selectedCompany && (

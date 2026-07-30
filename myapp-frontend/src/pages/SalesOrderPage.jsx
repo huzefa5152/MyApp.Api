@@ -313,7 +313,7 @@ export default function SalesOrderPage() {
       )}
 
       {showForm && selectedCompany && (
-        <SalesOrderForm companyId={selectedCompany.id} order={editOrder} onClose={() => { setShowForm(false); setEditOrder(null); }} onSaved={handleSave} />
+        <SalesOrderForm companyId={selectedCompany.id} order={editOrder} onClose={() => { setShowForm(false); setEditOrder(null); refreshAttachCounts(); }} onSaved={handleSave} />
       )}
       {showImport && selectedCompany && (
         <POImportForm
