@@ -1232,6 +1232,15 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Attachment>().HasIndex(a => new { a.CompanyId, a.FolderId });
             modelBuilder.Entity<Attachment>().HasIndex(a => new { a.EntityType, a.EntityId });
 
+            // Audit H-4 (2026-08-02): date-range composite indexes. The
+            // dashboard, reports and period-scoped document lists all filter by
+            // CompanyId + a document-date range; without these the date filter
+            // scans. Non-unique and purely additive (no behaviour change).
+            modelBuilder.Entity<Invoice>().HasIndex(i => new { i.CompanyId, i.Date });
+            modelBuilder.Entity<DeliveryChallan>().HasIndex(dc => new { dc.CompanyId, dc.DeliveryDate });
+            modelBuilder.Entity<PurchaseBill>().HasIndex(pb => new { pb.CompanyId, pb.Date });
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>().HasIndex(p => new { p.CompanyId, p.Date });
+
             // 2026-07-24: SQL Server 2025 (DB compatibility level 170) breaks
             // EF Core 9's OUTPUT-clause identity read-back — an INSERT's
             // `OUTPUT INSERTED.Id` returns 0 rows there, so a store-generated
