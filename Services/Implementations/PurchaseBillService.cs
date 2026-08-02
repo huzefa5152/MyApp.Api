@@ -89,6 +89,8 @@ namespace MyApp.Api.Services.Implementations
             DateTime? dateFrom = null, DateTime? dateTo = null)
         {
             var q = _context.PurchaseBills
+                .AsNoTracking()
+                .AsSplitQuery()
                 .Include(pb => pb.Supplier)
                 .Include(pb => pb.Items)
                     .ThenInclude(pi => pi.ItemType)
@@ -132,6 +134,8 @@ namespace MyApp.Api.Services.Implementations
         public async Task<PurchaseBillDto?> GetByIdAsync(int id)
         {
             var pb = await _context.PurchaseBills
+                .AsNoTracking()
+                .AsSplitQuery()
                 .Include(p => p.Company)
                 .Include(p => p.Supplier)
                 .Include(p => p.Items)
@@ -170,6 +174,7 @@ namespace MyApp.Api.Services.Implementations
         {
             var pb = await _context.PurchaseBills
                 .AsNoTracking()
+                .AsSplitQuery()
                 .Include(p => p.Company)
                 .Include(p => p.Supplier)
                 .Include(p => p.Items)

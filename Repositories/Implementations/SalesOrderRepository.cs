@@ -24,6 +24,7 @@ namespace MyApp.Api.Repositories.Implementations
         public async Task<List<SalesOrder>> GetByCompanyAsync(int companyId)
         {
             return await WithIncludes()
+                .AsNoTracking()
                 .Where(o => o.CompanyId == companyId)
                 .OrderByDescending(o => o.SalesOrderNumber)
                 .ToListAsync();
@@ -34,7 +35,7 @@ namespace MyApp.Api.Repositories.Implementations
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null)
         {
-            var query = WithIncludes().Where(o => o.CompanyId == companyId);
+            var query = WithIncludes().AsNoTracking().Where(o => o.CompanyId == companyId);
 
             if (!string.IsNullOrWhiteSpace(status))
                 query = query.Where(o => o.Status == status);
@@ -102,6 +103,7 @@ namespace MyApp.Api.Repositories.Implementations
         public async Task<List<SalesOrder>> GetOpenByCompanyAsync(int companyId)
         {
             return await WithIncludes()
+                .AsNoTracking()
                 .Where(o => o.CompanyId == companyId && o.Status == "Open")
                 .OrderByDescending(o => o.SalesOrderNumber)
                 .ToListAsync();

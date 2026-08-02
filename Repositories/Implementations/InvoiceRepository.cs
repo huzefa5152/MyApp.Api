@@ -21,6 +21,8 @@ namespace MyApp.Api.Repositories.Implementations
             // Notes (DocumentType 9/10), which live on the Return Invoices
             // tab with their own numbering sequence.
             return await _context.Invoices
+                .AsNoTracking()
+                .AsSplitQuery()
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans)
@@ -42,6 +44,8 @@ namespace MyApp.Api.Repositories.Implementations
             // sequence: sale bills (noteType null, default), Debit Notes
             // (9) and Credit Notes (10). A row is never in two lists.
             var query = _context.Invoices
+                .AsNoTracking()
+                .AsSplitQuery()
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                     // Dual-book overlay pulled on the list too, so the DTO's
@@ -136,6 +140,7 @@ namespace MyApp.Api.Repositories.Implementations
         public async Task<Invoice?> GetByIdAsync(int id)
         {
             return await _context.Invoices
+                .AsSplitQuery()
                 .Include(i => i.Company)
                 .Include(i => i.Client)
                 .Include(i => i.Items)

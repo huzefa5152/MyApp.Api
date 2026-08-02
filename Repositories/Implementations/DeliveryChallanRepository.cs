@@ -20,6 +20,7 @@ namespace MyApp.Api.Repositories.Implementations
             // through the FBR Sandbox tab — they do NOT appear on the regular
             // Challans page.
             return await _context.DeliveryChallans
+                                 .AsNoTracking()
                                  .Include(dc => dc.Items)
                                      .ThenInclude(i => i.ItemType)
                                  .Include(dc => dc.Client)
@@ -38,6 +39,7 @@ namespace MyApp.Api.Repositories.Implementations
             int? salesOrderId = null)
         {
             var query = _context.DeliveryChallans
+                .AsNoTracking()
                 .Include(dc => dc.Items).ThenInclude(i => i.ItemType)
                 .Include(dc => dc.Client)
                 .Include(dc => dc.Company)
@@ -85,6 +87,7 @@ namespace MyApp.Api.Repositories.Implementations
         public async Task<DeliveryChallan?> GetByIdAsync(int id)
         {
             return await _context.DeliveryChallans
+                                 .AsSplitQuery()
                                  .Include(dc => dc.Items)
                                      .ThenInclude(i => i.ItemType)
                                  .Include(dc => dc.Client)
@@ -181,6 +184,7 @@ namespace MyApp.Api.Repositories.Implementations
             // Both "Pending" (natively-created) and "Imported" (historical back-fill)
             // are billable — the bill-creation picker shows both populations.
             return await _context.DeliveryChallans
+                                 .AsNoTracking()
                                  .Include(dc => dc.Items)
                                      .ThenInclude(i => i.ItemType)
                                  .Include(dc => dc.Client)
