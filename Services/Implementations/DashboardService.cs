@@ -202,6 +202,10 @@ namespace MyApp.Api.Services.Implementations
         {
             var hero = new DashboardHeroKpis();
 
+            // Previous-period GST is captured alongside the prev totals below so
+            // GstNetPrev doesn't re-run the identical aggregate queries (audit L-7).
+            decimal prevGstOutput = 0m, prevGstInput = 0m;
+
             if (canSales)
             {
                 var (totalSales, gstOutput) = await SumInvoicesAsync(companyId, period.From, period.To);
@@ -209,8 +213,9 @@ namespace MyApp.Api.Services.Implementations
                 hero.GstOutput = gstOutput;
                 if (period.PreviousFrom.HasValue)
                 {
-                    var (prevSales, _) = await SumInvoicesAsync(companyId, period.PreviousFrom, period.PreviousTo);
+                    var (prevSales, prevGstOut) = await SumInvoicesAsync(companyId, period.PreviousFrom, period.PreviousTo);
                     hero.TotalSalesPrev = prevSales;
+                    prevGstOutput = prevGstOut;
                 }
             }
 
@@ -221,8 +226,9 @@ namespace MyApp.Api.Services.Implementations
                 hero.GstInput = gstInput;
                 if (period.PreviousFrom.HasValue)
                 {
-                    var (prevPurchases, _) = await SumPurchasesAsync(companyId, period.PreviousFrom, period.PreviousTo);
+                    var (prevPurchases, prevGstIn) = await SumPurchasesAsync(companyId, period.PreviousFrom, period.PreviousTo);
                     hero.TotalPurchasesPrev = prevPurchases;
+                    prevGstInput = prevGstIn;
                 }
             }
 
@@ -231,12 +237,11 @@ namespace MyApp.Api.Services.Implementations
             if (hero.TotalSalesPrev.HasValue || hero.TotalPurchasesPrev.HasValue)
             {
                 hero.NetPrev = (hero.TotalSalesPrev ?? 0m) - (hero.TotalPurchasesPrev ?? 0m);
-                // GstNetPrev only meaningful when we computed both prev
-                // sums — leave null when we computed only one side.
+                // GstNetPrev only meaningful when we computed both prev sums —
+                // leave null when we computed only one side. Values were already
+                // captured above (no re-query).
                 if (canSales && canPurchases)
                 {
-                    var (_, prevGstOutput) = await SumInvoicesAsync(companyId, period.PreviousFrom, period.PreviousTo);
-                    var (_, prevGstInput)  = await SumPurchasesAsync(companyId, period.PreviousFrom, period.PreviousTo);
                     hero.GstNetPrev = prevGstOutput - prevGstInput;
                 }
             }

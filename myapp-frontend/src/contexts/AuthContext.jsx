@@ -1,5 +1,5 @@
 // src/contexts/AuthContext.jsx
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { loginApi, getCurrentUser } from "../api/authApi";
 
@@ -104,17 +104,23 @@ export function AuthProvider({ children }) {
     setAvatarVersion(Date.now());
   }, []);
 
-  const value = {
-    user,
-    token,
-    setToken,
-    login,
-    logout,
-    refreshUser,
-    avatarVersion,
-    isAuthenticated: !!token && !!user,
-    loading,
-  };
+  // Memoized so consumers don't re-render on every AuthProvider render
+  // (audit M-7, 2026-08-02). setToken is a stable useState setter;
+  // login/logout/refreshUser are useCallback-stable.
+  const value = useMemo(
+    () => ({
+      user,
+      token,
+      setToken,
+      login,
+      logout,
+      refreshUser,
+      avatarVersion,
+      isAuthenticated: !!token && !!user,
+      loading,
+    }),
+    [user, token, login, logout, refreshUser, avatarVersion, loading]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

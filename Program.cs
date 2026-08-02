@@ -1814,6 +1814,21 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+// Baseline security response headers (audit M-8, 2026-08-02). nosniff stops
+// MIME-sniffing of served assets; DENY blocks click-jacking via framing;
+// Referrer-Policy avoids leaking full URLs cross-origin. A full
+// Content-Security-Policy is intentionally deferred — it needs testing against
+// the SPA's inline emotion styles + the grapesjs editor before it can be
+// enabled without breaking the UI.
+app.Use(async (ctx, next) =>
+{
+    var h = ctx.Response.Headers;
+    h["X-Content-Type-Options"] = "nosniff";
+    h["X-Frame-Options"] = "DENY";
+    h["Referrer-Policy"] = "no-referrer";
+    await next();
+});
+
 // after app = builder.Build()
 app.UseCors("AllowFrontend");
 

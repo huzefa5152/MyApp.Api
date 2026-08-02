@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { getCompanies } from "../api/companyApi";
 import { useAuth } from "./AuthContext";
 
@@ -54,10 +54,16 @@ export function CompanyProvider({ children }) {
     }
   }, [selectedCompany, setSelectedCompany]);
 
+  // Memoized so consumers don't re-render on every CompanyProvider render
+  // (audit M-7, 2026-08-02). setSelectedCompany/refreshCompanies are
+  // useCallback-stable.
+  const value = useMemo(
+    () => ({ companies, selectedCompany, setSelectedCompany, refreshCompanies, loading }),
+    [companies, selectedCompany, setSelectedCompany, refreshCompanies, loading]
+  );
+
   return (
-    <CompanyContext.Provider
-      value={{ companies, selectedCompany, setSelectedCompany, refreshCompanies, loading }}
-    >
+    <CompanyContext.Provider value={value}>
       {children}
     </CompanyContext.Provider>
   );

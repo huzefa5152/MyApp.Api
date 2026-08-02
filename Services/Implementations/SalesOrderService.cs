@@ -980,9 +980,11 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<PrintOrderDto?> GetPrintDataAsync(int id)
         {
-            var dto = await GetByIdAsync(id);
-            if (dto == null) return null;
+            // Load the order once, then map it — GetByIdAsync internally does
+            // the same repository load, so calling both double-loaded (audit L-8).
             var order = await _repository.GetByIdAsync(id);
+            var dto = await MapOneAsync(order);
+            if (dto == null) return null;
             var company = order!.Company;
 
             var sNo = 1;
