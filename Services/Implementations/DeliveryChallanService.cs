@@ -953,9 +953,18 @@ namespace MyApp.Api.Services.Implementations
                 // Imported challans go to "Imported" when they become ready;
                 // native ones go to "Pending".
                 dc.Status = hasPo ? ReadyStatusFor(dc) : "No PO";
-                await _repository.UpdateAsync(dc);
+                // Audit H-3: mark modified now, flush once after the loop
+                // instead of a SaveChanges per challan on this list-read path.
+                // Same Update() call + same rows as before — only the N
+                // round-trips collapse to one.
+                _context.DeliveryChallans.Update(dc);
                 transitioned++;
             }
+
+            // No save at all when nothing transitioned (matches prior behavior,
+            // where the per-row UpdateAsync simply never ran).
+            if (transitioned > 0)
+                await _context.SaveChangesAsync();
 
             return transitioned;
         }
