@@ -536,11 +536,22 @@ namespace MyApp.Api.Services.Implementations
             _context.PurchaseItems.RemoveRange(bill.Items);
             bill.Items.Clear();
 
+            // Pre-load all chosen ItemTypes in one query (mirrors CreateAsync)
+            // instead of a FindAsync per line — avoids N round-trips on edit.
+            var chosenItemTypeIds = dto.Items
+                .Where(i => i.ItemTypeId.HasValue)
+                .Select(i => i.ItemTypeId!.Value)
+                .Distinct()
+                .ToList();
+            var itemTypeMap = await _context.ItemTypes
+                .Where(it => chosenItemTypeIds.Contains(it.Id))
+                .ToDictionaryAsync(it => it.Id);
+
             var newItems = new List<PurchaseItem>();
             foreach (var i in dto.Items)
             {
                 ItemType? itemType = i.ItemTypeId.HasValue
-                    ? await _context.ItemTypes.FindAsync(i.ItemTypeId.Value)
+                    ? itemTypeMap.GetValueOrDefault(i.ItemTypeId.Value)
                     : null;
                 var ni = new PurchaseItem
                 {
