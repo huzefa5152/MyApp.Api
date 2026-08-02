@@ -57,6 +57,18 @@ namespace MyApp.Api.Services.Interfaces
             string? notes = null);
 
         /// <summary>
+        /// Batch variant of <see cref="RecordMovementAsync"/>: checks the
+        /// company tracking flag ONCE, appends every supplied movement, and
+        /// flushes in a single SaveChanges. Rows, the per-movement
+        /// quantity&gt;0 guard, and post-call visibility are identical to
+        /// calling RecordMovementAsync in a loop — it just drops the N
+        /// tracking queries + N SaveChanges round-trips. Safe only for callers
+        /// that do not read stock state BETWEEN movements in the batch.
+        /// Audit H-1.
+        /// </summary>
+        Task RecordMovementsAsync(int companyId, IEnumerable<StockMovementBatchItem> movements);
+
+        /// <summary>
         /// Current on-hand for one item under one company. Computed as
         /// opening balance + Σ In − Σ Out across all movements up to
         /// <paramref name="asOfDate"/> (default: now). Returns 0 when no
@@ -142,4 +154,14 @@ namespace MyApp.Api.Services.Interfaces
         decimal RequiredQuantity,
         decimal OnHandQuantity,
         decimal ShortBy);
+
+    /// <summary>One movement in a <see cref="IStockService.RecordMovementsAsync"/> batch.</summary>
+    public record StockMovementBatchItem(
+        int ItemTypeId,
+        StockMovementDirection Direction,
+        decimal Quantity,
+        StockMovementSourceType SourceType,
+        int? SourceId,
+        DateTime MovementDate,
+        string? Notes = null);
 }

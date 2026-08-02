@@ -438,23 +438,26 @@ namespace MyApp.Api.Services.Implementations
             // StockService.SyncInvoiceStockMovementsAsync.
             var trackedOnCreate = await _stock.GetStockTrackedItemTypeIdsAsync(
                 items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
+            var inMovements = new List<StockMovementBatchItem>();
             foreach (var it in items)
             {
                 if (!it.ItemTypeId.HasValue || it.Quantity <= 0) continue;
                 if (!trackedOnCreate.Contains(it.ItemTypeId.Value)) continue;
-                await _stock.RecordMovementAsync(
-                    companyId: bill.CompanyId,
-                    itemTypeId: it.ItemTypeId.Value,
-                    direction: StockMovementDirection.In,
+                inMovements.Add(new StockMovementBatchItem(
+                    ItemTypeId: it.ItemTypeId.Value,
+                    Direction: StockMovementDirection.In,
                     // 2026-05-12: IStockService now accepts decimal(18,4)
                     // (matches PurchaseItem precision). Fractional UOMs
                     // are preserved instead of being rounded to int.
-                    quantity: it.Quantity,
-                    sourceType: StockMovementSourceType.PurchaseBill,
-                    sourceId: bill.Id,
-                    movementDate: bill.Date,
-                    notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplier.Name}");
+                    Quantity: it.Quantity,
+                    SourceType: StockMovementSourceType.PurchaseBill,
+                    SourceId: bill.Id,
+                    MovementDate: bill.Date,
+                    Notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplier.Name}"));
             }
+            // Audit H-1: one tracking check + one SaveChanges for the whole
+            // bill instead of a query + flush per line.
+            await _stock.RecordMovementsAsync(bill.CompanyId, inMovements);
 
             await tx.CommitAsync();
             return (await GetByIdAsync(bill.Id))!;
@@ -655,23 +658,24 @@ namespace MyApp.Api.Services.Implementations
                     .ToListAsync())
                 .ToDictionary(x => x.ItemTypeId, x => x.Net);
 
-            // Emit only the difference.
+            // Emit only the difference (batched — audit H-1).
+            var deltaMovements = new List<StockMovementBatchItem>();
             foreach (var itemTypeId in desired.Keys.Union(posted.Keys))
             {
                 desired.TryGetValue(itemTypeId, out var want);
                 posted.TryGetValue(itemTypeId, out var have);
                 var delta = want - have;
                 if (delta == 0m) continue;
-                await _stock.RecordMovementAsync(
-                    companyId: bill.CompanyId,
-                    itemTypeId: itemTypeId,
-                    direction: delta > 0m ? StockMovementDirection.In : StockMovementDirection.Out,
-                    quantity: Math.Abs(delta),
-                    sourceType: StockMovementSourceType.PurchaseBill,
-                    sourceId: bill.Id,
-                    movementDate: bill.Date,
-                    notes: $"Purchase Bill #{bill.PurchaseBillNumber} (edit — stock {(delta > 0m ? "increased" : "decreased")} by {Math.Abs(delta):0.####})");
+                deltaMovements.Add(new StockMovementBatchItem(
+                    ItemTypeId: itemTypeId,
+                    Direction: delta > 0m ? StockMovementDirection.In : StockMovementDirection.Out,
+                    Quantity: Math.Abs(delta),
+                    SourceType: StockMovementSourceType.PurchaseBill,
+                    SourceId: bill.Id,
+                    MovementDate: bill.Date,
+                    Notes: $"Purchase Bill #{bill.PurchaseBillNumber} (edit — stock {(delta > 0m ? "increased" : "decreased")} by {Math.Abs(delta):0.####})"));
             }
+            await _stock.RecordMovementsAsync(bill.CompanyId, deltaMovements);
         }
 
         private async Task ReversePostedStockAsync(PurchaseBill bill, DateTime movementDate, string notes)
@@ -688,19 +692,20 @@ namespace MyApp.Api.Services.Implementations
                 })
                 .ToListAsync();
 
+            var reversals = new List<StockMovementBatchItem>();
             foreach (var p in posted)
             {
                 if (p.Net <= 0m) continue;
-                await _stock.RecordMovementAsync(
-                    companyId: bill.CompanyId,
-                    itemTypeId: p.ItemTypeId,
-                    direction: StockMovementDirection.Out,
-                    quantity: p.Net,
-                    sourceType: StockMovementSourceType.PurchaseBill,
-                    sourceId: bill.Id,
-                    movementDate: movementDate,
-                    notes: notes);
+                reversals.Add(new StockMovementBatchItem(
+                    ItemTypeId: p.ItemTypeId,
+                    Direction: StockMovementDirection.Out,
+                    Quantity: p.Net,
+                    SourceType: StockMovementSourceType.PurchaseBill,
+                    SourceId: bill.Id,
+                    MovementDate: movementDate,
+                    Notes: notes));
             }
+            await _stock.RecordMovementsAsync(bill.CompanyId, reversals);
         }
 
         public async Task<bool> DeleteAsync(int id)
