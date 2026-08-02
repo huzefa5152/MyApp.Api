@@ -113,6 +113,13 @@ MyApp.Api is a mature, **security-hardened** production ERP that has clearly abs
 - **Gain:** Medium–High (build reliability + supply chain). **Regression risk:** Medium — moving to a stock PdfPig may shift PO-text extraction; the PO-parser corpus gate must be re-run. **Effort:** half-day to 1 day.
 - **Fix direction:** document/host the custom build in a private feed *or* migrate to a released version and re-baseline the PO corpus.
 
+### H-9 — Creating an item type makes a synchronous, retried, blocking live FBR call
+- **Files:** `Services/Implementations/ItemTypeService.cs:164` (`EnrichFromFbrAsync`, called by `CreateAsync`; also on update at `:277`).
+- **Why:** `POST /api/itemtypes` calls FBR to enrich UOM/description inline. When `gw.fbr.gov.pk` is slow or unreachable, the FBR `HttpClient` (Polly: 3 retries × ~30 s attempt) blocks the request for up to ~90 s before returning. Measured **94,478 ms** for a single create during an FBR brownout (2026-08-02 verification run).
+- **Impact:** an operator onboarding items during an FBR outage sees a hung request / apparent freeze; the request thread is tied up for the duration.
+- **Gain:** High (UX + thread availability under FBR brownout). **Regression risk:** Low–Medium — must preserve the enrichment result when FBR *is* reachable. **Effort:** half-day.
+- **Fix direction:** shorten the FBR timeout for enrichment, fast-fail to the local UOM (`TaxMappingEngine`) fallback when FBR is unreachable, or defer enrichment to a background step so create returns immediately. Discovered during Phase 2 verification.
+
 ---
 
 ## 5. Medium Priority
