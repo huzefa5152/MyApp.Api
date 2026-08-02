@@ -99,6 +99,26 @@ namespace MyApp.Api.Repositories.Implementations
                                  .FirstOrDefaultAsync(dc => dc.Id == id);
         }
 
+        public async Task<List<DeliveryChallan>> GetByIdsAsync(IEnumerable<int> ids)
+        {
+            var idList = ids?.Distinct().ToList() ?? new List<int>();
+            if (idList.Count == 0) return new List<DeliveryChallan>();
+            // Mirrors GetByIdAsync's include set exactly so callers get an
+            // identical entity graph — just batched by (Id IN ...).
+            return await _context.DeliveryChallans
+                                 .AsSplitQuery()
+                                 .Include(dc => dc.Items)
+                                     .ThenInclude(i => i.ItemType)
+                                 .Include(dc => dc.Client)
+                                 .Include(dc => dc.Company)
+                                 .Include(dc => dc.Invoice)
+                                     .ThenInclude(inv => inv!.Items)
+                                 .Include(dc => dc.DuplicatedFrom)
+                                 .Include(dc => dc.SalesOrder)
+                                 .Where(dc => idList.Contains(dc.Id))
+                                 .ToListAsync();
+        }
+
         public async Task<DeliveryChallan> CreateDeliveryChallanAsync(DeliveryChallan deliveryChallan)
         {
             // Wrap in transaction to prevent duplicate challan numbers from concurrent requests

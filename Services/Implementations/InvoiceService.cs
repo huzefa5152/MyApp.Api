@@ -472,12 +472,17 @@ namespace MyApp.Api.Services.Implementations
             if (buyer.CompanyId != dto.CompanyId)
                 throw new InvalidOperationException("Client does not belong to this company.");
 
-            // Load and validate all challans
+            // Load and validate all challans. Batch the load (one round-trip for
+            // all selected challans) but keep the per-id validation loop
+            // byte-identical — same order, same exceptions/messages — so a
+            // missing or ineligible challan fails exactly as before.
+            var challansById = (await _challanRepo.GetByIdsAsync(dto.ChallanIds))
+                .ToDictionary(c => c.Id);
             var challans = new List<DeliveryChallan>();
             foreach (var challanId in dto.ChallanIds)
             {
-                var dc = await _challanRepo.GetByIdAsync(challanId);
-                if (dc == null) throw new KeyNotFoundException($"Challan {challanId} not found.");
+                if (!challansById.TryGetValue(challanId, out var dc))
+                    throw new KeyNotFoundException($"Challan {challanId} not found.");
                 // Both "Pending" (natively-created) and "Imported" (back-filled)
                 // are billable. Anything else (Invoiced, Cancelled, Setup Required, No PO)
                 // blocks bill creation.

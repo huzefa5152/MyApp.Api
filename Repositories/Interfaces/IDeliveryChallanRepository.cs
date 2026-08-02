@@ -11,6 +11,13 @@ namespace MyApp.Api.Repositories.Interfaces
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
             int? salesOrderId = null);
         Task<DeliveryChallan?> GetByIdAsync(int id);
+
+        /// <summary>
+        /// Batch-load challans by id with the SAME includes as
+        /// <see cref="GetByIdAsync"/> (tracked). Used by the bill-create path to
+        /// load all selected challans in one round-trip instead of one per id.
+        /// </summary>
+        Task<List<DeliveryChallan>> GetByIdsAsync(IEnumerable<int> ids);
         Task<DeliveryChallan> CreateDeliveryChallanAsync(DeliveryChallan deliveryChallan);
         Task<DeliveryChallan> UpdateAsync(DeliveryChallan deliveryChallan);
         Task DeleteAsync(DeliveryChallan deliveryChallan);
