@@ -1,5 +1,5 @@
 // src/layouts/DashboardLayout.jsx
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, Suspense } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   MdDashboard,
@@ -685,7 +685,12 @@ export default function DashboardLayout() {
 
         {/* Page Content */}
         <main className="dl-main" id="main-content">
-          <Outlet />
+          {/* Suspense boundary for the lazily-loaded route pages (audit H-5).
+              Kept here (not around <Routes>) so the sidebar + topbar stay
+              rendered while a page chunk loads. */}
+          <Suspense fallback={<div style={{ padding: "2rem", textAlign: "center", color: "#64748b" }}>Loading…</div>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>
