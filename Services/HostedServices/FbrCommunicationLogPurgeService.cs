@@ -79,20 +79,35 @@ namespace MyApp.Api.Services.HostedServices
             using var scope = _services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-            // Soft purge — null out body fields on older rows in chunks
-            // so a multi-year backfill doesn't lock the table.
-            var softUpdated = await db.Database.ExecuteSqlInterpolatedAsync($@"
-                UPDATE FbrCommunicationLogs
-                   SET RequestBodyMasked = NULL,
-                       ResponseBodyMasked = NULL
-                 WHERE Timestamp < {softCutoff}
-                   AND (RequestBodyMasked IS NOT NULL OR ResponseBodyMasked IS NOT NULL);
-            ", ct);
+            // Soft purge — null out body fields on older rows. Batched in
+            // TOP(5000) passes so a large first run doesn't hold a long lock on
+            // the table (audit M-12: the prior single UPDATE could lock a
+            // multi-year backlog in one statement — the comment claimed
+            // chunking but the SQL didn't). Same final state, just chunked.
+            const int batchSize = 5000;
+            var softUpdated = 0;
+            int affected;
+            do
+            {
+                affected = await db.Database.ExecuteSqlInterpolatedAsync($@"
+                    UPDATE TOP (5000) FbrCommunicationLogs
+                       SET RequestBodyMasked = NULL,
+                           ResponseBodyMasked = NULL
+                     WHERE Timestamp < {softCutoff}
+                       AND (RequestBodyMasked IS NOT NULL OR ResponseBodyMasked IS NOT NULL);
+                ", ct);
+                softUpdated += affected;
+            } while (affected == batchSize && !ct.IsCancellationRequested);
 
-            // Hard delete — drop rows entirely.
-            var hardDeleted = await db.Database.ExecuteSqlInterpolatedAsync($@"
-                DELETE FROM FbrCommunicationLogs WHERE Timestamp < {hardCutoff};
-            ", ct);
+            // Hard delete — drop rows entirely, same TOP(n) batching.
+            var hardDeleted = 0;
+            do
+            {
+                affected = await db.Database.ExecuteSqlInterpolatedAsync($@"
+                    DELETE TOP (5000) FROM FbrCommunicationLogs WHERE Timestamp < {hardCutoff};
+                ", ct);
+                hardDeleted += affected;
+            } while (affected == batchSize && !ct.IsCancellationRequested);
 
             if (softUpdated > 0 || hardDeleted > 0)
             {
