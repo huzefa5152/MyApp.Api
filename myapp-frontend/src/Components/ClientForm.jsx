@@ -395,6 +395,26 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
             </div>
             )}
 
+            {/* FBR-off companies still want NTN/STRN on record (e.g. migrated
+                clients that carry them) — surface both as OPTIONAL fields.
+                When FBR is on, the identity fields live in the FBR block above
+                (type-driven + required), so this stays hidden to avoid dupes. */}
+            {!fbrRequired && (
+              <div style={{ marginTop: "0.5rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #cfd8e3", backgroundColor: "#f7f9fc" }}>
+                <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#37474f" }}>Tax IDs (optional)</p>
+                <div className="form-grid-2col">
+                  <div style={formGroup}>
+                    <label style={label}>NTN</label>
+                    <input type="text" name="ntn" value={formData.ntn} onChange={handleChange} style={input} placeholder="NTN (optional)" />
+                  </div>
+                  <div style={formGroup}>
+                    <label style={label}>STRN</label>
+                    <input type="text" name="strn" value={formData.strn} onChange={handleChange} style={input} placeholder="STRN (optional)" />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div style={formGroup}>
               <label style={label}>Sites</label>
               <input type="text" name="site" value={formData.site} onChange={handleChange} style={input} placeholder="e.g. Site-A ; Site-B ; Site-C" />
