@@ -228,6 +228,7 @@ namespace MyApp.Api.Services.Implementations
             OriginalInvoiceId = inv.OriginalInvoiceId,
             OriginalInvoiceNumber = inv.OriginalInvoice?.InvoiceNumber,
             OriginalInvoiceRefIRN = inv.OriginalInvoiceRefIRN,
+            SupplementsInvoiceId = inv.SupplementsInvoiceId,
             NoteReason = inv.NoteReason,
             NoteReasonRemarks = inv.NoteReasonRemarks,
             NoteAffectsStock = inv.NoteAffectsStock,
@@ -330,6 +331,14 @@ namespace MyApp.Api.Services.Implementations
                          && n.OriginalInvoiceId != null && ids.Contains(n.OriginalInvoiceId.Value))
                 .Select(n => new { OriginalId = n.OriginalInvoiceId!.Value, n.DocumentType, n.InvoiceNumber })
                 .ToListAsync();
+            // LIVE correction delta bills against these originals — hides the
+            // Correct action so no duplicate correction can be created.
+            var supplementedSet = new HashSet<int>(await _context.Invoices
+                .Where(s => s.SupplementsInvoiceId != null && !s.IsCancelled
+                         && ids.Contains(s.SupplementsInvoiceId.Value))
+                .Select(s => s.SupplementsInvoiceId!.Value)
+                .Distinct()
+                .ToListAsync());
             foreach (var d in dtos)
             {
                 d.ReversedByCreditNoteNumber = noteMap
@@ -338,6 +347,7 @@ namespace MyApp.Api.Services.Implementations
                 d.AdjustedByDebitNoteNumber = noteMap
                     .Where(n => n.OriginalId == d.Id && n.DocumentType == 9)
                     .Select(n => (int?)n.InvoiceNumber).Max();
+                d.HasSupplement = supplementedSet.Contains(d.Id);
             }
         }
 
@@ -2564,6 +2574,244 @@ namespace MyApp.Api.Services.Implementations
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "InvoiceService: note transaction rolled back");
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            }
+            throw new InvalidOperationException(
+                "Could not allocate a unique invoice number after " + maxAttempts + " attempts.");
+        }
+
+        public async Task<InvoiceDto?> CreateSupplementaryInvoiceAsync(
+            int originalInvoiceId, CreateSupplementaryInvoiceDto dto, string? actorUserName = null)
+        {
+            // Snapshot the original (read-only) with items + linked challans.
+            var original = await _context.Invoices
+                .AsNoTracking()
+                .Include(i => i.Items)
+                .Include(i => i.DeliveryChallans).ThenInclude(dc => dc.Items)
+                .FirstOrDefaultAsync(i => i.Id == originalInvoiceId);
+            if (original == null) return null;
+
+            if (original.DocumentType == 9 || original.DocumentType == 10)
+                throw new InvalidOperationException("A Credit/Debit Note cannot be corrected. Reference the original sale invoice instead.");
+            if (original.IsCancelled)
+                throw new InvalidOperationException("This bill is cancelled — there is nothing to correct.");
+            if (original.IsDemo)
+                throw new InvalidOperationException("Sandbox (demo) bills cannot be corrected.");
+
+            var companyInfo = await _context.Companies.AsNoTracking().FirstOrDefaultAsync(c => c.Id == original.CompanyId)
+                ?? throw new InvalidOperationException("Company not found for the original invoice.");
+
+            // Correction eligibility depends on the company's FBR setting:
+            //   • FBR ON  → the original must be FBR-submitted (an unsubmitted bill is
+            //     just edited directly — nothing is locked yet).
+            //   • FBR OFF → there is no FBR filing to lock the bill, so "fully paid" is
+            //     the point at which it is treated as final and correctable.
+            if (companyInfo.FbrEnabled)
+            {
+                if (original.FbrStatus != "Submitted" || string.IsNullOrWhiteSpace(original.FbrIRN))
+                    throw new InvalidOperationException("Only an FBR-submitted invoice can be corrected. A bill that has not been submitted should be edited directly.");
+            }
+            else
+            {
+                if (MyApp.Api.Helpers.PaymentStatusCalculator.Status(original.GrandTotal, original.AmountPaid, original.DueDate)
+                    != MyApp.Api.Helpers.PaymentStatus.Paid)
+                    throw new InvalidOperationException("FBR integration is off for this company, so a bill can only be corrected once it is fully paid. Edit the bill directly, or record the remaining payment first.");
+            }
+
+            // No duplicate correction: block a second LIVE delta bill against the same original.
+            if (await _context.Invoices.AnyAsync(i => i.SupplementsInvoiceId == original.Id && !i.IsCancelled))
+                throw new InvalidOperationException("A correction (delta bill) already exists for this bill. Edit or cancel it instead of creating a duplicate.");
+
+            if (dto.Lines == null || dto.Lines.Count == 0)
+                throw new InvalidOperationException("Select at least one line with a delta quantity greater than zero.");
+
+            // UNCLASSIFIED delta lines from the base (bill-mode) invoice lines — base
+            // ItemTypeId, NO HS / SaleType / overlay. Classified downstream like any bill.
+            var byId = original.Items.ToDictionary(i => i.Id);
+            var plannedLines = new List<(int? ItemTypeId, string ItemTypeName, string Description, string UOM, decimal Quantity, decimal UnitPrice, decimal LineTotal)>();
+            foreach (var sel in dto.Lines)
+            {
+                if (!byId.TryGetValue(sel.InvoiceItemId, out var src)) continue;
+                var qty = sel.Quantity;
+                if (qty <= 0) continue;
+                var unitPrice = sel.UnitPrice.HasValue && sel.UnitPrice.Value > 0 ? sel.UnitPrice.Value : src.UnitPrice;
+                plannedLines.Add((src.ItemTypeId, src.ItemTypeName, src.Description, src.UOM, qty, unitPrice, Math.Round(qty * unitPrice, 2)));
+            }
+            if (plannedLines.Count == 0)
+                throw new InvalidOperationException("No positive delta quantity to bill.");
+
+            var subtotal   = plannedLines.Sum(l => l.LineTotal);
+            var gstRate    = original.GSTRate;
+            var gstAmount  = Math.Round(subtotal * gstRate / 100m, 2);
+            var grandTotal = subtotal + gstAmount;
+
+            // Which original challans to clone, matched to delta lines by description.
+            var plannedChallans = new List<(DeliveryChallan Src, List<(int? ItemTypeId, string Description, string Unit, decimal Quantity)> Items)>();
+            if (dto.CarryChallan)
+            {
+                foreach (var srcChallan in original.DeliveryChallans)
+                {
+                    var items = new List<(int? ItemTypeId, string Description, string Unit, decimal Quantity)>();
+                    foreach (var ci in srcChallan.Items)
+                    {
+                        var key = (ci.Description ?? "").Trim();
+                        var match = plannedLines.FirstOrDefault(l => string.Equals((l.Description ?? "").Trim(), key, StringComparison.OrdinalIgnoreCase));
+                        if (match.Description == null) continue;   // no delta line for this challan item
+                        items.Add((ci.ItemTypeId, ci.Description, ci.Unit, match.Quantity));
+                    }
+                    if (items.Count > 0)
+                        plannedChallans.Add((srcChallan, items));
+                }
+            }
+
+            var baseDate = (dto.Date ?? DateTime.UtcNow).Date;
+            var billDate = baseDate < original.Date.Date ? original.Date.Date : baseDate;
+            // A challan carries the PO; if none is cloned, keep the original's PO so it still prints.
+            var billPoNumber = plannedChallans.Count > 0 ? null : original.PoNumber;
+
+            const int maxAttempts = NumberAllocationRetry.DefaultMaxAttempts;
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                // Per-division numbering, resolved PER ATTEMPT (the collision catch
+                // detaches modified entities). The delta bill draws from the ORIGINAL
+                // bill's division sequence so the correction stays in the same series.
+                var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, original.CompanyId, original.DivisionId);
+                var company = await _context.Companies.FirstOrDefaultAsync(c => c.Id == original.CompanyId)
+                    ?? throw new InvalidOperationException("Company not found for the original invoice.");
+
+                var maxQuery = _context.Invoices.Where(i => i.CompanyId == original.CompanyId && !i.IsDemo);
+                maxQuery = original.DivisionId.HasValue
+                    ? maxQuery.Where(i => i.DivisionId == original.DivisionId.Value)
+                    : maxQuery.Where(i => i.DivisionId == null);
+                int maxExistingInvoice = await maxQuery.MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+
+                var seedStarting = division != null ? division.StartingInvoiceNumber : company.StartingInvoiceNumber;
+                int nextInvoiceNumber = maxExistingInvoice > 0 ? maxExistingInvoice + 1 : (seedStarting > 0 ? seedStarting : 1);
+                if (division != null) division.CurrentInvoiceNumber = nextInvoiceNumber;
+                else company.CurrentInvoiceNumber = nextInvoiceNumber;
+
+                var invoice = new Invoice
+                {
+                    InvoiceNumber = nextInvoiceNumber,
+                    Date = billDate,
+                    CompanyId = original.CompanyId,
+                    DivisionId = original.DivisionId,
+                    ClientId = original.ClientId,
+                    Subtotal = subtotal,
+                    GSTRate = gstRate,
+                    GSTAmount = gstAmount,
+                    GrandTotal = grandTotal,
+                    AmountInWords = NumberToWordsConverter.Convert(grandTotal),
+                    PaymentTerms = original.PaymentTerms,
+                    DocumentType = original.DocumentType,
+                    PaymentMode = original.PaymentMode,
+                    SupplementsInvoiceId = original.Id,
+                    PoNumber = billPoNumber,
+                    FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
+                        ? nextInvoiceNumber.ToString()
+                        : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
+                    Items = plannedLines.Select(l => new InvoiceItem
+                    {
+                        ItemTypeId   = l.ItemTypeId,
+                        ItemTypeName = l.ItemTypeName,
+                        Description  = l.Description,
+                        Quantity     = l.Quantity,
+                        UOM          = l.UOM,
+                        UnitPrice    = l.UnitPrice,
+                        LineTotal    = l.LineTotal,
+                        DeliveryItemId = null,
+                    }).ToList(),
+                };
+
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    _context.Invoices.Add(invoice);
+
+                    // Clone + link the challan(s) in the SAME SaveChanges (SQL 2025
+                    // read-back rule). Same ChallanNumber (non-unique by design), root
+                    // DuplicatedFromId, no counter bump, no SO link, inherits division.
+                    foreach (var pc in plannedChallans)
+                    {
+                        var clone = new DeliveryChallan
+                        {
+                            CompanyId = pc.Src.CompanyId,
+                            DivisionId = pc.Src.DivisionId,
+                            ChallanNumber = pc.Src.ChallanNumber,
+                            ClientId = pc.Src.ClientId,
+                            PoNumber = pc.Src.PoNumber,
+                            PoDate = pc.Src.PoDate,
+                            IndentNo = pc.Src.IndentNo,
+                            DeliveryDate = pc.Src.DeliveryDate,
+                            Site = pc.Src.Site,
+                            Status = "Invoiced",
+                            IsImported = pc.Src.IsImported,
+                            IsDemo = pc.Src.IsDemo,
+                            DuplicatedFromId = pc.Src.DuplicatedFromId ?? pc.Src.Id,
+                            SalesOrderId = null,
+                            Invoice = invoice,   // nav → EF fills InvoiceId with the new key in THIS save
+                            Items = pc.Items.Select(it => new DeliveryItem
+                            {
+                                ItemTypeId = it.ItemTypeId,
+                                Description = it.Description,
+                                Unit = it.Unit,
+                                Quantity = it.Quantity,
+                            }).ToList(),
+                        };
+                        _context.DeliveryChallans.Add(clone);
+                    }
+
+                    await _context.SaveChangesAsync();
+                    var created = invoice;
+
+                    // Stock + GL: same pipeline as a normal bill. Unclassified (no-HS)
+                    // lines record no stock movement until classified; GL posting is a
+                    // no-op when the company has GL disabled.
+                    await _stock.SyncInvoiceStockMovementsAsync(created);
+                    await _posting.PostInvoiceAsync(created);
+                    await transaction.CommitAsync();
+
+                    try
+                    {
+                        await _auditLog.LogAsync(new AuditLog
+                        {
+                            Level         = "Info",
+                            UserName      = actorUserName,
+                            HttpMethod    = "POST",
+                            RequestPath   = $"/invoices/{original.Id}/supplement",
+                            StatusCode    = 200,
+                            ExceptionType = "Invoice.Supplement",
+                            Message       = $"Delta bill #{nextInvoiceNumber} created correcting bill #{original.InvoiceNumber}"
+                                          + (string.IsNullOrWhiteSpace(original.FbrIRN) ? "" : $" (IRN {original.FbrIRN})")
+                                          + $"; {plannedLines.Count} line(s), {(dto.CarryChallan ? plannedChallans.Count : 0)} challan(s) cloned."
+                                          + (string.IsNullOrWhiteSpace(dto.Reason) ? "" : $" Reason: {dto.Reason}"),
+                        });
+                    }
+                    catch { /* audit must never break the operation */ }
+
+                    var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
+                    return loaded == null ? null : ToDto(loaded);
+                }
+                catch (DbUpdateException dupEx) when (NumberAllocationRetry.IsUniqueViolation(dupEx))
+                {
+                    _logger.LogWarning(
+                        "Supplement invoice number {Number} for company {CompanyId} collided with a concurrent create; retrying (attempt {Attempt}).",
+                        nextInvoiceNumber, original.CompanyId, attempt);
+                    await transaction.RollbackAsync();
+                    foreach (var entry in _context.ChangeTracker.Entries().ToList())
+                    {
+                        if (entry.State != EntityState.Unchanged)
+                            entry.State = EntityState.Detached;
+                    }
+                    if (attempt < maxAttempts)
+                        await Task.Delay(10 * attempt);
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "InvoiceService: supplement transaction rolled back");
                     await transaction.RollbackAsync();
                     throw;
                 }

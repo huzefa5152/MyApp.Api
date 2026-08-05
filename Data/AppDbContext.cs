@@ -306,6 +306,15 @@ namespace MyApp.Api.Data
                 .HasForeignKey(i => i.OriginalInvoiceId)
                 .OnDelete(DeleteBehavior.NoAction);
 
+            // Invoice -> SupplementsInvoice (self-reference for correction delta
+            // bills). NoAction for the same reason as OriginalInvoice — never
+            // cascade a delete from the original into the delta bill. Optional FK.
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.SupplementsInvoice)
+                .WithMany()
+                .HasForeignKey(i => i.SupplementsInvoiceId)
+                .OnDelete(DeleteBehavior.NoAction);
+
             // Invoice -> InvoiceItems (cascade)
             modelBuilder.Entity<InvoiceItem>()
                 .HasOne(ii => ii.Invoice)

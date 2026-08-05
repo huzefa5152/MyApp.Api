@@ -311,7 +311,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         return {
           ...blankRow(),
           itemTypeId: ln.itemTypeId || "",
-          itemTypeName: t?.name || "",
+          // Prefer the name the prefill payload carries so the row keeps the
+          // Item Type even before the catalog finishes loading; fall back to
+          // the local catalog row when an older backend omits it.
+          itemTypeName: ln.itemTypeName || t?.name || "",
           description: ln.description || "",
           quantity: ln.quantity != null ? String(ln.quantity) : "",
           unitPrice: ln.unitPrice != null ? String(ln.unitPrice) : "",

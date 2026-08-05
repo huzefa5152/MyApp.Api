@@ -494,6 +494,35 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
+        /// Correction: bill quantity under-reported on a corrected original as a
+        /// new UNCLASSIFIED delta bill (+ optional cloned challan). Eligible when
+        /// the original is FBR-submitted (FBR on) or fully paid (FBR off). The
+        /// delta bill then flows through the normal bill → (classify) → FBR
+        /// pipeline. Gated by invoices.note.create.
+        /// </summary>
+        [HttpPost("{id}/supplement")]
+        [HasPermission("invoices.note.create")]
+        public async Task<ActionResult<InvoiceDto>> Supplement(int id, [FromBody] CreateSupplementaryInvoiceDto body)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            // The delta bill inherits the original's division, so read access to
+            // that division is the right gate for creating the correction.
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
+            try
+            {
+                var bill = await _service.CreateSupplementaryInvoiceAsync(id, body, User.Identity?.Name);
+                if (bill == null) return NotFound(new { error = "Bill not found." });
+                return Ok(bill);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
         /// Flip the FBR-exclusion flag on a bill. Excluded bills are skipped
         /// by Validate All / Submit All; per-bill validate/submit still work.
         /// Returns the updated DTO so the UI can re-render without a refetch.

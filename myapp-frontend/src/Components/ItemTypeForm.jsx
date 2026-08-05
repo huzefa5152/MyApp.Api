@@ -312,6 +312,12 @@ export default function ItemTypeForm({
 
   const submit = async (e) => {
     e.preventDefault();
+    // This modal is portaled to <body> but stays React-tree-nested inside the
+    // parent document form (Sales Order / Quote / Challan / Bill / Purchase Bill
+    // line editors). Without stopping it, the submit event bubbles up the React
+    // tree and fires the PARENT form's onSubmit — saving and closing it. Stop it
+    // here so creating an item type only closes this mini-modal.
+    e.stopPropagation();
     setError("");
     if (!name.trim()) {
       setError("Name is required.");
@@ -394,7 +400,14 @@ export default function ItemTypeForm({
       : mode === "edit" ? "Update" : "Create";
 
   return (
-    <div style={{ ...formStyles.backdrop, zIndex: 1100 }}>
+    // Backdrop stops click / mousedown from reaching an ancestor modal's
+    // outside-click close handler (this form is React-nested inside document
+    // line editors even though it's portaled to <body>).
+    <div
+      style={{ ...formStyles.backdrop, zIndex: 1100 }}
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
       <div
         style={{
           ...formStyles.modal,

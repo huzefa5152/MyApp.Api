@@ -25,6 +25,12 @@ namespace MyApp.Api.Models
         public decimal Quantity { get; set; }
         public string Unit { get; set; } = "";
 
+        /// <summary>Optional agreed unit price for this ordered line. When set it
+        /// takes precedence when a bill is prefilled from this order (see
+        /// SalesOrderService.GetInvoicePrefillAsync); when null the prefill falls
+        /// back to the source-quote price, then the item's last billed rate.</summary>
+        public decimal? UnitPrice { get; set; }
+
         // Navigation
         public SalesOrder SalesOrder { get; set; } = null!;
         public ItemType? ItemType { get; set; }

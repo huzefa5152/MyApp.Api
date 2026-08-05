@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { MdDescription, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
 import ChallanTable from "../Components/ChallanTable";
@@ -19,7 +19,7 @@ import {
   getChallanPrintData,
 } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
-import { createChallanFromOrder } from "../api/salesOrderApi";
+import { createChallanFromOrder, getSalesOrdersForPicker } from "../api/salesOrderApi";
 import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
@@ -61,8 +61,14 @@ export default function ChallanPage() {
   // with just challans.list.view) would 403 on that call AND see an
   // empty non-functional dropdown — skip both the fetch and the UI.
   const canViewClients = has("clients.manage.view");
+  // Sales-Order filter dropdown lists the company's sales orders (endpoint
+  // gated by salesorders.list.view). Roles without it would 403 on that call
+  // AND see an empty dropdown — skip both the fetch and the UI, same as the
+  // client filter above.
+  const canViewSalesOrders = has("salesorders.list.view");
   const [viewMode, setViewMode, isBigScreen] = useListViewMode("challans");
   const [clients, setClients] = useState([]);
+  const [salesOrders, setSalesOrders] = useState([]);
   const [challans, setChallans] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -81,6 +87,7 @@ export default function ChallanPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
   const [clientFilter, setClientFilter] = useState("");
+  const [salesOrderFilter, setSalesOrderFilter] = useState("");
   // Shared template-picker state (dropdown + Print/PDF resolution), scoped to
   // the selected division: "All Divisions" → company-wide templates; a specific
   // division → that division's. An empty scope hides the picker and blocks
@@ -120,6 +127,7 @@ export default function ChallanPage() {
       if (statusFilter) params.status = statusFilter;
       if (divisionFilter) params.divisionId = divisionFilter;
       if (clientFilter) params.clientId = clientFilter;
+      if (salesOrderFilter) params.salesOrderId = salesOrderFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
       const { data } = await getPagedChallansByCompany(companyId, params);
@@ -134,12 +142,15 @@ export default function ChallanPage() {
     } finally {
       setLoadingChallans(false);
     }
-  }, [page, search, statusFilter, divisionFilter, clientFilter, dateFrom, dateTo]);
+  }, [page, search, statusFilter, divisionFilter, clientFilter, salesOrderFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (selectedCompany) {
       fetchClients(selectedCompany.id);
       setPage(1);
+      // Clear a stale SO selection when switching company — a sales-order id
+      // from the previous company would otherwise filter this list to nothing.
+      setSalesOrderFilter("");
       // Division ids are per-company — a stale filter would blank the list.
       // Resetting it retriggers the filter effect below, so only fetch
       // directly when there's no reset to piggyback on (avoids a stale-
@@ -159,13 +170,28 @@ export default function ChallanPage() {
   // Re-fetch when filters or page change
   useEffect(() => {
     if (selectedCompany) fetchChallans(selectedCompany.id, page);
-  }, [page, search, statusFilter, divisionFilter, clientFilter, dateFrom, dateTo]);
+  }, [page, search, statusFilter, divisionFilter, clientFilter, salesOrderFilter, dateFrom, dateTo]);
+
+  // Sales orders powering the SO filter dropdown — scoped to the selected
+  // company + division (the picker helper walks the division-scoped paged
+  // endpoint). Refetched when either changes; skipped for roles that can't
+  // view sales orders (they'd 403 + get an empty dropdown).
+  useEffect(() => {
+    if (!selectedCompany || !canViewSalesOrders) { setSalesOrders([]); return; }
+    let cancelled = false;
+    const params = divisionFilter ? { divisionId: divisionFilter } : {};
+    getSalesOrdersForPicker(selectedCompany.id, params)
+      .then((items) => { if (!cancelled) setSalesOrders(items || []); })
+      .catch(() => { if (!cancelled) setSalesOrders([]); });
+    return () => { cancelled = true; };
+  }, [selectedCompany, divisionFilter, canViewSalesOrders]);
 
   const resetFilters = () => {
     setSearch("");
     setStatusFilter("");
     setDivisionFilter("");
     setClientFilter("");
+    setSalesOrderFilter("");
     setDateFrom("");
     setDateTo("");
     setPage(1);
@@ -328,7 +354,18 @@ export default function ChallanPage() {
     }
   };
 
-  const hasFilters = search || statusFilter || divisionFilter || clientFilter || dateFrom || dateTo;
+  const hasFilters = search || statusFilter || divisionFilter || clientFilter || salesOrderFilter || dateFrom || dateTo;
+
+  // SO filter options: "SO #<n> — <client>", searchable by number or client
+  // (SearchableSelect searches the label by default). Memoised so the portaled
+  // dropdown isn't handed a fresh array identity on every render.
+  const salesOrderOptions = useMemo(
+    () => (salesOrders || []).map((o) => ({
+      id: o.id,
+      label: `SO #${o.salesOrderNumber}${o.clientName ? ` — ${o.clientName}` : ""}`,
+    })),
+    [salesOrders]
+  );
 
   return (
     <div>
@@ -392,7 +429,7 @@ export default function ChallanPage() {
               <DivisionSelect
                 companyId={selectedCompany.id}
                 value={divisionFilter}
-                onChange={(v) => { setDivisionFilter(v); setPage(1); }}
+                onChange={(v) => { setDivisionFilter(v); setSalesOrderFilter(""); setPage(1); }}
                 style={dropdownStyles.base}
               />
             )}
@@ -427,6 +464,17 @@ export default function ChallanPage() {
                     value={clientFilter}
                     onChange={(id) => handleFilterChange(setClientFilter)({ target: { value: id ? String(id) : "" } })}
                     placeholder="All Clients"
+                  />
+                </div>
+              )}
+              {canViewSalesOrders && (
+                <div style={{ minWidth: 220, maxWidth: 340 }}>
+                  <SearchableSelect
+                    items={salesOrderOptions}
+                    value={salesOrderFilter}
+                    onChange={(id) => handleFilterChange(setSalesOrderFilter)({ target: { value: id ? String(id) : "" } })}
+                    labelKey="label"
+                    placeholder="All Sales Orders"
                   />
                 </div>
               )}

@@ -63,6 +63,10 @@ namespace MyApp.Api.DTOs
         // ── Credit / Debit Note linkage (2026-07-01) ─────────────────────
         /// <summary>Local id of the original invoice this note reverses/adjusts (null for ordinary sale invoices).</summary>
         public int? OriginalInvoiceId { get; set; }
+        /// <summary>Local id of the invoice this delta bill supplements (post-correction flow); null for ordinary bills.</summary>
+        public int? SupplementsInvoiceId { get; set; }
+        /// <summary>True when a LIVE (non-cancelled) supplementary delta bill already exists against this invoice — the UI hides the Correct action so no duplicate correction is created.</summary>
+        public bool HasSupplement { get; set; }
         /// <summary>Human-facing bill number of the original invoice (for the "against #123" line). Null for ordinary invoices.</summary>
         public int? OriginalInvoiceNumber { get; set; }
         /// <summary>The original invoice's FBR IRN this note references (sent to FBR as invoiceRefNo).</summary>
@@ -384,6 +388,25 @@ namespace MyApp.Api.DTOs
         /// original invoice rate, per FBR 0068).
         /// </summary>
         public decimal? UnitPrice { get; set; }
+    }
+
+    /// <summary>
+    /// Correction: bill quantity under-reported on a corrected original as a new
+    /// UNCLASSIFIED delta bill (+ optional cloned challan). Eligibility depends on
+    /// the company's FBR setting — an FBR-submitted original (FBR on) or a fully
+    /// paid original (FBR off). The delta bill flows through the normal
+    /// bill → (classify) → FBR pipeline.
+    /// </summary>
+    public class CreateSupplementaryInvoiceDto
+    {
+        /// <summary>Lines to bill. InvoiceItemId = the ORIGINAL line; Quantity = the DELTA quantity to add (&gt; 0). UnitPrice optional (defaults to the original line's price).</summary>
+        public List<NoteLineDto> Lines { get; set; } = new();
+        /// <summary>Clone + link the original's delivery challan(s) at the delta qty so the delta bill prints the same DC#/PO. Default true.</summary>
+        public bool CarryChallan { get; set; } = true;
+        /// <summary>Optional note for the audit trail (e.g. "Balance quantity delivered").</summary>
+        public string? Reason { get; set; }
+        /// <summary>Delta bill date; defaults to today, never before the original.</summary>
+        public DateTime? Date { get; set; }
     }
 
     /// <summary>

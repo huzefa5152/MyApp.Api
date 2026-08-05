@@ -202,6 +202,7 @@ namespace MyApp.Api.Services.Implementations
                     Description = i.Description,
                     Quantity = i.Quantity,
                     Unit = i.Unit,
+                    UnitPrice = i.UnitPrice,
                     DeliveredQuantity = delivered,
                     RemainingQuantity = remaining,
                     LineStatus = LineStatusFor(i.Quantity, delivered)
@@ -386,7 +387,8 @@ namespace MyApp.Api.Services.Implementations
                         NonInventoryItemId = i.NonInventoryItemId,
                         Description = i.Description.Trim(),
                         Quantity = i.Quantity,
-                        Unit = i.Unit
+                        Unit = i.Unit,
+                        UnitPrice = i.UnitPrice
                     }).ToList()
                 };
                 if (division != null) division.CurrentSalesOrderNumber = next;
@@ -524,6 +526,7 @@ namespace MyApp.Api.Services.Implementations
                     existing.Description = itemDto.Description.Trim();
                     existing.Quantity = itemDto.Quantity;
                     existing.Unit = itemDto.Unit;
+                    existing.UnitPrice = itemDto.UnitPrice;
                 }
                 else
                 {
@@ -534,7 +537,8 @@ namespace MyApp.Api.Services.Implementations
                         NonInventoryItemId = itemDto.NonInventoryItemId,
                         Description = itemDto.Description.Trim(),
                         Quantity = itemDto.Quantity,
-                        Unit = itemDto.Unit
+                        Unit = itemDto.Unit,
+                        UnitPrice = itemDto.UnitPrice
                     });
                 }
             }
@@ -742,6 +746,10 @@ namespace MyApp.Api.Services.Implementations
                 var line = new SalesOrderInvoicePrefillLineDto
                 {
                     ItemTypeId = item.ItemTypeId,
+                    // ItemType is eager-loaded (SalesOrderRepository.WithIncludes) so
+                    // the prefill carries the name — the bill form shows the type
+                    // already selected instead of forcing the operator to re-pick.
+                    ItemTypeName = item.ItemType?.Name,
                     NonInventoryItemId = item.NonInventoryItemId,
                     NonInventoryItemName = item.NonInventoryItem?.Name,
                     Description = item.Description,
@@ -749,23 +757,34 @@ namespace MyApp.Api.Services.Implementations
                     Unit = item.Unit,
                 };
 
-                var match = (item.ItemTypeId.HasValue
-                        ? quoteItems.FirstOrDefault(qi => qi.ItemTypeId == item.ItemTypeId && qi.UnitPrice > 0)
-                        : null)
-                    ?? quoteItems.FirstOrDefault(qi => qi.UnitPrice > 0 && string.Equals(
-                        qi.Description.Trim(), item.Description.Trim(), StringComparison.OrdinalIgnoreCase));
-                if (match != null)
+                // Price precedence: the order line's own agreed UnitPrice wins
+                // when set; otherwise fall back to the source-quote price, then
+                // the item's last billed rate (existing behaviour), else 0.
+                if (item.UnitPrice.HasValue && item.UnitPrice.Value > 0)
                 {
-                    line.UnitPrice = match.UnitPrice;
-                    line.PriceSource = "Quote";
+                    line.UnitPrice = item.UnitPrice.Value;
+                    line.PriceSource = "SalesOrder";
                 }
                 else
                 {
-                    var last = await GetLastBilledRateAsync(order.CompanyId, item.Description, item.ItemTypeId);
-                    if (last.HasValue)
+                    var match = (item.ItemTypeId.HasValue
+                            ? quoteItems.FirstOrDefault(qi => qi.ItemTypeId == item.ItemTypeId && qi.UnitPrice > 0)
+                            : null)
+                        ?? quoteItems.FirstOrDefault(qi => qi.UnitPrice > 0 && string.Equals(
+                            qi.Description.Trim(), item.Description.Trim(), StringComparison.OrdinalIgnoreCase));
+                    if (match != null)
                     {
-                        line.UnitPrice = last.Value;
-                        line.PriceSource = "LastBilled";
+                        line.UnitPrice = match.UnitPrice;
+                        line.PriceSource = "Quote";
+                    }
+                    else
+                    {
+                        var last = await GetLastBilledRateAsync(order.CompanyId, item.Description, item.ItemTypeId);
+                        if (last.HasValue)
+                        {
+                            line.UnitPrice = last.Value;
+                            line.PriceSource = "LastBilled";
+                        }
                     }
                 }
                 lines.Add(line);

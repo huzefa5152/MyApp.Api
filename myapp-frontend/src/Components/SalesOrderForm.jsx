@@ -20,7 +20,7 @@ const colors = {
   inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1", teal: "#00897b",
 };
 
-const blankItem = () => ({ id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "" });
+const blankItem = () => ({ id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "", unitPrice: "" });
 
 // Create + edit a Sales Order (quantity-only). Pass `order` to edit.
 export default function SalesOrderForm({ onClose, onSaved, companyId, order, defaultDivisionId }) {
@@ -34,7 +34,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
   const [notes, setNotes] = useState(order?.notes || "");
   const [items, setItems] = useState(
     order?.items?.length
-      ? order.items.map((i) => ({ id: i.id, itemTypeId: i.itemTypeId, nonInventoryItemId: i.nonInventoryItemId ?? null, description: i.description, quantity: i.quantity, unit: i.unit, delivered: i.deliveredQuantity }))
+      ? order.items.map((i) => ({ id: i.id, itemTypeId: i.itemTypeId, nonInventoryItemId: i.nonInventoryItemId ?? null, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice ?? "", delivered: i.deliveredQuantity }))
       : [blankItem()]
   );
   const [units, setUnits] = useState([]);
@@ -155,6 +155,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
           description: i.description.trim(),
           quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
           unit: i.unit,
+          unitPrice: (i.unitPrice === "" || i.unitPrice == null || isNaN(parseFloat(i.unitPrice))) ? null : parseFloat(i.unitPrice),
         })),
       });
       // Upload any attachments staged before the order had an id. No-op in
@@ -245,7 +246,8 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
                     <th style={{ ...s.th, width: 190 }}>Item Type</th>
                     <th style={s.th}>Description</th>
                     <th style={{ ...s.th, width: 100, textAlign: "right" }}>Qty</th>
-                    <th style={{ ...s.th, width: 150 }}>Unit</th>
+                    <th style={{ ...s.th, width: 130 }}>Unit</th>
+                    <th style={{ ...s.th, width: 110, textAlign: "right" }}>Unit Price <span style={s.opt}>(opt)</span></th>
                     <th style={{ ...s.th, width: 40 }}></th>
                   </tr>
                 </thead>
@@ -277,6 +279,9 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
                         </td>
                         <td style={s.td}>
                           <LookupAutocomplete label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(v) => setItem(idx, { unit: v })} inputStyle={s.cellInput} />
+                        </td>
+                        <td style={s.td}>
+                          <input type="number" min="0" step="0.01" value={item.unitPrice ?? ""} onChange={(e) => setItem(idx, { unitPrice: e.target.value })} placeholder="—" title="Optional agreed price — prefills the bill created from this order" style={{ ...s.cellInput, textAlign: "right" }} />
                         </td>
                         <td style={{ ...s.td, textAlign: "center" }}>
                           {idx !== 0 && !locked && <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>}

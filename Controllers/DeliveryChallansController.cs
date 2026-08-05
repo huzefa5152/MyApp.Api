@@ -80,7 +80,8 @@ namespace MyApp.Api.Controllers
             [FromQuery] int? clientId = null,
             [FromQuery] DateTime? dateFrom = null,
             [FromQuery] DateTime? dateTo = null,
-            [FromQuery] int? divisionId = null)
+            [FromQuery] int? divisionId = null,
+            [FromQuery] int? salesOrderId = null)
         {
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
@@ -90,8 +91,12 @@ namespace MyApp.Api.Controllers
             if (divisionId.HasValue)
                 await _divisionAccess.AssertAccessAsync(CurrentUserId, companyId, divisionId.Value);
             var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            // salesOrderId is a plain view filter layered on top of the tenant +
+            // division scoping above (divScope is still applied inside the query),
+            // so it needs no separate access assert — a challan for another
+            // tenant's order can't be in this company's division-scoped set.
             var result = await _service.GetPagedByCompanyAsync(
-                companyId, clampedPage, size, search, status, clientId, dateFrom, dateTo, divisionId, divScope);
+                companyId, clampedPage, size, search, status, clientId, dateFrom, dateTo, divisionId, salesOrderId, divScope);
             return Ok(result);
         }
 

@@ -622,6 +622,55 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIds]);
 
+  // Seed each challan-derived line with the Item Type (or Non-Inventory item)
+  // it already carries from the delivery challan. A bill made from a Sales
+  // Order flows SO → challan → bill: CreateChallanFromOrderAsync copies the
+  // SO line's ItemTypeId onto the challan's DeliveryItem, but this form kept
+  // every picker blank — so the operator had to re-pick a type for every line
+  // (and the "every line must be classified" guard blocked submit until they
+  // did). Seed the stored type/charge so it shows already-selected, mirroring
+  // exactly what a manual pick sets (bound HS / UOM / SaleType / account +
+  // description lock) — a seeded row is indistinguishable from a picked one.
+  // Only UNTOUCHED rows are seeded: once state holds a value (a pick) or null
+  // (a clear) it's never overwritten, and only lines that actually carry a
+  // classification are seeded — unclassified challan lines stay blank as before.
+  useEffect(() => {
+    const rows = selectedChallans.flatMap((c) => c.items || []);
+    if (rows.length === 0) return;
+    const sType = {}, sNonInv = {}, sHs = {}, sSt = {}, sUom = {}, sFbrUom = {}, sDesc = {}, sAcct = {};
+    for (const it of rows) {
+      const id = it.id;
+      // A number (picked) or explicit null (cleared) means the operator owns
+      // this row — leave it. Only undefined (never touched) gets seeded.
+      if (itemTypeIds[id] !== undefined || itemNonInvIds[id] !== undefined) continue;
+      if (it.nonInventoryItemId) {
+        sNonInv[id] = it.nonInventoryItemId;
+      } else if (it.itemTypeId) {
+        sType[id] = it.itemTypeId;
+        const t = (itemTypes || []).find((x) => x.id === it.itemTypeId);
+        if (t) {
+          sAcct[id] = t.saleAccountId ?? null;
+          if (t.hsCode) sHs[id] = t.hsCode;
+          if (t.saleType) sSt[id] = t.saleType;
+          if (t.uom) sUom[id] = t.uom;
+          if (t.fbrUOMId) sFbrUom[id] = t.fbrUOMId;
+          if (t.name) sDesc[id] = t.name;
+        }
+      }
+    }
+    // Existing state wins over the seed (spread `p` last) so a concurrent
+    // operator edit is never clobbered by a late-running seed.
+    if (Object.keys(sType).length) setItemTypeIds((p) => ({ ...sType, ...p }));
+    if (Object.keys(sNonInv).length) setItemNonInvIds((p) => ({ ...sNonInv, ...p }));
+    if (Object.keys(sHs).length) setItemHsCodes((p) => ({ ...sHs, ...p }));
+    if (Object.keys(sSt).length) setItemSaleTypes((p) => ({ ...sSt, ...p }));
+    if (Object.keys(sUom).length) setItemUoms((p) => ({ ...sUom, ...p }));
+    if (Object.keys(sFbrUom).length) setItemFbrUomIds((p) => ({ ...sFbrUom, ...p }));
+    if (Object.keys(sDesc).length) setItemDescriptions((p) => ({ ...sDesc, ...p }));
+    if (Object.keys(sAcct).length) setItemAccountIds((p) => ({ ...sAcct, ...p }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIds, itemTypes, allChallans]);
+
   const subtotal = allItems.reduce((sum, item) => {
     const price = parseFloat(itemPrices[item.id]) || 0;
     return sum + item.quantity * price;

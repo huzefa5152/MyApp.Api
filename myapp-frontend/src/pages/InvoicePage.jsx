@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import PaymentForm from "../Components/PaymentForm";
 import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
@@ -13,6 +13,7 @@ import BulkFbrResultsDialog from "../Components/BulkFbrResultsDialog";
 import FbrPreviewDialog from "../Components/FbrPreviewDialog";
 import BulkFbrPreviewDialog from "../Components/BulkFbrPreviewDialog";
 import InvoiceTable from "../Components/InvoiceTable";
+import CorrectionWizard from "../Components/CorrectionWizard";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
 import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, cancelInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
@@ -196,6 +197,9 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [showBulkFbrPreview, setShowBulkFbrPreview] = useState(false);
   const [clients, setClients] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  // Bill currently open in the correction wizard (null when closed). Opens the
+  // post-sale CorrectionWizard the same way Reverse-etc modals open from a row.
+  const [correctTarget, setCorrectTarget] = useState(null);
   const [showForm, setShowForm] = useState(false);
   // Separate visibility flag for the "Create Bill (No Challan)" modal so
   // it doesn't share state with the regular New Bill flow.
@@ -983,6 +987,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               onDelete={handleDeleteInvoice}
               onVoid={handleVoidInvoice}
               onReverse={handleReverseInvoice}
+              onCorrect={setCorrectTarget}
             />
           ) : (
           <div className="card-grid">
@@ -1360,6 +1365,22 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdUndo size={14} /> Reverse
                       </button>
                     )}
+                    {/* Correct: bill the balance quantity under-reported on a
+                        locked original. Eligible when FBR is on AND the bill is
+                        submitted, OR FBR is off AND the bill is fully paid.
+                        Hidden once a live supplement already exists so no
+                        duplicate correction can be created. */}
+                    {canReverse && !inv.isCancelled && !inv.hasSupplement &&
+                     inv.documentType !== 9 && inv.documentType !== 10 &&
+                     (fbrEnabled ? inv.fbrStatus === "Submitted" : inv.paymentStatus === "Paid") && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#d6eee8", color: "#0a5d50", border: "1px solid #b6ddd3" }}
+                        onClick={() => setCorrectTarget(inv)}
+                        title="Bill the balance quantity under-reported on this bill — creates a new unclassified bill (+ same challan/PO) to classify and, when FBR is on, submit to FBR."
+                      >
+                        <MdPostAdd size={14} /> Correct
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1435,6 +1456,28 @@ export default function InvoicePage({ mode = "invoices" }) {
           companyId={selectedCompany.id}
           doc={{ ...paymentHistoryDoc, number: paymentHistoryDoc.invoiceNumber }}
           onClose={() => setPaymentHistoryDoc(null)}
+        />
+      )}
+
+      {/* Post-sale correction wizard — opens from a row's Correct action.
+          supp → new unclassified delta bill (navigate to it on the Invoices
+          tab to classify); credit/debit → a note against the original (refresh
+          so the original's Reversed/Adjusted badge appears). */}
+      {correctTarget && (
+        <CorrectionWizard
+          invoice={correctTarget}
+          onClose={() => setCorrectTarget(null)}
+          onCreated={(doc, correctionMode) => {
+            setCorrectTarget(null);
+            if (selectedCompany) fetchInvoices(selectedCompany.id, page);
+            if (correctionMode === "supp") {
+              notify(`Bill #${doc.invoiceNumber} created for the balance quantity — classify it for FBR in Invoice mode.`, "success");
+              navigate(`/invoices?search=${doc.invoiceNumber}`);
+            } else {
+              const kind = correctionMode === "credit" ? "Credit" : "Debit";
+              notify(`${kind} Note #${doc.invoiceNumber} created — open the ${kind} Notes tab to validate and submit it to FBR.`, "success");
+            }
+          }}
         />
       )}
 

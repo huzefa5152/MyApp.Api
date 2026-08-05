@@ -234,13 +234,13 @@ namespace MyApp.Api.Services.Implementations
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? divisionId = null, HashSet<int>? allowedDivisionIds = null)
+            int? divisionId = null, int? salesOrderId = null, HashSet<int>? allowedDivisionIds = null)
         {
             // Auto-clear "Setup Required" challans where FBR is now ready (runs once per page load)
             await ReEvaluateSetupRequiredAsync(companyId);
 
             var (items, totalCount) = await _repository.GetPagedByCompanyAsync(
-                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, divisionId, allowedDivisionIds);
+                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, divisionId, salesOrderId, allowedDivisionIds);
 
             // Gate the Delete button client-side — only the highest-numbered
             // challan for this company is deletable.

@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import {
   MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
-  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdPayments, MdUndo,
+  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdPayments, MdUndo, MdPostAdd,
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
@@ -84,6 +84,7 @@ export default function InvoiceTable({
   onDelete,
   onVoid,
   onReverse,
+  onCorrect,
 }) {
   const navigate = useNavigate();
 
@@ -407,6 +408,21 @@ export default function InvoiceTable({
             title="Reverse this FBR-submitted bill — opens the Credit Note screen prefilled with its lines (trim for a partial return)."
           >
             <MdUndo size={14} />
+          </button>
+        )}
+        {/* Correct: bill the balance qty under-reported on a locked original.
+            Eligible when FBR is on AND the bill is submitted, OR FBR is off AND
+            the bill is fully paid. Hidden once a live supplement already exists
+            (inv.hasSupplement) so no duplicate correction is created. */}
+        {perms.canReverse && !inv.isCancelled && !inv.hasSupplement &&
+         inv.documentType !== 9 && inv.documentType !== 10 &&
+         (fbrEnabled ? isSubmitted : inv.paymentStatus === "Paid") && (
+          <button
+            style={btn.teal}
+            onClick={() => onCorrect?.(inv)}
+            title="Bill the balance quantity under-reported on this bill — creates a new unclassified bill (+ same challan/PO) to classify and, when FBR is on, submit to FBR."
+          >
+            <MdPostAdd size={14} />
           </button>
         )}
       </>

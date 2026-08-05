@@ -13,7 +13,7 @@ namespace MyApp.Api.Repositories.Interfaces
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? divisionId = null, HashSet<int>? allowedDivisionIds = null);
+            int? divisionId = null, int? salesOrderId = null, HashSet<int>? allowedDivisionIds = null);
         Task<DeliveryChallan?> GetByIdAsync(int id);
         Task<DeliveryChallan> CreateDeliveryChallanAsync(DeliveryChallan deliveryChallan);
         Task<DeliveryChallan> UpdateAsync(DeliveryChallan deliveryChallan);

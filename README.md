@@ -289,6 +289,27 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-05 — Mobile responsiveness pass (reports, stock, dashboard, layout)
+
+- **Wide report tables now readable on a phone.** The Sales Report and Tax Sheet switch to a stacked, tappable **card per row** below 768px instead of forcing a horizontal-scrolling table; the desktop tables are unchanged. The Stock Dashboard's Inventory (V2 buckets) table — previously blank on phones — now renders mobile cards too.
+- **No more sideways page-scroll on small screens.** The dashboard content wrappers no longer let a wide child stretch the whole page horizontally, and long item/counterparty names on the dashboard wrap to two lines (line-clamp) instead of being clipped so similar-prefix names ("MEKO FABRICS" vs "MEKO DENIM") stay distinguishable. Common-client/supplier company lists wrap the same way.
+
+### 2026-08-05 — Fixes: Item Type carries onto bills from a Sales Order; inline "create item type" no longer closes the parent form
+
+- **Item Type now flows Sales Order → bill.** Creating a bill from a Sales Order (via its delivered challans, or the bill form's "From Sales Order" picker) now shows each line's **Item Type already selected** instead of forcing the operator to re-pick every line. The bill form seeds each challan line's stored type (with its HS/UOM/Sale-Type/account) for untouched rows only, and the Sales-Order bill-prefill payload now carries the item-type name so it survives even before the catalog loads.
+- **Inline "Create new item type" only closes its own mini-modal.** Adding a new item type from the quick-create shortcut on any line editor (Sales Order, Quote, Challan, Bill, Purchase Bill) no longer submits and closes the parent document form — the mini-modal's submit/backdrop events are kept from bubbling to the parent, so the parent stays open with the new type selected.
+
+### 2026-08-05 — Sales Order flow: line prices, challan shortcut, challan SO filter
+
+- **Optional unit price on Sales Order lines.** Each order line now has an optional **Unit Price** field. When a bill is created from the order, a line that carries an agreed price prefills the bill at that price; lines left blank fall back to the previous behaviour (source-quote price, then the item's last-billed rate). Prices are optional, so quantity-only orders keep working unchanged.
+- **"Create Challan" shortcut on the Sales Order list.** The order row's delivery action is now a clear **Create Challan** button (was the ambiguous "Deliver") that opens the create-from-order flow directly, matching the detail screen — shown only while the order is open and not fully delivered.
+- **Filter the Delivery Challan list by Sales Order.** The Challans page has a new **Sales Order** filter (searchable, scoped to the selected company + division) so you can see just the challans raised against one order. It's a plain view filter layered on top of the existing tenant + division scoping.
+
+### 2026-08-05 — Post-sale invoice correction (Correct action)
+
+- **Correct a finalised bill without editing it in place.** A new **Correct** action on the Bills list opens a wizard that bills quantity under-reported on an original bill as a **new delta bill** (optionally cloning the original's delivery challan so the delta prints the same DC#/PO), or raises a **Credit / Debit Note** — the original stays untouched as filed. The delta bill is created unclassified and flows through the normal bill → classify → (FBR) pipeline, keeps the original's **division** and per-division numbering, and posts to the ledger when GL is on.
+- **Eligibility follows the company's FBR setting:** when FBR integration is **on**, a bill is correctable once it is **FBR-submitted** (an unsubmitted bill is just edited directly); when FBR integration is **off**, a bill is correctable once it is **fully paid**. The Correct action only appears when the bill is eligible, and **hides after a correction already exists** so no duplicate correction can be raised (also enforced server-side). Gated by the existing `invoices.note.create` permission; every correction is audit-logged.
+
 ### 2026-08-05 — Sensible defaults for newly created companies
 
 - **A new company now starts ready to trade, with three defaults applied automatically:** **FBR Integration OFF** (non-FBR wholesalers are onboarded first; turn it on in the FBR tab when the company files digital invoices), **Inventory Tracking ON using the V2 engine** (every item type is stock-tracked; HS code is FBR metadata only), and the **General Ledger ON** (a wholesale Chart of Accounts is seeded and invoices/bills/payments post to journals from day one). The company create form's **Inventory** tab notes the V2 default, and a new **Accounting** tab carries the "Enable General Ledger" toggle (checked by default). Each default is fully overridable on the create screen, and **existing companies are untouched** — the defaults apply only when a company is created (there is no migration or backfill, and company edits are unchanged). Covered by a new `scripts/test_company_defaults.py` regression check.

@@ -12,7 +12,7 @@ namespace MyApp.Api.Services.Interfaces
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? divisionId = null, HashSet<int>? allowedDivisionIds = null);
+            int? divisionId = null, int? salesOrderId = null, HashSet<int>? allowedDivisionIds = null);
         Task<DeliveryChallanDto?> GetByIdAsync(int id);
         Task<DeliveryChallanDto> CreateDeliveryChallanAsync(int companyId, DeliveryChallanDto dto);
         Task<DeliveryChallanDto?> UpdateItemsAsync(int challanId, List<DeliveryItemDto> items);

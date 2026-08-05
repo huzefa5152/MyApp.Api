@@ -41,7 +41,7 @@ namespace MyApp.Api.Repositories.Implementations
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? divisionId = null, HashSet<int>? allowedDivisionIds = null)
+            int? divisionId = null, int? salesOrderId = null, HashSet<int>? allowedDivisionIds = null)
         {
             var query = _context.DeliveryChallans
                 .Include(dc => dc.Items).ThenInclude(i => i.ItemType)
@@ -67,6 +67,12 @@ namespace MyApp.Api.Repositories.Implementations
 
             if (divisionId.HasValue)
                 query = query.Where(dc => dc.DivisionId == divisionId.Value);
+
+            // Sales-Order filter: narrow to challans raised against one order.
+            // Layered on top of the tenant + division scoping above, never
+            // replacing it.
+            if (salesOrderId.HasValue)
+                query = query.Where(dc => dc.SalesOrderId == salesOrderId.Value);
 
             if (dateFrom.HasValue)
                 query = query.Where(dc => dc.DeliveryDate >= dateFrom.Value);

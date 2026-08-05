@@ -69,6 +69,10 @@ namespace MyApp.Api.DTOs
         /// <summary>Ordered quantity.</summary>
         public decimal Quantity { get; set; }
         public string Unit { get; set; } = "";
+        /// <summary>Optional agreed unit price. When set, it prefills the bill
+        /// created from this order (taking precedence over the quote / last-billed
+        /// fallback). Null = no agreed price on the order line.</summary>
+        public decimal? UnitPrice { get; set; }
 
         // ── Computed fulfilment (server-side, never stored) ──
         public decimal DeliveredQuantity { get; set; }
@@ -166,6 +170,9 @@ namespace MyApp.Api.DTOs
     public class SalesOrderInvoicePrefillLineDto
     {
         public int? ItemTypeId { get; set; }
+        /// <summary>Item type name, carried so the bill prefill shows the type
+        /// already selected without depending on the client's catalog being loaded.</summary>
+        public string? ItemTypeName { get; set; }
         /// <summary>Non-inventory link carried from the order line so the bill prefill keeps it.</summary>
         public int? NonInventoryItemId { get; set; }
         public string? NonInventoryItemName { get; set; }

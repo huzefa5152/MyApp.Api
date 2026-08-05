@@ -82,6 +82,14 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<InvoiceDto?> CreateNoteAsync(CreateNoteDto dto, string? actorUserName = null);
         /// <summary>
+        /// Correction: bill quantity under-reported on a corrected original as a
+        /// new UNCLASSIFIED delta bill (+ optional cloned challan). Eligible when
+        /// the original is FBR-submitted (FBR-enabled company) or fully paid
+        /// (FBR-disabled company). Blocks a second live delta bill against the
+        /// same original. Returns null if the original is not found.
+        /// </summary>
+        Task<InvoiceDto?> CreateSupplementaryInvoiceAsync(int originalInvoiceId, CreateSupplementaryInvoiceDto dto, string? actorUserName = null);
+        /// <summary>
         /// Flip the IsFbrExcluded flag. Excluded bills are skipped by the
         /// bulk Validate All / Submit All endpoints; per-bill validate and
         /// submit still work. Returns the updated bill or null if not found.

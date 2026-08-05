@@ -78,6 +78,14 @@ export const reverseInvoice = (id, { reason, remarks, documentType } = {}) =>
 export const createNote = (payload) =>
   httpClient.post("/invoices/notes", payload);
 
+// Correction: bill quantity under-reported on a corrected original as a new
+// UNCLASSIFIED delta bill (+ optional cloned challan). Eligible when the
+// original is FBR-submitted (FBR on) or fully paid (FBR off).
+// payload: { lines: [{ invoiceItemId, quantity, unitPrice? }], carryChallan?, reason?, date? }
+// Gated server-side by `invoices.note.create`.
+export const supplementInvoice = (id, payload) =>
+  httpClient.post(`/invoices/${id}/supplement`, payload);
+
 // Toggle the "exclude from FBR bulk actions" flag on a bill.
 // When excluded=true, Validate All / Submit All skip this bill.
 // Per-bill Validate / Submit buttons still work regardless.
