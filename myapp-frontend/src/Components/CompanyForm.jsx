@@ -29,6 +29,7 @@ const TABS = [
     { id: "numbering", label: "Document Numbers" },
     { id: "fbr", label: "FBR Integration" },
     { id: "inventory", label: "Inventory" },
+    { id: "accounting", label: "Accounting" },
     { id: "access", label: "Access" },
 ];
 
@@ -53,9 +54,10 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         startingCreditNoteNumber: 1,
         currentCreditNoteNumber: 0,
         invoiceNumberPrefix: "",
-        // FBR master switch. Default ON for new companies (consistent with the
-        // existing tenants); operator turns it OFF for non-FBR companies.
-        fbrEnabled: true,
+        // FBR master switch. Default OFF for new companies (non-FBR wholesalers
+        // are onboarded first); operator turns it ON in the FBR tab when the
+        // company files digital invoices.
+        fbrEnabled: false,
         fbrProvinceCode: "",
         fbrBusinessActivity: "",
         fbrSector: "",
@@ -68,11 +70,15 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         fbrDefaultUOM: "",
         fbrDefaultPaymentModeRegistered: "",
         fbrDefaultPaymentModeUnregistered: "",
-        // Inventory module — off by default. Operator turns it on once
-        // they've recorded opening balances and are ready to track stock.
-        inventoryTrackingEnabled: false,
+        // Inventory module — ON by default for new companies so stock is
+        // tracked from day one. Operator can turn it off in the Inventory tab.
+        inventoryTrackingEnabled: true,
         // Hard-block over-commit/oversell (409) when tracking is on (Q4).
         stockGuardHardBlock: false,
+        // General Ledger — ON by default for new companies (seeds the Chart of
+        // Accounts + turns posting on at create). Create-only; existing
+        // companies manage GL from the Accounting page. Ignored on edit.
+        enableGl: true,
         // Billing workflow — off by default so existing tenants bill as before.
         // ON forces every bill to come from a Sales Order.
         requireSalesOrderForBilling: false,
@@ -471,6 +477,11 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                         {/* ── INVENTORY ───────────────────────────────────── */}
                         {activeTab === "inventory" && (
                             <>
+                                {!company && (
+                                    <p style={{ margin: "0 0 0.5rem", padding: "0.6rem 0.7rem", borderRadius: 8, border: "1px solid #d6e4f5", backgroundColor: "#f2f8ff", fontSize: "0.78rem", color: "#33475b", lineHeight: 1.4 }}>
+                                        New companies start on <strong>V2 inventory</strong> — every item type is stock-tracked (HS code is FBR metadata only). Switch to V1 (only HS-coded items tracked) later from Inventory settings.
+                                    </p>
+                                )}
                                 <label style={{ ...toggleCard, marginTop: 0 }}>
                                     <input type="checkbox" name="inventoryTrackingEnabled" checked={!!form.inventoryTrackingEnabled} onChange={handleChange} style={{ marginTop: "0.15rem", flexShrink: 0 }} />
                                     <span style={{ fontSize: "0.86rem", color: "#1a2332", lineHeight: 1.4 }}>
@@ -490,6 +501,25 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                     </span>
                                 </label>
                             </>
+                        )}
+
+                        {/* ── ACCOUNTING (General Ledger) ─────────────────── */}
+                        {activeTab === "accounting" && (
+                            company ? (
+                                <p style={{ marginTop: 0, padding: "0.85rem", borderRadius: 10, border: "1px dashed #d0d7e2", backgroundColor: "#fafbfc", fontSize: "0.82rem", color: "#5f6d7e" }}>
+                                    General Ledger status, backfill and the period lock date are managed from <strong>Accounting → General Ledger</strong> for an existing company. This create-time toggle only applies while a company is being created.
+                                </p>
+                            ) : (
+                                <label style={{ ...toggleCard, marginTop: 0 }}>
+                                    <input type="checkbox" name="enableGl" checked={!!form.enableGl} onChange={handleChange} style={{ marginTop: "0.15rem", flexShrink: 0 }} />
+                                    <span style={{ fontSize: "0.86rem", color: "#1a2332", lineHeight: 1.4 }}>
+                                        <strong style={{ display: "block" }}>Enable General Ledger (Chart of Accounts)</strong>
+                                        <span style={{ fontSize: "0.76rem", color: "#5f6d7e" }}>
+                                            ON (default) — seed a wholesale Chart of Accounts and post invoices/bills/payments to journals from day one. OFF — create with GL off and enable it later from the Accounting page.
+                                        </span>
+                                    </span>
+                                </label>
+                            )
                         )}
 
                         {/* ── ACCESS ──────────────────────────────────────── */}

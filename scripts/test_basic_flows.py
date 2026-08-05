@@ -123,6 +123,13 @@ def setup(base: str, admin_user: str, admin_pw: str):
         "fbrBusinessActivity": "Manufacturer",
         "fbrSector": "All Other Sectors",
         "fbrToken": "test-token-not-used-for-real-pral-calls",
+        # Pin the legacy company config so this suite keeps testing core
+        # challan/bill/invoice/tax flows unchanged, independent of the new
+        # create defaults (FBR-off, inventory-on V2, GL-on): FBR on (token
+        # above), inventory tracking off, GL posting off.
+        "fbrEnabled": True,
+        "inventoryTrackingEnabled": False,
+        "enableGl": False,
     })
     if status not in (200, 201):
         print(f"FATAL: create company failed ({status} {company})")

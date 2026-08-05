@@ -20,6 +20,7 @@ namespace MyApp.Api.Services.Implementations
         private readonly AppDbContext _context;
         private readonly ILogger<CompanyService> _logger;
         private readonly ICompanyAccessGuard _access;
+        private readonly IGeneralLedgerService _gl;
 
         public CompanyService(
             ICompanyRepository repository,
@@ -28,7 +29,8 @@ namespace MyApp.Api.Services.Implementations
             IDeliveryChallanService challanService,
             AppDbContext context,
             ILogger<CompanyService> logger,
-            ICompanyAccessGuard access)
+            ICompanyAccessGuard access,
+            IGeneralLedgerService gl)
         {
             _repository = repository;
             _challanRepo = challanRepo;
@@ -37,6 +39,7 @@ namespace MyApp.Api.Services.Implementations
             _context = context;
             _logger = logger;
             _access = access;
+            _gl = gl;
         }
 
         private static CompanyDto ToDto(Company c, bool hasChallans = false, bool hasInvoices = false,
@@ -181,6 +184,7 @@ namespace MyApp.Api.Services.Implementations
                 FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered,
                 FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered,
                 InventoryTrackingEnabled = dto.InventoryTrackingEnabled,
+                InventoryFlowVersion = dto.InventoryFlowVersion,
                 StockGuardHardBlock = dto.StockGuardHardBlock,
                 StartingPurchaseBillNumber = dto.StartingPurchaseBillNumber,
                 CurrentPurchaseBillNumber = 0,
@@ -190,6 +194,28 @@ namespace MyApp.Api.Services.Implementations
             };
 
             var created = await _repository.AddAsync(company);
+
+            // New-company default: turn the General Ledger on so the Chart of
+            // Accounts + posting exist from day one. Routed through the GL enable
+            // flow (seeds the CoA, then flips GlPostingEnabled) — NOT a bare
+            // GlPostingEnabled = true, which would leave posting on with no
+            // accounts to resolve to. The operator can opt out via EnableGl=false.
+            // A GL-seed hiccup must never fail the company create itself: log and
+            // leave GL off for the operator to enable later from the Accounting page.
+            if (dto.EnableGl)
+            {
+                try
+                {
+                    await _gl.EnableAsync(created.Id);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "Company {CompanyId} created, but auto-enabling the General Ledger failed; GL left off.",
+                        created.Id);
+                }
+            }
+
             return ToDto(created);
         }
 

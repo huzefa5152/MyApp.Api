@@ -109,6 +109,8 @@ def setup(base: str, admin_user: str, admin_pw: str):
         # V2 engine on, with the hard block so over-commit / oversell are refused.
         "inventoryTrackingEnabled": True,
         "stockGuardHardBlock": True,
+        # GL posting off — this suite pins the V2 stock lifecycle, not journals.
+        "enableGl": False,
     })
     if status not in (200, 201):
         print(f"FATAL: create company failed ({status} {company})")

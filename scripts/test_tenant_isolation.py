@@ -153,6 +153,14 @@ for name in ["Test Alpha Co.", "Test Beta Co.", "Test Gamma Co."]:
         "startingGoodsReceiptNumber": 1,
         "fbrEnvironment": "sandbox",
         "fbrProvinceCode": 8,
+        # Pin the legacy company config so this tenant-isolation suite is
+        # unaffected by the new-company create defaults (FBR-off, inventory-on
+        # V2, GL-on): it seeds unclassified sales-order/bill lines to probe
+        # access control, which a V2 company would reject on classification.
+        "fbrEnabled": True,
+        "inventoryTrackingEnabled": False,
+        "inventoryFlowVersion": 1,
+        "enableGl": False,
     }
     status, data = request("POST", "/api/companies", token=admin, body=payload)
     assert status == 201 or status == 200, f"create company {name}: {status} {data}"

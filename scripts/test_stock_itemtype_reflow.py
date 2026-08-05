@@ -191,6 +191,13 @@ def setup(base: str, admin_user: str, admin_pw: str):
         # (we assert on deltas, not on shortage rejection).
         "inventoryTrackingEnabled": True,
         "stockGuardHardBlock": False,
+        # Pin the legacy setup explicitly so this suite stays byte-identical to
+        # its V1 HS-gated polarity regardless of the new-company create defaults
+        # (which are FBR-off, V2 inventory, GL-on): V1 flow version + FBR on
+        # (this suite classifies HS-coded item types) + GL posting off.
+        "fbrEnabled": True,
+        "inventoryFlowVersion": 1,
+        "enableGl": False,
     })
     if status not in (200, 201):
         print(f"FATAL: create company failed ({status} {company})")

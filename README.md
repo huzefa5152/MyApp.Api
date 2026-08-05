@@ -289,6 +289,10 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-05 — Sensible defaults for newly created companies
+
+- **A new company now starts ready to trade, with three defaults applied automatically:** **FBR Integration OFF** (non-FBR wholesalers are onboarded first; turn it on in the FBR tab when the company files digital invoices), **Inventory Tracking ON using the V2 engine** (every item type is stock-tracked; HS code is FBR metadata only), and the **General Ledger ON** (a wholesale Chart of Accounts is seeded and invoices/bills/payments post to journals from day one). The company create form's **Inventory** tab notes the V2 default, and a new **Accounting** tab carries the "Enable General Ledger" toggle (checked by default). Each default is fully overridable on the create screen, and **existing companies are untouched** — the defaults apply only when a company is created (there is no migration or backfill, and company edits are unchanged). Covered by a new `scripts/test_company_defaults.py` regression check.
+
 ### 2026-07-18 — Print letterhead logo fix (tax invoice, credit/debit notes) + Purchase Debit Note picker
 
 - **Company logo now prints on the Sales Tax Invoice, Credit Notes and Debit Notes** — the letterhead logo was missing from these printed/PDF documents. Root cause: their print templates render the logo via `{{companyLogoPath}}`/`{{divisionLogoPath}}`, but the tax-invoice print payload (shared by tax invoices and sales credit/debit notes) only supplied the issuer logo under `{{supplierLogoPath}}`, so the token resolved blank. The payload now provides the issuer (your company/division) under **both** naming conventions — `company*`/`division*` **and** `supplier*` — so the logo and letterhead render regardless of which convention the active template was authored with. Same fix applied to the Purchase Debit Note print payload. No template edits or data changes required.
