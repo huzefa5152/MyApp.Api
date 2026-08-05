@@ -117,7 +117,7 @@ export default function SalesOrderPage() {
     } else { setDivisionFilter(""); setClientFilter(""); setClients([]); setOrders([]); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany]);
-  useEffect(() => { if (selectedCompany) fetchOrders(selectedCompany.id, page); }, [page, search, statusFilter, divisionFilter]);
+  useEffect(() => { if (selectedCompany) fetchOrders(selectedCompany.id, page); }, [page, search, statusFilter, divisionFilter, clientFilter]);
 
   const reload = () => selectedCompany && fetchOrders(selectedCompany.id, page);
 
@@ -247,11 +247,6 @@ export default function SalesOrderPage() {
               {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
             </select>
             <DivisionSelect companyId={selectedCompany?.id} value={divisionFilter} onChange={(v) => { setDivisionFilter(v); setPage(1); }} style={dropdownStyles.base} />
-            {canViewClients && (
-              <div style={{ minWidth: 200, maxWidth: 300 }}>
-                <SearchableSelect items={clients} value={clientFilter} onChange={(id) => { setClientFilter(id ? String(id) : ""); setPage(1); }} placeholder="All Clients" />
-              </div>
-            )}
           </div>
           {selectedCompany && (
             <div className="filters-row">
@@ -263,6 +258,11 @@ export default function SalesOrderPage() {
                 <option value="">All Status</option>
                 {["Open", "Closed", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}
               </select>
+              {canViewClients && (
+                <div style={{ flex: 1, minWidth: 180, maxWidth: 260 }}>
+                  <SearchableSelect items={clients} value={clientFilter} onChange={(id) => { setClientFilter(id ? String(id) : ""); setPage(1); }} placeholder="All Clients" />
+                </div>
+              )}
               <PrintTemplateSelect picker={tplPicker} />
             </div>
           )}
