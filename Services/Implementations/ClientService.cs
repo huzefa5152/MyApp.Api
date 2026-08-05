@@ -369,19 +369,29 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new { ClientId = g.Key, Q = g.Sum(x => x.Quantity) })
                 .ToDictionaryAsync(x => x.ClientId, x => x.Q);
 
+            // Delivered qty must exclude CANCELLED challans — a cancelled challan's
+            // lines are no longer a real delivery. Mirrors the authoritative
+            // SalesOrderService delivered-qty logic (which always filters
+            // DeliveryChallan.Status != "Cancelled"). Without this, cancelling a
+            // delivery challan wrongly kept its qty "delivered", pushing
+            // QtyToDeliver negative on the Customers screen.
             var deliveredOnOrdersByClient = await _context.DeliveryItems
                 .Where(di => di.SalesOrderItemId != null
                              && di.SalesOrderItem!.SalesOrder.CompanyId == companyId
-                             && di.SalesOrderItem.SalesOrder.Status != "Cancelled")
+                             && di.SalesOrderItem.SalesOrder.Status != "Cancelled"
+                             && di.DeliveryChallan.Status != "Cancelled")
                 .GroupBy(di => di.SalesOrderItem!.SalesOrder.ClientId)
                 .Select(g => new { ClientId = g.Key, Q = g.Sum(x => x.Quantity) })
                 .ToDictionaryAsync(x => x.ClientId, x => x.Q);
 
             // Qty to invoice = Σ delivered quantity on challans not yet billed.
+            // Excludes cancelled challans — they will never be billed, so their
+            // lines must not inflate "To Invoice".
             var toInvoiceByClient = await _context.DeliveryItems
                 .Where(di => di.DeliveryChallan.CompanyId == companyId
                              && di.DeliveryChallan.InvoiceId == null
-                             && !di.DeliveryChallan.IsDemo)
+                             && !di.DeliveryChallan.IsDemo
+                             && di.DeliveryChallan.Status != "Cancelled")
                 .GroupBy(di => di.DeliveryChallan.ClientId)
                 .Select(g => new { ClientId = g.Key, Q = g.Sum(x => x.Quantity) })
                 .ToDictionaryAsync(x => x.ClientId, x => x.Q);
