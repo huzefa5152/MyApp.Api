@@ -468,8 +468,18 @@ namespace MyApp.Api.Services.Implementations
         // "22-APR-26 10:37:56 AM  registered person must issue Sales T").
         // No trailing word-boundary — many markers end in `#` or `:` which
         // are non-word characters and would break a trailing `\b`.
+        //
+        // The lone-currency marker "Rs." is anchored to a WHOLE line
+        // (`^\s*Rs\.\s*$`) as a top-level alternative — NOT `\s Rs.$` inside
+        // the shared prefix group. A bare "Rs." on its own line is chrome (a
+        // stray currency column header the Lotte layout occasionally wraps),
+        // but a data row whose Amount column carries a trailing currency suffix
+        // ("Butter Paper  12.0000  pack  6,500.00000  78,000.00 Rs.", the
+        // Hudson Pharma layout) ALSO ends in "Rs." — the old `Rs\.\s*$` token
+        // matched it and silently dropped the only item row. Whole-line
+        // anchoring keeps the stray-currency skip while leaving amount rows alone.
         private static readonly Regex PageChromeRegex = new(
-            @"(^\s*|\s)(Print\s+Date|Printed\s+By|Prepared\s+By|Special\s+Instructions|U\s*/\s*S\s+\d+\s+of\s+Sales\s+Tax|registered\s+person|It'?s\s+a\s+Product\s+of|\d+\s*\)\s+(Payment|Supplier|Documents|Lotte|Freight|Goods|Delivery|Shelf)|Terms\s*:|SCM\s*-|Purchase\s+Order\s+for|Documents\s+Required|Page\s+No|Page\s+\d+\s+of\s+\d+|Continued\b|Supplier\s+Name|Supplier\s+Address|Address\s*:|Location\s*:|P\.?O\.?\s*Date|P\.?O\.?\s*#|P\.?R\.?\s*#|Pur\.?\s*Req\.?|Purchase\s+Req|N\.?T\.?N\.?\s*No|G\.?S\.?T\.?\s*No|Phone\s*#|Fax\s*#|LOTTE\s+Kolson|MEKO\s+DENIM|SOORTY|Noman\s+Aslam|L-\d+\s*,\s*Block|F\.B\.?\s*Industrial|Rs\.\s*$|Item\s+Name\s*$|Item\s+Id|Unit\s+Price|Total\s+Price|Required\s+Delivery\s+Date|Payment\s+Terms|Delivery\s+Terms|Delivery\s+Location|Non-Inventory\s+Items|Dispensary\s*:)",
+            @"^\s*Rs\.\s*$|(^\s*|\s)(Print\s+Date|Printed\s+By|Prepared\s+By|Special\s+Instructions|U\s*/\s*S\s+\d+\s+of\s+Sales\s+Tax|registered\s+person|It'?s\s+a\s+Product\s+of|\d+\s*\)\s+(Payment|Supplier|Documents|Lotte|Freight|Goods|Delivery|Shelf)|Terms\s*:|SCM\s*-|Purchase\s+Order\s+for|Documents\s+Required|Page\s+No|Page\s+\d+\s+of\s+\d+|Continued\b|Supplier\s+Name|Supplier\s+Address|Address\s*:|Location\s*:|P\.?O\.?\s*Date|P\.?O\.?\s*#|P\.?R\.?\s*#|Pur\.?\s*Req\.?|Purchase\s+Req|N\.?T\.?N\.?\s*No|G\.?S\.?T\.?\s*No|Phone\s*#|Fax\s*#|LOTTE\s+Kolson|MEKO\s+DENIM|SOORTY|Noman\s+Aslam|L-\d+\s*,\s*Block|F\.B\.?\s*Industrial|Item\s+Name\s*$|Item\s+Id|Unit\s+Price|Total\s+Price|Required\s+Delivery\s+Date|Payment\s+Terms|Delivery\s+Terms|Delivery\s+Location|Non-Inventory\s+Items|Dispensary\s*:)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         // Standalone timestamp / page-printed-on stamp like

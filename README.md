@@ -289,6 +289,10 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-05 — PO import: fix single-item POs whose amount ends in "Rs." (Hudson Pharma)
+
+- **Fixed POs that produced an empty parse.** The importer's page-chrome skip rule matched any line ending in `Rs.`, so a single-item order (e.g. Hudson Pharma → ABBAS ALI & SONS: `Butter Paper  12  pack  6,500.00000  78,000.00 Rs.`) had its only item row discarded as footer chrome — the "format matched but nothing parsed" symptom. The rule now only skips a line that is *just* `Rs.`; a data/total row that merely ends in `Rs.` is kept. Both sample POs added to the parser regression corpus.
+
 ### 2026-08-05 — Sales Order: jump to challans + filter by client
 
 - **View Challans shortcut.** A Sales Order's challan count is now a link, and its detail screen has a **View Challans** button — both open the Delivery Challan screen filtered to that order.
