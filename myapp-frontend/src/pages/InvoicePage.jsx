@@ -10,6 +10,7 @@ import BulkFbrPreviewDialog from "../Components/BulkFbrPreviewDialog";
 import InvoiceTable from "../Components/InvoiceTable";
 import Pagination from "../Components/Pagination";
 import CorrectionWizard from "../Components/CorrectionWizard";
+import FbrResetModal from "../Components/FbrResetModal";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import AttachmentBadge from "../Components/AttachmentBadge";
 import AttachmentQuickModal from "../Components/AttachmentQuickModal";
@@ -58,6 +59,8 @@ function statusPill(tone, Icon, label, title) {
 function renderFbrPill(inv, isBillsMode) {
   if (inv.isCancelled) return statusPill("red", MdCancel, "Cancelled", inv.cancelReason ? `Cancelled — ${inv.cancelReason}` : "Cancelled (voided). Its delivery challan(s) were reverted to Pending.");
   if (inv.fbrStatus === "Submitted") return statusPill("green", MdCheckCircle, "Submitted", inv.fbrIRN ? `Submitted to FBR — IRN ${inv.fbrIRN} (locked from edits)` : "Submitted to FBR (locked from edits)");
+  if (inv.fbrStatus === "Submitting") return statusPill("blue", MdHourglassEmpty, "Submitting…", "A submission is in progress. Please wait and refresh — do not submit again.");
+  if (inv.fbrStatus === "Uncertain") return statusPill("amber", MdError, "Uncertain", "A previous submission timed out and its FBR outcome is unconfirmed. An administrator must verify it at FBR and reset it before it can be submitted again.");
   if (isBillsMode) return statusPill("amber", MdHourglassEmpty, "Pending", "Pending FBR submission — open the Invoices tab to validate & submit.");
   if (inv.fbrStatus === "Failed") return statusPill("red", MdError, "Failed", inv.fbrErrorMessage || "FBR rejected this submission. Open View FBR for details.");
   if (inv.fbrAdjustmentStale) return statusPill("amber", MdError, "Re-adjust", `Bill changed after FBR adjust — Bill Rs. ${Number(inv.subtotal).toLocaleString()} vs FBR Rs. ${Number(inv.fbrAdjustedSubtotal ?? inv.subtotal).toLocaleString()}. Reopen, re-adjust qty/price, then save.`);
@@ -164,6 +167,9 @@ export default function InvoicePage({ mode = "invoices" }) {
   // separated from invoices.manage.update so a role can be granted ONLY
   // the toggle without also gaining edit rights on the bill itself.
   const canFbrExclude = has("invoices.fbr.exclude");
+  // Admin recovery for a bill stuck in a non-resubmittable FBR state
+  // ("Submitting"/"Uncertain") after a timed-out or crashed submit.
+  const canFbrReset = has("invoices.fbr.reset");
   // Dedicated permission for the FBR preview dialog — operator can sanity-
   // check the grouped items / totals before clicking Validate or Submit
   // without being trusted to actually call FBR. Administrator gets it
@@ -187,6 +193,8 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [invoices, setInvoices] = useState([]);
   const [attachTarget, setAttachTarget] = useState(null);
   const [correctTarget, setCorrectTarget] = useState(null);
+  // Bill selected for the admin "Reset FBR state" modal (Submitting/Uncertain).
+  const [resetTarget, setResetTarget] = useState(null);
   const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "Invoice", invoices.map((r) => r.id));
   const [showForm, setShowForm] = useState(false);
   // Separate visibility flag for the "Create Bill (No Challan)" modal so
@@ -497,6 +505,9 @@ export default function InvoicePage({ mode = "invoices" }) {
       fetchInvoices(selectedCompany.id, page);
     } finally { setFbrLoading(null); }
   };
+
+  // Open the admin "Reset FBR state" modal for a stuck bill (Submitting/Uncertain).
+  const handleFbrReset = (inv) => setResetTarget(inv);
 
   const handleDeleteInvoice = async (inv) => {
     if (inv.fbrStatus === "Submitted") {
@@ -979,6 +990,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                 canFbrSubmit,
                 canOpenEdit: canEditInThisMode,
                 canFbrExclude,
+                canFbrReset,
                 canDelete,
                 canVoid,
                 canReverse,
@@ -1001,6 +1013,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               onFbrPreview={(inv) => setFbrPreviewId(inv.id)}
               onFbrValidate={handleFbrValidate}
               onFbrSubmit={handleFbrSubmit}
+              onFbrReset={handleFbrReset}
               onEdit={(inv) => setEditingId(inv.id)}
               onToggleFbrExcluded={handleToggleFbrExcluded}
               onDelete={handleDeleteInvoice}
@@ -1152,7 +1165,16 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdVisibility size={14} /> View FBR
                       </button>
                     )}
-                    {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
+                    {!isBillsMode && canFbrReset && (inv.fbrStatus === "Submitting" || inv.fbrStatus === "Uncertain") && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#fff8e1", color: "#8a6d00", border: "1px solid #ffe082" }}
+                        onClick={() => handleFbrReset(inv)}
+                        title="Reset this bill's FBR state (stuck after a timed-out/uncertain submit). Verify at FBR first."
+                      >
+                        <MdRestore size={14} /> Reset FBR
+                      </button>
+                    )}
+                    {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && inv.fbrStatus !== "Submitting" && inv.fbrStatus !== "Uncertain" && !inv.isCancelled && (
                       <>
                         {canFbrValidate && (
                           <button
@@ -1353,6 +1375,19 @@ export default function InvoicePage({ mode = "invoices" }) {
             if (selectedCompany) fetchInvoices(selectedCompany.id, page);
             notify(`Bill #${bill.invoiceNumber} created for the balance quantity — classify it for FBR in Invoice mode.`, "success");
             navigate(`/invoices?search=${bill.invoiceNumber}`);
+          }}
+        />
+      )}
+
+      {resetTarget && (
+        <FbrResetModal
+          invoice={resetTarget}
+          onClose={() => setResetTarget(null)}
+          onDone={() => {
+            const wasRetry = resetTarget;
+            setResetTarget(null);
+            if (selectedCompany) fetchInvoices(selectedCompany.id, page);
+            notify(`Bill #${wasRetry.invoiceNumber}: FBR state reset.`, "success");
           }}
         />
       )}

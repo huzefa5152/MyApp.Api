@@ -25,6 +25,12 @@ function fbrStatusBadge(inv, isBillsMode) {
       </StatusBadge>
     );
   }
+  if (inv.fbrStatus === "Submitting") {
+    return <StatusBadge tone="info" title="A submission is in progress. Please wait and refresh — do not submit again.">Submitting…</StatusBadge>;
+  }
+  if (inv.fbrStatus === "Uncertain") {
+    return <StatusBadge tone="warning" title="A previous submission timed out — its FBR outcome is unconfirmed. An administrator must verify it at FBR and reset it.">Uncertain</StatusBadge>;
+  }
   if (isBillsMode) {
     return <StatusBadge tone="warning">Pending FBR</StatusBadge>;
   }
@@ -72,6 +78,7 @@ export default function InvoiceTable({
   onFbrPreview,
   onFbrValidate,
   onFbrSubmit,
+  onFbrReset,
   onEdit,
   onToggleFbrExcluded,
   onDelete,
@@ -217,6 +224,11 @@ export default function InvoiceTable({
 
   const renderActions = (inv) => {
     const isSubmitted = inv.fbrStatus === "Submitted";
+    // A bill mid-submit ("Submitting") or with an unconfirmed outcome
+    // ("Uncertain") is NOT submittable — the server refuses it, so we must not
+    // offer Validate/Submit. It can only be moved on via the admin Reset action.
+    const isFbrPending = inv.fbrStatus === "Submitting" || inv.fbrStatus === "Uncertain";
+    const canReset = !!perms?.canFbrReset && isFbrPending;
     return (
       <>
         {isBillsMode && (
@@ -298,7 +310,16 @@ export default function InvoiceTable({
             <MdVisibility size={14} />
           </button>
         )}
-        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && !isSubmitted && !inv.isCancelled && (
+        {!isBillsMode && canReset && (
+          <button
+            style={{ ...btn.neutral, backgroundColor: "#fff8e1", color: "#8a6d00", border: "1px solid #ffe082" }}
+            onClick={() => onFbrReset?.(inv)}
+            title="Reset this bill's FBR state (it is stuck after a timed-out/uncertain submit). Verify at FBR first."
+          >
+            <MdRestore size={14} />
+          </button>
+        )}
+        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && !isSubmitted && !isFbrPending && !inv.isCancelled && (
           <>
             {perms.canFbrValidate && (
               <button
