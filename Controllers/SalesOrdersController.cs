@@ -232,6 +232,50 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
+        /// Challans that can be attached to this order — unlinked, unbilled,
+        /// non-cancelled deliveries in the order's division for the order's
+        /// client (e.g. No-PO challans raised before the PO arrived).
+        /// </summary>
+        [HttpGet("{id}/attachable-challans")]
+        [HasPermission("salesorders.list.view")]
+        public async Task<ActionResult<List<AttachableChallanDto>>> GetAttachableChallans(int id)
+        {
+            var order = await _service.GetByIdAsync(id);
+            if (order == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, order.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, order.CompanyId, order.DivisionId);
+            return Ok(await _service.GetAttachableChallansAsync(id));
+        }
+
+        /// <summary>
+        /// Attach an existing challan to this order (map its lines onto the
+        /// ordered lines, adopt the order's PO). Reuses challans.manage.create —
+        /// the same gate as raising a challan from an order — since it links a
+        /// challan into the order's fulfilment chain.
+        /// </summary>
+        [HttpPost("{id}/attach-challan")]
+        [HasPermission("challans.manage.create")]
+        public async Task<ActionResult<SalesOrderDto>> AttachChallan(int id, [FromBody] AttachChallanRequestDto dto)
+        {
+            var order = await _service.GetByIdAsync(id);
+            if (order == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, order.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, order.CompanyId, order.DivisionId);
+            try
+            {
+                var updated = await _service.AttachChallanAsync(id, dto);
+                return updated == null ? NotFound() : Ok(updated);
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (KeyNotFoundException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Attach challan {ChallanId} to sales order {OrderId} failed", dto?.ChallanId, id);
+                return StatusCode(500, new { error = "Could not attach the challan to this order. Please try again." });
+            }
+        }
+
+        /// <summary>
         /// Prefill for "create a bill from this order" (FBR-off standalone
         /// billing): header + lines with server-resolved unit prices (source
         /// quote first, then last billed rate). Gated by the bill-create

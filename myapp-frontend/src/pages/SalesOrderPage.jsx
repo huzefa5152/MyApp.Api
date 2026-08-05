@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdUploadFile, MdVisibility, MdReceiptLong } from "react-icons/md";
+import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdUploadFile, MdVisibility, MdReceiptLong, MdLink } from "react-icons/md";
 import SalesOrderForm from "../Components/SalesOrderForm";
 import CreateChallanFromOrderModal from "../Components/CreateChallanFromOrderModal";
+import AttachChallanToOrderModal from "../Components/AttachChallanToOrderModal";
 import SalesOrderDetailModal from "../Components/SalesOrderDetailModal";
 import POImportForm from "../Components/POImportForm";
 import InvoiceForm from "../Components/InvoiceForm";
@@ -53,6 +54,7 @@ export default function SalesOrderPage() {
   const [showForm, setShowForm] = useState(false);
   const [editOrder, setEditOrder] = useState(null);
   const [deliverOrder, setDeliverOrder] = useState(null);
+  const [attachOrder, setAttachOrder] = useState(null);
   const [viewOrder, setViewOrder] = useState(null);
   const [billChallanIds, setBillChallanIds] = useState(null);
   const [page, setPage] = useState(1);
@@ -163,6 +165,12 @@ export default function SalesOrderPage() {
     setDeliverOrder(null);
     reload();
     notify(`Delivery Challan #${challan.challanNumber} created from this order.`, "success");
+  };
+
+  const onChallanAttached = () => {
+    setAttachOrder(null);
+    reload();
+    notify("Delivery challan attached to this order.", "success");
   };
 
   // Generate one bill for ALL of this order's unbilled, non-cancelled
@@ -279,6 +287,7 @@ export default function SalesOrderPage() {
                   <div style={st.actions}>
                     {canView && <button style={st.actBtn} onClick={() => setViewOrder(o)} title="View details"><MdVisibility size={16} /></button>}
                     {canDeliver && <button style={st.deliverBtn} onClick={() => setDeliverOrder(o)} title="Create a delivery challan for this order"><MdLocalShipping size={15} /> Create Challan</button>}
+                    {canDeliver && <button style={st.attachBtn} onClick={() => setAttachOrder(o)} title="Attach an existing delivery challan to this order"><MdLink size={15} /> Attach Challan</button>}
                     {canUpdate && o.isEditable && <button style={st.actBtn} onClick={() => { setEditOrder(o); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
                     {canPrint && <button style={{ ...st.actBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} onClick={() => handlePrint(o)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}><MdPrint size={16} /></button>}
                     {canPrint && <button style={{ ...st.actBtn, opacity: (tplPicker.noTemplate || exportingId === o.id) ? 0.5 : 1, ...(tplPicker.noTemplate ? { cursor: "not-allowed" } : {}) }} onClick={() => handleExportPdf(o)} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={16} /></button>}
@@ -310,6 +319,9 @@ export default function SalesOrderPage() {
       {deliverOrder && (
         <CreateChallanFromOrderModal order={deliverOrder} onClose={() => setDeliverOrder(null)} onCreated={onChallanCreated} />
       )}
+      {attachOrder && selectedCompany && (
+        <AttachChallanToOrderModal companyId={selectedCompany.id} order={attachOrder} onClose={() => setAttachOrder(null)} onAttached={onChallanAttached} />
+      )}
       {viewOrder && (
         <SalesOrderDetailModal
           order={viewOrder}
@@ -318,6 +330,7 @@ export default function SalesOrderPage() {
           onPrint={canPrint ? handlePrint : undefined}
           onEdit={canUpdate ? (o) => { setEditOrder(o); setShowForm(true); } : undefined}
           onDeliver={canMakeChallan ? (o) => setDeliverOrder(o) : undefined}
+          onAttach={canMakeChallan ? (o) => setAttachOrder(o) : undefined}
           onGenerateBill={canBill ? (o) => handleGenerateBill(o) : undefined}
         />
       )}
@@ -381,6 +394,7 @@ const st = {
   challanCount: { display: "inline-flex", alignItems: "center", gap: "0.2rem", fontSize: "0.75rem", color: colors.textSecondary },
   actions: { display: "flex", gap: "0.4rem", marginTop: "0.75rem", flexWrap: "wrap", alignItems: "center" },
   deliverBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.7rem", borderRadius: 8, border: "none", background: colors.teal, color: "#fff", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
+  attachBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.7rem", borderRadius: 8, border: `1px solid ${colors.teal}`, background: "#fff", color: colors.teal, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
   billBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.7rem", borderRadius: 8, border: "none", background: colors.blue, color: "#fff", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
   // grid + placeItems centres the icon WITHOUT the flexbox quirk that
   // collapses a lone react-icon SVG to width:0 inside a fixed-width flex button.

@@ -289,6 +289,10 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-05 — Sales Orders: attach an existing delivery challan to an order
+
+- **Link a challan raised before the order.** A Sales Order now has an **Attach Challan** action (on the card and in the order detail view, beside Create Challan) that links an existing, unlinked, unbilled delivery challan to the order — for deliveries made before the customer PO / order existed. The operator picks the challan and maps each of its lines onto an ordered line (auto-suggested by item type / description) or adds it as a new order line; the delivered quantity then counts toward fulfilment and the challan becomes billable under the order's PO. No stock movement is recorded (the challan already booked its stock at creation). Only challans in the **same company, same division, and same customer** as the order are offered, and attaching never moves a challan across divisions.
+
 ### 2026-08-05 — Mobile responsiveness pass (reports, stock, dashboard, layout)
 
 - **Wide report tables now readable on a phone.** The Sales Report and Tax Sheet switch to a stacked, tappable **card per row** below 768px instead of forcing a horizontal-scrolling table; the desktop tables are unchanged. The Stock Dashboard's Inventory (V2 buckets) table — previously blank on phones — now renders mobile cards too.

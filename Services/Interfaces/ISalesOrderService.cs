@@ -37,5 +37,22 @@ namespace MyApp.Api.Services.Interfaces
         Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
         /// <summary>Delivery challans raised against this order, for the View / drill-down.</summary>
         Task<List<SalesOrderChallanDto>> GetChallansForOrderAsync(int orderId);
+        /// <summary>
+        /// Unlinked, unbilled, non-cancelled challans in this order's division —
+        /// for the order's client — that carry no PO of their own. Candidates
+        /// for attaching to the order (e.g. No-PO challans raised before the PO
+        /// arrived). Empty when the order doesn't exist.
+        /// </summary>
+        Task<List<AttachableChallanDto>> GetAttachableChallansAsync(int orderId);
+        /// <summary>
+        /// Link an existing challan to this order: map its lines onto the ordered
+        /// lines (roll-up), copy the order's PO onto the challan (flipping "No PO"
+        /// → "Pending" when the order has a PO), and auto-close the order if it's
+        /// now fully delivered. The challan must be in the SAME company AND
+        /// division as the order. Records NO stock movement — the challan's stock
+        /// was already booked at its creation. Returns the updated order, or null
+        /// when the order doesn't exist.
+        /// </summary>
+        Task<SalesOrderDto?> AttachChallanAsync(int orderId, AttachChallanRequestDto dto);
     }
 }

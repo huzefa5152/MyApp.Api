@@ -55,5 +55,15 @@ export const getSalesOrderPrintData = (id) =>
 export const getSalesOrderChallans = (id) =>
   httpClient.get(`/salesorders/${id}/challans`);
 
+// Unlinked, unbilled challans in this order's division for the order's client —
+// candidates to attach (e.g. No-PO challans raised before the PO arrived).
+export const getAttachableChallans = (id) =>
+  httpClient.get(`/salesorders/${id}/attachable-challans`);
+
+// Attach an existing challan to this order.
+// payload = { challanId, lineMappings: [{ deliveryItemId, salesOrderItemId|null }] }
+export const attachChallanToOrder = (id, payload) =>
+  httpClient.post(`/salesorders/${id}/attach-challan`, payload);
+
 export const getSalesOrdersCount = (companyId) =>
   httpClient.get("/salesorders/count", { params: companyId ? { companyId } : {} });

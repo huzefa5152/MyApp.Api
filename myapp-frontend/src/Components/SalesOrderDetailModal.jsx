@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  MdClose, MdPrint, MdLocalShipping, MdEdit, MdInventory2, MdReceiptLong,
+  MdClose, MdPrint, MdLocalShipping, MdEdit, MdInventory2, MdReceiptLong, MdLink,
 } from "react-icons/md";
 import { getSalesOrderChallans } from "../api/salesOrderApi";
 import AttachmentManager from "./AttachmentManager";
@@ -22,9 +22,9 @@ const LINE_COLORS = { Pending: "#5f6d7e", Partial: "#f57c00", Complete: "#28a745
  * Read-only Sales Order detail with delivery drill-down. Shows the order
  * header, every line's ordered/delivered/remaining, and each delivery challan
  * raised against the order (with the lines it delivered). Optional action
- * callbacks (print / edit / deliver) let the parent launch those flows.
+ * callbacks (print / edit / deliver / attach) let the parent launch those flows.
  */
-export default function SalesOrderDetailModal({ order, onClose, onPrint, onEdit, onDeliver, onGenerateBill, canDeliver }) {
+export default function SalesOrderDetailModal({ order, onClose, onPrint, onEdit, onDeliver, onAttach, onGenerateBill, canDeliver }) {
   const [challans, setChallans] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -174,6 +174,7 @@ export default function SalesOrderDetailModal({ order, onClose, onPrint, onEdit,
             {onEdit && order.isEditable && <button style={st.btnGhost} onClick={() => { onClose(); onEdit(order); }}><MdEdit size={15} /> Edit</button>}
             {onPrint && <button style={st.btnGhost} onClick={() => onPrint(order)}><MdPrint size={15} /> Print</button>}
             {onDeliver && canDeliver && <button style={st.btnTeal} onClick={() => { onClose(); onDeliver(order); }}><MdLocalShipping size={15} /> Create Challan</button>}
+            {onAttach && canDeliver && <button style={st.btnTealOutline} onClick={() => { onClose(); onAttach(order); }}><MdLink size={15} /> Attach Challan</button>}
             {onGenerateBill && billableChallans.length > 0 && <button style={st.btnBlue} onClick={() => { onClose(); onGenerateBill(order); }}><MdReceiptLong size={15} /> Generate Bill</button>}
           </div>
         </div>
@@ -237,4 +238,5 @@ const st = {
   btnGhost: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", borderRadius: 9, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" },
   btnBlue: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", borderRadius: 9, border: "none", background: colors.blue, color: "#fff", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" },
   btnTeal: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", borderRadius: 9, border: "none", background: colors.teal, color: "#fff", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" },
+  btnTealOutline: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", borderRadius: 9, border: `1px solid ${colors.teal}`, background: "#fff", color: colors.teal, fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" },
 };

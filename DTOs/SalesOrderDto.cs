@@ -115,6 +115,54 @@ namespace MyApp.Api.DTOs
     }
 
     /// <summary>
+    /// A delivery challan that can be attached to a Sales Order: unlinked
+    /// (SalesOrderId null), unbilled, non-cancelled, non-demo, in the SAME
+    /// division as the order, and for the order's client. Lines carry the
+    /// DeliveryItem id so the operator can map each to an ordered line at
+    /// attach time.
+    /// </summary>
+    public class AttachableChallanDto
+    {
+        public int Id { get; set; }
+        public int ChallanNumber { get; set; }
+        public DateTime? DeliveryDate { get; set; }
+        public string Status { get; set; } = "";
+        public string? PoNumber { get; set; }
+        public string? Site { get; set; }
+        public bool IsImported { get; set; }
+        public List<AttachableChallanLineDto> Lines { get; set; } = new();
+    }
+
+    public class AttachableChallanLineDto
+    {
+        public int DeliveryItemId { get; set; }
+        public int? ItemTypeId { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        public string Description { get; set; } = "";
+        public decimal Quantity { get; set; }
+        public string Unit { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Request to attach an existing (unlinked, unbilled) delivery challan to a
+    /// Sales Order. Each challan line is mapped to an ordered line via
+    /// <see cref="AttachLineMappingDto"/>; a null SalesOrderItemId adds the
+    /// line to the order as a new ordered line.
+    /// </summary>
+    public class AttachChallanRequestDto
+    {
+        public int ChallanId { get; set; }
+        public List<AttachLineMappingDto> LineMappings { get; set; } = new();
+    }
+
+    public class AttachLineMappingDto
+    {
+        public int DeliveryItemId { get; set; }
+        /// <summary>Ordered line this challan line fulfils, or null = add as a new ordered line.</summary>
+        public int? SalesOrderItemId { get; set; }
+    }
+
+    /// <summary>
     /// One delivery challan raised against a Sales Order, for the order's
     /// View / drill-down. Lightweight summary plus the lines it delivered, so
     /// the operator can see exactly how an order was fulfilled across challans.
