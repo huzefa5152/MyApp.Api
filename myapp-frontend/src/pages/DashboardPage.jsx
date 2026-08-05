@@ -587,7 +587,7 @@ function InventorySection({ data, canOpen = false }) {
                   <span style={{ ...styles.miniChip, color: m.direction === "In" ? "#15803d" : "#c62828", backgroundColor: m.direction === "In" ? "rgba(21,128,61,0.10)" : "rgba(198,40,40,0.09)" }}>
                     {m.direction}
                   </span>
-                  <span className="dash-mov-row__name" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600, color: "#0c1830" }}>{m.itemTypeName}</span>
+                  <span className="dash-mov-row__name" style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", fontWeight: 600, color: "#0c1830" }}>{m.itemTypeName}</span>
                   <span className="dash-mov-row__qty" style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', fontVariantNumeric: "tabular-nums", fontWeight: 600, color: "#0c1830" }}>{m.quantity}</span>
                   <span style={{ color: "#69788f", fontSize: "0.73rem" }}>{formatDate(m.date)}</span>
                 </div>
@@ -663,7 +663,7 @@ function RecentList({ rows }) {
           border: "1px solid #eef2f8", borderRadius: 10,
         }}>
           <span className="dash-recent-row__number" style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', fontSize: "0.75rem", color: "#69788f", flexShrink: 0 }}>#{r.number}</span>
-          <span className="dash-recent-row__name" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600, color: "#0c1830" }}>{r.counterpartyName || "(unknown)"}</span>
+          <span className="dash-recent-row__name" style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", fontWeight: 600, color: "#0c1830" }}>{r.counterpartyName || "(unknown)"}</span>
           <span className="dash-recent-row__date" style={{ color: "#69788f", fontSize: "0.73rem", flexShrink: 0 }}>{formatDate(r.date)}</span>
           <span className="dash-recent-row__amount" style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', fontVariantNumeric: "tabular-nums", fontWeight: 600, color: "#0c1830", flexShrink: 0 }}>{formatPkr(r.grandTotal)}</span>
         </div>

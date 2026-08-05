@@ -565,6 +565,8 @@ export default function StockDashboardPage() {
                   </p>
                 </div>
               ) : (
+                <>
+                {/* Desktop / tablet — table */}
                 <div className="stock-table" style={styles.tableWrap}>
                   <table style={styles.table}>
                     <thead>
@@ -609,6 +611,66 @@ export default function StockDashboardPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Mobile — inventory (V2 buckets) stack. In Stock is the
+                    headline metric; the reservation buckets are secondary
+                    stats below. Untracked (FBR-only) items show a note. */}
+                <div className="stock-cards">
+                  {filteredSummary.map((r) => (
+                    <div key={r.itemTypeId} className="stock-card">
+                      <div className="stock-card__top">
+                        <div className="stock-card__top-left">
+                          <span className="stock-card__name">{r.itemTypeName}</span>
+                          {(!r.tracked || (r.reorderLevel != null && r.available <= r.reorderLevel)) && (
+                            <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginTop: 2 }}>
+                              {!r.tracked && (
+                                <span style={styles.fbrBadge} title="FBR-reporting item — not tracked as inventory">FBR-only</span>
+                              )}
+                              {r.reorderLevel != null && r.available <= r.reorderLevel && (
+                                <span style={styles.lowBadge} title={`At/below reorder level ${r.reorderLevel}`}>Low</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        {r.tracked && (
+                          <div className="stock-card__onhand">
+                            <span className="stock-card__onhand-label">In Stock</span>
+                            <span className="stock-card__onhand-value" style={{ color: r.onHand < 0 ? "#c62828" : colors.blue }}>
+                              {r.onHand.toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      {r.tracked ? (
+                        <div className="stock-card__stats">
+                          <div className="stock-card__stat">
+                            <span className="stock-card__stat-label">Available</span>
+                            <span className="stock-card__stat-value" style={{ color: r.available < 0 ? "#c62828" : colors.teal }}>{r.available.toLocaleString()}</span>
+                          </div>
+                          <div className="stock-card__stat">
+                            <span className="stock-card__stat-label">Committed</span>
+                            <span className="stock-card__stat-value">{r.committed.toLocaleString()}</span>
+                          </div>
+                          <div className="stock-card__stat">
+                            <span className="stock-card__stat-label">To Deliver</span>
+                            <span className="stock-card__stat-value">{r.toDeliver.toLocaleString()}</span>
+                          </div>
+                          <div className="stock-card__stat">
+                            <span className="stock-card__stat-label">Delivered</span>
+                            <span className="stock-card__stat-value">{r.delivered.toLocaleString()}</span>
+                          </div>
+                          <div className="stock-card__stat">
+                            <span className="stock-card__stat-label">Incoming</span>
+                            <span className="stock-card__stat-value">{r.incoming.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="stock-card__notes">Not tracked as inventory (FBR-reporting item).</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                </>
               )}
             </>
           )}
@@ -915,7 +977,7 @@ function DrillPanel({ rows, loading, uom }) {
 function TabBtn({ active, children, onClick }) {
   return (
     <button onClick={onClick} style={{
-      padding: "0.5rem 1rem", borderRadius: 8, border: "1px solid #d0d7e2", cursor: "pointer",
+      borderRadius: 8, border: "1px solid #d0d7e2", cursor: "pointer",
       backgroundColor: active ? "#0d47a1" : "#fff", color: active ? "#fff" : "#1a2332",
       fontSize: "0.85rem", fontWeight: 600, boxShadow: "none", padding: "0.45rem 0.95rem"
     }}>{children}</button>

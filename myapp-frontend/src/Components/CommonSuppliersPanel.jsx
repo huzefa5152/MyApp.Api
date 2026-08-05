@@ -153,8 +153,9 @@ const styles = {
     color: colors.textSecondary,
     fontStyle: "italic",
     overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
   },
   cardEdit: {
     marginTop: "0.35rem",
