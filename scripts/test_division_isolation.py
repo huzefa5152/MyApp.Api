@@ -183,6 +183,16 @@ status, client = request("POST", "/api/clients", token=admin, body={
 assert status in (200, 201), f"create client: {status} {client}"
 client_id = client["id"]
 
+# Every bill / sales-order line on this branch must be classified with an
+# Item Type (or a Non-Inventory item) — see InvoiceService "Every bill line
+# must have an Item Type or a Non-Inventory item selected." (commit 7f11000).
+# ItemTypes are a GLOBAL catalog (no company/division scope on the base row),
+# so one shared type classifies every seeded bill/quote/challan line below.
+status, itemtype = request("POST", "/api/itemtypes", token=admin, body={"name": "DivRBAC Widget"})
+assert status in (200, 201), f"create item type: {status} {itemtype}"
+item_type_id = itemtype["id"]
+print(f"  item type id={item_type_id}")
+
 print("\n=== Creating users dana (restricted->North) + erik (unrestricted) ===")
 status, roles = request("GET", "/api/roles", token=admin)
 assert status == 200
@@ -218,7 +228,8 @@ def make_quote(token, division_id, label):
         "clientId": client_id,
         "divisionId": division_id,
         "date": "2026-07-04T00:00:00",
-        "items": [{"description": f"Widget {label}", "quantity": 5, "unitPrice": 100, "unit": "Pcs"}],
+        "items": [{"description": f"Widget {label}", "quantity": 5, "unitPrice": 100, "unit": "Pcs",
+                   "itemTypeId": item_type_id}],
     })
 
 
@@ -235,7 +246,7 @@ print(f"  quotes: north={q_north['id']} south={q_south['id']} company={q_company
 status, ch_south = request("POST", f"/api/deliverychallans/company/{cid}", token=erik, body={
     "clientId": client_id, "divisionId": south, "poNumber": "PO-S-1",
     "poDate": "2026-07-04T00:00:00", "deliveryDate": "2026-07-04T00:00:00",
-    "items": [{"description": "Gadget S", "quantity": 3, "unit": "Pcs"}],
+    "items": [{"description": "Gadget S", "quantity": 3, "unit": "Pcs", "itemTypeId": item_type_id}],
 })
 assert status in (200, 201), f"erik create South challan: {status} {ch_south}"
 
@@ -309,7 +320,8 @@ if status in (200, 201):
     move["divisionId"] = south
     status, _ = request("PUT", f"/api/salesquotes/{q_dana['id']}", token=dana, body={
         "clientId": client_id, "divisionId": south, "date": "2026-07-04T00:00:00",
-        "items": [{"description": "Widget dN", "quantity": 5, "unitPrice": 100, "unit": "Pcs"}],
+        "items": [{"description": "Widget dN", "quantity": 5, "unitPrice": 100, "unit": "Pcs",
+                   "itemTypeId": item_type_id}],
     })
     status_check(S, "dana move own quote → South → 403", status, 403)
 
@@ -355,7 +367,7 @@ def make_bill(token, division_id, qty, label):
         "documentType": 4,
         "paymentMode": "Cash",
         "items": [{"description": f"Bill item {label}", "quantity": qty, "uom": "Numbers, pieces, units",
-                   "unitPrice": 100}],
+                   "unitPrice": 100, "itemTypeId": item_type_id}],
     })
 
 
