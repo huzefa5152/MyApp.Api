@@ -24,7 +24,7 @@ const LINE_COLORS = { Pending: "#5f6d7e", Partial: "#f57c00", Complete: "#28a745
  * raised against the order (with the lines it delivered). Optional action
  * callbacks (print / edit / deliver / attach) let the parent launch those flows.
  */
-export default function SalesOrderDetailModal({ order, onClose, onPrint, onEdit, onDeliver, onAttach, onGenerateBill, canDeliver }) {
+export default function SalesOrderDetailModal({ order, onClose, onViewChallans, onPrint, onEdit, onDeliver, onAttach, onGenerateBill, canDeliver }) {
   const [challans, setChallans] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -173,6 +173,7 @@ export default function SalesOrderDetailModal({ order, onClose, onPrint, onEdit,
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
             {onEdit && order.isEditable && <button style={st.btnGhost} onClick={() => { onClose(); onEdit(order); }}><MdEdit size={15} /> Edit</button>}
             {onPrint && <button style={st.btnGhost} onClick={() => onPrint(order)}><MdPrint size={15} /> Print</button>}
+            {onViewChallans && order.challanCount > 0 && <button style={st.btnGhost} onClick={() => { onClose(); onViewChallans(order); }}><MdLocalShipping size={15} /> View Challans</button>}
             {onDeliver && canDeliver && <button style={st.btnTeal} onClick={() => { onClose(); onDeliver(order); }}><MdLocalShipping size={15} /> Create Challan</button>}
             {onAttach && canDeliver && <button style={st.btnTealOutline} onClick={() => { onClose(); onAttach(order); }}><MdLink size={15} /> Attach Challan</button>}
             {onGenerateBill && billableChallans.length > 0 && <button style={st.btnBlue} onClick={() => { onClose(); onGenerateBill(order); }}><MdReceiptLong size={15} /> Generate Bill</button>}

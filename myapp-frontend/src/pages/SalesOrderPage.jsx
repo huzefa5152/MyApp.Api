@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdUploadFile, MdVisibility, MdReceiptLong, MdLink } from "react-icons/md";
 import SalesOrderForm from "../Components/SalesOrderForm";
 import CreateChallanFromOrderModal from "../Components/CreateChallanFromOrderModal";
@@ -20,6 +21,8 @@ import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { richTextToPlain } from "../utils/richText";
 import { dropdownStyles } from "../theme";
 import DivisionSelect from "../Components/DivisionSelect";
+import SearchableSelect from "../Components/SearchableSelect";
+import { getClientsByCompany } from "../api/clientApi";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
@@ -45,7 +48,12 @@ export default function SalesOrderPage() {
   const canPrint = has("salesorders.print.view");
   const canMakeChallan = has("challans.manage.create");
   const canBill = has("bills.manage.create");
+  const canViewClients = has("clients.manage.view");
   const canImportPo = canCreate && has("poformats.import.create");
+
+  const navigate = useNavigate();
+  // Jump to the Delivery Challan screen filtered to this order's challans.
+  const viewChallans = (o) => navigate(`/challans?salesOrderId=${o.id}`);
 
   const [orders, setOrders] = useState([]);
   const [exportingId, setExportingId] = useState(null);
@@ -63,6 +71,8 @@ export default function SalesOrderPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
+  const [clients, setClients] = useState([]);
+  const [clientFilter, setClientFilter] = useState("");
 
   // Shared template-picker state, scoped to the selected division: "All
   // Divisions" → company-wide templates; a specific division → that division's.
@@ -77,13 +87,20 @@ export default function SalesOrderPage() {
       if (search) params.search = search;
       if (statusFilter) params.status = statusFilter;
       if (divisionFilter) params.divisionId = divisionFilter;
+      if (clientFilter) params.clientId = clientFilter;
       const { data } = await getPagedSalesOrdersByCompany(companyId, params);
       setOrders(data.items);
       setTotalCount(data.totalCount);
       setTotalPages(data.totalPages);
     } catch { setOrders([]); setTotalCount(0); setTotalPages(0); }
     finally { setLoading(false); }
-  }, [page, search, statusFilter, divisionFilter]);
+  }, [page, search, statusFilter, divisionFilter, clientFilter]);
+
+  const fetchClients = useCallback(async (companyId) => {
+    if (!canViewClients) { setClients([]); return; }
+    try { const { data } = await getClientsByCompany(companyId); setClients(data || []); }
+    catch { setClients([]); }
+  }, [canViewClients]);
 
   useEffect(() => {
     // Division ids are per-company — a stale filter would blank the list.
@@ -92,9 +109,12 @@ export default function SalesOrderPage() {
     // division request racing the corrected one).
     if (selectedCompany) {
       setPage(1);
+      fetchClients(selectedCompany.id);
+      const willReset = divisionFilter || clientFilter;
       if (divisionFilter) setDivisionFilter("");
-      else fetchOrders(selectedCompany.id, 1);
-    } else { setDivisionFilter(""); setOrders([]); }
+      if (clientFilter) setClientFilter("");
+      if (!willReset) fetchOrders(selectedCompany.id, 1);
+    } else { setDivisionFilter(""); setClientFilter(""); setClients([]); setOrders([]); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany]);
   useEffect(() => { if (selectedCompany) fetchOrders(selectedCompany.id, page); }, [page, search, statusFilter, divisionFilter]);
@@ -227,6 +247,11 @@ export default function SalesOrderPage() {
               {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
             </select>
             <DivisionSelect companyId={selectedCompany?.id} value={divisionFilter} onChange={(v) => { setDivisionFilter(v); setPage(1); }} style={dropdownStyles.base} />
+            {canViewClients && (
+              <div style={{ minWidth: 200, maxWidth: 300 }}>
+                <SearchableSelect items={clients} value={clientFilter} onChange={(id) => { setClientFilter(id ? String(id) : ""); setPage(1); }} placeholder="All Clients" />
+              </div>
+            )}
           </div>
           {selectedCompany && (
             <div className="filters-row">
@@ -282,7 +307,7 @@ export default function SalesOrderPage() {
                       <span style={{ ...st.statusPill, color: o.status === "Cancelled" ? "#dc3545" : o.status === "Closed" ? "#5f6d7e" : colors.teal }}>{o.status}</span>
                       <span style={{ ...st.invPill, color: INVOICE_COLORS[o.invoiceStatus] || "#5f6d7e", background: `${INVOICE_COLORS[o.invoiceStatus] || "#5f6d7e"}18` }}>{o.invoiceStatus}</span>
                     </span>
-                    {o.challanCount > 0 && <span style={st.challanCount}><MdLocalShipping size={13} /> {o.challanCount} challan{o.challanCount !== 1 ? "s" : ""}</span>}
+                    {o.challanCount > 0 && <button type="button" style={st.challanCountBtn} onClick={() => viewChallans(o)} title="View this order's challans on the Delivery Challan screen"><MdLocalShipping size={13} /> {o.challanCount} challan{o.challanCount !== 1 ? "s" : ""}</button>}
                   </div>
                   <div style={st.actions}>
                     {canView && <button style={st.actBtn} onClick={() => setViewOrder(o)} title="View details"><MdVisibility size={16} /></button>}
@@ -327,6 +352,7 @@ export default function SalesOrderPage() {
           order={viewOrder}
           canDeliver={canMakeChallan && viewOrder.status === "Open" && viewOrder.fulfillmentStatus !== "Fully Delivered" && viewOrder.fulfillmentStatus !== "Over Delivered"}
           onClose={() => setViewOrder(null)}
+          onViewChallans={viewChallans}
           onPrint={canPrint ? handlePrint : undefined}
           onEdit={canUpdate ? (o) => { setEditOrder(o); setShowForm(true); } : undefined}
           onDeliver={canMakeChallan ? (o) => setDeliverOrder(o) : undefined}
@@ -392,6 +418,7 @@ const st = {
   statusPill: { fontSize: "0.78rem", fontWeight: 700 },
   invPill: { fontSize: "0.7rem", fontWeight: 700, padding: "0.1rem 0.5rem", borderRadius: 20 },
   challanCount: { display: "inline-flex", alignItems: "center", gap: "0.2rem", fontSize: "0.75rem", color: colors.textSecondary },
+  challanCountBtn: { display: "inline-flex", alignItems: "center", gap: "0.2rem", fontSize: "0.75rem", color: colors.blue, background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 600, textDecoration: "underline", boxShadow: "none" },
   actions: { display: "flex", gap: "0.4rem", marginTop: "0.75rem", flexWrap: "wrap", alignItems: "center" },
   deliverBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.7rem", borderRadius: 8, border: "none", background: colors.teal, color: "#fff", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
   attachBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.7rem", borderRadius: 8, border: `1px solid ${colors.teal}`, background: "#fff", color: colors.teal, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },

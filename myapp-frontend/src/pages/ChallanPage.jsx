@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { MdDescription, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
 import ChallanTable from "../Components/ChallanTable";
@@ -87,7 +88,11 @@ export default function ChallanPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
   const [clientFilter, setClientFilter] = useState("");
-  const [salesOrderFilter, setSalesOrderFilter] = useState("");
+  // Seed the SO filter from ?salesOrderId= so the "View Challans" shortcut
+  // from the Sales Order screen lands here already filtered to that order.
+  const [searchParams] = useSearchParams();
+  const [salesOrderFilter, setSalesOrderFilter] = useState(searchParams.get("salesOrderId") || "");
+  const soFilterMountRef = useRef(false);
   // Shared template-picker state (dropdown + Print/PDF resolution), scoped to
   // the selected division: "All Divisions" → company-wide templates; a specific
   // division → that division's. An empty scope hides the picker and blocks
@@ -150,7 +155,10 @@ export default function ChallanPage() {
       setPage(1);
       // Clear a stale SO selection when switching company — a sales-order id
       // from the previous company would otherwise filter this list to nothing.
-      setSalesOrderFilter("");
+      // Skip on the initial mount so a ?salesOrderId= deep-link (the "View
+      // Challans" shortcut from the SO page) isn't wiped before it applies.
+      if (soFilterMountRef.current) setSalesOrderFilter("");
+      soFilterMountRef.current = true;
       // Division ids are per-company — a stale filter would blank the list.
       // Resetting it retriggers the filter effect below, so only fetch
       // directly when there's no reset to piggyback on (avoids a stale-

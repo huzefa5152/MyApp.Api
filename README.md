@@ -289,6 +289,11 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-05 — Sales Order: jump to challans + filter by client
+
+- **View Challans shortcut.** A Sales Order's challan count is now a link, and its detail screen has a **View Challans** button — both open the Delivery Challan screen filtered to that order.
+- **Filter Sales Orders by client.** The Sales Order list gains a searchable **Client** filter next to the division/status filters.
+
 ### 2026-08-05 — Sales Orders: attach an existing delivery challan to an order
 
 - **Link a challan raised before the order.** A Sales Order now has an **Attach Challan** action (on the card and in the order detail view, beside Create Challan) that links an existing, unlinked, unbilled delivery challan to the order — for deliveries made before the customer PO / order existed. The operator picks the challan and maps each of its lines onto an ordered line (auto-suggested by item type / description) or adds it as a new order line; the delivered quantity then counts toward fulfilment and the challan becomes billable under the order's PO. No stock movement is recorded (the challan already booked its stock at creation). Only challans in the **same company, same division, and same customer** as the order are offered, and attaching never moves a challan across divisions.
