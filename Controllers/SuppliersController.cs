@@ -42,12 +42,18 @@ namespace MyApp.Api.Controllers
         [HasPermission("suppliers.manage.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<CommonSupplierDto>>> GetCommon([FromQuery] int companyId)
-            => Ok(await _groupService.GetCommonSuppliersAsync(companyId));
+        {
+            var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            return Ok(await _groupService.GetCommonSuppliersAsync(companyId, accessible));
+        }
 
         [HttpGet("groups")]
         [HasPermission("suppliers.manage.view")]
         public async Task<ActionResult<List<CommonSupplierDto>>> GetAllGroups()
-            => Ok(await _groupService.GetAllGroupsAsync());
+        {
+            var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            return Ok(await _groupService.GetAllGroupsAsync(accessible));
+        }
 
         [HttpGet("common/{groupId:int}")]
         [HasPermission("suppliers.manage.view")]

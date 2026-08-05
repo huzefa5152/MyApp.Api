@@ -26,7 +26,7 @@ namespace MyApp.Api.Services.Interfaces
         /// Single-company groups are intentionally hidden — they're shown
         /// only in the existing per-company list.
         /// </summary>
-        Task<List<CommonClientDto>> GetCommonClientsAsync(int companyId);
+        Task<List<CommonClientDto>> GetCommonClientsAsync(int companyId, ISet<int> accessibleCompanyIds);
 
         /// <summary>
         /// Every <see cref="ClientGroup"/> (single-company AND multi-company) —
@@ -35,7 +35,7 @@ namespace MyApp.Api.Services.Interfaces
         /// the operator can still see at a glance which entries are
         /// cross-tenant.
         /// </summary>
-        Task<List<CommonClientDto>> GetAllGroupsAsync();
+        Task<List<CommonClientDto>> GetAllGroupsAsync(ISet<int> accessibleCompanyIds);
 
         /// <summary>
         /// Detail view: master fields + per-company members (sites etc.).

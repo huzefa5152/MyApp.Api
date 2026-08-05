@@ -96,7 +96,26 @@ namespace MyApp.Api.Services.Implementations
             return group;
         }
 
-        public async Task<List<CommonClientDto>> GetCommonClientsAsync(int companyId)
+        // Group ids whose EVERY member company is in the caller's accessible
+        // set — the tenant-isolation gate for the Common Clients / groups
+        // panels. A group spanning any company the user can't access is
+        // excluded entirely (its DisplayName / NTN / member-company names
+        // must not leak). Supplier group service mirrors this.
+        private async Task<HashSet<int>> AccessibleGroupIdsAsync(ISet<int> accessibleCompanyIds)
+        {
+            var pairs = await _db.Clients
+                .Where(c => c.ClientGroupId != null)
+                .Select(c => new { GroupId = c.ClientGroupId!.Value, c.CompanyId })
+                .Distinct()
+                .ToListAsync();
+            return pairs
+                .GroupBy(p => p.GroupId)
+                .Where(g => g.All(p => accessibleCompanyIds.Contains(p.CompanyId)))
+                .Select(g => g.Key)
+                .ToHashSet();
+        }
+
+        public async Task<List<CommonClientDto>> GetCommonClientsAsync(int companyId, ISet<int> accessibleCompanyIds)
         {
             // "Common Client" = a legal entity that more than one tenant
             // has as a client. The panel sits ABOVE the per-company
@@ -124,6 +143,10 @@ namespace MyApp.Api.Services.Implementations
                         .FirstOrDefault(),
                 })
                 .ToListAsync();
+
+            // Tenant scoping: keep only groups the caller can fully access.
+            var accessibleGroups = await AccessibleGroupIdsAsync(accessibleCompanyIds);
+            groupSummaries = groupSummaries.Where(s => accessibleGroups.Contains(s.GroupId)).ToList();
 
             if (groupSummaries.Count == 0) return new List<CommonClientDto>();
 
@@ -158,7 +181,7 @@ namespace MyApp.Api.Services.Implementations
                 .ToList();
         }
 
-        public async Task<List<CommonClientDto>> GetAllGroupsAsync()
+        public async Task<List<CommonClientDto>> GetAllGroupsAsync(ISet<int> accessibleCompanyIds)
         {
             // Every group, single-member or multi-company. Used by config
             // screens (PO Formats etc.) that key off "the legal entity"
@@ -176,6 +199,10 @@ namespace MyApp.Api.Services.Implementations
                     AnyClientId = g.Select(c => (int?)c.Id).FirstOrDefault(),
                 })
                 .ToListAsync();
+
+            // Tenant scoping: keep only groups the caller can fully access.
+            var accessibleGroups = await AccessibleGroupIdsAsync(accessibleCompanyIds);
+            groupSummaries = groupSummaries.Where(s => accessibleGroups.Contains(s.GroupId)).ToList();
 
             if (groupSummaries.Count == 0) return new List<CommonClientDto>();
 

@@ -42,7 +42,10 @@ namespace MyApp.Api.Controllers
         [HasPermission("clients.manage.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<CommonClientDto>>> GetCommon([FromQuery] int companyId)
-            => Ok(await _groupService.GetCommonClientsAsync(companyId));
+        {
+            var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            return Ok(await _groupService.GetCommonClientsAsync(companyId, accessible));
+        }
 
         /// <summary>
         /// Every client group (multi-company AND single-company). Used
@@ -53,7 +56,10 @@ namespace MyApp.Api.Controllers
         [HttpGet("groups")]
         [HasPermission("clients.manage.view")]
         public async Task<ActionResult<List<CommonClientDto>>> GetAllGroups()
-            => Ok(await _groupService.GetAllGroupsAsync());
+        {
+            var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            return Ok(await _groupService.GetAllGroupsAsync(accessible));
+        }
 
         /// <summary>
         /// Detail view for the Common Client edit form — master fields +

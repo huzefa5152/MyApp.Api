@@ -13,8 +13,8 @@ namespace MyApp.Api.Services.Interfaces
     public interface ISupplierGroupService
     {
         Task<SupplierGroup> EnsureGroupForSupplierAsync(Supplier supplier);
-        Task<List<CommonSupplierDto>> GetCommonSuppliersAsync(int companyId);
-        Task<List<CommonSupplierDto>> GetAllGroupsAsync();
+        Task<List<CommonSupplierDto>> GetCommonSuppliersAsync(int companyId, ISet<int> accessibleCompanyIds);
+        Task<List<CommonSupplierDto>> GetAllGroupsAsync(ISet<int> accessibleCompanyIds);
         Task<CommonSupplierDetailDto?> GetByIdAsync(int groupId);
         Task<CommonSupplierUpdateResultDto> UpdateAsync(int groupId, CommonSupplierUpdateDto dto);
         Task<CommonSupplierUpdateResultDto> DeleteAsync(int groupId);

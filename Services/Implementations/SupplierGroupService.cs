@@ -81,24 +81,42 @@ namespace MyApp.Api.Services.Implementations
             return group;
         }
 
-        public async Task<List<CommonSupplierDto>> GetCommonSuppliersAsync(int companyId)
+        public async Task<List<CommonSupplierDto>> GetCommonSuppliersAsync(int companyId, ISet<int> accessibleCompanyIds)
         {
-            // Multi-company groups visible to ANY company — same stable-
-            // across-company-switches behaviour as Common Clients.
-            // companyId is used only to compute ThisCompanyClientId for
-            // the deep-link, NOT to filter the list.
-            return await BuildGroupListAsync(multiCompanyOnly: true, companyId: companyId);
+            // Multi-company groups the caller can FULLY access. companyId is
+            // used only to compute the deep-link to the caller's own row, NOT
+            // to filter the list; tenant scoping is by accessibleCompanyIds.
+            return await BuildGroupListAsync(multiCompanyOnly: true, companyId: companyId, accessibleCompanyIds);
         }
 
-        public async Task<List<CommonSupplierDto>> GetAllGroupsAsync()
+        public async Task<List<CommonSupplierDto>> GetAllGroupsAsync(ISet<int> accessibleCompanyIds)
         {
             // Every group, single + multi-company. Used by config screens
             // (purchase-side PO formats etc., when those land) that pick
-            // one row per legal entity.
-            return await BuildGroupListAsync(multiCompanyOnly: false, companyId: null);
+            // one row per legal entity. Scoped to groups the caller can
+            // fully access.
+            return await BuildGroupListAsync(multiCompanyOnly: false, companyId: null, accessibleCompanyIds);
         }
 
-        private async Task<List<CommonSupplierDto>> BuildGroupListAsync(bool multiCompanyOnly, int? companyId)
+        // Group ids whose EVERY member company is in the caller's accessible
+        // set — the tenant-isolation gate (mirrors ClientGroupService). A group
+        // spanning any company the user can't access is excluded entirely so
+        // its name / NTN / member-company names never leak.
+        private async Task<HashSet<int>> AccessibleGroupIdsAsync(ISet<int> accessibleCompanyIds)
+        {
+            var pairs = await _db.Suppliers
+                .Where(s => s.SupplierGroupId != null)
+                .Select(s => new { GroupId = s.SupplierGroupId!.Value, s.CompanyId })
+                .Distinct()
+                .ToListAsync();
+            return pairs
+                .GroupBy(p => p.GroupId)
+                .Where(g => g.All(p => accessibleCompanyIds.Contains(p.CompanyId)))
+                .Select(g => g.Key)
+                .ToHashSet();
+        }
+
+        private async Task<List<CommonSupplierDto>> BuildGroupListAsync(bool multiCompanyOnly, int? companyId, ISet<int> accessibleCompanyIds)
         {
             var query = _db.Suppliers
                 .Where(s => s.SupplierGroupId != null)
@@ -117,6 +135,10 @@ namespace MyApp.Api.Services.Implementations
                         : g.Select(s => (int?)s.Id).FirstOrDefault(),
                 })
                 .ToListAsync();
+
+            // Tenant scoping: keep only groups the caller can fully access.
+            var accessibleGroups = await AccessibleGroupIdsAsync(accessibleCompanyIds);
+            summaries = summaries.Where(s => accessibleGroups.Contains(s.GroupId)).ToList();
 
             if (summaries.Count == 0) return new List<CommonSupplierDto>();
 
