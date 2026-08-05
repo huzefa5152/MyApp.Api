@@ -67,31 +67,38 @@ foreach (var file in files)
             descriptionHeader = c.DescHeader ?? "",
             quantityHeader = c.QtyHeader ?? "",
             unitHeader = c.UnitHeader ?? "",
+            unitPriceHeader = c.UnitPriceHeader ?? "",
         });
         var raw = WebUtility.HtmlDecode(c.RawText ?? "");
         var result = parser.Parse(raw, new POFormat { Id = 1, Name = c.Id ?? "", RuleSetJson = ruleSet });
 
-        var got = result.Items.Select(i => (desc: i.Description, qty: i.Quantity)).ToList();
-        var exp = (c.ExpectedItems ?? new()).Select(e => (desc: e.Description ?? "", qty: e.Quantity)).ToList();
-
-        bool ok = got.Count == exp.Count;
+        var expList = c.ExpectedItems ?? new();
+        bool ok = result.Items.Count == expList.Count;
         if (ok)
         {
-            var pool = new List<(string desc, decimal qty)>(got);
-            foreach (var e in exp)
+            var pool = new List<ParsedPOItemDto>(result.Items);
+            foreach (var e in expList)
             {
-                int idx = pool.FindIndex(g => g.qty == e.qty && Strip(g.desc) == Strip(e.desc));
+                // Match on (qty, description); additionally on unit price when the
+                // case declares an expected price (null = "don't assert price").
+                int idx = pool.FindIndex(g => g.Quantity == e.Quantity
+                    && Strip(g.Description) == Strip(e.Description ?? "")
+                    && (!e.UnitPrice.HasValue || g.UnitPrice == e.UnitPrice));
                 if (idx < 0) { ok = false; break; }
                 pool.RemoveAt(idx);
             }
         }
+        // A case flagged ExpectNoPrice asserts the parser filled NO unit price —
+        // e.g. an Amount/Total-only table must never be misread as a rate.
+        if (ok && c.ExpectNoPrice && result.Items.Any(i => i.UnitPrice.HasValue))
+            ok = false;
 
         if (ok) pass++;
         else if (c.AllowedFailures) tolerated++;
         else
             failures.Add($"  FAIL [{c.Category}] {c.Id}\n" +
-                         $"      expected ({exp.Count}): {string.Join(" | ", exp.Select(e => $"{e.desc}#{e.qty}"))}\n" +
-                         $"      got      ({got.Count}): {string.Join(" | ", result.Items.Select(i => $"{i.Description}#{i.Quantity}({i.Unit})"))}");
+                         $"      expected ({expList.Count}): {string.Join(" | ", expList.Select(e => $"{e.Description}#{e.Quantity}{(e.UnitPrice.HasValue ? $"@{e.UnitPrice}" : "")}"))}\n" +
+                         $"      got      ({result.Items.Count}): {string.Join(" | ", result.Items.Select(i => $"{i.Description}#{i.Quantity}({i.Unit}){(i.UnitPrice.HasValue ? $"@{i.UnitPrice}" : "")}"))}");
     }
 
     string name = Path.GetFileName(file);
@@ -108,5 +115,6 @@ return grandFail == 0 ? 0 : 1;
 static string Strip(string s) => Regex.Replace((s ?? "").ToLowerInvariant(), "[^a-z0-9]", "");
 
 record Case(string? Id, string? Category, string? DescHeader, string? QtyHeader, string? UnitHeader,
-            string? RawText, List<Exp>? ExpectedItems, bool AllowedFailures = false);
-record Exp(string? Description, decimal Quantity, string? Unit);
+            string? UnitPriceHeader, string? RawText, List<Exp>? ExpectedItems,
+            bool AllowedFailures = false, bool ExpectNoPrice = false);
+record Exp(string? Description, decimal Quantity, string? Unit, decimal? UnitPrice = null);

@@ -289,6 +289,12 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-05 — PO import: recognise a unit-price column (Sales Order + Sales Quote)
+
+- **The generic parser (`simple-headers-v1`) can now read a per-unit price/rate column.** PO Formats gains an optional **"Unit price column header"** (e.g. `Rate`, `Unit Price`); when set — or when the parser auto-detects a `Rate`/`Price`/`Cost` column (never an `Amount`/`Total`/`Value` line-total) — each parsed line carries its `unitPrice`.
+- **Sales Order and Sales Quote imports now prefill the unit price** from that column (Sales Order gained the price column in the import review; Sales Quote already had one). A **Delivery Challan** import stays quantity-only and ignores price by design. Sales Order lines with no detected price keep "no agreed price" so the bill still falls back to quote / last-billed.
+- Extraction is additive — description/quantity/unit reading is unchanged. New `unit_price_corpus.json` cases added; the offline corpus harness stays green.
+
 ### 2026-08-05 — PO import: fix single-item POs whose amount ends in "Rs." (Hudson Pharma)
 
 - **Fixed POs that produced an empty parse.** The importer's page-chrome skip rule matched any line ending in `Rs.`, so a single-item order (e.g. Hudson Pharma → ABBAS ALI & SONS: `Butter Paper  12  pack  6,500.00000  78,000.00 Rs.`) had its only item row discarded as footer chrome — the "format matched but nothing parsed" symptom. The rule now only skips a line that is *just* `Rs.`; a data/total row that merely ends in `Rs.` is kept. Both sample POs added to the parser regression corpus.

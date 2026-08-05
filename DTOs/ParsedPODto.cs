@@ -29,6 +29,11 @@ namespace MyApp.Api.DTOs
         // Decimal so PO parsers can carry "12.5 KG" through unchanged.
         public decimal Quantity { get; set; }
         public string Unit { get; set; } = "";
+        // Optional per-unit price read from the PO's rate/price column when the
+        // format declares (or the parser detects) one. Null = no price column /
+        // unreadable. Consumed by the Sales Order + Sales Quote import (a challan
+        // is quantity-only and ignores it).
+        public decimal? UnitPrice { get; set; }
     }
 
     public class ParseTextRequest

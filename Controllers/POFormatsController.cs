@@ -325,6 +325,7 @@ namespace MyApp.Api.Controllers
                 DescriptionHeader = dto.DescriptionHeader,
                 QuantityHeader = dto.QuantityHeader,
                 UnitHeader = dto.UnitHeader,
+                UnitPriceHeader = dto.UnitPriceHeader,
             });
             format.RuleSetJson = JsonSerializer.Serialize(ruleSet, JsonOpts);
             format.CurrentVersion += 1;
@@ -380,6 +381,7 @@ namespace MyApp.Api.Controllers
             descriptionHeader = dto.DescriptionHeader,
             quantityHeader = dto.QuantityHeader,
             unitHeader = dto.UnitHeader,
+            unitPriceHeader = dto.UnitPriceHeader ?? "",
         };
 
         private static POFormatDto ToDto(POFormat f) => new()

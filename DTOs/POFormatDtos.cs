@@ -70,6 +70,7 @@ namespace MyApp.Api.DTOs
         public string DescriptionHeader { get; set; } = "";   // e.g. "Item Name"
         public string QuantityHeader { get; set; } = "";      // e.g. "Quantity"
         public string UnitHeader { get; set; } = "";          // e.g. "Unit"
+        public string UnitPriceHeader { get; set; } = "";     // optional, e.g. "Rate"
         public string? Notes { get; set; }
     }
 
@@ -87,6 +88,7 @@ namespace MyApp.Api.DTOs
         public string DescriptionHeader { get; set; } = "";
         public string QuantityHeader { get; set; } = "";
         public string UnitHeader { get; set; } = "";
+        public string UnitPriceHeader { get; set; } = "";
         public string? Notes { get; set; }
         /// <summary>Optional — pass to replace the sample + recompute fingerprint.</summary>
         public string? RawText { get; set; }

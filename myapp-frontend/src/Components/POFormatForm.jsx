@@ -73,6 +73,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
   const [descriptionHeader, setDescriptionHeader] = useState("");
   const [quantityHeader, setQuantityHeader] = useState("");
   const [unitHeader, setUnitHeader] = useState("");
+  const [unitPriceHeader, setUnitPriceHeader] = useState("");
 
   const [rawText, setRawText] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -144,6 +145,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
         setDescriptionHeader(rs.descriptionHeader || "");
         setQuantityHeader(rs.quantityHeader || "");
         setUnitHeader(rs.unitHeader || "");
+        setUnitPriceHeader(rs.unitPriceHeader || "");
       }
     } catch {
       // ignore — legacy rule-sets can't be edited here
@@ -205,6 +207,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
           descriptionHeader: descriptionHeader.trim(),
           quantityHeader: quantityHeader.trim(),
           unitHeader: unitHeader.trim(),
+          unitPriceHeader: unitPriceHeader.trim(),
           notes: notes || null,
           // If the operator re-uploaded a sample PDF during edit, send the
           // fresh raw text so the server can recompute the fingerprint hash.
@@ -222,6 +225,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
           descriptionHeader: descriptionHeader.trim(),
           quantityHeader: quantityHeader.trim(),
           unitHeader: unitHeader.trim(),
+          unitPriceHeader: unitPriceHeader.trim(),
           notes: notes || null,
         });
       }
@@ -407,6 +411,15 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
                 value={unitHeader}
                 onChange={(e) => setUnitHeader(e.target.value)}
                 placeholder='e.g. "Unit" or "UOM" — leave blank if none'
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={styles.label}>Unit price column header (optional)</label>
+              <input
+                style={styles.input}
+                value={unitPriceHeader}
+                onChange={(e) => setUnitPriceHeader(e.target.value)}
+                placeholder='e.g. "Rate" or "Unit Price" — for Sales Order/Quote import'
               />
             </div>
           </div>

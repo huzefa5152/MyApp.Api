@@ -1,0 +1,65 @@
+[
+  {
+    "id": "up-rate-configured",
+    "category": "unit-price",
+    "descHeader": "Description",
+    "qtyHeader": "Qty",
+    "unitHeader": "UOM",
+    "unitPriceHeader": "Rate",
+    "rawText": "Description  Qty  UOM  Rate  Amount\nSteel Bracket  10  Pcs  50.00  500.00\nCopper Wire 2mm  5  Roll  120.50  602.50\nRubber Gasket  100  Nos  3.25  325.00",
+    "expectedItems": [
+      { "description": "Steel Bracket", "quantity": 10, "unitPrice": 50.00 },
+      { "description": "Copper Wire 2mm", "quantity": 5, "unitPrice": 120.50 },
+      { "description": "Rubber Gasket", "quantity": 100, "unitPrice": 3.25 }
+    ]
+  },
+  {
+    "id": "up-unitprice-synonym",
+    "category": "unit-price",
+    "descHeader": "Item",
+    "qtyHeader": "Qty",
+    "unitHeader": "Unit",
+    "rawText": "Item  Qty  Unit  Unit Price  Total\nWidget A  8  Pcs  75.00  600.00\nGadget B  12  Nos  45.50  546.00",
+    "expectedItems": [
+      { "description": "Widget A", "quantity": 8, "unitPrice": 75.00 },
+      { "description": "Gadget B", "quantity": 12, "unitPrice": 45.50 }
+    ]
+  },
+  {
+    "id": "up-rate-synonym-nounit",
+    "category": "unit-price",
+    "descHeader": "Description",
+    "qtyHeader": "Quantity",
+    "rawText": "Description  Quantity  Rate\nCement Bag 50kg  200  850.00\nSand Cubic  15  2500.00",
+    "expectedItems": [
+      { "description": "Cement Bag 50kg", "quantity": 200, "unitPrice": 850.00 },
+      { "description": "Sand Cubic", "quantity": 15, "unitPrice": 2500.00 }
+    ]
+  },
+  {
+    "id": "up-amount-only-no-price",
+    "category": "unit-price",
+    "descHeader": "Description",
+    "qtyHeader": "Qty",
+    "rawText": "Description  Qty  Amount\nBolt M8  500  1250.00\nNut M8  500  750.00",
+    "expectedItems": [
+      { "description": "Bolt M8", "quantity": 500 },
+      { "description": "Nut M8", "quantity": 500 }
+    ],
+    "expectNoPrice": true
+  },
+  {
+    "id": "up-mixed-blank-rate",
+    "category": "unit-price",
+    "descHeader": "Description",
+    "qtyHeader": "Qty",
+    "unitHeader": "UOM",
+    "unitPriceHeader": "Rate",
+    "rawText": "Description  Qty  UOM  Rate\nItem X  10  Pcs  40.00\nItem Y  20  Nos\nItem Z  5  Kg  15.50",
+    "expectedItems": [
+      { "description": "Item X", "quantity": 10, "unitPrice": 40.00 },
+      { "description": "Item Y", "quantity": 20 },
+      { "description": "Item Z", "quantity": 5, "unitPrice": 15.50 }
+    ]
+  }
+]

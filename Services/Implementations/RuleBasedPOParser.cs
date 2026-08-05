@@ -521,6 +521,7 @@ namespace MyApp.Api.Services.Implementations
             var descHdr = ruleSet.DescriptionHeader ?? "";
             var qtyHdr = ruleSet.QuantityHeader ?? "";
             var unitHdr = ruleSet.UnitHeader ?? "";
+            var unitPriceHdr = ruleSet.UnitPriceHeader ?? "";
 
             var lines = text.Split('\n');
 
@@ -583,7 +584,7 @@ namespace MyApp.Api.Services.Implementations
                 // synonyms, no unit column, wrapped/multi-page tables) and beats
                 // the adjacency scanner when a quantity is buried in the
                 // description ("… 20 Gram" → qty 6, not 20).
-                var byColumns = ExtractSimpleItemsByColumns(lines, descHdr, qtyHdr, unitHdr);
+                var byColumns = ExtractSimpleItemsByColumns(lines, descHdr, qtyHdr, unitHdr, unitPriceHdr);
 
                 // BUT the column reader assumes every header column is also
                 // present in every DATA row. Several tuned production layouts
@@ -884,13 +885,13 @@ namespace MyApp.Api.Services.Implementations
         //      page POs.
         //  PdfPig emits 2+ spaces at column boundaries, so rows split on \s{2,}.
         // ==============================================================
-        private static List<ParsedPOItemDto> ExtractSimpleItemsByColumns(string[] lines, string descHdr, string qtyHdr, string unitHdr)
+        private static List<ParsedPOItemDto> ExtractSimpleItemsByColumns(string[] lines, string descHdr, string qtyHdr, string unitHdr, string unitPriceHdr)
         {
             var items = new List<ParsedPOItemDto>();
 
-            var loc = FindHeaderRow(lines, descHdr, qtyHdr, unitHdr);
+            var loc = FindHeaderRow(lines, descHdr, qtyHdr, unitHdr, unitPriceHdr);
             if (loc == null) return items;
-            var (headerIdx, descCol, qtyCol, unitCol) = loc.Value;
+            var (headerIdx, descCol, qtyCol, unitCol, priceCol) = loc.Value;
 
             ParsedPOItemDto? current = null;
 
@@ -964,12 +965,23 @@ namespace MyApp.Api.Services.Implementations
                         unitRaw = cols[qtyIndex + 1];
                     var unit = LooksLikeUnitValue(unitRaw) ? unitRaw : "Pcs";
 
+                    // Unit price: only when the row's columns are ALIGNED (no
+                    // description spill shifted them) and the price column is a
+                    // distinct, present cell. Best-effort — a null just leaves the
+                    // operator to fill it; never read off a spilled row where the
+                    // fixed column index would be unreliable.
+                    decimal? unitPrice = null;
+                    if (priceCol >= 0 && qtyIndex == qtyCol && priceCol < cols.Length
+                        && priceCol != qtyIndex && priceCol != descCol && priceCol != unitCol)
+                        unitPrice = ParsePriceCell(cols[priceCol]);
+
                     FlushItem(items, ref current);
                     current = new ParsedPOItemDto
                     {
                         Description = desc,
                         Quantity = qty,
                         Unit = NormaliseUnit(unit),
+                        UnitPrice = unitPrice,
                     };
                 }
                 else if (current != null)
@@ -1051,8 +1063,8 @@ namespace MyApp.Api.Services.Implementations
         // operator's configured headers; pass 2 falls back to a synonym scan so
         // extraction still works when the configured strings don't exactly
         // match the PDF (or weren't provided).
-        private static (int HeaderIdx, int DescCol, int QtyCol, int UnitCol)? FindHeaderRow(
-            string[] lines, string descHdr, string qtyHdr, string unitHdr)
+        private static (int HeaderIdx, int DescCol, int QtyCol, int UnitCol, int PriceCol)? FindHeaderRow(
+            string[] lines, string descHdr, string qtyHdr, string unitHdr, string unitPriceHdr)
         {
             if (!string.IsNullOrWhiteSpace(descHdr) && !string.IsNullOrWhiteSpace(qtyHdr))
             {
@@ -1065,7 +1077,9 @@ namespace MyApp.Api.Services.Implementations
                     {
                         int uc = !string.IsNullOrWhiteSpace(unitHdr) ? ColumnIndexOf(cols, unitHdr) : -1;
                         if (uc < 0 || uc == dc || uc == qc) uc = AutoDetectUnitColumn(cols, dc, qc);
-                        return (i, dc, qc, uc);
+                        int pc = !string.IsNullOrWhiteSpace(unitPriceHdr) ? ColumnIndexOf(cols, unitPriceHdr) : -1;
+                        if (pc < 0 || pc == dc || pc == qc || pc == uc) pc = AutoDetectPriceColumn(cols, dc, qc, uc);
+                        return (i, dc, qc, uc, pc);
                     }
                 }
             }
@@ -1079,10 +1093,26 @@ namespace MyApp.Api.Services.Implementations
                 if (dc >= 0 && qc >= 0 && dc != qc)
                 {
                     int uc = AutoDetectUnitColumn(cols, dc, qc);
-                    return (i, dc, qc, uc);
+                    int pc = AutoDetectPriceColumn(cols, dc, qc, uc);
+                    return (i, dc, qc, uc, pc);
                 }
             }
             return null;
+        }
+
+        // A non-desc, non-qty, non-unit column that reads as a UNIT price/rate —
+        // "Rate", "Price", "Unit Cost" — but NOT a line-total column ("Amount",
+        // "Total", "Net/Gross Value", "Sub Total"). We only ever fill a per-unit
+        // price, never a line amount, so total-ish columns are excluded.
+        private static int AutoDetectPriceColumn(string[] cols, int descCol, int qtyCol, int unitCol)
+        {
+            for (int i = 0; i < cols.Length; i++)
+            {
+                if (i == descCol || i == qtyCol || i == unitCol) continue;
+                if (ContainsAnyWord(cols[i], UnitPriceSynonyms) && !ContainsAnyWord(cols[i], PriceExcludeWords))
+                    return i;
+            }
+            return -1;
         }
 
         // Split a line into columns on runs of 2+ spaces (PdfPig's column
@@ -1158,6 +1188,19 @@ namespace MyApp.Api.Services.Implementations
             return m.Success ? ParseQuantity(m.Value) : 0m;
         }
 
+        // Per-unit price from a rate/price cell: strip currency + thousands
+        // separators, keep the first decimal number. Null when the cell holds no
+        // number (blank/dash/text) so the caller leaves it for the operator.
+        private static decimal? ParsePriceCell(string? s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return null;
+            var m = Regex.Match(s, @"\d[\d,]*(?:\.\d+)?");
+            if (!m.Success) return null;
+            return decimal.TryParse(m.Value.Replace(",", ""),
+                System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : (decimal?)null;
+        }
+
         // The unit cell is a real UOM only when it carries letters and isn't
         // just a number/price. Otherwise the caller defaults to "Pcs".
         private static bool LooksLikeUnitValue(string s) =>
@@ -1185,6 +1228,15 @@ namespace MyApp.Api.Services.Implementations
         private static readonly string[] PriceWords =
         {
             "Price", "Cost", "Rate", "Value", "Amount", "Total",
+        };
+
+        // Header words that name a PER-UNIT price/rate column — the fallback when
+        // no unitPriceHeader is configured. Kept narrow; total-ish columns are
+        // rejected by PriceExcludeWords so we never fill a line amount as a rate.
+        private static readonly string[] UnitPriceSynonyms = { "Rate", "Price", "Cost" };
+        private static readonly string[] PriceExcludeWords =
+        {
+            "Amount", "Total", "Net", "Gross", "Value", "Line", "Sub",
         };
 
         // Strip leading date / page-chrome fragments and trailing date/
@@ -1380,6 +1432,7 @@ namespace MyApp.Api.Services.Implementations
             [JsonPropertyName("descriptionHeader")] public string? DescriptionHeader { get; set; }
             [JsonPropertyName("quantityHeader")]    public string? QuantityHeader { get; set; }
             [JsonPropertyName("unitHeader")]        public string? UnitHeader { get; set; }
+            [JsonPropertyName("unitPriceHeader")]   public string? UnitPriceHeader { get; set; }
         }
 
         private class FieldRuleDto

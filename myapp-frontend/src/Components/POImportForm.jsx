@@ -33,7 +33,7 @@ const colors = {
 // `showQuoteLink` only makes sense for orders (an order links to a quote);
 // `showPrice` adds a unit-price column for quotes (a priced document).
 const TARGET_CONFIG = {
-  salesorder: { doc: "Sales Order", verb: "Create Sales Order", dateLabel: "Order Date *", showQuoteLink: true, showPrice: false },
+  salesorder: { doc: "Sales Order", verb: "Create Sales Order", dateLabel: "Order Date *", showQuoteLink: true, showPrice: true },
   salesquote: { doc: "Sales Quote", verb: "Create Sales Quote", dateLabel: "Quote Date *", showQuoteLink: false, showPrice: true },
   challan: { doc: "Delivery Challan", verb: "Create Challan", dateLabel: "Delivery Date *", showQuoteLink: false, showPrice: false },
 };
@@ -144,7 +144,7 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
         description: item.description || "",
         quantity: item.quantity || 1,
         unit: item.unit || "Pcs",
-        unitPrice: 0,  // priced later (only surfaced for the quote target)
+        unitPrice: item.unitPrice ?? 0,  // from the PO's rate column when detected (Sales Order + Quote)
       })) || []);
       setRawText(data.rawText || "");
       setMatchedFormatId(data.matchedFormatId ?? null);
@@ -314,6 +314,10 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
             quantity: qty(i),
             unit: i.unit.trim() || "Pcs",
             itemTypeId: null,
+            // Optional agreed price from the PO's rate column. Null when the
+            // parser found none, so the order keeps "no agreed price" and the
+            // bill still falls back to quote / last-billed at bill time.
+            unitPrice: Number(i.unitPrice) > 0 ? Number(i.unitPrice) : null,
           })),
         });
       }
