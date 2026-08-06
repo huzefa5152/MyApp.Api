@@ -6,6 +6,7 @@ import { getClientsByCompany } from "../api/clientApi";
 import { hasExcelTemplate, getTemplate } from "../api/printTemplateApi";
 import { previewChallanImport, commitChallanImport } from "../api/challanImportApi";
 import { notify } from "../utils/notify";
+import useIsNarrow from "../hooks/useIsNarrow";
 
 const colors = {
   blue: "#0d47a1",
@@ -848,6 +849,7 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
 function ResultsStep({ results, onRestart }) {
   const success = results.filter((r) => r.success);
   const failed = results.filter((r) => !r.success);
+  const isNarrow = useIsNarrow();
   return (
     <div style={styles.card}>
       <div style={styles.resultSummary}>
@@ -866,36 +868,59 @@ function ResultsStep({ results, onRestart }) {
           </div>
         </div>
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={styles.itemTable}>
-          <thead>
-            <tr>
-              <th>File</th>
-              <th>Challan #</th>
-              <th>Status</th>
-              <th>Details</th>
-            </tr>
-          </thead>
-          <tbody>
-            {results.map((r, i) => (
-              <tr key={i}>
-                <td>{r.fileName}</td>
-                <td>{r.challanNumber}</td>
-                <td>
-                  {r.success ? (
-                    <span style={{ color: colors.success, fontWeight: 600 }}>✓ Success</span>
-                  ) : (
-                    <span style={{ color: colors.danger, fontWeight: 600 }}>✗ Failed</span>
-                  )}
-                </td>
-                <td style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>
-                  {r.error || (r.insertedId ? `ID ${r.insertedId}` : "")}
-                </td>
+      {isNarrow ? (
+        /* Phone (<768px): one card per result — file name wraps, status + details
+           stack, so the 4-column table never has to scroll sideways. */
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          {results.map((r, i) => (
+            <div key={i} style={styles.resultCard}>
+              <div style={styles.resultCardHead}>
+                <span style={{ fontWeight: 600, wordBreak: "break-all", flex: 1 }}>{r.fileName}</span>
+                {r.success ? (
+                  <span style={{ color: colors.success, fontWeight: 700, whiteSpace: "nowrap" }}>✓ Success</span>
+                ) : (
+                  <span style={{ color: colors.danger, fontWeight: 700, whiteSpace: "nowrap" }}>✗ Failed</span>
+                )}
+              </div>
+              <div style={{ fontSize: "0.82rem", color: colors.textSecondary }}>
+                Challan #{r.challanNumber || "—"}
+                {(r.error || r.insertedId) ? ` · ${r.error || `ID ${r.insertedId}`}` : ""}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={styles.itemTable}>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Challan #</th>
+                <th>Status</th>
+                <th>Details</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {results.map((r, i) => (
+                <tr key={i}>
+                  <td>{r.fileName}</td>
+                  <td>{r.challanNumber}</td>
+                  <td>
+                    {r.success ? (
+                      <span style={{ color: colors.success, fontWeight: 600 }}>✓ Success</span>
+                    ) : (
+                      <span style={{ color: colors.danger, fontWeight: 600 }}>✗ Failed</span>
+                    )}
+                  </td>
+                  <td style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>
+                    {r.error || (r.insertedId ? `ID ${r.insertedId}` : "")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       <div style={styles.footerBtns}>
         <button style={styles.primaryBtn} onClick={onRestart}>Import more</button>
       </div>
@@ -1032,7 +1057,7 @@ const styles = {
     fontSize: "0.85rem", lineHeight: 1.5,
   },
   fieldsGrid: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(180px, 100%), 1fr))",
     gap: "0.7rem",
   },
   field: { display: "flex", flexDirection: "column", gap: "0.25rem" },
@@ -1080,12 +1105,21 @@ const styles = {
     color: colors.danger, padding: "0.25rem", display: "inline-flex",
   },
   resultSummary: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
     gap: "0.7rem", marginBottom: "1rem",
   },
   summaryBox: {
     display: "flex", alignItems: "center", gap: "0.7rem",
     padding: "0.9rem 1rem", borderRadius: "10px",
     fontWeight: 600,
+  },
+  resultCard: {
+    border: `1px solid ${colors.cardBorder}`, borderRadius: 10,
+    padding: "0.7rem 0.8rem", background: "#fff",
+    display: "flex", flexDirection: "column", gap: "0.35rem",
+  },
+  resultCardHead: {
+    display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+    gap: "0.6rem", fontSize: "0.9rem", color: colors.textPrimary,
   },
 };

@@ -28,6 +28,7 @@ import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
+import useIsNarrow from "../hooks/useIsNarrow";
 
 const colors = {
   blue: "#0d47a1",
@@ -66,6 +67,7 @@ export default function PurchaseBillsPage() {
   const canViewSalesOrders = has("salesorders.list.view");
   const canViewChallans = has("challans.list.view");
   const [viewMode, setViewMode, isBigScreen] = useListViewMode("purchaseBills");
+  const isNarrow = useIsNarrow();
 
   const [bills, setBills] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -411,7 +413,7 @@ export default function PurchaseBillsPage() {
         <div style={styles.empty}>No companies available.</div>
       ) : (
         <>
-          <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
             <MdBusiness size={20} color={colors.blue} />
             <select style={dropdownStyles.base} value={selectedCompany?.id || ""} onChange={e => setSelectedCompany(companies.find(c => parseInt(c.id) === parseInt(e.target.value)))}>
               {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
@@ -629,7 +631,40 @@ export default function PurchaseBillsPage() {
                 <div style={{ padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary, fontSize: "0.9rem" }}>
                   No sale bills awaiting procurement. Either every bill is FBR-ready, or some lines are missing Item Type — fix those on the Bills page first.
                 </div>
-              ) : (
+              ) : (() => {
+                const filtered = awaitingBills.filter(b => {
+                  if (!pickerSearch.trim()) return true;
+                  const q = pickerSearch.toLowerCase();
+                  return String(b.invoiceNumber).includes(q)
+                      || (b.clientName || "").toLowerCase().includes(q);
+                });
+                const pick = (b) => {
+                  setShowSalePicker(false);
+                  setEditingId(null);
+                  setPrefillFromInvoiceId(b.invoiceId);
+                  setPrefillItems(null);
+                  setPrefillSourceLabel(null);
+                  setViewOnly(false);
+                  setShowForm(true);
+                };
+                return isNarrow ? (
+                  <div style={pickerStyles.cardList}>
+                    {filtered.map(b => (
+                      <div key={b.invoiceId} style={pickerStyles.card}>
+                        <div style={pickerStyles.cardHead}>
+                          <strong>#{b.invoiceNumber}</strong>
+                          <span style={pickerStyles.cardDate}>{new Date(b.date).toLocaleDateString()}</span>
+                        </div>
+                        <div style={pickerStyles.cardClient}>{b.clientName}</div>
+                        <div style={pickerStyles.cardMeta}>
+                          <span>Lines awaiting: <strong>{b.linesAwaiting}</strong></span>
+                          <span>Qty remaining: <strong>{b.totalQtyRemaining}</strong></span>
+                        </div>
+                        <button style={{ ...pickerStyles.pickBtn, width: "100%", minHeight: 44 }} onClick={() => pick(b)}>Pick</button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
                   <thead>
                     <tr>
@@ -642,14 +677,7 @@ export default function PurchaseBillsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {awaitingBills
-                      .filter(b => {
-                        if (!pickerSearch.trim()) return true;
-                        const q = pickerSearch.toLowerCase();
-                        return String(b.invoiceNumber).includes(q)
-                            || (b.clientName || "").toLowerCase().includes(q);
-                      })
-                      .map(b => (
+                    {filtered.map(b => (
                         <tr key={b.invoiceId}>
                           <td style={pickerStyles.td}><strong>#{b.invoiceNumber}</strong></td>
                           <td style={pickerStyles.td}>{new Date(b.date).toLocaleDateString()}</td>
@@ -657,15 +685,7 @@ export default function PurchaseBillsPage() {
                           <td style={{ ...pickerStyles.td, textAlign: "right" }}>{b.linesAwaiting}</td>
                           <td style={{ ...pickerStyles.td, textAlign: "right", fontWeight: 600 }}>{b.totalQtyRemaining}</td>
                           <td style={pickerStyles.td}>
-                            <button style={pickerStyles.pickBtn} onClick={() => {
-                              setShowSalePicker(false);
-                              setEditingId(null);
-                              setPrefillFromInvoiceId(b.invoiceId);
-                              setPrefillItems(null);
-                              setPrefillSourceLabel(null);
-                              setViewOnly(false);
-                              setShowForm(true);
-                            }}>
+                            <button style={pickerStyles.pickBtn} onClick={() => pick(b)}>
                               Pick
                             </button>
                           </td>
@@ -673,7 +693,8 @@ export default function PurchaseBillsPage() {
                       ))}
                   </tbody>
                 </table>
-              )}
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -710,7 +731,36 @@ export default function PurchaseBillsPage() {
                 <div style={{ padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary, fontSize: "0.9rem" }}>
                   No sales orders available to purchase for.
                 </div>
-              ) : (
+              ) : (() => {
+                const filtered = openOrders.filter(o => {
+                  if (!orderPickerSearch.trim()) return true;
+                  const q = orderPickerSearch.toLowerCase();
+                  return String(o.salesOrderNumber).includes(q)
+                      || (o.clientName || "").toLowerCase().includes(q);
+                });
+                return isNarrow ? (
+                  <div style={pickerStyles.cardList}>
+                    {filtered.map(o => {
+                      const sel = selectedOrderIds.has(o.id);
+                      return (
+                        <div key={o.id} style={{ ...pickerStyles.card, ...(sel ? pickerStyles.cardSelected : {}) }} onClick={() => toggleOrder(o.id)}>
+                          <div style={pickerStyles.cardHead}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                              <input type="checkbox" checked={sel} onChange={() => toggleOrder(o.id)} onClick={(e) => e.stopPropagation()} />
+                              <strong>#{o.salesOrderNumber}</strong>
+                            </span>
+                            <span style={pickerStyles.cardDate}>{o.orderDate ? new Date(o.orderDate).toLocaleDateString() : "—"}</span>
+                          </div>
+                          <div style={pickerStyles.cardClient}>{o.clientName}</div>
+                          <div style={pickerStyles.cardMeta}>
+                            <span>Lines: <strong>{o.items?.length || 0}</strong></span>
+                            <span>{o.fulfillmentStatus}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
                   <thead>
                     <tr>
@@ -723,14 +773,7 @@ export default function PurchaseBillsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {openOrders
-                      .filter(o => {
-                        if (!orderPickerSearch.trim()) return true;
-                        const q = orderPickerSearch.toLowerCase();
-                        return String(o.salesOrderNumber).includes(q)
-                            || (o.clientName || "").toLowerCase().includes(q);
-                      })
-                      .map(o => (
+                    {filtered.map(o => (
                         <tr key={o.id} style={{ cursor: "pointer", background: selectedOrderIds.has(o.id) ? "#e8f5e9" : "transparent" }} onClick={() => toggleOrder(o.id)}>
                           <td style={pickerStyles.td}>
                             <input type="checkbox" checked={selectedOrderIds.has(o.id)} onChange={() => toggleOrder(o.id)} onClick={(e) => e.stopPropagation()} />
@@ -744,9 +787,10 @@ export default function PurchaseBillsPage() {
                       ))}
                   </tbody>
                 </table>
-              )}
+                );
+              })()}
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", padding: "0.85rem 1.25rem", borderTop: `1px solid ${colors.cardBorder}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", padding: "0.85rem 1.25rem", borderTop: `1px solid ${colors.cardBorder}` }}>
               <span style={{ fontSize: "0.82rem", color: colors.textSecondary }}>
                 {selectedOrderIds.size} order{selectedOrderIds.size !== 1 ? "s" : ""} selected
               </span>
@@ -793,7 +837,36 @@ export default function PurchaseBillsPage() {
                 <div style={{ padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary, fontSize: "0.9rem" }}>
                   No delivery challans available to purchase for.
                 </div>
-              ) : (
+              ) : (() => {
+                const filtered = openChallans.filter(c => {
+                  if (!challanPickerSearch.trim()) return true;
+                  const q = challanPickerSearch.toLowerCase();
+                  return String(c.challanNumber).includes(q)
+                      || (c.clientName || "").toLowerCase().includes(q);
+                });
+                return isNarrow ? (
+                  <div style={pickerStyles.cardList}>
+                    {filtered.map(c => {
+                      const sel = selectedChallanIds.has(c.id);
+                      return (
+                        <div key={c.id} style={{ ...pickerStyles.card, ...(sel ? pickerStyles.cardSelected : {}) }} onClick={() => toggleChallan(c.id)}>
+                          <div style={pickerStyles.cardHead}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                              <input type="checkbox" checked={sel} onChange={() => toggleChallan(c.id)} onClick={(e) => e.stopPropagation()} />
+                              <strong>#{c.challanNumber}</strong>
+                            </span>
+                            <span style={pickerStyles.cardDate}>{c.deliveryDate ? new Date(c.deliveryDate).toLocaleDateString() : "—"}</span>
+                          </div>
+                          <div style={pickerStyles.cardClient}>{c.clientName}</div>
+                          <div style={pickerStyles.cardMeta}>
+                            <span>Lines: <strong>{c.items?.length || 0}</strong></span>
+                            <span>{c.status}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
                   <thead>
                     <tr>
@@ -806,14 +879,7 @@ export default function PurchaseBillsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {openChallans
-                      .filter(c => {
-                        if (!challanPickerSearch.trim()) return true;
-                        const q = challanPickerSearch.toLowerCase();
-                        return String(c.challanNumber).includes(q)
-                            || (c.clientName || "").toLowerCase().includes(q);
-                      })
-                      .map(c => (
+                    {filtered.map(c => (
                         <tr key={c.id} style={{ cursor: "pointer", background: selectedChallanIds.has(c.id) ? "#e8f5e9" : "transparent" }} onClick={() => toggleChallan(c.id)}>
                           <td style={pickerStyles.td}>
                             <input type="checkbox" checked={selectedChallanIds.has(c.id)} onChange={() => toggleChallan(c.id)} onClick={(e) => e.stopPropagation()} />
@@ -827,9 +893,10 @@ export default function PurchaseBillsPage() {
                       ))}
                   </tbody>
                 </table>
-              )}
+                );
+              })()}
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", padding: "0.85rem 1.25rem", borderTop: `1px solid ${colors.cardBorder}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", padding: "0.85rem 1.25rem", borderTop: `1px solid ${colors.cardBorder}` }}>
               <span style={{ fontSize: "0.82rem", color: colors.textSecondary }}>
                 {selectedChallanIds.size} challan{selectedChallanIds.size !== 1 ? "s" : ""} selected
               </span>
@@ -885,6 +952,18 @@ const pickerStyles = {
     backgroundColor: "#0d47a1", color: "#fff",
     fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", boxShadow: "none",
   },
+  // Mobile (<768px) card list — one selectable card per row instead of a
+  // horizontally-scrolled multi-column table.
+  cardList: { display: "flex", flexDirection: "column", gap: "0.6rem", padding: "0.75rem 1rem" },
+  card: {
+    border: "1px solid #e8edf3", borderRadius: 10, padding: "0.7rem 0.8rem",
+    background: "#fff", display: "flex", flexDirection: "column", gap: "0.4rem", cursor: "pointer",
+  },
+  cardSelected: { background: "#e8f5e9", borderColor: "#a5d6a7" },
+  cardHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", fontSize: "0.95rem", color: "#1a2332" },
+  cardDate: { fontSize: "0.78rem", color: "#5f6d7e", fontWeight: 500 },
+  cardClient: { fontSize: "0.9rem", fontWeight: 600, color: "#1a2332", wordBreak: "break-word" },
+  cardMeta: { display: "flex", flexWrap: "wrap", gap: "0.3rem 1rem", fontSize: "0.8rem", color: "#5f6d7e" },
 };
 
 const styles = {

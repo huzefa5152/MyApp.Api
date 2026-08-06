@@ -21,6 +21,7 @@ import AttachmentManager from "./AttachmentManager";
 import { usePermissions } from "../contexts/PermissionsContext";
 import QuantityInput from "./QuantityInput";
 import useScrollToError from "../hooks/useScrollToError";
+import useIsNarrow from "../hooks/useIsNarrow";
 
 const colors = {
   blue: "#0d47a1",
@@ -70,6 +71,8 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
   const [sourceBill, setSourceBill] = useState(null);
   const attachmentRef = useRef(null);
   const errRef = useScrollToError(error);
+  // Below 768px the wide line-items table reflows to a stacked card per line.
+  const isNarrow = useIsNarrow();
 
   function newRow() {
     return {
@@ -356,8 +359,8 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
           <h5 style={formStyles.title}>{readOnly ? "View Purchase Bill" : (isEdit ? "Edit Purchase Bill" : "New Purchase Bill")}</h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, overflow: "hidden" }}>
+          <div style={formStyles.body}>
           <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
@@ -482,6 +485,99 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
                 </button>
               </div>
               <BulkItemTypeBar items={items} setItems={setItems} itemTypes={itemTypes} nonInventoryItems={nonInvItems} divisionId={divisionId} />
+              {isNarrow ? (
+              /* Phone (<768px): each line becomes a stacked card so no control
+                 gets squeezed. Every editable field from the desktop table is
+                 preserved (item-type/non-inventory picker, description, qty,
+                 unit price, UOM, GL account, remove) — identical handlers +
+                 submit payload. */
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                {items.map((it, idx) => {
+                  const lineTotal = (parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0);
+                  const linkedToSale = (it.sourceInvoiceItemIds?.length || 0) > 0;
+                  return (
+                    <div key={idx} style={mStyles.card}>
+                      <div style={mStyles.cardHead}>
+                        <span style={mStyles.cardHeadLabel}>Line {idx + 1}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                          <span style={mStyles.cardHeadTotal}>{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          {items.length > 1 && (
+                            <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={mStyles.removeBtn} title="Remove line" aria-label="Remove line">
+                              <MdDelete size={18} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label style={mStyles.label}>Item Type (FBR catalog)</label>
+                        <SearchableItemTypeSelect
+                          divisionId={divisionId}
+                          items={eligibleItemTypes}
+                          value={it.itemTypeId || ""}
+                          onChange={(newId, picked) => pickItemType(idx, newId, picked)}
+                          nonInventoryItems={nonInvItems}
+                          nonInventoryValue={it.nonInventoryItemId || ""}
+                          onPickNonInventory={(n) => pickNonInventory(idx, n)}
+                          placeholder={isAgainstSale ? "— pick item with HS Code —" : "— optional —"}
+                          style={{ padding: "0.5rem 0.6rem", fontSize: "0.9rem",
+                                   ...(isAgainstSale && !it.itemTypeId ? { borderColor: "#dc3545" } : {}) }}
+                        />
+                        {linkedToSale && (
+                          <div style={{ fontSize: "0.72rem", color: "#5f6d7e", marginTop: 3 }}>
+                            {it._saleLineCount > 1
+                              ? `${it._saleLineCount} sale lines, was: ${it._originalItemTypeName || "—"}`
+                              : `1 sale line, was: ${it._originalItemTypeName || "—"}`}
+                            {it._saleProcuredQty > 0 && ` · already procured ${it._saleProcuredQty} of ${it._saleSoldQty}`}
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label style={mStyles.label}>Description *</label>
+                        <textarea rows={2} style={{ ...mStyles.input, resize: "vertical", minHeight: 44, lineHeight: 1.4 }} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
+                      </div>
+
+                      <div style={mStyles.fieldGrid}>
+                        <div>
+                          <label style={mStyles.label}>Qty *</label>
+                          <QuantityInput
+                            value={it.quantity}
+                            onChange={val => updateItem(idx, "quantity", val)}
+                            unit={it.uom}
+                            units={units}
+                            style={{ ...mStyles.input, textAlign: "right" }}
+                          />
+                        </div>
+                        <div>
+                          <label style={mStyles.label}>Unit Price *</label>
+                          <input type="number" min={0} step={0.01} style={{ ...mStyles.input, textAlign: "right" }} value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
+                        </div>
+                        <div>
+                          <label style={mStyles.label}>UOM</label>
+                          <input type="text" style={mStyles.input} value={it.uom} onChange={e => updateItem(idx, "uom", e.target.value)} />
+                        </div>
+                      </div>
+
+                      {glOn && (
+                        <div>
+                          <label style={mStyles.label}>Account (GL)</label>
+                          <AccountSelect
+                            accounts={accounts}
+                            value={it.accountId}
+                            onChange={(v) => updateItem(idx, "accountId", v)}
+                            side="expense"
+                            disabled={!!it.nonInventoryItemId}
+                            placeholder={it.nonInventoryItemId ? nonInvPurchaseAccountLabel(it.nonInventoryItemId) : defaultPurchaseAccountLabel}
+                            style={{ ...mStyles.input, minHeight: 44 }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              ) : (
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                   <thead>
@@ -569,6 +665,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
                   </tbody>
                 </table>
               </div>
+              )}
             </div>
 
             <div style={{ marginTop: "1rem", padding: "0.75rem 1rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff", display: "grid", gridTemplateColumns: "1fr auto auto", rowGap: "0.35rem", columnGap: "1rem" }}>
@@ -610,3 +707,16 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
 const th = { textAlign: "left", padding: "0.45rem 0.55rem", borderBottom: "1px solid #e8edf3", fontSize: "0.74rem", fontWeight: 700, color: "#5f6d7e", textTransform: "uppercase", letterSpacing: "0.04em" };
 const td = { padding: "0.4rem 0.45rem", borderBottom: "1px solid #f3f5f9", verticalAlign: "top" };
 const cellInput = { width: "100%", padding: "0.3rem 0.5rem", fontSize: "0.8rem", border: "1px solid #d0d7e2", borderRadius: 6, backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none" };
+
+// Mobile (<768px) stacked-line-item card styles. `boxShadow:"none"` + explicit
+// padding on the remove button neutralise index.css's global <button> rule.
+const mStyles = {
+  card: { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.75rem", backgroundColor: "#fff", display: "flex", flexDirection: "column", gap: "0.55rem" },
+  cardHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.6rem", borderBottom: `1px solid ${colors.cardBorder}`, paddingBottom: "0.45rem" },
+  cardHeadLabel: { fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: colors.textSecondary },
+  cardHeadTotal: { fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary },
+  removeBtn: { display: "grid", placeItems: "center", width: 44, height: 44, padding: 0, borderRadius: 8, border: "none", background: "#ffebee", color: "#c62828", cursor: "pointer", boxShadow: "none" },
+  label: { display: "block", fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: colors.textSecondary, marginBottom: 3 },
+  input: { width: "100%", boxSizing: "border-box", padding: "0.5rem 0.6rem", fontSize: "0.9rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 8, backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", minHeight: 44 },
+  fieldGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(120px, 100%), 1fr))", gap: "0.5rem" },
+};

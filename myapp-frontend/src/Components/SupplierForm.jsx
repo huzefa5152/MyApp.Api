@@ -257,7 +257,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], fbrE
               <input type="text" name="address" value={formData.address} onChange={handleChange} style={input} />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formGroup}>
                 <label style={label}>Email</label>
                 <input type="email" name="email" value={formData.email} onChange={handleChange} style={input} />
@@ -273,7 +273,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], fbrE
             {fbrRequired && (
             <div style={{ marginTop: "0.5rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #00695c30", backgroundColor: "#e0f2f1" }}>
               <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#00695c" }}>FBR Details</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
                 <div style={formGroup}>
                   <label style={label}>Registration Type</label>
                   <select name="registrationType" value={formData.registrationType} onChange={handleChange} style={input}>
@@ -301,7 +301,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], fbrE
               )}
 
               {(showNtn || showStrn) && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginTop: "0.5rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem", marginTop: "0.5rem" }}>
                   {showNtn && (
                     <div style={formGroup}>
                       <label style={label}>{ntnLabel}</label>

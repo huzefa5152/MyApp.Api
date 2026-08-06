@@ -6,6 +6,7 @@ import DivisionSelect from "./DivisionSelect";
 import BankCashSelect from "./BankCashSelect";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
+import useIsNarrow from "../hooks/useIsNarrow";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { createPayment, updatePayment } from "../api/paymentApi";
 import { getClientsByCompany } from "../api/clientApi";
@@ -63,6 +64,8 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
+  // Below 768px the allocation table reflows to a stacked card per document.
+  const isNarrow = useIsNarrow();
 
   // Load the contact list once.
   useEffect(() => {
@@ -290,6 +293,35 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                 <div style={hintBox}>Loading…</div>
               ) : docs.length === 0 ? (
                 <div style={hintBox}>No open {docLabel.toLowerCase()}s with a balance due for this {contactLabel.toLowerCase()}.</div>
+              ) : isNarrow ? (
+                /* Phone (<768px): one card per open document so the amount
+                   input + Max button get full-width tap targets instead of a
+                   5-column table squeezed into ~340px. */
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {docs.map((d) => (
+                    <div key={d.id} style={allocCard}>
+                      <div style={allocCardHead}>
+                        <strong>#{d.number}</strong>
+                        <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</span>
+                      </div>
+                      <div style={allocCardMeta}>
+                        <div><span style={allocMetaLabel}>Total</span><span style={allocMetaValue}>{d.grandTotal.toLocaleString()}</span></div>
+                        <div><span style={allocMetaLabel}>Balance due</span><span style={allocMetaValue}>{d.available.toLocaleString()}</span></div>
+                      </div>
+                      <div>
+                        <span style={allocMetaLabel}>Apply</span>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          <input
+                            type="number" min="0" step="0.01" style={{ ...formStyles.input, textAlign: "right", flex: 1, minHeight: 44 }}
+                            value={alloc[d.id] ?? ""}
+                            onChange={(e) => setAllocAmount(d.id, e.target.value)}
+                          />
+                          <button type="button" style={{ ...fillBtn, minHeight: 44, padding: "0.5rem 0.85rem", boxShadow: "none" }} onClick={() => fillBalance(d)} title="Apply full balance">Max</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div style={{ overflowX: "auto" }}>
                   <table style={tbl}>
@@ -366,3 +398,9 @@ const tbl = { width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" };
 const th = { textAlign: "left", padding: "0.4rem 0.5rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textSecondary, fontWeight: 700, whiteSpace: "nowrap" };
 const td = { padding: "0.4rem 0.5rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textPrimary };
 const fillBtn = { padding: "0.3rem 0.5rem", fontSize: "0.7rem", fontWeight: 700, borderRadius: 6, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, cursor: "pointer" };
+// Mobile (<768px) allocation cards.
+const allocCard = { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.7rem 0.8rem", background: "#fff", display: "flex", flexDirection: "column", gap: "0.5rem" };
+const allocCardHead = { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.5rem" };
+const allocCardMeta = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(120px, 100%), 1fr))", gap: "0.4rem 1rem" };
+const allocMetaLabel = { display: "block", fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: colors.textSecondary, marginBottom: 2 };
+const allocMetaValue = { fontSize: "0.9rem", fontWeight: 600, color: colors.textPrimary };

@@ -303,6 +303,11 @@ Publish output optimized from 79 MB to 37 MB via:
 - **Sales Order and Sales Quote imports now prefill the unit price** from that column (Sales Order gained the price column in the import review; Sales Quote already had one). A **Delivery Challan** import stays quantity-only and ignores price by design. Sales Order lines with no detected price keep "no agreed price" so the bill still falls back to quote / last-billed.
 - Extraction is additive — description/quantity/unit reading is unchanged. New `unit_price_corpus.json` cases added; the offline corpus harness stays green.
 
+### 2026-08-05 — Purchase Bill + Import Challan: mobile-friendly forms, dialogs & pickers
+
+- **Purchase Bill fully usable on a phone.** The New/Edit Purchase Bill modal now scrolls correctly on short screens (footer no longer clipped) and its line items render as stacked cards below 768px — item type / non-inventory picker, description, qty, unit, price and GL account all editable — instead of a cramped wide table. The dialogs on that screen (the Sale Bill / Sales Order / Delivery Challan pickers, the supplier quick-create form, and the payment allocation table) all get phone card / stacked layouts. Desktop tables unchanged.
+- **Import Challan**: the results table and field grids stack on phones — no sideways page scroll.
+
 ### 2026-08-05 — Line items: paste-list, repeat-last, responsive editor
 
 - **Faster, mobile-friendly line entry on Sales Quote / Sales Order / Delivery Challan.** A shared line-item editor replaces the per-form tables: **Paste list** turns pasted rows (tab/comma → description, qty, unit, price) into lines, **Repeat last** clones the previous line, and each line renders as a **card on phones / a table on desktop**. Item type, non-inventory items, division scoping, the optional Sales-Order unit price, and delivered-line locks are all preserved.
