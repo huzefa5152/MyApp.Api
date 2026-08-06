@@ -1,17 +1,14 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { MdAdd, MdDelete, MdInfo, MdContentCopy } from "react-icons/md";
-import LookupAutocomplete from "./LookupAutocomplete";
-import QuantityInput from "./QuantityInput";
-import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
-import BulkItemTypeBar from "./BulkItemTypeBar";
+import { MdInfo, MdContentCopy } from "react-icons/md";
+import LineItemsEditor from "./LineItemsEditor";
 import { updateChallan } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
-import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
+import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
   textPrimary: "#1a2332",
@@ -26,6 +23,8 @@ const colors = {
   warning: "#f57c00",
   warningLight: "#fff3e0",
 };
+
+const blankItem = () => ({ id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "" });
 
 /**
  * ChallanEditForm — edit ANY editable challan (Pending / No PO / Setup Required /
@@ -89,8 +88,8 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
 
   // ── UI state ──
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
-  const containerRef = useRef(null);
 
   // Load lookups once
   useEffect(() => {
@@ -101,10 +100,6 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     }
     getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
   }, [challan.companyId]);
-
-  useEffect(() => {
-    if (containerRef.current) containerRef.current.scrollTop = containerRef.current.scrollHeight;
-  }, [items.length]);
 
   // Derive the site options from the selected client's semicolon-separated list.
   // Null-safe: if the client has no sites the dropdown collapses to a free-text
@@ -128,57 +123,6 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
       setSite("");
     }
   }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Item handlers ──
-  const handleItemChange = (index, field, value) => {
-    const next = [...items];
-    next[index][field] = value;
-    setItems(next);
-  };
-
-  const handleItemPick = (index, picked) => {
-    const next = [...items];
-    if (picked.name) next[index].description = picked.name;
-    if (picked.uom) next[index].unit = picked.uom;
-    setItems(next);
-
-    if (picked.name && (picked.hsCode || picked.saleType || picked.fbrUOMId)) {
-      saveItemFbrDefaults({
-        name: picked.name,
-        hsCode: picked.hsCode || null,
-        saleType: picked.saleType || null,
-        fbrUOMId: picked.fbrUOMId || null,
-        uom: picked.uom || null,
-      }).catch(() => {});
-    }
-  };
-
-  // Item Type only TAGS the line (records ItemTypeId); it does NOT overwrite the
-  // typed description/unit. Mutually exclusive with a non-inventory item.
-  const pickItemType = (index, newId) => {
-    const next = [...items];
-    next[index] = { ...next[index], itemTypeId: newId ? parseInt(newId) : null, nonInventoryItemId: null };
-    setItems(next);
-  };
-  const pickNonInventory = (index, n) => {
-    setItems((prev) => prev.map((it, i) => {
-      if (i !== index) return it;
-      if (!n) return { ...it, nonInventoryItemId: null };
-      const nx = { ...it, nonInventoryItemId: n.id, itemTypeId: null };
-      if (!it.description?.trim()) nx.description = n.defaultLineDescription || n.name || "";
-      if (!it.unit?.trim()) nx.unit = n.unitName || "";
-      return nx;
-    }));
-  };
-
-  const addItem = () => {
-    setItems([...items, { id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "" }]);
-  };
-
-  const removeItem = (index) => {
-    if (items.length <= 1) return;
-    setItems(items.filter((_, i) => i !== index));
-  };
 
   // ── Preview the status the backend WILL set, so the operator sees the
   //    consequence of clearing the PO before they hit Save ──
@@ -254,7 +198,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div style={styles.errorAlert}>{error}</div>}
+            {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {/* Duplicate-mode banner — explains why so many fields are
                 read-only and what the operator IS allowed to change. */}
@@ -410,72 +354,18 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
             </div>
 
             {/* ── Items ── */}
-            <label style={{ ...styles.label, marginTop: "0.75rem" }}>Items *</label>
-
-            {/* Bulk "apply same Item Type to all lines" — shows only for 2+ lines. */}
-            <BulkItemTypeBar items={items} setItems={setItems} itemTypes={itemTypes} nonInventoryItems={nonInvItems} divisionId={challan.divisionId || null} />
-
-            {/* Optional Item Type per line (matches New Challan). Tags the line
-                for inventory / FBR classification; item type can still be
-                (re)classified on the Invoices tab. */}
-
-            <div ref={containerRef} style={styles.itemsContainer}>
-              {items.map((item, idx) => (
-                <div key={idx} style={styles.itemRow}>
-                  <div style={styles.itemIndex}>{idx + 1}</div>
-                  <div style={{ width: 190, flexShrink: 0 }}>
-                    <SearchableItemTypeSelect
-                      divisionId={challan.divisionId || null}
-                      items={itemTypes}
-                      value={item.itemTypeId || ""}
-                      onChange={(newId) => pickItemType(idx, newId)}
-                      nonInventoryItems={nonInvItems}
-                      nonInventoryValue={item.nonInventoryItemId || ""}
-                      onPickNonInventory={(n) => pickNonInventory(idx, n)}
-                      placeholder="— item type (optional) —"
-                      style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                    />
-                  </div>
-                  <div style={{ flex: 2, minWidth: 0 }}>
-                    <LookupAutocomplete
-                      label="Description"
-                      endpoint="/lookup/items"
-                      value={item.description}
-                      onChange={(val) => handleItemChange(idx, "description", val)}
-                    />
-                  </div>
-                  {/* Wider column so 4-place decimals (0.0004, 1234.5678)
-                      stay fully visible alongside the spinner controls. */}
-                  <div style={{ width: 130, flexShrink: 0 }}>
-                    <QuantityInput
-                      value={item.quantity}
-                      onChange={(val) => handleItemChange(idx, "quantity", val === "" ? 1 : val)}
-                      unit={item.unit}
-                      units={units}
-                      style={{ ...styles.input, textAlign: "right", padding: "0.55rem 0.5rem" }}
-                    />
-                  </div>
-                  <div style={{ width: 180, flexShrink: 0 }}>
-                    <LookupAutocomplete
-                      label="Unit"
-                      endpoint="/lookup/units"
-                      value={item.unit}
-                      onChange={(val) => handleItemChange(idx, "unit", val)}
-                    />
-                  </div>
-                  <div style={{ flexShrink: 0 }}>
-                    {items.length > 1 && (
-                      <button type="button" style={styles.removeBtn} onClick={() => removeItem(idx)}>
-                        <MdDelete size={16} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button type="button" style={styles.addItemBtn} onClick={addItem}>
-              <MdAdd size={16} /> Add Item
-            </button>
+            <LineItemsEditor
+              items={items}
+              onItemsChange={setItems}
+              makeBlankItem={blankItem}
+              units={units}
+              itemTypes={itemTypes}
+              nonInventoryItems={nonInvItems}
+              divisionId={challan.divisionId || null}
+              descriptionMultiline={false}
+              coerceEmptyQtyToOne
+              itemsLabel="Items *"
+            />
 
             {/* Saved record — uploads attach to the challan immediately. */}
             <AttachmentManager

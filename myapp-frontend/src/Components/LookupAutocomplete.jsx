@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import httpClient from "../api/httpClient";
 
-export default function LookupAutocomplete({ label, endpoint, value, onChange, inputClassName, inputStyle, multiline = false }) {
+export default function LookupAutocomplete({ label, endpoint, value, onChange, inputClassName, inputStyle, multiline = false, inputRef }) {
     const [suggestions, setSuggestions] = useState([]);
     const [showDropdown, setShowDropdown] = useState(false);
     const [inputValue, setInputValue] = useState(value || "");
@@ -145,6 +145,7 @@ export default function LookupAutocomplete({ label, endpoint, value, onChange, i
         <div className="position-relative" ref={wrapperRef}>
             {multiline ? (
                 <textarea
+                    ref={inputRef}
                     className={inputClassName !== undefined ? inputClassName : "form-control"}
                     style={{ resize: "vertical", minHeight: 58, lineHeight: 1.4, ...inputStyle }}
                     placeholder={label}
@@ -158,6 +159,7 @@ export default function LookupAutocomplete({ label, endpoint, value, onChange, i
                 />
             ) : (
                 <input
+                    ref={inputRef}
                     type="text"
                     className={inputClassName !== undefined ? inputClassName : "form-control"}
                     style={inputStyle}

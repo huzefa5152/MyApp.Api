@@ -1,12 +1,8 @@
 import { useState, useRef, useEffect } from "react";
-import { MdAdd, MdDelete } from "react-icons/md";
-import LookupAutocomplete from "./LookupAutocomplete";
 import SelectDropdown from "./SelectDropdown";
-import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
-import BulkItemTypeBar from "./BulkItemTypeBar";
 import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
-import QuantityInput from "./QuantityInput";
+import LineItemsEditor from "./LineItemsEditor";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
@@ -14,6 +10,7 @@ import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { getSalesQuotesForPicker } from "../api/salesQuoteApi";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
+import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
   textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
@@ -46,6 +43,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
   const [divisionId, setDivisionId] = useState(
     order?.divisionId ? String(order.divisionId) : (defaultDivisionId ? String(defaultDivisionId) : ""));
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   const [salesQuoteId, setSalesQuoteId] = useState(order?.salesQuoteId ? String(order.salesQuoteId) : "");
   const [quotes, setQuotes] = useState([]);
@@ -61,24 +59,6 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
     getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
   }, [companyId]);
 
-  // Picking an item type only TAGS the line (records ItemTypeId); it must NOT
-  // overwrite the operator's typed description/unit (that's Invoice-mode only).
-  // Mutually exclusive with a non-inventory item — clear any non-inv binding.
-  const pickItemType = (idx, newId) => setItem(idx, { itemTypeId: newId ? parseInt(newId) : null, nonInventoryItemId: null });
-
-  // Non-Inventory pick — mutually exclusive with an item type. Records the
-  // non-inv id, clears any itemTypeId, and prefills description / unit only
-  // when those fields are still empty (orders are qty-only, so ignore price).
-  const pickNonInventory = (idx, n) => {
-    if (!n) { setItem(idx, { nonInventoryItemId: null }); return; }
-    setItems((prev) => prev.map((it, i) => {
-      if (i !== idx) return it;
-      const next = { ...it, nonInventoryItemId: n.id, itemTypeId: null };
-      if (!it.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
-      if (!it.unit?.trim()) next.unit = n.unitName || "";
-      return next;
-    }));
-  };
   useEffect(() => {
     // Page-walking helper: the server clamps pageSize at 100, and the linked
     // quote must stay findable in edit mode even on quote-heavy companies.
@@ -119,14 +99,6 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
       setQuoteLoadedMsg(`Loaded ${q.items.length} item${q.items.length !== 1 ? "s" : ""} from Quote #${q.quoteNumber} — edit as needed.`);
     }
   };
-
-  const setItem = (idx, patch) => setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
-  const addItem = () => {
-    if (!items[items.length - 1].description.trim()) { setError("Fill the current item's description first."); return; }
-    setError("");
-    setItems([...items, blankItem()]);
-  };
-  const removeItem = (idx) => setItems(items.filter((_, i) => i !== idx));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -183,7 +155,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div style={s.err}>{error}</div>}
+            {error && <div ref={errRef} style={s.err}>{error}</div>}
             <div style={s.row}>
               <div style={{ flex: "1 1 100%", minWidth: 220 }}>
                 <label style={s.label}>Sales Quote <span style={s.opt}>(optional — picking one pre-fills the order)</span></label>
@@ -236,63 +208,21 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
               </div>
             </div>
 
-            <label style={{ ...s.label, marginBottom: "0.5rem" }}>Items (quantity ordered)</label>
-            <BulkItemTypeBar items={items} setItems={setItems} itemTypes={itemTypes} nonInventoryItems={nonInvItems} divisionId={divisionId} />
-            <div style={s.tableWrap}>
-              <table style={s.table}>
-                <thead>
-                  <tr>
-                    <th style={{ ...s.th, width: 28, textAlign: "center" }}>#</th>
-                    <th style={{ ...s.th, width: 190 }}>Item Type</th>
-                    <th style={s.th}>Description</th>
-                    <th style={{ ...s.th, width: 100, textAlign: "right" }}>Qty</th>
-                    <th style={{ ...s.th, width: 130 }}>Unit</th>
-                    <th style={{ ...s.th, width: 110, textAlign: "right" }}>Unit Price <span style={s.opt}>(opt)</span></th>
-                    <th style={{ ...s.th, width: 40 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item, idx) => {
-                    const locked = isEdit && item.id > 0 && item.delivered > 0;
-                    return (
-                      <tr key={idx}>
-                        <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
-                        <td style={{ ...s.td, verticalAlign: "top" }}>
-                          <SearchableItemTypeSelect
-                            divisionId={divisionId}
-                            items={itemTypes}
-                            value={item.itemTypeId || ""}
-                            onChange={(newId, picked) => pickItemType(idx, newId, picked)}
-                            nonInventoryItems={nonInvItems}
-                            nonInventoryValue={item.nonInventoryItemId || ""}
-                            onPickNonInventory={(n) => pickNonInventory(idx, n)}
-                            placeholder="— optional —"
-                            style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                          />
-                        </td>
-                        <td style={{ ...s.td, verticalAlign: "top" }}>
-                          <LookupAutocomplete label="Item description" endpoint="/lookup/items" value={item.description} onChange={(v) => setItem(idx, { description: v })} inputStyle={s.cellInput} multiline />
-                          {locked && <div style={s.hint}>{item.delivered} already delivered — qty can't go below that</div>}
-                        </td>
-                        <td style={s.td}>
-                          <QuantityInput value={item.quantity} onChange={(v) => setItem(idx, { quantity: v })} unit={item.unit} units={units} style={{ ...s.cellInput, textAlign: "right" }} />
-                        </td>
-                        <td style={s.td}>
-                          <LookupAutocomplete label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(v) => setItem(idx, { unit: v })} inputStyle={s.cellInput} />
-                        </td>
-                        <td style={s.td}>
-                          <input type="number" min="0" step="0.01" value={item.unitPrice ?? ""} onChange={(e) => setItem(idx, { unitPrice: e.target.value })} placeholder="—" title="Optional agreed price — prefills the bill created from this order" style={{ ...s.cellInput, textAlign: "right" }} />
-                        </td>
-                        <td style={{ ...s.td, textAlign: "center" }}>
-                          {idx !== 0 && !locked && <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <button type="button" style={s.addBtn} onClick={addItem}><MdAdd size={16} /> Add Item</button>
+            <LineItemsEditor
+              items={items}
+              onItemsChange={setItems}
+              makeBlankItem={blankItem}
+              units={units}
+              itemTypes={itemTypes}
+              nonInventoryItems={nonInvItems}
+              divisionId={divisionId}
+              showUnitPrice
+              priceOptional
+              unitPriceTitle="Optional agreed price — prefills the bill created from this order"
+              isRowLocked={(it) => isEdit && it.id > 0 && it.delivered > 0}
+              rowLockHint={(it) => (isEdit && it.id > 0 && it.delivered > 0) ? `${it.delivered} already delivered — qty can't go below that` : null}
+              itemsLabel="Items (quantity ordered)"
+            />
 
             <div style={{ marginTop: "1rem" }}>
               <label style={s.label}>Notes <span style={s.opt}>(optional)</span></label>

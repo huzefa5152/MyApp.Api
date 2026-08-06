@@ -1,22 +1,18 @@
 import { useState, useRef, useEffect } from "react";
-import { MdAdd, MdClose, MdDelete } from "react-icons/md";
-import LookupAutocomplete from "./LookupAutocomplete";
-import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
-import BulkItemTypeBar from "./BulkItemTypeBar";
 import SearchableSelect from "./SearchableSelect";
 import RichText from "./RichText";
 import SelectDropdown from "./SelectDropdown";
 import DivisionSelect from "./DivisionSelect";
-import QuantityInput from "./QuantityInput";
+import LineItemsEditor from "./LineItemsEditor";
 import { usePermissions } from "../contexts/PermissionsContext";
-import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getOpenSalesOrdersByCompany, getSalesOrderById } from "../api/salesOrderApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
+import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
   blue: "#0d47a1",
@@ -32,6 +28,8 @@ const colors = {
   success: "#28a745",
 };
 
+const blankItem = () => ({ description: "", quantity: 1, unit: "", itemTypeId: null, nonInventoryItemId: null });
+
 export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisionId }) {
   const [client, setClient] = useState(null);
   const [site, setSite] = useState("");
@@ -43,9 +41,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
   // New challans default to the division the page is currently filtered to
   // (so "filter to a division → New Challan" lands in that division).
   const [divisionId, setDivisionId] = useState(defaultDivisionId ? String(defaultDivisionId) : "");
-  const [items, setItems] = useState([
-    { description: "", quantity: 1, unit: "", itemTypeId: null, nonInventoryItemId: null },
-  ]);
+  const [items, setItems] = useState([blankItem()]);
   const [itemTypes, setItemTypes] = useState([]);
   const [nonInvItems, setNonInvItems] = useState([]);
   // Units list with the AllowsDecimalQuantity flag — drives whether each
@@ -54,8 +50,8 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
   // the Units admin page (changes only need a re-open of this form).
   const [units, setUnits] = useState([]);
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
-  const itemsContainerRef = useRef(null);
   const attachmentRef = useRef(null);
 
   // ── Optional "deliver from Sales Order" mode ─────────────────────────────
@@ -161,76 +157,6 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
     if (!companyId) { setNonInvItems([]); return; }
     getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
   }, [companyId]);
-
-  // Picking an item type only TAGS the challan line (records ItemTypeId); it must
-  // NOT overwrite the typed description/unit. Description auto-fill from an item
-  // type is reserved for Invoice (FBR-classification) mode. Mutually exclusive
-  // with a non-inventory item — clear any non-inv binding.
-  const pickItemType = (index, newId) => {
-    const next = [...items];
-    next[index] = { ...next[index], itemTypeId: newId ? parseInt(newId) : null, nonInventoryItemId: null };
-    setItems(next);
-  };
-
-  // Non-Inventory pick — mutually exclusive with an item type. Records the
-  // non-inv id, clears any itemTypeId, and prefills description / unit only
-  // when empty (challans are qty-only, so ignore price).
-  const pickNonInventory = (index, n) => {
-    setItems((prev) => prev.map((it, i) => {
-      if (i !== index) return it;
-      if (!n) return { ...it, nonInventoryItemId: null };
-      const next = { ...it, nonInventoryItemId: n.id, itemTypeId: null };
-      if (!it.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
-      if (!it.unit?.trim()) next.unit = n.unitName || "";
-      return next;
-    }));
-  };
-
-  useEffect(() => {
-    if (itemsContainerRef.current) {
-      itemsContainerRef.current.scrollTop = itemsContainerRef.current.scrollHeight;
-    }
-  }, [items]);
-
-  const handleItemChange = (index, field, value) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
-    setItems(newItems);
-  };
-
-  // Fires when user picks from the SmartItemAutocomplete dropdown
-  // (either a SAVED local item or an FBR catalog entry).
-  // Fills description + unit in one shot, and also remembers the HS code /
-  // sale type per description so the bill can auto-fill them later.
-  const handleItemPick = (index, picked) => {
-    const newItems = [...items];
-    if (picked.name) newItems[index].description = picked.name;
-    if (picked.uom) newItems[index].unit = picked.uom;
-    setItems(newItems);
-
-    // Remember FBR defaults for this description so future bills auto-fill
-    if (picked.name && (picked.hsCode || picked.saleType || picked.fbrUOMId)) {
-      saveItemFbrDefaults({
-        name: picked.name,
-        hsCode: picked.hsCode || null,
-        saleType: picked.saleType || null,
-        fbrUOMId: picked.fbrUOMId || null,
-        uom: picked.uom || null,
-      }).catch(() => {});
-    }
-  };
-
-  const addItem = () => {
-    const lastItem = items[items.length - 1];
-    if (!lastItem.description.trim()) {
-      setError("Please fill the description of the current item before adding a new one.");
-      return;
-    }
-    setError("");
-    setItems([...items, { description: "", quantity: 1, unit: "", itemTypeId: null, nonInventoryItemId: null }]);
-  };
-
-  const removeItem = (index) => setItems(items.filter((_, i) => i !== index));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -341,7 +267,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
 
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div style={styles.errorAlert}>{error}</div>}
+            {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {/* Optional: build this challan by delivering an open Sales Order.
                 Picking one fills every undelivered line; the operator just sets
@@ -529,72 +455,16 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
 
             {!fromOrder && (
             <div style={{ marginTop: "0.25rem" }}>
-              <label style={{ ...styles.label, marginBottom: "0.5rem" }}>Items</label>
-
-              {/* Bulk "apply same Item Type to all lines" — shows only for 2+ lines. */}
-              <BulkItemTypeBar items={items} setItems={setItems} itemTypes={itemTypes} nonInventoryItems={nonInvItems} divisionId={divisionId} />
-
-              {/* Each line has an optional Item Type (its own column), then
-                  description / qty / unit. Item Type can still be (re)classified
-                  on the Invoices tab when preparing the bill for FBR. */}
-
-              <div ref={itemsContainerRef} style={styles.itemsContainer}>
-                {items.map((item, idx) => (
-                  <div key={idx} style={styles.itemRow}>
-                    <div style={styles.itemIndex}>{idx + 1}</div>
-
-                    <div style={{ width: 190, flexShrink: 0 }}>
-                      <SearchableItemTypeSelect
-                        divisionId={divisionId}
-                        items={itemTypes}
-                        value={item.itemTypeId || ""}
-                        onChange={(newId, picked) => pickItemType(idx, newId, picked)}
-                        nonInventoryItems={nonInvItems}
-                        nonInventoryValue={item.nonInventoryItemId || ""}
-                        onPickNonInventory={(n) => pickNonInventory(idx, n)}
-                        placeholder="— item type (optional) —"
-                        style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                      />
-                    </div>
-
-                    <div style={{ flex: 2, minWidth: 0 }}>
-                      <LookupAutocomplete
-                        label="Description"
-                        endpoint="/lookup/items"
-                        value={item.description}
-                        onChange={(val) => handleItemChange(idx, "description", val)}
-                        multiline
-                      />
-                    </div>
-
-                    {/* Wider column so 4-place decimals like "0.0004" or
-                        "1234.5678" stay fully visible alongside the input
-                        spinners. Right-aligned reads more naturally for
-                        numbers than centred. */}
-                    <div style={{ width: 130, flexShrink: 0 }}>
-                      <QuantityInput
-                        value={item.quantity}
-                        onChange={(val) => handleItemChange(idx, "quantity", val)}
-                        unit={item.unit}
-                        units={units}
-                        style={{ ...styles.input, textAlign: "right", padding: "0.55rem 0.5rem" }}
-                      />
-                    </div>
-
-                    <div style={{ width: 180, flexShrink: 0 }}>
-                      <LookupAutocomplete label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(val) => handleItemChange(idx, "unit", val)} />
-                    </div>
-
-                    <div style={{ flexShrink: 0 }}>
-                      {idx !== 0 && (
-                        <button type="button" style={styles.removeBtn} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <button type="button" style={styles.addItemBtn} onClick={addItem}><MdAdd size={16} /> Add Item</button>
+              <LineItemsEditor
+                items={items}
+                onItemsChange={setItems}
+                makeBlankItem={blankItem}
+                units={units}
+                itemTypes={itemTypes}
+                nonInventoryItems={nonInvItems}
+                divisionId={divisionId}
+                itemsLabel="Items"
+              />
             </div>
             )}
 
