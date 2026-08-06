@@ -25,7 +25,12 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       backend: ${{ steps.filter.outputs.backend }}
     steps:
+      # Full history so dorny/paths-filter can always diff the push's base
+      # commit. With a shallow checkout it can fall back to "everything
+      # changed", which wrongly forces a full deploy for a frontend-only push.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: dorny/paths-filter@v3
         id: filter
         with:
