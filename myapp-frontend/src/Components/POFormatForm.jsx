@@ -9,6 +9,7 @@ import {
 } from "../api/poFormatApi";
 import SearchableSelect from "./SearchableSelect";
 import { formStyles, modalSizes } from "../theme";
+import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
   blue: "#0d47a1",
@@ -83,6 +84,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const fileInputRef = useRef(null);
 
   // Set of client IDs that ALREADY have a PO format IN THIS COMPANY.
@@ -249,7 +251,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
 
         <div style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
           {error && (
-            <div style={styles.errorAlert}>
+            <div ref={errRef} style={styles.errorAlert}>
               <MdWarning size={16} /> {error}
             </div>
           )}
@@ -275,7 +277,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
               PO format in this company are hidden (one format per client
               per company is the rule). */}
           <div style={styles.row}>
-            <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ minWidth: 0 }}>
               <label style={styles.label}>Client *</label>
               <SearchableSelect
                 items={availableClients}
@@ -307,7 +309,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
                 </div>
               )}
             </div>
-            <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ minWidth: 0 }}>
               <label style={styles.label}>Format name *</label>
               <input
                 style={styles.input}
@@ -462,7 +464,10 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
 }
 
 const styles = {
-  row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
+  // Auto-fit grid — 4-up on desktop, collapses to fewer columns (down to
+  // one) as the modal narrows on tablet/phone. Replaces a flex row whose
+  // flex:1 children crammed 4 inputs onto one line at 375px.
+  row: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(190px, 100%), 1fr))", gap: "1rem", marginBottom: "1rem" },
   label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
   input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
   textarea: { fontFamily: "inherit", resize: "vertical" },

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight, MdReceipt, MdClose, MdPayments, MdAssignment, MdPrint, MdPictureAsPdf, MdLocalShipping } from "react-icons/md";
+import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdReceipt, MdClose, MdPayments, MdAssignment, MdPrint, MdPictureAsPdf, MdLocalShipping } from "react-icons/md";
 import { getPurchaseBillsByCompanyPaged, deletePurchaseBill, getPurchaseBillPrintData } from "../api/purchaseBillApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
@@ -26,6 +26,8 @@ import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
 import StatusBadge from "../Components/StatusBadge";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
+import Pagination from "../Components/Pagination";
+import usePageSize from "../hooks/usePageSize";
 
 const colors = {
   blue: "#0d47a1",
@@ -69,6 +71,7 @@ export default function PurchaseBillsPage() {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
+  const [size, setSize] = usePageSize("purchaseBills");
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [searchParams] = useSearchParams();
@@ -266,6 +269,7 @@ export default function PurchaseBillsPage() {
     setLoading(true);
     try {
       const params = { page: pg || page };
+      if (size) params.pageSize = size;
       if (search) params.search = search;
       if (supplierFilter) params.supplierId = supplierFilter;
       if (divisionFilter) params.divisionId = divisionFilter;
@@ -280,7 +284,7 @@ export default function PurchaseBillsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany, page, search, supplierFilter, divisionFilter, dateFrom, dateTo]);
+  }, [selectedCompany, page, size, search, supplierFilter, divisionFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -298,7 +302,7 @@ export default function PurchaseBillsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany]);
 
-  useEffect(() => { if (selectedCompany) fetchBills(page); }, [page, search, supplierFilter, divisionFilter, dateFrom, dateTo]);
+  useEffect(() => { if (selectedCompany) fetchBills(page); }, [page, size, search, supplierFilter, divisionFilter, dateFrom, dateTo]);
 
   const onFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
   const hasFilters = search || supplierFilter || divisionFilter || dateFrom || dateTo;
@@ -547,17 +551,14 @@ export default function PurchaseBillsPage() {
                 ))}
               </div>
               )}
-              {totalPages > 1 && (
-                <div style={styles.pagination}>
-                  <button style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}>
-                    <MdChevronLeft size={20} /> Prev
-                  </button>
-                  <span style={styles.pageInfo}>Page {page} of {totalPages} ({totalCount} total)</span>
-                  <button style={{ ...styles.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-                    Next <MdChevronRight size={20} />
-                  </button>
-                </div>
-              )}
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                total={totalCount}
+                onPage={setPage}
+                pageSize={size}
+                onPageSize={(n) => { setSize(n); setPage(1); }}
+              />
             </>
           )}
         </>
@@ -870,7 +871,7 @@ const pickerStyles = {
     borderRadius: 8, boxShadow: "none",
     display: "inline-flex", alignItems: "center", justifyContent: "center",
   },
-  tableWrap: { overflowY: "auto", flex: "1 1 auto", minHeight: 0 },
+  tableWrap: { overflowY: "auto", overflowX: "auto", flex: "1 1 auto", minHeight: 0 },
   th: {
     textAlign: "left", padding: "0.6rem 0.95rem",
     backgroundColor: "#f5f8fc", borderBottom: "1px solid #e8edf3",

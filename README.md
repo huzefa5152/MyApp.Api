@@ -303,6 +303,16 @@ Publish output optimized from 79 MB to 37 MB via:
 - **Sales Order and Sales Quote imports now prefill the unit price** from that column (Sales Order gained the price column in the import review; Sales Quote already had one). A **Delivery Challan** import stays quantity-only and ignores price by design. Sales Order lines with no detected price keep "no agreed price" so the bill still falls back to quote / last-billed.
 - Extraction is additive — description/quantity/unit reading is unchanged. New `unit_price_corpus.json` cases added; the offline corpus harness stays green.
 
+### 2026-08-05 — Line items: paste-list, repeat-last, responsive editor
+
+- **Faster, mobile-friendly line entry on Sales Quote / Sales Order / Delivery Challan.** A shared line-item editor replaces the per-form tables: **Paste list** turns pasted rows (tab/comma → description, qty, unit, price) into lines, **Repeat last** clones the previous line, and each line renders as a **card on phones / a table on desktop**. Item type, non-inventory items, division scoping, the optional Sales-Order unit price, and delivered-line locks are all preserved.
+
+### 2026-08-05 — Mobile responsiveness: shared pagination/rows-per-page + screen sweep
+
+- **Shared pagination + rows-per-page** across the list screens (Sales Quote/Order, Challans, Invoices, Payments, Purchase Bills, Goods Receipts, Journal Entries, Transfers, FBR Monitor, Audit Logs, Item Rate History, Stock movements) — one wrapping, touch-friendly pager with a per-screen rows-per-page selector.
+- **Phone card fallbacks** for previously desktop-only tables (Purchase Debit Notes, WHT receipts, Non-Inventory Items, Bank & Cash accounts, Clients list) — every column preserved, desktop tables unchanged.
+- **Forms**: auto-scroll to the first validation error; purchase/receipt/debit-note line grids stack on phones instead of overflowing; multi-page print/PDF gets A4 page margins.
+
 ### 2026-08-05 — PO import: fix single-item POs whose amount ends in "Rs." (Hudson Pharma)
 
 - **Fixed POs that produced an empty parse.** The importer's page-chrome skip rule matched any line ending in `Rs.`, so a single-item order (e.g. Hudson Pharma → ABBAS ALI & SONS: `Butter Paper  12  pack  6,500.00000  78,000.00 Rs.`) had its only item row discarded as footer chrome — the "format matched but nothing parsed" symptom. The rule now only skips a line that is *just* `Rs.`; a data/total row that merely ends in `Rs.` is kept. Both sample POs added to the parser regression corpus.

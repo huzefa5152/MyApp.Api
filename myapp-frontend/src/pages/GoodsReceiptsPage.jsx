@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdInventory2, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf } from "react-icons/md";
+import { MdInventory2, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdPrint, MdPictureAsPdf } from "react-icons/md";
 import { getGoodsReceiptsByCompanyPaged, deleteGoodsReceipt, getGoodsReceiptPrintData } from "../api/goodsReceiptApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
@@ -19,6 +19,8 @@ import GoodsReceiptForm from "../Components/GoodsReceiptForm";
 import GoodsReceiptTable from "../Components/GoodsReceiptTable";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
+import Pagination from "../Components/Pagination";
+import usePageSize from "../hooks/usePageSize";
 
 const colors = {
   blue: "#0d47a1",
@@ -43,6 +45,7 @@ export default function GoodsReceiptsPage() {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
+  const [size, setSize] = usePageSize("goodsReceipts");
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [search, setSearch] = useState("");
@@ -60,6 +63,7 @@ export default function GoodsReceiptsPage() {
     setLoading(true);
     try {
       const params = { page: pg || page };
+      if (size) params.pageSize = size;
       if (search) params.search = search;
       if (supplierFilter) params.supplierId = supplierFilter;
       if (divisionFilter) params.divisionId = divisionFilter;
@@ -72,7 +76,7 @@ export default function GoodsReceiptsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany, page, search, supplierFilter, divisionFilter]);
+  }, [selectedCompany, page, size, search, supplierFilter, divisionFilter]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -88,7 +92,7 @@ export default function GoodsReceiptsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany]);
 
-  useEffect(() => { if (selectedCompany) fetchReceipts(page); }, [page, search, supplierFilter, divisionFilter]);
+  useEffect(() => { if (selectedCompany) fetchReceipts(page); }, [page, size, search, supplierFilter, divisionFilter]);
 
   const onFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
   const handleDelete = async (gr) => {
@@ -242,13 +246,14 @@ export default function GoodsReceiptsPage() {
                 ))}
               </div>
               )}
-              {totalPages > 1 && (
-                <div style={styles.pagination}>
-                  <button style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}><MdChevronLeft size={20} /> Prev</button>
-                  <span style={styles.pageInfo}>Page {page} of {totalPages}</span>
-                  <button style={{ ...styles.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next <MdChevronRight size={20} /></button>
-                </div>
-              )}
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                total={totalCount}
+                onPage={setPage}
+                pageSize={size}
+                onPageSize={(n) => { setSize(n); setPage(1); }}
+              />
             </>
           )}
         </>

@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { MdHistory, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdInsights, MdVisibility } from "react-icons/md";
+import { MdHistory, MdBusiness, MdSearch, MdInsights, MdVisibility } from "react-icons/md";
 import { getItemRateHistory } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getClientsByCompany } from "../api/clientApi";
 import EditBillForm from "../Components/EditBillForm";
 import RichText from "../Components/RichText";
+import Pagination from "../Components/Pagination";
+import usePageSize from "../hooks/usePageSize";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -42,11 +44,12 @@ export default function ItemRateHistoryPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // Pagination — pageSize is server-driven, sourced from the appsettings
-  // Pagination:DefaultPageSize value via the controller. We don't send a
-  // pageSize on the request so the server applies the configured default,
-  // and we read the value back from the response so totalPages is accurate.
+  // Pagination. The rows-per-page selector is a per-screen preference
+  // (usePageSize); while unset we OMIT pageSize so the server applies the
+  // appsettings Pagination:DefaultPageSize, and we read the effective size
+  // back from the response so totalPages stays accurate.
   const [page, setPage] = useState(1);
+  const [size, setSize] = usePageSize("itemRateHistory");
   const [pageSize, setPageSize] = useState(null);
   const [totalCount, setTotalCount] = useState(0);
   const totalPages = useMemo(
@@ -74,10 +77,10 @@ export default function ItemRateHistoryPage() {
     if (!selectedCompany) return;
     setLoading(true);
     try {
-      // Intentionally NOT sending pageSize — the backend pulls the
-      // configured Pagination:DefaultPageSize so we get a single source
-      // of truth across pages and respect operator-tuned values.
+      // Send pageSize only when the operator picked one; otherwise omit it
+      // so the backend applies its configured Pagination:DefaultPageSize.
       const params = { page };
+      if (size) params.pageSize = size;
       if (itemTypeId) params.itemTypeId = itemTypeId;
       else if (search) params.search = search;
       if (clientId) params.clientId = clientId;
@@ -101,7 +104,7 @@ export default function ItemRateHistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany, page, itemTypeId, search, clientId, dateFrom, dateTo]);
+  }, [selectedCompany, page, size, itemTypeId, search, clientId, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchRows();
@@ -409,29 +412,14 @@ export default function ItemRateHistoryPage() {
                 ))}
               </div>
 
-              {totalPages > 1 && (
-                <div className="irh-pagination">
-                  <button
-                    className="irh-page-btn"
-                    style={{ opacity: page <= 1 ? 0.4 : 1 }}
-                    disabled={page <= 1}
-                    onClick={() => setPage(page - 1)}
-                  >
-                    <MdChevronLeft size={20} /> Prev
-                  </button>
-                  <span className="irh-page-info">
-                    Page {page} of {totalPages} <span className="irh-page-info__count">({totalCount} total)</span>
-                  </span>
-                  <button
-                    className="irh-page-btn"
-                    style={{ opacity: page >= totalPages ? 0.4 : 1 }}
-                    disabled={page >= totalPages}
-                    onClick={() => setPage(page + 1)}
-                  >
-                    Next <MdChevronRight size={20} />
-                  </button>
-                </div>
-              )}
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                total={totalCount}
+                onPage={setPage}
+                pageSize={size}
+                onPageSize={(n) => { setSize(n); setPage(1); }}
+              />
             </>
           ) : (
             <div style={styles.emptyState}>

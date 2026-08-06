@@ -13,12 +13,13 @@ import { useConfirm } from "../Components/ConfirmDialog";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import useIsNarrow from "../hooks/useIsNarrow";
 import { notify } from "../utils/notify";
 import { writeAndPrint } from "../utils/printDocument";
 import { mergeTemplate } from "../utils/templateEngine";
 import { exportToPdf } from "../utils/exportUtils";
 import { defaultWithholdingTaxTemplate } from "../utils/accountingDocTemplates";
-import { formStyles, modalSizes, dropdownStyles } from "../theme";
+import { formStyles, modalSizes, dropdownStyles, cardStyles } from "../theme";
 
 const colors = { blue: "#0d47a1", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3" };
 
@@ -34,6 +35,7 @@ export default function WithholdingTaxReceiptsPage() {
   const canUpdate = has("withholdingtax.manage.update");
   const canDelete = has("withholdingtax.manage.delete");
   const canPrint = has("withholdingtax.print.view");
+  const isNarrow = useIsNarrow();
 
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -196,6 +198,55 @@ export default function WithholdingTaxReceiptsPage() {
             {receipts.length === 0 ? "No withholding tax receipts yet." : "No receipts match your search."}
           </p>
         </div>
+      ) : selectedCompany && isNarrow ? (
+        <div style={styles.cardList}>
+          {filtered.map((r) => (
+            <div key={r.id} style={styles.card}>
+              <div style={cardStyles.cardHeader}>
+                <span style={styles.cardNum}>#{r.receiptNumber}</span>
+                <span style={styles.cardDate}>{fmtDate(r.date)}</span>
+              </div>
+              <div style={cardStyles.cardLead}>
+                {r.clientName}{r.divisionName ? <span style={styles.divTag}>{r.divisionName}</span> : null}
+              </div>
+              <div style={cardStyles.metaGrid}>
+                <div>
+                  <span style={cardStyles.metaLabel}>Description</span>
+                  <span style={cardStyles.metaValue}>{r.description || "—"}</span>
+                </div>
+              </div>
+              <div style={cardStyles.amountBox}>
+                <span style={cardStyles.amountLabel}>Amount</span>
+                <span style={cardStyles.amount}>{money(r.amount)}</span>
+              </div>
+              <div style={styles.cardActions}>
+                <button style={{ ...styles.mIconBtn, ...styles.view }} title="View" onClick={() => setViewReceipt(r)}><MdVisibility size={18} /></button>
+                {canPrint && (
+                  <button
+                    style={{ ...styles.mIconBtn, ...styles.view, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                    disabled={tplPicker.noTemplate}
+                    title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print certificate"}
+                    onClick={() => handlePrint(r)}
+                  ><MdPrint size={18} /></button>
+                )}
+                {canPrint && (
+                  <button
+                    style={{ ...styles.mIconBtn, ...styles.view, ...((tplPicker.noTemplate || exportingId === r.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                    disabled={tplPicker.noTemplate || exportingId === r.id}
+                    title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}
+                    onClick={() => handleExportPdf(r)}
+                  ><MdPictureAsPdf size={18} /></button>
+                )}
+                {canUpdate && <button style={{ ...styles.mIconBtn, ...styles.edit }} title="Edit" onClick={() => { setEditReceipt(r); setShowForm(true); }}><MdEdit size={18} /></button>}
+                {canDelete && r.isLatest && <button style={{ ...styles.mIconBtn, ...styles.del }} title="Delete (latest only)" onClick={() => handleDelete(r)}><MdDelete size={18} /></button>}
+              </div>
+            </div>
+          ))}
+          <div style={styles.totalCard}>
+            <span style={styles.totalCardLabel}>Total ({filtered.length})</span>
+            <span style={styles.totalCardValue}>{money(total)}</span>
+          </div>
+        </div>
       ) : selectedCompany ? (
         <div style={styles.scroll}>
           <table style={styles.table}>
@@ -341,6 +392,16 @@ const styles = {
   divTag: { marginLeft: 8, fontSize: "0.68rem", fontWeight: 700, color: "#4527a0", background: "#ede7f6", padding: "0.1rem 0.4rem", borderRadius: 8 },
   actionRow: { display: "flex", gap: 4, justifyContent: "flex-end" },
   iconBtn: { display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, border: "none", cursor: "pointer" },
+  // Mobile (<768px) stacked-card fallback for the wide table.
+  mIconBtn: { display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 8, border: "none", cursor: "pointer" },
+  cardList: { display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: 8 },
+  card: { ...cardStyles.card, padding: "0.85rem 0.95rem" },
+  cardNum: { fontWeight: 700, fontSize: "0.95rem", color: colors.blue },
+  cardDate: { fontSize: "0.78rem", color: colors.textSecondary },
+  cardActions: { display: "flex", flexWrap: "wrap", gap: "0.4rem", justifyContent: "flex-end", borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.6rem" },
+  totalCard: { ...cardStyles.card, padding: "0.75rem 0.95rem", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f0f7ff" },
+  totalCardLabel: { fontWeight: 700, color: colors.textSecondary },
+  totalCardValue: { fontWeight: 800, color: colors.blue },
   view: { background: "#e0f2f1", color: "#00695c" },
   edit: { background: "#e3f2fd", color: "#0d47a1" },
   del: { background: "#ffebee", color: "#c62828" },

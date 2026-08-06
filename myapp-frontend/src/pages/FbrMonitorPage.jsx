@@ -19,6 +19,8 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getFbrLogs, getFbrLogById, getFbrSummary } from "../api/fbrMonitorApi";
 import { notify } from "../utils/notify";
+import Pagination from "../Components/Pagination";
+import usePageSize from "../hooks/usePageSize";
 import "./FbrMonitorPage.css";
 
 // Status -> visual config. Keys mirror FbrCommunicationLog.Status taxonomy.
@@ -58,7 +60,11 @@ export default function FbrMonitorPage() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(25);
+  // Rows-per-page is user-selectable + persisted (shared usePageSize). The
+  // monitor endpoint returns only totalCount (no server pageSize), so we keep
+  // a known effective size to page with — 20 (a canonical option) until picked.
+  const [pageSize, setPageSize] = usePageSize("fbrMonitor");
+  const effectiveSize = pageSize ?? 20;
   const [loading, setLoading] = useState(false);
   const [windowHours, setWindowHours] = useState(24);
   const [statusFilter, setStatusFilter] = useState("");
@@ -92,7 +98,7 @@ export default function FbrMonitorPage() {
       try {
         const since = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
         const r = await getFbrLogs({
-          page, pageSize, companyId,
+          page, pageSize: effectiveSize, companyId,
           status: statusFilter || undefined,
           action: actionFilter || undefined,
           since,
@@ -108,14 +114,14 @@ export default function FbrMonitorPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [canView, companyId, windowHours, page, pageSize, statusFilter, actionFilter]);
+  }, [canView, companyId, windowHours, page, effectiveSize, statusFilter, actionFilter]);
 
   // ── Permission / state gates ──────────────────────────────────
   if (permsLoading) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>Loading…</div></Shell>;
   if (!canView) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>You don't have permission to view FBR monitor.</div></Shell>;
   if (!selectedCompany) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>Pick a company first.</div></Shell>;
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const totalPages = Math.max(1, Math.ceil(total / effectiveSize));
   const filteredCount = total;
 
   return (
@@ -161,7 +167,15 @@ export default function FbrMonitorPage() {
         }}
       />
 
-      <Pagination page={page} totalPages={totalPages} total={total} onPage={setPage} />
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        onPage={setPage}
+        pageSize={pageSize ?? 20}
+        onPageSize={(n) => { setPageSize(n); setPage(1); }}
+        unit="rows"
+      />
 
       {drawer && <Drawer row={drawer} onClose={() => setDrawer(null)} />}
     </Shell>
@@ -317,19 +331,6 @@ function RowsList({ rows, loading, onClickRow }) {
         );
       })}
     </section>
-  );
-}
-
-function Pagination({ page, totalPages, total, onPage }) {
-  if (totalPages <= 1) return null;
-  return (
-    <div className="fbr-mon-pagination" style={S.pagination}>
-      <button type="button" disabled={page <= 1} onClick={() => onPage(page - 1)} style={S.pageBtn}>← Prev</button>
-      <span style={{ fontSize: "0.82rem", color: "#5f6d7e" }}>
-        Page {page} of {totalPages} <span style={{ color: "#98a4b3" }}>({total.toLocaleString()} rows)</span>
-      </span>
-      <button type="button" disabled={page >= totalPages} onClick={() => onPage(page + 1)} style={S.pageBtn}>Next →</button>
-    </div>
   );
 }
 

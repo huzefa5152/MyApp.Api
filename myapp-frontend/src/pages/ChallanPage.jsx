@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { MdDescription, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdUploadFile } from "react-icons/md";
+import { MdDescription, MdAdd, MdBusiness, MdSearch, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
 import ChallanTable from "../Components/ChallanTable";
 import SearchableSelect from "../Components/SearchableSelect";
@@ -36,6 +36,8 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 import DuplicateChallanDialog from "../Components/DuplicateChallanDialog";
+import Pagination from "../Components/Pagination";
+import usePageSize from "../hooks/usePageSize";
 
 const colors = {
   blue: "#0d47a1",
@@ -84,6 +86,8 @@ export default function ChallanPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [pageSize, setPageSize] = useState(10);
+  // User-chosen rows-per-page (persisted, null until picked → server default).
+  const [size, setSize] = usePageSize("challans");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
@@ -128,6 +132,7 @@ export default function ChallanPage() {
     setLoadingChallans(true);
     try {
       const params = { page: pg || page };
+      if (size) params.pageSize = size;
       if (search) params.search = search;
       if (statusFilter) params.status = statusFilter;
       if (divisionFilter) params.divisionId = divisionFilter;
@@ -147,7 +152,7 @@ export default function ChallanPage() {
     } finally {
       setLoadingChallans(false);
     }
-  }, [page, search, statusFilter, divisionFilter, clientFilter, salesOrderFilter, dateFrom, dateTo]);
+  }, [page, size, search, statusFilter, divisionFilter, clientFilter, salesOrderFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -178,7 +183,7 @@ export default function ChallanPage() {
   // Re-fetch when filters or page change
   useEffect(() => {
     if (selectedCompany) fetchChallans(selectedCompany.id, page);
-  }, [page, search, statusFilter, divisionFilter, clientFilter, salesOrderFilter, dateFrom, dateTo]);
+  }, [page, size, search, statusFilter, divisionFilter, clientFilter, salesOrderFilter, dateFrom, dateTo]);
 
   // Sales orders powering the SO filter dropdown — scoped to the selected
   // company + division (the picker helper walks the division-scoped paged
@@ -558,27 +563,14 @@ export default function ChallanPage() {
             />
           )}
           {/* Pagination */}
-          {totalPages > 1 && (
-            <div style={styles.pagination}>
-              <button
-                style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }}
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-              >
-                <MdChevronLeft size={20} /> Prev
-              </button>
-              <span style={styles.pageInfo}>
-                Page {page} of {totalPages} ({totalCount} total)
-              </span>
-              <button
-                style={{ ...styles.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }}
-                disabled={page >= totalPages}
-                onClick={() => setPage(page + 1)}
-              >
-                Next <MdChevronRight size={20} />
-              </button>
-            </div>
-          )}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={totalCount}
+            onPage={setPage}
+            pageSize={size}
+            onPageSize={(n) => { setSize(n); setPage(1); }}
+          />
         </>
       )}
 

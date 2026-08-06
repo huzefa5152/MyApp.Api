@@ -9,7 +9,8 @@ import { useConfirm } from "../Components/ConfirmDialog";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
-import { dropdownStyles } from "../theme";
+import useIsNarrow from "../hooks/useIsNarrow";
+import { dropdownStyles, cardStyles } from "../theme";
 
 const colors = { blue: "#0d47a1", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3" };
 
@@ -21,6 +22,7 @@ export default function NonInventoryItemsPage() {
   const canCreate = has("noninventoryitems.manage.create");
   const canUpdate = has("noninventoryitems.manage.update");
   const canDelete = has("noninventoryitems.manage.delete");
+  const isNarrow = useIsNarrow();
 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -136,6 +138,39 @@ export default function NonInventoryItemsPage() {
             {items.length === 0 ? "No non-inventory items yet. Add Freight, Discount, or other charge lines." : "No items match your search."}
           </p>
         </div>
+      ) : selectedCompany && isNarrow ? (
+        <div style={styles.cardList}>
+          {filtered.map((it) => (
+            <div key={it.id} style={styles.card}>
+              <div style={cardStyles.cardHeader}>
+                <span style={styles.cardName}>{it.name}</span>
+                {it.isActive
+                  ? <span style={styles.badgeActive}>Active</span>
+                  : <span style={styles.badgeInactive}>Inactive</span>}
+              </div>
+              <div style={cardStyles.metaGrid}>
+                <div>
+                  <span style={cardStyles.metaLabel}>Code</span>
+                  <span style={cardStyles.metaValue}>{it.code || "—"}</span>
+                </div>
+                <div>
+                  <span style={cardStyles.metaLabel}>When sold → account</span>
+                  <span style={cardStyles.metaValue}>{it.saleAccountName || <span style={styles.unmapped}>Suspense (unmapped)</span>}</span>
+                </div>
+                <div>
+                  <span style={cardStyles.metaLabel}>When purchased → account</span>
+                  <span style={cardStyles.metaValue}>{it.purchaseAccountName || <span style={styles.unmapped}>Suspense (unmapped)</span>}</span>
+                </div>
+              </div>
+              {(canUpdate || canDelete) && (
+                <div style={styles.cardActions}>
+                  {canUpdate && <button style={{ ...styles.mIconBtn, ...styles.edit }} title="Edit" onClick={() => { setEditItem(it); setShowForm(true); }}><MdEdit size={18} /></button>}
+                  {canDelete && <button style={{ ...styles.mIconBtn, ...styles.del }} title="Delete" onClick={() => handleDelete(it)}><MdDelete size={18} /></button>}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       ) : selectedCompany ? (
         <div style={styles.scroll}>
           <table style={styles.table}>
@@ -208,6 +243,12 @@ const styles = {
   badgeInactive: { fontSize: "0.72rem", fontWeight: 700, color: "#8d6e63", background: "#efebe9", padding: "0.15rem 0.5rem", borderRadius: 8 },
   actionRow: { display: "flex", gap: 4, justifyContent: "flex-end" },
   iconBtn: { display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, border: "none", cursor: "pointer" },
+  // Mobile (<768px) stacked-card fallback for the wide table.
+  mIconBtn: { display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 8, border: "none", cursor: "pointer" },
+  cardList: { display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: 8 },
+  card: { ...cardStyles.card, padding: "0.85rem 0.95rem" },
+  cardName: { fontWeight: 700, fontSize: "0.95rem", color: colors.textPrimary, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
+  cardActions: { display: "flex", flexWrap: "wrap", gap: "0.4rem", justifyContent: "flex-end", borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.6rem", marginTop: "0.2rem" },
   edit: { background: "#e3f2fd", color: "#0d47a1" },
   del: { background: "#ffebee", color: "#c62828" },
   loading: { display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem 0" },

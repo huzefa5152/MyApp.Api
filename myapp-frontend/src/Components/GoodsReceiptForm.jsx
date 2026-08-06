@@ -14,6 +14,7 @@ import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
 import AttachmentManager from "./AttachmentManager";
 import { usePermissions } from "../contexts/PermissionsContext";
+import useScrollToError from "../hooks/useScrollToError";
 
 export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSaved, defaultDivisionId }) {
   const isEdit = !!receiptId;
@@ -38,6 +39,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
+  const errRef = useScrollToError(error);
 
   useEffect(() => {
     (async () => {
@@ -153,8 +155,8 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
-            {error && <div style={formStyles.error}>{error}</div>}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
+            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
                 <label style={formStyles.label}>Supplier *</label>
                 <SearchableSelect
@@ -181,7 +183,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                 </select>
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier Challan #</label>
                 <input type="text" style={formStyles.input} value={supplierChallanNumber} onChange={e => setSupplierChallanNumber(e.target.value)} />
@@ -200,6 +202,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                 </button>
               </div>
               <BulkItemTypeBar items={items} setItems={setItems} itemTypes={itemTypes} nonInventoryItems={nonInvItems} divisionId={divisionId} />
+              <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                 <thead>
                   <tr style={{ backgroundColor: "#f5f8fc" }}>
@@ -248,6 +251,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
 
             <AttachmentManager

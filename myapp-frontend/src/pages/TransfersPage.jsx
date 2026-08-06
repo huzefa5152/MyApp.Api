@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  MdAdd, MdDelete, MdChevronLeft, MdChevronRight, MdSwapHoriz, MdSearch,
+  MdAdd, MdDelete, MdSwapHoriz, MdSearch,
   MdBusiness, MdCalendarToday, MdLabel, MdNotes, MdEdit, MdClose,
   MdArrowForward, MdPrint, MdPictureAsPdf, MdVisibility,
 } from "react-icons/md";
@@ -19,6 +19,9 @@ import { exportToPdf } from "../utils/exportUtils";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { defaultTransferTemplate } from "../utils/accountingDocTemplates";
+import Pagination from "../Components/Pagination";
+import usePageSize from "../hooks/usePageSize";
+import useScrollToError from "../hooks/useScrollToError";
 
 const fmtMoney = (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -55,6 +58,8 @@ export default function TransfersPage() {
 
   const [rows, setRows] = useState([]);
   const [page, setPage] = useState(1);
+  const [size, setSize] = usePageSize("transfers");
+  const [serverPageSize, setServerPageSize] = useState(null);
   const [totalPages, setTotalPages] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [search, setSearch] = useState("");
@@ -70,17 +75,19 @@ export default function TransfersPage() {
     setLoading(true);
     try {
       const params = { page: pg || page };
+      if (size) params.pageSize = size;
       if (search.trim()) params.search = search.trim();
       const { data } = await getTransfersPaged(companyId, params);
       setRows(data.items || []);
       setTotalCount(data.totalCount || 0);
+      setServerPageSize(data.pageSize ?? null);
       setTotalPages(data.totalPages || 0);
     } catch {
       setRows([]); setTotalCount(0); setTotalPages(0);
     } finally {
       setLoading(false);
     }
-  }, [companyId, page, search]);
+  }, [companyId, page, size, search]);
 
   // Reset to page 1 on company switch.
   useEffect(() => { setPage(1); setSearch(""); }, [companyId]);
@@ -219,17 +226,14 @@ export default function TransfersPage() {
             </div>
           )}
 
-          {totalPages > 1 && (
-            <div style={st.pagination}>
-              <button style={{ ...st.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}>
-                <MdChevronLeft size={20} /> Prev
-              </button>
-              <span style={st.pageInfo}>Page {page} of {totalPages} ({totalCount} total)</span>
-              <button style={{ ...st.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-                Next <MdChevronRight size={20} />
-              </button>
-            </div>
-          )}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={totalCount}
+            onPage={setPage}
+            pageSize={size ?? serverPageSize}
+            onPageSize={(n) => { setSize(n); setPage(1); }}
+          />
         </>
       )}
 
@@ -415,6 +419,7 @@ function TransferForm({ companyId, editTransfer = null, onClose, onSaved }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
+  const errRef = useScrollToError(error);
 
   const sameAccount = !!fromAccountId && fromAccountId === toAccountId;
   const amtNum = parseFloat(amount) || 0;
@@ -476,7 +481,7 @@ function TransferForm({ companyId, editTransfer = null, onClose, onSaved }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div style={formStyles.error}>{error}</div>}
+            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>

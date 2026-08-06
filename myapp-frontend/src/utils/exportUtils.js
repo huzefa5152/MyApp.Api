@@ -70,7 +70,15 @@ export async function exportToPdf(html, filename) {
     if (imgH <= pageH * 1.02) {
       pdf.addImage(imgData, "JPEG", 0, 0, pageW, Math.min(imgH, pageH));
     } else {
-      const pageCanvasH = (canvas.width * pageH) / pageW;
+      // Multi-page: leave a top + bottom white margin on EVERY page so
+      // consecutive pages don't butt together — page 1 ends with a bottom
+      // margin and page 2 starts with a top margin (previously the tall image
+      // was sliced edge-to-edge at exact A4 heights, so the break looked
+      // "combined" and rows were cut flush). Content is sliced into
+      // (pageH − 2·margin) tall bands, each drawn `marginMm` down from the top.
+      const marginMm = 8;
+      const contentMm = pageH - marginMm * 2;
+      const pageCanvasH = (canvas.width * contentMm) / pageW;   // slice height in canvas px
       let y = 0;
       let pageNum = 0;
       while (y < canvas.height) {
@@ -82,7 +90,7 @@ export async function exportToPdf(html, filename) {
         page.getContext("2d").drawImage(canvas, 0, -y);
         const sliceData = page.toDataURL("image/jpeg", 0.98);
         const sliceMmH = (sliceH * pageW) / canvas.width;
-        pdf.addImage(sliceData, "JPEG", 0, 0, pageW, sliceMmH);
+        pdf.addImage(sliceData, "JPEG", 0, marginMm, pageW, sliceMmH);
         y += pageCanvasH;
         pageNum++;
       }

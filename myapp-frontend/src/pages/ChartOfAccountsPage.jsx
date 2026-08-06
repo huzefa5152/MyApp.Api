@@ -11,6 +11,7 @@ import {
 } from "../api/accountApi";
 import { getGlStatus, enableGl } from "../api/accountingApi";
 import AccountLedgerDialog from "../Components/AccountLedgerDialog";
+import useScrollToError from "../hooks/useScrollToError";
 
 const ACCOUNT_TYPES = ["Asset", "Liability", "Equity", "Income", "Expense"];
 const CONTROL_TYPES = ["None", "AccountsReceivable", "AccountsPayable", "Inventory", "BankCash",
@@ -264,6 +265,7 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
   const [isDebit, setIsDebit] = useState(form.openingBalanceIsDebit ?? true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const errRef = useScrollToError(error);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -305,7 +307,7 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
         </div>
         <form onSubmit={submit}>
           <div style={formStyles.body}>
-            {error && <div style={formStyles.error}>{error}</div>}
+            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             <div style={formStyles.formGroup}>
               <label style={formStyles.label}>Name</label>
               <input style={formStyles.input} value={name} onChange={(e) => setName(e.target.value)} autoFocus />

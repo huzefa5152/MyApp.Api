@@ -5,6 +5,7 @@ import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
 import BankCashSelect from "./BankCashSelect";
 import AttachmentManager from "./AttachmentManager";
+import useScrollToError from "../hooks/useScrollToError";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { createPayment, updatePayment } from "../api/paymentApi";
 import { getClientsByCompany } from "../api/clientApi";
@@ -59,6 +60,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   const [loadingDocs, setLoadingDocs] = useState(false);
 
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
 
@@ -211,7 +213,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div style={formStyles.error}>{error}</div>}
+            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
             {/* Contact picker spans the full row so long client/supplier names
                 aren't truncated inside a narrow grid column. */}

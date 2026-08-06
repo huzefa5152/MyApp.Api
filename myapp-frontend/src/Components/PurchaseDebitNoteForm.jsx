@@ -17,6 +17,7 @@ import DivisionSelect from "./DivisionSelect";
 import AccountSelect from "./AccountSelect";
 import { usePermissions } from "../contexts/PermissionsContext";
 import QuantityInput from "./QuantityInput";
+import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
   blue: "#0d47a1",
@@ -56,6 +57,7 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
   const [items, setItems] = useState([newRow()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const errRef = useScrollToError(error);
 
   function newRow() {
     return { id: 0, itemTypeId: null, accountId: null, description: "", quantity: 1, unitPrice: 0, uom: "", hsCode: "" };
@@ -237,9 +239,9 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
             <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
-              {error && <div style={formStyles.error}>{error}</div>}
+              {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "0.75rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
                 <div style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
                   <label style={formStyles.label}>Supplier *</label>
                   <SearchableSelect
@@ -284,7 +286,7 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
                 <div style={formStyles.formGroup}>
                   <label style={formStyles.label}>Supplier Reference</label>
                   <input type="text" style={formStyles.input} value={supplierRef} onChange={(e) => setSupplierRef(e.target.value)} placeholder="Their document reference (optional)" />

@@ -20,6 +20,7 @@ import AccountSelect from "./AccountSelect";
 import AttachmentManager from "./AttachmentManager";
 import { usePermissions } from "../contexts/PermissionsContext";
 import QuantityInput from "./QuantityInput";
+import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
   blue: "#0d47a1",
@@ -68,6 +69,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
   // Source-bill metadata when in "Purchase Against Sale" mode
   const [sourceBill, setSourceBill] = useState(null);
   const attachmentRef = useRef(null);
+  const errRef = useScrollToError(error);
 
   function newRow() {
     return {
@@ -357,7 +359,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
           <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
-            {error && <div style={formStyles.error}>{error}</div>}
+            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
             {sourceBill && (
               <div style={{
@@ -398,7 +400,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "0.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
                 <label style={{ ...formStyles.label, display: "flex", alignItems: "center", gap: 8 }}>
                   Supplier *
@@ -443,7 +445,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier Bill #</label>
                 <input type="text" style={formStyles.input} value={supplierBillNumber} onChange={e => setSupplierBillNumber(e.target.value)} placeholder="Their invoice number" />
@@ -454,7 +456,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Payment Mode</label>
                 <select style={formStyles.input} value={paymentMode} onChange={e => setPaymentMode(e.target.value)}>

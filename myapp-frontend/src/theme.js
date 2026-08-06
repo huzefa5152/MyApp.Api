@@ -67,6 +67,17 @@ export const cardStyles = {
     marginBottom: "0.2rem",
     lineHeight: 1.5,
   },
+  // ── Richer card building blocks (adopted by the invoice/bill cards; any
+  // card can use them for a stronger visual hierarchy) ──────────────────
+  cardHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: "0.55rem" },
+  cardLead: { fontSize: "0.98rem", fontWeight: 700, color: colors.textPrimary, margin: "0 0 0.65rem", lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
+  metaGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(120px, 100%), 1fr))", gap: "0.5rem 1rem", marginBottom: "0.7rem" },
+  metaLabel: { display: "block", fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary, marginBottom: 1 },
+  metaValue: { fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary, lineHeight: 1.3, wordBreak: "break-word" },
+  amountBox: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, padding: "0.5rem 0.7rem", background: "linear-gradient(135deg, rgba(13,71,161,0.06), rgba(0,137,123,0.07))", borderRadius: 10, marginBottom: "0.6rem" },
+  amountLabel: { fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary },
+  amount: { fontSize: "1.2rem", fontWeight: 800, color: colors.blue, letterSpacing: "-0.01em" },
+  statusRow: { display: "flex", flexWrap: "wrap", gap: "0.4rem", margin: "0.1rem 0 0.2rem" },
   buttonGroup: {
     display: "flex",
     gap: "0.6rem",

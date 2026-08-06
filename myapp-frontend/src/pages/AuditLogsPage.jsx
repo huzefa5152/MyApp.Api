@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdBugReport, MdWarning, MdInfo, MdSearch, MdChevronLeft, MdChevronRight, MdClose, MdLock } from "react-icons/md";
+import { MdBugReport, MdWarning, MdInfo, MdSearch, MdClose, MdLock } from "react-icons/md";
 import { getAuditLogs, getAuditSummary } from "../api/auditLogApi";
 import { usePermissions } from "../contexts/PermissionsContext";
+import Pagination from "../Components/Pagination";
+import usePageSize from "../hooks/usePageSize";
 // Shared backdrop / modal so this audit-log detail dialog matches every
 // other popup (blurred backdrop, centered, non-movable).
 import { formStyles, modalSizes } from "../theme";
@@ -46,6 +48,10 @@ export default function AuditLogsPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [page, setPage] = useState(1);
+  // Rows-per-page: null until the operator picks one, so the request omits
+  // pageSize and the server applies Pagination:DefaultPageSize (unchanged
+  // default behaviour); a pick is clamped to the audit max (200) server-side.
+  const [size, setSize] = usePageSize("auditlogs");
   const [level, setLevel] = useState("");
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -56,10 +62,10 @@ export default function AuditLogsPage() {
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
-      // Don't send pageSize — let the server apply Pagination:DefaultPageSize
-      // from appsettings.json. The response carries page + pageSize +
+      // pageSize is null until the operator picks one — then the server
+      // clamps it to the audit max. The response carries page + pageSize +
       // totalPages back so the UI's pagination math stays accurate.
-      const { data } = await getAuditLogs(page, undefined, level || undefined, search || undefined);
+      const { data } = await getAuditLogs(page, size || undefined, level || undefined, search || undefined);
       setLogs(data.items);
       setTotalCount(data.totalCount);
       setTotalPages(data.totalPages);
@@ -68,7 +74,7 @@ export default function AuditLogsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, level, search]);
+  }, [page, size, level, search]);
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -263,27 +269,16 @@ export default function AuditLogsPage() {
         </div>
 
         {/* Pagination */}
-        {totalPages > 1 && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", padding: "12px", borderTop: `1px solid ${colors.cardBorder}` }}>
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-              style={pgBtn}
-            >
-              <MdChevronLeft size={18} />
-            </button>
-            <span style={{ fontSize: "0.85rem", color: colors.textSecondary, fontWeight: 500 }}>
-              Page {page} of {totalPages}
-            </span>
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              style={pgBtn}
-            >
-              <MdChevronRight size={18} />
-            </button>
-          </div>
-        )}
+        <div style={{ borderTop: `1px solid ${colors.cardBorder}` }}>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPage={setPage}
+            pageSize={size}
+            onPageSize={(n) => { setSize(n); setPage(1); }}
+            unit="rows"
+          />
+        </div>
       </div>
 
       {/* Detail Modal */}
@@ -357,11 +352,3 @@ function DetailBlock({ label, value, mono }) {
 
 const thStyle = { padding: "10px 14px", textAlign: "left", fontWeight: 600, color: "#5f6d7e", fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.3px", whiteSpace: "nowrap" };
 const tdStyle = { padding: "10px 14px", color: "#1a2332" };
-const pgBtn = {
-  display: "flex", alignItems: "center", justifyContent: "center",
-  width: 32, height: 32, minWidth: 32, flexShrink: 0,
-  borderRadius: 8, border: "1px solid #d0d7e2",
-  background: "#fff", color: "#1a2332",
-  padding: 0, boxShadow: "none",
-  cursor: "pointer",
-};

@@ -11,6 +11,8 @@ import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import { isDecimalUnit } from "../utils/formatQuantity";
 import SearchableItemTypeSelect from "../Components/SearchableItemTypeSelect";
+import Pagination from "../Components/Pagination";
+import usePageSize from "../hooks/usePageSize";
 
 const colors = {
   blue: "#0d47a1",
@@ -45,6 +47,8 @@ export default function StockDashboardPage() {
   // Server-driven page size from appsettings Pagination:DefaultPageSize.
   // Set after the first response so the pagination math is accurate.
   const [movPageSize, setMovPageSize] = useState(0);
+  // Operator's rows-per-page choice for the Movements tab (null → server default).
+  const [movSize, setMovSize] = usePageSize("stockMovements");
   const [openings, setOpenings] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
   const [units, setUnits] = useState([]);
@@ -81,7 +85,7 @@ export default function StockDashboardPage() {
         // until the tab was opened, which made the tab look empty even
         // when there were 20+ records waiting.
         canViewMovements
-          ? getStockMovements(selectedCompany.id, { page: 1 }).catch(() => ({ data: { items: [], totalCount: 0, pageSize: 0 } }))
+          ? getStockMovements(selectedCompany.id, { page: 1, ...(movSize ? { pageSize: movSize } : {}) }).catch(() => ({ data: { items: [], totalCount: 0, pageSize: 0 } }))
           : Promise.resolve({ data: { items: [], totalCount: 0, pageSize: 0 } }),
       ]);
       setOnhand(oh.data || []);
@@ -99,7 +103,7 @@ export default function StockDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany, canManageOpening, canViewMovements]);
+  }, [selectedCompany, canManageOpening, canViewMovements, movSize]);
 
   const fetchMovements = useCallback(async (pg) => {
     if (!selectedCompany || !canViewMovements) return;
@@ -107,17 +111,17 @@ export default function StockDashboardPage() {
       // Don't send pageSize — let the server apply Pagination:DefaultPageSize
       // from appsettings.json. Read it back from the response so totalPages
       // is accurate.
-      const { data } = await getStockMovements(selectedCompany.id, { page: pg || movPage });
+      const { data } = await getStockMovements(selectedCompany.id, { page: pg || movPage, ...(movSize ? { pageSize: movSize } : {}) });
       setMovements(data.items || []);
       setMovTotal(data.totalCount || 0);
       setMovPageSize(data.pageSize || 0);
     } catch {
       setMovements([]); setMovTotal(0);
     }
-  }, [selectedCompany, movPage, canViewMovements]);
+  }, [selectedCompany, movPage, canViewMovements, movSize]);
 
   useEffect(() => { if (selectedCompany) fetchAll(); }, [selectedCompany]);
-  useEffect(() => { if (tab === "movements") fetchMovements(movPage); }, [tab, selectedCompany, movPage]);
+  useEffect(() => { if (tab === "movements") fetchMovements(movPage); }, [tab, selectedCompany, movPage, movSize]);
 
   // Units list (carries the AllowsDecimalQuantity flag) drives whether the
   // opening-balance / adjustment quantity inputs accept decimals — the same
@@ -811,16 +815,15 @@ export default function StockDashboardPage() {
                     ))}
                   </div>
 
-                  {movPageSize > 0 && movTotal > movPageSize && (
-                    <div className="irh-pagination">
-                      <button className="irh-page-btn" disabled={movPage <= 1} onClick={() => setMovPage(movPage - 1)}>Prev</button>
-                      <span className="irh-page-info">
-                        Page {movPage} of {Math.ceil(movTotal / movPageSize)}{" "}
-                        <span className="irh-page-info__count">({movTotal} total)</span>
-                      </span>
-                      <button className="irh-page-btn" disabled={movPage * movPageSize >= movTotal} onClick={() => setMovPage(movPage + 1)}>Next</button>
-                    </div>
-                  )}
+                  <Pagination
+                    page={movPage}
+                    totalPages={movPageSize > 0 ? Math.ceil(movTotal / movPageSize) : 0}
+                    total={movTotal}
+                    onPage={setMovPage}
+                    pageSize={movSize}
+                    onPageSize={(n) => { setMovSize(n); setMovPage(1); }}
+                    unit="rows"
+                  />
                 </>
               )}
             </>

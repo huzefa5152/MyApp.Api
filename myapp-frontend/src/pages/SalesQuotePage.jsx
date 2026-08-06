@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdSwapHoriz, MdAttachFile, MdVisibility, MdUploadFile } from "react-icons/md";
+import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdSwapHoriz, MdAttachFile, MdVisibility, MdUploadFile } from "react-icons/md";
 import SalesQuoteForm from "../Components/SalesQuoteForm";
 import SalesQuoteDetailModal from "../Components/SalesQuoteDetailModal";
 import POImportForm from "../Components/POImportForm";
@@ -22,6 +22,8 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
+import Pagination from "../Components/Pagination";
+import usePageSize from "../hooks/usePageSize";
 
 const colors = { blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBorder: "#d0d7e2" };
 
@@ -52,6 +54,7 @@ export default function SalesQuotePage() {
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [size, setSize] = usePageSize("salesquotes");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
@@ -70,6 +73,7 @@ export default function SalesQuotePage() {
     setLoading(true);
     try {
       const params = { page: pg || page };
+      if (size) params.pageSize = size;
       if (search) params.search = search;
       if (statusFilter) params.status = statusFilter;
       if (divisionFilter) params.divisionId = divisionFilter;
@@ -88,7 +92,7 @@ export default function SalesQuotePage() {
       }
     } catch { setQuotes([]); setTotalCount(0); setTotalPages(0); }
     finally { setLoading(false); }
-  }, [page, search, statusFilter, divisionFilter, clientFilter, canSeeAttachments]);
+  }, [page, size, search, statusFilter, divisionFilter, clientFilter, canSeeAttachments]);
 
   // Reset paging + filters and load the client list when the company changes.
   useEffect(() => {
@@ -102,7 +106,7 @@ export default function SalesQuotePage() {
   useEffect(() => {
     if (selectedCompany) fetchQuotes(selectedCompany.id, page);
     else setQuotes([]);
-  }, [selectedCompany, page, search, statusFilter, divisionFilter, clientFilter]);
+  }, [selectedCompany, page, size, search, statusFilter, divisionFilter, clientFilter]);
 
   const reload = () => selectedCompany && fetchQuotes(selectedCompany.id, page);
 
@@ -280,13 +284,14 @@ export default function SalesQuotePage() {
               </div>
             ))}
           </div>
-          {totalPages > 1 && (
-            <div style={st.pagination}>
-              <button style={{ ...st.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}><MdChevronLeft size={20} /> Prev</button>
-              <span style={st.pageInfo}>Page {page} of {totalPages} ({totalCount} total)</span>
-              <button style={{ ...st.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next <MdChevronRight size={20} /></button>
-            </div>
-          )}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={totalCount}
+            onPage={setPage}
+            pageSize={size}
+            onPageSize={(n) => { setSize(n); setPage(1); }}
+          />
         </>
       )}
 

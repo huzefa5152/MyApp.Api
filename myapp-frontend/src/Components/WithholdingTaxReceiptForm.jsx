@@ -3,6 +3,7 @@ import SelectDropdown from "./SelectDropdown";
 import DivisionSelect from "./DivisionSelect";
 import AttachmentManager from "./AttachmentManager";
 import { usePermissions } from "../contexts/PermissionsContext";
+import useScrollToError from "../hooks/useScrollToError";
 import { formStyles, modalSizes } from "../theme";
 
 const colors = {
@@ -27,6 +28,7 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
+  const errRef = useScrollToError(error);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -72,7 +74,7 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div style={s.err}>{error}</div>}
+            {error && <div ref={errRef} style={s.err}>{error}</div>}
             <div style={s.row}>
               <div style={{ flex: "1 1 100%", minWidth: 220 }}>
                 <SelectDropdown

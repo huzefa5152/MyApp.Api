@@ -1,0 +1,64 @@
+/* Shared pagination bar — see Components/Pagination.jsx */
+
+.pagination-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem 1rem;
+  padding: 1rem 0;
+  margin-top: 0.5rem;
+}
+
+.pagination-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Class selector beats index.css's global `button { padding; box-shadow }`. */
+.pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 0.7rem;
+  border: 1px solid #d0d7e2;
+  border-radius: 8px;
+  background: #fff;
+  color: #0d47a1;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pagination-info {
+  font-size: 0.85rem;
+  color: #5f6d7e;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pagination-info__count {
+  color: #98a4b3;
+}
+
+/* Phone: nav spans the full width (Prev · info · Next), rows-select wraps
+   to its own centered line. Drop the "(n total)" suffix to save space. */
+@media (max-width: 599.98px) {
+  .pagination-nav {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .pagination-info__count {
+    display: none;
+  }
+}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  MdAdd, MdDelete, MdChevronLeft, MdChevronRight, MdReceiptLong, MdPayments,
+  MdAdd, MdDelete, MdReceiptLong, MdPayments,
   MdSearch, MdBusiness, MdExpandMore, MdPerson, MdAccountBalanceWallet,
   MdCalendarToday, MdLabel, MdNotes, MdVisibility, MdEdit, MdClose,
   MdPrint, MdPictureAsPdf,
@@ -20,6 +20,8 @@ import { exportToPdf } from "../utils/exportUtils";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import DivisionSelect from "../Components/DivisionSelect";
+import Pagination from "../Components/Pagination";
+import usePageSize from "../hooks/usePageSize";
 import { defaultReceiptTemplate, defaultPaymentTemplate } from "../utils/accountingDocTemplates";
 
 const fmtMoney = (n) =>
@@ -65,6 +67,8 @@ export default function PaymentsPage({ mode = "receipts" }) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  // Rows-per-page remembered separately for receipts vs payments.
+  const [size, setSize] = usePageSize(dir);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -79,6 +83,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
     setLoading(true);
     try {
       const params = { page: pg || page };
+      if (size) params.pageSize = size;
       if (search.trim()) params.search = search.trim();
       const { data } = await getPagedPayments(dir, companyId, params);
       setRows(data.items || []);
@@ -89,7 +94,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
     } finally {
       setLoading(false);
     }
-  }, [companyId, dir, page, search]);
+  }, [companyId, dir, page, size, search]);
 
   // Reset to page 1 on company / mode switch.
   useEffect(() => { setPage(1); setSearch(""); }, [companyId, dir]);
@@ -229,17 +234,14 @@ export default function PaymentsPage({ mode = "receipts" }) {
             </div>
           )}
 
-          {totalPages > 1 && (
-            <div style={st.pagination}>
-              <button style={{ ...st.pageBtn, opacity: page <= 1 ? 0.4 : 1 }} disabled={page <= 1} onClick={() => setPage(page - 1)}>
-                <MdChevronLeft size={20} /> Prev
-              </button>
-              <span style={st.pageInfo}>Page {page} of {totalPages} ({totalCount} total)</span>
-              <button style={{ ...st.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-                Next <MdChevronRight size={20} />
-              </button>
-            </div>
-          )}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={totalCount}
+            onPage={setPage}
+            pageSize={size}
+            onPageSize={(n) => { setSize(n); setPage(1); }}
+          />
         </>
       )}
 

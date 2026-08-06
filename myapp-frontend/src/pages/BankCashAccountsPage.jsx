@@ -10,6 +10,8 @@ import AccountLedgerDialog from "../Components/AccountLedgerDialog";
 import ReconcileModal from "../Components/ReconcileModal";
 import StatementImportModal from "../Components/StatementImportModal";
 import DivisionSelect from "../Components/DivisionSelect";
+import useIsNarrow from "../hooks/useIsNarrow";
+import useScrollToError from "../hooks/useScrollToError";
 
 // "- PKR 10,306,052.29" for negatives, "PKR 3,517,780.34" otherwise — matches
 // the reference product's bank-list convention.
@@ -45,6 +47,7 @@ export default function BankCashAccountsPage() {
   const canViewDivisions = has("divisions.manage.view");
   const canReconcile = has("accounting.reconciliation.view");
   const companyId = selectedCompany?.id;
+  const isNarrow = useIsNarrow();
 
   const [accounts, setAccounts] = useState([]);
   const [assetGroups, setAssetGroups] = useState([]);
@@ -156,6 +159,71 @@ export default function BankCashAccountsPage() {
           {accounts.length === 0
             ? "No bank or cash accounts yet. Create one, or add an account with control type “Bank & Cash” in Chart of Accounts."
             : "No accounts match your search."}
+        </div>
+      ) : isNarrow ? (
+        // Mobile: the up-to-8-column table becomes stacked cards. Every
+        // column is preserved (balance + the reconcile figures + the
+        // uncategorized-review link), and each card + its action buttons
+        // open the same ledger / reconcile / import flows as the desktop row.
+        <div style={st.cardList}>
+          {filtered.map((a) => {
+            const bal = Number(a.balance) || 0;
+            return (
+              <div key={a.id} style={st.acctCard} onClick={() => setLedgerAccount({ id: a.id, name: a.name, code: a.code })} title="View transactions">
+                <div style={st.acctCardTop}>
+                  <span style={st.acctName}>{a.name}</span>
+                  {a.code ? <span style={st.code}>{a.code}</span> : null}
+                </div>
+                <div style={st.acctBalBox}>
+                  <span style={st.acctBalLabel}>Actual balance</span>
+                  <span style={{ fontWeight: 800, fontSize: "1rem", color: bal < 0 ? "#b71c1c" : colors.textPrimary, whiteSpace: "nowrap" }}>{money(a.balance)}</span>
+                </div>
+                {canReconcile && (
+                  <div style={st.acctMetaGrid}>
+                    <div><span style={st.acctMetaLabel}>Cleared</span><span style={{ ...st.acctMetaValue, color: (Number(a.clearedBalance) || 0) < 0 ? "#b71c1c" : colors.textPrimary }}>{money(a.clearedBalance)}</span></div>
+                    <div><span style={st.acctMetaLabel}>Pending In</span><span style={{ ...st.acctMetaValue, color: a.pendingDeposits ? "#1b7a3d" : colors.textSecondary }}>{a.pendingDeposits ? money(a.pendingDeposits) : "—"}</span></div>
+                    <div><span style={st.acctMetaLabel}>Pending Out</span><span style={{ ...st.acctMetaValue, color: a.pendingWithdrawals ? "#b71c1c" : colors.textSecondary }}>{a.pendingWithdrawals ? money(a.pendingWithdrawals) : "—"}</span></div>
+                    <div>
+                      <span style={st.acctMetaLabel}>Uncategorized</span>
+                      {a.uncategorizedCount ? (
+                        <button type="button" style={{ ...st.reviewLink, color: colors.blue }} onClick={(e) => { e.stopPropagation(); setImportAccount({ id: a.id, name: a.name, code: a.code }); }}>
+                          {a.uncategorizedCount} to review
+                        </button>
+                      ) : <span style={st.acctMetaValue}>—</span>}
+                    </div>
+                  </div>
+                )}
+                <div style={st.acctActions}>
+                  <button type="button" style={st.acctActionBtn} onClick={(e) => { e.stopPropagation(); setLedgerAccount({ id: a.id, name: a.name, code: a.code }); }}>
+                    <MdVisibility size={16} /> Ledger
+                  </button>
+                  {canManage && (
+                    <button type="button" style={st.acctActionBtn} onClick={(e) => { e.stopPropagation(); setReconcileAccount({ id: a.id, name: a.name, code: a.code }); }}>
+                      <MdFactCheck size={16} /> Reconcile
+                    </button>
+                  )}
+                  {canManage && (
+                    <button type="button" style={st.acctActionBtn} onClick={(e) => { e.stopPropagation(); setImportAccount({ id: a.id, name: a.name, code: a.code }); }}>
+                      <MdUploadFile size={16} /> Import
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          <div style={st.acctTotalsCard}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+              <span style={st.acctMetaLabel}>{filtered.length} account{filtered.length === 1 ? "" : "s"}</span>
+              <span style={{ fontWeight: 800, color: total < 0 ? "#b71c1c" : colors.textPrimary, whiteSpace: "nowrap" }}>{money(total)}</span>
+            </div>
+            {canReconcile && (
+              <div style={st.acctMetaGrid}>
+                <div><span style={st.acctMetaLabel}>Cleared</span><span style={st.acctMetaValue}>{money(filtered.reduce((s, a) => s + (Number(a.clearedBalance) || 0), 0))}</span></div>
+                <div><span style={st.acctMetaLabel}>Pending In</span><span style={st.acctMetaValue}>{money(filtered.reduce((s, a) => s + (Number(a.pendingDeposits) || 0), 0))}</span></div>
+                <div><span style={st.acctMetaLabel}>Pending Out</span><span style={st.acctMetaValue}>{money(filtered.reduce((s, a) => s + (Number(a.pendingWithdrawals) || 0), 0))}</span></div>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <div style={st.tableWrap}>
@@ -274,6 +342,7 @@ function CreateBankCashModal({ companyId, canViewDivisions, assetGroups, default
   const [isDebit, setIsDebit] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
 
   const doCreate = async (addAnother) => {
     if (!name.trim()) { setError("Name is required."); return; }
@@ -363,7 +432,7 @@ function CreateBankCashModal({ companyId, canViewDivisions, assetGroups, default
               </div>
             </div>
 
-            {error && <div style={st.error}>{error}</div>}
+            {error && <div ref={errRef} style={st.error}>{error}</div>}
           </form>
         </div>
 
@@ -400,6 +469,21 @@ const st = {
   reviewLink: { border: "none", background: "transparent", padding: 0, fontSize: "0.82rem", fontWeight: 700, cursor: "pointer", textDecoration: "underline" },
   iconBtn: { display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 8, border: "none", background: "transparent", color: colors.blue, cursor: "pointer" },
   empty: { padding: "2.5rem 1rem", textAlign: "center", color: colors.textSecondary, background: colors.cardBg, border: `1px dashed ${colors.inputBorder}`, borderRadius: 12 },
+
+  // Mobile stacked-card fallback for the accounts table (<768px).
+  cardList: { display: "flex", flexDirection: "column", gap: "0.6rem" },
+  acctCard: { background: colors.cardBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 12, boxShadow: "0 2px 10px rgba(0,0,0,0.04)", padding: "0.8rem 0.9rem", cursor: "pointer", display: "flex", flexDirection: "column", gap: "0.5rem" },
+  acctCardTop: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
+  // Line-clamp long account names — never nowrap+ellipsis (CLAUDE.md §3).
+  acctName: { fontWeight: 700, color: colors.textPrimary, fontSize: "0.95rem", minWidth: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" },
+  acctBalBox: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, padding: "0.45rem 0.6rem", background: colors.inputBg, borderRadius: 8 },
+  acctBalLabel: { fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary },
+  acctMetaGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(120px, 100%), 1fr))", gap: "0.4rem 0.8rem" },
+  acctMetaLabel: { display: "block", fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary },
+  acctMetaValue: { display: "block", fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary, fontVariantNumeric: "tabular-nums" },
+  acctActions: { display: "flex", flexWrap: "wrap", gap: 6, paddingTop: "0.5rem", borderTop: `1px solid ${colors.cardBorder}` },
+  acctActionBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44, padding: "0.35rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
+  acctTotalsCard: { background: colors.inputBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.9rem", display: "flex", flexDirection: "column", gap: "0.4rem" },
   footer: { display: "flex", justifyContent: "flex-end", gap: "0.6rem", flexWrap: "wrap", padding: "0.9rem clamp(1rem, 2vw, 1.5rem)", borderTop: `1px solid ${colors.cardBorder}`, flexShrink: 0 },
   fieldRow: { display: "flex", gap: "0.75rem", flexWrap: "wrap" },
   label: { display: "block", fontSize: "0.75rem", fontWeight: 700, color: colors.textSecondary, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.03em" },

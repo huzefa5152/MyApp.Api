@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import PaymentForm from "../Components/PaymentForm";
 import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
@@ -33,6 +33,8 @@ import { exportToPdf } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
+import Pagination from "../Components/Pagination";
+import usePageSize from "../hooks/usePageSize";
 
 const colors = {
   blue: "#0d47a1",
@@ -227,6 +229,9 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  // Rows-per-page is remembered per tab (Bills / Invoices / each note tab),
+  // matching the per-tab view-mode persistence above.
+  const [size, setSize] = usePageSize(isBillsMode ? "bills" : isNotesMode ? mode : "invoices");
   const [search, setSearch] = useState(() => searchParams.get("search") || "");
   // Keep the URL's ?search= in sync with the search-box state. Without
   // this, clearing the box would still leave the param in the URL, and
@@ -267,6 +272,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     setLoadingInvoices(true);
     try {
       const params = { page: pg || page };
+      if (size) params.pageSize = size;
       if (search) params.search = search;
       if (clientFilter) params.clientId = clientFilter;
       if (divisionFilter) params.divisionId = divisionFilter;
@@ -298,7 +304,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       });
     } catch { setInvoices([]); setTotalCount(0); setTotalPages(0); }
     finally { setLoadingInvoices(false); }
-  }, [page, search, clientFilter, divisionFilter, dateFrom, dateTo]);
+  }, [page, size, search, clientFilter, divisionFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -326,7 +332,7 @@ export default function InvoicePage({ mode = "invoices" }) {
 
   useEffect(() => {
     if (selectedCompany) fetchInvoices(selectedCompany.id, page);
-  }, [page, search, clientFilter, divisionFilter, dateFrom, dateTo]);
+  }, [page, size, search, clientFilter, divisionFilter, dateFrom, dateTo]);
 
   const resetFilters = () => {
     setSearch(""); setClientFilter(""); setDivisionFilter(""); setDateFrom(""); setDateTo(""); setPage(1);
@@ -1388,27 +1394,14 @@ export default function InvoicePage({ mode = "invoices" }) {
           </div>
           )}
           {/* Pagination */}
-          {totalPages > 1 && (
-            <div style={styles.pagination}>
-              <button
-                style={{ ...styles.pageBtn, opacity: page <= 1 ? 0.4 : 1 }}
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-              >
-                <MdChevronLeft size={20} /> Prev
-              </button>
-              <span style={styles.pageInfo}>
-                Page {page} of {totalPages} ({totalCount} total)
-              </span>
-              <button
-                style={{ ...styles.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }}
-                disabled={page >= totalPages}
-                onClick={() => setPage(page + 1)}
-              >
-                Next <MdChevronRight size={20} />
-              </button>
-            </div>
-          )}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={totalCount}
+            onPage={setPage}
+            pageSize={size}
+            onPageSize={(n) => { setSize(n); setPage(1); }}
+          />
         </>
       )}
 

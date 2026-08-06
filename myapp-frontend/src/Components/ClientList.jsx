@@ -3,6 +3,7 @@ import { deleteClient, getClientDeleteImpact } from "../api/clientApi";
 import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
+import useIsNarrow from "../hooks/useIsNarrow";
 
 // ── Local formatters (kept inline so the table has no cross-module coupling) ──
 const money = (n) => {
@@ -33,6 +34,7 @@ const EMPTY = {
 export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, fetchClients, onOpenDetail }) {
   const confirm = useConfirm();
   const { has } = usePermissions();
+  const isNarrow = useIsNarrow();
   const canUpdate = has("clients.manage.update");
   const canDelete = has("clients.manage.delete");
   const canCopy = has("clients.manage.copy");
@@ -53,6 +55,17 @@ export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, 
         {text}
       </button>
     ) : (text || "");
+
+  // Mobile-card counterpart of `drill`: always shows a value ("0" when empty)
+  // so a stacked card reads cleanly, and stays a drill-down link when there's
+  // data behind it. `isQty` formats decimals; otherwise it's a plain count.
+  const metric = (client, value, section, isQty = false) => {
+    const hasData = isQty ? !!value : value > 0;
+    const text = isQty ? (qty(value) || "0") : String(value || 0);
+    return hasData && onOpenDetail ? (
+      <button type="button" style={styles.drill} title="View details" onClick={() => onOpenDetail(client, section)}>{text}</button>
+    ) : text;
+  };
 
   const handleDelete = async (client) => {
     // Look up what the wipe will cascade-delete (best-effort; falls back to a
@@ -91,6 +104,71 @@ export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, 
       notify(err.response?.data?.error || err.response?.data?.message || "Failed to delete client.", "error");
     }
   };
+
+  // Phones (<768px): stacked cards instead of the wide, horizontally-scrolling
+  // table. Every column is preserved; the customer name is line-clamped (never
+  // nowrap+ellipsis) so similar-prefix names stay distinguishable.
+  if (isNarrow) {
+    return (
+      <div style={styles.cards}>
+        {clients.map((client) => {
+          const s = summaryById[client.id] || EMPTY;
+          const stt = STATUS_STYLES[s.status] || STATUS_STYLES.Paid;
+          return (
+            <div key={client.id} style={styles.mCard}>
+              <div style={styles.mHead}>
+                {onOpenDetail ? (
+                  <button
+                    type="button"
+                    style={styles.nameBtn}
+                    title="View this customer's documents"
+                    onClick={() => onOpenDetail(client, null)}
+                  >
+                    {client.name}
+                  </button>
+                ) : (
+                  <div style={styles.name}>{client.name}</div>
+                )}
+                <span style={{ ...styles.pill, background: stt.bg, color: stt.fg, borderColor: stt.border }}>{s.status}</span>
+              </div>
+              {(client.ntn || client.phone) && (
+                <div style={styles.sub}>{client.ntn ? `NTN ${client.ntn}` : client.phone}</div>
+              )}
+
+              <div style={styles.mGrid}>
+                <div style={styles.mCell}><span style={styles.mLbl}>Quotes</span><span style={styles.mVal}>{metric(client, s.salesQuotes, "quotes")}</span></div>
+                <div style={styles.mCell}><span style={styles.mLbl}>Orders</span><span style={styles.mVal}>{metric(client, s.salesOrders, "orders")}</span></div>
+                <div style={styles.mCell}><span style={styles.mLbl}>Invoices</span><span style={styles.mVal}>{metric(client, s.salesInvoices, "invoices")}</span></div>
+                <div style={styles.mCell}><span style={styles.mLbl}>Cr. Notes</span><span style={styles.mVal}>{metric(client, s.creditNotes, "creditNotes")}</span></div>
+                <div style={styles.mCell}><span style={styles.mLbl}>Delivery</span><span style={styles.mVal}>{metric(client, s.deliveryNotes, "challans")}</span></div>
+                <div style={styles.mCell}><span style={styles.mLbl}>To Deliver</span><span style={styles.mVal}>{metric(client, s.qtyToDeliver, "orders", true)}</span></div>
+                <div style={styles.mCell}><span style={styles.mLbl}>To Invoice</span><span style={styles.mVal}>{metric(client, s.qtyToInvoice, "challans", true)}</span></div>
+              </div>
+
+              <div style={styles.mMoneyRow}>
+                <div style={styles.mCell}><span style={styles.mLbl}>A/R</span><span style={styles.mMoneyVal}>{drill(client, s.salesInvoices > 0, "statement", money(s.accountsReceivable))}</span></div>
+                <div style={styles.mCell}><span style={styles.mLbl}>WHT Rec.</span><span style={styles.mMoneyVal}>{drill(client, !!s.withholdingTaxReceivable, "wht", money(s.withholdingTaxReceivable))}</span></div>
+              </div>
+
+              {showActions && (
+                <div style={styles.mActions}>
+                  {canUpdate && (
+                    <button style={{ ...styles.mIconBtn, ...styles.edit }} title="Edit" onClick={() => onEdit(client)}><MdEdit size={18} /></button>
+                  )}
+                  {canCopy && onCopy && (
+                    <button style={{ ...styles.mIconBtn, ...styles.copy }} title="Copy to another company" onClick={() => onCopy(client)}><MdContentCopy size={17} /></button>
+                  )}
+                  {canDelete && (
+                    <button style={{ ...styles.mIconBtn, ...styles.del }} title="Delete" onClick={() => handleDelete(client)}><MdDelete size={18} /></button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     // Wide table → own horizontal-scroll container so the page body never
@@ -213,4 +291,17 @@ const styles = {
   edit: { background: "#e3f2fd", color: "#0d47a1" },
   copy: { background: "#ede7f6", color: "#4527a0" },
   del: { background: "#ffebee", color: "#c62828" },
+
+  // ── Mobile cards (<768px) ──
+  cards: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))", gap: "0.75rem" },
+  mCard: { border: "1px solid #e8edf3", borderRadius: 12, background: "#fff", padding: "0.8rem 0.9rem", display: "flex", flexDirection: "column", gap: "0.55rem", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" },
+  mHead: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
+  mGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(84px, 100%), 1fr))", gap: "0.45rem 0.6rem" },
+  mCell: { display: "flex", flexDirection: "column", gap: 1, minWidth: 0 },
+  mLbl: { fontSize: "0.6rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#94a3b8" },
+  mVal: { fontSize: "0.9rem", fontWeight: 600, color: "#334155", fontVariantNumeric: "tabular-nums" },
+  mMoneyRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", borderTop: "1px dashed #e8edf3", paddingTop: "0.55rem" },
+  mMoneyVal: { fontSize: "0.92rem", fontWeight: 700, color: "#1a2332", fontVariantNumeric: "tabular-nums" },
+  mActions: { display: "flex", gap: 8, justifyContent: "flex-end", borderTop: "1px solid #eef2f7", paddingTop: "0.55rem" },
+  mIconBtn: { display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 10, border: "none", cursor: "pointer" },
 };
