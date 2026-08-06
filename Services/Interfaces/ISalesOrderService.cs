@@ -10,6 +10,7 @@ namespace MyApp.Api.Services.Interfaces
         Task<List<SalesOrderDto>> GetByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
         /// <summary>Open orders that still have undelivered quantity — powers the challan picker.</summary>
         Task<List<SalesOrderDto>> GetOpenByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
+        Task<List<SalesOrderDto>> GetOpenForPurchaseAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
         Task<PagedResult<SalesOrderDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,

@@ -12,6 +12,8 @@ import { todayYmd } from "../utils/dateInput";
 import LookupAutocomplete from "./LookupAutocomplete";
 import QuantityInput from "./QuantityInput";
 import ParserFeedback from "./ParserFeedback";
+import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import { getItemTypes } from "../api/itemTypeApi";
 
 const colors = {
   blue: "#0d47a1",
@@ -33,9 +35,9 @@ const colors = {
 // `showQuoteLink` only makes sense for orders (an order links to a quote);
 // `showPrice` adds a unit-price column for quotes (a priced document).
 const TARGET_CONFIG = {
-  salesorder: { doc: "Sales Order", verb: "Create Sales Order", dateLabel: "Order Date *", showQuoteLink: true, showPrice: true },
-  salesquote: { doc: "Sales Quote", verb: "Create Sales Quote", dateLabel: "Quote Date *", showQuoteLink: false, showPrice: true },
-  challan: { doc: "Delivery Challan", verb: "Create Challan", dateLabel: "Delivery Date *", showQuoteLink: false, showPrice: false },
+  salesorder: { doc: "Sales Order", verb: "Create Sales Order", dateLabel: "Order Date *", showQuoteLink: true, showPrice: true, showItemType: true },
+  salesquote: { doc: "Sales Quote", verb: "Create Sales Quote", dateLabel: "Quote Date *", showQuoteLink: false, showPrice: true, showItemType: true },
+  challan: { doc: "Delivery Challan", verb: "Create Challan", dateLabel: "Delivery Date *", showQuoteLink: false, showPrice: false, showItemType: false },
 };
 
 export default function POImportForm({ companyId, target = "salesorder", onClose, onSaved }) {
@@ -78,6 +80,9 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
   // Units list — drives whether each row's quantity input accepts decimals
   // (KG, Liter, Carat) or only whole numbers (Pcs, SET, Pair).
   const [units, setUnits] = useState([]);
+  // Item types — optional per-line classification on the Sales Order / Quote
+  // review (loaded only for those targets). A picked type propagates to the bill.
+  const [itemTypes, setItemTypes] = useState([]);
   const [saving, setSaving] = useState(false);
 
   const fileInputRef = useRef(null);
@@ -85,21 +90,26 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
   useEffect(() => {
     const load = async () => {
       try {
-        const [clientRes, unitsRes, quoteItems] = await Promise.all([
+        const [clientRes, unitsRes, quoteItems, itemTypeRes] = await Promise.all([
           getClientsByCompany(companyId),
           getAllUnits().catch(() => ({ data: [] })),
           // Quote-link picker is order-only — skip the (paged) fetch otherwise.
           cfg.showQuoteLink
             ? getSalesQuotesForPicker(companyId).catch(() => [])
             : Promise.resolve([]),
+          // Item-type list only for targets that offer per-line classification.
+          cfg.showItemType
+            ? getItemTypes(companyId).catch(() => ({ data: [] }))
+            : Promise.resolve({ data: [] }),
         ]);
         setClients(clientRes.data);
         setUnits(unitsRes.data || []);
         setQuotes(quoteItems || []);
+        setItemTypes(itemTypeRes.data || []);
       } catch { /* ignore */ }
     };
     load();
-  }, [companyId, cfg.showQuoteLink]);
+  }, [companyId, cfg.showQuoteLink, cfg.showItemType]);
 
   // If the parse response carries a matchedClientId but it's not in the
   // current company's client list, fetch that one client and merge it in —
@@ -145,6 +155,7 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
         quantity: item.quantity || 1,
         unit: item.unit || "Pcs",
         unitPrice: item.unitPrice ?? 0,  // from the PO's rate column when detected (Sales Order + Quote)
+        itemTypeId: null,                // optional — operator classifies in review (Sales Order + Quote)
       })) || []);
       setRawText(data.rawText || "");
       setMatchedFormatId(data.matchedFormatId ?? null);
@@ -194,7 +205,7 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
   };
 
   const addItem = () => {
-    setItems((prev) => [...prev, { id: Date.now(), description: "", quantity: 1, unit: "Pcs", unitPrice: 0 }]);
+    setItems((prev) => [...prev, { id: Date.now(), description: "", quantity: 1, unit: "Pcs", unitPrice: 0, itemTypeId: null }]);
   };
 
   const removeItem = (idx) => {
@@ -262,7 +273,7 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
           notes: null,
           items: items.map((i) => ({
             id: 0,
-            itemTypeId: null,
+            itemTypeId: i.itemTypeId || null,
             nonInventoryItemId: null,
             description: i.description.trim(),
             quantity: qty(i),
@@ -313,7 +324,8 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
             description: i.description.trim(),
             quantity: qty(i),
             unit: i.unit.trim() || "Pcs",
-            itemTypeId: null,
+            // Optional item type picked in the review — propagates to the bill.
+            itemTypeId: i.itemTypeId || null,
             // Optional agreed price from the PO's rate column. Null when the
             // parser found none, so the order keeps "no agreed price" and the
             // bill still falls back to quote / last-billed at bill time.
@@ -547,6 +559,7 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
                       <span style={{ flex: 2.5 }}>Description *</span>
                       <span style={{ flex: 0.6, textAlign: "center" }}>Qty *</span>
                       <span style={{ flex: 1 }}>Unit</span>
+                      {cfg.showItemType && <span style={{ flex: 1.6 }}>Item Type (optional)</span>}
                       {cfg.showPrice && <span style={{ flex: 1, textAlign: "right" }}>Unit Price</span>}
                       <span style={{ flex: 0.3 }}></span>
                     </div>
@@ -585,6 +598,18 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
                             inputStyle={{ ...styles.input, padding: "0.35rem 0.5rem", fontSize: "0.85rem" }}
                           />
                         </div>
+                        {cfg.showItemType && (
+                          <div style={{ flex: 1.6 }}>
+                            <SearchableItemTypeSelect
+                              items={itemTypes}
+                              value={item.itemTypeId || ""}
+                              companyId={companyId}
+                              onChange={(newId) => handleItemChange(idx, "itemTypeId", newId ? Number(newId) : null)}
+                              placeholder="— optional —"
+                              style={{ ...styles.input, padding: "0.2rem 0.4rem", fontSize: "0.85rem" }}
+                            />
+                          </div>
+                        )}
                         {cfg.showPrice && (
                           <div style={{ flex: 1 }}>
                             <input

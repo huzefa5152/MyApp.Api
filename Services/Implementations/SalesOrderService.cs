@@ -52,13 +52,14 @@ namespace MyApp.Api.Services.Implementations
         {
             if (company.InventoryFlowVersion != (byte)InventoryFlowVersion.V2Standard) return;
 
-            // Non-inventory lines (Freight/Discount → GL account, no stock) are
-            // exempt from the item-type requirement and UOM constraint. Every
-            // OTHER line must carry an item type OR be a non-inventory line.
-            if (items.Any(i => (!i.ItemTypeId.HasValue || i.ItemTypeId.Value <= 0) && !i.NonInventoryItemId.HasValue))
-                throw new InvalidOperationException(
-                    "On a V2 (standard inventory) company, every sales-order line must have an Item Type or a Non-Inventory item selected.");
-
+            // Item type is OPTIONAL on a sales order — an order captures intent /
+            // commitment, not a stock movement, and PO imports often arrive
+            // unclassified. A line may be left without an item type and gets
+            // classified later at bill / challan time, where the item type IS
+            // required (InvoiceService / PurchaseBillService still enforce it).
+            // When a line DOES carry an item type it must use that item's base
+            // UOM (Q10) so committed quantities never mix units. Non-inventory
+            // lines (Freight/Discount → GL account, no stock) are exempt.
             var invLines = items.Where(i => i.ItemTypeId.HasValue && i.ItemTypeId.Value > 0 && !i.NonInventoryItemId.HasValue).ToList();
             var itemTypeIds = invLines.Select(i => i.ItemTypeId!.Value).Distinct().ToList();
             if (itemTypeIds.Count == 0) return;
@@ -278,6 +279,17 @@ namespace MyApp.Api.Services.Implementations
             // "create challan" picker.
             return mapped.Where(o => o.FulfillmentStatus != "Fully Delivered"
                                   && o.FulfillmentStatus != "Over Delivered").ToList();
+        }
+
+        // The "purchase bill from sales order" picker. Purchasing to fulfil an
+        // order is independent of DELIVERY, and an order auto-closes once fully
+        // delivered — yet the operator may still want to raise a purchase bill
+        // for it. So return EVERY order except cancelled ones (Open AND Closed),
+        // unlike the delivery-scoped challan picker (GetOpenByCompanyAsync).
+        public async Task<List<SalesOrderDto>> GetOpenForPurchaseAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
+        {
+            var mapped = await MapManyAsync(await _repository.GetByCompanyAsync(companyId, allowedDivisionIds));
+            return mapped.Where(o => o.Status != "Cancelled").ToList();
         }
 
         public async Task<PagedResult<SalesOrderDto>> GetPagedByCompanyAsync(
