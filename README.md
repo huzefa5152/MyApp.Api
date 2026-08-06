@@ -289,6 +289,14 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-06 — Purchase-bill sources + optional Sales Order item type
+
+- **Item type is now OPTIONAL on a sales order (V2 companies).** An order captures intent, not a stock movement, and PO imports arrive unclassified — so the previous "every line must have an Item Type" hard block is lifted. Bills/purchase bills still **require** classification, and a type set on the order propagates to the bill; leave it blank and you classify at bill time. Classified lines are still committed + base-UOM-validated, so V2 stock numbers (on-hand, committed, available) are unaffected. This unblocks PO import → Sales Order on standard-inventory companies.
+- **PO import review** (Sales Order / Sales Quote) gains an optional per-line **Item Type** picker, so operators can classify during import if they want.
+- **Purchase bill from a sales order** now lists **every open OR closed** order (auto-closed once fully delivered), not just partially-delivered ones — purchasing is independent of delivery. Lines prefill at the **full ordered quantity**.
+- **Purchase bill from delivery challan(s)** — a new "Purchase Against Delivery Challan" button lets the operator multi-select challans; their lines merge (identical items summed) into a purchase-bill prefill, same as the sales-order flow.
+- **Supplier quick-create** — the purchase-bill form has a "+ New supplier" shortcut that opens the supplier form inline and auto-selects the new supplier on save.
+
 ### 2026-08-05 — PO import: recognise a unit-price column (Sales Order + Sales Quote)
 
 - **The generic parser (`simple-headers-v1`) can now read a per-unit price/rate column.** PO Formats gains an optional **"Unit price column header"** (e.g. `Rate`, `Unit Price`); when set — or when the parser auto-detects a `Rate`/`Price`/`Cost` column (never an `Amount`/`Total`/`Value` line-total) — each parsed line carries its `unitPrice`.

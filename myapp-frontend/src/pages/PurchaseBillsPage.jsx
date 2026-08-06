@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight, MdReceipt, MdClose, MdPayments, MdAssignment, MdPrint, MdPictureAsPdf } from "react-icons/md";
+import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight, MdReceipt, MdClose, MdPayments, MdAssignment, MdPrint, MdPictureAsPdf, MdLocalShipping } from "react-icons/md";
 import { getPurchaseBillsByCompanyPaged, deletePurchaseBill, getPurchaseBillPrintData } from "../api/purchaseBillApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
@@ -10,7 +10,8 @@ import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getAwaitingPurchase } from "../api/invoiceApi";
-import { getOpenSalesOrdersByCompany } from "../api/salesOrderApi";
+import { getOpenSalesOrdersForPurchase } from "../api/salesOrderApi";
+import { getDeliveryChallansByCompany } from "../api/challanApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -61,6 +62,7 @@ export default function PurchaseBillsPage() {
   // Gate the "Purchase Against Sales Order" flow on the SO list permission
   // (the picker calls GET /salesorders/.../open).
   const canViewSalesOrders = has("salesorders.list.view");
+  const canViewChallans = has("challans.list.view");
   const [viewMode, setViewMode, isBigScreen] = useListViewMode("purchaseBills");
 
   const [bills, setBills] = useState([]);
@@ -105,13 +107,20 @@ export default function PurchaseBillsPage() {
   const [prefillItems, setPrefillItems] = useState(null);
   const [prefillSourceLabel, setPrefillSourceLabel] = useState(null);
 
+  // "Purchase Against Delivery Challan(s)" picker — multi-select challans.
+  const [showChallanPicker, setShowChallanPicker] = useState(false);
+  const [openChallans, setOpenChallans] = useState([]);
+  const [loadingChallans, setLoadingChallans] = useState(false);
+  const [challanPickerSearch, setChallanPickerSearch] = useState("");
+  const [selectedChallanIds, setSelectedChallanIds] = useState(() => new Set());
+
   const openOrderPicker = async () => {
     setShowOrderPicker(true);
     setOrderPickerSearch("");
     setSelectedOrderIds(new Set());
     setLoadingOrders(true);
     try {
-      const { data } = await getOpenSalesOrdersByCompany(selectedCompany.id);
+      const { data } = await getOpenSalesOrdersForPurchase(selectedCompany.id);
       setOpenOrders(data || []);
     } catch {
       setOpenOrders([]);
@@ -128,14 +137,16 @@ export default function PurchaseBillsPage() {
       return next;
     });
 
-  // Merge the chosen orders' outstanding lines into purchase-bill prefill rows.
-  // Lines with the same description + item type + unit are summed.
+  // Merge the chosen orders' lines into purchase-bill prefill rows, at the FULL
+  // ordered quantity — purchasing is independent of delivery, so a fully-
+  // delivered (auto-closed) order still contributes its ordered qty. Lines with
+  // the same description + item type + unit are summed.
   const buildPrefillFromOrders = () => {
     const chosen = openOrders.filter((o) => selectedOrderIds.has(o.id));
     const merged = new Map();
     for (const o of chosen) {
       for (const it of o.items || []) {
-        const qty = it.remainingQuantity ?? it.quantity ?? 0;
+        const qty = it.quantity ?? 0;
         if (qty <= 0) continue;
         const key = `${(it.description || "").trim().toLowerCase()}|${it.itemTypeId || 0}|${(it.unit || "").trim().toLowerCase()}`;
         if (merged.has(key)) {
@@ -157,7 +168,7 @@ export default function PurchaseBillsPage() {
   const confirmOrderPurchase = () => {
     const lines = buildPrefillFromOrders();
     if (lines.length === 0) {
-      notify("The selected order(s) have no outstanding quantity to purchase.", "warning");
+      notify("The selected order(s) have no quantity to purchase.", "warning");
       return;
     }
     const label = "#" + openOrders
@@ -166,6 +177,75 @@ export default function PurchaseBillsPage() {
       .sort((a, b) => a - b)
       .join(", #");
     setShowOrderPicker(false);
+    setEditingId(null);
+    setViewOnly(false);
+    setPrefillFromInvoiceId(null);
+    setPrefillItems(lines);
+    setPrefillSourceLabel(label);
+    setShowForm(true);
+  };
+
+  const openChallanPicker = async () => {
+    setShowChallanPicker(true);
+    setChallanPickerSearch("");
+    setSelectedChallanIds(new Set());
+    setLoadingChallans(true);
+    try {
+      const { data } = await getDeliveryChallansByCompany(selectedCompany.id);
+      setOpenChallans((data || []).filter((c) => c.status !== "Cancelled"));
+    } catch {
+      setOpenChallans([]);
+      notify("Failed to load delivery challans.", "error");
+    } finally {
+      setLoadingChallans(false);
+    }
+  };
+
+  const toggleChallan = (id) =>
+    setSelectedChallanIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  // Merge the chosen challans' lines into purchase-bill prefill rows at the
+  // delivered quantity. Lines with the same description + item type + unit
+  // are summed (identical to the sales-order merge).
+  const buildPrefillFromChallans = () => {
+    const chosen = openChallans.filter((c) => selectedChallanIds.has(c.id));
+    const merged = new Map();
+    for (const c of chosen) {
+      for (const it of c.items || []) {
+        const qty = it.quantity ?? 0;
+        if (qty <= 0) continue;
+        const key = `${(it.description || "").trim().toLowerCase()}|${it.itemTypeId || 0}|${(it.unit || "").trim().toLowerCase()}`;
+        if (merged.has(key)) {
+          merged.get(key).quantity += qty;
+        } else {
+          merged.set(key, {
+            description: it.description || it.itemTypeName || "",
+            quantity: qty,
+            unitPrice: 0,
+            uom: it.unit || "",
+            itemTypeId: it.itemTypeId || null,
+          });
+        }
+      }
+    }
+    return merged.size ? Array.from(merged.values()) : [];
+  };
+
+  const confirmChallanPurchase = () => {
+    const lines = buildPrefillFromChallans();
+    if (lines.length === 0) {
+      notify("The selected challan(s) have no items to purchase.", "warning");
+      return;
+    }
+    const label = "Challan #" + openChallans
+      .filter((c) => selectedChallanIds.has(c.id))
+      .map((c) => c.challanNumber)
+      .join(", #");
+    setShowChallanPicker(false);
     setEditingId(null);
     setViewOnly(false);
     setPrefillFromInvoiceId(null);
@@ -307,6 +387,11 @@ export default function PurchaseBillsPage() {
             {canViewSalesOrders && (
               <button style={styles.altBtn} onClick={openOrderPicker}>
                 <MdAssignment size={16} /> Purchase Against Sales Order
+              </button>
+            )}
+            {canViewChallans && (
+              <button style={styles.altBtn} onClick={openChallanPicker}>
+                <MdLocalShipping size={16} /> Purchase Against Delivery Challan
               </button>
             )}
             <button style={styles.addBtn} onClick={() => { setEditingId(null); setPrefillFromInvoiceId(null); setPrefillItems(null); setPrefillSourceLabel(null); setViewOnly(false); setShowForm(true); }}>
@@ -597,7 +682,7 @@ export default function PurchaseBillsPage() {
         <div style={pickerStyles.backdrop} onClick={() => setShowOrderPicker(false)}>
           <div style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={pickerStyles.header}>
-              <h3 style={pickerStyles.title}>Select open sales order(s) to purchase for</h3>
+              <h3 style={pickerStyles.title}>Select sales order(s) to purchase for</h3>
               <button style={pickerStyles.closeBtn} onClick={() => setShowOrderPicker(false)}>
                 <MdClose size={20} />
               </button>
@@ -614,7 +699,7 @@ export default function PurchaseBillsPage() {
                 />
               </div>
               <div style={{ fontSize: "0.74rem", color: colors.textSecondary, marginTop: "0.5rem" }}>
-                Pick one or more open orders. Their outstanding (undelivered) lines are merged into a single purchase bill — identical items are summed.
+                Pick one or more orders (open or already delivered). Their ordered lines are merged into a single purchase bill — identical items are summed.
               </div>
             </div>
             <div style={pickerStyles.tableWrap}>
@@ -622,7 +707,7 @@ export default function PurchaseBillsPage() {
                 <div style={{ padding: "3rem 0", textAlign: "center", color: colors.textSecondary }}>Loading...</div>
               ) : openOrders.length === 0 ? (
                 <div style={{ padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary, fontSize: "0.9rem" }}>
-                  No open sales orders with quantity still to deliver.
+                  No sales orders available to purchase for.
                 </div>
               ) : (
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
@@ -668,6 +753,89 @@ export default function PurchaseBillsPage() {
                 style={{ ...styles.addBtn, opacity: selectedOrderIds.size === 0 ? 0.5 : 1, cursor: selectedOrderIds.size === 0 ? "not-allowed" : "pointer" }}
                 disabled={selectedOrderIds.size === 0}
                 onClick={confirmOrderPurchase}
+              >
+                <MdShoppingCart size={16} /> Create purchase bill
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showChallanPicker && (
+        <div style={pickerStyles.backdrop} onClick={() => setShowChallanPicker(false)}>
+          <div style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={pickerStyles.header}>
+              <h3 style={pickerStyles.title}>Select delivery challan(s) to purchase for</h3>
+              <button style={pickerStyles.closeBtn} onClick={() => setShowChallanPicker(false)}>
+                <MdClose size={20} />
+              </button>
+            </div>
+            <div style={{ padding: "0.75rem 1.25rem", borderBottom: `1px solid ${colors.cardBorder}` }}>
+              <div style={{ position: "relative" }}>
+                <MdSearch style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+                <input
+                  type="text" placeholder="Search challan # / client..." autoFocus
+                  value={challanPickerSearch} onChange={(e) => setChallanPickerSearch(e.target.value)}
+                  style={{ width: "100%", padding: "0.55rem 0.75rem 0.55rem 2.3rem",
+                          border: `1px solid ${colors.inputBorder}`, borderRadius: 10,
+                          fontSize: "0.88rem", backgroundColor: "#f8f9fb", outline: "none" }}
+                />
+              </div>
+              <div style={{ fontSize: "0.74rem", color: colors.textSecondary, marginTop: "0.5rem" }}>
+                Pick one or more delivery challans. Their delivered lines are merged into a single purchase bill — identical items are summed.
+              </div>
+            </div>
+            <div style={pickerStyles.tableWrap}>
+              {loadingChallans ? (
+                <div style={{ padding: "3rem 0", textAlign: "center", color: colors.textSecondary }}>Loading...</div>
+              ) : openChallans.length === 0 ? (
+                <div style={{ padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary, fontSize: "0.9rem" }}>
+                  No delivery challans available to purchase for.
+                </div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...pickerStyles.th, width: 40 }}></th>
+                      <th style={pickerStyles.th}>Challan #</th>
+                      <th style={pickerStyles.th}>Date</th>
+                      <th style={pickerStyles.th}>Client</th>
+                      <th style={{ ...pickerStyles.th, textAlign: "right" }}>Lines</th>
+                      <th style={pickerStyles.th}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {openChallans
+                      .filter(c => {
+                        if (!challanPickerSearch.trim()) return true;
+                        const q = challanPickerSearch.toLowerCase();
+                        return String(c.challanNumber).includes(q)
+                            || (c.clientName || "").toLowerCase().includes(q);
+                      })
+                      .map(c => (
+                        <tr key={c.id} style={{ cursor: "pointer", background: selectedChallanIds.has(c.id) ? "#e8f5e9" : "transparent" }} onClick={() => toggleChallan(c.id)}>
+                          <td style={pickerStyles.td}>
+                            <input type="checkbox" checked={selectedChallanIds.has(c.id)} onChange={() => toggleChallan(c.id)} onClick={(e) => e.stopPropagation()} />
+                          </td>
+                          <td style={pickerStyles.td}><strong>#{c.challanNumber}</strong></td>
+                          <td style={pickerStyles.td}>{c.deliveryDate ? new Date(c.deliveryDate).toLocaleDateString() : "—"}</td>
+                          <td style={pickerStyles.td}>{c.clientName}</td>
+                          <td style={{ ...pickerStyles.td, textAlign: "right" }}>{c.items?.length || 0}</td>
+                          <td style={pickerStyles.td}>{c.status}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", padding: "0.85rem 1.25rem", borderTop: `1px solid ${colors.cardBorder}` }}>
+              <span style={{ fontSize: "0.82rem", color: colors.textSecondary }}>
+                {selectedChallanIds.size} challan{selectedChallanIds.size !== 1 ? "s" : ""} selected
+              </span>
+              <button
+                style={{ ...styles.addBtn, opacity: selectedChallanIds.size === 0 ? 0.5 : 1, cursor: selectedChallanIds.size === 0 ? "not-allowed" : "pointer" }}
+                disabled={selectedChallanIds.size === 0}
+                onClick={confirmChallanPurchase}
               >
                 <MdShoppingCart size={16} /> Create purchase bill
               </button>

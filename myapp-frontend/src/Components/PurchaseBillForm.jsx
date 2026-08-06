@@ -14,6 +14,7 @@ import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import SearchableSelect from "./SearchableSelect";
+import SupplierForm from "./SupplierForm";
 import DivisionSelect from "./DivisionSelect";
 import AccountSelect from "./AccountSelect";
 import AttachmentManager from "./AttachmentManager";
@@ -48,6 +49,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
   // same behaviour as the sales bill form.
   const [units, setUnits] = useState([]);
   const [supplierId, setSupplierId] = useState("");
+  const [showSupplierForm, setShowSupplierForm] = useState(false);
   const { has } = usePermissions();
   const canViewDivisions = has("divisions.manage.view");
   // New bills default to the division the list is filtered to; edits hydrate
@@ -398,7 +400,15 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
 
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "0.75rem" }}>
               <div style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
-                <label style={formStyles.label}>Supplier *</label>
+                <label style={{ ...formStyles.label, display: "flex", alignItems: "center", gap: 8 }}>
+                  Supplier *
+                  {!readOnly && (
+                    <button type="button" onClick={() => setShowSupplierForm(true)}
+                      style={{ background: "none", border: "none", color: "#0d47a1", fontWeight: 600, fontSize: "0.78rem", cursor: "pointer", padding: 0 }}>
+                      + New supplier
+                    </button>
+                  )}
+                </label>
                 <SearchableSelect
                   items={suppliers}
                   value={supplierId}
@@ -406,6 +416,18 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
                   placeholder="Select supplier…"
                 />
               </div>
+              {showSupplierForm && (
+                <SupplierForm
+                  companyId={companyId}
+                  onClose={() => setShowSupplierForm(false)}
+                  onSaved={(sup) => {
+                    if (sup && sup.id) {
+                      setSuppliers((prev) => [sup, ...prev.filter((s) => s.id !== sup.id)]);
+                      setSupplierId(String(sup.id));
+                    }
+                  }}
+                />
+              )}
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Bill Date *</label>
                 <input type="date" style={formStyles.input} value={date} onChange={e => setDate(e.target.value)} />

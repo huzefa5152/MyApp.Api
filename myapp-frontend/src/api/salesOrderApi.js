@@ -21,6 +21,10 @@ export const getSalesOrdersForPicker = async (companyId, params = {}, maxPages =
 export const getOpenSalesOrdersByCompany = (companyId) =>
   httpClient.get(`/salesorders/company/${companyId}/open`);
 
+// Every open order (regardless of delivery) — powers the purchase-bill picker.
+export const getOpenSalesOrdersForPurchase = (companyId) =>
+  httpClient.get(`/salesorders/company/${companyId}/open-for-purchase`);
+
 export const getSalesOrderById = (id) =>
   httpClient.get(`/salesorders/${id}`);
 
