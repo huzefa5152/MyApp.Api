@@ -65,9 +65,19 @@ namespace MyApp.Api.Services.Implementations
             }
 
             var accounts = await LoadAccountsAsync(payment.CompanyId);
-            var bank = payment.BankAccountId.HasValue
-                ? accounts.FirstOrDefault(a => a.Id == payment.BankAccountId.Value)
-                : null;
+            // An explicitly-chosen bank account must post to ITSELF even if it has
+            // since been deactivated — `accounts` is active-only, so fall back to a
+            // direct (tenant-scoped) load before the role default. Without this, a
+            // re-post of an old payment whose bank account was later deactivated
+            // would silently reroute to a different active bank/cash account.
+            Account? bank = null;
+            if (payment.BankAccountId.HasValue)
+            {
+                bank = accounts.FirstOrDefault(a => a.Id == payment.BankAccountId.Value)
+                    ?? await _context.Accounts.FirstOrDefaultAsync(a =>
+                           a.Id == payment.BankAccountId.Value && a.CompanyId == payment.CompanyId);
+            }
+            // Role default only when no bank account was chosen at all.
             bank ??= await ResolveAsync(payment.CompanyId, accounts, ControlType.BankCash, "bank/cash");
 
             var isReceipt = payment.Direction == PaymentDirection.Receipt;

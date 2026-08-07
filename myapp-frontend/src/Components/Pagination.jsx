@@ -31,7 +31,10 @@ export default function Pagination({
   onPageSize,
   unit = "total",
 }) {
-  const showSize = typeof onPageSize === "function";
+  // Hide the rows-per-page selector when there's nothing to paginate — an empty
+  // list shouldn't show a lone "Rows: 10" control (total === 0). `total`
+  // undefined (caller omits the count) keeps the old always-show behaviour.
+  const showSize = typeof onPageSize === "function" && total !== 0;
   const showNav = totalPages > 1;
   if (!showSize && !showNav) return null;
 

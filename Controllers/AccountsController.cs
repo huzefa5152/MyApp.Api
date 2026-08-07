@@ -61,8 +61,8 @@ namespace MyApp.Api.Controllers
         [HttpGet("company/{companyId}/bank-cash")]
         [HasAnyPermission("accounting.coa.view", "accounting.receipts.create", "accounting.payments.create", "accounting.receipts.view", "accounting.payments.view")]
         [AuthorizeCompany]
-        public async Task<ActionResult<List<AccountDto>>> GetBankCash(int companyId)
-            => Ok(await _service.GetBankCashAccountsAsync(companyId));
+        public async Task<ActionResult<List<AccountDto>>> GetBankCash(int companyId, [FromQuery] bool includeInactive = false)
+            => Ok(await _service.GetBankCashAccountsAsync(companyId, includeInactive));
 
         /// <summary>Account ledger drill-down: the journal lines that hit this
         /// account (running balance included), newest window paged. Tenant
@@ -142,6 +142,23 @@ namespace MyApp.Api.Controllers
             try
             {
                 var updated = await _service.UpdateAccountAsync(id, dto);
+                return updated == null ? NotFound() : Ok(updated);
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
+        /// <summary>Correct a bank/cash account's opening balance; the offsetting
+        /// delta lands in Retained earnings so the balance sheet stays balanced.</summary>
+        [HttpPost("{id}/adjust-opening-balance")]
+        [HasPermission("accounting.coa.manage")]
+        public async Task<ActionResult<AccountDto>> AdjustOpeningBalance(int id, [FromBody] AdjustOpeningBalanceDto dto)
+        {
+            var existing = await _service.GetAccountByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            try
+            {
+                var updated = await _service.AdjustOpeningBalanceAsync(id, dto);
                 return updated == null ? NotFound() : Ok(updated);
             }
             catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }

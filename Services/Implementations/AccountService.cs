@@ -125,7 +125,7 @@ namespace MyApp.Api.Services.Implementations
                 .Select(a => WithBalance(ToDto(a), a, balances)).ToList();
         }
 
-        public async Task<List<AccountDto>> GetBankCashAccountsAsync(int companyId)
+        public async Task<List<AccountDto>> GetBankCashAccountsAsync(int companyId, bool includeInactive = false)
         {
             var groupNameById = (await _repo.GetGroupsAsync(companyId))
                 .ToDictionary(g => g.Id, g => (g.Name ?? "").ToLowerInvariant());
@@ -133,11 +133,20 @@ namespace MyApp.Api.Services.Implementations
                 groupNameById.TryGetValue(gid, out var n) && (n.Contains("bank") || n.Contains("cash"));
 
             var balances = await _gl.GetAccountBalancesAsync(companyId);
-            return (await _repo.GetAccountsAsync(companyId))
-                .Where(a => a.IsActive
+            var rows = (await _repo.GetAccountsAsync(companyId))
+                .Where(a => (includeInactive || a.IsActive)
                          && a.AccountType == AccountType.Asset
                          && (a.ControlType == ControlType.BankCash || IsBankCashGroup(a.AccountGroupId)))
                 .Select(a => WithBalance(ToDto(a), a, balances)).ToList();
+
+            // Management screen: flag which rows are referenced (can't hard-delete).
+            // The picker path (includeInactive = false) skips this extra query.
+            if (includeInactive)
+            {
+                var active = await _repo.GetAccountIdsWithActivityAsync(rows.Select(r => r.Id).ToList());
+                foreach (var r in rows) r.HasActivity = active.Contains(r.Id);
+            }
+            return rows;
         }
 
         private static AccountDto WithBalance(AccountDto dto, Account a, Dictionary<int, decimal> balances)
@@ -346,8 +355,68 @@ namespace MyApp.Api.Services.Implementations
             if (dto.OpeningBalanceIsDebit.HasValue) a.OpeningBalanceIsDebit = dto.OpeningBalanceIsDebit.Value;
             if (dto.DefaultLineDescription != null) a.DefaultLineDescription = Trimmed(dto.DefaultLineDescription);
             if (dto.DefaultTaxRateId.HasValue) a.DefaultTaxRateId = dto.DefaultTaxRateId.Value == 0 ? null : dto.DefaultTaxRateId.Value;
-            if (dto.IsActive.HasValue) a.IsActive = dto.IsActive.Value;
+            if (dto.IsActive.HasValue)
+            {
+                // Guard deactivation (reactivation is always safe). Singleton
+                // posting-role control accounts (AR/AP/tax/inventory/suspense/…)
+                // and pinned company-default targets would be treated as
+                // "missing" by the posting engine when inactive — it would fall
+                // back to Suspense or auto-recreate a duplicate, splitting the
+                // books. BankCash is NOT a singleton role (chosen per document),
+                // so bank/cash accounts stay deactivatable.
+                if (!dto.IsActive.Value && a.IsActive)
+                {
+                    if (a.IsControlAccount && a.ControlType != ControlType.BankCash)
+                        throw new InvalidOperationException(
+                            "This is a control account used by the posting engine — it can't be deactivated.");
+                    if (await _repo.IsCompanyDefaultAccountAsync(a.Id))
+                        throw new InvalidOperationException(
+                            "This account is a company default posting target — it can't be deactivated.");
+                }
+                a.IsActive = dto.IsActive.Value;
+            }
             if (dto.Position.HasValue) a.Position = dto.Position.Value;
+
+            await _repo.SaveAsync();
+            return ToDto(a);
+        }
+
+        public async Task<AccountDto?> AdjustOpeningBalanceAsync(int id, AdjustOpeningBalanceDto dto)
+        {
+            var a = await _repo.GetAccountByIdAsync(id);
+            if (a == null) return null;
+            if (!a.IsActive)
+                throw new InvalidOperationException("Reactivate the account before correcting its opening balance.");
+
+            var newAmount = Math.Abs(dto.OpeningBalance);
+            // Signed, debit-positive, before and after.
+            decimal oldSigned = a.OpeningBalanceIsDebit ? a.OpeningBalance : -a.OpeningBalance;
+            decimal newSigned = dto.OpeningBalanceIsDebit ? newAmount : -newAmount;
+            decimal delta = newSigned - oldSigned;
+            if (delta == 0m) return ToDto(a);   // no-op
+
+            // Apply the corrected opening to the account itself.
+            a.OpeningBalance = newAmount;
+            a.OpeningBalanceIsDebit = dto.OpeningBalanceIsDebit;
+
+            // Offset the delta to Retained earnings (else Suspense) so the opening
+            // balance sheet stays balanced — the reference product routes starting
+            // balances the same way. When no equity anchor exists we still update
+            // the field (that company isn't running balanced books yet).
+            var candidates = await _repo.GetAccountsAsync(a.CompanyId);
+            var offsetInfo = candidates.FirstOrDefault(x => x.ControlType == ControlType.RetainedEarnings)
+                          ?? candidates.FirstOrDefault(x => x.ControlType == ControlType.Suspense);
+            if (offsetInfo != null && offsetInfo.Id != a.Id)
+            {
+                var offset = await _repo.GetAccountByIdAsync(offsetInfo.Id);
+                if (offset != null)
+                {
+                    decimal offOld = offset.OpeningBalanceIsDebit ? offset.OpeningBalance : -offset.OpeningBalance;
+                    decimal offNew = offOld - delta;   // opposite side leaves Σ openings unchanged
+                    offset.OpeningBalance = Math.Abs(offNew);
+                    offset.OpeningBalanceIsDebit = offNew >= 0m;
+                }
+            }
 
             await _repo.SaveAsync();
             return ToDto(a);

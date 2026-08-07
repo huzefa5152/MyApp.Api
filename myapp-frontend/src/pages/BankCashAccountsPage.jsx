@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { MdAccountBalance, MdAdd, MdSearch, MdVisibility, MdClose, MdBusiness, MdFactCheck, MdUploadFile } from "react-icons/md";
+import { MdAccountBalance, MdAdd, MdSearch, MdVisibility, MdClose, MdBusiness, MdFactCheck, MdUploadFile, MdEdit, MdDelete, MdBlock, MdCheckCircle } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
+import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import { colors, formStyles, modalSizes, dropdownStyles } from "../theme";
-import { getBankCashAccounts, createAccount, getCoaTree } from "../api/accountApi";
+import { getBankCashAccounts, createAccount, updateAccount, deleteAccount, adjustOpeningBalance, getCoaTree } from "../api/accountApi";
 import { getGlStatus, getBankReconSummary } from "../api/accountingApi";
 import AccountLedgerDialog from "../Components/AccountLedgerDialog";
 import ReconcileModal from "../Components/ReconcileModal";
@@ -42,6 +43,7 @@ function flattenGroups(nodes, depth = 0, out = []) {
 export default function BankCashAccountsPage() {
   const { companies, selectedCompany, setSelectedCompany } = useCompany();
   const { has } = usePermissions();
+  const confirm = useConfirm();
   const canView = has("accounting.coa.view");
   const canManage = has("accounting.coa.manage");
   const canViewDivisions = has("divisions.manage.view");
@@ -58,34 +60,45 @@ export default function BankCashAccountsPage() {
   const [reconcileAccount, setReconcileAccount] = useState(null); // { id, name, code }
   const [importAccount, setImportAccount] = useState(null); // { id, name, code }
   const [showCreate, setShowCreate] = useState(false);
+  const [editAccount, setEditAccount] = useState(null); // full row being edited
 
   const load = useCallback(async () => {
     if (!companyId) { setAccounts([]); setAssetGroups([]); return; }
     setLoading(true);
     try {
-      // With reconciliation permission, the summary endpoint gives actual +
-      // cleared + pending in one call; otherwise fall back to the plain
-      // bank/cash list (actual balance only).
-      const [bankRes, treeRes, statusRes] = await Promise.all([
-        canReconcile ? getBankReconSummary(companyId) : getBankCashAccounts(companyId),
+      // The bank/cash list carries the account metadata (active flag, control
+      // flag, has-activity hint, opening balance) needed to drive the manage
+      // actions — includeInactive when the operator can manage, so retired
+      // accounts stay visible (badged) for reactivation. The reconciliation
+      // summary (when permitted) adds cleared/pending/uncategorized figures,
+      // merged onto the base rows by account id.
+      const [baseRes, reconRes, treeRes, statusRes] = await Promise.all([
+        getBankCashAccounts(companyId, canManage),
+        canReconcile ? getBankReconSummary(companyId).catch(() => null) : Promise.resolve(null),
         getCoaTree(companyId).catch(() => null),
         getGlStatus(companyId).catch(() => null),
       ]);
-      const rows = (bankRes.data || []).map((r) => canReconcile
-        ? {
-            id: r.accountId, name: r.name, code: r.code, balance: r.actualBalance,
-            clearedBalance: r.clearedBalance, pendingDeposits: r.pendingDeposits,
-            pendingWithdrawals: r.pendingWithdrawals,
-            uncategorizedReceipts: r.uncategorizedReceipts, uncategorizedPayments: r.uncategorizedPayments,
-            uncategorizedCount: r.uncategorizedCount,
-          }
-        : { id: r.id, name: r.name, code: r.code, balance: r.balance, accountGroupId: r.accountGroupId });
+      const reconById = new Map((reconRes?.data || []).map((r) => [r.accountId, r]));
+      const rows = (baseRes.data || []).map((a) => {
+        const r = reconById.get(a.id);
+        return {
+          id: a.id, name: a.name, code: a.code,
+          balance: r ? r.actualBalance : a.balance,
+          accountGroupId: a.accountGroupId, divisionId: a.divisionId,
+          isActive: a.isActive, isControlAccount: a.isControlAccount, hasActivity: a.hasActivity,
+          openingBalance: a.openingBalance, openingBalanceIsDebit: a.openingBalanceIsDebit,
+          clearedBalance: r?.clearedBalance, pendingDeposits: r?.pendingDeposits,
+          pendingWithdrawals: r?.pendingWithdrawals,
+          uncategorizedReceipts: r?.uncategorizedReceipts, uncategorizedPayments: r?.uncategorizedPayments,
+          uncategorizedCount: r?.uncategorizedCount,
+        };
+      });
       setAccounts(rows);
       setAssetGroups(flattenGroups(treeRes?.data?.balanceSheet));
       setGlOff(statusRes?.data ? statusRes.data.enabled === false : false);
     } catch { setAccounts([]); }
     finally { setLoading(false); }
-  }, [companyId, canReconcile]);
+  }, [companyId, canReconcile, canManage]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -102,6 +115,46 @@ export default function BankCashAccountsPage() {
     const bankish = assetGroups.find((g) => /bank|cash/i.test(g.name));
     return bankish?.id || assetGroups[0]?.id || null;
   }, [accounts, assetGroups]);
+
+  // A row can be hard-deleted only when it's not a control account and nothing
+  // references it — mirrors the server guard, so Delete is offered only when it
+  // will succeed. Everything else retires via Deactivate.
+  const canDeleteRow = (a) => canManage && !a.isControlAccount && !a.hasActivity;
+
+  const handleToggleActive = async (a) => {
+    const deactivating = a.isActive;
+    if (deactivating) {
+      const ok = await confirm({
+        title: "Deactivate account?",
+        message: `Hide "${a.name}" from the receipt & payment pickers? Its balance and history stay intact — you can reactivate it any time.`,
+        confirmText: "Deactivate",
+      });
+      if (!ok) return;
+    }
+    try {
+      await updateAccount(a.id, { isActive: !a.isActive });
+      notify(deactivating ? "Account deactivated." : "Account reactivated.", "success");
+      load();
+    } catch (err) {
+      notify(err?.response?.data?.error || "Could not update the account.", "error");
+    }
+  };
+
+  const handleDelete = async (a) => {
+    const ok = await confirm({
+      title: "Delete account?",
+      message: `Permanently delete "${a.name}"? This can't be undone.`,
+      variant: "danger", confirmText: "Delete",
+    });
+    if (!ok) return;
+    try {
+      await deleteAccount(a.id);
+      notify("Account deleted.", "success");
+      load();
+    } catch (err) {
+      notify(err?.response?.data?.error || "Could not delete the account.", "error");
+    }
+  };
 
   if (!canView) {
     return <div style={{ padding: "2rem", color: colors.textSecondary }}>You don't have permission to view bank &amp; cash accounts.</div>;
@@ -169,9 +222,12 @@ export default function BankCashAccountsPage() {
           {filtered.map((a) => {
             const bal = Number(a.balance) || 0;
             return (
-              <div key={a.id} style={st.acctCard} onClick={() => setLedgerAccount({ id: a.id, name: a.name, code: a.code })} title="View transactions">
+              <div key={a.id} style={{ ...st.acctCard, opacity: a.isActive === false ? 0.65 : 1 }} onClick={() => setLedgerAccount({ id: a.id, name: a.name, code: a.code })} title="View transactions">
                 <div style={st.acctCardTop}>
-                  <span style={st.acctName}>{a.name}</span>
+                  <span style={st.acctName}>
+                    {a.name}
+                    {a.isActive === false && <span style={st.inactiveBadge}>inactive</span>}
+                  </span>
                   {a.code ? <span style={st.code}>{a.code}</span> : null}
                 </div>
                 <div style={st.acctBalBox}>
@@ -198,13 +254,30 @@ export default function BankCashAccountsPage() {
                     <MdVisibility size={16} /> Ledger
                   </button>
                   {canManage && (
+                    <button type="button" style={st.acctActionBtn} onClick={(e) => { e.stopPropagation(); setEditAccount(a); }}>
+                      <MdEdit size={16} /> Edit
+                    </button>
+                  )}
+                  {canManage && a.isActive !== false && (
                     <button type="button" style={st.acctActionBtn} onClick={(e) => { e.stopPropagation(); setReconcileAccount({ id: a.id, name: a.name, code: a.code }); }}>
                       <MdFactCheck size={16} /> Reconcile
                     </button>
                   )}
-                  {canManage && (
+                  {canManage && a.isActive !== false && (
                     <button type="button" style={st.acctActionBtn} onClick={(e) => { e.stopPropagation(); setImportAccount({ id: a.id, name: a.name, code: a.code }); }}>
                       <MdUploadFile size={16} /> Import
+                    </button>
+                  )}
+                  {canManage && (
+                    <button type="button" style={st.acctActionBtn} onClick={(e) => { e.stopPropagation(); handleToggleActive(a); }}>
+                      {a.isActive === false
+                        ? <><MdCheckCircle size={16} /> Reactivate</>
+                        : <><MdBlock size={16} /> Deactivate</>}
+                    </button>
+                  )}
+                  {canDeleteRow(a) && (
+                    <button type="button" style={{ ...st.acctActionBtn, color: "#b71c1c", borderColor: "#f3c0c0" }} onClick={(e) => { e.stopPropagation(); handleDelete(a); }}>
+                      <MdDelete size={16} /> Delete
                     </button>
                   )}
                 </div>
@@ -237,13 +310,16 @@ export default function BankCashAccountsPage() {
                 {canReconcile && <th style={{ ...st.th, textAlign: "right" }}>Pending Out</th>}
                 {canReconcile && <th style={{ ...st.th, textAlign: "center" }}>Uncategorized</th>}
                 <th style={{ ...st.th, textAlign: "right" }}>Actual Balance</th>
-                <th style={{ ...st.th, width: 80, textAlign: "center" }}>Ledger</th>
+                <th style={{ ...st.th, textAlign: "center" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((a) => (
-                <tr key={a.id} style={st.tr} onClick={() => setLedgerAccount({ id: a.id, name: a.name, code: a.code })} title="View transactions">
-                  <td style={st.td}><span style={st.accName}>{a.name}</span></td>
+                <tr key={a.id} style={{ ...st.tr, opacity: a.isActive === false ? 0.6 : 1 }} onClick={() => setLedgerAccount({ id: a.id, name: a.name, code: a.code })} title="View transactions">
+                  <td style={st.td}>
+                    <span style={st.accName}>{a.name}</span>
+                    {a.isActive === false && <span style={st.inactiveBadge}>inactive</span>}
+                  </td>
                   <td style={st.td}>{a.code ? <span style={st.code}>{a.code}</span> : <span style={st.muted}>—</span>}</td>
                   {canReconcile && <td style={{ ...st.td, textAlign: "right", color: (Number(a.clearedBalance) || 0) < 0 ? "#b71c1c" : colors.textSecondary, whiteSpace: "nowrap" }}>{money(a.clearedBalance)}</td>}
                   {canReconcile && <td style={{ ...st.td, textAlign: "right", color: a.pendingDeposits ? "#1b7a3d" : colors.textSecondary, whiteSpace: "nowrap" }}>{a.pendingDeposits ? money(a.pendingDeposits) : "—"}</td>}
@@ -262,19 +338,36 @@ export default function BankCashAccountsPage() {
                   </td>}
                   <td style={{ ...st.td, textAlign: "right", fontWeight: 700, color: (Number(a.balance) || 0) < 0 ? "#b71c1c" : colors.textPrimary, whiteSpace: "nowrap" }}>{money(a.balance)}</td>
                   <td style={{ ...st.td, textAlign: "center" }}>
-                    <button style={st.iconBtn} title="View ledger" onClick={(e) => { e.stopPropagation(); setLedgerAccount({ id: a.id, name: a.name, code: a.code }); }}>
-                      <MdVisibility size={17} />
-                    </button>
-                    {canManage && (
-                      <button style={st.iconBtn} title="Reconcile this account" onClick={(e) => { e.stopPropagation(); setReconcileAccount({ id: a.id, name: a.name, code: a.code }); }}>
-                        <MdFactCheck size={17} />
+                    <div style={{ display: "inline-flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
+                      <button style={st.iconBtn} title="View ledger" onClick={(e) => { e.stopPropagation(); setLedgerAccount({ id: a.id, name: a.name, code: a.code }); }}>
+                        <MdVisibility size={17} />
                       </button>
-                    )}
-                    {canManage && (
-                      <button style={st.iconBtn} title="Import bank statement" onClick={(e) => { e.stopPropagation(); setImportAccount({ id: a.id, name: a.name, code: a.code }); }}>
-                        <MdUploadFile size={17} />
-                      </button>
-                    )}
+                      {canManage && (
+                        <button style={st.iconBtn} title="Edit account" onClick={(e) => { e.stopPropagation(); setEditAccount(a); }}>
+                          <MdEdit size={17} />
+                        </button>
+                      )}
+                      {canManage && a.isActive !== false && (
+                        <button style={st.iconBtn} title="Reconcile this account" onClick={(e) => { e.stopPropagation(); setReconcileAccount({ id: a.id, name: a.name, code: a.code }); }}>
+                          <MdFactCheck size={17} />
+                        </button>
+                      )}
+                      {canManage && a.isActive !== false && (
+                        <button style={st.iconBtn} title="Import bank statement" onClick={(e) => { e.stopPropagation(); setImportAccount({ id: a.id, name: a.name, code: a.code }); }}>
+                          <MdUploadFile size={17} />
+                        </button>
+                      )}
+                      {canManage && (
+                        <button style={st.iconBtn} title={a.isActive === false ? "Reactivate account" : "Deactivate account"} onClick={(e) => { e.stopPropagation(); handleToggleActive(a); }}>
+                          {a.isActive === false ? <MdCheckCircle size={17} /> : <MdBlock size={17} />}
+                        </button>
+                      )}
+                      {canDeleteRow(a) && (
+                        <button style={{ ...st.iconBtn, color: "#b71c1c" }} title="Delete account" onClick={(e) => { e.stopPropagation(); handleDelete(a); }}>
+                          <MdDelete size={17} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -327,6 +420,17 @@ export default function BankCashAccountsPage() {
           defaultGroupId={defaultGroupId}
           onClose={() => setShowCreate(false)}
           onCreated={(keepOpen) => { if (!keepOpen) setShowCreate(false); load(); }}
+        />
+      )}
+
+      {editAccount && (
+        <EditBankCashModal
+          companyId={companyId}
+          canViewDivisions={canViewDivisions}
+          assetGroups={assetGroups}
+          account={editAccount}
+          onClose={() => setEditAccount(null)}
+          onSaved={() => { setEditAccount(null); load(); }}
         />
       )}
     </div>
@@ -446,6 +550,130 @@ function CreateBankCashModal({ companyId, canViewDivisions, assetGroups, default
   );
 }
 
+// Edit an existing bank/cash account: name/code/group/division are a plain
+// metadata update; changing the opening balance routes through the dedicated
+// adjust endpoint (offset to Retained earnings), so it's shown separately with
+// a live preview of the offset. Opening is locked while the account is inactive.
+function EditBankCashModal({ companyId, canViewDivisions, assetGroups, account, onClose, onSaved }) {
+  const [name, setName] = useState(account.name || "");
+  const [code, setCode] = useState(account.code || "");
+  const [groupId, setGroupId] = useState(account.accountGroupId ? String(account.accountGroupId) : "");
+  const [divisionId, setDivisionId] = useState(account.divisionId ? String(account.divisionId) : "");
+  const [opening, setOpening] = useState(account.openingBalance != null ? String(account.openingBalance) : "0");
+  const [isDebit, setIsDebit] = useState(account.openingBalanceIsDebit ?? true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const errRef = useScrollToError(error);
+
+  const isInactive = account.isActive === false;
+  const signedOld = (account.openingBalanceIsDebit ?? true) ? Number(account.openingBalance || 0) : -Number(account.openingBalance || 0);
+  const signedNew = isDebit ? Math.abs(Number(opening) || 0) : -Math.abs(Number(opening) || 0);
+  const delta = signedNew - signedOld;
+  const openingChanged = !isInactive && delta !== 0;
+
+  const doSave = async () => {
+    if (!name.trim()) { setError("Name is required."); return; }
+    if (!groupId) { setError("Pick a group (an asset group in the Chart of Accounts)."); return; }
+    setSaving(true); setError("");
+    try {
+      const payload = { name: name.trim(), code: code.trim() || null, accountGroupId: Number(groupId) };
+      // 0 is the server's "clear division" sentinel; only operators who can see
+      // divisions may change it (others leave it untouched).
+      if (canViewDivisions) payload.divisionId = divisionId ? Number(divisionId) : 0;
+      await updateAccount(account.id, payload);
+      if (openingChanged) {
+        await adjustOpeningBalance(account.id, { openingBalance: Math.abs(Number(opening) || 0), openingBalanceIsDebit: isDebit });
+      }
+      notify("Account updated.", "success");
+      onSaved();
+    } catch (err) {
+      setError(err?.response?.data?.error || "Could not save the account.");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={formStyles.backdrop} onClick={onClose}>
+      <div style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
+        <div style={formStyles.header}>
+          <h3 style={formStyles.title}>Edit Bank / Cash Account</h3>
+          <button style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
+        </div>
+
+        <div style={formStyles.body}>
+          <form onSubmit={(e) => { e.preventDefault(); doSave(); }} style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+            <div style={st.fieldRow}>
+              <div style={{ flex: 2, minWidth: 180 }}>
+                <label style={st.label}>Name *</label>
+                <input style={formStyles.input} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+              </div>
+              <div style={{ flex: 1, minWidth: 110 }}>
+                <label style={st.label}>Code</label>
+                <input style={formStyles.input} value={code} onChange={(e) => setCode(e.target.value)} placeholder="Optional" />
+              </div>
+            </div>
+
+            {canViewDivisions && (
+              <DivisionSelect
+                companyId={companyId}
+                value={divisionId}
+                onChange={setDivisionId}
+                mode="select"
+                noneLabel="— No division —"
+                label="Division (optional)"
+                labelStyle={st.label}
+                style={{ ...dropdownStyles.base, width: "100%" }}
+              />
+            )}
+
+            <div>
+              <label style={st.label}>Group</label>
+              {assetGroups.length === 0 ? (
+                <div style={st.muted}>No account groups found.</div>
+              ) : (
+                <select style={{ ...dropdownStyles.base, width: "100%" }} value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+                  <option value="">Select a group…</option>
+                  {assetGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+              )}
+            </div>
+
+            <div style={st.fieldRow}>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <label style={st.label}>Opening Balance</label>
+                <input type="number" step="0.01" style={{ ...formStyles.input, ...(isInactive ? { background: colors.inputBg, cursor: "not-allowed" } : {}) }}
+                  value={opening} disabled={isInactive} onChange={(e) => setOpening(e.target.value)} placeholder="0.00" />
+              </div>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <label style={st.label}>Balance is</label>
+                <select style={{ ...dropdownStyles.base, width: "100%" }} value={isDebit ? "debit" : "credit"} disabled={isInactive} onChange={(e) => setIsDebit(e.target.value === "debit")}>
+                  <option value="debit">Debit (money in the account)</option>
+                  <option value="credit">Credit (overdrawn)</option>
+                </select>
+              </div>
+            </div>
+
+            {isInactive ? (
+              <div style={st.noteMuted}>Reactivate the account to correct its opening balance.</div>
+            ) : openingChanged ? (
+              <div style={st.noteInfo}>
+                Offsets <b>{money(Math.abs(delta))}</b> to <b>Retained earnings</b> to keep the balance sheet balanced.
+              </div>
+            ) : null}
+
+            {error && <div ref={errRef} style={st.error}>{error}</div>}
+          </form>
+        </div>
+
+        <div style={st.footer}>
+          <button type="button" style={st.secondaryBtn} onClick={onClose} disabled={saving}>Cancel</button>
+          <button type="button" style={{ ...st.primaryBtn, opacity: saving ? 0.6 : 1 }} onClick={doSave} disabled={saving}>{saving ? "Saving…" : "Save changes"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const st = {
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" },
   headerIcon: { width: 46, height: 46, borderRadius: 12, background: colors.blue, display: "grid", placeItems: "center", flexShrink: 0 },
@@ -488,4 +716,7 @@ const st = {
   fieldRow: { display: "flex", gap: "0.75rem", flexWrap: "wrap" },
   label: { display: "block", fontSize: "0.75rem", fontWeight: 700, color: colors.textSecondary, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.03em" },
   error: { color: "#b71c1c", fontSize: "0.82rem", background: "#ffebee", border: "1px solid #ffcdd2", borderRadius: 8, padding: "8px 12px" },
+  inactiveBadge: { marginLeft: 6, fontSize: "0.62rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", color: "#607d8b", background: "#eceff1", border: "1px solid #cfd8dc", borderRadius: 10, padding: "1px 7px", verticalAlign: "middle", whiteSpace: "nowrap" },
+  noteInfo: { fontSize: "0.8rem", color: colors.textPrimary, background: "#e8f2fb", border: `1px solid ${colors.blue}33`, borderRadius: 8, padding: "8px 12px" },
+  noteMuted: { fontSize: "0.8rem", color: colors.textSecondary, background: colors.inputBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 8, padding: "8px 12px" },
 };

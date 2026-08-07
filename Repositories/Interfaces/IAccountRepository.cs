@@ -20,6 +20,17 @@ namespace MyApp.Api.Repositories.Interfaces
         /// payment allocations, payment bank-account links, or transfers.
         /// Such accounts deactivate instead of deleting.</summary>
         Task<bool> AccountHasActivityAsync(int accountId);
+
+        /// <summary>Of the given candidate account ids, the subset that has any
+        /// ledger/payment/transfer activity — batched form of
+        /// <see cref="AccountHasActivityAsync"/> for list screens that need a
+        /// per-row "can delete?" hint without N queries.</summary>
+        Task<HashSet<int>> GetAccountIdsWithActivityAsync(IReadOnlyCollection<int> accountIds);
+
+        /// <summary>True when the account is pinned as a company default posting
+        /// target (DefaultSales/DefaultPurchase) — deactivating it would make the
+        /// posting engine auto-recreate a duplicate, so it's blocked.</summary>
+        Task<bool> IsCompanyDefaultAccountAsync(int accountId);
         Task<int> NextGroupPositionAsync(int companyId, FinancialStatement statement, int? parentGroupId);
         Task<int> NextAccountPositionAsync(int accountGroupId);
 

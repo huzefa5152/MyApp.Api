@@ -28,6 +28,20 @@ namespace MyApp.Api.DTOs
         /// Σ(journal debits − credits). Equals the signed opening balance until
         /// GL posting is enabled for the company.</summary>
         public decimal Balance { get; set; }
+        /// <summary>True when the account is referenced by any ledger/payment/
+        /// transfer row — i.e. it can't be hard-deleted (deactivate instead).
+        /// Populated only on the management (bank & cash) list; null elsewhere.</summary>
+        public bool? HasActivity { get; set; }
+    }
+
+    /// <summary>Correct a bank/cash account's opening balance (the setup "starting
+    /// balance" seed). The equal-and-opposite delta is posted to the company's
+    /// Retained-earnings opening so the balance sheet stays balanced — the same
+    /// discipline the reference product applies to starting balances.</summary>
+    public class AdjustOpeningBalanceDto
+    {
+        public decimal OpeningBalance { get; set; }
+        public bool OpeningBalanceIsDebit { get; set; }
     }
 
     public class AccountGroupDto

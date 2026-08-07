@@ -10,10 +10,18 @@ namespace MyApp.Api.Services.Interfaces
         Task<CoaTreeDto> GetTreeAsync(int companyId);
         Task<List<AccountDto>> GetAccountsFlatAsync(int companyId);
 
-        /// <summary>Active bank/cash accounts for the "Received in / Paid from"
-        /// picker (manager.io-style): accounts flagged BankCash OR asset accounts
-        /// under a Bank/Cash group (covers migrated bank GL accounts).</summary>
-        Task<List<AccountDto>> GetBankCashAccountsAsync(int companyId);
+        /// <summary>Bank/cash accounts for the "Received in / Paid from" picker
+        /// (manager.io-style): accounts flagged BankCash OR asset accounts under a
+        /// Bank/Cash group (covers migrated bank GL accounts). Active-only by
+        /// default (pickers); pass <paramref name="includeInactive"/> for the
+        /// management screen, which also populates <see cref="AccountDto.HasActivity"/>.</summary>
+        Task<List<AccountDto>> GetBankCashAccountsAsync(int companyId, bool includeInactive = false);
+
+        /// <summary>Correct a bank/cash account's opening balance (setup "starting
+        /// balance" seed) and post the equal-and-opposite delta to Retained
+        /// earnings so the balance sheet stays balanced. Returns the updated
+        /// account (its live balance re-foots), or null when not found.</summary>
+        Task<AccountDto?> AdjustOpeningBalanceAsync(int id, AdjustOpeningBalanceDto dto);
 
         Task<AccountDto?> GetAccountByIdAsync(int id);
         Task<AccountGroupDto?> GetGroupByIdAsync(int id);

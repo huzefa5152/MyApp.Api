@@ -7,9 +7,11 @@ export const getCoaTree = (companyId) =>
 export const getAccountsFlat = (companyId) =>
   httpClient.get(`/accounts/company/${companyId}/flat`);
 
-// Bank/cash accounts for the receipt/payment "Received in / Paid from" picker.
-export const getBankCashAccounts = (companyId) =>
-  httpClient.get(`/accounts/company/${companyId}/bank-cash`);
+// Bank/cash accounts for the receipt/payment "Received in / Paid from" picker
+// (active-only by default). The management screen passes includeInactive to see
+// retired accounts (badged) and get the per-row hasActivity hint.
+export const getBankCashAccounts = (companyId, includeInactive = false) =>
+  httpClient.get(`/accounts/company/${companyId}/bank-cash`, { params: { includeInactive } });
 
 export const createAccountGroup = (companyId, payload) =>
   httpClient.post(`/accounts/company/${companyId}/groups`, payload);
@@ -28,6 +30,11 @@ export const updateAccount = (id, payload) =>
 
 export const deleteAccount = (id) =>
   httpClient.delete(`/accounts/${id}`);
+
+// Correct a bank/cash account's opening balance; the offsetting delta lands in
+// Retained earnings server-side so the balance sheet stays balanced.
+export const adjustOpeningBalance = (id, payload) =>
+  httpClient.post(`/accounts/${id}/adjust-opening-balance`, payload);
 
 export const seedWholesaleCoa = (companyId) =>
   httpClient.post(`/accounts/company/${companyId}/seed-wholesale`);

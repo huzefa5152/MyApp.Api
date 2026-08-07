@@ -48,6 +48,32 @@ namespace MyApp.Api.Repositories.Implementations
             || await _context.Payments.AnyAsync(p => p.BankAccountId == accountId)
             || await _context.AccountTransfers.AnyAsync(t => t.FromAccountId == accountId || t.ToAccountId == accountId);
 
+        public async Task<HashSet<int>> GetAccountIdsWithActivityAsync(IReadOnlyCollection<int> accountIds)
+        {
+            var result = new HashSet<int>();
+            if (accountIds == null || accountIds.Count == 0) return result;
+            var candidates = accountIds.ToList();
+            // One query per referencing table (4 total), each restricted to the
+            // candidate ids — cheap regardless of how many rows the list shows.
+            result.UnionWith(await _context.JournalLines
+                .Where(l => candidates.Contains(l.AccountId)).Select(l => l.AccountId).Distinct().ToListAsync());
+            result.UnionWith(await _context.PaymentAllocations
+                .Where(a => a.AccountId.HasValue && candidates.Contains(a.AccountId.Value))
+                .Select(a => a.AccountId!.Value).Distinct().ToListAsync());
+            result.UnionWith(await _context.Payments
+                .Where(p => p.BankAccountId.HasValue && candidates.Contains(p.BankAccountId.Value))
+                .Select(p => p.BankAccountId!.Value).Distinct().ToListAsync());
+            var transfers = await _context.AccountTransfers
+                .Where(t => candidates.Contains(t.FromAccountId) || candidates.Contains(t.ToAccountId))
+                .Select(t => new { t.FromAccountId, t.ToAccountId }).ToListAsync();
+            foreach (var t in transfers) { result.Add(t.FromAccountId); result.Add(t.ToAccountId); }
+            return result;
+        }
+
+        public async Task<bool> IsCompanyDefaultAccountAsync(int accountId) =>
+            await _context.Companies.AnyAsync(c =>
+                c.DefaultSalesAccountId == accountId || c.DefaultPurchaseAccountId == accountId);
+
         public async Task<int> NextGroupPositionAsync(int companyId, FinancialStatement statement, int? parentGroupId)
         {
             var q = _context.AccountGroups.Where(g => g.CompanyId == companyId && g.Statement == statement);
