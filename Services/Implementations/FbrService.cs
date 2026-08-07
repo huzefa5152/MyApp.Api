@@ -822,35 +822,75 @@ namespace MyApp.Api.Services.Implementations
             //     ItemTypeName. Quantity / unit price / SRO references
             //     stay as the operator entered them.
             //   • Skipped for dry-run preview — preview is read-only.
+            //   • Demo / sandbox scenario bills (IsDemo) take a SEPARATE branch:
+            //     they all reuse one shared catalog ItemType, so SaleType is
+            //     reconciled from the SN scenario (authoritative) rather than the
+            //     item — otherwise 3rd-Schedule / Reduced-Rate scenarios get
+            //     clobbered to the item's Standard-Rate sale type and FBR rejects
+            //     the saleType↔scenarioId mismatch.
             if (!dryRun
                 && !string.Equals(invoice.FbrStatus, FbrSubmissionStatus.Submitted, StringComparison.OrdinalIgnoreCase))
             {
-                var typeIds = invoice.Items
-                    .Where(ii => ii.ItemTypeId.HasValue)
-                    .Select(ii => ii.ItemTypeId!.Value)
-                    .Distinct()
-                    .ToList();
-                if (typeIds.Count > 0)
+                if (invoice.IsDemo)
                 {
-                    var liveTypes = await _db.ItemTypes
-                        .Where(t => typeIds.Contains(t.Id))
-                        .ToDictionaryAsync(t => t.Id);
-
-                    bool anyChanged = false;
-                    foreach (var line in invoice.Items)
+                    // Sandbox scenario bills are scenario-FIXED snapshots. Every
+                    // demo bill reuses ONE shared catalog ItemType (the favourite),
+                    // whose SaleType is "Goods at Standard Rate (default)". Running
+                    // the real-bill refresh below on a demo bill clobbers the
+                    // per-scenario SaleType that the seeder set — so a 3rd-Schedule
+                    // (SN008/SN027) or Reduced-Rate (SN028) bill got sent to FBR as
+                    // Standard Rate while still tagged scenarioId=SN008/SN027/SN028,
+                    // and PRAL rejected the saleType↔scenario mismatch (Sandbox tab
+                    // "Validate All" failed for exactly those scenarios). For demo
+                    // bills the SN scenario — not the shared item — is authoritative
+                    // for SaleType, so reconcile from the scenario catalog instead.
+                    // Any previously-clobbered value self-heals on the next run.
+                    // HS Code / UOM stay as seeded (they don't drift for demo bills).
+                    var scenario = TaxScenarios.Find(scenarioId);
+                    if (scenario != null)
                     {
-                        if (!line.ItemTypeId.HasValue) continue;
-                        if (!liveTypes.TryGetValue(line.ItemTypeId.Value, out var t)) continue;
-
-                        if (line.HSCode       != t.HSCode)        { line.HSCode = t.HSCode;        anyChanged = true; }
-                        if ((line.UOM ?? "")  != (t.UOM ?? ""))   { line.UOM = t.UOM ?? "";        anyChanged = true; }
-                        if (line.FbrUOMId     != t.FbrUOMId)      { line.FbrUOMId = t.FbrUOMId;    anyChanged = true; }
-                        if (line.SaleType     != t.SaleType)      { line.SaleType = t.SaleType;    anyChanged = true; }
-                        if (line.ItemTypeName != t.Name)          { line.ItemTypeName = t.Name;    anyChanged = true; }
+                        bool anyChanged = false;
+                        foreach (var line in invoice.Items)
+                        {
+                            if (line.SaleType != scenario.SaleType)
+                            {
+                                line.SaleType = scenario.SaleType;
+                                anyChanged = true;
+                            }
+                        }
+                        if (anyChanged)
+                            await _db.SaveChangesAsync();
                     }
+                }
+                else
+                {
+                    var typeIds = invoice.Items
+                        .Where(ii => ii.ItemTypeId.HasValue)
+                        .Select(ii => ii.ItemTypeId!.Value)
+                        .Distinct()
+                        .ToList();
+                    if (typeIds.Count > 0)
+                    {
+                        var liveTypes = await _db.ItemTypes
+                            .Where(t => typeIds.Contains(t.Id))
+                            .ToDictionaryAsync(t => t.Id);
 
-                    if (anyChanged)
-                        await _db.SaveChangesAsync();
+                        bool anyChanged = false;
+                        foreach (var line in invoice.Items)
+                        {
+                            if (!line.ItemTypeId.HasValue) continue;
+                            if (!liveTypes.TryGetValue(line.ItemTypeId.Value, out var t)) continue;
+
+                            if (line.HSCode       != t.HSCode)        { line.HSCode = t.HSCode;        anyChanged = true; }
+                            if ((line.UOM ?? "")  != (t.UOM ?? ""))   { line.UOM = t.UOM ?? "";        anyChanged = true; }
+                            if (line.FbrUOMId     != t.FbrUOMId)      { line.FbrUOMId = t.FbrUOMId;    anyChanged = true; }
+                            if (line.SaleType     != t.SaleType)      { line.SaleType = t.SaleType;    anyChanged = true; }
+                            if (line.ItemTypeName != t.Name)          { line.ItemTypeName = t.Name;    anyChanged = true; }
+                        }
+
+                        if (anyChanged)
+                            await _db.SaveChangesAsync();
+                    }
                 }
             }
 
