@@ -79,6 +79,7 @@ namespace MyApp.Api.Services.Implementations
             await Account("ar", "Accounts receivable", "assets", AccountType.Asset, ControlType.AccountsReceivable);
             await Account("inventory", "Inventory on hand", "assets", AccountType.Asset, ControlType.Inventory);
             await Account("input_tax", "Input Sales Tax", "assets", AccountType.Asset, ControlType.InputTax);
+            await Account("wht_receivable", "WHT receivable", "assets", AccountType.Asset, ControlType.WithholdingReceivable);
             await Group("fixed_assets", "Fixed assets", FinancialStatement.BalanceSheet, "assets", false);
 
             await Group("liabilities", "Liabilities", FinancialStatement.BalanceSheet, null, true);
@@ -102,12 +103,20 @@ namespace MyApp.Api.Services.Implementations
             {
                 ("exp_salaries", "Salaries"), ("exp_rent", "Rent"), ("exp_utilities", "Utilities"),
                 ("exp_freight", "Freight / Cartage"), ("exp_commission", "Commission"),
-                ("exp_bank_charges", "Bank charges"), ("exp_discount", "Discount allowed"),
+                ("exp_bank_charges", "Bank charges"),
                 ("exp_depreciation", "Depreciation"), ("exp_misc", "Miscellaneous"),
             })
             {
                 await Account(key, name, "expenses", AccountType.Expense);
             }
+
+            // Receipt/Payment "settle remainder" adjustment accounts — the
+            // quick-pick targets for the discount / write-off gap on a receipt
+            // or payment (operators can also route the gap to any other account).
+            await Account("disc_allowed", "Discount allowed", "expenses", AccountType.Expense, ControlType.DiscountAllowed);
+            await Account("bad_debts", "Bad debts written off", "expenses", AccountType.Expense, ControlType.BadDebtWriteOff);
+            await Account("disc_received", "Discount received", "income", AccountType.Income, ControlType.DiscountReceived);
+            await Account("writeback", "Sundry balances written back", "income", AccountType.Income, ControlType.WriteBackIncome);
 
             return created;
         }

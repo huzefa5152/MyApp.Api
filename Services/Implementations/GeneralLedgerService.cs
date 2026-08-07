@@ -441,16 +441,16 @@ namespace MyApp.Api.Services.Implementations
                 open = (await _context.Invoices.AsNoTracking()
                     .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
                              && i.DocumentType != 9 && i.DocumentType != 10
-                             && i.GrandTotal > i.AmountPaid)
-                    .Select(i => new { i.ClientId, ClientName = i.Client!.Name, i.Date, i.DueDate, Due = i.GrandTotal - i.AmountPaid })
+                             && i.GrandTotal - i.WithholdingTaxAmount > i.AmountPaid)
+                    .Select(i => new { i.ClientId, ClientName = i.Client!.Name, i.Date, i.DueDate, Due = i.GrandTotal - i.WithholdingTaxAmount - i.AmountPaid })
                     .ToListAsync())
                     .Select(x => (x.ClientId, x.ClientName, (x.DueDate ?? x.Date).Date, x.Due)).ToList();
             }
             else
             {
                 open = (await _context.PurchaseBills.AsNoTracking()
-                    .Where(b => b.CompanyId == companyId && b.GrandTotal > b.AmountPaid)
-                    .Select(b => new { b.SupplierId, SupplierName = b.Supplier!.Name, b.Date, b.DueDate, Due = b.GrandTotal - b.AmountPaid })
+                    .Where(b => b.CompanyId == companyId && b.GrandTotal - b.WithholdingTaxAmount > b.AmountPaid)
+                    .Select(b => new { b.SupplierId, SupplierName = b.Supplier!.Name, b.Date, b.DueDate, Due = b.GrandTotal - b.WithholdingTaxAmount - b.AmountPaid })
                     .ToListAsync())
                     .Select(x => (x.SupplierId, x.SupplierName, (x.DueDate ?? x.Date).Date, x.Due)).ToList();
             }

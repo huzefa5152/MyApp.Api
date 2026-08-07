@@ -51,11 +51,15 @@ namespace MyApp.Api.Services.Implementations
             GrandTotal = pb.GrandTotal,
             AmountInWords = pb.AmountInWords,
             PaymentTerms = pb.PaymentTerms,
+            WithholdingTaxRate = pb.WithholdingTaxRate,
+            WithholdingTaxAmount = pb.WithholdingTaxAmount,
             DueDate = pb.DueDate,
             AmountPaid = pb.AmountPaid,
-            BalanceDue = PaymentStatusCalculator.BalanceDue(pb.GrandTotal, pb.AmountPaid),
-            PaymentStatus = PaymentStatusCalculator.Status(pb.GrandTotal, pb.AmountPaid, pb.DueDate).ToString(),
-            DaysOverdue = PaymentStatusCalculator.DaysOverdue(pb.GrandTotal, pb.AmountPaid, pb.DueDate),
+            // Collectible = GrandTotal − WHT (what we owe the supplier after
+            // withholding); balance due + status settle against it.
+            BalanceDue = PaymentStatusCalculator.BalanceDue(WithholdingTaxCalculator.Collectible(pb.GrandTotal, pb.WithholdingTaxAmount), pb.AmountPaid),
+            PaymentStatus = PaymentStatusCalculator.Status(WithholdingTaxCalculator.Collectible(pb.GrandTotal, pb.WithholdingTaxAmount), pb.AmountPaid, pb.DueDate).ToString(),
+            DaysOverdue = PaymentStatusCalculator.DaysOverdue(WithholdingTaxCalculator.Collectible(pb.GrandTotal, pb.WithholdingTaxAmount), pb.AmountPaid, pb.DueDate),
             DocumentType = pb.DocumentType,
             PaymentMode = pb.PaymentMode,
             ReconciliationStatus = pb.ReconciliationStatus,
@@ -242,6 +246,9 @@ namespace MyApp.Api.Services.Implementations
                 // same print-only transformation as PrintBillDto.
                 GrandTotal = NumberToWordsConverter.RoundForDisplay(pb.GrandTotal),
                 AmountInWords = NumberToWordsConverter.Convert(pb.GrandTotal),
+                WithholdingTaxRate = pb.WithholdingTaxRate,
+                WithholdingTaxAmount = pb.WithholdingTaxAmount,
+                BalanceDueAfterWht = WithholdingTaxCalculator.Collectible(pb.GrandTotal, pb.WithholdingTaxAmount),
                 Items = pb.Items?.Select(i => new PrintPurchaseBillItemDto
                 {
                     SNo = ++sNo,
@@ -424,6 +431,8 @@ namespace MyApp.Api.Services.Implementations
                 GSTRate = dto.GSTRate,
                 GSTAmount = gstAmount,
                 GrandTotal = grandTotal,
+                WithholdingTaxRate = dto.WithholdingTaxRate,
+                WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(dto.WithholdingTaxRate, grandTotal, dto.WithholdingTaxAmount),
                 AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                 PaymentTerms = dto.PaymentTerms,
                 DocumentType = dto.DocumentType,
@@ -560,6 +569,8 @@ namespace MyApp.Api.Services.Implementations
             bill.SupplierBillNumber = dto.SupplierBillNumber?.Trim();
             bill.SupplierIRN = newIrn;
             bill.GSTRate = dto.GSTRate;
+            bill.WithholdingTaxRate = dto.WithholdingTaxRate;
+            bill.WithholdingTaxAmount = dto.WithholdingTaxAmount;   // reflowed below from rate/amount mode
             bill.PaymentTerms = dto.PaymentTerms;
             bill.DocumentType = dto.DocumentType;
             bill.PaymentMode = dto.PaymentMode;
@@ -620,6 +631,7 @@ namespace MyApp.Api.Services.Implementations
             bill.Subtotal = newItems.Sum(x => x.LineTotal);
             bill.GSTAmount = Math.Round(bill.Subtotal * dto.GSTRate / 100m, 2);
             bill.GrandTotal = bill.Subtotal + bill.GSTAmount;
+            bill.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(bill.WithholdingTaxRate, bill.GrandTotal, bill.WithholdingTaxAmount);
             bill.AmountInWords = NumberToWordsConverter.Convert(bill.GrandTotal);
 
             await _context.SaveChangesAsync();

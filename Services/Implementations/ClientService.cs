@@ -353,7 +353,7 @@ namespace MyApp.Api.Services.Implementations
                 .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
                             && i.DocumentType != 9 && i.DocumentType != 10)
                 .GroupBy(i => i.ClientId)
-                .Select(g => new { ClientId = g.Key, Bal = g.Sum(i => i.GrandTotal - i.AmountPaid) })
+                .Select(g => new { ClientId = g.Key, Bal = g.Sum(i => i.GrandTotal - i.WithholdingTaxAmount - i.AmountPaid) })
                 .ToDictionaryAsync(x => x.ClientId, x => x.Bal);
 
             var whtByClient = await _context.WithholdingTaxReceipts
@@ -453,8 +453,8 @@ namespace MyApp.Api.Services.Implementations
                     Number = i.InvoiceNumber.ToString(),
                     Date = i.Date,
                     Amount = i.GrandTotal,
-                    Balance = i.GrandTotal - i.AmountPaid,
-                    Status = (i.GrandTotal - i.AmountPaid) <= 0 ? "Paid" : (i.AmountPaid > 0 ? "Partial" : "Unpaid"),
+                    Balance = i.GrandTotal - i.WithholdingTaxAmount - i.AmountPaid,
+                    Status = (i.GrandTotal - i.WithholdingTaxAmount - i.AmountPaid) <= 0 ? "Paid" : (i.AmountPaid > 0 ? "Partial" : "Unpaid"),
                 })
                 .ToListAsync();
 

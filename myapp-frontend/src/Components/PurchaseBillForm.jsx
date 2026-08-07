@@ -62,6 +62,13 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
   const [supplierBillNumber, setSupplierBillNumber] = useState("");
   const [supplierIRN, setSupplierIRN] = useState("");
   const [gstRate, setGstRate] = useState(18);
+  // Withholding tax we deduct from the supplier — income tax that sits ON TOP
+  // of GST and never changes subtotal / GST / grand total; it reduces the
+  // balance we actually pay. "none" | "rate" (a %) | "amount" (fixed PKR).
+  // Prefilled from the company default on create, from the bill on edit.
+  const [whtMode, setWhtMode] = useState("none");
+  const [whtRate, setWhtRate] = useState("");
+  const [whtAmount, setWhtAmount] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
   const [paymentMode, setPaymentMode] = useState("");
   const [items, setItems] = useState([newRow()]);
@@ -138,6 +145,17 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
         setSupplierBillNumber(data.supplierBillNumber || "");
         setSupplierIRN(data.supplierIRN || "");
         setGstRate(data.gstRate);
+        // Withholding tax — prefill from the loaded bill: a stored rate → rate
+        // mode; else a non-zero stored amount → fixed-amount mode; else off.
+        if (data.withholdingTaxRate != null) {
+          setWhtMode("rate");
+          setWhtRate(String(data.withholdingTaxRate));
+        } else if (data.withholdingTaxAmount) {
+          setWhtMode("amount");
+          setWhtAmount(String(data.withholdingTaxAmount));
+        } else {
+          setWhtMode("none");
+        }
         setPaymentTerms(data.paymentTerms || "");
         setPaymentMode(data.paymentMode || "");
         setItems((data.items || []).map(i => ({
@@ -153,6 +171,17 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
       }
     })();
   }, [billId, isEdit]);
+
+  // Create only: prefill the WHT rate from the company default (rate-mode)
+  // when one is configured. Edits hydrate WHT from the loaded bill above.
+  useEffect(() => {
+    if (isEdit) return;
+    if (company?.defaultWithholdingTaxRate != null) {
+      setWhtMode("rate");
+      setWhtRate(String(company.defaultWithholdingTaxRate));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company?.defaultWithholdingTaxRate, isEdit]);
 
   // "Purchase Against Sale Bill" mode — load the grouped template and
   // populate items. Each row represents a group of sale lines with the
@@ -222,6 +251,13 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
     [subtotal, gstRate]
   );
   const grandTotal = subtotal + gstAmount;
+
+  // Withholding tax — rate-mode = % of the gross (subtotal + GST), rounded to
+  // 2dp exactly like the backend (Math.round(x*100)/100). Fixed-amount mode =
+  // the typed PKR value. Balance payable to the supplier = grandTotal − WHT.
+  const computedWhtAmount = Math.round(grandTotal * (parseFloat(whtRate) || 0)) / 100;
+  const whtResolved = whtMode === "none" ? 0 : (whtMode === "rate" ? computedWhtAmount : (parseFloat(whtAmount) || 0));
+  const balanceDue = grandTotal - whtResolved;
 
   // Account labels for the per-line Account (GL) column — name the resolved
   // company-default purchase account (shown when a line carries no explicit
@@ -315,6 +351,10 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
         supplierBillNumber: supplierBillNumber || null,
         supplierIRN: supplierIRN || null,
         gstRate: parseFloat(gstRate),
+        // Withholding tax: rate-mode ships the %, fixed-amount mode ships null
+        // rate + the typed amount. Backend recomputes/clamps the amount.
+        withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
+        withholdingTaxAmount: whtResolved,
         paymentTerms: paymentTerms || null,
         paymentMode: paymentMode || null,
         items: items.map(i => ({
@@ -446,6 +486,29 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
                 <label style={formStyles.label}>GST Rate (%)</label>
                 <input type="number" min={0} step={0.01} style={formStyles.input} value={gstRate} onChange={e => setGstRate(e.target.value)} />
               </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
+              <div style={formStyles.formGroup}>
+                <label style={formStyles.label}>Withholding Tax</label>
+                <select style={formStyles.input} value={whtMode} onChange={e => setWhtMode(e.target.value)} title="Income tax withheld from the supplier — reduces the balance payable, not the bill total">
+                  <option value="none">None</option>
+                  <option value="rate">Rate %</option>
+                  <option value="amount">Fixed amount</option>
+                </select>
+              </div>
+              {whtMode === "rate" && (
+                <div style={formStyles.formGroup}>
+                  <label style={formStyles.label}>WHT Rate (%)</label>
+                  <input type="number" min={0} step={0.01} style={formStyles.input} value={whtRate} onChange={e => setWhtRate(e.target.value)} placeholder="e.g. 5.5" />
+                </div>
+              )}
+              {whtMode === "amount" && (
+                <div style={formStyles.formGroup}>
+                  <label style={formStyles.label}>WHT Amount (Rs.)</label>
+                  <input type="number" min={0} step={0.01} style={formStyles.input} value={whtAmount} onChange={e => setWhtAmount(e.target.value)} placeholder="0.00" />
+                </div>
+              )}
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
@@ -678,6 +741,16 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
               <span style={{ color: colors.textPrimary, fontWeight: 700, fontSize: "1rem" }}>Grand Total:</span>
               <span></span>
               <strong style={{ fontSize: "1.05rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+              {whtResolved > 0 && (
+                <>
+                  <span style={{ color: colors.textSecondary }}>Withholding tax{whtMode === "rate" ? ` (${whtRate}%)` : ""}:</span>
+                  <span></span>
+                  <strong>Rs. {whtResolved.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+                  <span style={{ color: colors.textPrimary, fontWeight: 700, fontSize: "1rem" }}>Balance payable:</span>
+                  <span></span>
+                  <strong style={{ fontSize: "1.05rem", color: colors.blue }}>Rs. {balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+                </>
+              )}
             </div>
           </fieldset>
 

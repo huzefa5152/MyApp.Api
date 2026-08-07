@@ -683,8 +683,8 @@ namespace MyApp.Api.Services.Implementations
                 report.ArManager = invAmountByGuid.Values.Sum(v => v.balance);
                 report.ApManager = billAmountByGuid.Values.Sum(v => v.balance);
                 report.SalesTotal = await _db.Invoices.Where(i => i.CompanyId == companyId && i.DocumentType != 9 && i.DocumentType != 10).SumAsync(i => (decimal?)i.GrandTotal) ?? 0m;
-                report.ArMyApp = await _db.Invoices.Where(i => i.CompanyId == companyId && i.DocumentType != 9 && i.DocumentType != 10).SumAsync(i => (decimal?)(i.GrandTotal - i.AmountPaid)) ?? 0m;
-                report.ApMyApp = await _db.PurchaseBills.Where(p => p.CompanyId == companyId).SumAsync(p => (decimal?)(p.GrandTotal - p.AmountPaid)) ?? 0m;
+                report.ArMyApp = await _db.Invoices.Where(i => i.CompanyId == companyId && i.DocumentType != 9 && i.DocumentType != 10).SumAsync(i => (decimal?)(i.GrandTotal - i.WithholdingTaxAmount - i.AmountPaid)) ?? 0m;
+                report.ApMyApp = await _db.PurchaseBills.Where(p => p.CompanyId == companyId).SumAsync(p => (decimal?)(p.GrandTotal - p.WithholdingTaxAmount - p.AmountPaid)) ?? 0m;
                 Note("GL journals / inter-account transfers NOT imported (Manager exposes no account classification; enable MyApp's GL posting engine to derive the ledger from documents).");
 
                 if (dryRun) { await tx.RollbackAsync(); Note("DRY RUN — rolled back, nothing persisted."); }

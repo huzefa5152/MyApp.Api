@@ -9,6 +9,7 @@ import { getDivisionsByCompany } from "../api/divisionApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getClaimSummary } from "../api/taxClaimApi";
 import QuantityInput from "./QuantityInput";
+import { isDecimalUnit } from "../utils/formatQuantity";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { formStyles, modalSizes } from "../theme";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -137,7 +138,16 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // Units list — gates each row's quantity input on the picked UOM
   // (decimal allowed for KG/Liter/etc., integer-only for Pcs/SET/etc.).
   const [units, setUnits] = useState([]);
+  // Grouped-by-Item-Type ⇄ Individual-lines view toggle (invoice mode).
+  // Default grouped — mirrors the FBR submission granularity.
+  const [groupedView, setGroupedView] = useState(true);
   const [gstRate, setGstRate] = useState(18);
+  // Withholding tax (income tax that sits ON TOP of GST — never changes
+  // subtotal / GST / grand total). "none" | "rate" (a %) | "amount" (fixed PKR).
+  // Prefilled from the loaded bill below.
+  const [whtMode, setWhtMode] = useState("none");
+  const [whtRate, setWhtRate] = useState("");
+  const [whtAmount, setWhtAmount] = useState("");
   const [billDate, setBillDate] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
   const [paymentMode, setPaymentMode] = useState("");
@@ -226,6 +236,17 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         setClientId(data.clientId ? String(data.clientId) : "");
         setDivisionId(data.divisionId ? String(data.divisionId) : "");
         setGstRate(data.gstRate ?? 18);
+        // Withholding tax — prefill from the loaded bill: a stored rate → rate
+        // mode; else a non-zero stored amount → fixed-amount mode; else off.
+        if (data.withholdingTaxRate != null) {
+          setWhtMode("rate");
+          setWhtRate(String(data.withholdingTaxRate));
+        } else if (data.withholdingTaxAmount) {
+          setWhtMode("amount");
+          setWhtAmount(String(data.withholdingTaxAmount));
+        } else {
+          setWhtMode("none");
+        }
         // Date arrives as ISO string; the <input type="date"> control wants
         // YYYY-MM-DD in LOCAL time. Pre-fix (.toISOString().slice(0,10))
         // converted to UTC first, which rolled the calendar day forward in
@@ -827,6 +848,13 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
   const grandTotal = subtotal + gstAmount;
 
+  // Withholding tax — rate-mode = % of the gross (subtotal + GST), rounded to
+  // 2dp exactly like the backend (Math.round(x*100)/100). Fixed-amount mode =
+  // the typed PKR value. Balance due the buyer pays = grandTotal − WHT.
+  const computedWhtAmount = Math.round(grandTotal * (parseFloat(whtRate) || 0)) / 100;
+  const whtResolved = whtMode === "none" ? 0 : (whtMode === "rate" ? computedWhtAmount : (parseFloat(whtAmount) || 0));
+  const balanceDue = grandTotal - whtResolved;
+
   // Field-level gating booleans, derived once for clarity:
   //   • lockNonItemType — locks every BILL-level field outside the
   //     Item Type picker (GST rate, dates, payment terms, etc.) AND
@@ -844,6 +872,159 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const lockQty         = readOnly || itemTypeOnlyMode;
   const lockPrice       = readOnly || itemTypeOnlyMode;
   const lockItemType    = readOnly;
+
+  // ── Grouped-by-Item-Type view (invoice mode) ─────────────────────────
+  // FBR submission + the Tax Invoice print collapse every line sharing an
+  // Item Type into ONE row (summed qty + summed value). This view mirrors
+  // that so the operator edits the invoice at the same granularity FBR
+  // receives: a bill of 10 lines (5 hardware + 5 chemical) shows as 2 rows.
+  //
+  // Grouping is a PURE LENS over items[] — the group editors below write
+  // straight back into the underlying lines, so Save, the total-preservation
+  // guard and the tax-claim panel all keep reading items[] untouched. Group
+  // key = itemTypeId; an unclassified line becomes its own singleton group so
+  // nothing is ever hidden.
+  const itemGroups = useMemo(() => {
+    const map = new Map();
+    items.forEach((it, idx) => {
+      const key = it.itemTypeId ? `t${it.itemTypeId}` : `u${idx}`;
+      const g = map.get(key) || {
+        key,
+        itemTypeId: it.itemTypeId || null,
+        itemTypeName: it.itemTypeName || "",
+        uom: it.uom || "",
+        hsCode: it.hsCode || "",
+        saleType: it.saleType || "",
+        description: it.description || "",
+        lineIndices: [],
+        totalQty: 0,
+        totalValue: 0,
+      };
+      const qty = parseFloat(it.quantity) || 0;
+      const val = parseFloat(it.lineTotal) || qty * (parseFloat(it.unitPrice) || 0);
+      g.lineIndices.push(idx);
+      g.totalQty += qty;
+      g.totalValue += val;
+      // Prefer the most complete catalog-derived labels across the group's
+      // lines (they should all match, but be defensive against blanks).
+      if (it.itemTypeName) g.itemTypeName = it.itemTypeName;
+      if (it.hsCode) g.hsCode = it.hsCode;
+      if (it.saleType) g.saleType = it.saleType;
+      if (it.uom) g.uom = it.uom;
+      map.set(key, g);
+    });
+    return Array.from(map.values()).map((g) => {
+      // Round the running sums so float addition artefacts don't surface.
+      const totalQty = Math.round(g.totalQty * 10000) / 10000;
+      const totalValue = Math.round(g.totalValue * 100) / 100;
+      return {
+        ...g,
+        totalQty,
+        totalValue,
+        // Weighted-average unit price (Σ value / Σ qty). FBR itself never
+        // carries a grouped unit price — it takes summed qty + summed value —
+        // so this is a display/entry convenience only.
+        unitPrice: totalQty > 0 ? Math.round((totalValue / totalQty) * 100) / 100 : 0,
+      };
+    });
+  }, [items]);
+
+  // Grouping only collapses anything when at least one Item Type spans
+  // multiple lines; if every line is its own group, grouped and line views
+  // render identically (so no toggle is offered).
+  const groupingCollapses = itemGroups.length < items.length;
+
+  // Set a uniform unit price on every line in a group + recompute each line
+  // total. Every line in an FBR group ships under one grouped price anyway.
+  const setGroupUnitPrice = (group, newPrice) => {
+    const parsed = parseFloat(newPrice);
+    const price = isNaN(parsed) ? 0 : parsed;
+    setItems((prev) => {
+      const next = [...prev];
+      group.lineIndices.forEach((i) => {
+        const qty = parseFloat(next[i].quantity) || 0;
+        next[i] = { ...next[i], unitPrice: price, lineTotal: Math.round(qty * price * 100) / 100 };
+      });
+      return next;
+    });
+  };
+
+  // Set a group's TOTAL quantity, distributed across its lines in proportion
+  // to each line's ORIGINAL bill quantity (a fixed, stable reference so the
+  // controlled Qty input doesn't self-poison as the operator clears+retypes).
+  // Integer-only UOMs (Pcs/SET) stay whole — shares floored, remainder handed
+  // out largest-fraction-first; decimal UOMs distribute to 4dp with the last
+  // line absorbing the rounding so the lines always re-sum to the entered total.
+  const setGroupQty = (group, newTotalQty) => {
+    const parsed = parseFloat(newTotalQty);
+    const target = isNaN(parsed) ? 0 : parsed;
+    setItems((prev) => {
+      const next = [...prev];
+      const idxs = group.lineIndices;
+      let weights = idxs.map((i) => parseFloat(originalItemsRef.current[i]?.quantity) || 0);
+      let weightTotal = weights.reduce((s, w) => s + w, 0);
+      if (weightTotal <= 0) { weights = idxs.map(() => 1); weightTotal = idxs.length; }
+      const allowDecimal = isDecimalUnit(group.uom, units);
+
+      let assigned;
+      if (!allowDecimal && Number.isInteger(target)) {
+        const shares = weights.map((w) => target * (w / weightTotal));
+        assigned = shares.map((s) => Math.floor(s));
+        let rem = target - assigned.reduce((a, b) => a + b, 0);
+        const order = shares
+          .map((s, k) => ({ k, frac: s - Math.floor(s) }))
+          .sort((a, b) => b.frac - a.frac);
+        for (let j = 0; j < order.length && rem > 0; j++) { assigned[order[j].k]++; rem--; }
+      } else {
+        assigned = [];
+        let remaining = target;
+        idxs.forEach((_i, k) => {
+          if (k === idxs.length - 1) {
+            assigned[k] = Math.round(Math.max(0, remaining) * 10000) / 10000;
+          } else {
+            const q = Math.round(target * (weights[k] / weightTotal) * 10000) / 10000;
+            assigned[k] = q;
+            remaining -= q;
+          }
+        });
+      }
+
+      idxs.forEach((i, k) => {
+        const price = parseFloat(next[i].unitPrice) || 0;
+        const q = assigned[k];
+        next[i] = { ...next[i], quantity: q, lineTotal: Math.round(q * price * 100) / 100 };
+      });
+      return next;
+    });
+  };
+
+  // Reclassify an entire group to a different Item Type — applies to every
+  // line, reusing the per-row helper (so UOM / HS Code / Sale Type inherit)
+  // and honouring the same invoice-mode qty/price reset updateItemType
+  // applies on an HS change.
+  const updateGroupItemType = (group, newId, pickedType) => {
+    setItems((prev) => {
+      const next = [...prev];
+      group.lineIndices.forEach((i) => {
+        const oldHs = (next[i].hsCode || "").trim();
+        const newHs = (pickedType?.hsCode || "").trim();
+        const hsChanged = oldHs !== newHs;
+        next[i] = _applyItemTypeToRow(next[i], newId, pickedType);
+        if (!billsMode && hsChanged) {
+          const orig = originalItemsRef.current[i];
+          if (orig) {
+            next[i] = { ...next[i], quantity: orig.quantity, unitPrice: orig.unitPrice, lineTotal: orig.lineTotal };
+          }
+        }
+      });
+      return next;
+    });
+  };
+
+  // Grouped view is offered only on the Invoices tab (Item Type column
+  // visible) and only when grouping actually collapses lines.
+  const showGroupToggle = !billsMode && items.length > 1 && groupingCollapses;
+  const renderGrouped = showGroupToggle && groupedView;
 
   // ── Total preservation (narrow-edit guard) ───────────────────────
   // When the operator can edit qty/price (itemTypeAndQtyMode), the
@@ -970,6 +1151,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         await updateInvoice(invoiceId, {
           date: billDate || null,
           gstRate: parseFloat(gstRate),
+          // Withholding tax: rate-mode ships the %, fixed-amount mode ships null
+          // rate + the typed amount. Backend recomputes/clamps the amount.
+          withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
+          withholdingTaxAmount: whtResolved,
           paymentTerms: ptToSave,
           documentType: documentType || null,
           paymentMode: paymentMode || null,
@@ -1126,8 +1311,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                 )}
 
                 {/* Bill-level fields */}
-                <div style={styles.row}>
-                  <div style={{ flex: 1, minWidth: 240 }}>
+                <div style={styles.fieldGrid}>
+                  <div style={{ gridColumn: "1 / -1", minWidth: 0 }}>
                     <label style={styles.label}>
                       Buyer
                       {isChallanLinked && (
@@ -1201,6 +1386,50 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                       readOnly={lockNonItemType}
                     />
                   </div>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <label style={styles.label}>Withholding Tax</label>
+                    <select
+                      style={{ ...styles.input, ...(lockNonItemType ? styles.readOnlyInput : {}) }}
+                      value={whtMode}
+                      onChange={(e) => setWhtMode(e.target.value)}
+                      disabled={lockNonItemType}
+                      title="Income tax withheld on top of GST — reduces the balance due, not the bill total"
+                    >
+                      <option value="none">None</option>
+                      <option value="rate">Rate %</option>
+                      <option value="amount">Fixed amount</option>
+                    </select>
+                  </div>
+                  {whtMode === "rate" && (
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <label style={styles.label}>WHT Rate (%)</label>
+                      <input
+                        type="number"
+                        style={{ ...styles.input, ...(lockNonItemType ? styles.readOnlyInput : {}) }}
+                        value={whtRate}
+                        onChange={(e) => setWhtRate(e.target.value)}
+                        min={0}
+                        step={0.01}
+                        readOnly={lockNonItemType}
+                        placeholder="e.g. 5.5"
+                      />
+                    </div>
+                  )}
+                  {whtMode === "amount" && (
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <label style={styles.label}>WHT Amount (Rs.)</label>
+                      <input
+                        type="number"
+                        style={{ ...styles.input, ...(lockNonItemType ? styles.readOnlyInput : {}) }}
+                        value={whtAmount}
+                        onChange={(e) => setWhtAmount(e.target.value)}
+                        min={0}
+                        step={0.01}
+                        readOnly={lockNonItemType}
+                        placeholder="0.00"
+                      />
+                    </div>
+                  )}
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <label style={styles.label}>Payment Terms</label>
                     <input
@@ -1313,6 +1542,45 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                   />
                 )}
 
+                {/* Grouped ⇄ Individual lines toggle (invoice mode). Grouped
+                    view sums qty + value per Item Type — the same shape FBR
+                    receives. Only shown when grouping collapses lines. */}
+                {showGroupToggle && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap", margin: "0.75rem 0 0.5rem" }}>
+                    <h6 style={{ ...styles.sectionHeading, margin: 0 }}>
+                      Items ({renderGrouped ? `${itemGroups.length} item ${itemGroups.length === 1 ? "type" : "types"} · ${items.length} lines` : `${items.length} lines`})
+                    </h6>
+                    <div style={styles.viewToggle} role="group" aria-label="Item view">
+                      <button
+                        type="button"
+                        onClick={() => setGroupedView(true)}
+                        style={{ ...styles.viewToggleBtn, ...(groupedView ? styles.viewToggleBtnActive : {}) }}
+                        aria-pressed={groupedView}
+                        title="Group lines by Item Type (summed qty + value) — matches the FBR submission"
+                      >
+                        Grouped by Item Type
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGroupedView(false)}
+                        style={{ ...styles.viewToggleBtn, ...(!groupedView ? styles.viewToggleBtnActive : {}) }}
+                        aria-pressed={!groupedView}
+                        title="Show every bill line individually"
+                      >
+                        Individual lines
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {renderGrouped && (
+                  <p style={styles.gridHint}>
+                    Showing one row per <b>Item Type</b> — quantity and value are summed across all its lines
+                    (the same grouping sent to FBR). Editing <b>Qty</b> spreads the new total across the group's
+                    lines; editing <b>Unit Price</b> sets one price for the whole group. Switch to
+                    <b> Individual lines</b> to re-classify or fine-tune a single line.
+                  </p>
+                )}
+
                 <div style={styles.tableWrap}>
                   <table style={styles.table}>
                     <thead>
@@ -1336,7 +1604,85 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((item, idx) => {
+                      {/* Grouped rows — one per Item Type, qty + value summed
+                          across its lines (mirrors the FBR payload). Editing
+                          qty/price distributes back into items[] (setGroupQty /
+                          setGroupUnitPrice); Save reads items[] as always. */}
+                      {renderGrouped && itemGroups.map((group) => {
+                        const multi = group.lineIndices.length > 1;
+                        return (
+                          <tr key={group.key} style={multi ? styles.groupedRow : undefined}>
+                            <td style={styles.td}>
+                              {lockItemType ? (
+                                <div style={styles.readOnlyText}>{group.itemTypeName || <span style={styles.muted}>—</span>}</div>
+                              ) : (
+                                <SearchableItemTypeSelect
+                                  divisionId={divisionId}
+                                  items={filteredItemTypes}
+                                  value={group.itemTypeId || ""}
+                                  onChange={(newId, picked) => updateGroupItemType(group, newId ? parseInt(newId) : null, picked)}
+                                  placeholder="Pick item…"
+                                  style={styles.tableInput}
+                                />
+                              )}
+                            </td>
+                            <td style={styles.td}>
+                              <div style={styles.readOnlyText}>{group.itemTypeName || group.description || <span style={styles.muted}>—</span>}</div>
+                              {multi && (
+                                <div style={styles.groupMeta}>grouped from {group.lineIndices.length} lines</div>
+                              )}
+                            </td>
+                            <td style={styles.td}>
+                              {/* Summed quantity for the whole Item Type. Editing
+                                  redistributes across the group's lines — see setGroupQty. */}
+                              <QuantityInput
+                                value={group.totalQty}
+                                onChange={(val) => setGroupQty(group, val)}
+                                unit={group.uom}
+                                units={units}
+                                disabled={lockQty}
+                                readOnly={lockQty}
+                                style={{ ...styles.tableInput, ...(lockQty ? styles.readOnlyInput : {}), textAlign: "right" }}
+                              />
+                            </td>
+                            <td style={{ ...styles.td, ...styles.readOnlyCell }} title="Comes from Item Type">
+                              {group.uom || <span style={styles.muted}>—</span>}
+                            </td>
+                            <td style={styles.td}>
+                              {/* Weighted-average unit price. Editing sets a
+                                  single price across every line in the group. */}
+                              <input
+                                type="number"
+                                style={{ ...styles.tableInput, ...(lockPrice ? styles.readOnlyInput : {}), textAlign: "right" }}
+                                value={group.unitPrice}
+                                onChange={(e) => setGroupUnitPrice(group, e.target.value)}
+                                min={0}
+                                step={0.01}
+                                readOnly={lockPrice}
+                              />
+                              {multi && !lockPrice && (
+                                <div style={styles.groupMeta} title="Weighted average across the grouped lines. Editing sets one price for the whole group.">
+                                  avg · applies to all {group.lineIndices.length}
+                                </div>
+                              )}
+                            </td>
+                            <td style={{ ...styles.td, fontWeight: 600, color: colors.textPrimary, textAlign: "right" }}>
+                              {(Math.round(group.totalValue * 100) / 100).toLocaleString()}
+                            </td>
+                            {!billsMode && fbrEnabled && (
+                              <td style={{ ...styles.td, ...styles.readOnlyCell, fontFamily: "monospace" }} title="Comes from Item Type">
+                                {group.hsCode || <span style={styles.muted}>—</span>}
+                              </td>
+                            )}
+                            {fbrEnabled && (
+                              <td style={{ ...styles.td, ...styles.readOnlyCell, fontSize: "0.72rem" }} title="Comes from Item Type">
+                                {group.saleType || <span style={styles.muted}>—</span>}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                      {!renderGrouped && items.map((item, idx) => {
                         const hasItemType = !!item.itemTypeId;
                         return (
                           <tr key={item.id || `new-${idx}`}>
@@ -1434,6 +1780,18 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     <span style={{ fontWeight: 700 }}>Grand Total:</span>
                     <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString()}</strong>
                   </div>
+                  {whtResolved > 0 && (
+                    <>
+                      <div style={styles.totalsRow}>
+                        <span>Withholding tax{whtMode === "rate" ? ` (${whtRate}%)` : ""}:</span>
+                        <strong>Rs. {whtResolved.toLocaleString()}</strong>
+                      </div>
+                      <div style={{ ...styles.totalsRow, borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.5rem", marginTop: "0.5rem" }}>
+                        <span style={{ fontWeight: 700 }}>Balance due:</span>
+                        <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {balanceDue.toLocaleString()}</strong>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Total-preservation guard — only shown in itemType+qty
@@ -2249,6 +2607,12 @@ const styles = {
     fontSize: "0.82rem", border: `1px solid ${colors.infoBorder}`,
   },
   row: { display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" },
+  // Even, responsive field grid for the bill-header fields — equal columns
+  // that wrap cleanly (no lone last field stretching to full width, which is
+  // what made "Document Type" look oversized). Collapses to one column on
+  // phones via minmax(min(190px,100%),…). alignItems:end keeps inputs aligned
+  // when a label wraps to two lines.
+  fieldGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(190px, 100%), 1fr))", gap: "0.75rem 1rem", marginBottom: "1rem", alignItems: "end" },
   label: { display: "block", fontSize: "0.82rem", fontWeight: 600, color: colors.textPrimary, marginBottom: "0.3rem" },
   input: { width: "100%", padding: "0.55rem 0.75rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 6, fontSize: "0.85rem", backgroundColor: colors.inputBg },
   sectionHeading: { margin: "1rem 0 0.5rem", fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary },
@@ -2938,6 +3302,12 @@ const styles = {
   readOnlyText: { padding: "0.35rem 0.5rem", fontSize: "0.8rem", color: colors.textPrimary, fontWeight: 600 },
   muted: { color: "#9ca3af", fontStyle: "italic" },
   gridHint: { margin: "0.5rem 0 0.6rem", fontSize: "0.75rem", color: colors.textSecondary, lineHeight: 1.4 },
+  // Grouped ⇄ Individual lines segmented toggle + grouped-table affordances.
+  viewToggle: { display: "inline-flex", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, overflow: "hidden", backgroundColor: "#fff" },
+  viewToggleBtn: { padding: "0.35rem 0.7rem", fontSize: "0.76rem", fontWeight: 600, color: colors.textSecondary, backgroundColor: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap" },
+  viewToggleBtnActive: { backgroundColor: colors.blue, color: "#fff" },
+  groupedRow: { backgroundColor: "#fbfcfe" },
+  groupMeta: { marginTop: 2, fontSize: "0.68rem", color: colors.textSecondary, fontStyle: "italic" },
   bulkApplyBar: {
     display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap",
     padding: "0.55rem 0.85rem", marginBottom: "0.65rem",

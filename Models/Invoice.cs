@@ -27,6 +27,21 @@ namespace MyApp.Api.Models
         public DateTime? DueDate { get; set; }
         public decimal AmountPaid { get; set; }
 
+        // ── Withholding tax (income-tax, s.153 — Manager.io parity) ──
+        // Tax the CUSTOMER withholds at source when paying this sales invoice
+        // and remits to FBR on our behalf. It sits ON TOP of sales tax and is
+        // NOT part of the FBR sales-tax invoice — GrandTotal/GSTAmount and the
+        // PRAL payload are unchanged. It only reduces what the customer pays:
+        //   Collectible = GrandTotal − WithholdingTaxAmount
+        // and, when the GL is on, posts Dr "Withholding tax receivable".
+        //
+        // Mode is implicit:
+        //   • WithholdingTaxRate non-null → rate mode, amount = round(rate% × GrandTotal, 2)
+        //   • WithholdingTaxRate null & amount > 0 → fixed-amount mode
+        //   • both empty → no WHT (existing rows read as 0 — backward compatible)
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal WithholdingTaxAmount { get; set; }
+
         // FBR Digital Invoicing
         public int? DocumentType { get; set; }
         public string? PaymentMode { get; set; }

@@ -39,5 +39,18 @@ namespace MyApp.Api.Models.Accounting
         /// account is missing — imbalances surface visibly instead of failing
         /// the business operation (the reference product's Suspense account).</summary>
         Suspense = 14,
+
+        // ── Receipt/Payment "settle remainder" adjustment accounts (2026-08-07) ──
+        // Where a receipt/payment allocation's non-cash adjustment posts, by
+        // (direction × intent). Discount/Write-off are the UI quick-picks; the
+        // operator can also route the gap to ANY other account they choose.
+        /// <summary>Receipt-side settlement discount (P&amp;L, reduces income).</summary>
+        DiscountAllowed = 15,
+        /// <summary>Payment-side settlement discount taken from a supplier (P&amp;L income).</summary>
+        DiscountReceived = 16,
+        /// <summary>Receipt-side write-off of an uncollectible remainder (P&amp;L expense).</summary>
+        BadDebtWriteOff = 17,
+        /// <summary>Payment-side write-back of an amount no longer owed to a supplier (P&amp;L income).</summary>
+        WriteBackIncome = 18,
     }
 }

@@ -85,6 +85,7 @@ namespace MyApp.Api.Services.Implementations
             DefaultSalesAccountId = c.DefaultSalesAccountId,
             DefaultPurchaseAccountId = c.DefaultPurchaseAccountId,
             InventoryTrackingEnabled = c.InventoryTrackingEnabled,
+            DefaultWithholdingTaxRate = c.DefaultWithholdingTaxRate,
             StockGuardHardBlock = c.StockGuardHardBlock,
             InventoryFlowVersion = c.InventoryFlowVersion,
             StartingPurchaseBillNumber = c.StartingPurchaseBillNumber,
@@ -184,6 +185,7 @@ namespace MyApp.Api.Services.Implementations
                 FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered,
                 FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered,
                 InventoryTrackingEnabled = dto.InventoryTrackingEnabled,
+                DefaultWithholdingTaxRate = dto.DefaultWithholdingTaxRate,
                 InventoryFlowVersion = dto.InventoryFlowVersion,
                 StockGuardHardBlock = dto.StockGuardHardBlock,
                 StartingPurchaseBillNumber = dto.StartingPurchaseBillNumber,
@@ -262,6 +264,7 @@ namespace MyApp.Api.Services.Implementations
             // only apply if no purchase docs exist yet (same rule as the
             // sales-side starting numbers).
             company.InventoryTrackingEnabled = dto.InventoryTrackingEnabled;
+            company.DefaultWithholdingTaxRate = dto.DefaultWithholdingTaxRate;
             company.StockGuardHardBlock = dto.StockGuardHardBlock;
             var hasPurchaseBills = await _context.PurchaseBills.AnyAsync(p => p.CompanyId == id);
             if (!hasPurchaseBills)

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyApp.Api.Data;
 
@@ -11,9 +12,11 @@ using MyApp.Api.Data;
 namespace MyApp.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260807065747_AddWithholdingTax")]
+    partial class AddWithholdingTax
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -512,13 +515,6 @@ namespace MyApp.Api.Migrations
                     b.Property<int?>("AccountId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("AdjustmentAccountId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("AdjustmentAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<decimal>("Amount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -535,8 +531,6 @@ namespace MyApp.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");
-
-                    b.HasIndex("AdjustmentAccountId");
 
                     b.HasIndex("InvoiceId");
 
@@ -4874,11 +4868,6 @@ namespace MyApp.Api.Migrations
                         .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("MyApp.Api.Models.Accounting.Account", "AdjustmentAccount")
-                        .WithMany()
-                        .HasForeignKey("AdjustmentAccountId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("MyApp.Api.Models.Invoice", "Invoice")
                         .WithMany()
                         .HasForeignKey("InvoiceId")
@@ -4894,8 +4883,6 @@ namespace MyApp.Api.Migrations
                         .WithMany()
                         .HasForeignKey("PurchaseBillId")
                         .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("AdjustmentAccount");
 
                     b.Navigation("Invoice");
 

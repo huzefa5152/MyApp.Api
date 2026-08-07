@@ -116,6 +116,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [billPoDate, setBillPoDate] = useState("");
   const [dcSearch, setDcSearch] = useState("");
   const [gstRate, setGstRate] = useState(18);
+  // Withholding tax (income tax that sits ON TOP of GST — never changes
+  // subtotal / GST / grand total). "none" | "rate" (a %) | "amount" (fixed PKR).
+  // Prefilled from the company's default rate below when one is configured.
+  const [whtMode, setWhtMode] = useState("none");
+  const [whtRate, setWhtRate] = useState("");
+  const [whtAmount, setWhtAmount] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
   // 2026-05-12: todayYmd() returns LOCAL "YYYY-MM-DD" — pre-fix the UTC
   // slice rolled the calendar day back by one for PKT operators billing
@@ -200,7 +206,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (!newId || !picked) return;
     setItemTypeIds((prev) => {
       const next = { ...prev };
-      const newHs = {}, newSt = {}, newUom = {}, newFbrUom = {}, newDesc = {}, clearNi = {}, newAcct = {};
+      const newHs = {}, newSt = {}, newUom = {}, newFbrUom = {}, clearNi = {}, newAcct = {};
       for (const item of allItems) {
         const id = item.id;
         if (mode === "empty" && next[id]) continue;
@@ -214,11 +220,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         if (picked.saleType) newSt[id] = picked.saleType;
         if (picked.uom) newUom[id] = picked.uom;
         if (picked.fbrUOMId) newFbrUom[id] = picked.fbrUOMId;
-        // Description ALWAYS becomes the item type's name now — the
-        // description input is read-only when an item type is set, so
-        // there's no preserved free-text edit to step on. Clearing the
-        // item type later will unlock the description for editing.
-        if (picked.name) newDesc[id] = picked.name;
+        // Item Type sets ONLY the FBR fields — never the Description. Each
+        // line keeps its own product text (challan-seeded or operator-typed).
       }
       // Apply the keyed updates outside this updater so each set runs.
       setTimeout(() => {
@@ -226,7 +229,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         if (Object.keys(newSt).length) setItemSaleTypes(p => ({ ...p, ...newSt }));
         if (Object.keys(newUom).length) setItemUoms(p => ({ ...p, ...newUom }));
         if (Object.keys(newFbrUom).length) setItemFbrUomIds(p => ({ ...p, ...newFbrUom }));
-        if (Object.keys(newDesc).length) setItemDescriptions(p => ({ ...p, ...newDesc }));
         if (Object.keys(clearNi).length) setItemNonInvIds(p => ({ ...p, ...clearNi }));
         if (Object.keys(newAcct).length) setItemAccountIds(p => ({ ...p, ...newAcct }));
       }, 0);
@@ -484,6 +486,16 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     company?.fbrDefaultPaymentModeUnregistered,
   ]);
 
+  // Prefill the WHT rate from the company default (rate-mode) when one is
+  // configured. Runs once when the default becomes available; the primitive
+  // dependency stays stable afterward so it never clobbers operator edits.
+  useEffect(() => {
+    if (company?.defaultWithholdingTaxRate != null) {
+      setWhtMode("rate");
+      setWhtRate(String(company.defaultWithholdingTaxRate));
+    }
+  }, [company?.defaultWithholdingTaxRate]);
+
   // Filter challans for selected client, sorted by DC# descending
   const clientChallans = selectedClientId
     ? allChallans
@@ -637,7 +649,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   useEffect(() => {
     const rows = selectedChallans.flatMap((c) => c.items || []);
     if (rows.length === 0) return;
-    const sType = {}, sNonInv = {}, sHs = {}, sSt = {}, sUom = {}, sFbrUom = {}, sDesc = {}, sAcct = {};
+    const sType = {}, sNonInv = {}, sHs = {}, sSt = {}, sUom = {}, sFbrUom = {}, sAcct = {};
     for (const it of rows) {
       const id = it.id;
       // A number (picked) or explicit null (cleared) means the operator owns
@@ -654,7 +666,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           if (t.saleType) sSt[id] = t.saleType;
           if (t.uom) sUom[id] = t.uom;
           if (t.fbrUOMId) sFbrUom[id] = t.fbrUOMId;
-          if (t.name) sDesc[id] = t.name;
+          // Item Type sets ONLY the FBR fields — never the Description. The
+          // line keeps the challan's own product text (seeded from the SO),
+          // so a classified line no longer shows the Item Type name as its
+          // description.
         }
       }
     }
@@ -666,7 +681,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (Object.keys(sSt).length) setItemSaleTypes((p) => ({ ...sSt, ...p }));
     if (Object.keys(sUom).length) setItemUoms((p) => ({ ...sUom, ...p }));
     if (Object.keys(sFbrUom).length) setItemFbrUomIds((p) => ({ ...sFbrUom, ...p }));
-    if (Object.keys(sDesc).length) setItemDescriptions((p) => ({ ...sDesc, ...p }));
     if (Object.keys(sAcct).length) setItemAccountIds((p) => ({ ...sAcct, ...p }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIds, itemTypes, allChallans]);
@@ -677,6 +691,13 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   }, 0);
   const gstAmount = Math.round(subtotal * gstRate / 100 * 100) / 100;
   const grandTotal = subtotal + gstAmount;
+
+  // Withholding tax — rate-mode = % of the gross (subtotal + GST), rounded to
+  // 2dp exactly like the backend (Math.round(x*100)/100). Fixed-amount mode =
+  // the typed PKR value. Balance due the buyer pays = grandTotal − WHT.
+  const computedWhtAmount = Math.round(grandTotal * (parseFloat(whtRate) || 0)) / 100;
+  const whtResolved = whtMode === "none" ? 0 : (whtMode === "rate" ? computedWhtAmount : (parseFloat(whtAmount) || 0));
+  const balanceDue = grandTotal - whtResolved;
 
   const allPricesValid = allItems.length > 0 && allItems.every((i) => itemPrices[i.id] && parseFloat(itemPrices[i.id]) > 0);
   // Every line must be complete before the bill can be created: a classification
@@ -776,6 +797,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         divisionId: divisionId ? parseInt(divisionId) : null,
         clientId: parseInt(selectedClientId),
         gstRate: parseFloat(gstRate),
+        // Withholding tax: rate-mode ships the %, fixed-amount mode ships null
+        // rate + the typed amount. Backend recomputes/clamps the amount.
+        withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
+        withholdingTaxAmount: whtResolved,
         paymentTerms: paymentTermsToSave,
         documentType: documentType || null,
         paymentMode: paymentMode || null,
@@ -1180,7 +1205,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
                       {billHeaderOpen && (
                         <div style={{ ...styles.scenarioCollapseBody, marginBottom: 0 }}>
-                          <div style={styles.row}>
+                          <div style={styles.fieldGrid}>
                             {canViewDivisions && (
                               <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 140 }} />
                             )}
@@ -1206,6 +1231,38 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 min={0} max={100} step={0.5}
                               />
                             </div>
+                            <div style={{ flex: 1, minWidth: 140 }}>
+                              <label style={styles.label}>Withholding Tax</label>
+                              <select style={styles.input} value={whtMode} onChange={(e) => setWhtMode(e.target.value)} title="Income tax withheld on top of GST — reduces the balance due, not the invoice total">
+                                <option value="none">None</option>
+                                <option value="rate">Rate %</option>
+                                <option value="amount">Fixed amount</option>
+                              </select>
+                            </div>
+                            {whtMode === "rate" && (
+                              <div style={{ flex: 1, minWidth: 120 }}>
+                                <label style={styles.label}>WHT Rate (%)</label>
+                                <input
+                                  type="number" min={0} step={0.01}
+                                  style={styles.input}
+                                  value={whtRate}
+                                  onChange={(e) => setWhtRate(e.target.value)}
+                                  placeholder="e.g. 5.5"
+                                />
+                              </div>
+                            )}
+                            {whtMode === "amount" && (
+                              <div style={{ flex: 1, minWidth: 120 }}>
+                                <label style={styles.label}>WHT Amount (Rs.)</label>
+                                <input
+                                  type="number" min={0} step={0.01}
+                                  style={styles.input}
+                                  value={whtAmount}
+                                  onChange={(e) => setWhtAmount(e.target.value)}
+                                  placeholder="0.00"
+                                />
+                              </div>
+                            )}
                             <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Payment Terms</label>
                               <input type="text" style={styles.input} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Optional" />
@@ -1469,10 +1526,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                             // Auto-fill the line's GL income account from the item
                                             // type's per-company overlay (null → engine derives).
                                             setItemAccountIds((p) => ({ ...p, [item.id]: picked.saleAccountId ?? null }));
-                                            // Picking an ItemType binds these fields to the catalog row.
-                                            // Description switches to the item type's name and the
-                                            // input goes read-only — same UX as the no-challan form.
-                                            if (picked.name) setItemDescriptions((p) => ({ ...p, [item.id]: picked.name }));
+                                            // Item Type binds only the FBR fields below — it never
+                                            // touches the Description, which stays the challan line's
+                                            // own product text (editable via SmartItemAutocomplete).
                                             if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [item.id]: picked.hsCode }));
                                             if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [item.id]: picked.saleType }));
                                             if (picked.uom) setItemUoms((p) => ({ ...p, [item.id]: picked.uom }));
@@ -1497,40 +1553,21 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                       />
                                     </td>
                                     <td style={styles.unifiedTd}>
-                                      {/* Description is locked to the picked Item Type's name when
-                                          one is set — same rule as the no-challan form. Clearing the
-                                          Item Type unlocks SmartItemAutocomplete so the operator can
-                                          search saved items, pick from the FBR catalog, or type
-                                          freely. The challan's original description still seeds the
-                                          field on first load via the `?? item.description` fallback. */}
-                                      {/* Applies in Bills mode too — the Item Type column is visible
-                                          there now, so a picked type locks the description the same
-                                          way and the operator sees which type the row carries. */}
-                                      {itemTypeIds[item.id] ? (
-                                        <input
-                                          type="text"
-                                          readOnly
-                                          value={itemDescriptions[item.id] ?? item.description ?? ""}
-                                          style={{
-                                            ...styles.input,
-                                            padding: "0.3rem 0.5rem",
-                                            fontSize: "0.8rem",
-                                            backgroundColor: "#eef5ff",
-                                            cursor: "not-allowed",
-                                          }}
-                                          title="Locked to the picked Item Type's name. Clear the Item Type to edit."
-                                        />
-                                      ) : (
-                                        <SmartItemAutocomplete
-                                          companyId={companyId}
-                                          value={itemDescriptions[item.id] ?? item.description}
-                                          onChange={(v) => handleDescriptionChange(item.id, v)}
-                                          onPick={(picked) => handleItemPick(item.id, picked)}
-                                          style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                          placeholder="Search or type item…"
-                                          multiline
-                                        />
-                                      )}
+                                      {/* Description is ALWAYS editable and independent of the Item
+                                          Type. It seeds from the challan line's own product text
+                                          (`?? item.description`) and the operator can search saved
+                                          items, pick from the FBR catalog, or type freely. Picking an
+                                          Item Type only sets the FBR fields (HS Code / UOM / Sale
+                                          Type) — it never overwrites this text. */}
+                                      <SmartItemAutocomplete
+                                        companyId={companyId}
+                                        value={itemDescriptions[item.id] ?? item.description}
+                                        onChange={(v) => handleDescriptionChange(item.id, v)}
+                                        onPick={(picked) => handleItemPick(item.id, picked)}
+                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                        placeholder="Search or type item…"
+                                        multiline
+                                      />
                                     </td>
                                     <td style={{ ...styles.unifiedTd, textAlign: "right", fontSize: "0.82rem", paddingRight: "0.5rem" }}>
                                       {/* Strip trailing zeros so 1.0000 → "1",
@@ -1687,6 +1724,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
                             <span>Grand Total:</span><span>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                           </div>
+                          {whtResolved > 0 && (
+                            <>
+                              <div style={styles.totalRow}>
+                                <span>Withholding tax{whtMode === "rate" ? ` (${whtRate}%)` : ""}:</span>
+                                <span>Rs. {whtResolved.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                              </div>
+                              <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
+                                <span>Balance due:</span><span>Rs. {balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1758,6 +1806,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
 const styles = {
   row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
+  // Even, responsive field grid for the bill-detail fields — equal columns
+  // that wrap cleanly (no lone last field stretching full width). Collapses to
+  // one column on phones; alignItems:end keeps inputs aligned when a label
+  // (e.g. "GST Rate (%) 🔒 locked") wraps to two lines.
+  fieldGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(180px, 100%), 1fr))", gap: "0.75rem 1rem", marginBottom: "1rem", alignItems: "end" },
   label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
   input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
   select: { width: "100%", padding: "0.6rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", cursor: "pointer" },

@@ -41,6 +41,13 @@
         // reference product's Lock Date). Null = no lock.
         public DateTime? GlLockDate { get; set; }
 
+        // ── Withholding tax default (Manager.io parity) ──
+        // Company-level default income-tax withholding rate (%) that pre-fills
+        // the WHT field on new sales invoices and purchase bills. Operators
+        // override or clear it per document. Null = no default (field starts
+        // empty). Purely a convenience pre-fill; never forces WHT onto a doc.
+        public decimal? DefaultWithholdingTaxRate { get; set; }
+
         // ── Default inventory GL accounts (2026-07-14) ──
         // Where inventory item-type lines post when the item (via its
         // CompanyItemTypeSetting overlay) doesn't pin its own account. These

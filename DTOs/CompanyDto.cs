@@ -52,6 +52,8 @@
         // Null when GL posting has never been enabled for the company.
         public int? DefaultSalesAccountId { get; set; }
         public int? DefaultPurchaseAccountId { get; set; }
+        /// <summary>Company default income-tax withholding rate (%) that pre-fills new invoices/bills. Null = none.</summary>
+        public decimal? DefaultWithholdingTaxRate { get; set; }
 
         // ── Inventory module toggles ──────────────────────────────
         // Off by default. While off, no Stock movements are emitted by

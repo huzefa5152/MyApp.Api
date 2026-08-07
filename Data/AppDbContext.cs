@@ -498,6 +498,8 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Invoice>().Property(i => i.GSTAmount).HasPrecision(18, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.GrandTotal).HasPrecision(18, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.AmountPaid).HasPrecision(18, 2);
+            modelBuilder.Entity<Invoice>().Property(i => i.WithholdingTaxRate).HasPrecision(5, 2);
+            modelBuilder.Entity<Invoice>().Property(i => i.WithholdingTaxAmount).HasPrecision(18, 2);
             modelBuilder.Entity<InvoiceItem>().Property(ii => ii.UnitPrice).HasPrecision(18, 2);
             modelBuilder.Entity<InvoiceItem>().Property(ii => ii.LineTotal).HasPrecision(18, 2);
 
@@ -867,6 +869,15 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
                 .HasOne<MyApp.Api.Models.Accounting.Account>().WithMany()
                 .HasForeignKey(a => a.AccountId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Settle-remainder adjustment: amount + the GL account it posts to
+            // (Restrict, like AccountId — a referenced account can't be hard-deleted).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .Property(a => a.AdjustmentAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasOne(a => a.AdjustmentAccount).WithMany()
+                .HasForeignKey(a => a.AdjustmentAccountId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
             // Payment.BankAccountId → Accounts, Restrict (same rationale). The
@@ -1577,6 +1588,8 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.GSTAmount).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.GrandTotal).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.AmountPaid).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.WithholdingTaxRate).HasPrecision(5, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(pb => pb.WithholdingTaxAmount).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.SupplierBillNumber).HasMaxLength(100);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.SupplierIRN).HasMaxLength(64);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.ReconciliationStatus).HasMaxLength(20).HasDefaultValue("Pending");
@@ -1852,6 +1865,10 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Company>()
                 .Property(c => c.InventoryFlowVersion)
                 .HasDefaultValue((byte)1);
+
+            modelBuilder.Entity<Company>()
+                .Property(c => c.DefaultWithholdingTaxRate)
+                .HasPrecision(5, 2);
         }
 
     }

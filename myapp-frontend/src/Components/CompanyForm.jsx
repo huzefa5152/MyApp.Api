@@ -43,6 +43,10 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         ntn: "",
         cnic: "",
         strn: "",
+        // Company-wide default withholding-tax rate (%). Prefills the WHT
+        // control on new sales + purchase bills. Empty string / null = no
+        // default (operator turns WHT on per-bill).
+        defaultWithholdingTaxRate: "",
         startingChallanNumber: 0,
         currentChallanNumber: 0,
         startingInvoiceNumber: 0,
@@ -124,6 +128,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 ntn: freshCompany.ntn || "",
                 cnic: freshCompany.cnic || "",
                 strn: freshCompany.strn || "",
+                defaultWithholdingTaxRate: freshCompany.defaultWithholdingTaxRate ?? "",
                 startingChallanNumber: freshCompany.startingChallanNumber || 0,
                 currentChallanNumber: freshCompany.currentChallanNumber || 0,
                 startingInvoiceNumber: freshCompany.startingInvoiceNumber || 0,
@@ -225,6 +230,11 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 fbrDefaultUOM: form.fbrDefaultUOM || null,
                 fbrDefaultPaymentModeRegistered: form.fbrDefaultPaymentModeRegistered || null,
                 fbrDefaultPaymentModeUnregistered: form.fbrDefaultPaymentModeUnregistered || null,
+                // Empty input => null (no company default); otherwise the numeric %.
+                defaultWithholdingTaxRate:
+                    form.defaultWithholdingTaxRate === "" || form.defaultWithholdingTaxRate == null
+                        ? null
+                        : Number(form.defaultWithholdingTaxRate),
             };
 
             let savedCompany;
@@ -330,6 +340,24 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 <div style={formGroup}>
                                     <label style={label}>STRN</label>
                                     <input type="text" name="strn" value={form.strn} onChange={handleChange} style={input} />
+                                </div>
+                                <div style={formGroup}>
+                                    <label style={label}>
+                                        Default Withholding Tax Rate (%)
+                                        <span style={{ fontWeight: 400, color: "#5f6d7e", fontSize: "0.72rem", marginLeft: "0.4rem" }}>
+                                            prefills new sales &amp; purchase bills — leave blank for none
+                                        </span>
+                                    </label>
+                                    <input
+                                        type="number"
+                                        name="defaultWithholdingTaxRate"
+                                        min={0}
+                                        step={0.01}
+                                        value={form.defaultWithholdingTaxRate}
+                                        onChange={handleChange}
+                                        style={input}
+                                        placeholder="e.g. 0.5"
+                                    />
                                 </div>
                                 <div style={formGroup}>
                                     <label style={label}>Logo</label>

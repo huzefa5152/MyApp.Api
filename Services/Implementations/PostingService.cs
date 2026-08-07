@@ -81,7 +81,9 @@ namespace MyApp.Api.Services.Implementations
             // The settlement legs, one per allocation.
             foreach (var a in payment.Allocations)
             {
-                if (a.Amount == 0) continue;
+                if (a.Amount == 0m && a.AdjustmentAmount == 0m) continue;
+                // Settled against the document = cash + settle-remainder adjustment.
+                var settled = a.Amount + a.AdjustmentAmount;
                 Account target;
                 string? partyType = null; int? partyId = null;
                 if (a.InvoiceId.HasValue)
@@ -107,8 +109,8 @@ namespace MyApp.Api.Services.Implementations
                 lines.Add(new JournalLine
                 {
                     AccountId = target.Id,
-                    Debit = isReceipt ? 0m : a.Amount,
-                    Credit = isReceipt ? a.Amount : 0m,
+                    Debit = isReceipt ? 0m : settled,
+                    Credit = isReceipt ? settled : 0m,
                     PartyType = partyType,
                     PartyId = partyId,
                     InvoiceId = a.InvoiceId,
@@ -116,6 +118,22 @@ namespace MyApp.Api.Services.Implementations
                     DivisionId = payment.DivisionId,
                     Description = payment.Description,
                 });
+
+                // Settle-remainder adjustment (discount / write-off / any account):
+                // sits on the same side as the bank leg (Dr on a receipt, Cr on a
+                // payment) so the AR/AP leg above can clear the FULL settled amount
+                // while cash moved is only a.Amount. Falls back to Suspense if the
+                // chosen account can't be resolved (keeps the entry balanced).
+                if (a.AdjustmentAmount != 0m)
+                {
+                    var adjAcct = (a.AdjustmentAccountId.HasValue
+                        ? accounts.FirstOrDefault(x => x.Id == a.AdjustmentAccountId.Value)
+                        : null) ?? await SuspenseAsync(payment.CompanyId, accounts);
+                    AddLine(lines, adjAcct.Id,
+                        debit: isReceipt ? a.AdjustmentAmount : 0m,
+                        credit: isReceipt ? 0m : a.AdjustmentAmount,
+                        payment.DivisionId, payment.Description);
+                }
             }
 
             // On-account remainder: money moved but not fully matched by settlement
@@ -167,6 +185,12 @@ namespace MyApp.Api.Services.Implementations
                 _ => $"Invoice #{invoice.InvoiceNumber}",
             };
             var net = invoice.GrandTotal - invoice.GSTAmount;
+            // Withholding tax (income-tax) splits the AR line: the customer
+            // settles only the collectible (GrandTotal − WHT); the withheld
+            // slice is a receivable reclaimable from FBR (Manager parity). WHT is
+            // 0 on notes (out of scope), so this is a no-op there.
+            var wht = invoice.WithholdingTaxAmount;
+            var collectible = invoice.GrandTotal - wht;
 
             // Split the net across the per-line resolved income accounts (design
             // §4/§6). Inventory item-type lines resolve to line → item-type
@@ -186,8 +210,8 @@ namespace MyApp.Api.Services.Implementations
             var arLine = new JournalLine
             {
                 AccountId = ar.Id,
-                Debit = isCreditNote ? 0m : invoice.GrandTotal,
-                Credit = isCreditNote ? invoice.GrandTotal : 0m,
+                Debit = isCreditNote ? 0m : collectible,
+                Credit = isCreditNote ? collectible : 0m,
                 PartyType = "Client",
                 PartyId = invoice.ClientId,
                 InvoiceId = invoice.Id,
@@ -201,6 +225,12 @@ namespace MyApp.Api.Services.Implementations
             if (outputTax != null)
                 AddLine(lines, outputTax.Id, debit: isCreditNote ? invoice.GSTAmount : 0m,
                     credit: isCreditNote ? 0m : invoice.GSTAmount, invoice.DivisionId, label);
+            if (wht != 0m)
+            {
+                var whtReceivable = await ResolveAsync(invoice.CompanyId, accounts, ControlType.WithholdingReceivable, "withholding tax receivable");
+                AddLine(lines, whtReceivable.Id, debit: isCreditNote ? 0m : wht,
+                    credit: isCreditNote ? wht : 0m, invoice.DivisionId, label);
+            }
 
             await WriteEntryAsync(invoice.CompanyId, SourceDocType.Invoice, invoice.Id,
                 invoice.Date, label, invoice.DivisionId, lines);
@@ -226,6 +256,11 @@ namespace MyApp.Api.Services.Implementations
 
             var label = $"Bill #{bill.PurchaseBillNumber}";
             var net = bill.GrandTotal - bill.GSTAmount;
+            // Withholding tax splits the AP line: we owe the supplier only the
+            // collectible (GrandTotal − WHT); the withheld slice is a payable we
+            // remit to FBR (the "accounts payable increase" — Manager parity).
+            var wht = bill.WithholdingTaxAmount;
+            var collectible = bill.GrandTotal - wht;
 
             // Split the net across the per-line resolved expense/COGS accounts
             // (design §4/§6): inventory lines resolve to line → item-type overlay
@@ -250,13 +285,18 @@ namespace MyApp.Api.Services.Implementations
             {
                 AccountId = ap.Id,
                 Debit = 0m,
-                Credit = bill.GrandTotal,
+                Credit = collectible,
                 PartyType = "Supplier",
                 PartyId = bill.SupplierId,
                 PurchaseBillId = bill.Id,
                 DivisionId = bill.DivisionId,
                 Description = label,
             });
+            if (wht != 0m)
+            {
+                var whtPayable = await ResolveAsync(bill.CompanyId, accounts, ControlType.WithholdingPayable, "withholding tax payable");
+                AddLine(lines, whtPayable.Id, debit: 0m, credit: wht, bill.DivisionId, label);
+            }
 
             await WriteEntryAsync(bill.CompanyId, SourceDocType.PurchaseBill, bill.Id,
                 bill.Date, label, bill.DivisionId, lines);

@@ -20,6 +20,12 @@ namespace MyApp.Api.DTOs
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }
 
+        // ── Withholding tax (income-tax, Manager.io parity) — mirror of InvoiceDto,
+        // supplier side. Rate non-null → % mode; rate null & amount > 0 → fixed
+        // amount. Reduces BalanceDue (what we owe the supplier); never sent to FBR.
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal WithholdingTaxAmount { get; set; }
+
         // ── Payments (design §11.5) — mirror of InvoiceDto. PaymentStatus is
         // "Unpaid" | "PartiallyPaid" | "Paid" | "Overdue", derived at read time.
         public DateTime? DueDate { get; set; }
@@ -91,6 +97,8 @@ namespace MyApp.Api.DTOs
         public string? PaymentTerms { get; set; }
         public int? DocumentType { get; set; }
         public string? PaymentMode { get; set; }
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal WithholdingTaxAmount { get; set; }
         public List<CreatePurchaseItemDto> Items { get; set; } = new();
     }
 
@@ -136,6 +144,8 @@ namespace MyApp.Api.DTOs
         public string? PaymentTerms { get; set; }
         public int? DocumentType { get; set; }
         public string? PaymentMode { get; set; }
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal WithholdingTaxAmount { get; set; }
         public List<UpdatePurchaseItemDto> Items { get; set; } = new();
     }
 

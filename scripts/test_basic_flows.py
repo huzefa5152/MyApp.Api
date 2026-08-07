@@ -518,6 +518,53 @@ def print_report() -> int:
     return 0 if fail == 0 else 1
 
 
+# ── Suite 8: Withholding tax (Manager.io parity) ───────────────────
+def test_withholding_tax_flow(base: str, token: str, company: dict, client: dict) -> None:
+    """WHT reduces the collectible balance due (not GrandTotal/GST/FBR payload);
+    a receipt of the collectible pays the bill in full; over-allocation past the
+    collectible is rejected. Rate mode uses Manager invoice #1316's numbers."""
+    suite = "8. Withholding tax"
+    print(f"\n=== {suite} ===")
+    it_id = first_item_type_id(base, token)
+    # 35 x 3900 = 136,500 net; +18% GST = 161,070 gross; 5.5% of gross = 8,858.85
+    st, inv = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "date": pkt_date_iso(), "companyId": company["id"], "clientId": client["id"],
+        "gstRate": 18, "withholdingTaxRate": 5.5,
+        "items": [{"description": "WHT Good", "quantity": 35, "uom": "Pcs",
+                   "unitPrice": 3900, "itemTypeId": it_id}]})
+    if st not in (200, 201):
+        check(suite, "create WHT invoice", False, f"{st} {inv}"); return
+    check(suite, "grand total unchanged = 161070", abs(float(inv.get("grandTotal") or 0) - 161070) < 0.01, f"{inv.get('grandTotal')}")
+    check(suite, "GST unchanged = 24570", abs(float(inv.get("gstAmount") or 0) - 24570) < 0.01, f"{inv.get('gstAmount')}")
+    check(suite, "WHT amount = 8858.85 (5.5% of gross)", abs(float(inv.get("withholdingTaxAmount") or 0) - 8858.85) < 0.01, f"{inv.get('withholdingTaxAmount')}")
+    check(suite, "balance due = 152211.15 (grand - WHT)", abs(float(inv.get("balanceDue") or 0) - 152211.15) < 0.01, f"{inv.get('balanceDue')}")
+    st, rc = http("POST", f"/api/payments/receipts/company/{company['id']}", base, token=token, body={
+        "direction": "Receipt", "date": pkt_date_iso(), "contactType": "Client",
+        "contactId": client["id"], "method": "Cash",
+        "allocations": [{"invoiceId": inv["id"], "amount": 152211.15}]})
+    check(suite, "receipt of collectible accepted", st in (200, 201), f"{st} {rc}")
+    _, inv2 = http("GET", f"/api/invoices/{inv['id']}", base, token=token)
+    check(suite, "invoice Paid after collectible received",
+          abs(float(inv2.get("balanceDue") or 0)) < 0.01 and inv2.get("paymentStatus") == "Paid",
+          f"bal={inv2.get('balanceDue')} status={inv2.get('paymentStatus')}")
+    st, _ = http("POST", f"/api/payments/receipts/company/{company['id']}", base, token=token, body={
+        "direction": "Receipt", "date": pkt_date_iso(), "contactType": "Client",
+        "contactId": client["id"], "method": "Cash",
+        "allocations": [{"invoiceId": inv["id"], "amount": 1.00}]})
+    check(suite, "over-allocation past collectible rejected", st == 400, f"expected 400 got {st}")
+    st, invf = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "date": pkt_date_iso(), "companyId": company["id"], "clientId": client["id"],
+        "gstRate": 18, "withholdingTaxAmount": 200,
+        "items": [{"description": "Fixed WHT", "quantity": 10, "uom": "Pcs",
+                   "unitPrice": 100, "itemTypeId": it_id}]})
+    if st in (200, 201):
+        check(suite, "fixed-amount: balance due = grand - 200",
+              abs(float(invf.get("balanceDue") or 0) - (float(invf.get("grandTotal") or 0) - 200)) < 0.01,
+              f"bal={invf.get('balanceDue')} grand={invf.get('grandTotal')}")
+    else:
+        check(suite, "fixed-amount invoice created", False, f"{st}")
+
+
 # ── Main ───────────────────────────────────────────────────────────
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
@@ -553,6 +600,7 @@ def main() -> int:
         test_item_rate_history(args.base, token, company, classified)
         test_tax_calculations(args.base, token, company, client)
         test_future_date_guard(args.base, token, company, client, challan)
+        test_withholding_tax_flow(args.base, token, company, client)
     finally:
         teardown(args.base, token, company, args.keep)
 

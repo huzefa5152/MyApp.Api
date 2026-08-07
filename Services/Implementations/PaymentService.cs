@@ -82,22 +82,48 @@ namespace MyApp.Api.Services.Implementations
             // side for the direction. Collect the documents we'll need to touch.
             var invoiceIds = new List<int>();
             var billIds = new List<int>();
+            var glEnabled = await _posting.IsEnabledAsync(companyId);
+            var adjAccountIds = new HashSet<int>();
             foreach (var a in dto.Allocations)
             {
                 var targets = new[] { a.InvoiceId.HasValue, a.PurchaseBillId.HasValue, a.AccountId.HasValue }
                     .Count(x => x);
                 if (targets != 1)
                     throw new InvalidOperationException("Each allocation line must target exactly one of: invoice, purchase bill, or account.");
-                if (a.Amount <= 0)
-                    throw new InvalidOperationException("Allocation amounts must be greater than zero.");
+                if (a.Amount < 0 || a.AdjustmentAmount < 0)
+                    throw new InvalidOperationException("Allocation amounts cannot be negative.");
+                // A line may carry cash, a settle-remainder adjustment, or both —
+                // but the total applied must be positive.
+                if (a.Amount + a.AdjustmentAmount <= 0)
+                    throw new InvalidOperationException("Each allocation must apply a positive amount (cash and/or adjustment).");
 
                 if (direction == PaymentDirection.Receipt && a.PurchaseBillId.HasValue)
                     throw new InvalidOperationException("A receipt cannot settle a purchase bill.");
                 if (direction == PaymentDirection.Payment && a.InvoiceId.HasValue)
                     throw new InvalidOperationException("A payment cannot settle a sales invoice.");
 
+                if (a.AdjustmentAmount > 0)
+                {
+                    // The adjustment clears part of a settled invoice/bill — it has
+                    // no meaning on a direct account line.
+                    if (!a.InvoiceId.HasValue && !a.PurchaseBillId.HasValue)
+                        throw new InvalidOperationException("A settle-remainder adjustment can only be applied to an invoice or bill line.");
+                    if (glEnabled && !a.AdjustmentAccountId.HasValue)
+                        throw new InvalidOperationException("Choose the account the adjustment posts to (e.g. Discount allowed, Bad debts written off, or another account).");
+                    if (a.AdjustmentAccountId.HasValue) adjAccountIds.Add(a.AdjustmentAccountId.Value);
+                }
+
                 if (a.InvoiceId.HasValue) invoiceIds.Add(a.InvoiceId.Value);
                 if (a.PurchaseBillId.HasValue) billIds.Add(a.PurchaseBillId.Value);
+            }
+            // Every chosen adjustment account must belong to this company's CoA.
+            if (adjAccountIds.Count > 0)
+            {
+                var valid = await _context.Accounts
+                    .Where(x => x.CompanyId == companyId && adjAccountIds.Contains(x.Id))
+                    .Select(x => x.Id).ToListAsync();
+                if (adjAccountIds.Except(valid).Any())
+                    throw new InvalidOperationException("The selected adjustment account doesn't belong to this company.");
             }
 
             // Period-close guard (GL lock date) before any writes.
@@ -157,19 +183,24 @@ namespace MyApp.Api.Services.Implementations
                          .GroupBy(a => a.InvoiceId!.Value))
             {
                 var inv = invoices.First(i => i.Id == grp.Key);
-                var newTotal = inv.AmountPaid + grp.Sum(a => a.Amount);
-                if (newTotal > inv.GrandTotal)
+                // Cap at the COLLECTIBLE (GrandTotal − withheld), not GrandTotal:
+                // the withheld slice is settled by the customer at invoice time,
+                // so only the reduced balance can be received.
+                var collectible = WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount);
+                var newTotal = inv.AmountPaid + grp.Sum(a => a.Amount + a.AdjustmentAmount);
+                if (newTotal > collectible)
                     throw new InvalidOperationException(
-                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (balance due is {inv.GrandTotal - inv.AmountPaid:0.00}).");
+                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (balance due is {collectible - inv.AmountPaid:0.00}).");
             }
             foreach (var grp in dto.Allocations.Where(a => a.PurchaseBillId.HasValue)
                          .GroupBy(a => a.PurchaseBillId!.Value))
             {
                 var bill = bills.First(b => b.Id == grp.Key);
-                var newTotal = bill.AmountPaid + grp.Sum(a => a.Amount);
-                if (newTotal > bill.GrandTotal)
+                var collectible = WithholdingTaxCalculator.Collectible(bill.GrandTotal, bill.WithholdingTaxAmount);
+                var newTotal = bill.AmountPaid + grp.Sum(a => a.Amount + a.AdjustmentAmount);
+                if (newTotal > collectible)
                     throw new InvalidOperationException(
-                        $"Payment would over-pay Bill #{bill.PurchaseBillNumber} (balance due is {bill.GrandTotal - bill.AmountPaid:0.00}).");
+                        $"Payment would over-pay Bill #{bill.PurchaseBillNumber} (balance due is {collectible - bill.AmountPaid:0.00}).");
             }
 
             // Division tag: when the caller didn't pick one, default from the
@@ -213,6 +244,8 @@ namespace MyApp.Api.Services.Implementations
                     PurchaseBillId = a.PurchaseBillId,
                     AccountId = a.AccountId,
                     Amount = a.Amount,
+                    AdjustmentAmount = a.AdjustmentAmount,
+                    AdjustmentAccountId = a.AdjustmentAmount > 0 ? a.AdjustmentAccountId : null,
                 }).ToList(),
             };
 
@@ -330,22 +363,24 @@ namespace MyApp.Api.Services.Implementations
             foreach (var grp in dto.Allocations.Where(a => a.InvoiceId.HasValue).GroupBy(a => a.InvoiceId!.Value))
             {
                 var inv = invoices.First(i => i.Id == grp.Key);
+                var collectible = WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount);
                 var paidByOthers = await _context.PaymentAllocations
                     .Where(pa => pa.InvoiceId == grp.Key && pa.PaymentId != id && !pa.Payment.IsCancelled)
-                    .SumAsync(pa => (decimal?)pa.Amount) ?? 0m;
-                if (paidByOthers + grp.Sum(a => a.Amount) > inv.GrandTotal)
+                    .SumAsync(pa => (decimal?)(pa.Amount + pa.AdjustmentAmount)) ?? 0m;
+                if (paidByOthers + grp.Sum(a => a.Amount + a.AdjustmentAmount) > collectible)
                     throw new InvalidOperationException(
-                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (available is {inv.GrandTotal - paidByOthers:0.00}).");
+                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (available is {collectible - paidByOthers:0.00}).");
             }
             foreach (var grp in dto.Allocations.Where(a => a.PurchaseBillId.HasValue).GroupBy(a => a.PurchaseBillId!.Value))
             {
                 var bill = bills.First(b => b.Id == grp.Key);
+                var collectible = WithholdingTaxCalculator.Collectible(bill.GrandTotal, bill.WithholdingTaxAmount);
                 var paidByOthers = await _context.PaymentAllocations
                     .Where(pa => pa.PurchaseBillId == grp.Key && pa.PaymentId != id && !pa.Payment.IsCancelled)
-                    .SumAsync(pa => (decimal?)pa.Amount) ?? 0m;
-                if (paidByOthers + grp.Sum(a => a.Amount) > bill.GrandTotal)
+                    .SumAsync(pa => (decimal?)(pa.Amount + pa.AdjustmentAmount)) ?? 0m;
+                if (paidByOthers + grp.Sum(a => a.Amount + a.AdjustmentAmount) > collectible)
                     throw new InvalidOperationException(
-                        $"Payment would over-pay Bill #{bill.PurchaseBillNumber} (available is {bill.GrandTotal - paidByOthers:0.00}).");
+                        $"Payment would over-pay Bill #{bill.PurchaseBillNumber} (available is {collectible - paidByOthers:0.00}).");
             }
 
             // Documents this payment used to touch — reflow them too even if the
@@ -379,6 +414,8 @@ namespace MyApp.Api.Services.Implementations
                     PurchaseBillId = a.PurchaseBillId,
                     AccountId = a.AccountId,
                     Amount = a.Amount,
+                    AdjustmentAmount = a.AdjustmentAmount,
+                    AdjustmentAccountId = a.AdjustmentAmount > 0 ? a.AdjustmentAccountId : null,
                 }));
                 await _context.SaveChangesAsync();
 
@@ -480,9 +517,10 @@ namespace MyApp.Api.Services.Implementations
 
         private async Task RecomputeInvoiceAsync(int invoiceId)
         {
+            // Settled = cash + settle-remainder adjustment — both clear the invoice.
             var paid = await _context.PaymentAllocations
                 .Where(a => a.InvoiceId == invoiceId && !a.Payment.IsCancelled)
-                .SumAsync(a => (decimal?)a.Amount) ?? 0m;
+                .SumAsync(a => (decimal?)(a.Amount + a.AdjustmentAmount)) ?? 0m;
             var inv = await _context.Invoices.FirstOrDefaultAsync(i => i.Id == invoiceId);
             if (inv != null) inv.AmountPaid = paid;
         }
@@ -491,7 +529,7 @@ namespace MyApp.Api.Services.Implementations
         {
             var paid = await _context.PaymentAllocations
                 .Where(a => a.PurchaseBillId == billId && !a.Payment.IsCancelled)
-                .SumAsync(a => (decimal?)a.Amount) ?? 0m;
+                .SumAsync(a => (decimal?)(a.Amount + a.AdjustmentAmount)) ?? 0m;
             var bill = await _context.PurchaseBills.FirstOrDefaultAsync(b => b.Id == billId);
             if (bill != null) bill.AmountPaid = paid;
         }
@@ -551,6 +589,9 @@ namespace MyApp.Api.Services.Implementations
                                   : a.AccountId.HasValue ? "Direct"
                                   : null,
                     Amount = a.Amount,
+                    AdjustmentAmount = a.AdjustmentAmount,
+                    AdjustmentAccountId = a.AdjustmentAccountId,
+                    AdjustmentAccountName = a.AdjustmentAccount != null ? a.AdjustmentAccount.Name : null,
                 }).ToList(),
             };
         }

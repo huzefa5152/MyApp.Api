@@ -22,12 +22,28 @@ namespace MyApp.Api.Models.Accounting
         public int? PurchaseBillId { get; set; }   // Payment → purchase bill
         public int? AccountId { get; set; }        // OR a direct income/expense account (CoA phase)
 
-        /// <summary>Amount applied by this line. decimal(18,2) — see Payment.Amount.</summary>
+        /// <summary>Cash amount applied by this line. decimal(18,2) — see Payment.Amount.</summary>
         public decimal Amount { get; set; }
+
+        /// <summary>
+        /// Non-cash portion that ALSO clears the settled invoice/bill — the
+        /// Manager-style "settle remainder" (operator receives less than the
+        /// balance and routes the gap to a GL account: a discount, a write-off,
+        /// a carry-forward receivable, or any account they pick). The amount
+        /// cleared against the document is <see cref="Amount"/> + this; the
+        /// payment's cash total stays Σ Amount. 0 for a plain cash allocation.
+        /// </summary>
+        public decimal AdjustmentAmount { get; set; }
+
+        /// <summary>GL account the adjustment posts to when the ledger is on.
+        /// Null when there is no adjustment, or the company runs GL-off (the
+        /// adjustment then simply clears the balance with no posting).</summary>
+        public int? AdjustmentAccountId { get; set; }
 
         // Navigation
         public Payment Payment { get; set; } = null!;
         public Invoice? Invoice { get; set; }
         public PurchaseBill? PurchaseBill { get; set; }
+        public Account? AdjustmentAccount { get; set; }
     }
 }

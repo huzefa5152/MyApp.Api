@@ -61,6 +61,8 @@
         // false to create the company with GL off and enable it later from the
         // Accounting page. Only consulted when a company is created.
         public bool EnableGl { get; set; } = true;
+        /// <summary>Optional company default withholding-tax rate (%) pre-filled on new invoices/bills.</summary>
+        public decimal? DefaultWithholdingTaxRate { get; set; }
 
         public int StartingPurchaseBillNumber { get; set; }
         public int StartingGoodsReceiptNumber { get; set; }

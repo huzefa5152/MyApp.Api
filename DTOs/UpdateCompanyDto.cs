@@ -41,5 +41,9 @@
 
         // Tenant isolation flag. See CompanyDto for semantics.
         public bool IsTenantIsolated { get; set; }
+
+        // Company default income-tax withholding rate (%) — pre-fills new
+        // invoices/bills. Null clears the default. See CompanyDto for semantics.
+        public decimal? DefaultWithholdingTaxRate { get; set; }
     }
 }

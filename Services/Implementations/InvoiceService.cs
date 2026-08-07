@@ -207,11 +207,15 @@ namespace MyApp.Api.Services.Implementations
             GrandTotal = inv.GrandTotal,
             AmountInWords = inv.AmountInWords,
             PaymentTerms = inv.PaymentTerms,
+            WithholdingTaxRate = inv.WithholdingTaxRate,
+            WithholdingTaxAmount = inv.WithholdingTaxAmount,
             DueDate = inv.DueDate,
             AmountPaid = inv.AmountPaid,
-            BalanceDue = PaymentStatusCalculator.BalanceDue(inv.GrandTotal, inv.AmountPaid),
-            PaymentStatus = PaymentStatusCalculator.Status(inv.GrandTotal, inv.AmountPaid, inv.DueDate).ToString(),
-            DaysOverdue = PaymentStatusCalculator.DaysOverdue(inv.GrandTotal, inv.AmountPaid, inv.DueDate),
+            // Collectible = GrandTotal − WHT; balance due + status settle against
+            // it so the withheld slice reads as settled at invoice time (Manager parity).
+            BalanceDue = PaymentStatusCalculator.BalanceDue(WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount), inv.AmountPaid),
+            PaymentStatus = PaymentStatusCalculator.Status(WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount), inv.AmountPaid, inv.DueDate).ToString(),
+            DaysOverdue = PaymentStatusCalculator.DaysOverdue(WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount), inv.AmountPaid, inv.DueDate),
             DocumentType = inv.DocumentType,
             PaymentMode = inv.PaymentMode,
             FbrInvoiceNumber = inv.FbrInvoiceNumber,
@@ -730,6 +734,8 @@ namespace MyApp.Api.Services.Implementations
                     GSTRate = dto.GSTRate,
                     GSTAmount = gstAmount,
                     GrandTotal = grandTotal,
+                    WithholdingTaxRate = dto.WithholdingTaxRate,
+                    WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(dto.WithholdingTaxRate, grandTotal, dto.WithholdingTaxAmount),
                     AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                     PaymentTerms = dto.PaymentTerms,
                     DocumentType = effectiveDocType,
@@ -1089,6 +1095,8 @@ namespace MyApp.Api.Services.Implementations
                     GSTRate = dto.GSTRate,
                     GSTAmount = gstAmount,
                     GrandTotal = grandTotal,
+                    WithholdingTaxRate = dto.WithholdingTaxRate,
+                    WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(dto.WithholdingTaxRate, grandTotal, dto.WithholdingTaxAmount),
                     AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                     PaymentTerms = finalPaymentTerms,
                     DocumentType = effectiveDocType,
@@ -1292,6 +1300,8 @@ namespace MyApp.Api.Services.Implementations
                     invoice.Date = dto.Date.Value;
                 }
                 invoice.GSTRate = dto.GSTRate;
+                invoice.WithholdingTaxRate = dto.WithholdingTaxRate;
+                invoice.WithholdingTaxAmount = dto.WithholdingTaxAmount;   // reflowed below from rate/amount mode
                 invoice.PaymentTerms = dto.PaymentTerms;
                 invoice.DocumentType = dto.DocumentType;
                 invoice.PaymentMode = dto.PaymentMode;
@@ -1400,6 +1410,7 @@ namespace MyApp.Api.Services.Implementations
                 invoice.Subtotal = invoice.Items.Sum(ii => ii.LineTotal);
                 invoice.GSTAmount = Math.Round(invoice.Subtotal * invoice.GSTRate / 100, 2);
                 invoice.GrandTotal = invoice.Subtotal + invoice.GSTAmount;
+                invoice.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(invoice.WithholdingTaxRate, invoice.GrandTotal, invoice.WithholdingTaxAmount);
                 invoice.AmountInWords = NumberToWordsConverter.Convert(invoice.GrandTotal);
 
                 // Any edit invalidates a previous validation
@@ -1825,6 +1836,7 @@ namespace MyApp.Api.Services.Implementations
                         invoice.Subtotal = newSubtotal;
                         invoice.GSTAmount = Math.Round(newSubtotal * (invoice.GSTRate / 100m), 2, MidpointRounding.AwayFromZero);
                         invoice.GrandTotal = newSubtotal + invoice.GSTAmount;
+                        invoice.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(invoice.WithholdingTaxRate, invoice.GrandTotal, invoice.WithholdingTaxAmount);
                     }
                 }
 
@@ -2282,7 +2294,7 @@ namespace MyApp.Api.Services.Implementations
             }
             else
             {
-                var status = PaymentStatusCalculator.Status(original.GrandTotal, original.AmountPaid, original.DueDate).ToString();
+                var status = PaymentStatusCalculator.Status(WithholdingTaxCalculator.Collectible(original.GrandTotal, original.WithholdingTaxAmount), original.AmountPaid, original.DueDate).ToString();
                 if (status != "Paid")
                     throw new InvalidOperationException("Only a fully paid invoice can have a Credit/Debit Note issued against it (FBR is off for this company). Record the payment first, or void the bill instead.");
             }
@@ -2615,7 +2627,7 @@ namespace MyApp.Api.Services.Implementations
             }
             else
             {
-                if (MyApp.Api.Helpers.PaymentStatusCalculator.Status(original.GrandTotal, original.AmountPaid, original.DueDate)
+                if (MyApp.Api.Helpers.PaymentStatusCalculator.Status(WithholdingTaxCalculator.Collectible(original.GrandTotal, original.WithholdingTaxAmount), original.AmountPaid, original.DueDate)
                     != MyApp.Api.Helpers.PaymentStatus.Paid)
                     throw new InvalidOperationException("FBR integration is off for this company, so a bill can only be corrected once it is fully paid. Edit the bill directly, or record the remaining payment first.");
             }
@@ -2703,6 +2715,12 @@ namespace MyApp.Api.Services.Implementations
                     GSTRate = gstRate,
                     GSTAmount = gstAmount,
                     GrandTotal = grandTotal,
+                    // Inherit the original bill's WHT rate so the delta bill
+                    // withholds consistently (recomputed on its own gross). If
+                    // the original was fixed-amount mode (rate null), the
+                    // supplement carries no WHT — an acceptable v1 edge.
+                    WithholdingTaxRate = original.WithholdingTaxRate,
+                    WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(original.WithholdingTaxRate, grandTotal, 0m),
                     AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                     PaymentTerms = original.PaymentTerms,
                     DocumentType = original.DocumentType,
@@ -2865,6 +2883,9 @@ namespace MyApp.Api.Services.Implementations
                 // AmountInWords was written under the prior ceil rule) stay in
                 // sync with the rounded total without needing a re-save.
                 AmountInWords = NumberToWordsConverter.Convert(inv.GrandTotal),
+                WithholdingTaxRate = inv.WithholdingTaxRate,
+                WithholdingTaxAmount = inv.WithholdingTaxAmount,
+                BalanceDueAfterWht = WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount),
                 PaymentTerms = inv.PaymentTerms,
                 Items = inv.Items.Select((ii, idx) => new PrintBillItemDto
                 {

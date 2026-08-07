@@ -152,6 +152,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // (so "filter to a division → New Bill" lands in that division).
   const [divisionId, setDivisionId] = useState(defaultDivisionId ? String(defaultDivisionId) : "");
   const [gstRate, setGstRate] = useState(18);
+  // Withholding tax (income tax that sits ON TOP of GST — never changes
+  // subtotal / GST / grand total). "none" | "rate" (a %) | "amount" (fixed PKR).
+  // Prefilled from the company's default rate below when one is configured.
+  const [whtMode, setWhtMode] = useState("none");
+  const [whtRate, setWhtRate] = useState("");
+  const [whtAmount, setWhtAmount] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
   // Document Type is locked to Sale Invoice (4) on the no-challan flow.
   // Credit Note (10) and Debit Note (9) get their own dedicated screens
@@ -438,6 +444,16 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     company?.fbrDefaultPaymentModeUnregistered,
   ]);
 
+  // Prefill the WHT rate from the company default (rate-mode) when one is
+  // configured. Runs once when the default becomes available; the primitive
+  // dependency stays stable afterward so it never clobbers operator edits.
+  useEffect(() => {
+    if (company?.defaultWithholdingTaxRate != null) {
+      setWhtMode("rate");
+      setWhtRate(String(company.defaultWithholdingTaxRate));
+    }
+  }, [company?.defaultWithholdingTaxRate]);
+
   // Per-row helpers
   const updateRow = (localId, patch) =>
     setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, ...patch } : r)));
@@ -597,6 +613,13 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
   const grandTotal = subtotal + gstAmount;
 
+  // Withholding tax — rate-mode = % of the gross (subtotal + GST), rounded to
+  // 2dp exactly like the backend (Math.round(x*100)/100). Fixed-amount mode =
+  // the typed PKR value. Balance due the buyer pays = grandTotal − WHT.
+  const computedWhtAmount = Math.round(grandTotal * (parseFloat(whtRate) || 0)) / 100;
+  const whtResolved = whtMode === "none" ? 0 : (whtMode === "rate" ? computedWhtAmount : (parseFloat(whtAmount) || 0));
+  const balanceDue = grandTotal - whtResolved;
+
   const rowErrors = (r) => {
     const errs = [];
     // Every bill line must be classified — an Item Type OR a Non-Inventory
@@ -647,6 +670,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         divisionId: divisionId ? parseInt(divisionId) : null,
         clientId: parseInt(selectedClientId),
         gstRate: parseFloat(gstRate),
+        // Withholding tax: rate-mode ships the %, fixed-amount mode ships null
+        // rate + the typed amount. Backend recomputes/clamps the amount.
+        withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
+        withholdingTaxAmount: whtResolved,
         paymentTerms: paymentTerms || null,
         scenarioId: scenarioCode || null,
         documentType: documentType || null,
@@ -1013,6 +1040,38 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               />
                             </div>
                             <div style={{ flex: 1, minWidth: 140 }}>
+                              <label style={styles.label}>Withholding Tax</label>
+                              <select style={styles.input} value={whtMode} onChange={(e) => setWhtMode(e.target.value)} title="Income tax withheld on top of GST — reduces the balance due, not the invoice total">
+                                <option value="none">None</option>
+                                <option value="rate">Rate %</option>
+                                <option value="amount">Fixed amount</option>
+                              </select>
+                            </div>
+                            {whtMode === "rate" && (
+                              <div style={{ flex: 1, minWidth: 120 }}>
+                                <label style={styles.label}>WHT Rate (%)</label>
+                                <input
+                                  type="number" min={0} step={0.01}
+                                  style={styles.input}
+                                  value={whtRate}
+                                  onChange={(e) => setWhtRate(e.target.value)}
+                                  placeholder="e.g. 5.5"
+                                />
+                              </div>
+                            )}
+                            {whtMode === "amount" && (
+                              <div style={{ flex: 1, minWidth: 120 }}>
+                                <label style={styles.label}>WHT Amount (Rs.)</label>
+                                <input
+                                  type="number" min={0} step={0.01}
+                                  style={styles.input}
+                                  value={whtAmount}
+                                  onChange={(e) => setWhtAmount(e.target.value)}
+                                  placeholder="0.00"
+                                />
+                              </div>
+                            )}
+                            <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Payment Terms</label>
                               <input type="text" style={styles.input} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Optional" />
                             </div>
@@ -1347,6 +1406,17 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
                           <span>Grand Total:</span><span>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
+                        {whtResolved > 0 && (
+                          <>
+                            <div style={styles.totalRow}>
+                              <span>Withholding tax{whtMode === "rate" ? ` (${whtRate}%)` : ""}:</span>
+                              <span>Rs. {whtResolved.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
+                              <span>Balance due:</span><span>Rs. {balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </>

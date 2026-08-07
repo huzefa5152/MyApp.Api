@@ -55,6 +55,11 @@ namespace MyApp.Api.DTOs
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
         public string AmountInWords { get; set; } = "";
+        // Withholding tax (income-tax) — 0 when none. Templates render the WHT
+        // line + net payable only when WithholdingTaxAmount > 0.
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal WithholdingTaxAmount { get; set; }
+        public decimal BalanceDueAfterWht { get; set; }
         public string? PaymentTerms { get; set; }
         public List<PrintBillItemDto> Items { get; set; } = new();
     }
@@ -308,6 +313,10 @@ namespace MyApp.Api.DTOs
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
         public string AmountInWords { get; set; } = "";
+        // Withholding tax (income-tax) — 0 when none.
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal WithholdingTaxAmount { get; set; }
+        public decimal BalanceDueAfterWht { get; set; }
         public List<PrintPurchaseBillItemDto> Items { get; set; } = new();
     }
 

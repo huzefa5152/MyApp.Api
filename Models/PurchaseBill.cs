@@ -51,6 +51,17 @@ namespace MyApp.Api.Models
         public DateTime? DueDate { get; set; }
         public decimal AmountPaid { get; set; }
 
+        // ── Withholding tax (income-tax, s.153 — Manager.io parity) ──
+        // Tax WE withhold at source when paying this supplier bill and remit to
+        // FBR. Mirror of Invoice, opposite direction: it reduces what we pay the
+        // supplier and, when the GL is on, posts Cr "Withholding tax payable"
+        // (a liability — the "accounts payable increase" behaviour). Never sent
+        // to FBR. Collectible (owed to supplier) = GrandTotal − WithholdingTaxAmount.
+        // Mode is implicit (rate non-null → rate mode; rate null & amount > 0 →
+        // fixed-amount; both empty → no WHT).
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal WithholdingTaxAmount { get; set; }
+
         // FBR digital-invoicing classification — copied from supplier's
         // invoice for completeness (informational; we don't post this).
         public int? DocumentType { get; set; }

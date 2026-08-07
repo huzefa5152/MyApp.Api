@@ -18,6 +18,14 @@ namespace MyApp.Api.DTOs
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }
 
+        // ── Withholding tax (income-tax, Manager.io parity) ──
+        // Input on create/update AND echoed on read. Rate non-null → % mode
+        // (amount derived on gross); rate null & amount > 0 → fixed-amount mode.
+        // WHT reduces BalanceDue (= GrandTotal − WithholdingTaxAmount − AmountPaid)
+        // but never GrandTotal/GSTAmount or the FBR payload.
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal WithholdingTaxAmount { get; set; }
+
         // ── Payments / Receipts (design §11.5) ──
         // DueDate is operator-set; AmountPaid is synced by the receipt flow;
         // BalanceDue/PaymentStatus/DaysOverdue are derived at read time so
@@ -193,6 +201,10 @@ namespace MyApp.Api.DTOs
         /// <summary>Optional payment mode (Cash / Credit / Bank Transfer / Cheque / Online).</summary>
         public string? PaymentMode { get; set; }
         public List<int> ChallanIds { get; set; } = new();
+        /// <summary>Withholding-tax rate % (null = amount-mode or none). Reduces the customer's balance due; never sent to FBR.</summary>
+        public decimal? WithholdingTaxRate { get; set; }
+        /// <summary>WHT amount (PKR) — used directly in fixed-amount mode; recomputed from rate on gross in rate mode.</summary>
+        public decimal WithholdingTaxAmount { get; set; }
         public List<CreateInvoiceItemDto> Items { get; set; } = new();
         public Dictionary<int, DateTime> PoDateUpdates { get; set; } = new();
         /// <summary>
@@ -272,6 +284,8 @@ namespace MyApp.Api.DTOs
         /// <summary>Customer PO for the bill — manual entry, or prefilled from the linked order.</summary>
         public string? PoNumber { get; set; }
         public DateTime? PoDate { get; set; }
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal WithholdingTaxAmount { get; set; }
         public List<CreateStandaloneInvoiceItemDto> Items { get; set; } = new();
     }
 
@@ -449,6 +463,8 @@ namespace MyApp.Api.DTOs
         public bool UpdateDivision { get; set; }
         public int? DivisionId { get; set; }
 
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal WithholdingTaxAmount { get; set; }
         public List<UpdateInvoiceItemDto> Items { get; set; } = new();
     }
 
