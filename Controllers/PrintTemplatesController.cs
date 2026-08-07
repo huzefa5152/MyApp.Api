@@ -76,7 +76,14 @@ namespace MyApp.Api.Controllers
         // false to avoid parsing every attached workbook just to build a list.
         // Single-template reads (GetById, upload) keep it true so the editor's
         // sheet-pin dropdown still gets the workbook's sheet names.
-        private static PrintTemplateDto ToDto(Models.PrintTemplate t, bool includeSheetNames = true)
+        // includeBody=false drops the heavy HtmlContent + TemplateJson fields. The
+        // company-list endpoint's management/editor path (meta=true) uses this: a
+        // company can hold megabytes of template HTML (one tenant carries ~8.6 MB
+        // across 8 templates), and the Print Templates page + editor dropdown only
+        // need metadata — the body is fetched per-template by id when actually
+        // opened/previewed/duplicated. The picker/print path (meta absent) keeps
+        // the body so document screens still resolve HTML without an extra fetch.
+        private static PrintTemplateDto ToDto(Models.PrintTemplate t, bool includeSheetNames = true, bool includeBody = true)
         {
             bool hasFile = !string.IsNullOrEmpty(t.ExcelTemplatePath) && System.IO.File.Exists(
                 Path.Combine(Directory.GetCurrentDirectory(), (t.ExcelTemplatePath ?? "").TrimStart('/')));
@@ -105,8 +112,8 @@ namespace MyApp.Api.Controllers
                 TemplateType = t.TemplateType,
                 Name = t.Name,
                 IsDefault = t.IsDefault,
-                HtmlContent = t.HtmlContent,
-                TemplateJson = t.TemplateJson,
+                HtmlContent = includeBody ? t.HtmlContent : "",
+                TemplateJson = includeBody ? t.TemplateJson : null,
                 EditorMode = t.EditorMode,
                 HasExcelTemplate = hasFile,
                 ExcelSheetName = t.ExcelSheetName,
@@ -118,7 +125,7 @@ namespace MyApp.Api.Controllers
         [HttpGet("company/{companyId}")]
         [HasPermission("printtemplates.manage.view")]
         [AuthorizeCompany]
-        public async Task<IActionResult> GetByCompany(int companyId)
+        public async Task<IActionResult> GetByCompany(int companyId, [FromQuery] bool meta = false)
         {
             // Audit M-6 (2026-05-13): templates contain operator-authored
             // HTML — gate behind the print-template view perm so general
@@ -131,7 +138,13 @@ namespace MyApp.Api.Controllers
                 templates = templates.Where(t => t.DivisionId == null || divScope.Contains(t.DivisionId.Value)).ToList();
             // Skip the per-template workbook parse on this list path (hot: every
             // document screen's picker hits it). Sheet names aren't used here.
-            return Ok(templates.Select(t => ToDto(t, includeSheetNames: false)));
+            //
+            // meta=true (Print Templates page + editor dropdown): drop the HtmlContent
+            // + TemplateJson bodies too — those callers fetch the body by id when a
+            // template is actually opened, so the list stays tiny even for a tenant
+            // with megabytes of template HTML. meta absent (document-screen pickers):
+            // keep the body so Print / Export PDF resolve HTML without an extra call.
+            return Ok(templates.Select(t => ToDto(t, includeSheetNames: false, includeBody: !meta)));
         }
 
         [HttpGet("company/{companyId}/{templateType}")]

@@ -3,12 +3,13 @@ import { useNavigate } from "react-router-dom";
 import {
   MdDescription, MdBusiness, MdSearch, MdAdd, MdAutoAwesome, MdGridOn,
   MdEdit, MdDelete, MdStar, MdStarBorder, MdVisibility, MdBrush, MdContentCopy,
-  MdUploadFile, MdClose, MdLock, MdCheckCircle,
+  MdUploadFile, MdClose, MdLock, MdCheckCircle, MdApproval,
 } from "react-icons/md";
 import {
-  getTemplatesByCompany, createTemplate, setDefaultTemplate, deleteTemplate,
+  getTemplatesByCompany, getTemplateById, createTemplate, setDefaultTemplate, deleteTemplate,
   uploadExcelTemplateById, deleteExcelTemplateById,
 } from "../api/printTemplateApi";
+import { uploadStamp, deleteStamp, updateStamp } from "../api/stampApi";
 import { getDivisionsByCompany } from "../api/divisionApi";
 import { invalidatePrintTemplateCache } from "../hooks/usePrintTemplates";
 import { useCompany } from "../contexts/CompanyContext";
@@ -30,16 +31,19 @@ const TABS = [
   { key: "print", label: "Print Templates", icon: MdDescription },
   { key: "starter", label: "Starter Templates", icon: MdAutoAwesome },
   { key: "excel", label: "Excel Templates", icon: MdGridOn },
+  { key: "stamps", label: "Stamps", icon: MdApproval },
 ];
 
 export default function PrintTemplatesPage() {
   const navigate = useNavigate();
   const confirm = useConfirm();
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies, companyStamps, refreshStamps } = useCompany();
   const { has } = usePermissions();
   const canManage = has("printtemplates.manage.update");
   const canDelete = has("printtemplates.manage.delete");
   const canApplyStarter = has("printtemplates.starter.apply");
+  const canViewStamps = has("printtemplates.stamps.view");
+  const canManageStamps = has("printtemplates.stamps.manage");
 
   const [tab, setTab] = useState("print");
   const [templates, setTemplates] = useState([]);
@@ -62,6 +66,11 @@ export default function PrintTemplatesPage() {
 
   const [applyTarget, setApplyTarget] = useState(null); // template to apply a starter onto
   const [previewTarget, setPreviewTarget] = useState(null); // template to preview
+  const [previewLoading, setPreviewLoading] = useState(false); // body fetch for preview in flight
+  // Stamps tab
+  const [stampModalOpen, setStampModalOpen] = useState(false);
+  const [stampUploading, setStampUploading] = useState(false);
+  const [stampBusyId, setStampBusyId] = useState(null);
   const [starterToCreate, setStarterToCreate] = useState(null); // starter awaiting a scope choice
   const excelUploadRef = useRef(null);
   const excelTargetIdRef = useRef(null);
@@ -70,8 +79,11 @@ export default function PrintTemplatesPage() {
     if (!selectedCompany) { setTemplates([]); setDivisions([]); return; }
     setLoading(true);
     try {
+      // Metadata only — the cards show name/type/scope/default/excel/date, never
+      // the body. Fetching megabytes of template HTML here was the slow load; the
+      // body is now pulled by id only when a template is previewed or duplicated.
       const [tpls, divs] = await Promise.all([
-        getTemplatesByCompany(selectedCompany.id),
+        getTemplatesByCompany(selectedCompany.id, { meta: true }),
         getDivisionsByCompany(selectedCompany.id).catch(() => ({ data: [] })),
       ]);
       setTemplates(tpls.data || []);
@@ -140,13 +152,30 @@ export default function PrintTemplatesPage() {
   const handleDuplicate = async (t) => {
     setBusyId(t.id);
     try {
+      // The list is metadata-only now, so pull the source body by id before copying.
+      const { data: full } = await getTemplateById(t.id);
       await createTemplate(selectedCompany.id, {
         templateType: t.templateType, divisionId: t.divisionId ?? null,
-        name: `${t.name} (copy)`, htmlContent: t.htmlContent, templateJson: t.templateJson,
-        editorMode: t.editorMode, isDefault: false,
+        name: `${t.name} (copy)`, htmlContent: full.htmlContent, templateJson: full.templateJson,
+        editorMode: full.editorMode, isDefault: false,
       });
       notify(`Duplicated "${t.name}".`, "success"); invalidatePrintTemplateCache(selectedCompany?.id); await load();
     } catch { notify("Failed to duplicate.", "error"); } finally { setBusyId(null); }
+  };
+
+  // Open the full-preview modal. The list is metadata-only, so fetch the body by
+  // id; the modal shows a spinner until it lands (no blank-then-fill flash).
+  const openPreview = async (t) => {
+    setPreviewTarget(t);
+    setPreviewLoading(true);
+    try {
+      const { data: full } = await getTemplateById(t.id);
+      setPreviewTarget((cur) => (cur && cur.id === t.id ? { ...cur, htmlContent: full.htmlContent } : cur));
+    } catch {
+      notify("Failed to load template preview.", "error");
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
   // ── Starter-tab: create a NEW template from a starter ──
@@ -187,6 +216,41 @@ export default function PrintTemplatesPage() {
     setBusyId(t.id);
     try { await deleteExcelTemplateById(t.id); notify("Excel layout removed.", "success"); invalidatePrintTemplateCache(selectedCompany?.id); await load(); }
     catch { notify("Failed to remove Excel layout.", "error"); } finally { setBusyId(null); }
+  };
+
+  // ── Stamps-tab actions ──
+  const handleStampUpload = async (file, name) => {
+    if (!selectedCompany || !file) return;
+    setStampUploading(true);
+    try {
+      await uploadStamp(selectedCompany.id, file, name);
+      notify("Stamp uploaded.", "success");
+      setStampModalOpen(false);
+      await refreshStamps();
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to upload stamp.", "error");
+    } finally { setStampUploading(false); }
+  };
+  const handleStampRename = async (s) => {
+    const name = window.prompt("Stamp name", s.name);
+    if (name == null) return;
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === s.name) return;
+    setStampBusyId(s.id);
+    try { await updateStamp(selectedCompany.id, s.id, { name: trimmed }); await refreshStamps(); notify("Stamp renamed.", "success"); }
+    catch { notify("Failed to rename stamp.", "error"); } finally { setStampBusyId(null); }
+  };
+  const handleStampDelete = async (s) => {
+    const ok = await confirm({ title: "Delete stamp?", message: `Delete "${s.name}"? Any template using {{stamps.${s.slug}}} will show a broken image.`, variant: "danger", confirmText: "Delete" });
+    if (!ok) return;
+    setStampBusyId(s.id);
+    try { await deleteStamp(selectedCompany.id, s.id); notify("Stamp deleted.", "success"); await refreshStamps(); }
+    catch { notify("Failed to delete stamp.", "error"); } finally { setStampBusyId(null); }
+  };
+  const copyStampToken = (s) => {
+    const token = `{{stamps.${s.slug}}}`;
+    try { navigator.clipboard.writeText(token); notify(`Copied ${token}`, "success"); }
+    catch { notify(token, "info"); }
   };
 
   if (!canManage) {
@@ -263,7 +327,7 @@ export default function PrintTemplatesPage() {
 
           {/* Tabs */}
           <div style={st.tabs} role="tablist">
-            {TABS.map((t) => {
+            {TABS.filter((t) => t.key !== "stamps" || canViewStamps).map((t) => {
               const Icon = t.icon;
               const active = tab === t.key;
               return (
@@ -303,7 +367,7 @@ export default function PrintTemplatesPage() {
                       <div style={st.actions}>
                         {busyId === t.id && <span style={st.cardSpin} aria-label="Working…" />}
                         <button style={st.actBtn} title="Edit" disabled={busy} onClick={() => openInEditor(t)}><MdEdit size={15} /></button>
-                        <button style={st.actBtn} title="Preview" disabled={busy} onClick={() => setPreviewTarget(t)}><MdVisibility size={15} /></button>
+                        <button style={st.actBtn} title="Preview" disabled={busy} onClick={() => openPreview(t)}><MdVisibility size={15} /></button>
                         {canApplyStarter && <button style={st.actBtn} title="Import starter design" disabled={busy} onClick={() => setApplyTarget(t)}><MdBrush size={15} /></button>}
                         <button style={st.actBtn} title="Duplicate" disabled={busy} onClick={() => handleDuplicate(t)}><MdContentCopy size={15} /></button>
                         {!t.isDefault && <button style={st.actBtn} title="Set as default" disabled={busy} onClick={() => handleSetDefault(t)}><MdStar size={15} /></button>}
@@ -360,6 +424,50 @@ export default function PrintTemplatesPage() {
               <input ref={excelUploadRef} type="file" accept=".xlsx,.xlsm" style={{ display: "none" }} onChange={handleExcelFile} />
             </>
           )}
+
+          {/* ── Tab: Stamps ── */}
+          {tab === "stamps" && canViewStamps && (
+            <>
+              <p style={st.hint}>
+                Upload stamps or signatures once, then insert them into any template as{" "}
+                <code style={{ fontFamily: "monospace" }}>{"{{stamps.slug}}"}</code> — no more pasting images into HTML.
+                Each template can use different stamps.
+              </p>
+              {canManageStamps && (
+                <div style={{ marginBottom: "1rem" }}>
+                  <button style={{ ...st.btn, ...st.btnPrimary }} onClick={() => setStampModalOpen(true)}>
+                    <MdUploadFile size={16} /> Upload Stamp
+                  </button>
+                </div>
+              )}
+              {companyStamps.length === 0 ? (
+                <Empty label="No stamps yet. Upload a stamp to use it in your print templates." />
+              ) : (
+                <div style={st.grid}>
+                  {companyStamps.map((s) => (
+                    <div key={s.id} style={st.card}>
+                      <div style={st.stampThumbWrap}>
+                        <img src={s.url} alt={s.name} style={st.stampThumbImg} />
+                      </div>
+                      <div style={st.cardTop}>
+                        <span style={st.tName} title={s.name}>{s.name}</span>
+                      </div>
+                      <button style={st.stampToken} onClick={() => copyStampToken(s)} title="Copy merge field">
+                        <code style={{ fontFamily: "monospace", fontSize: "0.72rem", color: colors.blue, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`{{stamps.${s.slug}}}`}</code>
+                        <MdContentCopy size={13} color={colors.textSecondary} />
+                      </button>
+                      <div style={st.actions}>
+                        {stampBusyId === s.id && <span style={st.cardSpin} aria-label="Working…" />}
+                        <button style={st.actBtn} title="Copy merge field" disabled={stampBusyId != null} onClick={() => copyStampToken(s)}><MdContentCopy size={15} /></button>
+                        {canManageStamps && <button style={st.actBtn} title="Rename" disabled={stampBusyId != null} onClick={() => handleStampRename(s)}><MdEdit size={15} /></button>}
+                        {canManageStamps && <button style={{ ...st.actBtn, color: "#dc3545" }} title="Delete" disabled={stampBusyId != null} onClick={() => handleStampDelete(s)}><MdDelete size={15} /></button>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </>
       )}
 
@@ -411,17 +519,92 @@ export default function PrintTemplatesPage() {
               <button style={st.closeBtn} onClick={() => setPreviewTarget(null)} aria-label="Close"><MdClose size={20} /></button>
             </div>
             <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
-              <A4PreviewFrame
-                html={buildTemplatePreviewHtml(previewTarget.templateType, previewTarget.htmlContent || "", {
-                  company: selectedCompany,
-                  division: previewTarget.divisionId != null ? divisionById[previewTarget.divisionId] : null,
-                })}
-                title={`Preview of ${previewTarget.name}`}
-              />
+              {previewLoading && previewTarget.htmlContent == null ? (
+                <Spinner label="Loading preview…" />
+              ) : (
+                <A4PreviewFrame
+                  html={buildTemplatePreviewHtml(previewTarget.templateType, previewTarget.htmlContent || "", {
+                    company: selectedCompany,
+                    division: previewTarget.divisionId != null ? divisionById[previewTarget.divisionId] : null,
+                  })}
+                  title={`Preview of ${previewTarget.name}`}
+                />
+              )}
             </div>
           </div>
         </div>
       )}
+
+      {/* Stamp upload */}
+      {stampModalOpen && (
+        <StampUploadModal
+          uploading={stampUploading}
+          onClose={() => setStampModalOpen(false)}
+          onUpload={handleStampUpload}
+        />
+      )}
+    </div>
+  );
+}
+
+// Self-contained upload modal: pick an image, name it, upload. Local state only.
+function StampUploadModal({ onClose, onUpload, uploading }) {
+  const [file, setFile] = useState(null);
+  const [name, setName] = useState("");
+  const [preview, setPreview] = useState("");
+  const inputRef = useRef(null);
+
+  const onPick = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFile(f);
+    setName((prev) => prev || f.name.replace(/\.[^.]+$/, ""));
+    setPreview(URL.createObjectURL(f));
+  };
+
+  return (
+    <div style={st.scopeOverlay} onClick={onClose}>
+      <div style={st.scopeModal} onClick={(e) => e.stopPropagation()}>
+        <div style={st.scopeHead}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: colors.textPrimary }}>Upload Stamp</h3>
+            <p style={{ margin: "0.2rem 0 0", fontSize: "0.82rem", color: colors.textSecondary }}>PNG, JPG or WebP. A transparent PNG works best for signatures.</p>
+          </div>
+          <button style={st.closeBtn} onClick={onClose} aria-label="Close"><MdClose size={20} /></button>
+        </div>
+        <div style={{ padding: "1rem 1.1rem", display: "flex", flexDirection: "column", gap: "0.8rem" }}>
+          <input ref={inputRef} type="file" accept=".png,.jpg,.jpeg,.webp,.gif" style={{ display: "none" }} onChange={onPick} />
+          <div
+            onClick={() => inputRef.current?.click()}
+            style={{ border: `2px dashed ${colors.inputBorder}`, borderRadius: 10, padding: "1.2rem", textAlign: "center", cursor: "pointer", background: "#f7f9fc" }}
+          >
+            {preview ? (
+              <img src={preview} alt="preview" style={{ maxWidth: "100%", maxHeight: 140, objectFit: "contain" }} />
+            ) : (
+              <div style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>
+                <MdUploadFile size={28} /><div style={{ marginTop: 6 }}>Click to choose an image</div>
+              </div>
+            )}
+          </div>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.8rem", color: colors.textSecondary, fontWeight: 600 }}>
+            Name
+            <input
+              type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Director Signature"
+              style={{ padding: "0.5rem 0.6rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 8, fontSize: "0.9rem" }}
+            />
+          </label>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.2rem" }}>
+            <button style={{ ...st.btn, ...st.btnOutline }} onClick={onClose} disabled={uploading}>Cancel</button>
+            <button
+              style={{ ...st.btn, ...st.btnPrimary, opacity: (!file || uploading) ? 0.6 : 1, cursor: (!file || uploading) ? "default" : "pointer" }}
+              disabled={!file || uploading}
+              onClick={() => onUpload(file, name.trim())}
+            >
+              {uploading ? "Uploading…" : "Upload"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -472,4 +655,7 @@ const st = {
   scopeList: { display: "flex", flexDirection: "column", gap: "0.5rem", padding: "0.9rem 1.1rem", overflow: "auto" },
   scopeBtn: { display: "flex", alignItems: "center", gap: "0.6rem", textAlign: "left", border: `1px solid ${colors.inputBorder}`, background: "#fff", borderRadius: 10, padding: "0.7rem 0.85rem", cursor: "pointer", fontSize: "0.88rem", color: colors.textPrimary },
   scopeHintTxt: { fontSize: "0.74rem", color: colors.textSecondary, fontWeight: 400 },
+  stampThumbWrap: { height: 110, display: "flex", alignItems: "center", justifyContent: "center", background: "#f7f9fc", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, padding: 6 },
+  stampThumbImg: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" },
+  stampToken: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.4rem", width: "100%", padding: "0.3rem 0.5rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 7, background: "#f8fafd", cursor: "pointer" },
 };

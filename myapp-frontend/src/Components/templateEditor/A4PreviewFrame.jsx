@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useLayoutEffect } from "react";
+import { useRef, useState, useMemo, useLayoutEffect, useEffect } from "react";
 
 // A4 at 96dpi.
 const A4_W = 794;
@@ -36,14 +36,25 @@ export default function A4PreviewFrame({ html, title = "Preview" }) {
     return (html || "").includes("</head>") ? html.replace("</head>", tag + "</head>") : tag + (html || "");
   }, [html, zoom]);
 
+  // Cover the blank gap while the iframe renders a large (base64-image) template.
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => { setLoaded(false); }, [html]);
+
   return (
     <div
       ref={stageRef}
-      style={{ flex: 1, minHeight: 0, overflow: "auto", display: "flex", justifyContent: "center", alignItems: "flex-start", background: "#e8e8e8", padding: 12 }}
+      style={{ position: "relative", flex: 1, minHeight: 0, overflow: "auto", display: "flex", justifyContent: "center", alignItems: "flex-start", background: "#e8e8e8", padding: 12 }}
     >
+      {!loaded && (
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: "0.6rem", background: "#e8e8e8", zIndex: 2 }}>
+          <span style={{ width: 22, height: 22, border: "3px solid #d0d7e2", borderTopColor: "#0d47a1", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block" }} />
+          <span style={{ color: "#5f6d7e", fontSize: "0.9rem", fontWeight: 600 }}>Rendering preview…</span>
+        </div>
+      )}
       <iframe
         srcDoc={doc}
         title={title}
+        onLoad={() => setLoaded(true)}
         sandbox="allow-same-origin"
         style={{ width: Math.round(A4_W * zoom), height: Math.round(A4_H * zoom), border: "none", background: "#fff", boxShadow: "0 2px 24px rgba(0,0,0,0.25)", display: "block" }}
       />

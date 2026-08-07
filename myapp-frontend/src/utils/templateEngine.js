@@ -143,9 +143,22 @@ Handlebars.registerHelper("taxEmptyRows", (count) => {
  * works in production (same origin serves /data) and in dev (the Vite server
  * proxies /data to the backend).
  */
+// Company stamps for the ACTIVE company, as { slug: "/data/uploads/stamps/…" }.
+// CompanyContext sets this whenever the selected company (or its stamp list)
+// changes, so every mergeTemplate call — print, PDF, and the editor preview —
+// resolves {{stamps.<slug>}} without each screen having to thread stamps through
+// its per-document data. A document is always printed for the selected company,
+// so the active dict always matches the document being rendered.
+let _activeStamps = {};
+export function setActiveStamps(dict) {
+  _activeStamps = dict || {};
+}
+
 export function mergeTemplate(htmlTemplate, data) {
   const compiled = Handlebars.compile(htmlTemplate);
-  const html = compiled(data);
+  // Inject stamps unless the caller already supplied its own.
+  const merged = { ...(data || {}), stamps: (data && data.stamps) || _activeStamps };
+  const html = compiled(merged);
   if (typeof window !== "undefined" && window.location?.origin) {
     const base = `<base href="${window.location.origin}/">`;
     return /<head[^>]*>/i.test(html)

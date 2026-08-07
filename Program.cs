@@ -250,6 +250,7 @@ builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 builder.Services.AddScoped<IItemTypeRepository, ItemTypeRepository>();
 builder.Services.AddScoped<IPrintTemplateRepository, PrintTemplateRepository>();
+builder.Services.AddScoped<ICompanyStampRepository, CompanyStampRepository>();
 builder.Services.AddScoped<IMergeFieldRepository, MergeFieldRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 

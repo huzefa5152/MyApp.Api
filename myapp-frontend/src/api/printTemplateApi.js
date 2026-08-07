@@ -1,7 +1,10 @@
 import httpClient from "./httpClient";
 
-export const getTemplatesByCompany = (companyId) =>
-  httpClient.get(`/printtemplates/company/${companyId}`);
+// meta:true returns metadata only (no htmlContent/templateJson) — used by the
+// Print Templates page + editor dropdown, which fetch a body by id on demand.
+// Omit it (document-screen pickers) to get full bodies for Print / Export PDF.
+export const getTemplatesByCompany = (companyId, { meta = false } = {}) =>
+  httpClient.get(`/printtemplates/company/${companyId}${meta ? "?meta=true" : ""}`);
 
 export const getTemplate = (companyId, templateType) =>
   httpClient.get(`/printtemplates/company/${companyId}/${templateType}`);

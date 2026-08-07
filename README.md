@@ -289,6 +289,13 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-08 — Company Stamps + print-template load speed & preview loaders
+
+- **Company Stamps — reusable stamp/signature images as print-template merge fields.** Upload multiple stamps per company on the new **Stamps** tab (Configuration → Print Templates), then drop any of them into a template as `{{stamps.<name>}}` — one click in the editor's merge-field sidebar inserts a ready `<img>`. No more pasting giant base64 images into template HTML, and each template can carry different stamps. Stamps render in the live preview, Print, and PDF. Managed under new permissions `printtemplates.stamps.view` / `printtemplates.stamps.manage`; each stamp keeps a stable key so renaming it never breaks templates already using it.
+- **Print Templates page + editor load much faster.** The template list now loads metadata only (names, types, scopes) instead of every template's full HTML — a company with megabytes of template markup went from multi-MB list loads to a few KB. Template bodies are fetched on demand when you open, preview, or duplicate one.
+- **Loaders everywhere in the editor.** Opening or switching a template shows a spinner while its content loads (no more blank editor that fills in a second later), and the preview shows a "Rendering preview…" spinner while a heavy template (e.g. one with a large embedded image) paints.
+- **Editor Excel bar decluttered.** The "No Excel template" prompt no longer shows in the editor — Excel layouts are managed on the dedicated Excel Templates tab; the bar appears in the editor only when a layout is attached.
+
 ### 2026-08-07 — Bill/invoice description fix + Grouped-by-Item-Type invoice view
 
 - **Receipts & Payments — settle-remainder adjustments + focused from-document form (Manager.io parity).** When you record a receipt/payment against a document, each line now takes the **cash received** plus an optional **adjustment** that clears the rest of the balance — routed to any GL account you choose (one-tap **Discount** / **Write-off** presets, or **Other** to pick any account). Examples: a 30,000.50 invoice settled by 30,000 cash + 0.50 discount; a 300,000 invoice settled by 200,000 cash + 100,000 written off. The invoice shows fully **Paid**, cash recorded is only what came in, and (GL on) the gap posts `Dr <chosen account> / Cr Accounts receivable` — balanced. Over-settling past the balance is rejected. Opening the form **from a specific invoice/bill** now shows only that one document (locked); the standalone Receipts/Payments page keeps the full client picker + all open documents.

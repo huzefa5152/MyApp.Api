@@ -48,7 +48,7 @@ export default function TemplateEditorPage() {
   const canDelete = has("printtemplates.manage.delete");
   const canApplyStarter = has("printtemplates.starter.apply");
   const [showApplyStarter, setShowApplyStarter] = useState(false);
-  const { companies, selectedCompany, setSelectedCompany, loading } = useCompany();
+  const { companies, selectedCompany, setSelectedCompany, loading, companyStamps } = useCompany();
   const [templateType, setTemplateType] = useState(() => localStorage.getItem("te.type") || "Challan");
   const [htmlContent, setHtmlContent] = useState("");
   const [originalContent, setOriginalContent] = useState("");
@@ -72,6 +72,13 @@ export default function TemplateEditorPage() {
   // so the editor populates straight from here — no per-id fetch).
   const [allTemplates, setAllTemplates] = useState([]);
   const [currentTemplateId, setCurrentTemplateId] = useState(null);
+  // The company template list is metadata-only now (fast even for a tenant with
+  // megabytes of template HTML); the OPEN template's body is fetched by id.
+  // listLoading = the company metadata list is loading; bodyLoading = a single
+  // template body is being fetched. Either one shows the editor-pane loader, so
+  // the editor never paints an empty CodeEditor before its content lands.
+  const [listLoading, setListLoading] = useState(true);
+  const [bodyLoading, setBodyLoading] = useState(false);
   const [currentTemplateName, setCurrentTemplateName] = useState("Default");
   const [fields, setFields] = useState([]);
   const [hasExcel, setHasExcel] = useState(false);
@@ -191,6 +198,33 @@ export default function TemplateEditorPage() {
     if (!keepTab) setActiveTab("editor");
   };
 
+  // Open a template from a METADATA row: reflect the selection instantly (dropdown
+  // + name + Excel badge), then fetch just that one body by id and populate — with
+  // a race guard so a fast second switch wins. metaRow null seeds a blank default
+  // (empty scope). This replaces reading the body out of the company list, which
+  // used to force every template's HTML down the wire on load.
+  const openTemplate = (metaRow, type, keepTab = false) => {
+    if (!metaRow) { populateEditor(null, type, keepTab); return; }
+    currentTemplateIdRef.current = metaRow.id;
+    setCurrentTemplateId(metaRow.id);
+    setCurrentTemplateName(metaRow.name || "Default");
+    setHasExcel(metaRow.hasExcelTemplate || false);
+    if (!keepTab) setActiveTab("editor");
+    setBodyLoading(true);
+    getTemplateById(metaRow.id)
+      .then(({ data }) => {
+        if (currentTemplateIdRef.current !== metaRow.id) return; // switched away mid-fetch
+        populateEditor(data, type, true);                        // tab already handled above
+      })
+      .catch(() => {
+        if (currentTemplateIdRef.current !== metaRow.id) return;
+        populateEditor(metaRow, type, true); // fall back to metadata (blank body) — never stale
+      })
+      .finally(() => {
+        if (currentTemplateIdRef.current === metaRow.id) setBodyLoading(false);
+      });
+  };
+
   // Pick + load the right template for (type, scope): prefer a specific id, else the
   // scope default, else the first, else seed a blank.
   const loadScope = (list, type, divId, preferId = null) => {
@@ -202,14 +236,14 @@ export default function TemplateEditorPage() {
       inScope.find((t) => t.isDefault) ||
       inScope[0] ||
       null;
-    populateEditor(pick, type);
+    openTemplate(pick, type);
   };
 
   // Refetch the company's templates and re-load the current scope (used after
   // create/duplicate/rename/delete/set-default so default badges stay accurate).
   const refreshTemplates = async (preferId) => {
     if (!selectedCompany) return [];
-    const { data } = await getTemplatesByCompany(selectedCompany.id);
+    const { data } = await getTemplatesByCompany(selectedCompany.id, { meta: true });
     const list = data || [];
     setAllTemplates(list);
     loadScope(list, templateType, scopeDivisionId,
@@ -221,10 +255,11 @@ export default function TemplateEditorPage() {
   useEffect(() => {
     if (!selectedCompany) return;
     let cancelled = false;
+    setListLoading(true);
     (async () => {
       try {
         const [tplRes, divRes] = await Promise.all([
-          getTemplatesByCompany(selectedCompany.id),
+          getTemplatesByCompany(selectedCompany.id, { meta: true }),
           getDivisionsByCompany(selectedCompany.id).catch(() => ({ data: [] })),
         ]);
         if (cancelled) return;
@@ -243,7 +278,7 @@ export default function TemplateEditorPage() {
         }
         r.consumed = true;
         setScopeDivisionId(scope);
-        loadScope(list, templateType, scope, preferId);
+        loadScope(list, templateType, scope, preferId); // openTemplate takes over the body fetch
       } catch {
         if (cancelled) return;
         initialRestoreRef.current.consumed = true;
@@ -251,6 +286,8 @@ export default function TemplateEditorPage() {
         setAllTemplates([]);
         setScopeDivisionId(null);
         populateEditor(null, templateType);
+      } finally {
+        if (!cancelled) setListLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -392,7 +429,7 @@ export default function TemplateEditorPage() {
       });
       if (!ok) return false;
     }
-    populateEditor(tpl, templateType, true);
+    openTemplate(tpl, templateType, true);
     return true;
   };
 
@@ -421,9 +458,11 @@ export default function TemplateEditorPage() {
     setManagerBusyId(tpl.id);
     setManagerBusy(true);
     try {
+      // Metadata rows carry no body — pull the source template by id before copying.
+      const { data: full } = await getTemplateById(tpl.id);
       const { data } = await createTemplate(selectedCompany.id, {
         templateType, divisionId: scopeDivisionId, name: `${tpl.name} (copy)`,
-        htmlContent: tpl.htmlContent, templateJson: tpl.templateJson, editorMode: tpl.editorMode,
+        htmlContent: full.htmlContent, templateJson: full.templateJson, editorMode: full.editorMode,
         isDefault: false,
       });
       await refreshTemplates(data.id);
@@ -448,8 +487,12 @@ export default function TemplateEditorPage() {
     setManagerBusyId(id);
     setManagerBusy(true);
     try {
+      // The list is metadata-only, so tpl has no body. The update endpoint writes
+      // name + body together — fetch the current body by id and send it back
+      // unchanged so a rename can never blank HtmlContent/TemplateJson.
+      const { data: full } = await getTemplateById(id);
       await updateTemplateById(id, {
-        name, htmlContent: tpl?.htmlContent ?? "", templateJson: tpl?.templateJson, editorMode: tpl?.editorMode,
+        name, htmlContent: full.htmlContent, templateJson: full.templateJson, editorMode: full.editorMode,
       });
       invalidatePrintTemplateCache(selectedCompany?.id);
       showToast("Template renamed");
@@ -961,62 +1004,49 @@ export default function TemplateEditorPage() {
         )}
       </div>
 
-      {/* Excel Template Bar */}
-      {selectedCompany && (
+      {/* Excel Template Bar — only when a layout is already attached. Uploading a
+          NEW Excel layout lives on the dedicated Excel Templates tab (Print
+          Templates page), so the editor no longer shows a redundant "No Excel
+          template" prompt. When one IS attached we keep the compact bar so the
+          sheet-pin / replace / remove stay reachable while editing the HTML. */}
+      {selectedCompany && hasExcel && (
         <div style={styles.excelBar}>
           <MdGridOn size={16} color={colors.teal} />
           <span style={{ fontSize: "0.82rem", fontWeight: 600, color: colors.textPrimary }}>
             Excel Template:
           </span>
-          {hasExcel ? (
-            <>
-              <span style={styles.excelBadge}>Uploaded</span>
-              {canSheetPin && excelSheetNames && excelSheetNames.length > 0 && (
-                <label style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "0.78rem", color: "#5f6d7e" }}>
-                  Data sheet:
-                  <select
-                    style={{ ...dropdownStyles.base, padding: "0.3rem 0.55rem", fontSize: "0.78rem", minWidth: 160 }}
-                    value={excelSheetName || ""}
-                    disabled={sheetSaving}
-                    onChange={(e) => handleSheetChange(e.target.value)}
-                    title={excelSheetNames.length === 1
-                      ? "Single-sheet template — Auto-detect handles this case. You can still pin the sheet name if your import files use a different layout."
-                      : "Pin the sheet that holds the data on every uploaded file. Leave 'Auto-detect' to let the importer choose."}
-                  >
-                    <option value="">
-                      Auto-detect{excelSheetNames.length === 1 ? ` (${excelSheetNames[0]})` : ""}
-                    </option>
-                    {excelSheetNames.map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              <button style={{ ...styles.btn, ...styles.btnDanger, padding: "0.3rem 0.6rem", fontSize: "0.78rem" }} onClick={handleExcelDelete}>
-                <MdDelete size={14} /> Remove
-              </button>
-              <button
-                style={{ ...styles.btn, ...styles.btnOutline, padding: "0.3rem 0.6rem", fontSize: "0.78rem" }}
-                onClick={() => excelInputRef.current?.click()}
-                disabled={excelUploading}
+          <span style={styles.excelBadge}>Uploaded</span>
+          {canSheetPin && excelSheetNames && excelSheetNames.length > 0 && (
+            <label style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "0.78rem", color: "#5f6d7e" }}>
+              Data sheet:
+              <select
+                style={{ ...dropdownStyles.base, padding: "0.3rem 0.55rem", fontSize: "0.78rem", minWidth: 160 }}
+                value={excelSheetName || ""}
+                disabled={sheetSaving}
+                onChange={(e) => handleSheetChange(e.target.value)}
+                title={excelSheetNames.length === 1
+                  ? "Single-sheet template — Auto-detect handles this case. You can still pin the sheet name if your import files use a different layout."
+                  : "Pin the sheet that holds the data on every uploaded file. Leave 'Auto-detect' to let the importer choose."}
               >
-                <MdUploadFile size={14} /> Replace
-              </button>
-            </>
-          ) : (
-            <>
-              <span style={{ fontSize: "0.8rem", color: colors.textSecondary }}>
-                No Excel template — Excel export button hidden on challan/invoice pages
-              </span>
-              <button
-                style={{ ...styles.btn, ...styles.btnOutline, padding: "0.3rem 0.6rem", fontSize: "0.78rem" }}
-                onClick={() => excelInputRef.current?.click()}
-                disabled={excelUploading}
-              >
-                <MdUploadFile size={14} /> {excelUploading ? "Uploading..." : "Upload .xlsx"}
-              </button>
-            </>
+                <option value="">
+                  Auto-detect{excelSheetNames.length === 1 ? ` (${excelSheetNames[0]})` : ""}
+                </option>
+                {excelSheetNames.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </label>
           )}
+          <button style={{ ...styles.btn, ...styles.btnDanger, padding: "0.3rem 0.6rem", fontSize: "0.78rem" }} onClick={handleExcelDelete}>
+            <MdDelete size={14} /> Remove
+          </button>
+          <button
+            style={{ ...styles.btn, ...styles.btnOutline, padding: "0.3rem 0.6rem", fontSize: "0.78rem" }}
+            onClick={() => excelInputRef.current?.click()}
+            disabled={excelUploading}
+          >
+            <MdUploadFile size={14} /> {excelUploading ? "Uploading..." : "Replace"}
+          </button>
           <input
             ref={excelInputRef}
             type="file"
@@ -1030,8 +1060,14 @@ export default function TemplateEditorPage() {
       {/* Main Content */}
       <div style={{ flex: 1, display: "flex", gap: "0", overflow: "hidden", borderTop: `1px solid ${colors.cardBorder}` }}>
 
-        {/* Visual Editor Mode */}
-        {editorMode === "visual" ? (
+        {/* Loader while the metadata list or the open template's body is loading —
+            keeps the editor from painting an empty CodeEditor before content lands. */}
+        {(listLoading || bodyLoading) ? (
+          <div style={styles.editorLoading}>
+            <span style={styles.editorSpin} />
+            <span>Loading template…</span>
+          </div>
+        ) : editorMode === "visual" ? (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             {/* Tabs for visual mode */}
             <div style={styles.tabs}>
@@ -1066,7 +1102,7 @@ export default function TemplateEditorPage() {
           <>
             {/* Merge Fields Sidebar - hidden on mobile */}
             {!isMobile && (
-              <MergeFieldSidebar fields={fields} onInsert={insertField} />
+              <MergeFieldSidebar fields={fields} onInsert={insertField} stamps={companyStamps} />
             )}
 
             {/* Code Editor / Preview Area */}
@@ -1242,5 +1278,25 @@ const styles = {
     background: "#fff",
     color: "#c62828",
     border: "1px solid #c6282830",
+  },
+  editorLoading: {
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "0.6rem",
+    color: colors.textSecondary,
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    background: "#fff",
+  },
+  editorSpin: {
+    width: 22,
+    height: 22,
+    border: `3px solid ${colors.cardBorder}`,
+    borderTopColor: colors.blue,
+    borderRadius: "50%",
+    animation: "spin 0.8s linear infinite",
+    display: "inline-block",
   },
 };
