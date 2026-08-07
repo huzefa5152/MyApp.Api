@@ -279,11 +279,14 @@ def suite_overcommit_block(base, token, cid, client, suffix):
     check(s, "3.1 rejected order did not reserve (ToDeliver 0)",
           approx(b["toDeliver"], 0), f"{b}")
 
-    # V2 requires an item type on every SO line.
+    # Item type is OPTIONAL on a Sales Order line (2026-08-06, 787c468): an
+    # order captures intent and PO imports arrive unclassified, so the "every
+    # line needs an Item Type" block was lifted for orders — classification is
+    # enforced at bill/challan time instead. A typeless SO line is accepted.
     st, r = http("POST", f"/api/salesorders/company/{cid}", base, token=token, body={
         "clientId": client["id"], "orderDate": TODAY,
         "items": [{"description": "no type", "quantity": 1, "unit": "Pcs"}]})
-    check(s, "3.2 V2 SO line without item type rejected (400)", st == 400, f"got {st} {r}")
+    check(s, "3.2 V2 SO line without item type accepted (item type optional)", st in (200, 201), f"got {st} {r}")
 
 
 def suite_concurrency(base, token, cid, client, supplier, suffix):
