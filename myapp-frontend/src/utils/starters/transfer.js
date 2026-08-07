@@ -56,7 +56,7 @@ body { font-family: "Times New Roman", Times, serif; padding: 14mm; color: #000;
 <div class="header">
   <div>
     <div class="logo-wrap">{{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:60px">{{/if}}</div>
-    <div class="brand">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
     {{#if divisionName}}<div class="division">{{divisionName}}</div>{{/if}}
     {{#if companyAddress}}<div class="addr">{{{nl2br companyAddress}}}</div>{{/if}}
     {{#if companyPhone}}<div class="addr">{{{nl2br companyPhone}}}</div>{{/if}}
@@ -131,7 +131,7 @@ body { font-family: Calibri, "Segoe UI", Arial, sans-serif; padding: 14mm; color
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:50px;margin-bottom:8px;display:block">{{/if}}
-    <div class="brand">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
     {{#if divisionName}}<div class="division">{{divisionName}}</div>{{/if}}
     {{#if companyAddress}}<div class="sub">{{{nl2br companyAddress}}}</div>{{/if}}
     {{#if companyPhone}}<div class="sub">{{{nl2br companyPhone}}}</div>{{/if}}
@@ -205,7 +205,7 @@ body { font-family: Calibri, Arial, sans-serif; color: #111; }
   <div class="hb-left">
     {{#if companyLogoPath}}<div class="hb-logo"><img src="{{companyLogoPath}}"></div>{{/if}}
     <div>
-      <div class="hb-name">{{companyBrandName}}</div>
+      {{#unless companyLogoPath}}<div class="hb-name">{{companyBrandName}}</div>{{/unless}}
       {{#if divisionName}}<div class="hb-division">{{divisionName}}</div>{{/if}}
       {{#if companyAddress}}<div class="hb-addr">{{{nl2br companyAddress}}}</div>{{/if}}
       {{#if companyPhone}}<div class="hb-addr">{{{nl2br companyPhone}}}</div>{{/if}}
@@ -277,7 +277,7 @@ body { font-family: Arial, sans-serif; padding: 14mm; color: #000; font-size: 11
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:48px;margin-bottom:6px;display:block;filter:grayscale(100%)">{{/if}}
-    <div class="brand">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
     {{#if divisionName}}<div class="division">{{divisionName}}</div>{{/if}}
     {{#if companyAddress}}<div class="addr">{{{nl2br companyAddress}}}</div>{{/if}}
     {{#if companyPhone}}<div class="addr">{{{nl2br companyPhone}}}</div>{{/if}}

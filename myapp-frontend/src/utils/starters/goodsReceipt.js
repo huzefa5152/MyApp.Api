@@ -50,7 +50,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
 <div class="header">
   <div>
     <div class="logo-wrap">{{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:60px">{{/if}}</div>
-    <div class="brand">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
     <div class="addr">{{{nl2br companyAddress}}}</div>
     <div class="addr">{{{nl2br companyPhone}}}</div>
   </div>
@@ -125,7 +125,7 @@ td.c { text-align: center; }
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:50px;margin-bottom:6px;display:block">{{/if}}
-    <div class="brand">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
     <div class="sub">{{{nl2br companyAddress}}}</div>
     <div class="sub">{{{nl2br companyPhone}}}</div>
   </div>
@@ -203,7 +203,7 @@ tbody tr:nth-child(even) td { background: #eef2f9 !important; }
   <div class="hb-left">
     {{#if companyLogoPath}}<div class="hb-logo"><img src="{{companyLogoPath}}"></div>{{/if}}
     <div>
-      <div class="hb-name">{{companyBrandName}}</div>
+      {{#unless companyLogoPath}}<div class="hb-name">{{companyBrandName}}</div>{{/unless}}
       <div class="hb-addr">{{{nl2br companyAddress}}}</div>
       <div class="hb-addr">{{{nl2br companyPhone}}}</div>
     </div>
@@ -284,7 +284,7 @@ tbody tr:nth-child(even) td { background: #e0f2f1 !important; }
     <div class="banner-company">
       {{#if companyLogoPath}}<div class="banner-logo"><img src="{{companyLogoPath}}"></div>{{/if}}
       <div>
-        <div class="banner-name">{{companyBrandName}}</div>
+        {{#unless companyLogoPath}}<div class="banner-name">{{companyBrandName}}</div>{{/unless}}
         <div class="banner-sub">{{{nl2br companyAddress}}}</div>
         <div class="banner-sub">{{{nl2br companyPhone}}}</div>
       </div>
@@ -360,7 +360,7 @@ td.c { text-align: center; }
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:50px;margin-bottom:6px;display:block;filter:grayscale(100%)">{{/if}}
-    <div class="brand">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
     <div class="addr">{{{nl2br companyAddress}}}</div>
     <div class="addr">{{{nl2br companyPhone}}}</div>
   </div>
@@ -438,7 +438,7 @@ tbody tr:nth-child(even) td { background: #fdf8ee !important; }
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:55px;margin-bottom:8px;display:block">{{/if}}
-    <div class="brand">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
     <div class="brand-tagline">Est. &mdash; Pakistan</div>
     <div class="addr">{{{nl2br companyAddress}}}</div>
     <div class="addr">{{{nl2br companyPhone}}}</div>
@@ -512,7 +512,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:36px;margin-bottom:3px;display:block">{{/if}}
-    <div class="brand">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
     <div class="addr">{{{nl2br companyAddress}}}</div>
     <div class="addr">{{{nl2br companyPhone}}}</div>
   </div>
@@ -592,7 +592,7 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
   <div class="top-row">
     <div>
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:50px;margin-bottom:6px;display:block">{{/if}}
-      <div class="brand">{{companyBrandName}}</div>
+      {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
       <div class="addr">{{{nl2br companyAddress}}}</div>
       <div class="addr">{{{nl2br companyPhone}}}</div>
     </div>
@@ -664,7 +664,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
   <div class="title-box">
     <div>
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:50px;margin-bottom:5px;display:block">{{/if}}
-      <div class="company-name">{{companyBrandName}}</div>
+      {{#unless companyLogoPath}}<div class="company-name">{{companyBrandName}}</div>{{/unless}}
       <div class="company-meta">{{{nl2br companyAddress}}} &nbsp;|&nbsp; {{{nl2br companyPhone}}}</div>
     </div>
     <div class="grn-box">
@@ -740,7 +740,7 @@ tbody tr:nth-child(even) td { background: #e8f5e9 !important; }
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:54px;margin-bottom:6px;display:block">{{/if}}
-    <div class="brand">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
     <div class="addr">{{{nl2br companyAddress}}}</div>
     <div class="addr">{{{nl2br companyPhone}}}</div>
   </div>
@@ -820,7 +820,7 @@ tbody tr:nth-child(odd) td { background: #fff !important; }
   <div class="header">
     <div>
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:52px;margin-bottom:6px;display:block">{{/if}}
-      <div class="brand">{{companyBrandName}}</div>
+      {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
       <div class="addr">{{{nl2br companyAddress}}}</div>
       <div class="addr">{{{nl2br companyPhone}}}</div>
     </div>
@@ -901,7 +901,7 @@ tbody tr:nth-child(even) td { background: #eceff1 !important; }
   <div class="header-left">
     {{#if companyLogoPath}}<div class="hl-logo"><img src="{{companyLogoPath}}"></div>{{/if}}
     <div>
-      <div class="hl-name">{{companyBrandName}}</div>
+      {{#unless companyLogoPath}}<div class="hl-name">{{companyBrandName}}</div>{{/unless}}
       <div class="hl-addr">{{{nl2br companyAddress}}}</div>
       <div class="hl-addr">{{{nl2br companyPhone}}}</div>
     </div>
@@ -977,7 +977,7 @@ tbody tr:nth-child(even) td { background: #e8edf5 !important; }
 </style></head><body>
 <div class="letterhead">
   <div class="lh-logo">{{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:60px">{{/if}}</div>
-  <div class="lh-name">{{companyBrandName}}</div>
+  {{#unless companyLogoPath}}<div class="lh-name">{{companyBrandName}}</div>{{/unless}}
   <div class="lh-contact">{{{nl2br companyAddress}}}</div>
   <div class="lh-contact">{{{nl2br companyPhone}}}</div>
 </div>
@@ -1056,7 +1056,7 @@ tbody tr:nth-child(even) td { background: #f5f7f9 !important; }
   <div class="header">
     <div>
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:50px;margin-bottom:5px;display:block">{{/if}}
-      <div class="brand">{{companyBrandName}}</div>
+      {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
       <div class="addr">{{{nl2br companyAddress}}}</div>
       <div class="addr">{{{nl2br companyPhone}}}</div>
     </div>
@@ -1133,7 +1133,7 @@ table.items td.c { text-align: center; }
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:52px">{{else}}<div style="width:52px;height:52px;border:1px solid #ccc;display:flex;align-items:center;justify-content:center;font-size:7px;color:#aaa">LOGO</div>{{/if}}
     </div>
     <div class="title-main">
-      <div class="title-company">{{companyBrandName}}</div>
+      {{#unless companyLogoPath}}<div class="title-company">{{companyBrandName}}</div>{{/unless}}
       <div class="title-sub">Goods Inward / Gate Entry Record</div>
       <div class="title-addr">{{{nl2br companyAddress}}}</div>
       <div class="title-addr">{{{nl2br companyPhone}}}</div>

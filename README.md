@@ -301,6 +301,7 @@ Publish output optimized from 79 MB to 37 MB via:
 - **Print Templates page + editor load much faster.** The template list now loads metadata only (names, types, scopes) instead of every template's full HTML — a company with megabytes of template markup went from multi-MB list loads to a few KB. Template bodies are fetched on demand when you open, preview, or duplicate one.
 - **Loaders everywhere in the editor.** Opening or switching a template shows a spinner while its content loads (no more blank editor that fills in a second later), and the preview shows a "Rendering preview…" spinner while a heavy template (e.g. one with a large embedded image) paints.
 - **Editor Excel bar decluttered.** The "No Excel template" prompt no longer shows in the editor — Excel layouts are managed on the dedicated Excel Templates tab; the bar appears in the editor only when a layout is attached.
+- **Template header shows the logo _or_ the company name — not both.** Every starter and default print template now shows the company logo when one is set, and falls back to the company name only when there's no logo (previously both rendered, which looked cluttered). Division-logo-aware headers fall back correctly too.
 
 ### 2026-08-07 — Bill/invoice description fix + Grouped-by-Item-Type invoice view
 

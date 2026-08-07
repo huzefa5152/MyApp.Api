@@ -60,7 +60,7 @@ export const defaultChallanTemplate = `<!DOCTYPE html><html><head><title>DC #{{c
   <div class="header-left">
     <div class="brand-row">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" />{{/if}}
-      <span class="company-name">{{companyBrandName}}</span>
+      {{#unless companyLogoPath}}<span class="company-name">{{companyBrandName}}</span>{{/unless}}
     </div>
     {{#if companyAddress}}<div class="company-address">{{{nl2br companyAddress}}}</div>{{/if}}
     {{#if companyPhone}}<div class="company-contact">{{{nl2br companyPhone}}}</div>{{/if}}
@@ -205,7 +205,7 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
 <!-- Header: Company name on left, BILL on right -->
 <div class="header-detail">
   <div class="header-left">
-    <div class="company-name">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="company-name">{{companyBrandName}}</div>{{/unless}}
     <div class="addr-row">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" />{{/if}}
       <div class="company-address">{{{nl2br companyAddress}}}</div>

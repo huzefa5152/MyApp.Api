@@ -72,7 +72,7 @@ tfoot td { font-weight: 700; background: #e3f2fd !important; border-top: 2px sol
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:58px;margin-bottom:6px;display:block">{{/if}}
-    <div class="brand">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
     {{#if divisionName}}<div class="division">{{divisionName}}</div>{{/if}}
     <div class="addr">{{{nl2br companyAddress}}}</div>
     <div class="addr">{{{nl2br companyPhone}}}</div>
@@ -172,7 +172,7 @@ tfoot td { font-weight: 700; color: #0d47a1; border-top: 2px solid #0d47a1; bord
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:50px;margin-bottom:6px;display:block">{{/if}}
-    <div class="brand">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
     {{#if divisionName}}<div class="division">{{divisionName}}</div>{{/if}}
     <div class="sub">{{{nl2br companyAddress}}}</div>
     <div class="sub">{{{nl2br companyPhone}}}</div>
@@ -277,7 +277,7 @@ tfoot td { font-weight: 700; background: #e3f2fd !important; }
   <div class="hb-left">
     {{#if companyLogoPath}}<div class="hb-logo"><img src="{{companyLogoPath}}"></div>{{/if}}
     <div>
-      <div class="hb-name">{{companyBrandName}}</div>
+      {{#unless companyLogoPath}}<div class="hb-name">{{companyBrandName}}</div>{{/unless}}
       {{#if divisionName}}<div class="hb-division">{{divisionName}}</div>{{/if}}
       <div class="hb-addr">{{{nl2br companyAddress}}}</div>
       <div class="hb-addr">{{{nl2br companyPhone}}}</div>
@@ -382,7 +382,7 @@ tfoot td { font-weight: 700; }
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:48px;margin-bottom:6px;display:block;filter:grayscale(100%)">{{/if}}
-    <div class="brand">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
     {{#if divisionName}}<div class="division">{{divisionName}}</div>{{/if}}
     <div class="addr">{{{nl2br companyAddress}}}</div>
     <div class="addr">{{{nl2br companyPhone}}}</div>

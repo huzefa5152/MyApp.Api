@@ -64,7 +64,7 @@ body { font-family: "Times New Roman", Times, serif; padding: 12mm; color: #000;
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:58px;margin-bottom:6px;display:block">{{/if}}
-    <div class="brand">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
     {{#if divisionName}}<div class="division">{{divisionName}}</div>{{/if}}
     <div class="addr">{{{nl2br companyAddress}}}</div>
     {{#if companyPhone}}<div class="addr">{{{nl2br companyPhone}}}</div>{{/if}}
@@ -165,7 +165,7 @@ body { font-family: Calibri, "Segoe UI", Arial, sans-serif; padding: 14mm; color
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:50px;margin-bottom:6px;display:block">{{/if}}
-    <div class="brand">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
     {{#if divisionName}}<div class="division">{{divisionName}}</div>{{/if}}
     <div class="sub">{{{nl2br companyAddress}}}</div>
     {{#if companyPhone}}<div class="sub">{{{nl2br companyPhone}}}</div>{{/if}}
@@ -275,7 +275,7 @@ body { font-family: "Times New Roman", Times, serif; padding: 8mm; color: #1a1a1
 <div class="content">
   <div class="head">
     {{#if companyLogoPath}}<div class="logo"><img src="{{companyLogoPath}}" style="height:56px"></div>{{/if}}
-    <div class="brand">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
     {{#if divisionName}}<div class="division">{{divisionName}}</div>{{/if}}
     <div class="addr">{{{nl2br companyAddress}}}{{#if companyPhone}} &nbsp;|&nbsp; {{{nl2br companyPhone}}}{{/if}}</div>
     <div class="tax-ids">{{#if companyNTN}}<b>NTN:</b> {{companyNTN}}{{/if}}{{#if companySTRN}} &nbsp;&nbsp; <b>STRN:</b> {{companySTRN}}{{/if}}</div>
@@ -369,7 +369,7 @@ body { font-family: Arial, "Helvetica Neue", sans-serif; padding: 12mm; color: #
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:46px;margin-bottom:5px;display:block;filter:grayscale(100%)">{{/if}}
-    <div class="brand">{{companyBrandName}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{companyBrandName}}</div>{{/unless}}
     {{#if divisionName}}<div class="division">{{divisionName}}</div>{{/if}}
     <div class="addr">{{{nl2br companyAddress}}}</div>
     {{#if companyPhone}}<div class="addr">{{{nl2br companyPhone}}}</div>{{/if}}

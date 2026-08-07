@@ -54,7 +54,7 @@ tr.total td.lbl { text-align: right; text-transform: uppercase; letter-spacing: 
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:60px;margin-bottom:6px;display:block">{{/if}}
-    <div class="brand">{{#if divisionBrandName}}{{divisionBrandName}}{{else}}{{companyBrandName}}{{/if}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{#if divisionBrandName}}{{divisionBrandName}}{{else}}{{companyBrandName}}{{/if}}</div>{{/unless}}
     <div class="addr">{{{nl2br companyAddress}}}</div>
     <div class="addr">{{{nl2br companyPhone}}}</div>
     {{#if companyNTN}}<div class="tax">NTN: {{companyNTN}}{{#if companySTRN}} &nbsp;|&nbsp; STRN: {{companySTRN}}{{/if}}</div>{{/if}}
@@ -128,7 +128,7 @@ tr.total td.lbl { text-align: right; text-transform: uppercase; letter-spacing: 
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:50px;margin-bottom:6px;display:block">{{/if}}
-    <div class="brand">{{#if divisionBrandName}}{{divisionBrandName}}{{else}}{{companyBrandName}}{{/if}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{#if divisionBrandName}}{{divisionBrandName}}{{else}}{{companyBrandName}}{{/if}}</div>{{/unless}}
     <div class="sub">{{{nl2br companyAddress}}}</div>
     <div class="sub">{{{nl2br companyPhone}}}</div>
     {{#if companyNTN}}<div class="tax">NTN {{companyNTN}}{{#if companySTRN}} &middot; STRN {{companySTRN}}{{/if}}</div>{{/if}}
@@ -212,7 +212,7 @@ tr.total td.lbl { text-align: right; text-transform: uppercase; letter-spacing: 
   <div class="hb-left">
     {{#if companyLogoPath}}<div class="hb-logo"><img src="{{companyLogoPath}}"></div>{{/if}}
     <div>
-      <div class="hb-name">{{#if divisionBrandName}}{{divisionBrandName}}{{else}}{{companyBrandName}}{{/if}}</div>
+      {{#unless companyLogoPath}}<div class="hb-name">{{#if divisionBrandName}}{{divisionBrandName}}{{else}}{{companyBrandName}}{{/if}}</div>{{/unless}}
       <div class="hb-addr">{{{nl2br companyAddress}}}</div>
       <div class="hb-addr">{{{nl2br companyPhone}}}</div>
       {{#if companyNTN}}<div class="hb-tax">NTN {{companyNTN}}{{#if companySTRN}} &middot; STRN {{companySTRN}}{{/if}}</div>{{/if}}
@@ -291,7 +291,7 @@ tr.total td.lbl { text-align: right; text-transform: uppercase; letter-spacing: 
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:50px;margin-bottom:6px;display:block;filter:grayscale(100%)">{{/if}}
-    <div class="brand">{{#if divisionBrandName}}{{divisionBrandName}}{{else}}{{companyBrandName}}{{/if}}</div>
+    {{#unless companyLogoPath}}<div class="brand">{{#if divisionBrandName}}{{divisionBrandName}}{{else}}{{companyBrandName}}{{/if}}</div>{{/unless}}
     <div class="addr">{{{nl2br companyAddress}}}</div>
     <div class="addr">{{{nl2br companyPhone}}}</div>
     {{#if companyNTN}}<div class="tax">NTN: {{companyNTN}}{{#if companySTRN}} | STRN: {{companySTRN}}{{/if}}</div>{{/if}}
