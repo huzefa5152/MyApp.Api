@@ -69,12 +69,19 @@ namespace MyApp.Api.Controllers
                 User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
                 out var id) ? id : 0;
 
-        private static PrintTemplateDto ToDto(Models.PrintTemplate t)
+        // includeSheetNames=false skips the per-template XLWorkbook open+parse
+        // (disk I/O + full ClosedXML parse). The company-list endpoint — the hot
+        // path behind every document screen's print-template picker AND the Print
+        // Templates page — never uses the parsed sheet-name list, so it passes
+        // false to avoid parsing every attached workbook just to build a list.
+        // Single-template reads (GetById, upload) keep it true so the editor's
+        // sheet-pin dropdown still gets the workbook's sheet names.
+        private static PrintTemplateDto ToDto(Models.PrintTemplate t, bool includeSheetNames = true)
         {
             bool hasFile = !string.IsNullOrEmpty(t.ExcelTemplatePath) && System.IO.File.Exists(
                 Path.Combine(Directory.GetCurrentDirectory(), (t.ExcelTemplatePath ?? "").TrimStart('/')));
             List<string>? sheetNames = null;
-            if (hasFile)
+            if (hasFile && includeSheetNames)
             {
                 try
                 {
@@ -122,7 +129,9 @@ namespace MyApp.Api.Controllers
             var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
             if (divScope != null)
                 templates = templates.Where(t => t.DivisionId == null || divScope.Contains(t.DivisionId.Value)).ToList();
-            return Ok(templates.Select(ToDto));
+            // Skip the per-template workbook parse on this list path (hot: every
+            // document screen's picker hits it). Sheet names aren't used here.
+            return Ok(templates.Select(t => ToDto(t, includeSheetNames: false)));
         }
 
         [HttpGet("company/{companyId}/{templateType}")]

@@ -361,11 +361,11 @@ export default function InvoiceTable({
             )}
           </>
         )}
-        {perms.canOpenEdit && (isBillsMode || fbrEnabled) && !isSubmitted && !inv.isCancelled && (
+        {perms.canOpenEdit && !isSubmitted && !inv.isCancelled && (
           <button
             style={btn.edit}
             onClick={() => onEdit?.(inv)}
-            title={isBillsMode ? "Edit bill" : "Classify line items by Item Type"}
+            title={isBillsMode ? "Edit bill" : "Edit item type, qty & unit price (saved as an adjustment over the bill)"}
           >
             <MdEdit size={14} />
           </button>

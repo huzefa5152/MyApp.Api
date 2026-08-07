@@ -1297,15 +1297,17 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdEdit size={14} /> Edit
                       </button>
                     )}
-                    {/* Edit on Invoices tab: ONLY allows picking the Item
-                        Type for each line. Everything else (items, prices,
-                        qty, dates) is read-only and reflects whatever was
-                        last saved on the Bills tab. Hidden once submitted. */}
-                    {!isBillsMode && fbrEnabled && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
+                    {/* Edit on Invoices tab (invoice-mode edit): item type, qty
+                        and unit price — kept as an adjustment OVERLAY over the
+                        bill (base bill untouched; total reconciles to it). Shown
+                        for FBR-off companies too: they have no Bills-tab FBR
+                        step, so this is their line-adjust surface. Hidden once
+                        FBR-submitted or cancelled. */}
+                    {!isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
-                        title="Classify line items by Item Type (other fields read-only — edit on the Bills tab)"
+                        title="Edit item type, qty & unit price (saved as an adjustment over the bill)"
                       >
                         <MdEdit size={14} /> Edit
                       </button>

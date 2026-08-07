@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   MdClose, MdStar, MdStarBorder, MdContentCopy, MdEdit, MdDelete,
   MdCheck, MdAdd, MdAutoAwesome,
@@ -9,6 +9,12 @@ import { formStyles, modalSizes } from "../../theme";
 // operator set the default, rename, duplicate, delete, and create new ones. The page
 // owns all API calls; this component only emits intent. Scope/default are immutable
 // here — they are decided at create time / via Set default.
+//
+// Feedback contract: the page passes `busyId` (the template id whose action is in
+// flight) and `busy` (any action in flight). The acting row shows a spinner and its
+// buttons disable; other rows stay disabled too while busy so mutations never race.
+// Rename is optimistic on the page side, so the input closes instantly — the spinner
+// here just confirms the background save.
 export default function SavedTemplatesManager({
   templateTypeLabel,
   scopeLabel,
@@ -16,6 +22,7 @@ export default function SavedTemplatesManager({
   currentTemplateId,
   canDelete,
   busy,
+  busyId = null,
   onSelect,
   onSetDefault,
   onDuplicate,
@@ -28,19 +35,37 @@ export default function SavedTemplatesManager({
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState("");
   const [newName, setNewName] = useState("");
+  // Guards the rename commit so Enter + the ensuing blur (and any double event)
+  // fire onRename at most once, and so Escape cancels without committing.
+  const renameCommitted = useRef(false);
 
-  const startRename = (t) => { setRenamingId(t.id); setRenameValue(t.name); };
-  const commitRename = () => {
-    const name = renameValue.trim();
-    if (name && name !== templates.find((t) => t.id === renamingId)?.name) onRename(renamingId, name);
+  const startRename = (t) => {
+    renameCommitted.current = false;
+    setRenamingId(t.id);
+    setRenameValue(t.name);
+  };
+  const cancelRename = () => {
+    renameCommitted.current = true; // stop the trailing blur from committing
     setRenamingId(null);
+  };
+  const commitRename = () => {
+    if (renameCommitted.current) return; // already handled (Enter→blur, double-fire)
+    renameCommitted.current = true;
+    const id = renamingId;
+    const current = templates.find((t) => t.id === id);
+    const name = renameValue.trim();
+    setRenamingId(null);
+    if (id != null && name && current && name !== current.name) onRename(id, name);
   };
   const commitNew = () => {
     const name = newName.trim();
-    if (!name) return;
+    if (!name || busy) return;
     onNewBlank(name);
     setNewName("");
   };
+
+  // A create / start-from-starter op (no specific row id) is in flight.
+  const creating = busy && busyId == null;
 
   return (
     <div style={s.overlay}>
@@ -60,8 +85,10 @@ export default function SavedTemplatesManager({
           {templates.map((t) => {
             const isCurrent = t.id === currentTemplateId;
             const isRenaming = renamingId === t.id;
+            const rowBusy = busyId === t.id;        // this row's action is saving
+            const disabled = busy;                   // any action in flight → lock all
             return (
-              <div key={t.id} style={{ ...s.row, ...(isCurrent ? s.rowCurrent : {}) }}>
+              <div key={t.id} style={{ ...s.row, ...(isCurrent ? s.rowCurrent : {}), ...(rowBusy ? s.rowBusy : {}) }}>
                 <div style={s.rowMain}>
                   <span title={t.isDefault ? "Default for printing" : "Set as default"} style={{ display: "inline-flex", flexShrink: 0 }}>
                     {t.isDefault
@@ -75,8 +102,8 @@ export default function SavedTemplatesManager({
                       value={renameValue}
                       onChange={(e) => setRenameValue(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") commitRename();
-                        if (e.key === "Escape") setRenamingId(null);
+                        if (e.key === "Enter") { e.preventDefault(); commitRename(); }
+                        if (e.key === "Escape") { e.preventDefault(); cancelRename(); }
                       }}
                       onBlur={commitRename}
                     />
@@ -85,6 +112,7 @@ export default function SavedTemplatesManager({
                       style={s.nameBtn}
                       onClick={() => onSelect(t.id)}
                       title="Open in editor"
+                      disabled={disabled}
                     >
                       <span style={s.name}>{t.name}</span>
                       {isCurrent && <span style={s.editingBadge}>editing</span>}
@@ -93,19 +121,20 @@ export default function SavedTemplatesManager({
                   )}
                 </div>
                 <div style={s.actions}>
+                  {rowBusy && <span style={s.spinner} aria-label="Saving…" />}
                   {!t.isDefault && (
-                    <button style={s.iconBtn} disabled={busy} onClick={() => onSetDefault(t.id)} title="Set as default">
+                    <button style={s.iconBtn} disabled={disabled} onClick={() => onSetDefault(t.id)} title="Set as default">
                       <MdCheck size={16} /> <span style={s.actionLabel}>Default</span>
                     </button>
                   )}
-                  <button style={s.iconBtn} disabled={busy} onClick={() => startRename(t)} title="Rename">
+                  <button style={s.iconBtn} disabled={disabled} onClick={() => startRename(t)} title="Rename">
                     <MdEdit size={16} /> <span style={s.actionLabel}>Rename</span>
                   </button>
-                  <button style={s.iconBtn} disabled={busy} onClick={() => onDuplicate(t)} title="Duplicate">
+                  <button style={s.iconBtn} disabled={disabled} onClick={() => onDuplicate(t)} title="Duplicate">
                     <MdContentCopy size={16} /> <span style={s.actionLabel}>Duplicate</span>
                   </button>
                   {canDelete && (
-                    <button style={{ ...s.iconBtn, ...s.iconBtnDanger }} disabled={busy} onClick={() => onDelete(t.id)} title="Delete">
+                    <button style={{ ...s.iconBtn, ...s.iconBtnDanger }} disabled={disabled} onClick={() => onDelete(t.id)} title="Delete">
                       <MdDelete size={16} /> <span style={s.actionLabel}>Delete</span>
                     </button>
                   )}
@@ -122,9 +151,10 @@ export default function SavedTemplatesManager({
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") commitNew(); }}
+            disabled={busy}
           />
-          <button style={{ ...s.newBtn, ...s.newBtnPrimary }} disabled={busy || !newName.trim()} onClick={commitNew}>
-            <MdAdd size={16} /> Create blank
+          <button style={{ ...s.newBtn, ...s.newBtnPrimary, ...(busy || !newName.trim() ? s.newBtnDisabled : {}) }} disabled={busy || !newName.trim()} onClick={commitNew}>
+            {creating ? <span style={s.spinnerLight} /> : <MdAdd size={16} />} {creating ? "Creating…" : "Create blank"}
           </button>
           <button style={{ ...s.newBtn, ...s.newBtnOutline }} disabled={busy} onClick={onNewFromStarter}>
             <MdAutoAwesome size={16} /> From starter
@@ -152,9 +182,10 @@ const s = {
   row: {
     display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between",
     gap: "0.5rem", padding: "0.6rem 0.75rem", borderRadius: 8,
-    border: "1px solid #e8edf3", background: "#fff",
+    border: "1px solid #e8edf3", background: "#fff", transition: "opacity 0.15s, border-color 0.15s",
   },
   rowCurrent: { borderColor: "#0d47a1", background: "#f3f7ff" },
+  rowBusy: { opacity: 0.65 },
   rowMain: { display: "flex", alignItems: "center", gap: "0.5rem", flex: "1 1 200px", minWidth: 0 },
   nameBtn: {
     display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap",
@@ -177,7 +208,19 @@ const s = {
     flex: 1, minWidth: 0, padding: "0.35rem 0.5rem", fontSize: "0.9rem",
     border: "1px solid #0d47a1", borderRadius: 6, outline: "none",
   },
-  actions: { display: "flex", flexWrap: "wrap", gap: "0.35rem", flexShrink: 0 },
+  actions: { display: "flex", flexWrap: "wrap", gap: "0.35rem", flexShrink: 0, alignItems: "center" },
+  // Small inline spinner shown on the acting row / create button. Relies on the
+  // global `spin` keyframes (defined app-wide, used across the pages).
+  spinner: {
+    width: 15, height: 15, borderRadius: "50%", flexShrink: 0,
+    border: "2px solid #d0d7e2", borderTopColor: "#0d47a1",
+    animation: "spin 0.7s linear infinite",
+  },
+  spinnerLight: {
+    width: 14, height: 14, borderRadius: "50%", flexShrink: 0, display: "inline-block",
+    border: "2px solid rgba(255,255,255,0.5)", borderTopColor: "#fff",
+    animation: "spin 0.7s linear infinite",
+  },
   iconBtn: {
     display: "inline-flex", alignItems: "center", gap: "0.25rem",
     border: "1px solid #d0d7e2", background: "#fff", color: "#5f6d7e",
@@ -201,4 +244,5 @@ const s = {
   },
   newBtnPrimary: { border: "none", background: "#0d47a1", color: "#fff" },
   newBtnOutline: { border: "1px solid #d0d7e2", background: "#fff", color: "#0d47a1" },
+  newBtnDisabled: { opacity: 0.6, cursor: "not-allowed" },
 };

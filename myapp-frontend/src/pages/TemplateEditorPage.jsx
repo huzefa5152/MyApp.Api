@@ -6,11 +6,12 @@ import {
   MdUploadFile, MdDelete, MdGridOn, MdDescription, MdArrowBack,
 } from "react-icons/md";
 import {
-  getMergeFields, getTemplatesByCompany,
+  getMergeFields, getTemplatesByCompany, getTemplateById,
   createTemplate, updateTemplateById, setDefaultTemplate, deleteTemplate,
   uploadExcelTemplateById, setExcelSheetNameById, deleteExcelTemplateById,
 } from "../api/printTemplateApi";
 import { getDivisionsByCompany } from "../api/divisionApi";
+import { invalidatePrintTemplateCache } from "../hooks/usePrintTemplates";
 import { useCompany } from "../contexts/CompanyContext";
 import {
   TEMPLATE_TYPES, DEFAULT_TEMPLATES, buildTemplatePreviewHtml,
@@ -61,6 +62,9 @@ export default function TemplateEditorPage() {
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showManager, setShowManager] = useState(false);
   const [managerBusy, setManagerBusy] = useState(false);
+  // Id of the template whose manager action is in flight (spinner + row lock);
+  // null while a create/start-from-starter (no specific row) runs.
+  const [managerBusyId, setManagerBusyId] = useState(null);
   // Scope = company-wide (scopeDivisionId === null) or a specific division.
   const [divisions, setDivisions] = useState([]);
   const [scopeDivisionId, setScopeDivisionId] = useState(null);
@@ -133,6 +137,24 @@ export default function TemplateEditorPage() {
     if (currentTemplateId != null) localStorage.setItem("te.templateId", String(currentTemplateId));
     else localStorage.removeItem("te.templateId");
   }, [selectedCompany?.id, scopeDivisionId, currentTemplateId]);
+
+  // The company template list now omits per-template Excel sheet names (skipping
+  // the workbook parse is what makes that list fast). Hydrate them for the OPEN
+  // template on demand — a single by-id read — so the sheet-pin dropdown still
+  // populates. Only fires for an Excel-backed template that has no names yet, so
+  // it's at most one extra fetch when switching to such a template.
+  useEffect(() => {
+    if (!currentTemplateId || !hasExcel || excelSheetNames.length > 0) return;
+    let alive = true;
+    getTemplateById(currentTemplateId)
+      .then(({ data }) => {
+        if (!alive) return;
+        setExcelSheetName(data.excelSheetName || null);
+        setExcelSheetNames(data.excelSheetNames || []);
+      })
+      .catch(() => { /* dropdown falls back to Auto-detect */ });
+    return () => { alive = false; };
+  }, [currentTemplateId, hasExcel, excelSheetNames.length]);
 
   // ── Scope + multi-template helpers ──
 
@@ -286,6 +308,7 @@ export default function TemplateEditorPage() {
       setTemplateJson(saveJson);
       setOriginalContent(saveHtml);
       setOriginalJson(saveJson);
+      invalidatePrintTemplateCache(selectedCompany.id);
       showToast("Template saved successfully!");
     } catch {
       showToast("Failed to save template", "error");
@@ -342,6 +365,7 @@ export default function TemplateEditorPage() {
         htmlContent: starter.html, isDefault: false,
       });
       await refreshTemplates(data.id);
+      invalidatePrintTemplateCache(selectedCompany.id);
       showToast(`Created "${data.name}" from starter`);
     } catch {
       showToast("Failed to create template from starter", "error");
@@ -378,19 +402,23 @@ export default function TemplateEditorPage() {
   };
 
   const handleSetDefault = async (id) => {
+    setManagerBusyId(id);
     setManagerBusy(true);
     try {
       await setDefaultTemplate(id);
       await refreshTemplates(currentTemplateIdRef.current);
+      invalidatePrintTemplateCache(selectedCompany?.id);
       showToast("Default template updated");
     } catch {
       showToast("Failed to set default", "error");
     } finally {
       setManagerBusy(false);
+      setManagerBusyId(null);
     }
   };
 
   const handleDuplicate = async (tpl) => {
+    setManagerBusyId(tpl.id);
     setManagerBusy(true);
     try {
       const { data } = await createTemplate(selectedCompany.id, {
@@ -399,45 +427,60 @@ export default function TemplateEditorPage() {
         isDefault: false,
       });
       await refreshTemplates(data.id);
+      invalidatePrintTemplateCache(selectedCompany?.id);
       showToast("Template duplicated");
     } catch {
       showToast("Failed to duplicate template", "error");
     } finally {
       setManagerBusy(false);
+      setManagerBusyId(null);
     }
   };
 
+  // Rename is optimistic: the new name shows instantly (input closes, row
+  // updates), the background PUT confirms it, and a failure reverts the name.
+  // No refetch on success — only the name changed — so the list never flashes.
   const handleRename = async (id, name) => {
+    const tpl = allTemplates.find((t) => t.id === id);
+    const prevName = tpl?.name;
+    setAllTemplates((list) => list.map((t) => (t.id === id ? { ...t, name } : t)));
+    if (id === currentTemplateIdRef.current) setCurrentTemplateName(name);
+    setManagerBusyId(id);
     setManagerBusy(true);
     try {
-      const tpl = allTemplates.find((t) => t.id === id);
       await updateTemplateById(id, {
         name, htmlContent: tpl?.htmlContent ?? "", templateJson: tpl?.templateJson, editorMode: tpl?.editorMode,
       });
-      if (id === currentTemplateIdRef.current) setCurrentTemplateName(name);
-      await refreshTemplates(currentTemplateIdRef.current);
+      invalidatePrintTemplateCache(selectedCompany?.id);
       showToast("Template renamed");
     } catch {
+      // Revert the optimistic name on failure.
+      setAllTemplates((list) => list.map((t) => (t.id === id ? { ...t, name: prevName ?? t.name } : t)));
+      if (id === currentTemplateIdRef.current && prevName != null) setCurrentTemplateName(prevName);
       showToast("Failed to rename template", "error");
     } finally {
       setManagerBusy(false);
+      setManagerBusyId(null);
     }
   };
 
   const handleManagerDelete = async (id) => {
     const ok = await confirm({ title: "Delete Template?", message: "Delete this saved template? This cannot be undone.", variant: "danger", confirmText: "Delete" });
     if (!ok) return;
+    setManagerBusyId(id);
     setManagerBusy(true);
     try {
       await deleteTemplate(id);
       // If we deleted the open one, let the scope re-pick its default/first.
       const prefer = id === currentTemplateIdRef.current ? null : currentTemplateIdRef.current;
       await refreshTemplates(prefer);
+      invalidatePrintTemplateCache(selectedCompany?.id);
       showToast("Template deleted");
     } catch {
       showToast("Failed to delete template", "error");
     } finally {
       setManagerBusy(false);
+      setManagerBusyId(null);
     }
   };
 
@@ -450,6 +493,7 @@ export default function TemplateEditorPage() {
         htmlContent: DEFAULT_TEMPLATES[templateType] || "", isDefault: false,
       });
       await refreshTemplates(data.id);
+      invalidatePrintTemplateCache(selectedCompany.id);
       setShowManager(false);
       showToast(`Created "${data.name}"`);
     } catch {
@@ -488,6 +532,7 @@ export default function TemplateEditorPage() {
       setAllTemplates((prev) => prev.map((t) => t.id === currentTemplateId
         ? { ...t, hasExcelTemplate: true, excelSheetName: data.excelSheetName || null, excelSheetNames: data.excelSheetNames || [] }
         : t));
+      invalidatePrintTemplateCache(selectedCompany.id);
       const sheetCount = (data.excelSheetNames || []).length;
       if (sheetCount > 1) {
         showToast(`Excel template uploaded — ${sheetCount} sheets detected, pin one in the Data sheet dropdown if needed.`);
@@ -525,6 +570,7 @@ export default function TemplateEditorPage() {
       await deleteExcelTemplateById(currentTemplateId);
       setHasExcel(false);
       setAllTemplates((prev) => prev.map((t) => t.id === currentTemplateId ? { ...t, hasExcelTemplate: false } : t));
+      invalidatePrintTemplateCache(selectedCompany?.id);
       showToast("Excel template removed");
     } catch {
       showToast("Failed to remove Excel template", "error");
@@ -674,6 +720,7 @@ export default function TemplateEditorPage() {
           onApplied={async (updated) => {
             setShowApplyStarter(false);
             await refreshTemplates(updated.id);
+            invalidatePrintTemplateCache(selectedCompany?.id);
             populateEditor(updated, updated.templateType, false);
           }}
         />
@@ -688,6 +735,7 @@ export default function TemplateEditorPage() {
           currentTemplateId={currentTemplateId}
           canDelete={canDelete}
           busy={managerBusy}
+          busyId={managerBusyId}
           onSelect={handleManagerSelect}
           onSetDefault={handleSetDefault}
           onDuplicate={handleDuplicate}

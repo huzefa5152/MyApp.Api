@@ -10,6 +10,7 @@ import {
   uploadExcelTemplateById, deleteExcelTemplateById,
 } from "../api/printTemplateApi";
 import { getDivisionsByCompany } from "../api/divisionApi";
+import { invalidatePrintTemplateCache } from "../hooks/usePrintTemplates";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
@@ -44,7 +45,14 @@ export default function PrintTemplatesPage() {
   const [templates, setTemplates] = useState([]);
   const [divisions, setDivisions] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState(false);
+  // Id of the card whose action (set-default / delete / duplicate / Excel) is in
+  // flight — drives that card's spinner and locks actions so nothing races.
+  const [busyId, setBusyId] = useState(null);
+  const busy = busyId != null;
+  // Shown as a full-panel overlay while a starter is being turned into a new
+  // template (that flow navigates to the editor, so the operator gets clear
+  // "working…" feedback before the page changes under them).
+  const [creating, setCreating] = useState(false);
 
   // filters (shared by Print + Excel tabs)
   const [search, setSearch] = useState("");
@@ -118,27 +126,27 @@ export default function PrintTemplatesPage() {
 
   // ── Print-tab actions ──
   const handleSetDefault = async (t) => {
-    setBusy(true);
-    try { await setDefaultTemplate(t.id); notify(`"${t.name}" is now the default for ${TEMPLATE_TYPE_LABEL[t.templateType]} · ${scopeLabel(t)}.`, "success"); await load(); }
-    catch { notify("Failed to set default.", "error"); } finally { setBusy(false); }
+    setBusyId(t.id);
+    try { await setDefaultTemplate(t.id); notify(`"${t.name}" is now the default for ${TEMPLATE_TYPE_LABEL[t.templateType]} · ${scopeLabel(t)}.`, "success"); invalidatePrintTemplateCache(selectedCompany?.id); await load(); }
+    catch { notify("Failed to set default.", "error"); } finally { setBusyId(null); }
   };
   const handleDelete = async (t) => {
     const ok = await confirm({ title: "Delete Template?", message: `Delete "${t.name}" (${TEMPLATE_TYPE_LABEL[t.templateType]} · ${scopeLabel(t)})? This cannot be undone.`, variant: "danger", confirmText: "Delete" });
     if (!ok) return;
-    setBusy(true);
-    try { await deleteTemplate(t.id); notify("Template deleted.", "success"); await load(); }
-    catch (err) { notify(err.response?.data?.error || "Failed to delete.", "error"); } finally { setBusy(false); }
+    setBusyId(t.id);
+    try { await deleteTemplate(t.id); notify("Template deleted.", "success"); invalidatePrintTemplateCache(selectedCompany?.id); await load(); }
+    catch (err) { notify(err.response?.data?.error || "Failed to delete.", "error"); } finally { setBusyId(null); }
   };
   const handleDuplicate = async (t) => {
-    setBusy(true);
+    setBusyId(t.id);
     try {
       await createTemplate(selectedCompany.id, {
         templateType: t.templateType, divisionId: t.divisionId ?? null,
         name: `${t.name} (copy)`, htmlContent: t.htmlContent, templateJson: t.templateJson,
         editorMode: t.editorMode, isDefault: false,
       });
-      notify(`Duplicated "${t.name}".`, "success"); await load();
-    } catch { notify("Failed to duplicate.", "error"); } finally { setBusy(false); }
+      notify(`Duplicated "${t.name}".`, "success"); invalidatePrintTemplateCache(selectedCompany?.id); await load();
+    } catch { notify("Failed to duplicate.", "error"); } finally { setBusyId(null); }
   };
 
   // ── Starter-tab: create a NEW template from a starter ──
@@ -150,15 +158,16 @@ export default function PrintTemplatesPage() {
   };
   const createFromStarter = async (starter, divisionId) => {
     setStarterToCreate(null);
-    setBusy(true);
+    setCreating(true);
     try {
       const { data } = await createTemplate(selectedCompany.id, {
         templateType: starter.type, divisionId: divisionId ?? null,
         name: starter.name, htmlContent: starter.html, isDefault: false,
       });
+      invalidatePrintTemplateCache(selectedCompany?.id);
       notify(`Created "${data.name}" from starter. Opening editor…`, "success");
       openInEditor(data);
-    } catch { notify("Failed to create template from starter.", "error"); setBusy(false); }
+    } catch { notify("Failed to create template from starter.", "error"); setCreating(false); }
   };
 
   // ── Excel-tab actions ──
@@ -168,16 +177,16 @@ export default function PrintTemplatesPage() {
     const id = excelTargetIdRef.current;
     if (excelUploadRef.current) excelUploadRef.current.value = "";
     if (!file || !id) return;
-    setBusy(true);
-    try { await uploadExcelTemplateById(id, file); notify("Excel layout uploaded.", "success"); await load(); }
-    catch (err) { notify(err.response?.data?.error || "Failed to upload Excel.", "error"); } finally { setBusy(false); }
+    setBusyId(id);
+    try { await uploadExcelTemplateById(id, file); notify("Excel layout uploaded.", "success"); invalidatePrintTemplateCache(selectedCompany?.id); await load(); }
+    catch (err) { notify(err.response?.data?.error || "Failed to upload Excel.", "error"); } finally { setBusyId(null); }
   };
   const handleExcelDelete = async (t) => {
     const ok = await confirm({ title: "Remove Excel layout?", message: `Remove the Excel layout from "${t.name}"? This cannot be undone.`, variant: "danger", confirmText: "Remove" });
     if (!ok) return;
-    setBusy(true);
-    try { await deleteExcelTemplateById(t.id); notify("Excel layout removed.", "success"); await load(); }
-    catch { notify("Failed to remove Excel layout.", "error"); } finally { setBusy(false); }
+    setBusyId(t.id);
+    try { await deleteExcelTemplateById(t.id); notify("Excel layout removed.", "success"); invalidatePrintTemplateCache(selectedCompany?.id); await load(); }
+    catch { notify("Failed to remove Excel layout.", "error"); } finally { setBusyId(null); }
   };
 
   if (!canManage) {
@@ -217,6 +226,14 @@ export default function PrintTemplatesPage() {
 
   return (
     <div>
+      {creating && (
+        <div style={st.createOverlay}>
+          <div style={st.createCard}>
+            <div style={st.spin} />
+            <span style={{ fontWeight: 600, color: colors.textPrimary }}>Creating template…</span>
+          </div>
+        </div>
+      )}
       <div style={st.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={st.icon}><MdDescription size={26} color="#fff" /></div>
@@ -284,9 +301,10 @@ export default function PrintTemplatesPage() {
                         <span style={{ color: colors.textSecondary }}>Updated {fmtDate(t.updatedAt)}</span>
                       </div>
                       <div style={st.actions}>
-                        <button style={st.actBtn} title="Edit" onClick={() => openInEditor(t)}><MdEdit size={15} /></button>
-                        <button style={st.actBtn} title="Preview" onClick={() => setPreviewTarget(t)}><MdVisibility size={15} /></button>
-                        {canApplyStarter && <button style={st.actBtn} title="Import starter design" onClick={() => setApplyTarget(t)}><MdBrush size={15} /></button>}
+                        {busyId === t.id && <span style={st.cardSpin} aria-label="Working…" />}
+                        <button style={st.actBtn} title="Edit" disabled={busy} onClick={() => openInEditor(t)}><MdEdit size={15} /></button>
+                        <button style={st.actBtn} title="Preview" disabled={busy} onClick={() => setPreviewTarget(t)}><MdVisibility size={15} /></button>
+                        {canApplyStarter && <button style={st.actBtn} title="Import starter design" disabled={busy} onClick={() => setApplyTarget(t)}><MdBrush size={15} /></button>}
                         <button style={st.actBtn} title="Duplicate" disabled={busy} onClick={() => handleDuplicate(t)}><MdContentCopy size={15} /></button>
                         {!t.isDefault && <button style={st.actBtn} title="Set as default" disabled={busy} onClick={() => handleSetDefault(t)}><MdStar size={15} /></button>}
                         {canDelete && <button style={{ ...st.actBtn, color: "#dc3545" }} title="Delete" disabled={busy} onClick={() => handleDelete(t)}><MdDelete size={15} /></button>}
@@ -327,8 +345,9 @@ export default function PrintTemplatesPage() {
                         <span style={st.scopeChip}>{scopeLabel(t)}</span>
                       </div>
                       <div style={st.actions}>
+                        {busyId === t.id && <span style={st.cardSpin} aria-label="Working…" />}
                         <button style={{ ...st.actBtnWide }} disabled={busy} onClick={() => triggerExcelUpload(t)}>
-                          <MdUploadFile size={15} /> {t.hasExcelTemplate ? "Replace .xlsx" : "Upload .xlsx"}
+                          <MdUploadFile size={15} /> {busyId === t.id ? "Working…" : t.hasExcelTemplate ? "Replace .xlsx" : "Upload .xlsx"}
                         </button>
                         {t.hasExcelTemplate && canDelete && (
                           <button style={{ ...st.actBtn, color: "#dc3545" }} title="Remove Excel layout" disabled={busy} onClick={() => handleExcelDelete(t)}><MdDelete size={15} /></button>
@@ -439,6 +458,9 @@ const st = {
   actBtnWide: { display: "inline-flex", alignItems: "center", gap: "0.35rem", flex: 1, justifyContent: "center", height: 32, padding: "0 0.5rem", borderRadius: 7, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
   loading: { display: "flex", alignItems: "center", justifyContent: "center", gap: "0.6rem", padding: "3rem 0" },
   spin: { width: 24, height: 24, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
+  cardSpin: { width: 16, height: 16, border: `2px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.7s linear infinite", alignSelf: "center" },
+  createOverlay: { position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1400, padding: "1rem" },
+  createCard: { background: "#fff", borderRadius: 14, padding: "1.4rem 1.8rem", display: "flex", alignItems: "center", gap: "0.9rem", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" },
   empty: { display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem 1rem", textAlign: "center" },
   previewOverlay: { position: "fixed", inset: 0, background: "rgba(15,23,42,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1300, padding: "1rem" },
   previewModal: { background: "#e8e8e8", borderRadius: 14, width: "min(860px, 96vw)", height: "94vh", display: "flex", flexDirection: "column", overflow: "hidden" },

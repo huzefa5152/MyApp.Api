@@ -20,6 +20,22 @@ import { MdPrint } from "react-icons/md";
 export default function PrintTemplateSelect({ picker, style }) {
   if (!picker?.canChoose) return null;
 
+  // While the (shared, cached) list is still loading, show a disabled
+  // "Loading templates…" control instead of a live "★ Default" with an empty
+  // option list — otherwise the picker paints a bare Default first and the
+  // real templates pop in a moment later (the reported "only default, then all
+  // appear" flash). Once loaded it renders Auto + every in-scope template.
+  if (!picker.templatesLoaded) {
+    return (
+      <div className="print-template-picker" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", minWidth: 0, ...style }} title="Loading print templates…">
+        <MdPrint size={15} color="#9aa4b2" aria-hidden="true" />
+        <select className="filter-select" aria-label="Print template (loading)" disabled value="" style={{ flex: 1, minWidth: 0, maxWidth: 260, opacity: 0.7 }}>
+          <option value="">Loading templates…</option>
+        </select>
+      </div>
+    );
+  }
+
   const autoDefault = picker.resolveAuto();
   const autoLabel = autoDefault ? `Default — ${autoDefault.name}` : "Default";
 

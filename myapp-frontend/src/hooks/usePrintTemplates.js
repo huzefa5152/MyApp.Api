@@ -49,6 +49,63 @@ const readStored = (companyId, templateType, scopeKey) => {
   }
 };
 
+// ── Shared per-company template cache ───────────────────────────────────────
+// The company template list (all types, all scopes) is fetched ONCE per company
+// and shared by every usePrintTemplates instance on every document screen. This
+// is the fix for "templates load late on every screen": before, all 13 screens
+// refetched the list on each mount/navigation. Now the first visit warms the
+// cache and the rest are instant, and the list can be prefetched the moment a
+// company is selected so even the first picker paints filled, not flashing.
+//
+// A short TTL guards against a very long session drifting from server state;
+// same-session edits invalidate explicitly (management screens call
+// invalidatePrintTemplateCache after every mutation).
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const templateCache = new Map(); // companyId -> { data: [], ts: number, promise: Promise|null }
+const cacheSubscribers = new Set(); // notified (companyId|null) on invalidation
+
+// Start (or reuse) a single in-flight fetch for a company; store the promise so
+// concurrent callers dedupe onto it, and cache the result on success. Failures
+// are NOT cached (so the next mount retries).
+function fetchCompanyTemplates(companyId) {
+  const existing = templateCache.get(companyId);
+  if (existing?.promise) return existing.promise;
+
+  const promise = getTemplatesByCompany(companyId)
+    .then(({ data }) => {
+      const list = data || [];
+      templateCache.set(companyId, { data: list, ts: Date.now(), promise: null });
+      return list;
+    })
+    .catch((err) => {
+      templateCache.delete(companyId);
+      throw err;
+    });
+
+  templateCache.set(companyId, { data: existing?.data || null, ts: existing?.ts || 0, promise });
+  return promise;
+}
+
+// Warm the cache ahead of time (e.g. right after a company is selected) so the
+// first document screen the operator opens shows a filled picker immediately.
+export function prefetchPrintTemplates(companyId) {
+  if (!companyId) return;
+  const entry = templateCache.get(companyId);
+  if (entry?.promise) return;                                  // already loading
+  if (entry?.data && Date.now() - entry.ts < CACHE_TTL_MS) return; // still fresh
+  fetchCompanyTemplates(companyId).catch(() => { /* prefetch is best-effort */ });
+}
+
+// Drop a company's cached list (or all companies when companyId is null) and
+// tell every live picker to refetch. Management screens call this after any
+// create / rename / duplicate / delete / set-default / apply-starter / Excel
+// change so document-screen pickers reflect it without a manual reload.
+export function invalidatePrintTemplateCache(companyId = null) {
+  if (companyId == null) templateCache.clear();
+  else templateCache.delete(companyId);
+  cacheSubscribers.forEach((fn) => { try { fn(companyId); } catch { /* non-fatal */ } });
+}
+
 export function usePrintTemplates(templateType, { divisionId = null } = {}) {
   const { selectedCompany } = useCompany();
   const { has } = usePermissions();
@@ -60,22 +117,51 @@ export function usePrintTemplates(templateType, { divisionId = null } = {}) {
   const scopeDivisionId = divisionId === "" || divisionId == null ? null : Number(divisionId);
   const scopeKey = scopeKeyOf(divisionId);
 
-  const [allTemplates, setAllTemplates] = useState([]);
-  const [templatesLoaded, setTemplatesLoaded] = useState(false);
+  // Seed from the shared cache so a warm cache (prefetched, or filled by another
+  // screen) paints a filled picker on the very first render — no empty flash.
+  const cachedAtMount = companyId ? templateCache.get(companyId)?.data : null;
+  const [allTemplates, setAllTemplates] = useState(cachedAtMount || []);
+  const [templatesLoaded, setTemplatesLoaded] = useState(!!cachedAtMount);
   const [selectedId, setSelectedIdState] = useState(() => readStored(companyId, templateType, scopeKey));
+  // Bumped on cross-screen invalidation to force the load effect to re-run.
+  const [reloadTick, setReloadTick] = useState(0);
 
-  // One fetch per company (all types) — the type + division filters are
-  // client-side, so switching type (bills ⇄ notes) or division doesn't refetch.
+  // One fetch per company (all types), SHARED across every screen via the
+  // module cache — the type + division filters are client-side, so switching
+  // type (bills ⇄ notes) or division never refetches, and neither does
+  // navigating between document screens while the cache is fresh.
   useEffect(() => {
     let alive = true;
-    setAllTemplates([]);
+    if (!companyId || !canViewTemplates) {
+      setAllTemplates([]);
+      setTemplatesLoaded(false);
+      return () => { alive = false; };
+    }
+    const entry = templateCache.get(companyId);
+    const fresh = entry?.data && Date.now() - entry.ts < CACHE_TTL_MS;
+    if (fresh) {
+      // Cache hit — no network, no flash.
+      setAllTemplates(entry.data);
+      setTemplatesLoaded(true);
+      return () => { alive = false; };
+    }
+    // Cold or stale → (re)fetch, deduped onto any in-flight request.
     setTemplatesLoaded(false);
-    if (!companyId || !canViewTemplates) return () => { alive = false; };
-    getTemplatesByCompany(companyId)
-      .then(({ data }) => { if (alive) { setAllTemplates(data || []); setTemplatesLoaded(true); } })
+    fetchCompanyTemplates(companyId)
+      .then((list) => { if (alive) { setAllTemplates(list); setTemplatesLoaded(true); } })
       .catch(() => { if (alive) { setAllTemplates([]); setTemplatesLoaded(false); } });
     return () => { alive = false; };
-  }, [companyId, canViewTemplates]);
+  }, [companyId, canViewTemplates, reloadTick]);
+
+  // Refetch when another screen invalidates this company's cache after a
+  // template mutation (create/rename/delete/set-default/duplicate/Excel).
+  useEffect(() => {
+    const onInvalidate = (invCompanyId) => {
+      if (invCompanyId == null || invCompanyId === companyId) setReloadTick((n) => n + 1);
+    };
+    cacheSubscribers.add(onInvalidate);
+    return () => { cacheSubscribers.delete(onInvalidate); };
+  }, [companyId]);
 
   // Re-read the remembered choice when the company, document type, or division
   // scope changes (each scope remembers its own pick).
