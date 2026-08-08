@@ -295,6 +295,11 @@ Publish output optimized from 79 MB to 37 MB via:
 - **Correct a wrong opening balance.** The Edit dialog lets you fix an account's opening balance; the offsetting amount posts to **Retained earnings** so the balance sheet stays balanced, with a live preview of the offset before you save. (Deactivating a bank account is safe for the ledger — an edited/re-posted payment tied to it still books to that same account.)
 - **Fix: the "Rows per page" selector no longer shows on empty lists.** Screens with no data (e.g. Payments showing "No payments yet") were still rendering a lone "Rows: 10" control — now hidden until there's something to page through. Applies to every paged list (Invoices, Bills, Payments, Journal Entries, …).
 
+### 2026-08-09 — Standalone bill item editing + No-PO billing when FBR is off
+
+- **Edit a standalone bill's line items.** A bill created directly — no delivery challan, no sales order — can now have items **added and removed** when edited, just like the create form. Bills that came from a delivery challan or a sales order still direct you to the source (challan or order) to change items, so a bill never drifts from what it was billed against. (Previously every bill blocked add/remove, which stranded standalone invoices — you couldn't add a line after saving.)
+- **Bill "No PO" delivery challans when FBR is off.** For companies without FBR integration, a delivery challan that has no customer PO is now billable directly from the challan list/table and counts toward its sales order's billable challans. FBR-enabled companies still require a PO first.
+
 ### 2026-08-08 — Company Stamps + print-template load speed & preview loaders
 
 - **Company Stamps — reusable stamp/signature images as print-template merge fields.** Upload multiple stamps per company on the new **Stamps** tab (Configuration → Print Templates), then drop any of them into a template as `{{stamps.<name>}}` — one click in the editor's merge-field sidebar inserts a ready `<img>`. No more pasting giant base64 images into template HTML, and each template can carry different stamps. Stamps render in the live preview, Print, and PDF. Managed under new permissions `printtemplates.stamps.view` / `printtemplates.stamps.manage`; each stamp keeps a stable key so renaming it never breaks templates already using it.

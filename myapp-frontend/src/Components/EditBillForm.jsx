@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { toLocalYmd, todayYmd } from "../utils/dateInput";
-import { MdInfo, MdAdd, MdCheckCircle, MdWarning, MdInventory2, MdLightbulb, MdRefresh, MdError, MdExpandMore, MdExpandLess, MdAutoAwesome } from "react-icons/md";
+import { MdInfo, MdAdd, MdCheckCircle, MdWarning, MdInventory2, MdLightbulb, MdRefresh, MdError, MdExpandMore, MdExpandLess, MdAutoAwesome, MdDelete } from "react-icons/md";
 import { getInvoiceById, updateInvoice, updateInvoiceItemTypes, updateInvoiceItemTypesAndQty } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
@@ -1064,6 +1064,20 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const isChallanLinked = !!(invoice?.challanNumbers && invoice.challanNumbers.length > 0);
   const lockClient      = lockNonItemType || isChallanLinked;
 
+  // Item add/remove policy (2026-08-08). A bill's items belong to whatever it was
+  // created from: a delivery challan, a sales order, or nothing (plain standalone).
+  //   • challan-linked → edit items on the challan (the bill auto-syncs)
+  //   • SO-linked      → edit items on the sales order
+  //   • plain standalone (neither) → add/remove directly here, like the create form.
+  const isSoLinked = invoice?.salesOrderId != null;
+  const isPlainStandalone = !isChallanLinked && !isSoLinked;
+  const canAddRemoveItems = isPlainStandalone && canFullEdit && !itemTypeOnlyMode && !itemTypeAndQtyMode && !readOnly;
+  const addBlankRow = () => setItems((prev) => [...prev, {
+    id: 0, itemTypeId: null, nonInventoryItemId: null, description: "",
+    quantity: 1, uom: "", unitPrice: 0, lineTotal: 0, hsCode: "", saleType: "", fbrUOMId: null,
+  }]);
+  const removeRow = (index) => setItems((prev) => prev.filter((_, i) => i !== index));
+
   const handleSave = async (e) => {
     e.preventDefault();
     setError("");
@@ -1217,7 +1231,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
               <>
                 {error && <div style={styles.errorAlert}>{error}</div>}
 
-                {!readOnly && (
+                {!readOnly && isChallanLinked && (
                   <div style={styles.infoBox}>
                     <MdInfo size={16} style={{ color: colors.blue, flexShrink: 0, marginTop: 2 }} />
                     <div>
@@ -1226,6 +1240,15 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                         <> (<b>DC#{invoice.challanNumbers.join(", DC#")}</b>)</>
                       )}.
                       The bill will sync automatically.
+                    </div>
+                  </div>
+                )}
+                {!readOnly && !isChallanLinked && isSoLinked && (
+                  <div style={styles.infoBox}>
+                    <MdInfo size={16} style={{ color: colors.blue, flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      This bill is linked to <b>Sales Order #{invoice.salesOrderId}</b>. To
+                      <b> add or remove items</b>, update the sales order — the bill follows it.
                     </div>
                   </div>
                 )}
@@ -1601,6 +1624,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                         {fbrEnabled && (
                           <th style={{ ...styles.th, minWidth: 140 }}>Sale Type</th>
                         )}
+                        {canAddRemoveItems && !renderGrouped && (
+                          <th style={{ ...styles.th, width: 44, minWidth: 44 }} aria-label="Remove" />
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -1759,12 +1785,31 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                 {item.saleType || <span style={styles.muted}>—</span>}
                               </td>
                             )}
+                            {canAddRemoveItems && (
+                              <td style={{ ...styles.td, textAlign: "center" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => removeRow(idx)}
+                                  disabled={items.length <= 1}
+                                  title={items.length <= 1 ? "A bill needs at least one item" : "Remove this line"}
+                                  style={{ ...styles.rowRemoveBtn, ...(items.length <= 1 ? { opacity: 0.4, cursor: "default" } : {}) }}
+                                >
+                                  <MdDelete size={16} />
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
                 </div>
+
+                {canAddRemoveItems && !renderGrouped && (
+                  <button type="button" onClick={addBlankRow} style={styles.addRowBtn}>
+                    <MdAdd size={16} /> Add Row
+                  </button>
+                )}
 
                 {/* Totals */}
                 <div style={styles.totalsBox}>
@@ -2638,6 +2683,19 @@ const styles = {
     cursor: "pointer",
     fontFamily: "inherit",
     flexShrink: 0,
+  },
+  rowRemoveBtn: {
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    width: 30, height: 30, padding: 0,
+    border: `1px solid ${colors.inputBorder}`, borderRadius: 7,
+    backgroundColor: "#fff", color: colors.danger, cursor: "pointer",
+  },
+  addRowBtn: {
+    display: "inline-flex", alignItems: "center", gap: "0.35rem",
+    marginTop: "0.6rem", padding: "0.45rem 0.9rem",
+    border: `1px dashed ${colors.blue}`, borderRadius: 8,
+    backgroundColor: "#f4f8ff", color: colors.blue,
+    fontSize: "0.85rem", fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
   },
   // ── Tax Claim Panel styles ────────────────────────────────────────
   taxPanelCard: {

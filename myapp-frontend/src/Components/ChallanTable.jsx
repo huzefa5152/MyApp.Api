@@ -14,7 +14,7 @@ function evalRowFlags(c, perms) {
   const canCancel = c.status !== "Invoiced" && isEditable;
   const isDuplicate = c.duplicatedFromId != null;
   const canDelete = canCancel && (isDuplicate || c.isLatest === true);
-  const canGenerateBill = perms.permCreateBill && (c.status === "Pending" || c.status === "Imported");
+  const canGenerateBill = perms.permCreateBill && (c.status === "Pending" || c.status === "Imported" || (c.status === "No PO" && perms.companyFbrOff));
   const canDuplicate = perms.permDuplicate
     && !isDuplicate
     && (c.status === "Pending" || c.status === "Imported");
@@ -35,6 +35,7 @@ export default function ChallanTable({
   duplicatingId,
   printDisabled = false,
   printDisabledReason = "",
+  companyFbrOff = false,
 }) {
   const { has } = usePermissions();
   const perms = {
@@ -43,6 +44,7 @@ export default function ChallanTable({
     permPrint: has("challans.print.view"),
     permCreateBill: has("bills.manage.create"),
     permDuplicate: has("challans.manage.duplicate"),
+    companyFbrOff,
   };
   const [selectedChallan, setSelectedChallan] = useState(null);
 

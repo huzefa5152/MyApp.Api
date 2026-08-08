@@ -147,6 +147,13 @@ namespace MyApp.Api.Services.Implementations
             // many are billable now. Only "Pending"/"Imported" challans can go
             // on a bill (InvoiceService rejects "No PO"/"Setup Required"), so the
             // billable count — not the raw unbilled count — gates "Generate Bill".
+            // "No PO" challans are billable when the company has FBR OFF (a PO is
+            // optional metadata then, and CreateAsync already accepts them), so an
+            // FBR-off order whose challans are all "No PO" still surfaces its Bill
+            // action. FBR-on orders still require a PO first.
+            var companyFbrOff = orders.Count > 0 && !(await _context.Companies.AsNoTracking()
+                .Where(c => c.Id == orders[0].CompanyId)
+                .Select(c => c.FbrEnabled).FirstOrDefaultAsync());
             var challanStatsList = await _context.DeliveryChallans
                 .Where(dc => dc.SalesOrderId != null
                           && orderIds.Contains(dc.SalesOrderId.Value)
@@ -156,7 +163,8 @@ namespace MyApp.Api.Services.Implementations
                 {
                     Key = g.Key,
                     Count = g.Count(),
-                    Billable = g.Count(x => x.Status == "Pending" || x.Status == "Imported"),
+                    Billable = g.Count(x => x.Status == "Pending" || x.Status == "Imported"
+                                         || (companyFbrOff && x.Status == "No PO")),
                     Billed = g.Count(x => x.InvoiceId != null)
                 })
                 .ToListAsync();

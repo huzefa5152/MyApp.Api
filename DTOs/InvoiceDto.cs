@@ -108,6 +108,9 @@ namespace MyApp.Api.DTOs
         public List<string> FbrMissing { get; set; } = new();
         public List<InvoiceItemDto> Items { get; set; } = new();
         public List<int> ChallanNumbers { get; set; } = new();
+        // Header link to the source Sales Order (null = not order-linked). Lets the
+        // bill-edit UI distinguish "SO-linked" from "plain standalone" for item add/remove.
+        public int? SalesOrderId { get; set; }
 
         // Aggregated from the linked DeliveryChallans — bills don't
         // store these directly because a single bill can roll up

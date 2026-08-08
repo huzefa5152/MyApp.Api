@@ -233,6 +233,7 @@ namespace MyApp.Api.Services.Implementations
             OriginalInvoiceNumber = inv.OriginalInvoice?.InvoiceNumber,
             OriginalInvoiceRefIRN = inv.OriginalInvoiceRefIRN,
             SupplementsInvoiceId = inv.SupplementsInvoiceId,
+            SalesOrderId = inv.SalesOrderId,
             NoteReason = inv.NoteReason,
             NoteReasonRemarks = inv.NoteReasonRemarks,
             NoteAffectsStock = inv.NoteAffectsStock,
@@ -1267,20 +1268,35 @@ namespace MyApp.Api.Services.Implementations
             await MyApp.Api.Helpers.UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.UOM));
             await ValidateUpdateItemDecimalQuantitiesAsync(dto.Items);
 
-            // A bill's items cannot be added or removed from here — that must happen on the
-            // linked delivery challan (which auto-syncs). Reject any attempt to add or drop items.
+            // Item add/remove policy (2026-08-08). Where a bill's items are OWNED
+            // decides whether they can be added/removed directly on the bill:
+            //   • Challan-linked  → owned by the delivery challan; edit them there
+            //                       (the bill auto-syncs). Direct add/remove rejected.
+            //   • Sales-order-linked → owned by the sales order; edit them there.
+            //   • Plain standalone (no challan, no SO) → add/remove allowed here,
+            //     exactly like the standalone-create form.
             var incomingIds = dto.Items.Select(i => i.Id).ToHashSet();
-            if (dto.Items.Any(i => i.Id <= 0))
-                throw new InvalidOperationException(
-                    "Cannot add new items directly to a bill. Add the item to the linked delivery challan instead.");
-
             var existingIds = invoice.Items.Select(ii => ii.Id).ToHashSet();
-            var missingFromPayload = existingIds.Except(incomingIds).ToList();
-            if (missingFromPayload.Count > 0)
-                throw new InvalidOperationException(
-                    "Cannot remove items directly from a bill. Remove the item from the linked delivery challan instead.");
+            var addedItemDtos = dto.Items.Where(i => i.Id <= 0).ToList();
+            var removedItemIds = existingIds.Except(incomingIds).ToList();
+            var structuralChange = addedItemDtos.Count > 0 || removedItemIds.Count > 0;
 
-            var extrasInPayload = incomingIds.Except(existingIds).ToList();
+            var hasChallan = invoice.DeliveryChallans != null && invoice.DeliveryChallans.Any();
+            var hasSalesOrder = invoice.SalesOrderId != null;
+            if (structuralChange)
+            {
+                if (hasChallan)
+                    throw new InvalidOperationException(
+                        "Items on a challan-linked bill can't be added or removed here. Change them on the linked delivery challan — the bill updates automatically.");
+                if (hasSalesOrder)
+                    throw new InvalidOperationException(
+                        $"This bill is linked to Sales Order #{invoice.SalesOrderId}. Add or remove items on the sales order.");
+                // else: plain standalone → allowed; reconciled in the item loop below.
+            }
+
+            // A positive id in the payload that isn't one of this bill's lines is
+            // always invalid, in every case.
+            var extrasInPayload = incomingIds.Where(x => x > 0).Except(existingIds).ToList();
             if (extrasInPayload.Count > 0)
                 throw new InvalidOperationException(
                     $"Bill item id(s) [{string.Join(", ", extrasInPayload)}] do not belong to this bill.");
@@ -1345,8 +1361,35 @@ namespace MyApp.Api.Services.Implementations
                 // UOM / HS Code / Sale Type / FbrUOMId from that ItemType — the user
                 // edits these indirectly by picking a different ItemType on the bill.
                 var validAccountIds = await ValidCompanyAccountIdsAsync(invoice.CompanyId, dto.Items.Select(i => i.AccountId));
+
+                // Plain-standalone add/remove reconcile (only reachable when the bill
+                // has no challan and no sales order — guarded above). Removed lines are
+                // deleted (their dual-book overlay cascade-deletes); new lines (Id<=0)
+                // are built like the standalone-create path. Stock + GL are reflowed off
+                // invoice.Items after the loop, so add/remove needs no other special-casing.
+                if (removedItemIds.Count > 0)
+                {
+                    var toRemove = invoice.Items.Where(ii => removedItemIds.Contains(ii.Id)).ToList();
+                    _context.InvoiceItems.RemoveRange(toRemove);
+                    foreach (var r in toRemove) invoice.Items.Remove(r);
+                }
+                var companyDefaultSaleType = "Goods at Standard Rate (default)";
+                if (addedItemDtos.Count > 0)
+                {
+                    var defSt = await _context.Companies.AsNoTracking()
+                        .Where(c => c.Id == invoice.CompanyId)
+                        .Select(c => c.FbrDefaultSaleType).FirstOrDefaultAsync();
+                    if (!string.IsNullOrWhiteSpace(defSt)) companyDefaultSaleType = defSt;
+                }
+
                 foreach (var itemDto in dto.Items)
                 {
+                    if (itemDto.Id <= 0)
+                    {
+                        invoice.Items.Add(await BuildStandaloneInvoiceItemAsync(
+                            invoice.CompanyId, itemDto, typeMap, validAccountIds, companyDefaultSaleType));
+                        continue;
+                    }
                     var existing = invoice.Items.First(ii => ii.Id == itemDto.Id);
                     var lineTotal = Math.Round(itemDto.Quantity * itemDto.UnitPrice, 2);
 
@@ -1945,6 +1988,69 @@ namespace MyApp.Api.Services.Implementations
         /// to the source delivery items so the challan stays in sync with the bill.
         /// Price/HS code/sale type are bill-specific and are not synced back.
         /// </summary>
+        // Build a brand-new InvoiceItem for a plain-standalone bill's "add a line"
+        // flow in UpdateAsync. Mirrors the standalone-create item build: a
+        // non-inventory shortcut line skips FBR resolution; item-type / free-text
+        // lines resolve UOM + HS + sale type exactly as the create path does.
+        private async Task<InvoiceItem> BuildStandaloneInvoiceItemAsync(
+            int companyId, UpdateInvoiceItemDto itemDto,
+            Dictionary<int, ItemType> typeMap, HashSet<int> validAccountIds, string companyDefaultSaleType)
+        {
+            if (itemDto.NonInventoryItemId.HasValue)
+            {
+                return new InvoiceItem
+                {
+                    DeliveryItemId = null,
+                    ItemTypeId = null,
+                    NonInventoryItemId = itemDto.NonInventoryItemId,
+                    AccountId = Coerce(itemDto.AccountId, validAccountIds),
+                    ItemTypeName = "",
+                    Description = itemDto.Description ?? "",
+                    Quantity = itemDto.Quantity,
+                    UOM = itemDto.UOM ?? "",
+                    UnitPrice = itemDto.UnitPrice,
+                    LineTotal = Math.Round(itemDto.Quantity * itemDto.UnitPrice, 2),
+                };
+            }
+
+            ItemType? itemType = null;
+            if (itemDto.ItemTypeId.HasValue)
+                typeMap.TryGetValue(itemDto.ItemTypeId.Value, out itemType);
+
+            var effectiveHSCode = !string.IsNullOrWhiteSpace(itemDto.HSCode)
+                ? itemDto.HSCode
+                : itemType?.HSCode;
+
+            var (effectiveUOM, effectiveFbrUOMId) = await ResolveUomAsync(
+                companyId, itemDto.UOM, itemDto.FbrUOMId, itemType, effectiveHSCode, itemDto.Description ?? "(unnamed)");
+
+            var effectiveSaleType = !string.IsNullOrWhiteSpace(itemDto.SaleType)
+                ? itemDto.SaleType
+                : !string.IsNullOrWhiteSpace(itemType?.SaleType)
+                    ? itemType!.SaleType
+                    : companyDefaultSaleType;
+
+            return new InvoiceItem
+            {
+                DeliveryItemId = null,
+                ItemTypeId = itemType?.Id,
+                ItemTypeName = itemType?.Name ?? "",
+                AccountId = Coerce(itemDto.AccountId, validAccountIds),
+                Description = itemDto.Description ?? "",
+                Quantity = itemDto.Quantity,
+                UOM = effectiveUOM,
+                UnitPrice = itemDto.UnitPrice,
+                LineTotal = Math.Round(itemDto.Quantity * itemDto.UnitPrice, 2),
+                HSCode = effectiveHSCode,
+                FbrUOMId = effectiveFbrUOMId,
+                SaleType = effectiveSaleType,
+                RateId = itemDto.RateId,
+                FixedNotifiedValueOrRetailPrice = itemDto.FixedNotifiedValueOrRetailPrice,
+                SroScheduleNo = string.IsNullOrWhiteSpace(itemDto.SroScheduleNo) ? null : itemDto.SroScheduleNo,
+                SroItemSerialNo = string.IsNullOrWhiteSpace(itemDto.SroItemSerialNo) ? null : itemDto.SroItemSerialNo,
+            };
+        }
+
         private async Task SyncDeliveryItemsFromInvoiceEditAsync(Invoice invoice)
         {
             var deliveryItemIds = invoice.Items

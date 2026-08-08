@@ -57,7 +57,7 @@ function WarningTooltip({ warnings }) {
   );
 }
 
-export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "" }) {
+export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", companyFbrOff = false }) {
   const { has } = usePermissions();
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
@@ -92,9 +92,10 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
           //     in DeliveryChallanService.DeleteAsync.
           const canDelete = canCancel && (isDuplicate || c.isLatest === true);
           const hasWarnings = c.warnings && c.warnings.length > 0;
-          // Generate Bill shortcut — only for billable statuses
-          // (Pending / Imported), matching the backend's CreateAsync guard.
-          const canGenerateBill = permCreateBill && (c.status === "Pending" || c.status === "Imported");
+          // Generate Bill shortcut — Pending / Imported always; "No PO" too when
+          // the company has FBR integration OFF (a PO isn't needed to bill, and the
+          // backend already accepts it). FBR-on companies still need a PO first.
+          const canGenerateBill = permCreateBill && (c.status === "Pending" || c.status === "Imported" || (c.status === "No PO" && companyFbrOff));
           // Duplicate is available on the same statuses as Generate Bill,
           // EXCEPT duplicating-a-duplicate is not allowed (2026-05-08): the
           // original is the only canonical row, and the new "create N copies"

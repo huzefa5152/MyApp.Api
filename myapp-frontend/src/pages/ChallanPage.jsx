@@ -544,6 +544,7 @@ export default function ChallanPage() {
               onDuplicate={handleDuplicate}
               exportingId={exportingId}
               duplicatingId={duplicatingId}
+              companyFbrOff={selectedCompany?.fbrEnabled === false}
             />
           ) : (
             <ChallanList
@@ -560,6 +561,7 @@ export default function ChallanPage() {
               onDuplicate={handleDuplicate}
               exportingId={exportingId}
               duplicatingId={duplicatingId}
+              companyFbrOff={selectedCompany?.fbrEnabled === false}
             />
           )}
           {/* Pagination */}
