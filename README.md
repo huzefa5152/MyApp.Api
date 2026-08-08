@@ -295,10 +295,12 @@ Publish output optimized from 79 MB to 37 MB via:
 - **Correct a wrong opening balance.** The Edit dialog lets you fix an account's opening balance; the offsetting amount posts to **Retained earnings** so the balance sheet stays balanced, with a live preview of the offset before you save. (Deactivating a bank account is safe for the ledger — an edited/re-posted payment tied to it still books to that same account.)
 - **Fix: the "Rows per page" selector no longer shows on empty lists.** Screens with no data (e.g. Payments showing "No payments yet") were still rendering a lone "Rows: 10" control — now hidden until there's something to page through. Applies to every paged list (Invoices, Bills, Payments, Journal Entries, …).
 
-### 2026-08-09 — Standalone bill item editing + No-PO billing when FBR is off
+### 2026-08-09 — Sales flow: standalone bill items, No-PO billing, order lifecycle & clearer locks
 
 - **Edit a standalone bill's line items.** A bill created directly — no delivery challan, no sales order — can now have items **added and removed** when edited, just like the create form. Bills that came from a delivery challan or a sales order still direct you to the source (challan or order) to change items, so a bill never drifts from what it was billed against. (Previously every bill blocked add/remove, which stranded standalone invoices — you couldn't add a line after saving.)
 - **Bill "No PO" delivery challans when FBR is off.** For companies without FBR integration, a delivery challan that has no customer PO is now billable directly from the challan list/table and counts toward its sales order's billable challans. FBR-enabled companies still require a PO first.
+- **Cancel or delete a sales order that only has cancelled challans.** A voided (cancelled) delivery challan no longer keeps its order stuck **Open** — cancelling or deleting the order now ignores cancelled challans (delete unlinks them, preserving their history). Active challans still block it.
+- **Clearer locked states on quotes & orders.** When a quote is locked (converted to an order) or an order is locked (a challan from it was billed), the Edit button now shows **disabled with a tooltip explaining why**, instead of silently disappearing.
 
 ### 2026-08-08 — Company Stamps + print-template load speed & preview loaders
 

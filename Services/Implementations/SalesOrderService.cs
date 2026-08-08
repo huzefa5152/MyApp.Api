@@ -581,8 +581,8 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("Invalid status. Allowed: Open, Closed, Cancelled.");
             var order = await _repository.GetByIdAsync(id);
             if (order == null) return false;
-            if (status == "Cancelled" && await _repository.HasChallansAsync(id))
-                throw new InvalidOperationException("Cannot cancel an order that already has delivery challans.");
+            if (status == "Cancelled" && await _repository.HasChallansAsync(id, includeCancelled: false))
+                throw new InvalidOperationException("Cannot cancel an order that has active delivery challans.");
             order.Status = status;
             await _repository.UpdateAsync(order);
             return true;
@@ -592,8 +592,14 @@ namespace MyApp.Api.Services.Implementations
         {
             var order = await _repository.GetByIdAsync(id);
             if (order == null) return false;
-            if (await _repository.HasChallansAsync(id))
-                throw new InvalidOperationException("Cannot delete an order that has delivery challans. Delete the challans first.");
+            if (await _repository.HasChallansAsync(id, includeCancelled: false))
+                throw new InvalidOperationException("Cannot delete an order that has active delivery challans. Delete the challans first.");
+            // Release any cancelled (voided) challans still pointing at this order so
+            // the NoAction FK doesn't block the delete — they keep their history,
+            // just unlinked from the removed order.
+            var cancelledChallans = await _context.DeliveryChallans
+                .Where(dc => dc.SalesOrderId == id && dc.Status == "Cancelled").ToListAsync();
+            foreach (var dc in cancelledChallans) dc.SalesOrderId = null;
 
             var maxNumber = await _repository.GetMaxNumberAsync(order.CompanyId);
             if (order.SalesOrderNumber != maxNumber)

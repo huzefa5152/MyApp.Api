@@ -275,7 +275,10 @@ export default function SalesQuotePage() {
                 {q.convertedToSalesOrderNumber && <div style={st.converted}>→ Sales Order #{q.convertedToSalesOrderNumber}</div>}
                 <div style={st.actions}>
                   <button style={st.actBtn} onClick={() => setViewQuote(q)} title="View"><MdVisibility size={16} /></button>
-                  {canUpdate && q.isEditable && <button style={st.actBtn} onClick={() => { setEditQuote(q); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
+                  {canUpdate && (q.isEditable
+                    ? <button style={st.actBtn} onClick={() => { setEditQuote(q); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>
+                    : <button style={{ ...st.actBtn, opacity: 0.4, cursor: "not-allowed" }} disabled title={q.convertedToSalesOrderNumber ? `Locked — converted to Sales Order #${q.convertedToSalesOrderNumber}. Delete that order to edit this quote again.` : "Locked — this quote can no longer be edited."}><MdEdit size={16} /></button>
+                  )}
                   {canPrint && <button style={{ ...st.actBtn, ...(quoteNoTemplate(q) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={quoteNoTemplate(q)} onClick={() => handlePrint(q)} title={quoteNoTemplate(q) ? tplPicker.noTemplateReason : "Print"}><MdPrint size={16} /></button>}
                   {canPrint && <button style={{ ...st.actBtn, opacity: (quoteNoTemplate(q) || exportingId === q.id) ? 0.5 : 1, ...(quoteNoTemplate(q) ? { cursor: "not-allowed" } : {}) }} onClick={() => handleExportPdf(q)} disabled={quoteNoTemplate(q) || !!exportingId} title={quoteNoTemplate(q) ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={16} /></button>}
                   {canConvert && q.status !== "Accepted" && <button style={{ ...st.actBtn, color: colors.teal }} onClick={() => handleConvert(q)} title="Convert to Sales Order"><MdSwapHoriz size={16} /></button>}

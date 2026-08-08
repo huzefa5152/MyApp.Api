@@ -317,7 +317,10 @@ export default function SalesOrderPage() {
                     {canView && <button style={st.actBtn} onClick={() => setViewOrder(o)} title="View details"><MdVisibility size={16} /></button>}
                     {canDeliver && <button style={st.deliverBtn} onClick={() => setDeliverOrder(o)} title="Create a delivery challan for this order"><MdLocalShipping size={15} /> Create Challan</button>}
                     {canDeliver && <button style={st.attachBtn} onClick={() => setAttachOrder(o)} title="Attach an existing delivery challan to this order"><MdLink size={15} /> Attach Challan</button>}
-                    {canUpdate && o.isEditable && <button style={st.actBtn} onClick={() => { setEditOrder(o); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
+                    {canUpdate && (o.isEditable
+                      ? <button style={st.actBtn} onClick={() => { setEditOrder(o); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>
+                      : <button style={{ ...st.actBtn, opacity: 0.4, cursor: "not-allowed" }} disabled title="Locked — a challan from this order has been billed, so its lines are fixed. Edit items on the challan/bill instead."><MdEdit size={16} /></button>
+                    )}
                     {canPrint && <button style={{ ...st.actBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} onClick={() => handlePrint(o)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}><MdPrint size={16} /></button>}
                     {canPrint && <button style={{ ...st.actBtn, opacity: (tplPicker.noTemplate || exportingId === o.id) ? 0.5 : 1, ...(tplPicker.noTemplate ? { cursor: "not-allowed" } : {}) }} onClick={() => handleExportPdf(o)} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={16} /></button>}
                     {canBill && o.billableChallanCount > 0 && <button style={st.billBtn} onClick={() => handleGenerateBill(o)} title="Generate bill from delivered challans"><MdReceiptLong size={15} /> Bill</button>}

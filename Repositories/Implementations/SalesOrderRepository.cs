@@ -108,9 +108,13 @@ namespace MyApp.Api.Repositories.Implementations
                 .MaxAsync(o => (int?)o.SalesOrderNumber) ?? 0;
         }
 
-        public async Task<bool> HasChallansAsync(int salesOrderId)
+        // includeCancelled=false ignores cancelled challans — a voided challan
+        // shouldn't keep an order from being cancelled/deleted (matches the
+        // billable-challan stats, which already exclude "Cancelled").
+        public async Task<bool> HasChallansAsync(int salesOrderId, bool includeCancelled = true)
         {
-            return await _context.DeliveryChallans.AnyAsync(dc => dc.SalesOrderId == salesOrderId);
+            return await _context.DeliveryChallans.AnyAsync(dc => dc.SalesOrderId == salesOrderId
+                && (includeCancelled || dc.Status != "Cancelled"));
         }
 
         public async Task<List<SalesOrder>> GetOpenByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)

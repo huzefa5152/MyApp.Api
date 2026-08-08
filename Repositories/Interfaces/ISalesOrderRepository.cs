@@ -19,7 +19,7 @@ namespace MyApp.Api.Repositories.Interfaces
         Task DeleteAsync(SalesOrder order);
         Task<int> GetCountByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
         Task<int> GetMaxNumberAsync(int companyId);
-        Task<bool> HasChallansAsync(int salesOrderId);
+        Task<bool> HasChallansAsync(int salesOrderId, bool includeCancelled = true);
         /// <summary>Orders with at least one undelivered line — powers the "open orders" picker.</summary>
         Task<List<SalesOrder>> GetOpenByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null);
     }
