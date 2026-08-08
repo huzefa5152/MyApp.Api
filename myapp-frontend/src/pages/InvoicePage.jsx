@@ -931,6 +931,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                   <option value="notadjusted">Not adjusted (needs HS/qty/price)</option>
                   <option value="ready">Ready to validate</option>
                   <option value="submitted">Submitted to FBR</option>
+                  <option value="excluded">FBR excluded</option>
                 </select>
               )}
               <div className="filter-date-group">
