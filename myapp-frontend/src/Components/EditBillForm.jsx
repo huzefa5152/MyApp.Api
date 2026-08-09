@@ -2651,7 +2651,7 @@ const styles = {
     color: colors.textPrimary, borderRadius: 6, marginBottom: "1rem",
     fontSize: "0.82rem", border: `1px solid ${colors.infoBorder}`,
   },
-  row: { display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" },
+  row: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.85rem 1rem", marginBottom: "1rem", alignItems: "end" },
   // Even, responsive field grid for the bill-header fields — equal columns
   // that wrap cleanly (no lone last field stretching to full width, which is
   // what made "Document Type" look oversized). Collapses to one column on

@@ -99,7 +99,7 @@ export default function CreateChallanFromOrderModal({ order, onClose, onCreated 
 
 const s = {
   sub: { fontSize: "0.85rem", color: colors.textSecondary, marginBottom: "1rem" },
-  row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
+  row: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.85rem 1rem", marginBottom: "1rem", alignItems: "end" },
   label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
   input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },
   err: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, fontSize: "0.85rem" },

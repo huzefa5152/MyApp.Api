@@ -207,7 +207,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
 }
 
 const s = {
-  row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
+  row: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.85rem 1rem", marginBottom: "1rem", alignItems: "end" },
   label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
   miniLabel: { display: "block", marginBottom: "0.2rem", fontWeight: 600, fontSize: "0.72rem", color: colors.textSecondary },
   opt: { color: colors.textSecondary, fontWeight: 400 },

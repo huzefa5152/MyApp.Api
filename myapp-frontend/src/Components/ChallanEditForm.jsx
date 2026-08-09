@@ -439,10 +439,11 @@ const styles = {
     marginLeft: 4,
   },
   rowGroup: {
-    display: "flex",
-    gap: "0.75rem",
-    flexWrap: "wrap",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
+    gap: "0.85rem 1rem",
     marginBottom: "0.75rem",
+    alignItems: "end",
   },
   label: {
     display: "block",

@@ -301,6 +301,7 @@ Publish output optimized from 79 MB to 37 MB via:
 - **Bill "No PO" delivery challans when FBR is off.** For companies without FBR integration, a delivery challan that has no customer PO is now billable directly from the challan list/table and counts toward its sales order's billable challans. FBR-enabled companies still require a PO first.
 - **Cancel or delete a sales order that only has cancelled challans.** A voided (cancelled) delivery challan no longer keeps its order stuck **Open** — cancelling or deleting the order now ignores cancelled challans (delete unlinks them, preserving their history). Active challans still block it.
 - **Clearer locked states on quotes & orders.** When a quote is locked (converted to an order) or an order is locked (a challan from it was billed), the Edit button now shows **disabled with a tooltip explaining why**, instead of silently disappearing.
+- **Consistent, responsive form field alignment.** Data-entry forms — Create/Edit Bill, Delivery Challan (create + edit), Sales Order, Sales Quote, Withholding Tax Receipt, Create-Challan-from-Order, PO Import — now lay their fields on an aligned responsive grid: fields line up in even columns and collapse cleanly to fewer columns on narrow screens instead of wrapping raggedly. Pure UI, no behavior change.
 
 ### 2026-08-08 — Company Stamps + print-template load speed & preview loaders
 
