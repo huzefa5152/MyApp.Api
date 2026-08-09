@@ -9,6 +9,92 @@
 
 ---
 
+## 0. Implementation Status — HANDOFF (updated 2026-08-09)
+
+**Branch:** `fix/audit-2026-08-02` (off `master`). Pushed to `origin` for pickup elsewhere.
+`master` merged in on **2026-08-09** (merge `7bf61f9`, master @ `b7ab153` — customer-doc-handover + FBR fixes). Two merge conflicts resolved **keep-both**, non-destructive: (1) `InvoiceService.CreateAsync` — master's FBR future-date guard **and** the branch's batched challan-load both kept; (2) `AppDbContextModelSnapshot` — branch's `(CompanyId,Date)` index **and** master's `(CompanyId,HandoverAt)` index both kept. `dotnet build` = **0 errors** post-merge.
+
+**⚠ Verification note for whoever picks this up:** this branch does **not** auto-deploy (only `master` and `customize-solution-for-other` trigger CI→prod). Nothing here is verified beyond `dotnet build`. **Before merging any of this to `master`, run the full pre-push gate** — `scripts/test_stock_itemtype_reflow.py` (140/140), `test_basic_flows.py` (37/37), `test_tenant_isolation.py` — see the resume recipe at the end of this section.
+
+**Legend:** ✅ done+committed · 🟡 partial · ⏸ deferred (see why) · ⬜ not started · 📝 documented-only (not fixed).
+
+### 0.1 Per-finding status
+
+| ID | Finding (short) | Status | Commit / note |
+|---|---|---|---|
+| **C-1** | Startup live-DDL chain fragility | ⬜ | multi-day; Phase 6, do last, after C-2 exists |
+| **C-2** | No CI test gate before prod | ⬜ | **highest-value remaining item** — everything else should ride on it |
+| H-1 | Per-row stock writes (purchase) | ✅ | `849a79c` — `IStockService.RecordMovementsAsync`; **⏸ import sub-path** (`FbrPurchaseImportCommitter`) left per-row (not covered by reflow gate) |
+| H-2 | Unbounded tracked cartesian invoice read | ✅ | `a7fbb95` |
+| H-3 | Challan list writes on every read | ✅ | `2524bf8` (batched transitions) |
+| H-4 | Missing date-range indexes | ✅ | `d529cfa` — migration `20260802200706`, applied to db46684 by hand |
+| H-5 | No frontend code-splitting | ✅ | `22e526d` — 3.7MB → ~0.5MB initial |
+| H-6 | God files + no unit tests | ⬜ | multi-day; Phase 7; **do C-2 first** |
+| H-7 | `InvalidOperationException`→400 leak | ⬜ | Phase 5 |
+| H-8 | PdfPig `1.7.0-custom-5` build | ⬜ | Phase 6; re-baseline PO corpus after |
+| H-9 | Item-type create blocks ~90s on FBR brownout | 📝 | `c475066` documented only — **fix not started** |
+| M-1 | N+1 last-rate per challan line | ⏸ | EF-translation/row-diff risk on `GetLastRatesForChallanAsync`; can't prove zero-logic-change with current gates |
+| M-2 | N+1 challan fetch on invoice create | ✅ | `70386f1` — `GetByIdsAsync`, validation loop byte-identical |
+| M-3 | N+1 item-type on bill update | ✅ | `15debd2` |
+| M-4 | Cartesian includes on hot paths | ✅ | `a7fbb95` (AsSplitQuery) |
+| M-5 | SalesOrder read paths tracked | ✅ | `a7fbb95` (AsNoTracking) |
+| M-6 | TaxClaim C#→SQL aggregation | ⏸ | rounding/null-diff risk on tax figures; deferred under "no business-logic change" |
+| M-7 | Context value not memoized | ✅ | `ff9a94d` (Auth/Company) |
+| M-8 | Missing response security headers | 🟡 | `ff9a94d` shipped nosniff / X-Frame-Options / Referrer-Policy; **CSP still deferred** |
+| M-9 | ~98 `catch/ex.Message` in controllers | ⬜ | Phase 5 |
+| M-10 | Direct `AppDbContext` in controllers | ⬜ | Phase 5 |
+| M-11 | NPOI + ClosedXML both shipped | ⬜ | document-only decision pending (ClosedXML `SaveAs` totals bug already tracked) |
+| M-12 | Purge job single unbatched UPDATE+DELETE | ✅ | `3546554` — TOP(5000) loops |
+| M-13 | Backfills run under `AutoMigrate=false` | ⬜ | Phase 6 (ties to C-1) |
+| M-14 | `EnableBuffering()` on every request | ⬜ | 1h |
+| M-15 | Deploy: verify `ftps` + `app_offline.htm` removal | ⬜ | <30m; **NOT in the Phase 0 commit** |
+| M-16 | `POGoldenSample.PdfBlob` in DB row | ⬜ | low volume today |
+| M-17 | Confirm `CsvSafe` on server Excel exports | ⬜ | half-day; verify ReportService/SalesReport/TaxSheet paths |
+| L-1 | Dead frontend deps (xlsx, html2pdf) | ✅ | `ff9a94d` (xlsx) + `fa93726` (html2pdf → explicit jspdf+html2canvas) |
+| L-2 | Three UI systems (MUI/Bootstrap/react-bootstrap) | ⬜ | assess/spike |
+| L-3 | Likely-unused backend NuGet | ⬜ | <30m |
+| L-4 | Floating `JwtBearer 9.0.*` | ✅ | `ff9a94d` — pinned 9.0.8 |
+| L-5 | Dead Gemini config | ⬜ | <30m |
+| L-6 | Unbounded caches (no SizeLimit) | ⬜ | Phase 1; <30m |
+| L-7 | Dashboard prev-period aggregate queried twice | ✅ | `ff9a94d` |
+| L-8 | `SalesOrder.GetPrintDataAsync` double load | ✅ | `ff9a94d` |
+| L-9 | Unpaged reference reads | ⬜ | pre-SaaS |
+| L-10 | ItemType full-catalog scan on create | ⬜ | half-day |
+| L-11 | AttachmentService per-row FS stat on reads | ⬜ | half-day |
+| L-12 | Committed demo JWT key + dev hostname | ⬜ | <30m |
+| L-13 | Missing `HasMaxLength` on indexed strings | ⬜ | half-day |
+| L-14 | ~32 endpoints without `[HasPermission]` — enumerate | ⬜ | 1h |
+
+### 0.2 Tally
+
+Fully done **16** (H-1..H-5, M-2/3/4/5/7/12, L-1/4/7/8) + **1 partial** (M-8, CSP left).
+Deferred **3** (M-1, M-6, H-1 import sub-path — all "can't prove zero-logic-change with current gates").
+Documented-only **1** (H-9).
+**Not started 21** — incl. **both Criticals** (C-1, C-2), H-6/H-7/H-8, the H-9 fix, the Phase-5 error-hygiene mediums (M-9/M-10), Phase-6 startup/supply-chain (C-1/M-13/H-8), and the low-priority tail.
+
+### 0.3 Roadmap phase status
+
+- **Phase 0** (quick wins) — ✅ done, except **M-15** (deploy hygiene) and the **CSP** part of M-8.
+- **Phase 1** (reliability) — 🟡 only M-12 shipped; **C-2 (CI gate) + L-6 open** — the gap that blocks safe refactors.
+- **Phase 2** (read perf) — ✅ mostly (H-2, M-4/5, H-1, H-3, M-2/3); **M-1, M-6 deferred**.
+- **Phase 3** (indexes) — ✅ done (H-4).
+- **Phase 4** (frontend) — 🟡 H-5 done; L-2 (UI consolidation) not started.
+- **Phase 5** (error hygiene) — ⬜ H-7, M-9, M-10.
+- **Phase 6** (supply chain + startup) — ⬜ H-8, C-1, M-13. Highest care; last.
+- **Phase 7** (structural refactor) — ⬜ H-6. Needs C-2 first.
+
+**Suggested next step for the picking-up session:** land **C-2** (CI build+test gate) — it's low-regression, additive, and every remaining refactor (H-6, Phase 5, C-1) is meant to ride on it.
+
+### 0.4 Resume recipe (how to verify on this branch)
+
+- **DB:** `appsettings.Development.json` (gitignored) already points at **db46684** (prod-replica, `AutoMigrate=false`). Login `admin`/`admin123`.
+- **Run:** `ASPNETCORE_ENVIRONMENT=Development dotnet run --no-launch-profile --no-build --urls "http://localhost:5134"` (wait-for-ready: `curl --retry-connrefused`).
+- **Gates:** `python scripts/test_stock_itemtype_reflow.py` (140/140), `test_basic_flows.py` (37/37), `test_tenant_isolation.py`.
+- **Gotchas:** (1) `POST /api/itemtypes` calls **live FBR** (`ItemTypeService.EnrichFromFbrAsync`) — blocks ~90s when `gw.fbr.gov.pk` is unreachable (H-9); transient, just re-run the reflow gate. (2) **Stop the backend before `dotnet build`** — it locks the exe (kill the PID on 5134 first).
+- **Index migration on db46684:** apply only the new migration's own IF-NOT-EXISTS-guarded statements + one `__EFMigrationsHistory` row. **Do NOT** run the full `dotnet ef migrations script --idempotent` — it re-emits already-dropped indexes (e.g. `IX_Invoices_CompanyId_InvoiceNumber`) and hits history-vs-actual drift. `sqlcmd` needs `-I` (QUOTED_IDENTIFIER ON) or `CREATE INDEX` errors.
+
+---
+
 ## 1. Executive Summary
 
 MyApp.Api is a mature, **security-hardened** production ERP that has clearly absorbed several prior audit rounds (upload validation, tenant isolation, token revocation, rate limiting, FBR retry safety are all in place and genuinely well-built). The dominant debt is **not security** — it is **performance hot-paths (EF N+1 / unbounded / cartesian queries), maintainability (a few very large "god" files and no automated .NET test suite), and operational fragility (a 1,939-line `Program.cs` that runs live DDL on every boot, and a CI pipeline that ships straight to two live tenants with no test gate).**
