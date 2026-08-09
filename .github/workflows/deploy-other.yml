@@ -22,28 +22,43 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
-      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.detect.outputs.frontend }}
+      backend: ${{ steps.detect.outputs.backend }}
     steps:
-      # Full history so dorny/paths-filter can always diff the push's base
-      # commit. With a shallow checkout it can fall back to "everything
-      # changed", which wrongly forces a full deploy for a frontend-only push.
+      # Full history so the push's base commit is always available to diff.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            frontend:
-              - 'myapp-frontend/**'
-              - 'landing/**'
-            backend:
-              - '**/*.cs'
-              - '**/*.csproj'
-              - 'appsettings*.json'
-              - 'web.config'
-              - '.github/workflows/**'
+      # Deterministic change detection over the EXACT push range
+      # (github.event.before .. github.sha). Replaces dorny/paths-filter, whose
+      # push-event base heuristic intermittently fell back to "everything
+      # changed" and forced a full deploy for frontend-only pushes (e.g. a
+      # commit of only frontend files + README ran the full .NET pipeline).
+      - name: Detect changed areas
+        id: detect
+        run: |
+          BASE="${{ github.event.before }}"
+          # New branch / missing or unknown base → can't diff safely, so fall
+          # back to a FULL deploy (never risk skipping a real backend change).
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            echo "No usable base commit ('$BASE') — forcing full deploy."
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            echo "backend=true"  >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CHANGED="$(git diff --name-only "$BASE" "${{ github.sha }}")"
+          echo "Changed files in ${BASE}..${{ github.sha }}:"
+          echo "$CHANGED"
+          FRONTEND=false
+          BACKEND=false
+          # Frontend = the React app or the landing page.
+          if printf '%s\n' "$CHANGED" | grep -qE '^(myapp-frontend/|landing/)'; then FRONTEND=true; fi
+          # Backend = .NET sources/project, server config, or the CI workflows
+          # themselves (a pipeline change always warrants a full run).
+          if printf '%s\n' "$CHANGED" | grep -qE '(\.cs|\.csproj)$|(^|/)appsettings[^/]*\.json$|(^|/)web\.config$|^\.github/workflows/'; then BACKEND=true; fi
+          echo "Decision: frontend=$FRONTEND backend=$BACKEND"
+          echo "frontend=$FRONTEND" >> "$GITHUB_OUTPUT"
+          echo "backend=$BACKEND"  >> "$GITHUB_OUTPUT"
 
   # Fast path: only frontend changed — no .NET build, no app restart
   deploy-frontend-only:
