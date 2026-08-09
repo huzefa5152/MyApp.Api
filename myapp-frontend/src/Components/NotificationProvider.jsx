@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { onNotify } from "../utils/notify";
 
 const severityColors = {
@@ -10,13 +10,28 @@ const severityColors = {
 
 export default function NotificationProvider({ children }) {
   const [toast, setToast] = useState(null);
+  const timerRef = useRef(null);
+
+  const clearTimer = () => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+  };
+  const dismiss = useCallback(() => { clearTimer(); setToast(null); }, []);
 
   const showToast = useCallback(({ message, severity = "error" }) => {
+    // Reset any in-flight timer so a new toast always gets its full duration
+    // (and an earlier toast's timer can't dismiss this one early).
+    clearTimer();
     setToast({ message, severity });
-    setTimeout(() => setToast(null), 5000);
+    // Auto-dismiss by severity. Errors linger long enough to actually READ —
+    // operators reported FBR / validate errors vanishing before they could
+    // read them. Applies APP-WIDE: every toast flows through this one surface
+    // (utils/notify). Manual close (× button) still works any time.
+    const ms = severity === "error" ? 15000 : severity === "warning" ? 10000 : 5000;
+    timerRef.current = setTimeout(() => { timerRef.current = null; setToast(null); }, ms);
   }, []);
 
   useEffect(() => onNotify(showToast), [showToast]);
+  useEffect(() => clearTimer, []); // clear any pending timer on unmount
 
   const s = toast ? severityColors[toast.severity] || severityColors.error : null;
 
@@ -49,7 +64,7 @@ export default function NotificationProvider({ children }) {
           <span style={{ fontWeight: 700, fontSize: "1.1rem", lineHeight: 1 }}>{s.icon}</span>
           <span style={{ flex: 1 }}>{toast.message}</span>
           <button
-            onClick={() => setToast(null)}
+            onClick={dismiss}
             style={{
               background: "none",
               border: "none",

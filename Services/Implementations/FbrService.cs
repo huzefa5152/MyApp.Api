@@ -913,7 +913,18 @@ namespace MyApp.Api.Services.Implementations
             if (!dryRun)
             {
                 var preResult = await PreValidate(invoice, company, buyer);
-                if (preResult != null) return preResult;
+                if (preResult != null)
+                {
+                    // Pre-validate fails BEFORE any FBR HTTP call, so this reason
+                    // (future date, missing HS/UOM, mixed sale types, …) otherwise
+                    // never reaches the FBR monitor or audit trail. Log it ONCE
+                    // (deduped by message) so the operator can see WHY a
+                    // Validate/Submit was refused.
+                    await LogPreValidateFailureOnceAsync(
+                        invoice, isSubmit ? "Submit" : "Validate",
+                        preResult.ErrorMessage ?? "Pre-validation failed.");
+                    return preResult;
+                }
             }
 
             // Stock availability is NOT a gate on FBR submission. Sales /
@@ -1474,7 +1485,16 @@ namespace MyApp.Api.Services.Implementations
             invoice.FbrStatus = status;
             if (irn != null) invoice.FbrIRN = irn;
             invoice.FbrErrorMessage = errorMessage;
-            invoice.FbrSubmittedAt = DateTime.UtcNow;
+            // Stamp the filing time ONLY on a real submission. A successful
+            // VALIDATE (dry-run, no IRN) must NOT set it — FbrSubmittedAt is the
+            // "is-filed" signal for the Tax Sheet worklist (ReportService), the
+            // Tax-Sheet "transfer to next month", and the "submitted to FBR"
+            // sales report. Stamping it on validate made a never-submitted bill
+            // vanish from the worklist and over-count as submitted. Validated /
+            // Failed / Uncertain outcomes leave FbrSubmittedAt as it was (null
+            // for a bill that was never actually submitted).
+            if (string.Equals(status, FbrSubmissionStatus.Submitted, StringComparison.OrdinalIgnoreCase))
+                invoice.FbrSubmittedAt = DateTime.UtcNow;
             await _invoiceRepo.UpdateAsync(invoice);
         }
 
@@ -1678,6 +1698,51 @@ namespace MyApp.Api.Services.Implementations
             }
 
             return (salesTax, furtherTax, retail);
+        }
+
+        // Records a pre-validate rejection to the FBR monitor exactly ONCE per
+        // (invoice, message). Pre-validate runs before any FBR HTTP call, so
+        // without this the reason a Validate/Submit was refused (future date,
+        // missing HS/UOM, mixed sale types, …) never lands in the FBR monitor
+        // or audit trail. Deduped on the message so repeated clicks never spam
+        // a new row. Uses Status "rejected" (a local validation rejection) — NOT
+        // AuditFbr, whose httpStatus=0 path would mislabel it "uncertain".
+        private async Task LogPreValidateFailureOnceAsync(Invoice invoice, string action, string message)
+        {
+            try
+            {
+                bool already = await _db.FbrCommunicationLogs.AsNoTracking()
+                    .AnyAsync(l => l.InvoiceId == invoice.Id && l.FbrErrorMessage == message);
+                if (already) return;
+
+                var corr = MyApp.Api.Middleware.CorrelationIdMiddleware.FromContext(_http.HttpContext);
+                await _fbrComm.LogAsync(new FbrCommunicationLog
+                {
+                    Timestamp = DateTime.UtcNow,
+                    CompanyId = invoice.CompanyId,
+                    InvoiceId = invoice.Id,
+                    CorrelationId = corr,
+                    Action = action,               // "Validate" or "Submit"
+                    Endpoint = "(pre-validate)",
+                    HttpMethod = "POST",
+                    HttpStatusCode = null,
+                    Status = "rejected",           // local validation rejected it before any FBR call
+                    FbrErrorCode = null,
+                    FbrErrorMessage = message,
+                    RequestDurationMs = 0,
+                    RetryAttempt = 0,
+                    RequestBodyMasked = null,
+                    ResponseBodyMasked = null,
+                    UserName = _http.HttpContext?.User.Identity?.Name,
+                });
+                _logger.LogWarning("FBR {Action} pre-validate rejected invoice={InvoiceId}: {Message}",
+                    action, invoice.Id, message);
+            }
+            catch (Exception ex)
+            {
+                // Logging must never break the user-facing validate/submit flow.
+                _logger.LogWarning(ex, "Pre-validate failure log skipped for invoice {InvoiceId}", invoice.Id);
+            }
         }
 
         private async Task AuditFbr(string level, string action, int invoiceId,
