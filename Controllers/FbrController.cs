@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
+using MyApp.Api.DTOs;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 using MyApp.Api.Services.Tax;
@@ -145,6 +146,34 @@ namespace MyApp.Api.Controllers
             if (denied != null) return denied;
             var result = await _fbrService.PreviewInvoicePayloadAsync(invoiceId, scenarioId);
             return Ok(result);
+        }
+
+        /// <summary>
+        /// Admin recovery for a bill locked in a non-resubmittable FBR state —
+        /// "Uncertain" (a submit timed out and its FBR outcome is unconfirmed) or
+        /// "Submitting" (a submit crashed mid-flight). This is the deliberate valve
+        /// for the double-submit guard (incident 2026-08-05). It NEVER contacts FBR:
+        /// either it clears the FBR fields so the bill can be submitted again
+        /// (mode "retry" — safe only once verified at FBR that no invoice exists),
+        /// or it records an IRN the operator confirmed at FBR (mode "recordExisting").
+        /// Gated by invoices.fbr.reset (NOT the ordinary submit permission) and audited.
+        /// </summary>
+        [HttpPost("{invoiceId}/reset-submission")]
+        [HasPermission("invoices.fbr.reset")]
+        public async Task<IActionResult> ResetSubmission(
+            int invoiceId, [FromBody] FbrResetSubmissionRequest request)
+        {
+            var denied = await AssertAccessForInvoice(invoiceId);
+            if (denied != null) return denied;
+
+            if (request == null || string.IsNullOrWhiteSpace(request.Reason))
+                return BadRequest(new { message = "A reason is required to reset a bill's FBR state." });
+
+            var actor = User.Identity?.Name;
+            var result = await _fbrService.ResetSubmissionAsync(
+                invoiceId, request.Mode, request.Irn, request.Reason, actor);
+
+            return result.Success ? Ok(result) : BadRequest(result);
         }
 
         // ── Reference Data v1 ───────────────────────────────────

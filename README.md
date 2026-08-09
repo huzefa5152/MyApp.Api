@@ -281,6 +281,17 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-08-09 — Customer Document Handover status
+
+- **New "Documents" status on the Invoices + Credit/Debit-Note views** answering one question per FBR-submitted invoice: *have the printed customer copies (Bill + Tax Invoice) been physically handed to the customer?* Shown as a **Pending 🟡 / Delivered 🟢 / — (n/a)** badge, kept deliberately separate from the FBR-submission and payment statuses (print history is **not** a proxy for handover).
+- **Actions (all permission-gated):** per-row **Mark Delivered** (optional remark) and **Revert to Pending**, plus a **bulk "Mark delivered"** that flips every Pending row matching the current filters, and a server-side **All / Pending / Delivered** filter. New permissions `invoices.docs.deliver` and `invoices.docs.revert` (the badge itself is visible to anyone who can view the list).
+- **Data:** three additive, nullable columns on `Invoice` (`HandoverAt`, `HandoverByUserId` → `Users` SetNull, `HandoverRemark`); the status is **derived at read time**, never stored. A one-time idempotent backfill (`HANDOVER_BACKFILL_V1`) marks pre-existing submitted invoices Delivered (migrated, no operator) so the Pending worklist starts empty. Every write is audited.
+- **Safety:** touches no FBR-submission, tax/calculation, payment, printing, numbering, or stock path. Tenant-guarded + a new `scripts/test_doc_handover.py` flow test; stock-reflow stayed 140/140.
+
+### 2026-08-05 — PO import: fix single-item POs whose amount ends in "Rs." (Hudson Pharma)
+
+- **Fixed POs that produced an empty parse.** The importer's page-chrome skip rule matched any line ending in `Rs.`, so a single-item order (e.g. Hudson Pharma → ABBAS ALI & SONS: `Butter Paper  12  pack  6,500.00000  78,000.00 Rs.`) had its only item row discarded as footer chrome — the "format matched but nothing parsed" symptom. The rule now only skips a line that is *just* `Rs.`; a data/total row that merely ends in `Rs.` is kept. Both sample POs added to the parser regression corpus.
+
 ### 2026-07-30 — Attachment badge refreshes without a full page reload
 
 - **List badges now update the moment a document form closes.** Uploading a file

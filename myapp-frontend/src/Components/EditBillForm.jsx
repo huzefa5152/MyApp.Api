@@ -99,6 +99,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const effectiveReadOnly = readOnly || (!canFullEdit && !canEditItemTypeAndQty && !canEditItemType);
 
   const [invoice, setInvoice] = useState(null);
+  // True when the loaded invoice carries an Invoice-mode FBR overlay
+  // (InvoiceItemAdjustment) on any line — gates the "Send back for
+  // re-adjustment" action, which reverts that overlay. confirmingSendBack
+  // drives the inline two-step confirm on that (stock-affecting) action.
+  const [anyOverlay, setAnyOverlay] = useState(false);
+  const [confirmingSendBack, setConfirmingSendBack] = useState(false);
   const [items, setItems] = useState([]);
   // Responsive: the wide FBR line-item table side-scrolls on a phone, so below
   // 760px the individual-lines view renders as tap-friendly stacked cards
@@ -204,6 +210,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           getAllUnits().catch(() => ({ data: [] })),
         ]);
         setInvoice(data);
+        setAnyOverlay((data.items || []).some((it) => it.adjustment));
         // Bill-mode source-of-truth: every InvoiceItem field as the
         // bill carries it. Used to seed both `items[]` (when no
         // Invoice-mode overlay applies) AND originalItemsRef (which
@@ -830,6 +837,37 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
       }
       return nextRow;
     }));
+  };
+
+  // "Send back for re-adjustment" (Invoice mode): revert the FBR overlay so
+  // the bill returns to the Tax Sheet worklist for the consultant. We re-send
+  // every line's PHYSICAL bill values (item type + qty + price from
+  // originalItemsRef — never the overlay) through the adjustment path. The
+  // server deletes the overlay whenever a row matches its bill line, then
+  // re-syncs stock (SyncInvoiceStockMovementsAsync) — reverting the classified
+  // item's OUT because the effective type falls back to the no-HS bill type.
+  // Only offered pre-submission (a submitted bill is locked) and only when an
+  // overlay actually exists to revert.
+  const handleSendBackForReadjustment = async () => {
+    setError("");
+    setSaving(true);
+    setConfirmingSendBack(false);
+    try {
+      const rows = (originalItemsRef.current || []).map((bi) => ({
+        id: bi.id || 0,
+        itemTypeId: bi.itemTypeId || null,
+        quantity: parseFloat(bi.quantity) || 0,
+        unitPrice: parseFloat(bi.unitPrice) || 0,
+      }));
+      await updateInvoiceItemTypesAndQty(invoiceId, rows, "adjustment");
+      onSaved();
+    } catch (e) {
+      setError(
+        e?.response?.data?.error || e?.response?.data?.message ||
+        "Failed to send back for re-adjustment. Please try again."
+      );
+      setSaving(false);
+    }
   };
 
   // ── Grouped-by-Item-Type view (invoice mode) ──────────────────────
@@ -1993,6 +2031,36 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
               {readOnly ? "Close" : "Cancel"}
             </button>
+            {/* Send back for re-adjustment — Invoice tab only, only while the
+                bill is still classifiable (an overlay exists and it is NOT yet
+                submitted to FBR). Reverts the FBR overlay + stock so the bill
+                returns to the Tax Sheet worklist. Two-step inline confirm
+                because it removes classification and moves inventory. */}
+            {!readOnly && forceItemTypeAndQty && anyOverlay && canEditItemTypeAndQty
+              && invoice?.fbrStatus !== "Submitted" && invoice?.fbrStatus !== "Submitting"
+              && invoice?.fbrStatus !== "Uncertain" && (
+              confirmingSendBack ? (
+                <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "0.78rem", color: "#e65100", fontWeight: 600 }}>
+                    Remove FBR classification &amp; revert stock?
+                  </span>
+                  <button type="button" disabled={saving} onClick={handleSendBackForReadjustment}
+                    style={{ ...formStyles.button, backgroundColor: "#e65100", color: "#fff", opacity: saving ? 0.5 : 1 }}>
+                    {saving ? "Sending…" : "Confirm"}
+                  </button>
+                  <button type="button" disabled={saving} onClick={() => setConfirmingSendBack(false)}
+                    style={{ ...formStyles.button, ...formStyles.cancel }}>
+                    No
+                  </button>
+                </span>
+              ) : (
+                <button type="button" disabled={saving} onClick={() => setConfirmingSendBack(true)}
+                  style={{ ...formStyles.button, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
+                  title="Remove the FBR classification (item type / HS) and revert its stock, sending this bill back to the Tax Sheet so the consultant can re-adjust it.">
+                  ↩ Send back for re-adjustment
+                </button>
+              )
+            )}
             {!readOnly && invoice?.isEditable && (canFullEdit || canEditItemTypeAndQty || canEditItemType) && (() => {
               // In itemType+qty(+price) mode, block save when totals
               // drift past the tolerance. Tooltip explains the gap.

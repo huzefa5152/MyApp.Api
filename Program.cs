@@ -1336,6 +1336,62 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
+    // ── One-time backfill: Customer Document Handover ──
+    // Existing FBR-submitted invoices predate the handover feature, so we
+    // ASSUME they were already delivered — that keeps the new "Pending"
+    // filter empty at launch, and only NEW submissions enter the pending
+    // flow. HandoverByUserId is left NULL so a migrated row is distinguishable
+    // from a real operator handover (UI shows "Delivered (migrated)", no
+    // fabricated operator name). HandoverAt ≈ FbrSubmittedAt (falls back to
+    // CreatedAt on legacy rows that never recorded a submit timestamp).
+    // The EF migration adds the columns during Migrate() above, so this
+    // separate batch can reference them directly (no split-batch issue —
+    // the ALTER already ran and committed). Idempotent via the marker.
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'HANDOVER_BACKFILL_V1')
+        BEGIN
+            UPDATE Invoices
+               SET HandoverAt = COALESCE(FbrSubmittedAt, CreatedAt)
+             WHERE FbrStatus = 'Submitted'
+               AND HandoverAt IS NULL
+               AND IsCancelled = 0
+               AND IsDemo = 0;
+
+            INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp])
+            VALUES ('Info', 'HANDOVER_BACKFILL_V1',
+                    'Backfilled customer-document handover: marked pre-existing FBR-submitted invoices as Delivered (migrated).',
+                    'STARTUP', '/seed/invoices/handover-backfill', 200, SYSUTCDATETIME());
+        END
+    ");
+
+    // ── One-time backfill: clear stale FbrSubmittedAt from the validate bug ──
+    // Until 2026-08, PersistStatus stamped FbrSubmittedAt on EVERY status,
+    // including a successful VALIDATE (dry-run, no IRN). FbrSubmittedAt is the
+    // "is-filed" signal for the Tax Sheet worklist, the Tax-Sheet transfer, and
+    // the "submitted to FBR" sales report — so validated-but-never-submitted
+    // bills wrongly vanished from the worklist and over-counted as submitted.
+    // The code is fixed (only a real Submitted now stamps it); this clears the
+    // stale stamps left on bills that were NEVER actually filed:
+    //   FbrSubmittedAt set  AND  no IRN  AND  status is null/Validated/Failed.
+    // Genuinely-submitted (IRN present) and Uncertain (submit may have reached
+    // FBR — unconfirmed) bills are deliberately left untouched. Idempotent via
+    // the marker.
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'FBR_SUBMITTEDAT_VALIDATE_FIX_V1')
+        BEGIN
+            UPDATE Invoices
+               SET FbrSubmittedAt = NULL
+             WHERE FbrSubmittedAt IS NOT NULL
+               AND FbrIRN IS NULL
+               AND (FbrStatus IS NULL OR FbrStatus IN ('Validated','Failed'));
+
+            INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp])
+            VALUES ('Info', 'FBR_SUBMITTEDAT_VALIDATE_FIX_V1',
+                    'Cleared stale FbrSubmittedAt on never-filed invoices (no IRN, status null/Validated/Failed) wrongly stamped by the old validate path, so they return to the Tax Sheet and stop counting as submitted.',
+                    'STARTUP', '/seed/invoices/fbr-submittedat-fix', 200, SYSUTCDATETIME());
+        END
+    ");
+
     // ── One-time backfill: Common Suppliers grouping ──
     // Mirrors the Common Clients backfill above. Walks every existing
     // Supplier and assigns it to a SupplierGroup based on the same

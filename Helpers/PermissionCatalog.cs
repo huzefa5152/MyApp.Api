@@ -137,6 +137,22 @@ namespace MyApp.Api.Helpers
             // operator can be trusted to flip the toggle without being trusted
             // to edit prices, dates, or items on the bill itself.
             new("invoices.fbr.exclude",    "Invoices", "FBR",    "Exclude/Include", "Mark a bill as excluded from FBR bulk Validate/Submit, or re-include it"),
+            // Admin recovery for a bill locked after a timed-out / crashed submit
+            // ("Uncertain" / "Submitting"). Lets a trusted user clear the FBR state
+            // for resubmission, or record an IRN they confirmed at FBR — the ONLY
+            // sanctioned way to unlock the double-submit guard. High-trust: it can
+            // clear a real IRN, so keep it to admins / senior FBR officers.
+            new("invoices.fbr.reset",      "Invoices", "FBR",    "Reset Submission", "Reset a bill's FBR submission state (clear for resubmit, or record a confirmed IRN) after a timed-out/uncertain submit"),
+
+            // ── Customer document handover (2026-08) ────────────────────────
+            // Tracks whether the printed customer copies were physically handed
+            // to the customer. The "Documents" column renders for anyone with
+            // invoices.list.view; only these WRITE actions are gated.
+            new("invoices.docs.deliver",   "Invoices", "Documents", "Mark Delivered",
+                "Mark an FBR-submitted invoice's customer documents as handed over to the customer (single or bulk)"),
+            new("invoices.docs.revert",    "Invoices", "Documents", "Revert Delivery",
+                "Revert a delivered invoice's customer documents back to Pending (mis-click / wrong-invoice recovery)"),
+
             new("invoices.print.view",     "Invoices", "Print",  "View",   "Print or download a Tax Invoice (Tax Invoice print, Tax PDF, Tax XLS)"),
 
             // ── PO Formats (Purchase-Order parser registry) ─────────────────

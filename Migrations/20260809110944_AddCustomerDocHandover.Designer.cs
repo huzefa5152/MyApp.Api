@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyApp.Api.Data;
 
@@ -11,9 +12,11 @@ using MyApp.Api.Data;
 namespace MyApp.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260809110944_AddCustomerDocHandover")]
+    partial class AddCustomerDocHandover
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -95,8 +98,6 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CompanyId", "Date");
 
                     b.HasIndex("CompanyId", "Direction", "Number")
                         .IsUnique();
@@ -595,8 +596,6 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("SalesOrderId");
 
                     b.HasIndex("CompanyId", "ChallanNumber");
-
-                    b.HasIndex("CompanyId", "DeliveryDate");
 
                     b.ToTable("DeliveryChallans");
 
@@ -1399,8 +1398,6 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("HandoverByUserId");
 
                     b.HasIndex("SupplementsInvoiceId");
-
-                    b.HasIndex("CompanyId", "Date");
 
                     b.HasIndex("CompanyId", "HandoverAt");
 
@@ -3092,8 +3089,6 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("SupplierIRN");
 
                     b.HasIndex("SupplierId");
-
-                    b.HasIndex("CompanyId", "Date");
 
                     b.HasIndex("CompanyId", "PurchaseBillNumber")
                         .IsUnique();

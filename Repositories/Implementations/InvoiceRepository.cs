@@ -28,6 +28,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(i => i.DeliveryChallans)
                 .Include(i => i.OriginalInvoice)
                 .Include(i => i.SupplementsInvoice)
+                .Include(i => i.HandoverBy)
                 .Where(i => i.CompanyId == companyId && !i.IsDemo
                          && i.DocumentType != 9 && i.DocumentType != 10)
                 .OrderByDescending(i => i.InvoiceNumber)
@@ -38,7 +39,7 @@ namespace MyApp.Api.Repositories.Implementations
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? noteType = null, string? fbrFilter = null)
+            int? noteType = null, string? fbrFilter = null, string? handoverFilter = null)
         {
             // Three disjoint document groups, each with its own numbering
             // sequence: sale bills (noteType null, default), Debit Notes
@@ -56,6 +57,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(i => i.DeliveryChallans)
                 .Include(i => i.OriginalInvoice)
                 .Include(i => i.SupplementsInvoice)
+                .Include(i => i.HandoverBy)
                 .Where(i => i.CompanyId == companyId && !i.IsDemo
                          && (noteType == null
                               ? (i.DocumentType != 9 && i.DocumentType != 10)
@@ -86,12 +88,20 @@ namespace MyApp.Api.Repositories.Implementations
             // FBR workflow-status filter (server-side so pagination stays correct).
             //   submitted    → already sent to FBR
             //   ready        → FBR setup complete (every line has HS Code + Sale
-            //                  Type + a UOM + a positive unit price), not yet
-            //                  submitted — ready to validate/submit. Mirrors the
-            //                  in-memory FbrReady flag / ComputeFbrMissing, in SQL.
-            //   notadjusted  → not submitted and at least one line still missing
-            //                  an FBR field (HS Code / Sale Type / UOM / price) —
-            //                  i.e. qty/price/HS not adjusted for FBR yet.
+            //                  Type + a UOM + a positive unit price), NOT excluded
+            //                  from FBR, not yet submitted — ready to
+            //                  validate/submit. Mirrors the in-memory FbrReady flag
+            //                  / ComputeFbrMissing, in SQL.
+            //   notadjusted  → not submitted, NOT excluded, and at least one line
+            //                  still missing an FBR field (HS Code / Sale Type /
+            //                  UOM / price) — i.e. qty/price/HS not adjusted yet.
+            //   excluded     → operator-flagged out of the FBR bulk workflow
+            //                  (IsFbrExcluded). Dedicated bucket so these don't
+            //                  clutter the "ready"/"notadjusted" action lists.
+            // "ready" and "notadjusted" both drop IsFbrExcluded bills — an excluded
+            // bill is off the FBR action workflow, so it appears only under
+            // "excluded" and "All FBR statuses" (and "submitted" if it was
+            // submitted per-bill, which exclusion still allows).
             if (!string.IsNullOrWhiteSpace(fbrFilter))
             {
                 switch (fbrFilter.Trim().ToLowerInvariant())
@@ -106,7 +116,7 @@ namespace MyApp.Api.Repositories.Implementations
                     // mirrors ComputeFbrMissing / FbrService.ApplyAdjustmentOverlay.
                     case "ready":
                         query = query.Where(i =>
-                            i.FbrStatus != "Submitted" && !i.IsCancelled &&
+                            i.FbrStatus != "Submitted" && !i.IsCancelled && !i.IsFbrExcluded &&
                             i.Items.Any() &&
                             !i.Items.Any(it =>
                                 (it.Adjustment.AdjustedHSCode ?? it.HSCode) == null || (it.Adjustment.AdjustedHSCode ?? it.HSCode) == "" ||
@@ -116,13 +126,36 @@ namespace MyApp.Api.Repositories.Implementations
                         break;
                     case "notadjusted":
                         query = query.Where(i =>
-                            i.FbrStatus != "Submitted" && !i.IsCancelled &&
+                            i.FbrStatus != "Submitted" && !i.IsCancelled && !i.IsFbrExcluded &&
                             (!i.Items.Any() ||
                              i.Items.Any(it =>
                                 (it.Adjustment.AdjustedHSCode ?? it.HSCode) == null || (it.Adjustment.AdjustedHSCode ?? it.HSCode) == "" ||
                                 (it.Adjustment.AdjustedSaleType ?? it.SaleType) == null || (it.Adjustment.AdjustedSaleType ?? it.SaleType) == "" ||
                                 ((it.Adjustment.AdjustedFbrUOMId ?? it.FbrUOMId) == null && ((it.Adjustment.AdjustedUOM ?? it.UOM) == null || (it.Adjustment.AdjustedUOM ?? it.UOM) == "")) ||
                                 (it.Adjustment.AdjustedUnitPrice ?? it.UnitPrice) <= 0)));
+                        break;
+                    case "excluded":
+                        query = query.Where(i => i.IsFbrExcluded);
+                        break;
+                }
+            }
+
+            // Customer document-handover filter (server-side, like fbrFilter,
+            // so pagination stays correct). Mirrors the derived status:
+            //   pending   → FBR-submitted, not cancelled, not yet handed over
+            //   delivered → handed over (HandoverAt set)
+            //   all/blank → no extra predicate
+            // (Demo bills are already excluded by the base query.)
+            if (!string.IsNullOrWhiteSpace(handoverFilter))
+            {
+                switch (handoverFilter.Trim().ToLowerInvariant())
+                {
+                    case "pending":
+                        query = query.Where(i =>
+                            i.FbrStatus == "Submitted" && !i.IsCancelled && i.HandoverAt == null);
+                        break;
+                    case "delivered":
+                        query = query.Where(i => i.HandoverAt != null);
                         break;
                 }
             }
@@ -157,6 +190,7 @@ namespace MyApp.Api.Repositories.Implementations
                     .ThenInclude(dc => dc.Items)
                 .Include(i => i.OriginalInvoice)
                 .Include(i => i.SupplementsInvoice)
+                .Include(i => i.HandoverBy)
                 .FirstOrDefaultAsync(i => i.Id == id);
         }
 

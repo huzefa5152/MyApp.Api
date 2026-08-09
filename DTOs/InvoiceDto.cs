@@ -117,6 +117,22 @@ namespace MyApp.Api.DTOs
         public string? PaymentStatus { get; set; }
         public int? DaysOverdue { get; set; }
 
+        // ── Customer Document Handover (2026-08) ─────────────────────────
+        /// <summary>
+        /// Derived (never stored): "NotApplicable" for non-submitted /
+        /// cancelled / demo bills (UI shows "—"), else "Pending" (submitted,
+        /// not handed over) or "Delivered" (HandoverAt set). Answers only
+        /// "were the printed customer copies physically handed over?" —
+        /// independent of FBR / payment / print state.
+        /// </summary>
+        public string HandoverStatus { get; set; } = "NotApplicable";
+        /// <summary>When the documents were handed over. Null unless Delivered.</summary>
+        public DateTime? HandoverAt { get; set; }
+        /// <summary>Operator who marked it. Null = system backfill (migrated) — UI shows "Delivered (migrated)".</summary>
+        public string? HandoverByName { get; set; }
+        /// <summary>Optional handover note.</summary>
+        public string? HandoverRemark { get; set; }
+
         public List<InvoiceItemDto> Items { get; set; } = new();
         public List<int> ChallanNumbers { get; set; } = new();
 
@@ -132,6 +148,36 @@ namespace MyApp.Api.DTOs
         public DateTime? PoDate { get; set; }
         public string? IndentNo { get; set; }
         public string? Site { get; set; }
+    }
+
+    /// <summary>Request body for marking customer-document handover (single or bulk).</summary>
+    public class HandoverRequest
+    {
+        /// <summary>Optional free-text handover note (max 300 chars).</summary>
+        public string? Remark { get; set; }
+    }
+
+    /// <summary>Request body for the bulk customer-document handover endpoint.</summary>
+    public class BulkHandoverRequest
+    {
+        public List<int> Ids { get; set; } = new();
+        public string? Remark { get; set; }
+    }
+
+    /// <summary>Per-id outcome summary of a bulk customer-document handover.</summary>
+    public class HandoverBulkResult
+    {
+        public int Delivered { get; set; }
+        public int Skipped { get; set; }
+        public List<HandoverBulkRow> Rows { get; set; } = new();
+    }
+
+    public class HandoverBulkRow
+    {
+        public int Id { get; set; }
+        public int InvoiceNumber { get; set; }
+        public bool Success { get; set; }
+        public string? Message { get; set; }
     }
 
     public class InvoiceItemDto

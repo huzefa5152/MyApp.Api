@@ -98,7 +98,10 @@ namespace MyApp.Api.Controllers
             [FromQuery] string? type = null,
             // FBR workflow status: "submitted" | "ready" | "notadjusted"
             // (see InvoiceRepository.GetPagedByCompanyAsync). Empty → no filter.
-            [FromQuery] string? fbrFilter = null)
+            [FromQuery] string? fbrFilter = null,
+            // Customer document-handover status filter: "pending" | "delivered"
+            // | "all"/null. Applied server-side (see InvoiceRepository).
+            [FromQuery] string? handoverFilter = null)
         {
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
@@ -109,7 +112,7 @@ namespace MyApp.Api.Controllers
                           : string.Equals(type, "creditnotes", StringComparison.OrdinalIgnoreCase) ? 10
                           : null;
             var result = await _service.GetPagedByCompanyAsync(
-                companyId, clampedPage, size, search, clientId, dateFrom, dateTo, noteType, fbrFilter);
+                companyId, clampedPage, size, search, clientId, dateFrom, dateTo, noteType, fbrFilter, handoverFilter);
             await ScrubPaymentIfDenied(result.Items);
             return Ok(result);
         }
@@ -532,6 +535,64 @@ namespace MyApp.Api.Controllers
         public class SetFbrExcludedRequest
         {
             public bool Excluded { get; set; }
+        }
+
+        // ── Customer document handover (2026-08) ─────────────────────────
+        // Tracks whether the printed customer copies were physically handed
+        // over. Independent of FBR/payment/print. Every id-bearing endpoint
+        // asserts tenant access against the STORED invoice's CompanyId; bulk
+        // filters by the caller's accessible-company set inside the service.
+
+        /// <summary>Mark an FBR-submitted invoice's customer documents as handed over (optional remark).</summary>
+        [HttpPost("{id}/handover")]
+        [HasPermission("invoices.docs.deliver")]
+        public async Task<ActionResult<InvoiceDto>> MarkHandover(int id, [FromBody] HandoverRequest? body)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            try
+            {
+                var updated = await _service.MarkHandoverAsync(id, CurrentUserId, body?.Remark);
+                if (updated == null) return NotFound(new { error = "Bill not found." });
+                return Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        /// <summary>Revert a delivered invoice's customer documents back to Pending.</summary>
+        [HttpPost("{id}/handover/revert")]
+        [HasPermission("invoices.docs.revert")]
+        public async Task<ActionResult<InvoiceDto>> RevertHandover(int id)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            try
+            {
+                var updated = await _service.RevertHandoverAsync(id);
+                if (updated == null) return NotFound(new { error = "Bill not found." });
+                return Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        /// <summary>Bulk-mark customer documents delivered across many invoices; skips ineligible / cross-tenant ids.</summary>
+        [HttpPost("handover/bulk")]
+        [HasPermission("invoices.docs.deliver")]
+        public async Task<ActionResult<HandoverBulkResult>> BulkHandover([FromBody] BulkHandoverRequest body)
+        {
+            if (body?.Ids == null || body.Ids.Count == 0)
+                return BadRequest(new { error = "No invoices selected." });
+            var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            var result = await _service.BulkMarkHandoverAsync(body.Ids, CurrentUserId, body.Remark, accessible);
+            return Ok(result);
         }
 
         /// <summary>Set/clear the invoice's payment due date (drives the

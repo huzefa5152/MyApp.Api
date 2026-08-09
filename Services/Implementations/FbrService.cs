@@ -542,11 +542,22 @@ namespace MyApp.Api.Services.Implementations
             }
 
             // Already-submitted guard
-            if (invoice.FbrStatus == "Submitted" && !string.IsNullOrEmpty(invoice.FbrIRN))
+            if (invoice.FbrStatus == FbrSubmissionStatus.Submitted && !string.IsNullOrEmpty(invoice.FbrIRN))
                 errors.Add($"Invoice already submitted to FBR. IRN: {invoice.FbrIRN}");
 
-            if (invoice.Date > DateTime.UtcNow.AddDays(1))
-                errors.Add("Invoice date cannot be in the future. [FBR 0043]");
+            // FBR [0043]: no future-dated invoices. Evaluated against TODAY IN
+            // PAKISTAN (PakistanClock) — date-only, server-time-zone independent
+            // — so a bill an operator legitimately dates "today" is never wrongly
+            // rejected on a non-PKT host (the MonsterASP box is not PKT). A truly
+            // future date is a hard stop (FBR rejects it anyway); the message
+            // covers the Tax-Sheet "transfer to next month" case so the operator
+            // knows the invoice becomes submittable once that month begins.
+            if (PakistanClock.IsFutureInvoiceDate(invoice.Date))
+                errors.Add(
+                    $"This invoice is dated {invoice.Date:dd-MMM-yyyy}, which is in the future in Pakistan. " +
+                    "FBR rejects future-dated invoices [0043], so it can't be validated or submitted yet. " +
+                    "If it was moved to next month from the Tax Sheet, classify and submit it once that month " +
+                    "begins — or change its date to today.");
 
             // ─ Items ─
             // Dual-book: validate the EFFECTIVE (overlay-applied) lines — the
@@ -730,19 +741,47 @@ namespace MyApp.Api.Services.Implementations
             if (invoice.IsCancelled)
                 return Fail("This bill has been cancelled and cannot be sent to FBR.");
 
-            // Audit C-4 (2026-05-08): pre-fix, a network drop AFTER FBR
-            // received the submit but BEFORE we got the response would let
-            // the operator click Submit again and produce a duplicate IRN.
-            // Now: refuse re-submission of a bill that already has an IRN.
-            // Validate is allowed (it's idempotent on FBR's side); only
-            // commit-bearing Submit is blocked.
-            if (isSubmit && !dryRun && !string.IsNullOrWhiteSpace(invoice.FbrIRN))
+            // Audit C-4 (2026-05-08) + double-submit incident (2026-08-05):
+            // a network drop AFTER FBR received the submit but BEFORE we got the
+            // response, OR two concurrent clicks, would let a second Submit POST
+            // reach FBR and produce a duplicate IRN (invoice 3816 — FBR does NOT
+            // honour our X-Idempotency-Key). These checks are early, friendly
+            // bail-outs so we don't build a payload for a bill that can't be
+            // submitted; the REAL safety mechanism is the atomic claim right
+            // before the POST (see PostAsync below). Validate is idempotent on
+            // FBR's side and is never blocked; only commit-bearing Submit is.
+            if (isSubmit && !dryRun)
             {
-                _logger.LogWarning(
-                    "Refused duplicate FBR submit for invoice {InvoiceId} — IRN {Irn} already issued",
-                    invoiceId, invoice.FbrIRN);
-                return Fail($"This invoice was already submitted to FBR. IRN: {invoice.FbrIRN}. " +
-                            "If you believe the original submission did not reach FBR, contact an administrator.");
+                if (!string.IsNullOrWhiteSpace(invoice.FbrIRN))
+                {
+                    _logger.LogWarning(
+                        "Refused duplicate FBR submit for invoice {InvoiceId} — IRN {Irn} already issued",
+                        invoiceId, invoice.FbrIRN);
+                    return new FbrSubmissionResult
+                    {
+                        Success = false,
+                        AlreadyInProgress = true,
+                        ErrorMessage = $"This invoice was already submitted to FBR. IRN: {invoice.FbrIRN}. " +
+                                       "If you believe the original submission did not reach FBR, an administrator can reset it.",
+                    };
+                }
+                if (string.Equals(invoice.FbrStatus, FbrSubmissionStatus.Submitting, StringComparison.OrdinalIgnoreCase))
+                    return new FbrSubmissionResult
+                    {
+                        Success = false,
+                        AlreadyInProgress = true,
+                        ErrorMessage = "A submission for this invoice is already in progress. " +
+                                       "Please wait a moment and refresh — do not submit again.",
+                    };
+                if (string.Equals(invoice.FbrStatus, FbrSubmissionStatus.Uncertain, StringComparison.OrdinalIgnoreCase))
+                    return new FbrSubmissionResult
+                    {
+                        Success = false,
+                        AlreadyInProgress = true,
+                        ErrorMessage = "A previous submission for this invoice timed out and its FBR outcome is " +
+                                       "unconfirmed. An administrator must verify it at FBR and reset it before it " +
+                                       "can be submitted again.",
+                    };
             }
 
             var company = await _companyRepo.GetByIdAsync(invoice.CompanyId);
@@ -794,35 +833,75 @@ namespace MyApp.Api.Services.Implementations
             //     ItemTypeName. Quantity / unit price / SRO references
             //     stay as the operator entered them.
             //   • Skipped for dry-run preview — preview is read-only.
+            //   • Demo / sandbox scenario bills (IsDemo) take a SEPARATE branch:
+            //     they all reuse one shared catalog ItemType, so SaleType is
+            //     reconciled from the SN scenario (authoritative) rather than the
+            //     item — otherwise 3rd-Schedule / Reduced-Rate scenarios get
+            //     clobbered to the item's Standard-Rate sale type and FBR rejects
+            //     the saleType↔scenarioId mismatch.
             if (!dryRun
-                && !string.Equals(invoice.FbrStatus, "Submitted", StringComparison.OrdinalIgnoreCase))
+                && !string.Equals(invoice.FbrStatus, FbrSubmissionStatus.Submitted, StringComparison.OrdinalIgnoreCase))
             {
-                var typeIds = invoice.Items
-                    .Where(ii => ii.ItemTypeId.HasValue)
-                    .Select(ii => ii.ItemTypeId!.Value)
-                    .Distinct()
-                    .ToList();
-                if (typeIds.Count > 0)
+                if (invoice.IsDemo)
                 {
-                    var liveTypes = await _db.ItemTypes
-                        .Where(t => typeIds.Contains(t.Id))
-                        .ToDictionaryAsync(t => t.Id);
-
-                    bool anyChanged = false;
-                    foreach (var line in invoice.Items)
+                    // Sandbox scenario bills are scenario-FIXED snapshots. Every
+                    // demo bill reuses ONE shared catalog ItemType (the favourite),
+                    // whose SaleType is "Goods at Standard Rate (default)". Running
+                    // the real-bill refresh below on a demo bill clobbers the
+                    // per-scenario SaleType that the seeder set — so a 3rd-Schedule
+                    // (SN008/SN027) or Reduced-Rate (SN028) bill got sent to FBR as
+                    // Standard Rate while still tagged scenarioId=SN008/SN027/SN028,
+                    // and PRAL rejected the saleType↔scenario mismatch (Sandbox tab
+                    // "Validate All" failed for exactly those scenarios). For demo
+                    // bills the SN scenario — not the shared item — is authoritative
+                    // for SaleType, so reconcile from the scenario catalog instead.
+                    // Any previously-clobbered value self-heals on the next run.
+                    // HS Code / UOM stay as seeded (they don't drift for demo bills).
+                    var scenario = TaxScenarios.Find(scenarioId);
+                    if (scenario != null)
                     {
-                        if (!line.ItemTypeId.HasValue) continue;
-                        if (!liveTypes.TryGetValue(line.ItemTypeId.Value, out var t)) continue;
-
-                        if (line.HSCode       != t.HSCode)        { line.HSCode = t.HSCode;        anyChanged = true; }
-                        if ((line.UOM ?? "")  != (t.UOM ?? ""))   { line.UOM = t.UOM ?? "";        anyChanged = true; }
-                        if (line.FbrUOMId     != t.FbrUOMId)      { line.FbrUOMId = t.FbrUOMId;    anyChanged = true; }
-                        if (line.SaleType     != t.SaleType)      { line.SaleType = t.SaleType;    anyChanged = true; }
-                        if (line.ItemTypeName != t.Name)          { line.ItemTypeName = t.Name;    anyChanged = true; }
+                        bool anyChanged = false;
+                        foreach (var line in invoice.Items)
+                        {
+                            if (line.SaleType != scenario.SaleType)
+                            {
+                                line.SaleType = scenario.SaleType;
+                                anyChanged = true;
+                            }
+                        }
+                        if (anyChanged)
+                            await _db.SaveChangesAsync();
                     }
+                }
+                else
+                {
+                    var typeIds = invoice.Items
+                        .Where(ii => ii.ItemTypeId.HasValue)
+                        .Select(ii => ii.ItemTypeId!.Value)
+                        .Distinct()
+                        .ToList();
+                    if (typeIds.Count > 0)
+                    {
+                        var liveTypes = await _db.ItemTypes
+                            .Where(t => typeIds.Contains(t.Id))
+                            .ToDictionaryAsync(t => t.Id);
 
-                    if (anyChanged)
-                        await _db.SaveChangesAsync();
+                        bool anyChanged = false;
+                        foreach (var line in invoice.Items)
+                        {
+                            if (!line.ItemTypeId.HasValue) continue;
+                            if (!liveTypes.TryGetValue(line.ItemTypeId.Value, out var t)) continue;
+
+                            if (line.HSCode       != t.HSCode)        { line.HSCode = t.HSCode;        anyChanged = true; }
+                            if ((line.UOM ?? "")  != (t.UOM ?? ""))   { line.UOM = t.UOM ?? "";        anyChanged = true; }
+                            if (line.FbrUOMId     != t.FbrUOMId)      { line.FbrUOMId = t.FbrUOMId;    anyChanged = true; }
+                            if (line.SaleType     != t.SaleType)      { line.SaleType = t.SaleType;    anyChanged = true; }
+                            if (line.ItemTypeName != t.Name)          { line.ItemTypeName = t.Name;    anyChanged = true; }
+                        }
+
+                        if (anyChanged)
+                            await _db.SaveChangesAsync();
+                    }
                 }
             }
 
@@ -834,7 +913,18 @@ namespace MyApp.Api.Services.Implementations
             if (!dryRun)
             {
                 var preResult = await PreValidate(invoice, company, buyer);
-                if (preResult != null) return preResult;
+                if (preResult != null)
+                {
+                    // Pre-validate fails BEFORE any FBR HTTP call, so this reason
+                    // (future date, missing HS/UOM, mixed sale types, …) otherwise
+                    // never reaches the FBR monitor or audit trail. Log it ONCE
+                    // (deduped by message) so the operator can see WHY a
+                    // Validate/Submit was refused.
+                    await LogPreValidateFailureOnceAsync(
+                        invoice, isSubmit ? "Submit" : "Validate",
+                        preResult.ErrorMessage ?? "Pre-validation failed.");
+                    return preResult;
+                }
             }
 
             // Stock availability is NOT a gate on FBR submission. Sales /
@@ -1063,6 +1153,10 @@ namespace MyApp.Api.Services.Implementations
                 };
             }
 
+            // Tracks whether the POST bytes actually left our process. Lets the
+            // generic catch below distinguish "never sent" (safe to retry → Failed)
+            // from "sent, outcome unknown" (must not auto-retry → Uncertain).
+            bool posted = false;
             try
             {
                 var httpClient = CreateClient(company);
@@ -1075,7 +1169,50 @@ namespace MyApp.Api.Services.Implementations
                 var idempotencyKey = ComputeIdempotencyKey(invoice.CompanyId, invoice.Id, invoice.CreatedAt);
                 content.Headers.Add("X-Idempotency-Key", idempotencyKey);
 
+                // ── Atomic submit claim (double-submit incident 2026-08-05) ──
+                // The load-time IRN check above is a check-then-act race: two
+                // concurrent submits both read FbrIRN=null, both fall through here,
+                // both POST — and FBR issues two IRNs because it ignores our
+                // idempotency key (invoice 3816). Close the race with a single
+                // conditional UPDATE. The row lock serialises concurrent claims;
+                // exactly one flips a submittable status to "Submitting" (1 row).
+                // Every other caller gets 0 rows and is turned away BEFORE any POST
+                // leaves our system. Cross-process safe; reuses the FbrStatus
+                // string (no new column, no migration). A bill in "Submitting",
+                // "Submitted" or "Uncertain" is deliberately NOT claimable.
+                if (isSubmit)
+                {
+                    // WHERE mirrors FbrSubmissionStatus.IsSubmittable — kept as
+                    // inline constant comparisons because EF cannot translate a
+                    // method call to SQL. If you change one, change the other.
+                    var claimed = await _db.Invoices
+                        .Where(i => i.Id == invoice.Id
+                                 && i.FbrIRN == null
+                                 && (i.FbrStatus == null
+                                     || i.FbrStatus == FbrSubmissionStatus.Failed
+                                     || i.FbrStatus == FbrSubmissionStatus.Validated))
+                        .ExecuteUpdateAsync(s => s.SetProperty(i => i.FbrStatus, FbrSubmissionStatus.Submitting));
+
+                    if (claimed == 0)
+                    {
+                        _logger.LogWarning(
+                            "FBR submit claim lost for invoice {InvoiceId} — a concurrent submit is in progress, " +
+                            "or the bill is already Submitted/Uncertain. No POST sent.", invoice.Id);
+                        return new FbrSubmissionResult
+                        {
+                            Success = false,
+                            AlreadyInProgress = true,
+                            ErrorMessage = "A submission for this invoice is already in progress. " +
+                                           "Please wait a moment and refresh — do not submit again.",
+                        };
+                    }
+                    // Keep the tracked entity in step with the claim so the final
+                    // PersistStatus writes a consistent row.
+                    invoice.FbrStatus = FbrSubmissionStatus.Submitting;
+                }
+
                 var response = await httpClient.PostAsync(url, content);
+                posted = true;   // bytes are on the wire; FBR may now hold this invoice
                 var responseBody = await response.Content.ReadAsStringAsync();
 
                 // ── HTTP-level errors ──
@@ -1100,17 +1237,27 @@ namespace MyApp.Api.Services.Implementations
                             statusCode, responseBody.Length > 300 ? responseBody[..300] : responseBody);
                     }
 
+                    // Retry-safety classification (single policy, see
+                    // FbrSubmissionStatus.OutcomeFor): a 4xx is a definitive FBR
+                    // rejection — nothing was committed, so the bill returns to a
+                    // re-submittable "Failed". A 5xx is a server error that MAY have
+                    // committed the invoice before failing, so the bill is parked
+                    // "Uncertain" and must be reconciled at FBR, never blindly retried.
+                    var httpOutcome = FbrSubmissionStatus.OutcomeFor(statusCode, requestSent: true);
+
                     string errorMsg = statusCode switch
                     {
                         401 => $"FBR authentication failed (0401) — the token is not authorized for seller NTN '{sellerNtnCnic}'. Please verify on IRIS portal that Digital Invoicing is enabled for this NTN and the token is active.{fbrDetail}",
                         403 => $"FBR access denied — your token may not have the required permissions.{fbrDetail}",
                         429 => "FBR rate limit exceeded. Please wait a moment and try again.",
-                        500 => "FBR internal server error. Please try again later or contact FBR support.",
+                        >= 500 => $"FBR returned a server error (HTTP {statusCode}), so this submission's outcome is UNCONFIRMED. " +
+                                  "Do NOT submit again — FBR may already have recorded this invoice. An administrator must verify it " +
+                                  $"at FBR and, only if it is not there, reset it for resubmission.{fbrDetail}",
                         _ => $"FBR API returned HTTP {statusCode}: {responseBody}"
                     };
 
                     await AuditFbr("Error", action, invoice.Id, url, json, responseBody, statusCode, errorMsg);
-                    if (isSubmit) await PersistStatus(invoice, "Failed", null, errorMsg);
+                    if (isSubmit) await PersistStatus(invoice, httpOutcome, null, errorMsg);
                     return Fail(errorMsg);
                 }
 
@@ -1127,9 +1274,14 @@ namespace MyApp.Api.Services.Implementations
                     // generic; full body is in the audit log.
                     _logger.LogError(jx, "FBR success response not parseable as FbrApiResponse (first 500 chars): {Body}",
                         responseBody.Length > 500 ? responseBody[..500] : responseBody);
-                    var pmsg = "FBR returned an unrecognised response. Please contact support with the request ID.";
+                    // 2xx but the body isn't the documented contract. FBR
+                    // answered 200 — it may well have created the invoice — so the
+                    // outcome is UNCONFIRMED, not failed. Uncertain blocks an
+                    // auto-retry that could duplicate; an admin verifies + resets.
+                    var pmsg = "FBR returned a 200 response we could not interpret, so this submission's outcome " +
+                               "is UNCONFIRMED. Do NOT submit again — an administrator must verify it at FBR and reset it.";
                     await AuditFbr("Error", action, invoice.Id, url, json, responseBody, 200, pmsg);
-                    if (isSubmit) await PersistStatus(invoice, "Failed", null, pmsg);
+                    if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Uncertain, null, pmsg);
                     return Fail(pmsg);
                 }
 
@@ -1137,8 +1289,12 @@ namespace MyApp.Api.Services.Implementations
 
                 if (validation == null)
                 {
-                    var msg = $"FBR returned an unexpected response format: {responseBody}";
-                    if (isSubmit) await PersistStatus(invoice, "Failed", null, msg);
+                    // 2xx with no validationResponse — same reasoning as above:
+                    // FBR responded OK, outcome unconfirmed → Uncertain, not Failed.
+                    var msg = "FBR returned a 200 response with no validation result, so this submission's " +
+                              "outcome is UNCONFIRMED. Do NOT submit again — an administrator must verify it at FBR and reset it.";
+                    await AuditFbr("Error", action, invoice.Id, url, json, responseBody, 200, msg);
+                    if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Uncertain, null, msg);
                     return Fail(msg);
                 }
 
@@ -1178,11 +1334,11 @@ namespace MyApp.Api.Services.Implementations
                     msg = EnrichFbrErrorHint(validation.ErrorCode, msg, invoice);
 
                     await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, msg);
-                    if (isSubmit) await PersistStatus(invoice, "Failed", null, msg);
+                    if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Failed, null, msg);
                     return new FbrSubmissionResult
                     {
                         Success = false,
-                        FbrStatus = "Failed",
+                        FbrStatus = FbrSubmissionStatus.Failed,
                         ErrorMessage = msg,
                         ItemErrors = itemErrors,
                     };
@@ -1204,11 +1360,11 @@ namespace MyApp.Api.Services.Implementations
                     msg = EnrichFbrErrorHint(firstCode, msg, invoice);
 
                     await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, msg);
-                    if (isSubmit) await PersistStatus(invoice, "Failed", null, msg);
+                    if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Failed, null, msg);
                     return new FbrSubmissionResult
                     {
                         Success = false,
-                        FbrStatus = "Failed",
+                        FbrStatus = FbrSubmissionStatus.Failed,
                         ErrorMessage = msg,
                         ItemErrors = errorItems
                     };
@@ -1221,7 +1377,7 @@ namespace MyApp.Api.Services.Implementations
 
                     if (isSubmit)
                     {
-                        await PersistStatus(invoice, "Submitted", irn, null);
+                        await PersistStatus(invoice, FbrSubmissionStatus.Submitted, irn, null);
 
                         // 2026-05-12: stock-out is no longer emitted here.
                         // The deduction now happens at invoice save time
@@ -1244,9 +1400,9 @@ namespace MyApp.Api.Services.Implementations
                         // Validated. Re-validation of a Submitted bill
                         // is allowed by FBR but doesn't change anything
                         // useful on our side.
-                        if (!string.Equals(invoice.FbrStatus, "Submitted", StringComparison.OrdinalIgnoreCase))
+                        if (!string.Equals(invoice.FbrStatus, FbrSubmissionStatus.Submitted, StringComparison.OrdinalIgnoreCase))
                         {
-                            await PersistStatus(invoice, "Validated", null, null);
+                            await PersistStatus(invoice, FbrSubmissionStatus.Validated, null, null);
                         }
                     }
 
@@ -1259,28 +1415,51 @@ namespace MyApp.Api.Services.Implementations
                     {
                         Success = true,
                         IRN = irn,
-                        FbrStatus = isSubmit ? "Submitted" : "Validated"
+                        FbrStatus = isSubmit ? FbrSubmissionStatus.Submitted : FbrSubmissionStatus.Validated
                     };
                 }
 
                 // ── Unexpected status ──
-                var unexpectedMsg = $"FBR returned unexpected status: {validation.StatusCode} / {validation.Status}. Error: {validation.Error}";
+                // 2xx with a status we don't recognise (neither Valid nor a known
+                // rejection shape). FBR responded OK → outcome unconfirmed →
+                // Uncertain so we never auto-resubmit into a possible duplicate.
+                var unexpectedMsg = $"FBR returned an unrecognised status ({validation.StatusCode} / {validation.Status}); " +
+                                    "this submission's outcome is UNCONFIRMED. Do NOT submit again — an administrator must verify it at FBR and reset it.";
                 await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, unexpectedMsg);
-                if (isSubmit) await PersistStatus(invoice, "Failed", null, unexpectedMsg);
+                if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Uncertain, null, unexpectedMsg);
                 return Fail(unexpectedMsg);
             }
             catch (HttpRequestException ex)
             {
-                var msg = $"Cannot connect to FBR — {ex.Message}. Check your internet connection and ensure your server IP is whitelisted on the FBR IRIS portal.";
+                // A connect-time failure (DNS / refused / TLS) means nothing was
+                // sent → safe to retry (Failed). But this same exception can be
+                // thrown while READING the response, after the request was sent —
+                // in which case FBR may already hold the invoice → Uncertain.
+                _logger.LogError(ex, "FBR {Action} transport error for invoice {InvoiceId} (posted={Posted})", action, invoice.Id, posted);
+                var msg = posted
+                    ? "The connection to FBR dropped after the request was sent, so this submission's outcome " +
+                      "is UNCONFIRMED. Do NOT submit again — an administrator must verify it at FBR and reset it."
+                    : "Cannot connect to FBR. Check your internet connection and ensure your server IP is " +
+                      "whitelisted on the FBR IRIS portal, then try again.";
                 await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg);
-                if (isSubmit) await PersistStatus(invoice, "Failed", null, msg);
+                if (isSubmit) await PersistStatus(invoice, posted ? FbrSubmissionStatus.Uncertain : FbrSubmissionStatus.Failed, null, msg);
                 return Fail(msg);
             }
             catch (TaskCanceledException)
             {
-                var msg = "FBR request timed out. The FBR server may be slow or unreachable. Please try again.";
+                // Timeout AFTER the request was flushed: FBR may or may not have
+                // created the invoice. Marking this "Failed" (re-submittable) is
+                // exactly what duplicated invoice 3816. It is "Uncertain" — NOT
+                // claimable — so an admin must verify at FBR and reset it. If we
+                // never even sent the bytes (connect timeout), it is safe to retry.
+                var uncertain = posted;
+                var msg = uncertain
+                    ? "FBR did not respond in time, so this submission's outcome is UNCONFIRMED. " +
+                      "Do NOT submit again — FBR may already have this invoice. An administrator must verify " +
+                      "it at FBR and, only if it is not there, reset it for resubmission."
+                    : "Could not reach FBR before the request timed out (nothing was sent). Please try again.";
                 await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg);
-                if (isSubmit) await PersistStatus(invoice, "Failed", null, msg);
+                if (isSubmit) await PersistStatus(invoice, uncertain ? FbrSubmissionStatus.Uncertain : FbrSubmissionStatus.Failed, null, msg);
                 return Fail(msg);
             }
             catch (Exception ex)
@@ -1289,9 +1468,14 @@ namespace MyApp.Api.Services.Implementations
                 // ex.Message (SQL/EF/stack text) to the client on this token-
                 // sensitive path.
                 _logger.LogError(ex, "FBR {Action} failed unexpectedly for invoice {InvoiceId}", action, invoice.Id);
-                var msg = "An unexpected error occurred while contacting FBR. See the FBR monitor / server logs for details.";
+                // If the POST already went out, the outcome is unknown → Uncertain
+                // (block auto-retry). If it threw before sending, it's safe to retry.
+                var msg = posted
+                    ? "An unexpected error occurred after contacting FBR, so this submission's outcome is " +
+                      "UNCONFIRMED. Do NOT submit again — an administrator must verify it at FBR and reset it."
+                    : "An unexpected error occurred before the request reached FBR. See the FBR monitor / server logs for details.";
                 await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg);
-                if (isSubmit) await PersistStatus(invoice, "Failed", null, msg);
+                if (isSubmit) await PersistStatus(invoice, posted ? FbrSubmissionStatus.Uncertain : FbrSubmissionStatus.Failed, null, msg);
                 return Fail(msg);
             }
         }
@@ -1301,8 +1485,97 @@ namespace MyApp.Api.Services.Implementations
             invoice.FbrStatus = status;
             if (irn != null) invoice.FbrIRN = irn;
             invoice.FbrErrorMessage = errorMessage;
-            invoice.FbrSubmittedAt = DateTime.UtcNow;
+            // Stamp the filing time ONLY on a real submission. A successful
+            // VALIDATE (dry-run, no IRN) must NOT set it — FbrSubmittedAt is the
+            // "is-filed" signal for the Tax Sheet worklist (ReportService), the
+            // Tax-Sheet "transfer to next month", and the "submitted to FBR"
+            // sales report. Stamping it on validate made a never-submitted bill
+            // vanish from the worklist and over-count as submitted. Validated /
+            // Failed / Uncertain outcomes leave FbrSubmittedAt as it was (null
+            // for a bill that was never actually submitted).
+            if (string.Equals(status, FbrSubmissionStatus.Submitted, StringComparison.OrdinalIgnoreCase))
+                invoice.FbrSubmittedAt = DateTime.UtcNow;
             await _invoiceRepo.UpdateAsync(invoice);
+        }
+
+        /// <summary>
+        /// Admin recovery valve for a bill locked in a non-resubmittable FBR state
+        /// (Submitting after a crash, or Uncertain after a timed-out submit). This
+        /// is the ONLY sanctioned way to re-open such a bill, and it never POSTs to
+        /// FBR. Two modes:
+        ///   • "retry"          — clear the FBR fields so it can be submitted again.
+        ///                        Safe ONLY once the operator has confirmed at FBR
+        ///                        that no invoice exists for this bill.
+        ///   • "recordExisting" — record an IRN the operator found at FBR, marking
+        ///                        the bill Submitted without sending anything.
+        /// Every call is audited with the before/after state and the operator's reason.
+        /// </summary>
+        public async Task<FbrResetResult> ResetSubmissionAsync(
+            int invoiceId, string mode, string? irn, string reason, string? actorUserName)
+        {
+            var invoice = await _invoiceRepo.GetByIdAsync(invoiceId);
+            if (invoice == null)
+                return new FbrResetResult { Success = false, Message = "Invoice not found." };
+
+            mode = (mode ?? "").Trim();
+            var before = $"status={invoice.FbrStatus ?? "(none)"}, irn={invoice.FbrIRN ?? "(none)"}";
+
+            if (string.Equals(mode, "retry", StringComparison.OrdinalIgnoreCase))
+            {
+                invoice.FbrStatus = null;
+                invoice.FbrIRN = null;
+                invoice.FbrInvoiceNumber = null;
+                invoice.FbrErrorMessage = null;
+                invoice.FbrSubmittedAt = null;
+            }
+            else if (string.Equals(mode, "recordExisting", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(irn))
+                    return new FbrResetResult { Success = false, Message = "An IRN is required to record an existing FBR submission." };
+                invoice.FbrStatus = FbrSubmissionStatus.Submitted;
+                invoice.FbrIRN = irn.Trim();
+                invoice.FbrInvoiceNumber = $"INV-{invoice.InvoiceNumber}";
+                invoice.FbrErrorMessage = null;
+                invoice.FbrSubmittedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                return new FbrResetResult { Success = false, Message = "Unknown reset mode. Use 'retry' or 'recordExisting'." };
+            }
+
+            await _invoiceRepo.UpdateAsync(invoice);
+
+            try
+            {
+                var trimmedReason = reason?.Length > 500 ? reason[..500] : reason;
+                await _auditLog.LogAsync(new AuditLog
+                {
+                    Level = "Warning",
+                    UserName = actorUserName,
+                    HttpMethod = "POST",
+                    RequestPath = $"/fbr/{invoiceId}/reset-submission",
+                    StatusCode = 200,
+                    ExceptionType = "Fbr.ResetSubmission",
+                    Message = $"Bill #{invoice.InvoiceNumber}: FBR state reset (mode={mode}). "
+                            + $"Before: {before}. After: status={invoice.FbrStatus ?? "(none)"}, irn={invoice.FbrIRN ?? "(none)"}. "
+                            + $"Reason: {trimmedReason}",
+                });
+            }
+            catch { /* audit must never break the reset */ }
+
+            _logger.LogWarning(
+                "FBR submission state reset for invoice {InvoiceId} by {User} (mode={Mode}). {Before} -> status={After}",
+                invoiceId, actorUserName ?? "(unknown)", mode, before, invoice.FbrStatus ?? "(none)");
+
+            return new FbrResetResult
+            {
+                Success = true,
+                FbrStatus = invoice.FbrStatus,
+                FbrIRN = invoice.FbrIRN,
+                Message = string.Equals(mode, "retry", StringComparison.OrdinalIgnoreCase)
+                    ? "FBR state cleared. The bill can be submitted again."
+                    : "IRN recorded. The bill is now marked Submitted.",
+            };
         }
 
         /// <summary>
@@ -1425,6 +1698,51 @@ namespace MyApp.Api.Services.Implementations
             }
 
             return (salesTax, furtherTax, retail);
+        }
+
+        // Records a pre-validate rejection to the FBR monitor exactly ONCE per
+        // (invoice, message). Pre-validate runs before any FBR HTTP call, so
+        // without this the reason a Validate/Submit was refused (future date,
+        // missing HS/UOM, mixed sale types, …) never lands in the FBR monitor
+        // or audit trail. Deduped on the message so repeated clicks never spam
+        // a new row. Uses Status "rejected" (a local validation rejection) — NOT
+        // AuditFbr, whose httpStatus=0 path would mislabel it "uncertain".
+        private async Task LogPreValidateFailureOnceAsync(Invoice invoice, string action, string message)
+        {
+            try
+            {
+                bool already = await _db.FbrCommunicationLogs.AsNoTracking()
+                    .AnyAsync(l => l.InvoiceId == invoice.Id && l.FbrErrorMessage == message);
+                if (already) return;
+
+                var corr = MyApp.Api.Middleware.CorrelationIdMiddleware.FromContext(_http.HttpContext);
+                await _fbrComm.LogAsync(new FbrCommunicationLog
+                {
+                    Timestamp = DateTime.UtcNow,
+                    CompanyId = invoice.CompanyId,
+                    InvoiceId = invoice.Id,
+                    CorrelationId = corr,
+                    Action = action,               // "Validate" or "Submit"
+                    Endpoint = "(pre-validate)",
+                    HttpMethod = "POST",
+                    HttpStatusCode = null,
+                    Status = "rejected",           // local validation rejected it before any FBR call
+                    FbrErrorCode = null,
+                    FbrErrorMessage = message,
+                    RequestDurationMs = 0,
+                    RetryAttempt = 0,
+                    RequestBodyMasked = null,
+                    ResponseBodyMasked = null,
+                    UserName = _http.HttpContext?.User.Identity?.Name,
+                });
+                _logger.LogWarning("FBR {Action} pre-validate rejected invoice={InvoiceId}: {Message}",
+                    action, invoice.Id, message);
+            }
+            catch (Exception ex)
+            {
+                // Logging must never break the user-facing validate/submit flow.
+                _logger.LogWarning(ex, "Pre-validate failure log skipped for invoice {InvoiceId}", invoice.Id);
+            }
         }
 
         private async Task AuditFbr(string level, string action, int invoiceId,

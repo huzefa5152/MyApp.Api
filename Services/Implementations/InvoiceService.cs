@@ -287,6 +287,15 @@ namespace MyApp.Api.Services.Implementations
             BalanceDue = MyApp.Api.Helpers.PaymentStatusCalculator.BalanceDue(inv.GrandTotal, inv.AmountPaid),
             PaymentStatus = MyApp.Api.Helpers.PaymentStatusCalculator.Status(inv.GrandTotal, inv.AmountPaid, inv.DueDate).ToString(),
             DaysOverdue = MyApp.Api.Helpers.PaymentStatusCalculator.DaysOverdue(inv.GrandTotal, inv.AmountPaid, inv.DueDate),
+            // Customer document handover — DERIVED, never stored. Gated to
+            // FBR-submitted, non-cancelled, non-demo bills; everything else is
+            // "—" (NotApplicable). Independent of FBR/payment/print events.
+            HandoverStatus = (inv.IsCancelled || inv.IsDemo || inv.FbrStatus != "Submitted")
+                ? "NotApplicable"
+                : (inv.HandoverAt == null ? "Pending" : "Delivered"),
+            HandoverAt = inv.HandoverAt,
+            HandoverByName = inv.HandoverBy?.FullName is { Length: > 0 } fn ? fn : inv.HandoverBy?.Username,
+            HandoverRemark = inv.HandoverRemark,
             Items = inv.Items.Select(ii => new InvoiceItemDto
             {
                 Id = ii.Id,
@@ -394,10 +403,10 @@ namespace MyApp.Api.Services.Implementations
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? noteType = null, string? fbrFilter = null)
+            int? noteType = null, string? fbrFilter = null, string? handoverFilter = null)
         {
             var (items, totalCount) = await _invoiceRepo.GetPagedByCompanyAsync(
-                companyId, page, pageSize, search, clientId, dateFrom, dateTo, noteType, fbrFilter);
+                companyId, page, pageSize, search, clientId, dateFrom, dateTo, noteType, fbrFilter, handoverFilter);
 
             // Gate the Delete button client-side — only the highest-numbered
             // bill for this company is deletable. Earlier bills must be edited.
@@ -471,6 +480,14 @@ namespace MyApp.Api.Services.Implementations
             if (buyer == null) throw new KeyNotFoundException("Client not found.");
             if (buyer.CompanyId != dto.CompanyId)
                 throw new InvalidOperationException("Client does not belong to this company.");
+
+            // FBR [0043]: a bill can't be dated in the future. Evaluated against
+            // TODAY IN PAKISTAN (PakistanClock) so it holds on any server time
+            // zone (the MonsterASP host is not PKT). Manual future-dating is
+            // disallowed here; deferring a bill to a later month is done via the
+            // Tax Sheet "Transfer to next month" flow, not a manual future date.
+            if (PakistanClock.IsFutureInvoiceDate(dto.Date))
+                throw new InvalidOperationException(FutureDateMessage(dto.Date));
 
             // Load and validate all challans. Batch the load (one round-trip for
             // all selected challans) but keep the per-id validation loop
@@ -941,10 +958,12 @@ namespace MyApp.Api.Services.Implementations
             if (dto.GSTRate < 0 || dto.GSTRate > 100)
                 throw new InvalidOperationException("GST rate must be between 0 and 100.");
 
-            // Cap bill date at end-of-today UTC — same FBR [0043] guard as UpdateAsync.
-            var maxDate = DateTime.UtcNow.Date.AddDays(1).AddTicks(-1);
-            if (dto.Date > maxDate)
-                throw new InvalidOperationException("Bill date cannot be in the future. [FBR 0043]");
+            // FBR [0043]: no future-dated bills. Evaluated against today in
+            // Pakistan (PakistanClock) so it's correct on any server time zone
+            // (the MonsterASP host is not PKT) — the old end-of-today-UTC cap
+            // wrongly rejected "today" for the first ~5 hours of a Karachi day.
+            if (PakistanClock.IsFutureInvoiceDate(dto.Date))
+                throw new InvalidOperationException(FutureDateMessage(dto.Date));
 
             // Register any newly-typed UOM names + reject fractional qty
             // for integer-only UOMs. Mirrors the contract on the regular
@@ -1325,13 +1344,16 @@ namespace MyApp.Api.Services.Implementations
                 // Update invoice-level fields
                 if (dto.Date.HasValue)
                 {
-                    // FBR rejects future dates with [0043]. Cap at end-of-today
-                    // (UTC) so the operator can pick "today" in any time zone
-                    // without tripping the gate.
                     var newDate = dto.Date.Value;
-                    var maxDate = DateTime.UtcNow.Date.AddDays(1).AddTicks(-1);
-                    if (newDate > maxDate)
-                        throw new InvalidOperationException("Bill date cannot be in the future. [FBR 0043]");
+                    // FBR [0043]: no future-dated bills — evaluated against today
+                    // in Pakistan (PakistanClock), correct on any server zone.
+                    // Block only a CHANGE to a future date: an invoice already
+                    // dated in the future by the Tax Sheet "Transfer to next
+                    // month" flow may be edited/classified without re-dating, so
+                    // we compare date-only against the stored value and let an
+                    // unchanged future date through.
+                    if (PakistanClock.IsFutureInvoiceDate(newDate) && newDate.Date != invoice.Date.Date)
+                        throw new InvalidOperationException(FutureDateMessage(newDate));
                     invoice.Date = newDate;
                 }
                 invoice.GSTRate = dto.GSTRate;
@@ -2048,6 +2070,146 @@ namespace MyApp.Api.Services.Implementations
             }
 
             return ToDto(invoice);
+        }
+
+        // ── Customer document handover (2026-08) ─────────────────────────
+        // Isolated, additive write path — touches ONLY the three Handover
+        // columns. No stock, no FBR, no totals, no numbering (safety boundary,
+        // FEATURE_CUSTOMER_DOC_HANDOVER.md §9). Controller asserts tenant access
+        // before every call; bulk additionally filters by the caller's
+        // accessible-company set.
+
+        public async Task<InvoiceDto?> MarkHandoverAsync(int id, int userId, string? remark = null)
+        {
+            var invoice = await _context.Invoices.FirstOrDefaultAsync(i => i.Id == id);
+            if (invoice == null) return null;
+
+            EnsureHandoverEligible(invoice);   // throws for non-submitted / cancelled / demo
+            if (invoice.HandoverAt != null)
+                throw new InvalidOperationException("These documents are already marked delivered.");
+
+            invoice.HandoverAt = DateTime.UtcNow;
+            invoice.HandoverByUserId = userId;
+            invoice.HandoverRemark = TruncateRemark(remark);
+            await _context.SaveChangesAsync();
+
+            await AuditHandoverAsync(invoice, delivered: true);
+            return await GetByIdAsync(id);   // re-read so HandoverBy (operator name) is populated
+        }
+
+        public async Task<InvoiceDto?> RevertHandoverAsync(int id)
+        {
+            var invoice = await _context.Invoices.FirstOrDefaultAsync(i => i.Id == id);
+            if (invoice == null) return null;
+
+            if (invoice.HandoverAt == null)
+                throw new InvalidOperationException("These documents are not marked delivered — nothing to revert.");
+
+            invoice.HandoverAt = null;
+            invoice.HandoverByUserId = null;
+            invoice.HandoverRemark = null;
+            await _context.SaveChangesAsync();
+
+            await AuditHandoverAsync(invoice, delivered: false);
+            return await GetByIdAsync(id);
+        }
+
+        public async Task<HandoverBulkResult> BulkMarkHandoverAsync(
+            IEnumerable<int> ids, int userId, string? remark, ISet<int> accessibleCompanyIds)
+        {
+            var result = new HandoverBulkResult();
+            var distinctIds = ids?.Distinct().ToList() ?? new List<int>();
+            if (distinctIds.Count == 0) return result;
+
+            var invoices = await _context.Invoices
+                .Where(i => distinctIds.Contains(i.Id))
+                .ToListAsync();
+            var byId = invoices.ToDictionary(i => i.Id);
+            var trimmedRemark = TruncateRemark(remark);
+            var now = DateTime.UtcNow;
+            bool anyChanged = false;
+
+            foreach (var reqId in distinctIds)
+            {
+                void Skip(string msg, int number = 0)
+                {
+                    result.Skipped++;
+                    result.Rows.Add(new HandoverBulkRow { Id = reqId, InvoiceNumber = number, Success = false, Message = msg });
+                }
+
+                if (!byId.TryGetValue(reqId, out var inv)) { Skip("Not found."); continue; }
+                // Cross-tenant guard — never touch a bill outside the caller's set.
+                if (!accessibleCompanyIds.Contains(inv.CompanyId)) { Skip("No access.", inv.InvoiceNumber); continue; }
+                if (inv.IsCancelled || inv.IsDemo || inv.FbrStatus != "Submitted") { Skip("Not an FBR-submitted bill.", inv.InvoiceNumber); continue; }
+                if (inv.HandoverAt != null) { Skip("Already delivered.", inv.InvoiceNumber); continue; }
+
+                inv.HandoverAt = now;
+                inv.HandoverByUserId = userId;
+                inv.HandoverRemark = trimmedRemark;
+                anyChanged = true;
+                result.Delivered++;
+                result.Rows.Add(new HandoverBulkRow { Id = reqId, InvoiceNumber = inv.InvoiceNumber, Success = true });
+            }
+
+            if (anyChanged)
+            {
+                await _context.SaveChangesAsync();
+                try
+                {
+                    await _auditLog.LogAsync(new AuditLog
+                    {
+                        Level = "Info",
+                        HttpMethod = "POST",
+                        RequestPath = "/invoices/handover/bulk",
+                        StatusCode = 200,
+                        ExceptionType = "Invoice.Handover",
+                        Message = $"Bulk customer-document handover: {result.Delivered} invoice(s) marked delivered by user {userId}.",
+                    });
+                }
+                catch { /* audit must never break the operation */ }
+            }
+            return result;
+        }
+
+        // Shared future-date rejection message for the create/edit save paths.
+        // Points the operator at the sanctioned way to defer a bill (Tax Sheet
+        // "Transfer to next month") rather than a manual future date.
+        private static string FutureDateMessage(DateTime date) =>
+            $"Bill date {date:dd-MMM-yyyy} is in the future. A bill can't be dated ahead of today in Pakistan. " +
+            "To move it to next month, use the Tax Sheet's \"Transfer to next month\" instead of setting a future date.";
+
+        // Handover eligibility (single mark). Bulk does its own inline skip —
+        // it summarises per id and must not throw.
+        private static void EnsureHandoverEligible(Invoice inv)
+        {
+            if (inv.IsDemo)
+                throw new InvalidOperationException("Demo bills have no customer document handover.");
+            if (inv.IsCancelled)
+                throw new InvalidOperationException("A cancelled bill has no customer document handover.");
+            if (inv.FbrStatus != "Submitted")
+                throw new InvalidOperationException("Documents can only be marked delivered once the invoice is submitted to FBR.");
+        }
+
+        private static string? TruncateRemark(string? s)
+            => string.IsNullOrWhiteSpace(s) ? null : (s.Trim().Length <= 300 ? s.Trim() : s.Trim()[..300]);
+
+        private async Task AuditHandoverAsync(Invoice inv, bool delivered)
+        {
+            try
+            {
+                await _auditLog.LogAsync(new AuditLog
+                {
+                    Level = "Info",
+                    HttpMethod = "POST",
+                    RequestPath = $"/invoices/{inv.Id}/handover{(delivered ? "" : "/revert")}",
+                    StatusCode = 200,
+                    ExceptionType = "Invoice.Handover",
+                    Message = delivered
+                        ? $"Bill #{inv.InvoiceNumber}: customer documents marked DELIVERED."
+                        : $"Bill #{inv.InvoiceNumber}: customer document handover REVERTED to pending.",
+                });
+            }
+            catch { /* audit must never break the operation */ }
         }
 
         /// <summary>Set/clear the invoice's AR payment due date — drives the

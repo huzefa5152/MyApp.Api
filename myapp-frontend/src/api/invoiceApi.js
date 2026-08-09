@@ -87,6 +87,23 @@ export const supplementInvoice = (id, payload) =>
 export const setInvoiceFbrExcluded = (id, excluded) =>
   httpClient.put(`/invoices/${id}/fbr-excluded`, { excluded });
 
+// ── Customer document handover (2026-08) ───────────────────────────
+// Mark an FBR-submitted invoice's customer documents as handed over to the
+// customer (optional remark). Gated server-side by invoices.docs.deliver.
+export const markInvoiceHandover = (id, remark) =>
+  httpClient.post(`/invoices/${id}/handover`, { remark: remark ?? null });
+
+// Revert a delivered invoice's customer documents back to Pending.
+// Gated server-side by invoices.docs.revert.
+export const revertInvoiceHandover = (id) =>
+  httpClient.post(`/invoices/${id}/handover/revert`);
+
+// Bulk-mark customer documents delivered across many invoices at once.
+// The server skips ineligible / cross-tenant ids and returns a per-id
+// summary { delivered, skipped, rows[] }. Gated by invoices.docs.deliver.
+export const bulkInvoiceHandover = (ids, remark) =>
+  httpClient.post(`/invoices/handover/bulk`, { ids, remark: remark ?? null });
+
 export const getInvoicePrintBill = (invoiceId) =>
   httpClient.get(`/invoices/${invoiceId}/print/bill`);
 

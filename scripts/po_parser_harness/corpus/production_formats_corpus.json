@@ -1,5 +1,35 @@
 [
   {
+    "id": "prod-hudson-pharma-abbas-ali-po23410",
+    "category": "hudson-pharma-abbas-ali",
+    "descHeader": "Product",
+    "qtyHeader": "Qty",
+    "unitHeader": "Unit of Measure",
+    "rawText": "Hudson Pharma (Private) Limited  Safety and Innovation\nD93, North Western Industrial Zone, Port Qasim Authority\nKarachi 021 75020  NTN: 3556727-9\nPakistan  GST: 1700355672717\nShipping address:  ABBAS ALI & SONS\nFactory  F.9,, SAIFY NAGAR,, NISHTAR ROADKARACHI,\nD93, North Western Industrial Zone, Port Qasim Authority  Karachi South Saddar Town\nKarachi 021 75020  Tax ID: A121899-3\nPakistan\nPurchase Order Confirmation # PO23410\nOur Order Reference:  Order Date:  Expected Arrival:  Approved By:  Approval Date:\nPO23410  07/27/2026  07/07/2026  Sarfaraz Muhammad 07/27/2026\nProduct  Qty  Unit of Measure  Unit Price  Amount\nButter Paper  12.0000  pack  6,500.00000  78,000.00 Rs.\nSubtotal  78,000.00 Rs.\nTax  Rs. 0.00\nTotal  Rs. 78000.00\nReference: This refers to your Last Order / Quotation No.\nShipment will be made at Suppliers / Transporters Risk.\nDelivery must be made by delivery date stated on P.O.\nAll deliveries are subject to Approval by Q.A. In case of rejection, Hudson Pharma reserves the right to destroy the material.\nAll Deliveries should be accompanied by PO and COA, if applicable\nBill will not be processed if P.O No is not mentioned on Delivery Challan and Invoice.\nOur N.T.N and Sales Tax Regn. No. should be mentioned on sales tax invoice wherever applicable.\nNTN: 3556727-9 GST: 1700355672717\nPage 1 / 1",
+    "expectedItems": [
+      {
+        "description": "Butter Paper",
+        "quantity": 12.0,
+        "unit": "Pack"
+      }
+    ]
+  },
+  {
+    "id": "prod-hudson-pharma-abbas-ali-po23412",
+    "category": "hudson-pharma-abbas-ali",
+    "descHeader": "Product",
+    "qtyHeader": "Qty",
+    "unitHeader": "Unit of Measure",
+    "rawText": "Hudson Pharma (Private) Limited  Safety and Innovation\nD93, North Western Industrial Zone, Port Qasim Authority\nKarachi 021 75020  NTN: 3556727-9\nPakistan  GST: 1700355672717\nShipping address:  ABBAS ALI & SONS\nFactory  F.9,, SAIFY NAGAR,, NISHTAR ROADKARACHI,\nD93, North Western Industrial Zone, Port Qasim Authority  Karachi South Saddar Town\nKarachi 021 75020  Tax ID: A121899-3\nPakistan\nPurchase Order Confirmation # PO23412\nOur Order Reference:  Order Date:  Expected Arrival:  Approved By:  Approval Date:\nPO23412  07/16/2026  07/07/2026  Sarfaraz Muhammad 07/16/2026\nProduct  Qty  Unit of Measure  Unit Price  Amount\nWater Dispenser (General Item)  2.0000  Unit(s)  53,000.00000  106,000.00 Rs.\nSubtotal  106,000.00 Rs.\nTax  Rs. 0.00\nTotal  Rs. 106000.00\nReference: This refers to your Last Order / Quotation No.\nShipment will be made at Suppliers / Transporters Risk.\nDelivery must be made by delivery date stated on P.O.\nAll deliveries are subject to Approval by Q.A. In case of rejection, Hudson Pharma reserves the right to destroy the material.\nAll Deliveries should be accompanied by PO and COA, if applicable\nBill will not be processed if P.O No is not mentioned on Delivery Challan and Invoice.\nOur N.T.N and Sales Tax Regn. No. should be mentioned on sales tax invoice wherever applicable.\nNTN: 3556727-9 GST: 1700355672717\nPage 1 / 1",
+    "expectedItems": [
+      {
+        "description": "Water Dispenser (General Item)",
+        "quantity": 2.0,
+        "unit": "Unit"
+      }
+    ]
+  },
+  {
     "id": "prod-123-meko-denim-fabrics",
     "category": "meko-denim-fabrics",
     "descHeader": "Item Name",
