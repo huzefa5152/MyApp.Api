@@ -13,6 +13,15 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<FbrSubmissionResult> PreviewInvoicePayloadAsync(int invoiceId, string? scenarioId = null);
 
+        /// <summary>
+        /// Admin recovery for an invoice locked in a non-resubmittable FBR state
+        /// (Submitting / Uncertain). Either clears the FBR fields so it can be
+        /// submitted again ("retry"), or records an IRN the operator confirmed at
+        /// FBR ("recordExisting"). Audited. Never POSTs to FBR.
+        /// </summary>
+        Task<FbrResetResult> ResetSubmissionAsync(
+            int invoiceId, string mode, string? irn, string reason, string? actorUserName);
+
         // Reference APIs v1 (V1.12 §5.1–§5.6)
         Task<List<FbrProvinceDto>> GetProvincesAsync(int companyId);
         Task<List<FbrDocTypeDto>> GetDocTypesAsync(int companyId);

@@ -28,6 +28,8 @@ const statusToTone = {
   Cancelled: "danger",
   "Setup Required": "setup",
   Submitted: "submitted",
+  Submitting: "info",
+  Uncertain: "warning",
   Validated: "ready",
   Failed: "danger",
   Open: "info",

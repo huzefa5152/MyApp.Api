@@ -466,6 +466,12 @@ namespace MyApp.Api.Services.Tax
             if (sc.Code == "SN028")
             {
                 hsCode = "0101.2100";
+                // HS 0101.2100 only permits UOM "Numbers, pieces, units"
+                // (FBR HS_UOM annexure 3). The shared demo ItemType's UOM is
+                // usually "Pair" (FbrUOMId 73), which trips pre-flight 0099
+                // ("UoM not allowed for HS Code") on this line. Pin the
+                // compatible UOM so the seeded SN028 bill validates.
+                uom = "Numbers, pieces, units"; fbrUom = 69;
                 qty = 1; unit = 99.01m; lineTotal = 99.01m; retailPrice = 100m;
             }
 

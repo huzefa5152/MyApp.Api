@@ -36,6 +36,13 @@ export const submitInvoiceToFbr = (invoiceId) =>
 export const validateInvoiceWithFbr = (invoiceId) =>
   httpClient.post(`/fbr/${invoiceId}/validate`);
 
+// Admin recovery for a bill locked in a non-resubmittable FBR state
+// ("Submitting" after a crash, or "Uncertain" after a timed-out submit).
+// body = { mode: "retry" | "recordExisting", irn?, reason }. Gated by
+// invoices.fbr.reset on the server; never contacts FBR.
+export const resetFbrSubmission = (invoiceId, body) =>
+  httpClient.post(`/fbr/${invoiceId}/reset-submission`, body);
+
 // Catalog of all 28 FBR scenarios (SN001..SN028) with metadata —
 // drives the bill-creation Scenario picker so item types can be filtered
 // by sale type compatibility.
