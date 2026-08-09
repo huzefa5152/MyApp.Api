@@ -1,9 +1,11 @@
 # Feature Spec — Customer Document Handover Status
 
-**Status:** Approved design, NOT yet implemented (spec only).
-**Date:** 2026-08-04
+**Status:** ✅ Implemented 2026-08-09 (master merged into the branch first). All pre-push gates green (build 0 errors; stock-reflow 140/140; basic-flows 37/37; tenant-isolation incl. handover guard; new `test_doc_handover.py` 19/19; audit 67/67). No FBR / stock / calc regressions.
+**Date:** 2026-08-04 (design) · 2026-08-09 (implementation)
 **Branch:** `feat/customer-doc-handover` (off `master`). Merge back to `master` when complete.
 **Owner:** Huzefa
+
+> **Implementation note — bulk UX.** v1 ships bulk as **"Mark all pending (filtered) delivered"** — one button that acts on every Pending row matching the current filters (across pages), reusing the existing Validate-All / Submit-All bulk pattern this spec references. This was chosen over per-row checkboxes (§8): the codebase's existing bulk actions are set-based, not checkbox-based, and it avoids adding fragile multi-page selection state to the card + table views. Same outcome, lower risk. Revisit checkboxes if operators want partial multi-select.
 
 ---
 

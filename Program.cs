@@ -1336,6 +1336,34 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
+    // ── One-time backfill: Customer Document Handover ──
+    // Existing FBR-submitted invoices predate the handover feature, so we
+    // ASSUME they were already delivered — that keeps the new "Pending"
+    // filter empty at launch, and only NEW submissions enter the pending
+    // flow. HandoverByUserId is left NULL so a migrated row is distinguishable
+    // from a real operator handover (UI shows "Delivered (migrated)", no
+    // fabricated operator name). HandoverAt ≈ FbrSubmittedAt (falls back to
+    // CreatedAt on legacy rows that never recorded a submit timestamp).
+    // The EF migration adds the columns during Migrate() above, so this
+    // separate batch can reference them directly (no split-batch issue —
+    // the ALTER already ran and committed). Idempotent via the marker.
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'HANDOVER_BACKFILL_V1')
+        BEGIN
+            UPDATE Invoices
+               SET HandoverAt = COALESCE(FbrSubmittedAt, CreatedAt)
+             WHERE FbrStatus = 'Submitted'
+               AND HandoverAt IS NULL
+               AND IsCancelled = 0
+               AND IsDemo = 0;
+
+            INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp])
+            VALUES ('Info', 'HANDOVER_BACKFILL_V1',
+                    'Backfilled customer-document handover: marked pre-existing FBR-submitted invoices as Delivered (migrated).',
+                    'STARTUP', '/seed/invoices/handover-backfill', 200, SYSUTCDATETIME());
+        END
+    ");
+
     // ── One-time backfill: Common Suppliers grouping ──
     // Mirrors the Common Clients backfill above. Walks every existing
     // Supplier and assigns it to a SupplierGroup based on the same

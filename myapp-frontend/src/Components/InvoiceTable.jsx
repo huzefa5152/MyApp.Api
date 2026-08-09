@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import {
   MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
-  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdUndo, MdPostAdd,
+  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdUndo, MdPostAdd, MdAssignmentTurnedIn,
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
@@ -47,6 +47,22 @@ function fbrStatusBadge(inv, isBillsMode) {
   return <StatusBadge tone="ready">Ready</StatusBadge>;
 }
 
+// Customer document-handover badge (Invoices / Notes). Separate concern from
+// the FBR badge: "were the printed customer copies handed over?". "—" for
+// non-submitted / cancelled / demo rows (derived server-side as NotApplicable).
+function handoverBadge(inv) {
+  if (inv.handoverStatus === "Delivered") {
+    const when = inv.handoverAt ? new Date(inv.handoverAt).toLocaleDateString() : "";
+    const who = inv.handoverByName ? ` by ${inv.handoverByName}` : " (migrated)";
+    const remark = inv.handoverRemark ? ` — ${inv.handoverRemark}` : "";
+    return <StatusBadge tone="submitted" title={`Handed over${when ? ` on ${when}` : ""}${who}${remark}`}>Delivered</StatusBadge>;
+  }
+  if (inv.handoverStatus === "Pending") {
+    return <StatusBadge tone="warning" title="Submitted to FBR but the printed customer copies have not been marked handed over yet.">Pending</StatusBadge>;
+  }
+  return <span style={{ color: "#90a4ae" }}>—</span>;
+}
+
 export default function InvoiceTable({
   invoices,
   isBillsMode,
@@ -85,6 +101,8 @@ export default function InvoiceTable({
   onVoid,
   onReverse,
   onCorrect,
+  onMarkHandover,
+  onRevertHandover,
 }) {
   const navigate = useNavigate();
 
@@ -210,6 +228,15 @@ export default function InvoiceTable({
       accessor: (i) => i.fbrStatus || "",
       render: (i) => fbrStatusBadge(i, isBillsMode),
     },
+    // Customer document handover — Invoices + Notes only (not the pre-FBR
+    // Bills tab). Its own column; answers a different question than FBR status.
+    ...(!isBillsMode ? [{
+      key: "handoverStatus",
+      header: "Documents",
+      width: 130,
+      accessor: (i) => i.handoverStatus || "",
+      render: (i) => handoverBadge(i),
+    }] : []),
     // Payment status (AR) — gated by permission; not shown on the note tabs.
     ...(showPaymentStatus && !isReturnsMode ? [{
       key: "paymentStatus",
@@ -385,6 +412,26 @@ export default function InvoiceTable({
             {inv.isFbrExcluded ? <MdRestore size={14} /> : <MdBlock size={14} />}
           </button>
         )}
+        {/* Customer document handover — Mark (Pending rows) / Revert (Delivered
+            rows). Invoices + Notes only; each gated by its own permission. */}
+        {!isBillsMode && perms.canDocsDeliver && inv.handoverStatus === "Pending" && (
+          <button
+            style={btn.handoverMark}
+            onClick={() => onMarkHandover?.(inv)}
+            title="Mark customer documents delivered"
+          >
+            <MdAssignmentTurnedIn size={14} />
+          </button>
+        )}
+        {!isBillsMode && perms.canDocsRevert && inv.handoverStatus === "Delivered" && (
+          <button
+            style={btn.handoverRevert}
+            onClick={() => onRevertHandover?.(inv)}
+            title={`Delivered${inv.handoverAt ? ` on ${new Date(inv.handoverAt).toLocaleDateString()}` : ""}${inv.handoverByName ? ` by ${inv.handoverByName}` : " (migrated)"}. Click to revert to Pending.`}
+          >
+            <MdUndo size={14} />
+          </button>
+        )}
         {(isBillsMode || isReturnsMode) && perms.canDelete && !isSubmitted && !inv.isCancelled && inv.isLatest && (
           <button style={btn.delete} onClick={() => onDelete?.(inv)} title="Delete — only the latest document in its sequence, removes the row entirely.">
             <MdDelete size={14} />
@@ -461,4 +508,6 @@ const btn = {
   fbrValidate: { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
   fbrSubmit:   { ...baseBtn, backgroundColor: "#e8eaf6", color: "#1a237e" },
   neutral:     { ...baseBtn, backgroundColor: "#eceff1", color: "#546e7a" },
+  handoverMark:   { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
+  handoverRevert: { ...baseBtn, backgroundColor: "#fff8e1", color: "#8a6d00" },
 };

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdUndo, MdPostAdd } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdUndo, MdPostAdd, MdLocalShipping, MdAssignmentTurnedIn } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import StandaloneInvoiceForm from "../Components/StandaloneInvoiceForm";
 import EditBillForm from "../Components/EditBillForm";
@@ -11,6 +11,7 @@ import InvoiceTable from "../Components/InvoiceTable";
 import Pagination from "../Components/Pagination";
 import CorrectionWizard from "../Components/CorrectionWizard";
 import FbrResetModal from "../Components/FbrResetModal";
+import HandoverDialog from "../Components/HandoverDialog";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import AttachmentBadge from "../Components/AttachmentBadge";
 import AttachmentQuickModal from "../Components/AttachmentQuickModal";
@@ -18,7 +19,7 @@ import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import { useListViewMode } from "../hooks/useListViewMode";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
 import PageSizeSelect from "../Components/PageSizeSelect";
-import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, cancelInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
+import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, cancelInvoice, setInvoiceFbrExcluded, markInvoiceHandover, revertInvoiceHandover, bulkInvoiceHandover } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
@@ -73,6 +74,23 @@ function renderNotePill(inv) {
   if (inv.documentType === 9) return statusPill("teal", MdUndo, inv.originalInvoiceNumber ? `DN ↩#${inv.originalInvoiceNumber}` : "Debit Note", inv.originalInvoiceNumber ? `Debit Note against Bill #${inv.originalInvoiceNumber}` : "Debit Note");
   if (inv.reversedByCreditNoteNumber) return statusPill("purple", MdUndo, "Reversed", `Reversed by Credit Note #${inv.reversedByCreditNoteNumber}`);
   if (inv.adjustedByDebitNoteNumber) return statusPill("teal", MdUndo, "Adjusted", `Adjusted by Debit Note #${inv.adjustedByDebitNoteNumber}`);
+  return null;
+}
+// Customer document handover pill (Invoices / Notes views). Answers "were the
+// printed customer copies physically handed over?" — separate from the FBR
+// pill. Renders only for FBR-submitted rows; "—" (NotApplicable) shows nothing.
+function renderHandoverPill(inv) {
+  if (inv.handoverStatus === "Delivered") {
+    const when = inv.handoverAt ? new Date(inv.handoverAt).toLocaleDateString() : "";
+    const who = inv.handoverByName ? ` by ${inv.handoverByName}` : " (migrated)";
+    const remark = inv.handoverRemark ? `\nNote: ${inv.handoverRemark}` : "";
+    return statusPill("green", MdAssignmentTurnedIn, "Docs delivered",
+      `Customer documents handed over${when ? ` on ${when}` : ""}${who}.${remark}`);
+  }
+  if (inv.handoverStatus === "Pending") {
+    return statusPill("amber", MdLocalShipping, "Docs pending",
+      "Submitted to FBR but the printed customer copies have not been marked handed over yet.");
+  }
   return null;
 }
 
@@ -175,6 +193,11 @@ export default function InvoicePage({ mode = "invoices" }) {
   // without being trusted to actually call FBR. Administrator gets it
   // automatically via RbacSeeder.
   const canFbrPreview = has("invoices.fbr.preview");
+  // Customer document handover — mark delivered (single/bulk) and revert.
+  // The "Documents" badge renders for anyone with invoices.list.view; only
+  // these WRITE actions are gated (least-privilege — CLAUDE.md §2).
+  const canDocsDeliver = has("invoices.docs.deliver");
+  const canDocsRevert = has("invoices.docs.revert");
   // Client-filter dropdown needs `clients.manage.view` because it calls
   // GET /api/clients/company/{id}. A read-only role (e.g. tax consultant
   // with invoices.list.view only) would 403 on that call AND see a
@@ -246,6 +269,12 @@ export default function InvoicePage({ mode = "invoices" }) {
   // Applied server-side (paged endpoint) so it paginates correctly. Shown on the
   // Bills and Invoices tabs. See InvoiceRepository.GetPagedByCompanyAsync.
   const [fbrFilter, setFbrFilter] = useState("");
+  // Customer document-handover filter: "" (all) | "pending" | "delivered".
+  // Server-side (paged endpoint), like fbrFilter. Invoices + Notes views only.
+  const [handoverFilter, setHandoverFilter] = useState("");
+  // Handover dialog: null | { mode:"single", inv } | { mode:"bulk", ids:[], count }
+  const [handoverTarget, setHandoverTarget] = useState(null);
+  const [handoverBulkBusy, setHandoverBulkBusy] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [hasExcelBill, setHasExcelBill] = useState(false);
@@ -272,6 +301,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       if (search) params.search = search;
       if (clientFilter) params.clientId = clientFilter;
       if (fbrFilter) params.fbrFilter = fbrFilter;
+      if (handoverFilter) params.handoverFilter = handoverFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
       // Note tabs list ONLY their own type; other tabs get sale bills
@@ -301,7 +331,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       });
     } catch { setInvoices([]); setTotalCount(0); setTotalPages(0); }
     finally { setLoadingInvoices(false); }
-  }, [page, pageSize, search, clientFilter, fbrFilter, dateFrom, dateTo]);
+  }, [page, pageSize, search, clientFilter, fbrFilter, handoverFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -328,10 +358,10 @@ export default function InvoicePage({ mode = "invoices" }) {
 
   useEffect(() => {
     if (selectedCompany) fetchInvoices(selectedCompany.id, page);
-  }, [page, pageSize, search, clientFilter, fbrFilter, dateFrom, dateTo]);
+  }, [page, pageSize, search, clientFilter, fbrFilter, handoverFilter, dateFrom, dateTo]);
 
   const resetFilters = () => {
-    setSearch(""); setClientFilter(""); setFbrFilter(""); setDateFrom(""); setDateTo(""); setPage(1);
+    setSearch(""); setClientFilter(""); setFbrFilter(""); setHandoverFilter(""); setDateFrom(""); setDateTo(""); setPage(1);
   };
 
   const handleFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
@@ -587,6 +617,10 @@ export default function InvoicePage({ mode = "invoices" }) {
   const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.fbrReady && !inv.isFbrExcluded);
   const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.fbrReady && !inv.isFbrExcluded).length;
   const validatedCount = unsubmittedInvoices.filter(inv => fbrValidated.has(inv.id)).length;
+  // Documents pending handover on the CURRENT page (drives the handover bulk
+  // bar's label + visibility). The bulk action itself re-fetches ALL filtered
+  // pending across pages, so it isn't limited to this count.
+  const pendingHandoverCount = invoices.filter(inv => inv.handoverStatus === "Pending").length;
 
   const handleToggleFbrExcluded = async (inv) => {
     const nextExcluded = !inv.isFbrExcluded;
@@ -613,6 +647,70 @@ export default function InvoicePage({ mode = "invoices" }) {
     } catch (err) {
       notify(err.response?.data?.error || "Failed to update FBR exclusion.", "error");
     }
+  };
+
+  // ── Customer document handover ──────────────────────────────────
+  // Single mark opens the dialog (optional remark); the dialog calls
+  // confirmSingleHandover with the remark. Revert is a plain confirm.
+  const handleRevertHandover = async (inv) => {
+    const ok = await confirm({
+      title: `Revert delivery for #${inv.invoiceNumber}?`,
+      message: "This marks the customer documents as NOT handed over (back to Pending). Who reverted it is recorded in the audit log.",
+      variant: "warning",
+      confirmText: "Revert to Pending",
+    });
+    if (!ok) return;
+    try {
+      await revertInvoiceHandover(inv.id);
+      notify(`Bill #${inv.invoiceNumber}: documents reverted to Pending.`, "success");
+      fetchInvoices(selectedCompany.id, page);
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to revert handover.", "error");
+    }
+  };
+
+  const confirmSingleHandover = async (remark) => {
+    const inv = handoverTarget?.inv;
+    if (!inv) return;
+    // Let the dialog surface any thrown error; only close + refetch on success.
+    await markInvoiceHandover(inv.id, remark);
+    notify(`Bill #${inv.invoiceNumber}: documents marked delivered.`, "success");
+    setHandoverTarget(null);
+    fetchInvoices(selectedCompany.id, page);
+  };
+
+  // Gather ALL pending invoices matching the current filters (across pages),
+  // then open the bulk dialog. Mirrors fetchAllFilteredBills (FBR bulk).
+  const openBulkHandover = async () => {
+    setHandoverBulkBusy(true);
+    try {
+      const params = { page: 1, pageSize: 10000, handoverFilter: "pending" };
+      if (search) params.search = search;
+      if (clientFilter) params.clientId = clientFilter;
+      if (dateFrom) params.dateFrom = dateFrom;
+      if (dateTo) params.dateTo = dateTo;
+      if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
+      const { data } = await getPagedInvoicesByCompany(selectedCompany.id, params);
+      const ids = (data.items || []).map((i) => i.id);
+      if (ids.length === 0) { notify("No pending documents to mark delivered.", "info"); return; }
+      setHandoverTarget({ mode: "bulk", ids, count: ids.length });
+    } catch {
+      notify("Failed to load pending invoices.", "error");
+    } finally {
+      setHandoverBulkBusy(false);
+    }
+  };
+
+  const confirmBulkHandover = async (remark) => {
+    const ids = handoverTarget?.ids || [];
+    if (ids.length === 0) return;
+    const { data } = await bulkInvoiceHandover(ids, remark);
+    const msg = data.skipped > 0
+      ? `Marked ${data.delivered} delivered, skipped ${data.skipped} (already delivered or not eligible).`
+      : `Marked ${data.delivered} invoice${data.delivered === 1 ? "" : "s"} delivered.`;
+    notify(msg, data.delivered > 0 ? "success" : "info");
+    setHandoverTarget(null);
+    fetchInvoices(selectedCompany.id, page);
   };
 
   // Fetches every bill matching the current filters (client / date range /
@@ -765,7 +863,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     setBulkResults({ open: true, action: "submit", items: results });
   };
 
-  const hasFilters = search || clientFilter || fbrFilter || dateFrom || dateTo;
+  const hasFilters = search || clientFilter || fbrFilter || handoverFilter || dateFrom || dateTo;
 
   return (
     <div>
@@ -899,6 +997,32 @@ export default function InvoicePage({ mode = "invoices" }) {
             </div>
           )}
 
+          {/* Customer document handover — bulk bar. Invoices + Notes only,
+              shown when the caller can mark delivered and there are pending
+              documents on the current page. "Mark delivered" acts on ALL
+              pending rows matching the current filters (across pages). */}
+          {!isBillsMode && canDocsDeliver && pendingHandoverCount > 0 && (
+            <div style={styles.fbrBulkBar}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                <MdLocalShipping size={18} color="#e65100" />
+                <span style={{ fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary }}>
+                  Documents: {pendingHandoverCount} pending on this page
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <button
+                  style={{ ...styles.fbrBulkBtn, backgroundColor: "#2e7d32", color: "#fff" }}
+                  disabled={handoverBulkBusy}
+                  onClick={openBulkHandover}
+                  title="Mark every pending invoice matching the current filters as documents delivered"
+                >
+                  {handoverBulkBusy ? <span className="btn-spinner" /> : <MdAssignmentTurnedIn size={15} />}
+                  Mark delivered
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Filters */}
           {selectedCompany && (
             <div className="filters-row">
@@ -932,6 +1056,21 @@ export default function InvoicePage({ mode = "invoices" }) {
                   <option value="ready">Ready to validate</option>
                   <option value="submitted">Submitted to FBR</option>
                   <option value="excluded">FBR excluded</option>
+                </select>
+              )}
+              {/* Customer document-handover filter — Invoices + Notes views
+                  (not the pre-FBR Bills tab, where nearly every row is "—").
+                  Server-side, so it paginates correctly. */}
+              {!isBillsMode && (
+                <select
+                  className="filter-select"
+                  value={handoverFilter}
+                  onChange={handleFilterChange(setHandoverFilter)}
+                  title="Filter by customer document handover"
+                >
+                  <option value="">All documents</option>
+                  <option value="pending">Docs pending</option>
+                  <option value="delivered">Docs delivered</option>
                 </select>
               )}
               <div className="filter-date-group">
@@ -995,6 +1134,8 @@ export default function InvoicePage({ mode = "invoices" }) {
                 canDelete,
                 canVoid,
                 canReverse,
+                canDocsDeliver,
+                canDocsRevert,
               }}
               hasExcelBill={hasExcelBill}
               hasExcelTax={hasExcelTax}
@@ -1021,6 +1162,8 @@ export default function InvoicePage({ mode = "invoices" }) {
               onVoid={handleVoidInvoice}
               onReverse={handleReverseInvoice}
               onCorrect={setCorrectTarget}
+              onMarkHandover={(inv) => setHandoverTarget({ mode: "single", inv })}
+              onRevertHandover={handleRevertHandover}
             />
           ) : (
           <div className="card-grid">
@@ -1043,6 +1186,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                       <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap", justifyContent: "flex-end" }}>
                         {renderNotePill(inv)}
                         {renderFbrPill(inv, isBillsMode)}
+                        {!isBillsMode && renderHandoverPill(inv)}
                         <AttachmentBadge count={attachCounts[inv.id]} onClick={() => setAttachTarget(inv)} />
                       </div>
                     </div>
@@ -1271,6 +1415,27 @@ export default function InvoicePage({ mode = "invoices" }) {
                         {inv.isFbrExcluded ? "Include in FBR" : "Exclude from FBR"}
                       </button>
                     )}
+                    {/* Customer document handover — Invoices + Notes only. Mark
+                        on Pending rows, Revert on Delivered rows. Both gated by
+                        their own permission (button hidden otherwise). */}
+                    {!isBillsMode && canDocsDeliver && inv.handoverStatus === "Pending" && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#e8f5e9", color: "#2e7d32", border: "1px solid #a5d6a7" }}
+                        onClick={() => setHandoverTarget({ mode: "single", inv })}
+                        title="Mark the customer's printed documents (Bill + Tax Invoice) as handed over to the customer"
+                      >
+                        <MdAssignmentTurnedIn size={14} /> Mark Delivered
+                      </button>
+                    )}
+                    {!isBillsMode && canDocsRevert && inv.handoverStatus === "Delivered" && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#fff8e1", color: "#8a6d00", border: "1px solid #ffe082" }}
+                        onClick={() => handleRevertHandover(inv)}
+                        title={`Delivered${inv.handoverAt ? ` on ${new Date(inv.handoverAt).toLocaleDateString()}` : ""}${inv.handoverByName ? ` by ${inv.handoverByName}` : " (migrated)"}${inv.handoverRemark ? ` — ${inv.handoverRemark}` : ""}. Click to revert to Pending.`}
+                      >
+                        <MdUndo size={14} /> Revert Delivery
+                      </button>
+                    )}
                     {/* Delete: Bills tab only, last-created bill only,
                         not FBR-submitted. Same gates as before plus Bills mode. */}
                     {(isBillsMode || isNotesMode) && canDelete && inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.isLatest && (
@@ -1390,6 +1555,16 @@ export default function InvoicePage({ mode = "invoices" }) {
             if (selectedCompany) fetchInvoices(selectedCompany.id, page);
             notify(`Bill #${wasRetry.invoiceNumber}: FBR state reset.`, "success");
           }}
+        />
+      )}
+
+      {handoverTarget && (
+        <HandoverDialog
+          mode={handoverTarget.mode}
+          invoiceNumber={handoverTarget.inv?.invoiceNumber}
+          count={handoverTarget.count}
+          onClose={() => setHandoverTarget(null)}
+          onConfirm={handoverTarget.mode === "bulk" ? confirmBulkHandover : confirmSingleHandover}
         />
       )}
 

@@ -15,7 +15,7 @@ namespace MyApp.Api.Services.Interfaces
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? noteType = null, string? fbrFilter = null);
+            int? noteType = null, string? fbrFilter = null, string? handoverFilter = null);
         Task<InvoiceDto?> GetByIdAsync(int id);
         Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto);
         /// <summary>
@@ -93,6 +93,29 @@ namespace MyApp.Api.Services.Interfaces
         /// submit still work. Returns the updated bill or null if not found.
         /// </summary>
         Task<InvoiceDto?> SetFbrExcludedAsync(int id, bool excluded);
+
+        /// <summary>
+        /// Mark an FBR-submitted invoice's customer documents as handed over:
+        /// sets HandoverAt = now, HandoverByUserId, optional remark. Throws
+        /// <see cref="InvalidOperationException"/> if the bill is not
+        /// FBR-submitted, is cancelled/demo, or is already delivered. Returns
+        /// the updated DTO, or null if not found. Audited via AuditLogService.
+        /// </summary>
+        Task<InvoiceDto?> MarkHandoverAsync(int id, int userId, string? remark = null);
+        /// <summary>
+        /// Revert a delivered invoice back to Pending — clears HandoverAt /
+        /// HandoverByUserId / HandoverRemark. Throws if not currently
+        /// delivered. Returns the updated DTO, or null if not found.
+        /// </summary>
+        Task<InvoiceDto?> RevertHandoverAsync(int id);
+        /// <summary>
+        /// Bulk-mark the given invoice ids delivered. Silently skips ineligible
+        /// ids (not FBR-submitted / already delivered / cancelled) and any id
+        /// whose CompanyId is not in <paramref name="accessibleCompanyIds"/>
+        /// (cross-tenant guard). Returns a per-id result summary.
+        /// </summary>
+        Task<HandoverBulkResult> BulkMarkHandoverAsync(
+            IEnumerable<int> ids, int userId, string? remark, ISet<int> accessibleCompanyIds);
         /// <summary>Set/clear the invoice's AR payment due date (drives the
         /// Overdue / Coming-due status). Returns the updated bill or null.</summary>
         Task<InvoiceDto?> SetDueDateAsync(int id, DateTime? dueDate);

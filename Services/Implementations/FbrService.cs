@@ -545,8 +545,19 @@ namespace MyApp.Api.Services.Implementations
             if (invoice.FbrStatus == FbrSubmissionStatus.Submitted && !string.IsNullOrEmpty(invoice.FbrIRN))
                 errors.Add($"Invoice already submitted to FBR. IRN: {invoice.FbrIRN}");
 
-            if (invoice.Date > DateTime.UtcNow.AddDays(1))
-                errors.Add("Invoice date cannot be in the future. [FBR 0043]");
+            // FBR [0043]: no future-dated invoices. Evaluated against TODAY IN
+            // PAKISTAN (PakistanClock) — date-only, server-time-zone independent
+            // — so a bill an operator legitimately dates "today" is never wrongly
+            // rejected on a non-PKT host (the MonsterASP box is not PKT). A truly
+            // future date is a hard stop (FBR rejects it anyway); the message
+            // covers the Tax-Sheet "transfer to next month" case so the operator
+            // knows the invoice becomes submittable once that month begins.
+            if (PakistanClock.IsFutureInvoiceDate(invoice.Date))
+                errors.Add(
+                    $"This invoice is dated {invoice.Date:dd-MMM-yyyy}, which is in the future in Pakistan. " +
+                    "FBR rejects future-dated invoices [0043], so it can't be validated or submitted yet. " +
+                    "If it was moved to next month from the Tax Sheet, classify and submit it once that month " +
+                    "begins — or change its date to today.");
 
             // ─ Items ─
             // Dual-book: validate the EFFECTIVE (overlay-applied) lines — the

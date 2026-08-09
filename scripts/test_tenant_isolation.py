@@ -396,6 +396,46 @@ check("Cross-tenant ClientId guard",
       "alice -> POST /api/invoices/standalone (companyId=alpha, clientId=beta-owned)",
       status == 400, f"expected 400, got {status}")
 
+# Suite 7: customer document handover — tenant guard on the 3 handover
+# endpoints (2026-08). A user without access to the invoice's company gets
+# 403 on the single mark/revert (tenant assert fires on the STORED invoice's
+# CompanyId, before any eligibility check); the bulk endpoint silently skips
+# cross-tenant ids (filtered by the caller's accessible-company set) and never
+# mutates a bill outside it.
+print("\n  Suite 7 — customer document handover tenant guard")
+beta_bill_payload = {
+    "companyId": beta["id"],
+    "clientId": beta_client["id"],
+    "date": "2026-05-16",
+    "gstRate": 18,
+    "items": [{"description": "Handover-guard bait", "quantity": 1, "uom": "Numbers, pieces, units", "unitPrice": 100}],
+}
+status, beta_bill = request("POST", "/api/invoices/standalone", token=admin, body=beta_bill_payload)
+assert status in (200, 201), f"seed beta bill: {status} {beta_bill}"
+
+# alice (Alpha only) is blocked on Beta's invoice on both single endpoints.
+status, _ = request("POST", f"/api/invoices/{beta_bill['id']}/handover", token=tokens["alice"], body={})
+status_check("Handover tenant guard", "alice -> POST /invoices/{beta}/handover", status, 403)
+status, _ = request("POST", f"/api/invoices/{beta_bill['id']}/handover/revert", token=tokens["alice"])
+status_check("Handover tenant guard", "alice -> POST /invoices/{beta}/handover/revert", status, 403)
+
+# Bulk cross-tenant forge: alice submits a Beta id. The service filters by her
+# accessible set (Alpha only), so it skips it — delivered 0, skipped 1 — and
+# the bill is NOT marked delivered.
+status, bulk = request("POST", "/api/invoices/handover/bulk", token=tokens["alice"], body={"ids": [beta_bill["id"]]})
+check("Handover tenant guard", "alice -> bulk handover (beta id) returns 200",
+      status == 200, f"expected 200, got {status}")
+check("Handover tenant guard", "alice -> bulk handover skips cross-tenant id",
+      bool(bulk) and bulk.get("delivered") == 0 and bulk.get("skipped") == 1,
+      f"expected delivered=0 skipped=1, got {bulk}")
+status, check_bill = request("GET", f"/api/invoices/{beta_bill['id']}", token=admin)
+check("Handover tenant guard", "beta bill NOT delivered after cross-tenant bulk",
+      status == 200 and (check_bill or {}).get("handoverAt") is None,
+      f"expected handoverAt null, got {(check_bill or {}).get('handoverAt')}")
+
+# Cleanup the seed bill (latest in a fresh company → deletable).
+request("DELETE", f"/api/invoices/{beta_bill['id']}", token=admin)
+
 # Cleanup the seed Beta client
 request("DELETE", f"/api/clients/{beta_client['id']}", token=admin)
 

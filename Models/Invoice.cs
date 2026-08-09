@@ -139,6 +139,23 @@ namespace MyApp.Api.Models
         public string? PoNumber { get; set; }
         public DateTime? PoDate { get; set; }
 
+        // ── Customer Document Handover (2026-08) ─────────────────────────
+        // Tracks whether the printed customer copies (Bill + two Tax Invoice
+        // copies) were PHYSICALLY handed to the customer — a business event,
+        // distinct from FBR submission and from print history (operators
+        // reprint, preview PDFs, print today / deliver tomorrow). Meaningful
+        // only once FbrStatus == "Submitted"; the display status
+        // (Pending / Delivered / —) is DERIVED at read time, never stored
+        // (mirrors how payment status derives from AmountPaid). All three
+        // columns are additive + nullable and touch no existing write path.
+        // See FEATURE_CUSTOMER_DOC_HANDOVER.md.
+        /// <summary>When the customer documents were handed over. Null = not yet handed over.</summary>
+        public DateTime? HandoverAt { get; set; }
+        /// <summary>Operator who marked handover. Null = system backfill (migrated) — so a migrated row shows no fabricated operator name.</summary>
+        public int? HandoverByUserId { get; set; }
+        /// <summary>Optional free-text handover note ("received by Ali at gate", "TCS #123"). Max 300 chars.</summary>
+        public string? HandoverRemark { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation
@@ -152,5 +169,8 @@ namespace MyApp.Api.Models
 
         /// <summary>Self-reference to the invoice this delta bill supplements. Null for ordinary invoices.</summary>
         public Invoice? SupplementsInvoice { get; set; }
+
+        /// <summary>Operator who marked the customer-document handover. Null when not yet handed over OR a system backfill (migrated).</summary>
+        public User? HandoverBy { get; set; }
     }
 }

@@ -26,6 +26,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(i => i.DeliveryChallans)
                 .Include(i => i.OriginalInvoice)
                 .Include(i => i.SupplementsInvoice)
+                .Include(i => i.HandoverBy)
                 .Where(i => i.CompanyId == companyId && !i.IsDemo
                          && i.DocumentType != 9 && i.DocumentType != 10)
                 .OrderByDescending(i => i.InvoiceNumber)
@@ -36,7 +37,7 @@ namespace MyApp.Api.Repositories.Implementations
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? noteType = null, string? fbrFilter = null)
+            int? noteType = null, string? fbrFilter = null, string? handoverFilter = null)
         {
             // Three disjoint document groups, each with its own numbering
             // sequence: sale bills (noteType null, default), Debit Notes
@@ -52,6 +53,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(i => i.DeliveryChallans)
                 .Include(i => i.OriginalInvoice)
                 .Include(i => i.SupplementsInvoice)
+                .Include(i => i.HandoverBy)
                 .Where(i => i.CompanyId == companyId && !i.IsDemo
                          && (noteType == null
                               ? (i.DocumentType != 9 && i.DocumentType != 10)
@@ -134,6 +136,26 @@ namespace MyApp.Api.Repositories.Implementations
                 }
             }
 
+            // Customer document-handover filter (server-side, like fbrFilter,
+            // so pagination stays correct). Mirrors the derived status:
+            //   pending   → FBR-submitted, not cancelled, not yet handed over
+            //   delivered → handed over (HandoverAt set)
+            //   all/blank → no extra predicate
+            // (Demo bills are already excluded by the base query.)
+            if (!string.IsNullOrWhiteSpace(handoverFilter))
+            {
+                switch (handoverFilter.Trim().ToLowerInvariant())
+                {
+                    case "pending":
+                        query = query.Where(i =>
+                            i.FbrStatus == "Submitted" && !i.IsCancelled && i.HandoverAt == null);
+                        break;
+                    case "delivered":
+                        query = query.Where(i => i.HandoverAt != null);
+                        break;
+                }
+            }
+
             var totalCount = await query.CountAsync();
             var items = await query
                 .OrderByDescending(i => i.InvoiceNumber)
@@ -163,6 +185,7 @@ namespace MyApp.Api.Repositories.Implementations
                     .ThenInclude(dc => dc.Items)
                 .Include(i => i.OriginalInvoice)
                 .Include(i => i.SupplementsInvoice)
+                .Include(i => i.HandoverBy)
                 .FirstOrDefaultAsync(i => i.Id == id);
         }
 

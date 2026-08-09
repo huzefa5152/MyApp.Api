@@ -273,6 +273,19 @@ namespace MyApp.Api.Data
                 .OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<Invoice>().HasIndex(i => i.SupplementsInvoiceId);
 
+            // Invoice -> HandoverBy (operator who marked customer-document
+            // handover). SetNull: deleting a user must never delete their
+            // invoices — the handover just loses operator attribution, which
+            // reads the same as a system backfill (HandoverByUserId == null).
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.HandoverBy)
+                .WithMany()
+                .HasForeignKey(i => i.HandoverByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<Invoice>().Property(i => i.HandoverRemark).HasMaxLength(300);
+            // Backs the Pending / Delivered handover list filter.
+            modelBuilder.Entity<Invoice>().HasIndex(i => new { i.CompanyId, i.HandoverAt });
+
             // Invoice -> InvoiceItems (cascade)
             modelBuilder.Entity<InvoiceItem>()
                 .HasOne(ii => ii.Invoice)
