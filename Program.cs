@@ -443,9 +443,9 @@ builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
 
 // Tenant-scope guard — answers "may this user touch this company?"
-// in addition to RBAC's "may this user perform this action?". Reads
-// the UserCompany table when Company.IsTenantIsolated=true; passes
-// through otherwise (preserves Hakimi/Roshan behaviour).
+// in addition to RBAC's "may this user perform this action?". Fail-closed:
+// a non-seed-admin passes only for companies with an explicit UserCompany
+// row (Company.IsTenantIsolated no longer affects the decision).
 builder.Services.AddScoped<ICompanyAccessGuard, CompanyAccessGuard>();
 
 // Division-scope guard — the layer below the company guard: within a

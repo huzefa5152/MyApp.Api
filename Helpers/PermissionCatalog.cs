@@ -357,13 +357,13 @@ namespace MyApp.Api.Helpers
             new("fbrmonitor.view",         "FBR",       "Monitor", "View", "View FBR communication trail and aggregate health"),
 
             // ── Tenant Access (User → Company assignments) ──────────────────
-            // Decides who can SEE the per-company data. The `IsTenantIsolated`
-            // flag on Company is the switch: while false, every authenticated
-            // user with the right RBAC permission still reaches the company
-            // (legacy/open mode); while true, only users with a matching
-            // UserCompanies row pass the ICompanyAccessGuard. These two
-            // permissions gate the UI that maintains those rows; flipping
-            // IsTenantIsolated itself reuses companies.manage.update.
+            // Decides who can SEE the per-company data. Access is fail-closed:
+            // a non-seed-admin reaches a company only via an explicit
+            // UserCompanies row that ICompanyAccessGuard checks. The
+            // `IsTenantIsolated` flag on Company is now informational and does
+            // not change access decisions (the old open mode is gone). These
+            // two permissions gate the UI that maintains those rows; flipping
+            // IsTenantIsolated itself is gated by tenantaccess.manage.update (below).
             new("tenantaccess.manage.view",   "Tenant Access", "Manage", "View",
                 "View user → company tenant-access assignments"),
             new("tenantaccess.manage.assign", "Tenant Access", "Manage", "Assign",

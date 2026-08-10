@@ -139,12 +139,12 @@
         public int CurrentSalesOrderNumber { get; set; }
 
         // ── Tenant isolation ──
-        // When false (default), any authenticated user with the right
-        // RBAC permission can access this company's data — preserves
-        // the legacy "every user sees every company" behaviour Hakimi
-        // and Roshan rely on. Flip to true on a SaaS tenant and only
-        // users with an explicit UserCompany row can reach it. See
-        // ICompanyAccessGuard.
+        // Historical flag. Access is now FAIL-CLOSED for every non-seed-admin
+        // regardless of this value: a user reaches a company ONLY when an
+        // explicit UserCompany row grants it (see ICompanyAccessGuard). The
+        // old "false = every user sees every company" open mode is gone —
+        // IsTenantIsolated is retained as informational metadata and no longer
+        // changes access decisions.
         public bool IsTenantIsolated { get; set; }
 
         // When true, every bill must trace to a Sales Order: all bill-creation

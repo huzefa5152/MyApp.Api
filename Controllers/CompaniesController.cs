@@ -45,11 +45,10 @@ namespace MyApp.Api.Controllers
                 out var id) ? id : 0;
 
         // GET: api/companies
-        // Returns only the companies the caller has tenant access to. Today
-        // most companies are IsTenantIsolated=false → CompanyAccessGuard
-        // returns "everything", preserving legacy behaviour. Once a company
-        // is flipped isolated, only users with a UserCompanies row see it
-        // here — which means every company-picker dropdown in the SPA gets
+        // Returns only the companies the caller has tenant access to. Access is
+        // FAIL-CLOSED: a non-seed-admin sees ONLY companies with an explicit
+        // UserCompanies row (see ICompanyAccessGuard), so a user with no grants
+        // gets an empty list. Every company-picker dropdown in the SPA is thus
         // filtered automatically without per-page changes.
         [HttpGet]
         public async Task<ActionResult<IEnumerable<CompanyDto>>> GetCompanies()
