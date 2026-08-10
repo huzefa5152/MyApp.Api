@@ -25,6 +25,27 @@ jobs:
               - 'web.config'
               - '.github/workflows/**'
 
+  # Test gate (audit C-2): a backend change must compile clean AND pass the
+  # xUnit unit suite before the full deploy runs — a red test blocks the
+  # push-to-prod FTP step. Frontend-only pushes skip this (no backend risk).
+  build-test:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Build API (Release)
+        run: dotnet build MyApp.Api.csproj -c Release
+
+      - name: Run unit tests
+        run: dotnet test tests/MyApp.Api.Tests/MyApp.Api.Tests.csproj -c Release --nologo
+
   # Fast path: only frontend changed — no .NET build, no app restart
   deploy-frontend-only:
     needs: detect-changes
@@ -58,7 +79,7 @@ jobs:
   # Full path: backend changed — build everything, restart app
   # FTP sync only uploads changed files automatically
   deploy-full:
-    needs: detect-changes
+    needs: [detect-changes, build-test]
     if: needs.detect-changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
