@@ -212,22 +212,29 @@ namespace MyApp.Api.Services.Implementations
                     importableLines
                         .Select(l => lineToItemType.GetValueOrDefault(l.SourceRowNumber))
                         .Where(t => t.HasValue).Select(t => t!.Value));
+                // Audit H-1 (import tail): build one batch and flush via
+                // RecordMovementsAsync (one tracking check + one SaveChanges)
+                // instead of a query + flush per line. Rows, the >0 guard, the
+                // filter, the counter, and atomicity inside `tx` are identical
+                // to the per-row loop — only the round-trips collapse. Mirrors
+                // PurchaseBillService.CreateAsync's batched IN.
+                var inMovements = new List<StockMovementBatchItem>();
                 foreach (var line in importableLines)
                 {
                     var itemTypeId = lineToItemType.GetValueOrDefault(line.SourceRowNumber);
                     if (!itemTypeId.HasValue || line.Quantity <= 0 || !trackedTypes.Contains(itemTypeId.Value)) continue;
-                    await _stock.RecordMovementAsync(
-                        companyId: companyId,
-                        itemTypeId: itemTypeId.Value,
-                        direction: StockMovementDirection.In,
+                    inMovements.Add(new StockMovementBatchItem(
+                        ItemTypeId: itemTypeId.Value,
+                        Direction: StockMovementDirection.In,
                         // 2026-05-12: decimal quantity flows through.
-                        quantity: line.Quantity,
-                        sourceType: StockMovementSourceType.PurchaseBill,
-                        sourceId: bill.Id,
-                        movementDate: bill.Date,
-                        notes: $"FBR Import: {invoice.SupplierName} #{invoice.InvoiceNo}");
+                        Quantity: line.Quantity,
+                        SourceType: StockMovementSourceType.PurchaseBill,
+                        SourceId: bill.Id,
+                        MovementDate: bill.Date,
+                        Notes: $"FBR Import: {invoice.SupplierName} #{invoice.InvoiceNo}"));
                     runningCounts.StockMovementsRecorded++;
                 }
+                await _stock.RecordMovementsAsync(companyId, inMovements);
 
                 await tx.CommitAsync();
                 result.Outcome = "imported";
