@@ -429,9 +429,17 @@ namespace MyApp.Api.Services.Implementations
 
             try
             {
-                var suggested = await _taxEngine.SuggestDefaultUomAsync(
-                    enrichWithCompanyId.Value, dto.HSCode!);
-                if (suggested == null) return;
+                // Audit H-9: bound the FBR-backed UOM enrichment. During a PRAL
+                // brownout the FBR client retries 3× (~30s each), which used to
+                // hang POST /api/itemtypes for ~90s (measured 94,478 ms). The
+                // enrichment is best-effort, so if it doesn't resolve within a
+                // short budget we save the row without it and the operator picks
+                // UOM manually — exactly what the catch below already did on a
+                // hard failure, just without the long wait.
+                var (completed, suggested) = await TaskBudget.WaitAsync(
+                    _taxEngine.SuggestDefaultUomAsync(enrichWithCompanyId.Value, dto.HSCode!),
+                    TimeSpan.FromSeconds(5));
+                if (!completed || suggested == null) return;
 
                 if (!dto.FbrUOMId.HasValue)       dto.FbrUOMId = suggested.UOM_ID;
                 if (string.IsNullOrWhiteSpace(dto.UOM)) dto.UOM = suggested.Description;
