@@ -153,8 +153,18 @@ namespace MyApp.Api.Middleware
             // returns directly).
             var statusCode = ex switch
             {
+                // Audit H-7: the sanctioned caller-facing 400.
+                ValidationException => (int)HttpStatusCode.BadRequest,
                 KeyNotFoundException => (int)HttpStatusCode.NotFound,
-                InvalidOperationException => (int)HttpStatusCode.BadRequest,
+                // Audit H-7: a deliberately-thrown InvalidOperationException is a
+                // caller validation error (400 + message). A framework-internal
+                // one (EF LINQ translation, concurrent DbContext, Single()-on-
+                // empty, disposed object, …) signals a server defect → opaque
+                // 500 + Error log. ExceptionClassifier draws the line so the ~212
+                // existing validation throws keep their 400, while real bugs stop
+                // masquerading as 400 and stop leaking internal detail.
+                InvalidOperationException ioe when !ExceptionClassifier.IsFrameworkInternal(ioe)
+                    => (int)HttpStatusCode.BadRequest,
                 UnauthorizedAccessException => (int)HttpStatusCode.Forbidden,
                 _ => (int)HttpStatusCode.InternalServerError
             };
