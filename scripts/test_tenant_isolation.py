@@ -27,7 +27,7 @@ Cleans up the test rows it created on success; leaves them on failure
 so you can inspect.
 """
 from __future__ import annotations
-import json, sys, uuid, urllib.request, urllib.error
+import json, os, sys, uuid, urllib.request, urllib.error
 from typing import Any
 
 BASE = "http://localhost:5134"
@@ -123,7 +123,7 @@ def status_check(suite: str, label: str, status: int, expected: int) -> None:
 
 # ── Setup ────────────────────────────────────────────────────
 print(f"\n=== Logging in as admin ===")
-admin = login("admin", "admin123")
+admin = login(os.environ.get("MYAPP_ADMIN_USER", "admin"), os.environ.get("MYAPP_ADMIN_PW", "admin123"))
 
 print(f"\n=== Cleaning up any leftover test rows from a prior run ===")
 status, all_companies_pre = request("GET", "/api/companies", token=admin)
@@ -581,6 +581,156 @@ check(suite9, "admin prefill 200 + 1 line",
 # cleanup: order first (client delete would otherwise be restricted)
 request("DELETE", f"/api/salesorders/{beta_so['id']}", token=admin)
 request("DELETE", f"/api/clients/{so_client['id']}", token=admin)
+
+
+# Suite 10: RBAC access-smoothing (2026-08-10). Proves (a) L1 reference-feed
+# co-authorization — a narrow doc-create role reads the lookup PICKERS its
+# forms need WITHOUT the module's *.view key; (b) tenant isolation is NOT
+# weakened by that relaxation; (c) full read surfaces stay gated; (d) L3
+# starter roles were seeded; (e) L4 one-step provisioning works; (f) the L4
+# escalation guard blocks smuggled role/company grants.
+print("\n  Suite 10 — reference co-authorization + starter roles + provisioning")
+s10 = "reference co-authorization"
+
+# Idempotent pre-clean (users first — a role with assigned users can't delete).
+status, _ulist = request("GET", "/api/users", token=admin)
+for u in (_ulist or []):
+    if u["username"] in ("dave_iso", "erin_iso", "frank_iso", "frank_plain_iso", "frank_esc_iso", "frank_esc2_iso"):
+        request("DELETE", f"/api/users/{u['id']}", token=admin)
+status, _rlist = request("GET", "/api/roles", token=admin)
+for r in (_rlist or []):
+    if r["name"] in ("IsoTest Doc Creator", "IsoTest User Admin"):
+        request("DELETE", f"/api/roles/{r['id']}", token=admin)
+
+# A narrow role: can CREATE sales/purchase docs but holds NONE of the
+# *.view / *.list.view keys the lookup pickers were historically gated on.
+status, doc_role = request("POST", "/api/roles", token=admin, body={
+    "name": "IsoTest Doc Creator",
+    "description": "Narrow doc-create role for the co-authorization test",
+    "permissionKeys": [
+        "salesquotes.manage.create", "challans.manage.create",
+        "bills.manage.create", "purchasebills.manage.create",
+        "salesquotes.print.view",
+    ],
+})
+assert status in (200, 201), f"create doc role: {status} {doc_role}"
+
+# dave: the narrow role + tenant access to Alpha only (via one-step create).
+status, dave = request("POST", "/api/users", token=admin, body={
+    "username": "dave_iso", "password": "test1234", "fullName": "Dave Iso",
+    "role": "IsoTest Doc Creator", "roleIds": [doc_role["id"]], "companyIds": [alpha["id"]],
+})
+assert status in (200, 201), f"create dave: {status} {dave}"
+dave_tok = login("dave_iso", "test1234")
+acid = alpha["id"]
+
+# (a) Co-authorized picker feeds on Alpha — dave has NO *.view keys → 200.
+for label, path in [
+    ("clients picker",       f"/api/clients/company/{acid}"),
+    ("suppliers picker",     f"/api/suppliers/company/{acid}"),
+    ("divisions picker",     f"/api/divisions/company/{acid}"),
+    ("non-inventory picker", f"/api/noninventoryitems/company/{acid}?activeOnly=true"),
+    ("open sales orders",    f"/api/salesorders/company/{acid}/open"),
+    ("accounts flat (GL)",   f"/api/accounts/company/{acid}/flat"),
+    ("pending challans",     f"/api/deliverychallans/company/{acid}/pending"),
+    ("print templates",      f"/api/printtemplates/company/{acid}"),
+]:
+    s, _ = request("GET", path, token=dave_tok)
+    check(s10, f"dave 200 on {label} (co-authorized)", s == 200, f"expected 200, got {s}")
+
+# (c) Full read surfaces still gated on the module's own *.view key → 403.
+for label, path in [
+    ("clients full list",  "/api/clients"),
+    ("clients summary",    f"/api/clients/company/{acid}/summary"),
+    ("suppliers full list", "/api/suppliers"),
+    ("sales orders paged", f"/api/salesorders/company/{acid}/paged"),
+    ("folders list",       f"/api/folders/company/{acid}"),
+]:
+    s, _ = request("GET", path, token=dave_tok)
+    check(s10, f"dave 403 on {label} (view key still required)", s == 403, f"expected 403, got {s}")
+
+# (b) Tenant isolation preserved — co-authorization does NOT let dave read
+# another tenant's picker feed (Beta has no UserCompany row for dave → 403).
+for label, path in [
+    ("clients picker (Beta)",   f"/api/clients/company/{beta['id']}"),
+    ("divisions picker (Beta)", f"/api/divisions/company/{beta['id']}"),
+    ("pending challans (Beta)", f"/api/deliverychallans/company/{beta['id']}/pending"),
+]:
+    s, _ = request("GET", path, token=dave_tok)
+    check(s10, f"dave 403 on {label} (tenant isolation intact)", s == 403, f"expected 403, got {s}")
+
+# (d) Starter roles seeded (L3): present, non-system, non-empty.
+status, all_roles = request("GET", "/api/roles", token=admin)
+role_by_name = {r["name"]: r for r in (all_roles or [])}
+for name in ["Sales Operator", "FBR Officer", "Bookkeeper", "Inventory Manager", "Accountant", "Read-Only Auditor"]:
+    r = role_by_name.get(name)
+    check("starter roles", f"'{name}' seeded", r is not None, "role missing")
+    if r:
+        check("starter roles", f"'{name}' non-system + has perms",
+              r.get("isSystemRole") is False and len(r.get("permissionKeys") or []) > 0,
+              f"isSystemRole={r.get('isSystemRole')}, perms={len(r.get('permissionKeys') or [])}")
+
+# (e) One-step provisioning (L4): erin gets a starter role + Alpha access in ONE
+# call, then works on first login (non-empty perms + non-empty company list).
+so_role = role_by_name.get("Sales Operator")
+if so_role:
+    status, erin = request("POST", "/api/users", token=admin, body={
+        "username": "erin_iso", "password": "test1234", "fullName": "Erin Iso",
+        "role": "Sales Operator", "roleIds": [so_role["id"]], "companyIds": [alpha["id"]],
+    })
+    check("one-step provisioning", "create erin (role+company in one call)", status in (200, 201), f"got {status}: {erin}")
+    if status in (200, 201):
+        erin_tok = login("erin_iso", "test1234")
+        s, me = request("GET", "/api/permissions/me", token=erin_tok)
+        perms = (me or {}).get("permissions") or []
+        check("one-step provisioning", "erin has permissions on first login", s == 200 and len(perms) > 0, f"status {s}, {len(perms)} perms")
+        s, cos = request("GET", "/api/companies", token=erin_tok)
+        vis = {c["id"] for c in (cos or [])}
+        check("one-step provisioning", "erin sees Alpha on first login", s == 200 and acid in vis, f"status {s}, visible {sorted(vis)}")
+
+# (f) Escalation guard (L4): a user-admin WITHOUT tenantaccess.manage.assign /
+# rbac.userroles.assign cannot smuggle those grants through the create call.
+status, ua_role = request("POST", "/api/roles", token=admin, body={
+    "name": "IsoTest User Admin",
+    "description": "users.manage.create only — no assign rights",
+    "permissionKeys": ["users.manage.create", "users.manage.view"],
+})
+assert status in (200, 201), f"create ua role: {status} {ua_role}"
+status, frank = request("POST", "/api/users", token=admin, body={
+    "username": "frank_iso", "password": "test1234", "fullName": "Frank Iso",
+    "role": "IsoTest User Admin", "roleIds": [ua_role["id"]], "companyIds": [alpha["id"]],
+})
+assert status in (200, 201), f"create frank: {status} {frank}"
+frank_tok = login("frank_iso", "test1234")
+# frank CAN create a plain user (has users.manage.create, no grants attached)…
+status, _ = request("POST", "/api/users", token=frank_tok, body={
+    "username": "frank_plain_iso", "password": "test1234", "fullName": "Plain", "role": "User",
+})
+check("provisioning escalation guard", "frank can create a plain user", status in (200, 201), f"got {status}")
+# …but NOT one carrying companyIds (needs tenantaccess.manage.assign) → 403…
+status, _ = request("POST", "/api/users", token=frank_tok, body={
+    "username": "frank_esc_iso", "password": "test1234", "fullName": "Esc", "role": "User",
+    "companyIds": [acid],
+})
+check("provisioning escalation guard", "frank blocked from granting companyIds", status == 403, f"expected 403, got {status}")
+# …nor roleIds (needs rbac.userroles.assign) → 403.
+status, _ = request("POST", "/api/users", token=frank_tok, body={
+    "username": "frank_esc2_iso", "password": "test1234", "fullName": "Esc2", "role": "User",
+    "roleIds": [so_role["id"] if so_role else doc_role["id"]],
+})
+check("provisioning escalation guard", "frank blocked from granting roleIds", status == 403, f"expected 403, got {status}")
+
+# Suite 10 cleanup (users first, then the custom roles).
+for uname in ("dave_iso", "erin_iso", "frank_iso", "frank_plain_iso", "frank_esc_iso", "frank_esc2_iso"):
+    s__, _u = request("GET", "/api/users", token=admin)
+    uu = next((u for u in (_u or []) if u["username"] == uname), None)
+    if uu:
+        request("DELETE", f"/api/users/{uu['id']}", token=admin)
+for rname in ("IsoTest Doc Creator", "IsoTest User Admin"):
+    s__, _r = request("GET", "/api/roles", token=admin)
+    rr = next((r for r in (_r or []) if r["name"] == rname), None)
+    if rr:
+        request("DELETE", f"/api/roles/{rr['id']}", token=admin)
 
 
 # ── Cleanup (test fails → keep rows for inspection) ──────────

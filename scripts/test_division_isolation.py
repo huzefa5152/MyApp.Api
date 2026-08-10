@@ -123,7 +123,7 @@ USERS = ("dana", "erik")
 
 # ── Setup ────────────────────────────────────────────────────
 print("\n=== Logging in as admin ===")
-admin = login("admin", "admin123")
+admin = login(os.environ.get("MYAPP_ADMIN_USER", "admin"), os.environ.get("MYAPP_ADMIN_PW", "admin123"))
 
 print("\n=== Cleaning up leftovers from a prior run ===")
 _, pre_companies = request("GET", "/api/companies", token=admin)
@@ -189,7 +189,14 @@ client_id = client["id"]
 # ItemTypes are a GLOBAL catalog (no company/division scope on the base row),
 # so one shared type classifies every seeded bill/quote/challan line below.
 status, itemtype = request("POST", "/api/itemtypes", token=admin, body={"name": "DivRBAC Widget"})
-assert status in (200, 201), f"create item type: {status} {itemtype}"
+if status not in (200, 201):
+    # ItemTypes are a GLOBAL, name-unique catalog with no company scope to
+    # cascade-clean, so a prior mid-run abort can leave "DivRBAC Widget"
+    # behind. Reuse the existing row instead of failing — keeps the suite
+    # idempotent across aborted runs.
+    s2, existing = request("GET", f"/api/itemtypes?companyId={cid}", token=admin)
+    itemtype = next((it for it in (existing or []) if it.get("name") == "DivRBAC Widget"), None)
+    assert itemtype, f"create item type: {status} {itemtype}; and no existing 'DivRBAC Widget' to reuse (list {s2})"
 item_type_id = itemtype["id"]
 print(f"  item type id={item_type_id}")
 
