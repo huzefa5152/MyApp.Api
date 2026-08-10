@@ -5,7 +5,6 @@ import RichText from "./RichText";
 import SelectDropdown from "./SelectDropdown";
 import DivisionSelect from "./DivisionSelect";
 import LineItemsEditor from "./LineItemsEditor";
-import { usePermissions } from "../contexts/PermissionsContext";
 import { getOpenSalesOrdersByCompany, getSalesOrderById } from "../api/salesOrderApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
@@ -37,7 +36,6 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
   const [poDate, setPoDate] = useState("");
   const [indentNo, setIndentNo] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
-  const { has } = usePermissions();
   // New challans default to the division the page is currently filtered to
   // (so "filter to a division → New Challan" lands in that division).
   const [divisionId, setDivisionId] = useState(defaultDivisionId ? String(defaultDivisionId) : "");
@@ -355,7 +353,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                 <label style={styles.label}>Delivery Date</label>
                 <input type="date" style={styles.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
               </div>
-              {!fromOrder && has("divisions.manage.view") && (
+              {!fromOrder && (
                 <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ color: "#5f6d7e", fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 150 }} />
               )}
             </div>

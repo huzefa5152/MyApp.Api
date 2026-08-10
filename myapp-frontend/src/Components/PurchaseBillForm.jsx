@@ -18,7 +18,6 @@ import SupplierForm from "./SupplierForm";
 import DivisionSelect from "./DivisionSelect";
 import AccountSelect from "./AccountSelect";
 import AttachmentManager from "./AttachmentManager";
-import { usePermissions } from "../contexts/PermissionsContext";
 import QuantityInput from "./QuantityInput";
 import useScrollToError from "../hooks/useScrollToError";
 import useIsNarrow from "../hooks/useIsNarrow";
@@ -52,8 +51,6 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
   const [units, setUnits] = useState([]);
   const [supplierId, setSupplierId] = useState("");
   const [showSupplierForm, setShowSupplierForm] = useState(false);
-  const { has } = usePermissions();
-  const canViewDivisions = has("divisions.manage.view");
   // New bills default to the division the list is filtered to; edits hydrate
   // their stored division from the loaded bill below.
   const [divisionId, setDivisionId] = useState(
@@ -477,11 +474,9 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
                 <label style={formStyles.label}>Bill Date *</label>
                 <input type="date" style={formStyles.input} value={date} onChange={e => setDate(e.target.value)} />
               </div>
-              {canViewDivisions && (
-                <div style={formStyles.formGroup}>
-                  <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={formStyles.label} style={formStyles.input} />
-                </div>
-              )}
+              <div style={formStyles.formGroup}>
+                <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={formStyles.label} style={formStyles.input} />
+              </div>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>GST Rate (%)</label>
                 <input type="number" min={0} step={0.01} style={formStyles.input} value={gstRate} onChange={e => setGstRate(e.target.value)} />

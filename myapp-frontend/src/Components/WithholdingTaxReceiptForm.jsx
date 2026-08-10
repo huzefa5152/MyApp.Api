@@ -2,7 +2,6 @@ import { useState, useRef } from "react";
 import SelectDropdown from "./SelectDropdown";
 import DivisionSelect from "./DivisionSelect";
 import AttachmentManager from "./AttachmentManager";
-import { usePermissions } from "../contexts/PermissionsContext";
 import useScrollToError from "../hooks/useScrollToError";
 import { formStyles, modalSizes } from "../theme";
 
@@ -17,7 +16,6 @@ const colors = {
 // the saved record so staged attachments can flush against the new id.
 export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId, receipt, defaultDivisionId }) {
   const isEdit = !!receipt;
-  const { has } = usePermissions();
   const [client, setClient] = useState(receipt ? { id: receipt.clientId, label: receipt.clientName } : null);
   const [date, setDate] = useState(receipt?.date ? receipt.date.slice(0, 10) : new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = useState(receipt?.amount != null ? String(receipt.amount) : "");
@@ -101,7 +99,7 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
                   placeholder="0.00"
                 />
               </div>
-              {has("divisions.manage.view") && !isEdit && (
+              {!isEdit && (
                 <DivisionSelect
                   companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select"
                   label={<>Division <span style={s.opt}>(optional)</span></>}

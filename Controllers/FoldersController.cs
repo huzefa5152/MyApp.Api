@@ -33,8 +33,10 @@ namespace MyApp.Api.Controllers
                 User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
                 out var id) ? id : 0;
 
+        // Folder picker feed for the attachment upload / manager. Co-authorized
+        // for attachment viewers/uploaders without folders.list.view. Tenant guard unchanged.
         [HttpGet("company/{companyId}")]
-        [HasPermission("folders.list.view")]
+        [HasReferenceAccess("folders")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<FolderDto>>> GetByCompany(int companyId)
             => Ok(await _service.GetByCompanyAsync(companyId));

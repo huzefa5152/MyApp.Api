@@ -8,7 +8,6 @@ import AccountSelect from "./AccountSelect";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import useIsNarrow from "../hooks/useIsNarrow";
-import { usePermissions } from "../contexts/PermissionsContext";
 import { createPayment, updatePayment } from "../api/paymentApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
@@ -33,8 +32,6 @@ const METHODS = ["Cash", "Bank Transfer", "Cheque", "Online", "Other"];
  * one document. Direct (account-only) lines remain deferred.
  */
 export default function PaymentForm({ mode, companyId, preset, editPayment = null, onClose, onSaved }) {
-  const { has } = usePermissions();
-  const canViewDivisions = has("divisions.manage.view");
   const isReceipt = mode === "receipts";
   const isEdit = !!editPayment?.id;
   const contactLabel = isReceipt ? "Client" : "Supplier";
@@ -462,19 +459,17 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                 autoSelectSingle={!isEdit}
                 label={isReceipt ? "Received in (bank/cash)" : "Paid from (bank/cash)"}
               />
-              {canViewDivisions && (
-                <div style={formStyles.formGroup}>
-                  <DivisionSelect
-                    companyId={companyId}
-                    value={divisionId}
-                    onChange={setDivisionId}
-                    mode="select"
-                    label={<>Division <span style={{ fontWeight: 400, color: colors.textSecondary }}>(optional)</span></>}
-                    labelStyle={formStyles.label}
-                    style={{ ...dropdownStyles.base, width: "100%" }}
-                  />
-                </div>
-              )}
+              <div style={formStyles.formGroup}>
+                <DivisionSelect
+                  companyId={companyId}
+                  value={divisionId}
+                  onChange={setDivisionId}
+                  mode="select"
+                  label={<>Division <span style={{ fontWeight: 400, color: colors.textSecondary }}>(optional)</span></>}
+                  labelStyle={formStyles.label}
+                  style={{ ...dropdownStyles.base, width: "100%" }}
+                />
+              </div>
             </div>
 
             {method === "Cheque" && (

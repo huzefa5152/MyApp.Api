@@ -13,13 +13,10 @@ import BulkItemTypeBar from "./BulkItemTypeBar";
 import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
 import AttachmentManager from "./AttachmentManager";
-import { usePermissions } from "../contexts/PermissionsContext";
 import useScrollToError from "../hooks/useScrollToError";
 
 export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSaved, defaultDivisionId }) {
   const isEdit = !!receiptId;
-  const { has } = usePermissions();
-  const canViewDivisions = has("divisions.manage.view");
   // New receipts default to the division currently being filtered (so "filter
   // to a division → New Receipt" lands in that division); edits hydrate from
   // the loaded receipt below.
@@ -170,11 +167,9 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                 <label style={formStyles.label}>Receipt Date *</label>
                 <input type="date" style={formStyles.input} value={receiptDate} onChange={e => setReceiptDate(e.target.value)} />
               </div>
-              {canViewDivisions && (
-                <div style={formStyles.formGroup}>
-                  <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={formStyles.label} style={formStyles.input} />
-                </div>
-              )}
+              <div style={formStyles.formGroup}>
+                <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={formStyles.label} style={formStyles.input} />
+              </div>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Linked Purchase Bill</label>
                 <select style={formStyles.input} value={purchaseBillId} onChange={e => setPurchaseBillId(e.target.value)}>

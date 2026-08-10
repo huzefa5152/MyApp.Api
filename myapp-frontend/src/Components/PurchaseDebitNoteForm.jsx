@@ -15,7 +15,6 @@ import BulkItemTypeBar from "./BulkItemTypeBar";
 import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
 import AccountSelect from "./AccountSelect";
-import { usePermissions } from "../contexts/PermissionsContext";
 import QuantityInput from "./QuantityInput";
 import useScrollToError from "../hooks/useScrollToError";
 
@@ -33,8 +32,6 @@ const colors = {
 // (else the engine derives it). Value-only lines (no item/account) are allowed.
 export default function PurchaseDebitNoteForm({ companyId, company = null, noteId, onClose, onSaved, readOnly = false, defaultDivisionId = null }) {
   const isEdit = !!noteId;
-  const { has } = usePermissions();
-  const canViewDivisions = has("divisions.manage.view");
 
   const [suppliers, setSuppliers] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -275,11 +272,9 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
                   <label style={formStyles.label}>Date *</label>
                   <input type="date" style={formStyles.input} value={date} onChange={(e) => setDate(e.target.value)} />
                 </div>
-                {canViewDivisions && (
-                  <div style={formStyles.formGroup}>
-                    <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={formStyles.label} style={formStyles.input} />
-                  </div>
-                )}
+                <div style={formStyles.formGroup}>
+                  <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={formStyles.label} style={formStyles.input} />
+                </div>
                 <div style={formStyles.formGroup}>
                   <label style={formStyles.label}>GST Rate (%)</label>
                   <input type="number" min={0} step={0.01} style={formStyles.input} value={gstRate} onChange={(e) => setGstRate(e.target.value)} />

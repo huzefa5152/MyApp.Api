@@ -193,8 +193,11 @@ namespace MyApp.Api.Controllers
             return Ok(all.Count(r => allowed.Contains(r.CompanyId)));
         }
 
+        // Supplier PICKER feed for purchase create/edit forms (Purchase Bill,
+        // Goods Receipt, Purchase Debit Note). Co-authorized so any purchase-doc
+        // creator can populate it without suppliers.manage.view. Tenant guard unchanged.
         [HttpGet("company/{companyId}")]
-        [HasPermission("suppliers.manage.view")]
+        [HasReferenceAccess("suppliers")]
         [AuthorizeCompany]
         public async Task<ActionResult<IEnumerable<SupplierDto>>> GetByCompany(int companyId)
             => Ok(await _service.GetByCompanyAsync(companyId));

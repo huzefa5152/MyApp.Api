@@ -36,8 +36,11 @@ namespace MyApp.Api.Controllers
 
         // Divisions have their own RBAC namespace (divisions.manage.*) so a role
         // can manage them independently of full company-edit rights.
+        // This endpoint feeds every DivisionSelect picker, so it is co-authorized
+        // for any document creator (a division-restricted operator MUST pick a
+        // division to save — see DivisionAccessGuard policy D2). Tenant guard unchanged.
         [HttpGet("company/{companyId}")]
-        [HasPermission("divisions.manage.view")]
+        [HasReferenceAccess("divisions")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<DivisionDto>>> GetByCompany(int companyId)
         {

@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using MyApp.Api.Helpers;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Middleware
@@ -125,6 +126,27 @@ namespace MyApp.Api.Middleware
             {
                 StatusCode = StatusCodes.Status403Forbidden
             };
+        }
+    }
+
+    /// <summary>
+    /// Reference-feed guard: <c>[HasReferenceAccess("clients")]</c>. Authorizes a
+    /// lookup/picker feed by resolving the allowed key set from
+    /// <see cref="ReferenceAccessPolicy"/> and passing if the user holds ANY of
+    /// them — i.e. the feed's own view key OR any document permission that
+    /// legitimately needs the picker. Reuses <see cref="HasAnyPermissionFilter"/>.
+    ///
+    /// This relaxes the PERMISSION check only; the endpoint's tenant/company
+    /// access check (ICompanyAccessGuard / [AuthorizeCompany]) is unaffected and
+    /// still runs. See <see cref="ReferenceAccessPolicy"/> for the rationale and
+    /// the full policy map. An unknown policy name throws at request time.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
+    public class HasReferenceAccessAttribute : TypeFilterAttribute
+    {
+        public HasReferenceAccessAttribute(string policyName) : base(typeof(HasAnyPermissionFilter))
+        {
+            Arguments = new object[] { ReferenceAccessPolicy.Resolve(policyName) };
         }
     }
 }

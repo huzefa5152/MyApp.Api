@@ -127,7 +127,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // slice rolled the calendar day back by one for PKT operators billing
   // before 5am.
   const [invoiceDate, setInvoiceDate] = useState(todayYmd());
-  const canViewDivisions = has("divisions.manage.view");
   // New bills default to the division currently being filtered on the page
   // (so "filter to a division → New Bill" lands in that division).
   const [divisionId, setDivisionId] = useState(defaultDivisionId ? String(defaultDivisionId) : "");
@@ -1206,9 +1205,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                       {billHeaderOpen && (
                         <div style={{ ...styles.scenarioCollapseBody, marginBottom: 0 }}>
                           <div style={styles.fieldGrid}>
-                            {canViewDivisions && (
-                              <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 140 }} />
-                            )}
+                            <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 140 }} />
                             <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Bill Date</label>
                               <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />

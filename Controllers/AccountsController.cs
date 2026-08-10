@@ -49,8 +49,11 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<CoaTreeDto>> GetTree(int companyId)
             => Ok(await _service.GetTreeAsync(companyId));
 
+        // Flat account list feed for the per-line GL AccountSelect on bills,
+        // purchase bills, payment adjustments and manual journals. Co-authorized
+        // for those document creators without requiring accounting.coa.view.
         [HttpGet("company/{companyId}/flat")]
-        [HasPermission("accounting.coa.view")]
+        [HasReferenceAccess("accounts")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<AccountDto>>> GetFlat(int companyId)
             => Ok(await _service.GetAccountsFlatAsync(companyId));

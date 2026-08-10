@@ -289,6 +289,15 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-10 — Smoother roles & access: no false "no-permission" warnings, ready-made roles, one-step user setup
+
+- **Create screens stop nagging for "view" permissions.** Opening a create/edit form (invoice, delivery challan, sales quote, sales order, bill, purchase bill, goods receipt, payment, withholding-tax receipt) no longer throws a *"You don't have permission"* warning just to fill its dropdowns. A role that can **create** a document can now load the customers, suppliers, divisions, item/GL-account lines, open sales orders, print templates and pending challans those forms need — **without** also being granted the broad "view" permission that opens the module's sidebar tab. Least-privilege is preserved: the tab stays hidden and the module's full list / summary pages stay gated, and tenant isolation is unchanged (you still only ever see companies you're assigned to).
+- **Background look-ups no longer pop warning toasts.** A dropdown that can't load shows its own quiet inline state instead of a global red warning; the permission warning still appears for actions you actually click (save / submit / delete).
+- **Division-restricted operators are no longer blocked.** They can pick their division on create forms without needing the Divisions admin permission.
+- **Six ready-made starter roles.** **Sales Operator, FBR Officer, Bookkeeper, Inventory Manager, Accountant, Read-Only Auditor** ship out of the box — each a coherent, warning-free permission bundle, fully editable and cloneable. Existing roles are untouched.
+- **One-step new-user setup.** The Add User dialog now assigns the role **and** company access together, so a new user works on first login instead of landing on an empty company picker. Each grant still respects the creator's own permissions.
+- **Direct-URL hardening.** A page you hold no permission for now redirects to the dashboard instead of loading behind an already-hidden nav link.
+
 ### 2026-08-08 — Bank & Cash accounts: edit / retire / correct opening balance; empty-list page-size fix
 
 - **Bank & Cash Accounts — manage accounts, not just view them.** Each account now has **Edit** (name, code, group, division), **Deactivate / Reactivate**, and **Delete**. Deactivating hides an account from the receipt/payment pickers while keeping its full history and balance (reactivate any time) — the way to retire a wrongly-created or no-longer-used bank/cash account. Delete is offered only for empty accounts with no transactions; anything referenced by history (or a system control account) is protected and deactivates instead. Retired accounts stay listed with an **inactive** badge.

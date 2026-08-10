@@ -156,8 +156,11 @@ namespace MyApp.Api.Controllers
             return Ok(all.Count(r => allowed.Contains(r.CompanyId)));
         }
 
+        // Client PICKER feed for create/edit forms (Sales Quote, Order, Challan,
+        // Bill, Invoice, Payment, WHT). Co-authorized so any document creator can
+        // populate it without holding clients.manage.view. Tenant guard unchanged.
         [HttpGet("company/{companyId}")]
-        [HasPermission("clients.manage.view")]
+        [HasReferenceAccess("clients")]
         [AuthorizeCompany]
         public async Task<ActionResult<IEnumerable<ClientDto>>> GetClientsByCompany(int companyId)
             => Ok(await _service.GetByCompanyAsync(companyId));

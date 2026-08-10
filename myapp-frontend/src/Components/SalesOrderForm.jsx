@@ -3,7 +3,6 @@ import SelectDropdown from "./SelectDropdown";
 import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
 import LineItemsEditor from "./LineItemsEditor";
-import { usePermissions } from "../contexts/PermissionsContext";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
@@ -37,7 +36,6 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
   const [units, setUnits] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
   const [nonInvItems, setNonInvItems] = useState([]);
-  const { has } = usePermissions();
   // New orders default to the division currently being filtered (so "filter to
   // a division → New Order" lands in that division); edits keep their own.
   const [divisionId, setDivisionId] = useState(
@@ -185,9 +183,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
                   );
                 })()}
               </div>
-              {has("divisions.manage.view") && (
-                <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={s.opt}>(optional)</span></>} labelStyle={s.label} style={s.input} wrapStyle={{ flex: 1, minWidth: 150 }} />
-              )}
+              <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={s.opt}>(optional)</span></>} labelStyle={s.label} style={s.input} wrapStyle={{ flex: 1, minWidth: 150 }} />
             </div>
             <div style={s.row}>
               <div style={{ flex: 1, minWidth: 140 }}>

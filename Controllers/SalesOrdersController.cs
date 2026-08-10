@@ -64,8 +64,10 @@ namespace MyApp.Api.Controllers
             return Ok(await _service.GetByCompanyAsync(companyId, divScope));
         }
 
+        // Open-order picker feed for "create challan from order". Co-authorized
+        // so a challan creator can populate it without salesorders.list.view.
         [HttpGet("company/{companyId}/open")]
-        [HasPermission("salesorders.list.view")]
+        [HasReferenceAccess("salesorders")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<SalesOrderDto>>> GetOpenByCompany(int companyId)
         {
@@ -78,7 +80,7 @@ namespace MyApp.Api.Controllers
         // unlike /open (the challan picker) this does NOT hide fully-delivered
         // orders.
         [HttpGet("company/{companyId}/open-for-purchase")]
-        [HasPermission("salesorders.list.view")]
+        [HasReferenceAccess("salesorders")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<SalesOrderDto>>> GetOpenForPurchase(int companyId)
         {
@@ -250,7 +252,7 @@ namespace MyApp.Api.Controllers
         /// client (e.g. No-PO challans raised before the PO arrived).
         /// </summary>
         [HttpGet("{id}/attachable-challans")]
-        [HasPermission("salesorders.list.view")]
+        [HasReferenceAccess("salesorders")]
         public async Task<ActionResult<List<AttachableChallanDto>>> GetAttachableChallans(int id)
         {
             var order = await _service.GetByIdAsync(id);

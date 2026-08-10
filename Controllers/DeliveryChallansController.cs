@@ -100,8 +100,10 @@ namespace MyApp.Api.Controllers
             return Ok(result);
         }
 
+        // Pending-challan picker feed for "create bill from challan". Co-authorized
+        // so a bill creator can populate it without challans.list.view. Tenant + division unchanged.
         [HttpGet("company/{companyId}/pending")]
-        [HasPermission("challans.list.view")]
+        [HasReferenceAccess("pendingchallans")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<DeliveryChallanDto>>> GetPendingByCompany(int companyId)
         {

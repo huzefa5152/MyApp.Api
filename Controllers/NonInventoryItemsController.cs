@@ -37,8 +37,10 @@ namespace MyApp.Api.Controllers
                 User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
                 out var id) ? id : 0;
 
+        // Non-inventory line picker (Freight/Discount/…) feed for sales + purchase
+        // create/edit forms. Co-authorized for any document creator. Tenant guard unchanged.
         [HttpGet("company/{companyId}")]
-        [HasPermission("noninventoryitems.list.view")]
+        [HasReferenceAccess("noninventory")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<NonInventoryItemDto>>> GetByCompany(int companyId, [FromQuery] bool activeOnly = false)
             => Ok(await _service.GetByCompanyAsync(companyId, activeOnly));

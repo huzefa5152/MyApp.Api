@@ -122,8 +122,11 @@ namespace MyApp.Api.Controllers
             };
         }
 
+        // Print-template picker feed for every document print screen. Co-authorized
+        // so anyone who can print a document type can resolve its template without
+        // holding printtemplates.manage.view. Tenant + division scoping unchanged.
         [HttpGet("company/{companyId}")]
-        [HasPermission("printtemplates.manage.view")]
+        [HasReferenceAccess("printtemplates")]
         [AuthorizeCompany]
         public async Task<IActionResult> GetByCompany(int companyId, [FromQuery] bool meta = false)
         {
@@ -148,7 +151,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("company/{companyId}/{templateType}")]
-        [HasPermission("printtemplates.manage.view")]
+        [HasReferenceAccess("printtemplates")]
         [AuthorizeCompany]
         public async Task<IActionResult> GetByCompanyAndType(int companyId, string templateType)
         {

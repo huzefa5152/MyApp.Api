@@ -147,7 +147,6 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
   const [selectedClientId, setSelectedClientId] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(todayYmd());
-  const canViewDivisions = has("divisions.manage.view");
   // New bills default to the division currently being filtered on the page
   // (so "filter to a division → New Bill" lands in that division).
   const [divisionId, setDivisionId] = useState(defaultDivisionId ? String(defaultDivisionId) : "");
@@ -1023,9 +1022,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               <label style={styles.label}>Bill Date</label>
                               <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
                             </div>
-                            {canViewDivisions && (
-                              <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 140 }} />
-                            )}
+                            <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 140 }} />
                             <div style={{ flex: 1, minWidth: 100 }}>
                               <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
                                 GST Rate (%) {chosenScenario && <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}><MdLock size={10} /> locked</span>}

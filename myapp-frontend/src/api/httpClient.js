@@ -138,11 +138,27 @@ httpClient.interceptors.response.use(
       localStorage.removeItem("token");
       window.location.href = appBase + "/login";
     } else if (status === 403) {
-      // Surface the API's reason if it gave one (e.g. "Access denied:
-      // you are not authorized for company N.") instead of the generic
-      // "You don't have permission" toast.
-      const m = error.response?.data?.message;
-      notify(m || "You don't have permission to perform this action.", "warning");
+      // A 403 on a background READ (GET/HEAD — lookup/picker feeds, list
+      // fetches) is usually not actionable: the dropdown / page renders its own
+      // inline "failed to load" state, so a global warning toast was pure noise.
+      // The canonical case: opening an invoice/challan/quote create form whose
+      // client/division picker feed the role isn't scoped for — the operator got
+      // a scary "you don't have permission" toast for a form they CAN use.
+      //
+      // So warn only on 403s the user directly caused — the mutating verbs
+      // (POST/PUT/PATCH/DELETE) behind a clicked action. A caller can force the
+      // toast on a read via `_forcePermissionToast`, or suppress it on any
+      // request via `_skipPermissionToast`. The API's own reason message
+      // (e.g. "Access denied: you are not authorized for company N.") is
+      // preferred over the generic text when a toast does fire.
+      const method = (error.config?.method || "get").toLowerCase();
+      const isRead = method === "get" || method === "head";
+      const skip = error.config?._skipPermissionToast === true;
+      const force = error.config?._forcePermissionToast === true;
+      if (!skip && (force || !isRead)) {
+        const m = error.response?.data?.message;
+        notify(m || "You don't have permission to perform this action.", "warning");
+      }
     } else if (status >= 500) {
       notify("Something went wrong on the server. Please try again.", "error");
     } else if (!error.response) {
