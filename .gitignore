@@ -214,6 +214,10 @@ PublishScripts/
 
 # NuGet Packages
 *.nupkg
+# Audit H-8: the vendored PdfPig 1.7.0-custom-5 build is a non-public package
+# and MUST be tracked so a clean CI restore is reproducible (nuget.org can't
+# supply it). Keep this negation below the *.nupkg rule.
+!nuget/*.nupkg
 # NuGet Symbol Packages
 *.snupkg
 # The packages folder can be ignored because of Package Restore
