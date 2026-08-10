@@ -17,10 +17,15 @@ namespace MyApp.Api.Data
 
         public const string BootstrapMarker = "RBAC_BOOTSTRAP_V1_ADMIN_AUTO_ASSIGN";
 
+        // Starter roles are seeded ONCE per database (marker-gated) so an admin
+        // who later deletes or retunes one doesn't see it reappear on restart.
+        public const string StarterRolesMarker = "RBAC_STARTER_ROLES_V1";
+
         public static async Task SeedAsync(AppDbContext db, int seedAdminUserId)
         {
             await UpsertPermissionsAsync(db);
             await EnsureAdministratorRoleAsync(db, seedAdminUserId);
+            await EnsureStarterRolesAsync(db, seedAdminUserId);
             await BootstrapExistingAdminUsersAsync(db);
         }
 
@@ -102,6 +107,71 @@ namespace MyApp.Api.Data
                 Message = $"RBAC bootstrap complete — auto-assigned Administrator role to {count} pre-existing user(s)."
             });
 
+            await db.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Seeds the curated <see cref="StarterRoleCatalog"/> job roles (Sales
+        /// Operator, Bookkeeper, …) so an admin can provision a new user by
+        /// picking one role instead of hand-ticking dozens of permissions.
+        ///
+        /// Runs ONCE per database (gated by an AuditLog marker) so roles an
+        /// operator later deletes or retunes don't regenerate on the next boot.
+        /// Purely ADDITIVE: creates a role only when no role with that name
+        /// already exists — never overwrites an existing role, and never touches
+        /// users, companies, or the Administrator role. Starter roles are
+        /// NON-system so they can be renamed / cloned / deleted freely.
+        /// </summary>
+        private static async Task EnsureStarterRolesAsync(AppDbContext db, int seedAdminUserId)
+        {
+            var alreadyRan = await db.AuditLogs.AnyAsync(a => a.ExceptionType == StarterRolesMarker);
+            if (alreadyRan) return;
+
+            // Permissions are already upserted — resolve keys → ids once.
+            var permIdByKey = await db.Permissions
+                .ToDictionaryAsync(p => p.Key, p => p.Id, StringComparer.OrdinalIgnoreCase);
+
+            var created = 0;
+            foreach (var def in StarterRoleCatalog.All)
+            {
+                // Additive only: skip if a role with this name already exists
+                // (fresh DB → none; existing DB → don't clobber an operator's).
+                if (await db.Roles.AnyAsync(r => r.Name == def.Name)) continue;
+
+                var role = new Role
+                {
+                    Name = def.Name,
+                    Description = def.Description,
+                    IsSystemRole = false,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedByUserId = seedAdminUserId
+                };
+                db.Roles.Add(role);
+                await db.SaveChangesAsync(); // need role.Id for RolePermissions
+
+                var permIds = def.PermissionKeys
+                    .Where(permIdByKey.ContainsKey)
+                    .Select(k => permIdByKey[k])
+                    .Distinct()
+                    .ToList();
+                foreach (var pid in permIds)
+                    db.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = pid });
+                if (permIds.Count > 0)
+                    await db.SaveChangesAsync();
+                created++;
+            }
+
+            db.AuditLogs.Add(new AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                Level = "Info",
+                UserName = "system",
+                HttpMethod = "SEED",
+                RequestPath = "/rbac/starter-roles",
+                StatusCode = 200,
+                ExceptionType = StarterRolesMarker,
+                Message = $"Starter roles seeded — created {created} of {StarterRoleCatalog.All.Count} (existing same-named roles left untouched)."
+            });
             await db.SaveChangesAsync();
         }
 
