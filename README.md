@@ -281,6 +281,15 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-08-10 — Audit hardening (reliability/perf; on `fix/audit-2026-08-02`, not yet in prod)
+
+- **CI test gate (C-2).** New `MyApp.Api.Tests` xUnit project + a `build-test` job in the deploy workflow that must pass before a backend change deploys — the pipeline no longer ships to prod on a green *compile* alone. The first 39 tests cover pageSize clamping, sensitive-data redaction, and the two fixes below.
+- **Server errors stop leaking internals (H-7).** Framework-internal `InvalidOperationException`s (EF query-translation failures, concurrent-context misuse, disposed objects) now return an opaque **500** instead of a **400** echoing the raw .NET message; genuine input-validation errors keep their existing 400 + human-readable message. An error-response change only — no invoice/tax/stock/FBR logic touched.
+- **Item-type creation no longer hangs during an FBR outage (H-9).** When PRAL is unreachable, saving a new item type now falls back to the local unit-of-measure after a short wait instead of freezing for ~90 s; FBR enrichment still runs normally when FBR responds.
+- **Reproducible builds (H-8).** The custom PdfPig build the PO parser depends on is now vendored in-repo, so a clean CI restore can't fail on an unreachable external feed. Identical binary — PO parsing unchanged (regression corpus green).
+- **Fewer DB round-trips on FBR purchase import (H-1 tail).** Stock movements from an FBR purchase-file import are written in a single batch instead of one save per line — same rows, same result.
+- Executable specs added for the two remaining multi-day items: startup DDL-chain retirement (C-1) and the god-file split + test roadmap (H-6).
+
 ### 2026-08-09 — Customer Document Handover status
 
 - **New "Documents" status on the Invoices + Credit/Debit-Note views** answering one question per FBR-submitted invoice: *have the printed customer copies (Bill + Tax Invoice) been physically handed to the customer?* Shown as a **Pending 🟡 / Delivered 🟢 / — (n/a)** badge, kept deliberately separate from the FBR-submission and payment statuses (print history is **not** a proxy for handover).

@@ -14,7 +14,9 @@
 **Branch:** `fix/audit-2026-08-02` (off `master`). Pushed to `origin` for pickup elsewhere.
 `master` merged in on **2026-08-09** (merge `7bf61f9`, master @ `b7ab153` — customer-doc-handover + FBR fixes). Two merge conflicts resolved **keep-both**, non-destructive: (1) `InvoiceService.CreateAsync` — master's FBR future-date guard **and** the branch's batched challan-load both kept; (2) `AppDbContextModelSnapshot` — branch's `(CompanyId,Date)` index **and** master's `(CompanyId,HandoverAt)` index both kept. `dotnet build` = **0 errors** post-merge.
 
-**⚠ Verification note for whoever picks this up:** this branch does **not** auto-deploy (only `master` and `customize-solution-for-other` trigger CI→prod). Nothing here is verified beyond `dotnet build`. **Before merging any of this to `master`, run the full pre-push gate** — `scripts/test_stock_itemtype_reflow.py` (140/140), `test_basic_flows.py` (37/37), `test_tenant_isolation.py` — see the resume recipe at the end of this section.
+**Session 2026-08-10 — Critical/High batch shipped on this branch (committed, not yet pushed):** C-2 (CI test gate + new xUnit project), H-7 (ValidationException + EF-internal denylist), H-8 (vendored PdfPig for reproducible restore), H-9 (item-type FBR enrich fast-fail), and the H-1 import-committer tail. New unit suite = **39/39 green**; PO corpus **ALL REGRESSION CORPORA PASSED**; clean-runner restore proven (PdfPig resolves from the local feed). C-1 and H-6 written up as executable specs (`C1_STARTUP_DDL_RETIREMENT_DESIGN.md`, `H6_GODFILE_REFACTOR_TEST_ROADMAP.md`). Per user: H-7 and H-9 are **accepted intentional behavior changes**; everything else is strictly no-logic-change.
+
+**⚠ Verification note for whoever picks this up:** this branch does **not** auto-deploy (only `master` and `customize-solution-for-other` trigger CI→prod). The new xUnit suite covers the pure-logic units (pagination, redactor, H-7 classifier, H-9 budget); **DB-coupled invariants are NOT unit-covered**, and the **FBR-import committer (H-1 tail) has no automated gate** — verify it manually (upload an FBR purchase file on db46684) before trusting it. **Before merging any of this to `master`, run the full pre-push gate** — `scripts/test_stock_itemtype_reflow.py` (140/140), `test_basic_flows.py` (37/37), `test_tenant_isolation.py` — see the resume recipe at the end of this section.
 
 **Legend:** ✅ done+committed · 🟡 partial · ⏸ deferred (see why) · ⬜ not started · 📝 documented-only (not fixed).
 
@@ -22,17 +24,17 @@
 
 | ID | Finding (short) | Status | Commit / note |
 |---|---|---|---|
-| **C-1** | Startup live-DDL chain fragility | ⬜ | multi-day; Phase 6, do last, after C-2 exists |
-| **C-2** | No CI test gate before prod | ⬜ | **highest-value remaining item** — everything else should ride on it |
-| H-1 | Per-row stock writes (purchase) | ✅ | `849a79c` — `IStockService.RecordMovementsAsync`; **⏸ import sub-path** (`FbrPurchaseImportCommitter`) left per-row (not covered by reflow gate) |
+| **C-1** | Startup live-DDL chain fragility | ⬜📝 | **spec written** → `C1_STARTUP_DDL_RETIREMENT_DESIGN.md` (block inventory + confirm-before-retire markers + phasing). Multi-day, HIGH regr; needs read-only prod marker confirmation. |
+| **C-2** | No CI test gate before prod | ✅ | **2026-08-10** — new `tests/MyApp.Api.Tests` xUnit project; `deploy.yml` `build-test` job (build + test) gates `deploy-full`. 39 tests (pagination/redactor/H-7 classifier/H-9 budget). |
+| H-1 | Per-row stock writes (purchase) | ✅ | `849a79c` core + **2026-08-10 import tail** — `FbrPurchaseImportCommitter` now batches via `RecordMovementsAsync` (behavior-identical: same rows/filter/counter/atomicity). No import gate — verify manually. |
 | H-2 | Unbounded tracked cartesian invoice read | ✅ | `a7fbb95` |
 | H-3 | Challan list writes on every read | ✅ | `2524bf8` (batched transitions) |
 | H-4 | Missing date-range indexes | ✅ | `d529cfa` — migration `20260802200706`, applied to db46684 by hand |
 | H-5 | No frontend code-splitting | ✅ | `22e526d` — 3.7MB → ~0.5MB initial |
-| H-6 | God files + no unit tests | ⬜ | multi-day; Phase 7; **do C-2 first** |
-| H-7 | `InvalidOperationException`→400 leak | ⬜ | Phase 5 |
-| H-8 | PdfPig `1.7.0-custom-5` build | ⬜ | Phase 6; re-baseline PO corpus after |
-| H-9 | Item-type create blocks ~90s on FBR brownout | 📝 | `c475066` documented only — **fix not started** |
+| H-6 | God files + no unit tests | ⬜📝 | **spec written** → `H6_GODFILE_REFACTOR_TEST_ROADMAP.md` (seams + one-unit-per-PR + test approach). C-2 test project now exists to build on. Multi-day. |
+| H-7 | `InvalidOperationException`→400 leak | ✅ | **2026-08-10** — `Helpers/ValidationException` + `Helpers/ExceptionClassifier`; middleware routes EF-internal IOEs → opaque 500, deliberate validation stays 400 + message. **Accepted behavior change.** |
+| H-8 | PdfPig `1.7.0-custom-5` build | ✅ | **2026-08-10** — vendored `nuget/uglytoad.pdfpig.1.7.0-custom-5.nupkg` + local feed in `nuget.config` (`.gitignore` negation). Clean restore proven; identical binary → PO corpus unchanged. |
+| H-9 | Item-type create blocks ~90s on FBR brownout | ✅ | **2026-08-10** — `Helpers/TaskBudget` bounds the FBR enrich to 5s in `ItemTypeService`; brownout → local UOM fallback, no 90s hang. `InvoiceService` path untouched. **Accepted behavior change.** |
 | M-1 | N+1 last-rate per challan line | ⏸ | EF-translation/row-diff risk on `GetLastRatesForChallanAsync`; can't prove zero-logic-change with current gates |
 | M-2 | N+1 challan fetch on invoice create | ✅ | `70386f1` — `GetByIdsAsync`, validation loop byte-identical |
 | M-3 | N+1 item-type on bill update | ✅ | `15debd2` |
@@ -67,30 +69,30 @@
 
 ### 0.2 Tally
 
-Fully done **16** (H-1..H-5, M-2/3/4/5/7/12, L-1/4/7/8) + **1 partial** (M-8, CSP left).
-Deferred **3** (M-1, M-6, H-1 import sub-path — all "can't prove zero-logic-change with current gates").
-Documented-only **1** (H-9).
-**Not started 21** — incl. **both Criticals** (C-1, C-2), H-6/H-7/H-8, the H-9 fix, the Phase-5 error-hygiene mediums (M-9/M-10), Phase-6 startup/supply-chain (C-1/M-13/H-8), and the low-priority tail.
+Fully done **19** (C-2, H-1..H-5, H-7, H-8, H-9, M-2/3/4/5/7/12, L-1/4/7/8) + **1 partial** (M-8, CSP left).
+Deferred **2** (M-1, M-6 — "can't prove zero-logic-change with current gates").
+Specs written, not implemented **2** (C-1, H-6).
+**Not started 18** — M-9/M-10 (Phase-5 controller error hygiene), M-11/M-13/M-14/M-15/M-16/M-17, and the low tail L-2/3/5/6/9/10/11/12/13/14. Of the Criticals: **C-2 done**, **C-1 spec'd** (execution pending prod marker confirmation).
 
 ### 0.3 Roadmap phase status
 
 - **Phase 0** (quick wins) — ✅ done, except **M-15** (deploy hygiene) and the **CSP** part of M-8.
-- **Phase 1** (reliability) — 🟡 only M-12 shipped; **C-2 (CI gate) + L-6 open** — the gap that blocks safe refactors.
-- **Phase 2** (read perf) — ✅ mostly (H-2, M-4/5, H-1, H-3, M-2/3); **M-1, M-6 deferred**.
+- **Phase 1** (reliability) — 🟡 M-12 + **C-2 done**; **L-6 open**.
+- **Phase 2** (read perf) — ✅ mostly (H-2, M-4/5, H-1 incl. import tail, H-3, M-2/3); **M-1, M-6 deferred**.
 - **Phase 3** (indexes) — ✅ done (H-4).
 - **Phase 4** (frontend) — 🟡 H-5 done; L-2 (UI consolidation) not started.
-- **Phase 5** (error hygiene) — ⬜ H-7, M-9, M-10.
-- **Phase 6** (supply chain + startup) — ⬜ H-8, C-1, M-13. Highest care; last.
-- **Phase 7** (structural refactor) — ⬜ H-6. Needs C-2 first.
+- **Phase 5** (error hygiene) — 🟡 **H-7 done**; M-9, M-10 open.
+- **Phase 6** (supply chain + startup) — 🟡 **H-8 done**; **C-1 spec'd** (not done), M-13 open.
+- **Phase 7** (structural refactor) — ⬜ **H-6 spec'd** (not done); the C-2 test project it depends on now exists.
 
-**Suggested next step for the picking-up session:** land **C-2** (CI build+test gate) — it's low-regression, additive, and every remaining refactor (H-6, Phase 5, C-1) is meant to ride on it.
+**Suggested next step for the picking-up session:** C-2 is in, so the safe follow-ons are the **Phase-5 mediums** (M-9/M-10 — move controller `catch/ex.Message` + direct-DB into services, now that `ValidationException` exists as the sanctioned 400) and **executing the C-1 spec** (after the operator runs the read-only prod marker-confirmation query). H-6 refactor can begin any time on top of the new xUnit project.
 
 ### 0.4 Resume recipe (how to verify on this branch)
 
 - **DB:** `appsettings.Development.json` (gitignored) already points at **db46684** (prod-replica, `AutoMigrate=false`). Login `admin`/`admin123`.
 - **Run:** `ASPNETCORE_ENVIRONMENT=Development dotnet run --no-launch-profile --no-build --urls "http://localhost:5134"` (wait-for-ready: `curl --retry-connrefused`).
 - **Gates:** `python scripts/test_stock_itemtype_reflow.py` (140/140), `test_basic_flows.py` (37/37), `test_tenant_isolation.py`.
-- **Gotchas:** (1) `POST /api/itemtypes` calls **live FBR** (`ItemTypeService.EnrichFromFbrAsync`) — blocks ~90s when `gw.fbr.gov.pk` is unreachable (H-9); transient, just re-run the reflow gate. (2) **Stop the backend before `dotnet build`** — it locks the exe (kill the PID on 5134 first).
+- **Gotchas:** (1) `POST /api/itemtypes` calls **live FBR** (`ItemTypeService.EnrichFromFbrAsync`) but **H-9 now bounds it to 5s** — a brownout no longer hangs the request ~90s; it falls back to the local UOM. (2) **Stop the backend before `dotnet build`** — it locks the exe (kill the PID on 5134 first). (3) New unit gate: `dotnet test tests/MyApp.Api.Tests/MyApp.Api.Tests.csproj -c Release` (39/39).
 - **Index migration on db46684:** apply only the new migration's own IF-NOT-EXISTS-guarded statements + one `__EFMigrationsHistory` row. **Do NOT** run the full `dotnet ef migrations script --idempotent` — it re-emits already-dropped indexes (e.g. `IX_Invoices_CompanyId_InvoiceNumber`) and hits history-vs-actual drift. `sqlcmd` needs `-I` (QUOTED_IDENTIFIER ON) or `CREATE INDEX` errors.
 
 ---
