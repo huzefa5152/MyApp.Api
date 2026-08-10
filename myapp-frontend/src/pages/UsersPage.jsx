@@ -15,6 +15,7 @@ import {
 } from "react-icons/md";
 import { getUsers, createUser, updateUser, deleteUser } from "../api/usersApi";
 import { getRoles, getUserRoles, assignUserRoles } from "../api/rbacApi";
+import { getCompanies } from "../api/companyApi";
 import { useAuth } from "../contexts/AuthContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
@@ -48,6 +49,10 @@ export default function UsersPage() {
   const canUpdate = has("users.manage.update");
   const canDelete = has("users.manage.delete");
   const canAssignRoles = has("rbac.userroles.assign");
+  // One-step provisioning: an operator who can assign tenant access gets a
+  // company multi-select in the create dialog, so a new user has company
+  // access on first login instead of a blank company picker (fail-closed).
+  const canAssignTenant = has("tenantaccess.manage.assign");
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -63,6 +68,11 @@ export default function UsersPage() {
   // because we need the dropdown populated immediately when the operator
   // hits "Add User".
   const [availableRoles, setAvailableRoles] = useState([]);
+
+  // Companies the operator can grant (backend already scopes /companies to
+  // the caller's accessible set) + the create dialog's current selection.
+  const [companies, setCompanies] = useState([]);
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState(new Set());
 
   // Role-assignment modal state
   const [rolesModalUser, setRolesModalUser] = useState(null);
@@ -93,13 +103,31 @@ export default function UsersPage() {
     getRoles()
       .then(({ data }) => setAvailableRoles(data || []))
       .catch(() => setAvailableRoles([]));
+    // Companies for the create dialog's access multi-select — best-effort,
+    // only when the operator can actually grant tenant access.
+    if (canAssignTenant) {
+      getCompanies()
+        .then(({ data }) => setCompanies(data || []))
+        .catch(() => setCompanies([]));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const toggleCompanySelection = (companyId) => {
+    setSelectedCompanyIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(companyId)) next.delete(companyId);
+      else next.add(companyId);
+      return next;
+    });
+  };
 
   const defaultRoleName = () => availableRoles[0]?.name || "Admin";
 
   const openAdd = () => {
     setEditUser(null);
     setForm({ username: "", fullName: "", password: "", role: defaultRoleName() });
+    setSelectedCompanyIds(new Set());
     setMsg(null);
     setShowModal(true);
   };
@@ -149,27 +177,28 @@ export default function UsersPage() {
           setMsg({ type: "success", text: "User updated successfully" });
         }
       } else {
-        // Create the user with the legacy `role` text field (kept for
-        // backwards-compat with existing JWT-claim consumers), then assign
-        // the matching RBAC role via the UserRoles join table so the new
-        // user immediately gets their permissions. If the operator can't
-        // assign roles (rbac.userroles.assign), the create still succeeds
-        // — they just won't have permissions until an admin assigns them.
-        const { data: newUser } = await createUser(form);
+        // One-step provisioning: create the user AND wire up their RBAC role +
+        // company access in a single call, so they work on first login instead
+        // of landing on a blank company picker (tenant access is fail-closed).
+        // The backend assigns roles/companies transactionally — each gated by
+        // the operator's own rbac.userroles.assign / tenantaccess.manage.assign,
+        // so an operator who lacks a grant simply can't include it.
         const matchingRole = availableRoles.find(
           (r) => r.name?.toLowerCase() === form.role?.toLowerCase());
-        if (newUser?.id && matchingRole?.id && canAssignRoles) {
-          try {
-            await assignUserRoles(newUser.id, [matchingRole.id]);
-          } catch {
-            // Non-fatal: the user was created; surface a soft warning.
-            setMsg({
-              type: "warn",
-              text: `User created, but could not auto-assign role "${matchingRole.name}". Use the Roles button to set it manually.`,
-            });
-          }
-        }
-        if (!msg) setMsg({ type: "success", text: "User created successfully" });
+        const payload = { ...form };
+        if (matchingRole?.id && canAssignRoles) payload.roleIds = [matchingRole.id];
+        if (canAssignTenant && selectedCompanyIds.size > 0)
+          payload.companyIds = Array.from(selectedCompanyIds);
+        await createUser(payload);
+
+        const bits = [];
+        if (payload.roleIds) bits.push(`role "${matchingRole.name}"`);
+        if (payload.companyIds)
+          bits.push(`${payload.companyIds.length} compan${payload.companyIds.length === 1 ? "y" : "ies"}`);
+        setMsg({
+          type: "success",
+          text: bits.length ? `User created with ${bits.join(" and ")}.` : "User created successfully",
+        });
       }
       await fetchUsers();
       setTimeout(closeModal, 800);
@@ -448,6 +477,49 @@ export default function UsersPage() {
                 <p style={{ margin: "0.35rem 0 0", fontSize: "0.72rem", color: "#5f6d7e" }}>
                   The selected role's permissions will be auto-assigned to this user on create.
                 </p>
+              )}
+
+              {/* Company access — one-step provisioning. Tenant access is
+                  fail-closed, so without at least one company a new user logs
+                  in to an empty company picker. Surface it in the create form. */}
+              {!editUser && canAssignTenant && companies.length > 0 && (
+                <>
+                  <label style={styles.label}>
+                    <MdShield style={styles.labelIcon} />
+                    Company Access
+                  </label>
+                  <div
+                    style={{
+                      display: "flex", flexDirection: "column", gap: "0.4rem",
+                      maxHeight: 180, overflowY: "auto",
+                      border: `1px solid ${colors.inputBorder}`, borderRadius: 8,
+                      padding: "0.5rem 0.65rem", background: colors.inputBg,
+                    }}
+                  >
+                    {companies.map((c) => (
+                      <label
+                        key={c.id}
+                        style={{
+                          display: "flex", alignItems: "center", gap: "0.55rem",
+                          cursor: "pointer", fontSize: "0.88rem", color: colors.textPrimary,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedCompanyIds.has(c.id)}
+                          onChange={() => toggleCompanySelection(c.id)}
+                          style={{ accentColor: colors.blue }}
+                        />
+                        {c.name}
+                      </label>
+                    ))}
+                  </div>
+                  <p style={{ margin: "0.35rem 0 0", fontSize: "0.72rem", color: "#5f6d7e" }}>
+                    {selectedCompanyIds.size === 0
+                      ? "No companies selected — the user won't see any company until access is granted (Tenant Access)."
+                      : `Access to ${selectedCompanyIds.size} compan${selectedCompanyIds.size === 1 ? "y" : "ies"} on first login. Division-level limits can be set later on the Tenant Access page.`}
+                  </p>
+                </>
               )}
             </div>
 
