@@ -28,6 +28,9 @@ const Meta = ({ label, value }) => (
 export default function SalesQuoteDetailModal({ companyId, quote, canPrint, onPrint, onClose }) {
   if (!quote) return null;
   const items = quote.items || [];
+  // Photo column only when at least one line has one — mirrors the print
+  // template's {{#if hasLineImages}} so the view matches the paper.
+  const hasImages = items.some((i) => i.imagePath);
   return (
     <div style={formStyles.backdrop} onClick={onClose}>
       <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()}>
@@ -61,6 +64,7 @@ export default function SalesQuoteDetailModal({ companyId, quote, canPrint, onPr
               <thead>
                 <tr>
                   <th style={{ ...st.th, width: 28, textAlign: "center" }}>#</th>
+                  {hasImages && <th style={{ ...st.th, width: 64, textAlign: "center" }}>Photo</th>}
                   <th style={st.th}>Description</th>
                   <th style={{ ...st.th, textAlign: "right" }}>Qty</th>
                   <th style={st.th}>Unit</th>
@@ -72,6 +76,17 @@ export default function SalesQuoteDetailModal({ companyId, quote, canPrint, onPr
                 {items.map((i, idx) => (
                   <tr key={i.id ?? idx}>
                     <td style={{ ...st.td, textAlign: "center", color: colors.textSecondary }}>{idx + 1}</td>
+                    {hasImages && (
+                      <td style={{ ...st.td, textAlign: "center" }}>
+                        {i.imagePath ? (
+                          <a href={i.imagePath} target="_blank" rel="noreferrer" title="Open full size" style={st.thumbLink}>
+                            <img src={i.imagePath} alt="" style={st.thumb} />
+                          </a>
+                        ) : (
+                          <span style={{ color: colors.textSecondary }}>—</span>
+                        )}
+                      </td>
+                    )}
                     <td style={st.td}><RichText text={i.description} /></td>
                     <td style={{ ...st.td, textAlign: "right" }}>{Number(i.quantity).toLocaleString()}</td>
                     <td style={st.td}>{i.unit}</td>
@@ -126,6 +141,13 @@ const st = {
   table: { width: "100%", borderCollapse: "collapse" },
   th: { textAlign: "left", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.02em", fontWeight: 700, color: colors.textSecondary, padding: "0.5rem 0.5rem", borderBottom: `2px solid ${colors.cardBorder}`, whiteSpace: "nowrap", background: "#fafbfc", position: "sticky", top: 0 },
   td: { padding: "0.4rem 0.5rem", verticalAlign: "middle", borderBottom: `1px solid ${colors.cardBorder}`, fontSize: "0.88rem", color: colors.textPrimary },
+  // Fixed box, contain — a tall photo can't stretch the row (same rule the
+  // print template uses).
+  // FLEX, not grid: inside a grid box a portrait photo's percentage height is
+  // treated as auto and renders 3x too tall (then gets cropped). In a
+  // fixed-size flex box max-width/max-height clamp it properly and letterbox.
+  thumbLink: { display: "flex", alignItems: "center", justifyContent: "center", width: 48, height: 48, margin: "0 auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, overflow: "hidden", background: "#fff" },
+  thumb: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" },
   totals: { marginTop: "1rem", marginLeft: "auto", width: 280 },
   tRow: { display: "flex", justifyContent: "space-between", padding: "0.25rem 0", fontSize: "0.9rem", color: colors.textSecondary },
   grand: { borderTop: `2px solid ${colors.blue}`, marginTop: 4, paddingTop: 8, fontWeight: 800, fontSize: "1rem", color: colors.blue },

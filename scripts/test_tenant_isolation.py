@@ -733,6 +733,81 @@ for rname in ("IsoTest Doc Creator", "IsoTest User Admin"):
         request("DELETE", f"/api/roles/{rr['id']}", token=admin)
 
 
+# Suite 11: Sales Quote per-line product images (2026-08-11). The upload is
+# company-scoped (the photo is picked before the quote exists), so the route
+# guard is the only thing standing between tenants — and because the client
+# sends the stored path back on save, the quote write must reject any path that
+# isn't inside its OWN company's folder. Without that second check a forged
+# body could point a line at another tenant's photo, or at an external URL that
+# phones home when the customer opens the printed quote.
+print("\n  Suite 11 — quote line images: upload guard + stored-path validation")
+suite11 = "quote line images"
+PNG = (b"\x89PNG\r\n\x1a\n" + b"\x00" * 64)   # valid magic bytes, junk payload
+
+# alice (Alpha only) must not upload into Beta
+s, _ = upload_file(f"/api/companies/{beta['id']}/quote-images", tokens["alice"], "p.png", PNG, "image/png")
+status_check(suite11, "alice upload quote image into Beta", s, 403)
+
+# admin uploads into both companies — Alpha's URL becomes the forgery payload
+s, alpha_img = upload_file(f"/api/companies/{alpha['id']}/quote-images", admin, "a.png", PNG, "image/png")
+status_check(suite11, "admin upload into Alpha", s, 200)
+s, beta_img = upload_file(f"/api/companies/{beta['id']}/quote-images", admin, "b.png", PNG, "image/png")
+status_check(suite11, "admin upload into Beta", s, 200)
+alpha_url = alpha_img.get("url") if isinstance(alpha_img, dict) else None
+beta_url = beta_img.get("url") if isinstance(beta_img, dict) else None
+check(suite11, "upload returns own-company path",
+      bool(beta_url) and f"/company_{beta['id']}/" in beta_url, f"url {beta_url}")
+
+# Validator still applies (renamed non-image → 400)
+s, _ = upload_file(f"/api/companies/{beta['id']}/quote-images", admin, "fake.png", b"NOT-AN-IMAGE", "image/png")
+status_check(suite11, "reject .png with wrong magic bytes", s, 400)
+
+# Seed a Beta client, then try to save a Beta quote whose line points elsewhere.
+status, qi_client = request("POST", "/api/clients", token=admin, body={
+    "companyId": beta["id"], "name": "Beta QuoteImage Client", "phone": "+92-00-0000000",
+    "site": "Karachi", "ntn": "0000003", "cnic": "0000003000003",
+    "strn": "0000003000003", "registrationType": "Registered",
+})
+assert status in (200, 201), f"seed beta quote-image client: {status} {qi_client}"
+
+
+def beta_quote_body(image_path):
+    return {
+        "clientId": qi_client["id"], "date": "2026-08-11", "gstRate": 18,
+        "items": [{"id": 0, "description": "Photo line", "quantity": 1,
+                   "unit": "Numbers, pieces, units", "unitPrice": 100,
+                   "imagePath": image_path}],
+    }
+
+
+for label, forged in (
+    ("other tenant's folder", alpha_url),
+    ("external URL", "https://evil.example.com/track.png"),
+    ("path traversal", f"/data/uploads/quoteitems/company_{beta['id']}/../../../appsettings.json"),
+    ("non-image extension", f"/data/uploads/quoteitems/company_{beta['id']}/x.svg"),
+):
+    s, _ = request("POST", f"/api/salesquotes/company/{beta['id']}", token=admin, body=beta_quote_body(forged))
+    status_check(suite11, f"reject quote line image — {label}", s, 400)
+
+# The company's own upload path is accepted and round-trips
+s, good_quote = request("POST", f"/api/salesquotes/company/{beta['id']}", token=admin, body=beta_quote_body(beta_url))
+check(suite11, "accept own-company image path", s in (200, 201), f"status {s}, body {good_quote}")
+if isinstance(good_quote, dict) and good_quote.get("items"):
+    check(suite11, "image path round-trips on the saved line",
+          good_quote["items"][0].get("imagePath") == beta_url,
+          f"got {good_quote['items'][0].get('imagePath')}")
+    # …and reaches the print payload with the hasLineImages flag set
+    s, pr = request("GET", f"/api/salesquotes/{good_quote['id']}/print", token=admin)
+    check(suite11, "print payload exposes imagePath + hasLineImages",
+          s == 200 and pr.get("hasLineImages") is True
+          and pr["items"][0].get("imagePath") == beta_url,
+          f"status {s}, hasLineImages {pr.get('hasLineImages') if isinstance(pr, dict) else pr}")
+    # alice must not read Beta's quote print data (id-based guard)
+    s, _ = request("GET", f"/api/salesquotes/{good_quote['id']}/print", token=tokens["alice"])
+    status_check(suite11, "alice GET /salesquotes/{betaId}/print", s, 403)
+    request("DELETE", f"/api/salesquotes/{good_quote['id']}", token=admin)
+
+
 # ── Cleanup (test fails → keep rows for inspection) ──────────
 print("\n=== Results ===")
 fails = [r for r in results if not r[2].startswith(PASS)]

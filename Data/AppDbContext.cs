@@ -777,6 +777,9 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<SalesQuoteItem>().Property(i => i.Quantity).HasPrecision(18, 4);
             modelBuilder.Entity<SalesQuoteItem>().Property(i => i.UnitPrice).HasPrecision(18, 2);
             modelBuilder.Entity<SalesQuoteItem>().Property(i => i.LineTotal).HasPrecision(18, 2);
+            // Per-line product photo — relative URL only (see QuoteLineImages).
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.ImagePath)
+                .HasMaxLength(MyApp.Api.Helpers.QuoteLineImages.MaxUrlLength);
             modelBuilder.Entity<SalesOrderItem>().Property(i => i.Quantity).HasPrecision(18, 4);
 
             // Unique numbering per (company, division). A division has its own

@@ -289,6 +289,13 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-11 — Product photos on Sales Quote lines (and on the printed quote)
+
+- **Attach a photo to any Sales Quote line.** Each line in the quote form has a photo slot — click it to pick a file, drag an image onto it, or paste one with `Ctrl+V`. Filled slots show a thumbnail with a small ✕ to clear it, and clicking replaces it. Phone photos are shrunk in the browser before upload (long edge 1200px), so a 4 MB snap uploads in a fraction of a second and still prints sharp. *Repeat last* copies the photo along with the rest of the line. Works the same on phone, tablet and desktop.
+- **Photos print on the quote.** The printed quote (and its PDF) gains an **Image** column: every photo is drawn inside an identical fixed box, so tall, wide or huge source images all sit level and never stretch a row or crop the product. The column appears **only** when a quote actually has photos — a photo-free quote prints exactly as before. Lines without a photo simply leave the cell empty.
+- **Available in every quote design.** All 15 Sales Quote starter designs and the existing default quote templates carry the column, with new merge fields (`{{this.imagePath}}`, `{{#if hasLineImages}}`) listed in the template editor's sidebar for custom layouts.
+- **Photos are per-quote and tidy up after themselves.** Replacing or clearing a line's photo — or deleting the quote — removes the stored file. Uploads are validated (JPG/PNG/WebP/GIF, 5 MB cap, real image contents), scoped to the company that uploaded them, and a quote can never be saved pointing at another company's photo or an outside web address.
+
 ### 2026-08-11 — Per-invoice print grouping + Sales Order → challan → bill flow fixes
 
 - **Choose how each document prints its lines — grouped by item type or individual.** Every bill now carries an independent print-grouping choice for its **Bill** print and its **Tax Invoice** print: *Individual* (the default) prints each line with its own quantity and real description; *Grouped* collapses lines that share an item type into one summed row labelled by the item type. The choice is saved per invoice, applies to print **and** PDF, appears whenever you edit a bill (even single-line), and the two documents are independent (grouping the Tax Invoice never changes the Bill). For **FBR-off** companies the Invoices tab is now **grouping-choice-only** — item type/quantity stay read-only there (edited on the Bills tab), so stock can't be disturbed from the invoice view.

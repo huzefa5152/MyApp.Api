@@ -55,6 +55,12 @@ namespace MyApp.Api.DTOs
         public string Unit { get; set; } = "";
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
+        /// <summary>
+        /// Optional per-line product photo (relative URL from the quote-line
+        /// image upload endpoint). Validated server-side against this company's
+        /// upload folder — a foreign or malformed path is rejected, never stored.
+        /// </summary>
+        public string? ImagePath { get; set; }
     }
 
     /// <summary>

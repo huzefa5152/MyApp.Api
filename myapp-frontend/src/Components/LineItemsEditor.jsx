@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { MdAdd, MdDelete, MdContentPaste, MdRepeat } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
+import LineItemImageCell from "./LineItemImageCell";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import QuantityInput from "./QuantityInput";
@@ -38,6 +39,9 @@ import useIsNarrow from "../hooks/useIsNarrow";
  *   - showUnitPrice             → the Unit Price column (Quote / Order)
  *   - showAmount                → the per-row Amount column (Quote)
  *   - getRate                   → last-billed-rate auto-fill on the price (Quote)
+ *   - showImage + onUploadImage → per-line product photo (Quote), stored on the
+ *                                 row as `imagePath` and printed via the
+ *                                 {{this.imagePath}} merge field
  */
 export default function LineItemsEditor({
   items,
@@ -62,6 +66,10 @@ export default function LineItemsEditor({
   priceOptional = false,
   unitPriceTitle,
   getRate, // (description) => Promise<{ lastUnitPrice, hint } | null | undefined>
+  // Per-line product photo (Sales Quote). `onUploadImage(file)` must resolve to
+  // the stored relative URL; the row keeps it as `imagePath`.
+  showImage = false,
+  onUploadImage,
   // Description field — multiline (rich text + line breaks) for Quote / Order /
   // Challan; single-line for Challan edit (matches the current forms).
   descriptionMultiline = true,
@@ -81,6 +89,8 @@ export default function LineItemsEditor({
 }) {
   const isNarrow = useIsNarrow(narrowBreakpoint);
   const showBulk = showBulkBar && showItemType;
+  // The photo cell is inert without an uploader, so require both.
+  const showPhoto = showImage && typeof onUploadImage === "function";
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const rateTimers = useRef({});
@@ -200,6 +210,9 @@ export default function LineItemsEditor({
       unit: last.unit || "",
     };
     if (showUnitPrice) seed.unitPrice = last.unitPrice ?? "";
+    // Same product, different size/qty — keep the photo too (it's the same
+    // uploaded file URL, so no duplicate upload).
+    if (showPhoto && last.imagePath) seed.imagePath = last.imagePath;
     if (last.rateHint) seed.rateHint = last.rateHint;
     addItem(seed);
   };
@@ -259,6 +272,16 @@ export default function LineItemsEditor({
   };
 
   const rowLocked = (it) => (isRowLocked ? isRowLocked(it) : false);
+
+  const imageCell = (item, idx, size) => (
+    <LineItemImageCell
+      value={item.imagePath || null}
+      onChange={(url) => setItem(idx, { imagePath: url })}
+      onUpload={async (file) => await onUploadImage(file)}
+      size={size}
+      label={`photo for line ${idx + 1}`}
+    />
+  );
 
   const priceInput = (item, idx, styleExtra) => (
     <input
@@ -336,6 +359,7 @@ export default function LineItemsEditor({
               <div style={s.mcard} key={idx}>
                 <div style={s.mcardHead}>
                   <span style={s.mnum}>{idx + 1}</span>
+                  {showPhoto && imageCell(item, idx, 48)}
                   {showItemType ? (
                     <div style={{ flex: 1 }}>
                       <SearchableItemTypeSelect
@@ -397,6 +421,7 @@ export default function LineItemsEditor({
             <thead>
               <tr>
                 <th style={{ ...s.th, width: 28, textAlign: "center" }}>#</th>
+                {showPhoto && <th style={{ ...s.th, width: 62, textAlign: "center" }}>Photo</th>}
                 {showItemType && <th style={{ ...s.th, width: 190 }}>Item Type</th>}
                 <th style={{ ...s.th, minWidth: 240 }}>Description</th>
                 <th style={{ ...s.th, width: 100, textAlign: "right" }}>Qty</th>
@@ -413,6 +438,9 @@ export default function LineItemsEditor({
                 return (
                   <tr key={idx}>
                     <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
+                    {showPhoto && (
+                      <td style={{ ...s.td, verticalAlign: "top", textAlign: "center" }}>{imageCell(item, idx, 46)}</td>
+                    )}
                     {showItemType && (
                       <td style={{ ...s.td, verticalAlign: "top" }}>
                         <SearchableItemTypeSelect

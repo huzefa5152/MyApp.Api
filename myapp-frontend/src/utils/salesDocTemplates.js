@@ -44,6 +44,9 @@ export const defaultQuoteTemplate = `<!DOCTYPE html><html><head><title>Quotation
   .cname { color:#0d47a1; }
   .doc .t { color:#00897b; }
   th { background:#0d47a1 !important; }
+  td.qpic{text-align:center;vertical-align:top;}
+  .qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+  .qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 </style></head><body>
   <div class="hdr">
     <div class="brand">
@@ -83,7 +86,7 @@ export const defaultQuoteTemplate = `<!DOCTYPE html><html><head><title>Quotation
 
   <table>
     <thead><tr>
-      <th class="c" style="width:36px">#</th>
+      <th class="c" style="width:36px">#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
       <th>Description</th>
       <th class="c" style="width:70px">Qty</th>
       <th class="c" style="width:60px">Unit</th>
@@ -93,7 +96,7 @@ export const defaultQuoteTemplate = `<!DOCTYPE html><html><head><title>Quotation
     <tbody>
     {{#each items}}
       <tr>
-        <td class="c">{{this.sNo}}</td>
+        <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
         <td>{{{richText this.description}}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>

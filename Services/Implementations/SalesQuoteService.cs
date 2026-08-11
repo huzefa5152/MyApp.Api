@@ -72,7 +72,8 @@ namespace MyApp.Api.Services.Implementations
                     Quantity = i.Quantity,
                     Unit = i.Unit,
                     UnitPrice = i.UnitPrice,
-                    LineTotal = i.LineTotal
+                    LineTotal = i.LineTotal,
+                    ImagePath = i.ImagePath
                 }).ToList()
             };
         }
@@ -123,6 +124,18 @@ namespace MyApp.Api.Services.Implementations
                 .Select(n => n.Id).ToListAsync();
             if (wanted.Any(w => !valid.Contains(w)))
                 throw new InvalidOperationException("A selected non-inventory item does not belong to this company.");
+        }
+
+        // Per-line product photos arrive as relative URLs the client got back
+        // from the upload endpoint. NEVER trust them as-is: a forged body could
+        // point a line at another tenant's file or at an external URL that
+        // phones home when the customer opens the printed quote. Anything that
+        // isn't a well-formed path inside THIS company's own upload folder is
+        // rejected (400) rather than silently blanked.
+        private static void ValidateLineImages(int companyId, IEnumerable<SalesQuoteItemDto> items)
+        {
+            foreach (var i in items)
+                i.ImagePath = QuoteLineImages.Normalize(i.ImagePath, companyId);
         }
 
         // ── Reads ────────────────────────────────────────────────────────────
@@ -191,6 +204,7 @@ namespace MyApp.Api.Services.Implementations
 
             await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.Unit));
             await ValidateNonInvAsync(companyId, dto.Items.Select(i => i.NonInventoryItemId));
+            ValidateLineImages(companyId, dto.Items);
 
             var createdId = await NumberAllocationRetry.ExecuteAsync(async _ =>
             {
@@ -224,7 +238,8 @@ namespace MyApp.Api.Services.Implementations
                         Description = i.Description.Trim(),
                         Quantity = i.Quantity,
                         Unit = i.Unit,
-                        UnitPrice = i.UnitPrice
+                        UnitPrice = i.UnitPrice,
+                        ImagePath = i.ImagePath
                     }).ToList()
                 };
                 ApplyTotals(quote, dto.GSTRate);
@@ -277,12 +292,17 @@ namespace MyApp.Api.Services.Implementations
 
             await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.Unit));
             await ValidateNonInvAsync(quote.CompanyId, dto.Items.Select(i => i.NonInventoryItemId));
+            ValidateLineImages(quote.CompanyId, dto.Items);
 
             // Full replace of items — quotes have no downstream links so a
             // straight rebuild is safe (unlike challans, which sync a bill).
+            // Image files whose line went away (or whose photo was replaced) are
+            // collected here and deleted only AFTER the save succeeds.
+            var staleImages = new List<string?>();
             var keptIds = dto.Items.Where(i => i.Id > 0).Select(i => i.Id).ToHashSet();
             foreach (var rem in quote.Items.Where(i => !keptIds.Contains(i.Id)).ToList())
             {
+                staleImages.Add(rem.ImagePath);
                 quote.Items.Remove(rem);
                 _context.SalesQuoteItems.Remove(rem);
             }
@@ -297,6 +317,9 @@ namespace MyApp.Api.Services.Implementations
                     existing.Quantity = itemDto.Quantity;
                     existing.Unit = itemDto.Unit;
                     existing.UnitPrice = itemDto.UnitPrice;
+                    if (!string.Equals(existing.ImagePath, itemDto.ImagePath, StringComparison.OrdinalIgnoreCase))
+                        staleImages.Add(existing.ImagePath);
+                    existing.ImagePath = itemDto.ImagePath;
                 }
                 else
                 {
@@ -308,13 +331,15 @@ namespace MyApp.Api.Services.Implementations
                         Description = itemDto.Description.Trim(),
                         Quantity = itemDto.Quantity,
                         Unit = itemDto.Unit,
-                        UnitPrice = itemDto.UnitPrice
+                        UnitPrice = itemDto.UnitPrice,
+                        ImagePath = itemDto.ImagePath
                     });
                 }
             }
 
             ApplyTotals(quote, dto.GSTRate);
             await _repository.UpdateAsync(quote);
+            foreach (var stale in staleImages) QuoteLineImages.TryDelete(stale, quote.CompanyId);
             return await GetByIdAsync(id);
         }
 
@@ -350,7 +375,10 @@ namespace MyApp.Api.Services.Implementations
             foreach (var so in linkedOrders) so.SalesQuoteId = null;
             if (linkedOrders.Count > 0) await _context.SaveChangesAsync();
 
+            // Line photos are per-quote uploads, so they go with the row.
+            var images = quote.Items.Select(i => i.ImagePath).ToList();
             await _repository.DeleteAsync(quote);
+            foreach (var img in images) QuoteLineImages.TryDelete(img, quote.CompanyId);
             return true;
         }
 
@@ -434,6 +462,9 @@ namespace MyApp.Api.Services.Implementations
                 GrandTotal = q.GrandTotal,
                 AmountInWords = q.AmountInWords,
                 Notes = q.Notes,
+                // Lets the template drop the whole image column when no line has
+                // a photo — a photo-free quote prints byte-identically to before.
+                HasLineImages = q.Items.Any(i => !string.IsNullOrWhiteSpace(i.ImagePath)),
                 Items = q.Items.Select(i => new PrintQuoteItemDto
                 {
                     SNo = ++sNo,
@@ -442,7 +473,8 @@ namespace MyApp.Api.Services.Implementations
                     Quantity = i.Quantity,
                     Uom = i.Unit,
                     UnitPrice = i.UnitPrice,
-                    LineTotal = i.LineTotal
+                    LineTotal = i.LineTotal,
+                    ImagePath = i.ImagePath
                 }).ToList()
             };
         }

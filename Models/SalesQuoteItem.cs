@@ -29,6 +29,14 @@ namespace MyApp.Api.Models
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
 
+        /// <summary>
+        /// Optional product photo for this line, as a relative URL under
+        /// <c>/data/uploads/quoteitems/company_{id}/</c> (see
+        /// <see cref="Helpers.QuoteLineImages"/>). Rendered in the printed quote
+        /// via the <c>{{this.imagePath}}</c> merge field. Null = no photo.
+        /// </summary>
+        public string? ImagePath { get; set; }
+
         // Navigation
         public SalesQuote SalesQuote { get; set; } = null!;
         public ItemType? ItemType { get; set; }

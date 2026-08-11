@@ -5,7 +5,7 @@ import LineItemsEditor from "./LineItemsEditor";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
-import { getQuoteItemRate } from "../api/salesQuoteApi";
+import { getQuoteItemRate, uploadQuoteLineImage } from "../api/salesQuoteApi";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
@@ -15,7 +15,7 @@ const colors = {
   inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1", teal: "#00897b",
 };
 
-const blankItem = () => ({ id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "", unitPrice: 0, rateHint: "" });
+const blankItem = () => ({ id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "", unitPrice: 0, imagePath: null, rateHint: "" });
 
 // Create + edit a Sales Quote. Pass `quote` to edit; omit to create.
 export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, defaultDivisionId }) {
@@ -42,7 +42,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
   const [notes, setNotes] = useState(quote?.notes || "");
   const [items, setItems] = useState(
     quote?.items?.length
-      ? quote.items.map((i) => ({ id: i.id, itemTypeId: i.itemTypeId, nonInventoryItemId: i.nonInventoryItemId ?? null, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, rateHint: "" }))
+      ? quote.items.map((i) => ({ id: i.id, itemTypeId: i.itemTypeId, nonInventoryItemId: i.nonInventoryItemId ?? null, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, imagePath: i.imagePath ?? null, rateHint: "" }))
       : [blankItem()]
   );
   const [units, setUnits] = useState([]);
@@ -74,6 +74,14 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
       return { lastUnitPrice: data.lastUnitPrice, hint };
     }
     return null;
+  };
+
+  // Per-line product photo. Uploaded straight away (before the quote exists) so
+  // the row only ever carries the returned relative URL; the server re-validates
+  // that URL against this company's folder on save.
+  const uploadLineImage = async (file) => {
+    const { data } = await uploadQuoteLineImage(companyId, file);
+    return data?.url || null;
   };
 
   const lineTotal = (it) => Math.round((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0) * 100) / 100;
@@ -108,6 +116,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
           quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
           unit: i.unit,
           unitPrice: Number(i.unitPrice) || 0,
+          imagePath: i.imagePath || null,
         })),
       });
       // Upload any attachments staged before the quote had an id. No-op in
@@ -178,8 +187,10 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
               currency="Rs"
               nonInvPrefillsPrice
               getRate={quoteGetRate}
+              showImage
+              onUploadImage={uploadLineImage}
               itemsLabel="Items"
-              itemsHint={"descriptions allow line breaks and <b>bold</b> / <i>italic</i>"}
+              itemsHint={"descriptions allow line breaks and <b>bold</b> / <i>italic</i>; photos print on the quote"}
             />
 
             <div style={s.totals}>

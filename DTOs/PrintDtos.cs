@@ -227,6 +227,12 @@ namespace MyApp.Api.DTOs
         public decimal GrandTotal { get; set; }
         public string AmountInWords { get; set; } = "";
         public string? Notes { get; set; }
+        /// <summary>
+        /// True when at least one line carries a product photo. Templates wrap
+        /// the image column in {{#if hasLineImages}} so a photo-free quote
+        /// prints exactly as it did before the feature existed.
+        /// </summary>
+        public bool HasLineImages { get; set; }
         public List<PrintQuoteItemDto> Items { get; set; } = new();
     }
 
@@ -241,6 +247,12 @@ namespace MyApp.Api.DTOs
         public string Uom { get; set; } = "";
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
+        /// <summary>
+        /// Relative URL of this line's product photo, or null. Rendered as
+        /// {{this.imagePath}} — resolves against the &lt;base href&gt; the print
+        /// popup injects, same as the company logo.
+        /// </summary>
+        public string? ImagePath { get; set; }
     }
 
     // Data for printing a Sales Order (quantity-only — mirrors PrintChallanDto

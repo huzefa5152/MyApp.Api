@@ -46,5 +46,16 @@ export const getQuoteItemRate = (companyId, { description, itemTypeId } = {}) =>
     params: { description: description || undefined, itemTypeId: itemTypeId || undefined },
   });
 
+// Per-line product photo. Uploaded before the quote is saved (the operator may
+// still be typing), so it's company-scoped; the returned relative URL is stamped
+// onto the line and re-validated server-side on save.
+export const uploadQuoteLineImage = (companyId, file) => {
+  const form = new FormData();
+  form.append("file", file);
+  return httpClient.post(`/companies/${companyId}/quote-images`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+
 export const getSalesQuotesCount = (companyId) =>
   httpClient.get("/salesquotes/count", { params: companyId ? { companyId } : {} });

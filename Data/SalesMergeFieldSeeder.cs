@@ -51,9 +51,16 @@ namespace MyApp.Api.Data
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{this.uom}}", Label = "Item UOM (in loop)", Category = "Items", SortOrder = 45 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{fmt this.unitPrice}}", Label = "Unit Price (in loop)", Category = "Items", SortOrder = 46 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{fmt this.lineTotal}}", Label = "Line Total (in loop)", Category = "Items", SortOrder = 47 },
+                // Per-line product photo. Relative URL — put it in an <img src>
+                // inside a fixed-size box so rows stay uniform, and guard the
+                // whole column with {{#if hasLineImages}} so photo-free quotes
+                // print unchanged.
+                new() { TemplateType = "SalesQuote", FieldExpression = "{{this.imagePath}}", Label = "Item Image URL (in loop)", Category = "Items", SortOrder = 48 },
+                new() { TemplateType = "SalesQuote", FieldExpression = "{{#if this.imagePath}}", Label = "If: Item Has Image (in loop)", Category = "Items", SortOrder = 49 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{#if companyLogoPath}}", Label = "If: Has Logo", Category = "Conditionals", SortOrder = 50 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{#if validUntil}}", Label = "If: Has Valid Until", Category = "Conditionals", SortOrder = 51 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{#if customerEnquiryRef}}", Label = "If: Has Enquiry Ref", Category = "Conditionals", SortOrder = 52 },
+                new() { TemplateType = "SalesQuote", FieldExpression = "{{#if hasLineImages}}", Label = "If: Any Line Has An Image", Category = "Conditionals", SortOrder = 55 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{else}}", Label = "Else", Category = "Conditionals", SortOrder = 53 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{/if}}", Label = "End If", Category = "Conditionals", SortOrder = 54 },
 
