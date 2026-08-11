@@ -85,6 +85,9 @@ namespace MyApp.Api.DTOs
         public string? NoteReasonRemarks { get; set; }
         /// <summary>Notes only: whether this note moves inventory (Credit Note → IN, Debit Note → OUT). Null on sale invoices.</summary>
         public bool? NoteAffectsStock { get; set; }
+        /// <summary>Per-invoice print grouping (null = legacy default). See Invoice model. Independent per document.</summary>
+        public bool? PrintGroupBillByItemType { get; set; }
+        public bool? PrintGroupTaxInvoiceByItemType { get; set; }
         /// <summary>
         /// If this invoice has a LIVE (non-cancelled) CREDIT NOTE (return /
         /// reversal) against it, that note's number in the credit-note
@@ -193,6 +196,10 @@ namespace MyApp.Api.DTOs
 
     public class CreateInvoiceDto
     {
+        /// <summary>Optional Bill-print grouping for the new bill (true = grouped
+        /// by item type; null/false = individual, the default). The Tax Invoice
+        /// grouping is independent and set later on the Invoices tab.</summary>
+        public bool? PrintGroupBillByItemType { get; set; }
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int? DivisionId { get; set; }
@@ -260,6 +267,10 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class CreateStandaloneInvoiceDto
     {
+        /// <summary>Optional Bill-print grouping for the new bill (true = grouped
+        /// by item type; null/false = individual, the default). The Tax Invoice
+        /// grouping is independent and set later on the Invoices tab.</summary>
+        public bool? PrintGroupBillByItemType { get; set; }
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int? DivisionId { get; set; }
@@ -431,6 +442,18 @@ namespace MyApp.Api.DTOs
     /// Users can update prices, descriptions, GST rate, FBR fields, and even
     /// quantity if an item's source challan item was also updated.
     /// </summary>
+    /// <summary>
+    /// Body for PATCH /invoices/{id}/print-grouping — set one or both per-document
+    /// print-grouping flags (only non-null values are applied, so the two documents
+    /// stay independent). Display-only: never touches items, totals, stock, or the
+    /// FBR payload, so it is allowed regardless of FBR status or editability.
+    /// </summary>
+    public class SetPrintGroupingDto
+    {
+        public bool? PrintGroupBillByItemType { get; set; }
+        public bool? PrintGroupTaxInvoiceByItemType { get; set; }
+    }
+
     public class UpdateInvoiceDto
     {
         /// <summary>

@@ -47,6 +47,13 @@ export const updateInvoiceItemTypes = (id, items, extra = {}) =>
 export const updateInvoiceItemTypesAndQty = (id, items, writeMode = "bill", extra = {}) =>
   httpClient.patch(`/invoices/${id}/itemtypes-and-qty`, { items, writeMode, ...extra });
 
+// Set the per-document print grouping (Bill and/or Tax Invoice). Display-only —
+// no item / stock / FBR impact; this is how the Invoices tab persists the choice
+// (especially for FBR-off companies, where item/qty editing is blocked). Pass only
+// the flag(s) being changed, e.g. { printGroupTaxInvoiceByItemType: true }.
+export const setPrintGrouping = (id, flags) =>
+  httpClient.patch(`/invoices/${id}/print-grouping`, flags);
+
 export const deleteInvoice = (id) =>
   httpClient.delete(`/invoices/${id}`);
 

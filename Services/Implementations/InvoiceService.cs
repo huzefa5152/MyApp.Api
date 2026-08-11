@@ -237,6 +237,8 @@ namespace MyApp.Api.Services.Implementations
             NoteReason = inv.NoteReason,
             NoteReasonRemarks = inv.NoteReasonRemarks,
             NoteAffectsStock = inv.NoteAffectsStock,
+            PrintGroupBillByItemType = inv.PrintGroupBillByItemType,
+            PrintGroupTaxInvoiceByItemType = inv.PrintGroupTaxInvoiceByItemType,
             FbrReady = missing.Count == 0,
             FbrMissing = missing,
             Items = inv.Items.Select(ii => new InvoiceItemDto
@@ -741,6 +743,7 @@ namespace MyApp.Api.Services.Implementations
                     PaymentTerms = dto.PaymentTerms,
                     DocumentType = effectiveDocType,
                     PaymentMode = effectivePaymentMode,
+                    PrintGroupBillByItemType = dto.PrintGroupBillByItemType,
                     SalesOrderId = headerSalesOrderId,
                     PoNumber = billPoNumber,
                     PoDate = billPoDate,
@@ -1102,6 +1105,7 @@ namespace MyApp.Api.Services.Implementations
                     PaymentTerms = finalPaymentTerms,
                     DocumentType = effectiveDocType,
                     PaymentMode = effectivePaymentMode,
+                    PrintGroupBillByItemType = dto.PrintGroupBillByItemType,
                     SalesOrderId = standaloneSo?.Id,
                     PoNumber = billPoNumber,
                     PoDate = billPoDate,
@@ -1524,15 +1528,17 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException(
                     "A Debit/Credit Note cannot be edited. Void it and create a new return from the Return Invoices screen.");
 
-            // Invoices-tab edit is an FBR-classification flow. When the company's
-            // FBR integration is OFF there's nothing to classify — all edits must
-            // go through the Bills tab. Block it server-side (the Invoices-tab
-            // Edit button is also hidden for FBR-off companies). 2026-07-14.
+            // Invoices-tab item-type/qty edit is an FBR-classification flow. When
+            // the company's FBR integration is OFF there's nothing to classify and
+            // qty edits here would move stock via the adjustment overlay — so this
+            // path stays blocked for FBR-off. The Invoices tab still lets FBR-off
+            // operators change the print GROUPING (Bill/Tax Invoice) via the
+            // dedicated print-grouping endpoint, which never touches items or stock.
             var fbrOn = await _context.Companies.AsNoTracking()
                 .Where(c => c.Id == invoice.CompanyId).Select(c => c.FbrEnabled).FirstOrDefaultAsync();
             if (!fbrOn)
                 throw new InvalidOperationException(
-                    "This company's FBR integration is off — edit the bill on the Bills tab. The Invoices tab is view-only here.");
+                    "This company's FBR integration is off — edit item type & quantity on the Bills tab. Only the print grouping can be changed on the Invoices tab.");
 
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("At least one item is required.");
@@ -2944,6 +2950,20 @@ namespace MyApp.Api.Services.Implementations
                 "Could not allocate a unique invoice number after " + maxAttempts + " attempts.");
         }
 
+        public async Task<InvoiceDto?> SetPrintGroupingAsync(int id, bool? printGroupBillByItemType, bool? printGroupTaxInvoiceByItemType)
+        {
+            var invoice = await _invoiceRepo.GetByIdAsync(id);
+            if (invoice == null) return null;
+            // Display-only preference — allowed on ANY bill (incl. submitted /
+            // cancelled) because it changes only how the document prints, never
+            // its data, stock, or the FBR payload. Each flag applied only when
+            // provided so the Bill and Tax Invoice choices stay independent.
+            if (printGroupBillByItemType.HasValue) invoice.PrintGroupBillByItemType = printGroupBillByItemType;
+            if (printGroupTaxInvoiceByItemType.HasValue) invoice.PrintGroupTaxInvoiceByItemType = printGroupTaxInvoiceByItemType;
+            await _context.SaveChangesAsync();
+            return ToDto(invoice);
+        }
+
         public async Task<PrintBillDto?> GetPrintBillAsync(int invoiceId)
         {
             var inv = await _invoiceRepo.GetByIdAsync(invoiceId);
@@ -2954,6 +2974,12 @@ namespace MyApp.Api.Services.Implementations
                 .Where(p => !string.IsNullOrEmpty(p))
                 .Distinct()
                 .ToList();
+
+            // Print grouping: collapse same-ItemType lines into one row only when
+            // the operator opted in (PrintGroupBillByItemType == true) AND every
+            // line is typed. null / false keep the legacy per-line Bill print.
+            var billAllTyped = inv.Items.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName));
+            var groupBill = inv.PrintGroupBillByItemType == true && billAllTyped;
 
             return new PrintBillDto
             {
@@ -2993,16 +3019,36 @@ namespace MyApp.Api.Services.Implementations
                 WithholdingTaxAmount = inv.WithholdingTaxAmount,
                 BalanceDueAfterWht = WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount),
                 PaymentTerms = inv.PaymentTerms,
-                Items = inv.Items.Select((ii, idx) => new PrintBillItemDto
-                {
-                    SNo = idx + 1,
-                    ItemTypeName = ii.ItemTypeName,
-                    Description = ii.Description,
-                    Quantity = ii.Quantity,
-                    UOM = ii.UOM,
-                    UnitPrice = ii.UnitPrice,
-                    LineTotal = ii.LineTotal
-                }).ToList()
+                Items = groupBill
+                    ? inv.Items
+                        .GroupBy(ii => ii.ItemTypeName)
+                        .Select((g, idx) =>
+                        {
+                            var qty = g.Sum(ii => ii.Quantity);
+                            var amount = g.Sum(ii => ii.LineTotal);
+                            return new PrintBillItemDto
+                            {
+                                SNo = idx + 1,
+                                ItemTypeName = g.Key,
+                                // Grouped rows are labelled by the ITEM TYPE;
+                                // individual mode shows each line's real Description.
+                                Description = g.Key,
+                                Quantity = qty,
+                                UOM = g.First().UOM,
+                                UnitPrice = qty != 0 ? Math.Round(amount / qty, 2) : 0m,
+                                LineTotal = amount
+                            };
+                        }).ToList()
+                    : inv.Items.Select((ii, idx) => new PrintBillItemDto
+                        {
+                            SNo = idx + 1,
+                            ItemTypeName = ii.ItemTypeName,
+                            Description = ii.Description,
+                            Quantity = ii.Quantity,
+                            UOM = ii.UOM,
+                            UnitPrice = ii.UnitPrice,
+                            LineTotal = ii.LineTotal
+                        }).ToList()
             };
         }
 
@@ -3016,6 +3062,14 @@ namespace MyApp.Api.Services.Implementations
                 .Where(p => !string.IsNullOrEmpty(p))
                 .Distinct()
                 .ToList();
+
+            // Print grouping: group same-ItemType lines only when the operator
+            // opted in (PrintGroupTaxInvoiceByItemType == true) AND every line is
+            // typed. null/false → individual lines (the default). Independent of
+            // the Bill print's own flag — changing the Tax Invoice grouping never
+            // affects the Bill print.
+            var taxAllTyped = inv.Items.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName));
+            var groupTax = inv.PrintGroupTaxInvoiceByItemType == true && taxAllTyped;
 
             return new PrintTaxInvoiceDto
             {
@@ -3106,7 +3160,7 @@ namespace MyApp.Api.Services.Implementations
                 // Description / UOM / ItemTypeName / HSCode continue to
                 // come from InvoiceItem — same narrowing the FbrService
                 // applies (overlay only ever carries numerical fields).
-                Items = inv.Items.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName))
+                Items = groupTax
                     ? inv.Items
                         .GroupBy(ii => ii.ItemTypeName)
                         .Select(g =>
@@ -3121,6 +3175,9 @@ namespace MyApp.Api.Services.Implementations
                                 ItemTypeName = g.Key,
                                 Quantity = totalQty,
                                 UOM = g.First().UOM,
+                                // Grouped rows are labelled by the ITEM TYPE (the
+                                // grouping key). Individual mode shows each line's
+                                // real Description instead.
                                 Description = g.Key,
                                 UnitPrice = totalQty != 0 ? Math.Round(totalValue / totalQty, 2) : 0m,
                                 ValueExclTax = totalValue,

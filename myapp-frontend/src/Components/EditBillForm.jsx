@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { toLocalYmd, todayYmd } from "../utils/dateInput";
 import { MdInfo, MdAdd, MdCheckCircle, MdWarning, MdInventory2, MdLightbulb, MdRefresh, MdError, MdExpandMore, MdExpandLess, MdAutoAwesome, MdDelete } from "react-icons/md";
-import { getInvoiceById, updateInvoice, updateInvoiceItemTypes, updateInvoiceItemTypesAndQty } from "../api/invoiceApi";
+import { getInvoiceById, updateInvoice, updateInvoiceItemTypes, updateInvoiceItemTypesAndQty, setPrintGrouping } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { getClientsByCompany } from "../api/clientApi";
@@ -48,7 +48,14 @@ const colors = {
  * Description and UOM use LookupAutocomplete with /api/lookup/items and /api/lookup/units,
  * matching the delivery challan form — picks existing values, creates new ones if needed.
  */
-export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = false, billsMode = false, forceItemTypeAndQty = false, fbrEnabled = true }) {
+export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: readOnlyProp = false, billsMode = false, forceItemTypeAndQty = false, fbrEnabled = true }) {
+  // FBR-off Invoices tab (2026-08-11): print-grouping selection ONLY — item type,
+  // quantity and every other field are read-only so no qty/overlay edit can move
+  // stock. Implemented by shadowing readOnly (reuses the proven read-only render:
+  // locked cells, hidden Save, "Close" footer). The grouping selector is rendered
+  // interactive regardless and persists via the dedicated print-grouping endpoint.
+  const groupingOnly = forceItemTypeAndQty && !billsMode && !fbrEnabled;
+  const readOnly = readOnlyProp || groupingOnly;
   // billsMode: true when this form is mounted from the Bills tab. Hides
   // the Item Type column + picker and the bulk-apply toolbar (item-type
   // classification is the Invoices tab's responsibility). Existing item-
@@ -236,6 +243,15 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         setClientId(data.clientId ? String(data.clientId) : "");
         setDivisionId(data.divisionId ? String(data.divisionId) : "");
         setGstRate(data.gstRate ?? 18);
+        // Print grouping (2026-08-11): initialise the toggle from the saved
+        // per-document flag — Invoice mode ↔ Tax Invoice flag, Bill mode ↔ Bill
+        // flag. null → that document's legacy default (Tax Invoice grouped,
+        // Bill individual).
+        setGroupedView(
+          billsMode
+            ? (data.printGroupBillByItemType ?? false)
+            : (data.printGroupTaxInvoiceByItemType ?? false)
+        );
         // Withholding tax — prefill from the loaded bill: a stored rate → rate
         // mode; else a non-zero stored amount → fixed-amount mode; else off.
         if (data.withholdingTaxRate != null) {
@@ -1023,8 +1039,13 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
 
   // Grouped view is offered only on the Invoices tab (Item Type column
   // visible) and only when grouping actually collapses lines.
-  const showGroupToggle = !billsMode && items.length > 1 && groupingCollapses;
-  const renderGrouped = showGroupToggle && groupedView;
+  // Print-grouping selector: shown whenever there are items (even a single line —
+  // it sets the saved print preference that drives the Bill / Tax Invoice print).
+  const showGroupToggle = items.length >= 1;
+  // Grouped EDIT table (retotal-able summed rows) only in FBR-on invoice mode when
+  // grouping actually collapses lines; never in the read-only grouping-only view
+  // or bill mode (there the selector is a pure print preference).
+  const renderGrouped = !billsMode && !groupingOnly && groupedView && groupingCollapses;
 
   // ── Total preservation (narrow-edit guard) ───────────────────────
   // When the operator can edit qty/price (itemTypeAndQtyMode), the
@@ -1077,6 +1098,20 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
     quantity: 1, uom: "", unitPrice: 0, lineTotal: 0, hsCode: "", saleType: "", fbrUOMId: null,
   }]);
   const removeRow = (index) => setItems((prev) => prev.filter((_, i) => i !== index));
+
+  // Persist the print-grouping choice immediately (independent of the item/qty
+  // Save, and the ONLY editable action in FBR-off grouping-only mode). Invoice
+  // mode ↔ Tax Invoice flag, Bill mode ↔ Bill flag — the two stay independent.
+  // No-op for a not-yet-created bill (the create form carries the flag instead).
+  const persistGrouping = async (grouped) => {
+    setGroupedView(grouped);
+    if (!invoiceId) return;
+    try {
+      await setPrintGrouping(invoiceId, billsMode
+        ? { printGroupBillByItemType: grouped }
+        : { printGroupTaxInvoiceByItemType: grouped });
+    } catch { /* non-fatal — the print reflects whatever was last saved */ }
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -1273,7 +1308,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                 )}
 
                 {/* Narrow-permission banner */}
-                {itemTypeOnlyMode && (
+                {itemTypeOnlyMode && !groupingOnly && (
                   <div style={styles.narrowPermissionBanner}>
                     <MdInfo size={16} style={{ color: colors.warn, flexShrink: 0, marginTop: 2 }} />
                     <div>
@@ -1283,13 +1318,24 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     </div>
                   </div>
                 )}
-                {itemTypeAndQtyMode && (
+                {itemTypeAndQtyMode && !groupingOnly && (
                   <div style={styles.narrowPermissionBanner}>
                     <MdInfo size={16} style={{ color: colors.warn, flexShrink: 0, marginTop: 2 }} />
                     <div>
                       <b>Item Type + Quantity only</b> — your role lets you re-classify lines and
                       adjust quantity. Prices, dates, payment terms, and other fields are read-only.
                       Ask an administrator to grant <code>invoices.manage.update</code> for full edit access.
+                    </div>
+                  </div>
+                )}
+                {groupingOnly && (
+                  <div style={styles.narrowPermissionBanner}>
+                    <MdInfo size={16} style={{ color: colors.warn, flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      <b>Print grouping only</b> — this company's FBR integration is off, so item type,
+                      quantity and other fields are edited on the <b>Bills</b> tab. Here you can only choose
+                      how the <b>Tax Invoice</b> prints — <b>Grouped by Item Type</b> vs <b>Individual lines</b>;
+                      the choice saves immediately and does not change the Bill.
                     </div>
                   </div>
                 )}
@@ -1576,7 +1622,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     <div style={styles.viewToggle} role="group" aria-label="Item view">
                       <button
                         type="button"
-                        onClick={() => setGroupedView(true)}
+                        onClick={() => persistGrouping(true)}
                         style={{ ...styles.viewToggleBtn, ...(groupedView ? styles.viewToggleBtnActive : {}) }}
                         aria-pressed={groupedView}
                         title="Group lines by Item Type (summed qty + value) — matches the FBR submission"
@@ -1585,7 +1631,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                       </button>
                       <button
                         type="button"
-                        onClick={() => setGroupedView(false)}
+                        onClick={() => persistGrouping(false)}
                         style={{ ...styles.viewToggleBtn, ...(!groupedView ? styles.viewToggleBtnActive : {}) }}
                         aria-pressed={!groupedView}
                         title="Show every bill line individually"
@@ -1600,7 +1646,15 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     Showing one row per <b>Item Type</b> — quantity and value are summed across all its lines
                     (the same grouping sent to FBR). Editing <b>Qty</b> spreads the new total across the group's
                     lines; editing <b>Unit Price</b> sets one price for the whole group. Switch to
-                    <b> Individual lines</b> to re-classify or fine-tune a single line.
+                    <b> Individual lines</b> to re-classify or fine-tune a single line. This choice is saved and
+                    controls how the <b>Tax Invoice</b> prints.
+                  </p>
+                )}
+                {showGroupToggle && billsMode && (
+                  <p style={styles.gridHint}>
+                    Sets how the printed <b>Bill</b> lays out lines that share an Item Type — <b>Grouped</b> merges
+                    them into one row (summed qty + value, weighted-average price); <b>Individual lines</b> prints
+                    every line. Saved on this bill; affects the printout only (the lines below stay individual for editing).
                   </p>
                 )}
 

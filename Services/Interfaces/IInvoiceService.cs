@@ -99,6 +99,9 @@ namespace MyApp.Api.Services.Interfaces
         /// drives the Overdue/Coming-due status (design §11.5). Returns the
         /// updated invoice or null if not found.</summary>
         Task<InvoiceDto?> SetDueDateAsync(int id, DateTime? dueDate);
+
+        /// <summary>Set the per-document print-grouping flags (display-only). Each applied only when non-null so Bill and Tax Invoice stay independent.</summary>
+        Task<InvoiceDto?> SetPrintGroupingAsync(int id, bool? printGroupBillByItemType, bool? printGroupTaxInvoiceByItemType);
         Task<PrintBillDto?> GetPrintBillAsync(int invoiceId);
         Task<PrintTaxInvoiceDto?> GetPrintTaxInvoiceAsync(int invoiceId);
         Task<int> GetTotalCountAsync();

@@ -371,6 +371,27 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Set the per-document print grouping (Bill and/or Tax Invoice). Display-
+        /// only: never edits items, totals, stock, or the FBR payload, so it is
+        /// allowed for FBR-off companies and on submitted bills. This is how the
+        /// Invoices tab lets an FBR-off operator switch grouping WITHOUT the
+        /// item/qty edit path (which stays blocked for FBR-off to protect stock).
+        /// </summary>
+        [HttpPatch("{id}/print-grouping")]
+        [HasPermission("invoices.print.view")]
+        public async Task<ActionResult<InvoiceDto>> SetPrintGrouping(
+            int id, [FromBody] SetPrintGroupingDto dto)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
+            var updated = await _service.SetPrintGroupingAsync(id, dto.PrintGroupBillByItemType, dto.PrintGroupTaxInvoiceByItemType);
+            if (updated == null) return NotFound(new { error = "Bill not found." });
+            return Ok(updated);
+        }
+
         [HttpDelete("{id}")]
         [HasPermission("bills.manage.delete")]
         public async Task<IActionResult> Delete(int id)

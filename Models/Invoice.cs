@@ -178,6 +178,20 @@ namespace MyApp.Api.Models
         /// </summary>
         public int? SupplementsInvoiceId { get; set; }
 
+        /// <summary>
+        /// Per-invoice PRINT grouping preferences (2026-08-11). Control whether a
+        /// printed document lists individual lines or collapses lines that share
+        /// an ItemType into one grouped row (summed qty + amount, weighted-average
+        /// unit price). Independent per document:
+        ///   • <see cref="PrintGroupBillByItemType"/>       → the customer Bill print.
+        ///   • <see cref="PrintGroupTaxInvoiceByItemType"/>  → the FBR-aligned Tax Invoice print.
+        /// NULL = legacy default for that document (Bill: individual; Tax Invoice:
+        /// grouped when every line is typed) so existing invoices print exactly as
+        /// before. Display-only — never affects stored totals, stock, or the FBR payload.
+        /// </summary>
+        public bool? PrintGroupBillByItemType { get; set; }
+        public bool? PrintGroupTaxInvoiceByItemType { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation
