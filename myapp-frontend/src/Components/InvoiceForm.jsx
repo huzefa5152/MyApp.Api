@@ -630,6 +630,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     const pod = selectedChallans.map((c) => c.poDate).find((d) => d);
     if (po) setBillPoNumber((prev) => prev || po);
     if (pod) setBillPoDate((prev) => prev || String(pod).slice(0, 10));
+    // 2026-08-11 fix: reflect the originating Sales Order in the SO dropdown when
+    // the bill was launched from a sales order (challans preselected via
+    // prefillChallanIds). Only sets the dropdown value — buyer + challans are
+    // already prefilled, so we deliberately don't re-run handleSalesOrderPick.
+    const soId = selectedChallans.map((c) => c.salesOrderId).find((s) => s);
+    if (soId) setSalesOrderId((prev) => prev || String(soId));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIds]);
 

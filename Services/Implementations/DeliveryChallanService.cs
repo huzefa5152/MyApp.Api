@@ -678,6 +678,43 @@ namespace MyApp.Api.Services.Implementations
             await _stock.SyncInvoiceStockMovementsAsync(invoice);
         }
 
+        // 2026-08-11 fix: when a challan is deleted or cancelled, a Sales Order that
+        // was auto-Closed on full delivery must re-open if it is no longer fully
+        // delivered — otherwise the Sales Orders page hides "Create Challan" (it
+        // requires Status "Open") and the operator is stuck. Also restores the
+        // order's stock reservation (InventoryReadService drops it for a Closed
+        // order). Non-fatal: a failure here must not fail the delete/cancel.
+        private async Task ReopenSalesOrderIfUnderdeliveredAsync(int? salesOrderId)
+        {
+            if (salesOrderId == null) return;
+            try
+            {
+                var order = await _context.SalesOrders
+                    .Include(o => o.Items)
+                    .FirstOrDefaultAsync(o => o.Id == salesOrderId.Value);
+                if (order == null || order.Status != "Closed") return;
+                var soItemIds = order.Items.Select(i => i.Id).ToList();
+                var delivered = soItemIds.Count == 0
+                    ? new Dictionary<int, decimal>()
+                    : await _context.DeliveryItems
+                        .Where(di => di.SalesOrderItemId != null
+                                  && soItemIds.Contains(di.SalesOrderItemId.Value)
+                                  && di.DeliveryChallan.Status != "Cancelled")
+                        .GroupBy(di => di.SalesOrderItemId!.Value)
+                        .Select(g => new { g.Key, Qty = g.Sum(x => x.Quantity) })
+                        .ToDictionaryAsync(x => x.Key, x => x.Qty);
+                if (!order.Items.All(i => delivered.GetValueOrDefault(i.Id, 0m) >= i.Quantity))
+                {
+                    order.Status = "Open";
+                    await _context.SaveChangesAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to re-open SalesOrder {SalesOrderId} after challan delete/cancel.", salesOrderId);
+            }
+        }
+
         public async Task<bool> CancelAsync(int challanId)
         {
             var dc = await _repository.GetByIdAsync(challanId);
@@ -690,6 +727,7 @@ namespace MyApp.Api.Services.Implementations
 
             dc.Status = "Cancelled";
             await _repository.UpdateAsync(dc);
+            await ReopenSalesOrderIfUnderdeliveredAsync(dc.SalesOrderId);
             return true;
         }
 
@@ -724,6 +762,7 @@ namespace MyApp.Api.Services.Implementations
             }
 
             var companyId = dc.CompanyId;
+            var salesOrderId = dc.SalesOrderId;
             await _repository.DeleteAsync(dc);
 
             // If this was the last challan for the company, reset the counter
@@ -757,6 +796,8 @@ namespace MyApp.Api.Services.Implementations
                     challanId, companyId);
             }
 
+            // Re-open the parent Sales Order if this delete leaves it under-delivered.
+            await ReopenSalesOrderIfUnderdeliveredAsync(salesOrderId);
             return true;
         }
 

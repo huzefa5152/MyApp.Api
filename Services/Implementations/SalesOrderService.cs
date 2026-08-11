@@ -507,6 +507,23 @@ namespace MyApp.Api.Services.Implementations
             order.RequiredDate = dto.RequiredDate;
             order.CustomerPoNumber = string.IsNullOrWhiteSpace(dto.CustomerPoNumber) ? null : dto.CustomerPoNumber.Trim();
             order.CustomerPoDate = dto.CustomerPoDate;
+            // 2026-08-11 fix: propagate the order's PO down to its existing challans
+            // so a PO added/edited AFTER challans were created reaches them (mirrors
+            // AttachChallanAsync). Without this a challan created from a PO-less order
+            // stays PoNumber="" / Status="No PO" forever, which then blocks billing.
+            // Only when a PO is present; skip cancelled + already-billed challans.
+            if (!string.IsNullOrWhiteSpace(order.CustomerPoNumber))
+            {
+                var linkedChallans = await _context.DeliveryChallans
+                    .Where(dc => dc.SalesOrderId == id && dc.Status != "Cancelled" && dc.InvoiceId == null)
+                    .ToListAsync();
+                foreach (var ch in linkedChallans)
+                {
+                    ch.PoNumber = order.CustomerPoNumber;
+                    ch.PoDate = order.CustomerPoDate;
+                    if (ch.Status == "No PO") ch.Status = "Pending";
+                }
+            }
             order.Site = string.IsNullOrWhiteSpace(dto.Site) ? null : dto.Site.Trim();
             order.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
             // Reference link to a Sales Quote (set/cleared from the form).
