@@ -190,14 +190,35 @@ export async function exportToPdf(html, filename, opts = {}) {
       windowWidth: 796,
     });
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-    const imgH = (canvas.height * PAGE_W_MM) / canvas.width;   // natural height in mm
-    const oneFitScale = PAGE_H_MM / imgH;
-    const layout = {
-      mode: "", pages: 1, scale: 1, cuts: [],
-      heightPx: canvas.height, heightMm: imgH, oneFitScale,
-      pxRatio: content.offsetHeight > 0 ? canvas.height / content.offsetHeight : 1,
-    };
+    const layout = paginateOntoPdf(pdf, canvas, content);
 
+    if (typeof opts.onLayout === "function") opts.onLayout({ ...layout, content });
+    pdf.save(`${filename}.pdf`);
+    return layout;
+  } finally {
+    document.body.removeChild(wrapper);
+  }
+}
+
+/**
+ * Draw a rasterised document onto a jsPDF instance, choosing the page layout.
+ *
+ * Shared by every rasterising export path so none of them can regress to
+ * slicing the bitmap at blind fixed offsets — which is what cut the FBR box,
+ * and half its verification QR, across a page boundary in production.
+ *
+ * Returns the decision it made: `{ mode, pages, scale, cuts, ... }`.
+ */
+function paginateOntoPdf(pdf, canvas, content) {
+  const imgH = (canvas.height * PAGE_W_MM) / canvas.width;   // natural height in mm
+  const oneFitScale = PAGE_H_MM / imgH;
+  const layout = {
+    mode: "", pages: 1, scale: 1, cuts: [],
+    heightPx: canvas.height, heightMm: imgH, oneFitScale,
+    pxRatio: content.offsetHeight > 0 ? canvas.height / content.offsetHeight : 1,
+  };
+
+  {
     if (oneFitScale >= 1) {
       // Fits as-is. Drawn edge-to-edge at natural size — the template supplies
       // its own page padding, so no extra margin here.
@@ -251,13 +272,9 @@ export async function exportToPdf(html, filename, opts = {}) {
       layout.mode = "multipage";
       layout.pages = pageNum;
     }
-
-    if (typeof opts.onLayout === "function") opts.onLayout({ ...layout, content });
-    pdf.save(`${filename}.pdf`);
-    return layout;
-  } finally {
-    document.body.removeChild(wrapper);
   }
+
+  return layout;
 }
 
 // Wrapper class every merged page gets. The template's own `body` rules are
@@ -405,30 +422,7 @@ export async function renderPdfBlob(html) {
       windowWidth: 796,
     });
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-    const pageW = 210;
-    const pageH = 297;
-    const imgH = (canvas.height * pageW) / canvas.width;
-
-    if (imgH <= pageH * 1.02) {
-      pdf.addImage(canvas.toDataURL("image/jpeg", 0.98), "JPEG", 0, 0, pageW, Math.min(imgH, pageH));
-    } else {
-      const marginMm = 8;
-      const contentMm = pageH - marginMm * 2;
-      const pageCanvasH = (canvas.width * contentMm) / pageW;
-      let y = 0;
-      let pageNum = 0;
-      while (y < canvas.height) {
-        if (pageNum > 0) pdf.addPage();
-        const sliceH = Math.min(pageCanvasH, canvas.height - y);
-        const page = document.createElement("canvas");
-        page.width = canvas.width;
-        page.height = sliceH;
-        page.getContext("2d").drawImage(canvas, 0, -y);
-        pdf.addImage(page.toDataURL("image/jpeg", 0.98), "JPEG", 0, marginMm, pageW, (sliceH * pageW) / canvas.width);
-        y += pageCanvasH;
-        pageNum++;
-      }
-    }
+    paginateOntoPdf(pdf, canvas, content);
     return pdf.output("blob");
   } finally {
     document.body.removeChild(wrapper);

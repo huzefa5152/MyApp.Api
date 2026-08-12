@@ -201,6 +201,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
 | Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `140/140`) |
+| PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (200 cases) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
 
@@ -211,6 +212,17 @@ must keep BOTH the offline corpus harness AND the production read-only check
 green, and add corpus cases for the new behaviour. Full runbook (parser
 internals, feedback system, cross-branch cherry-pick, prod-check setup) is in
 `PO_IMPORT_PARSER_GUIDE.md`.
+
+**Print/PDF export changes.** Any change to `myapp-frontend/src/utils/exportUtils.js`,
+`printDocument.js`, or a tax-invoice template must keep
+`python scripts/test_pdf_pagination.py` green. It drives the real `exportToPdf()`
+in headless Chromium (`pip install playwright && python -m playwright install chromium`;
+no backend or DB needed) across item counts × substituted font stacks × device
+pixel ratios, and asserts the two invariants: every production-shape invoice
+exports as one page on any font, and a page cut never runs through the FBR
+block — a sliced QR does not scan. Add `--prod-template "<conn str>"` to also
+run the live per-company template, and `--engines chromium,firefox` for
+cross-engine coverage.
 
 If you add a new endpoint that takes `companyId`, add a tenant-isolation
 case to `scripts/test_tenant_isolation.py`. If you touch invoice/bill

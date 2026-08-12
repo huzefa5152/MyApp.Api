@@ -19,7 +19,7 @@ export const taxInvoiceStarters = [
     type: "TaxInvoice",
     description: "Traditional Times New Roman layout with double-rule header and FBR block",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@media print { @page { size: A4; margin: 8mm 10mm; } .footer { page-break-inside: avoid; } }
+@media print { @page { size: A4; margin: 8mm 10mm; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 body { font-family: "Times New Roman", Times, serif; padding: 8mm 10mm; color: #000; display: flex; flex-direction: column; min-height: 100vh; }
 .main { flex: 1; }
@@ -138,7 +138,7 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
     type: "TaxInvoice",
     description: "Clean sans-serif with a thin accent bar, whitespace-driven layout",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@media print { @page { size: A4; margin: 8mm 10mm; } .footer { page-break-inside: avoid; } }
+@media print { @page { size: A4; margin: 8mm 10mm; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 body { font-family: "Segoe UI", Calibri, Arial, sans-serif; padding: 8mm 10mm; color: #1a1a1a; display: flex; flex-direction: column; min-height: 100vh; font-size: 10pt; }
 .main { flex: 1; }
@@ -268,7 +268,7 @@ table.items thead th.left { text-align: left; }
     type: "TaxInvoice",
     description: "Navy header band with white text, FBR section, and blue-accented tables",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } }
+@media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 body { font-family: Calibri, "Segoe UI", Arial, sans-serif; color: #111; display: flex; flex-direction: column; min-height: 100vh; }
 .main { flex: 1; padding: 0 10mm 6mm; }
@@ -391,7 +391,7 @@ tbody tr:nth-child(even) td { background: #edf2fb !important; }
     type: "TaxInvoice",
     description: "Teal/orange gradient banner with bold typography and FBR QR sidebar",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } }
+@media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 body { font-family: "Segoe UI", Calibri, Arial, sans-serif; color: #111; display: flex; flex-direction: column; min-height: 100vh; }
 .main { flex: 1; padding: 0 10mm 6mm; }
@@ -517,7 +517,7 @@ tbody tr:nth-child(even) td { background: #e8f5e9 !important; }
     type: "TaxInvoice",
     description: "Black-and-white only, no fills, hairline borders — minimal toner use",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@media print { @page { size: A4; margin: 8mm 10mm; } .footer { page-break-inside: avoid; } }
+@media print { @page { size: A4; margin: 8mm 10mm; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 body { font-family: Arial, Helvetica, sans-serif; padding: 8mm 10mm; color: #000; display: flex; flex-direction: column; min-height: 100vh; font-size: 9.5pt; }
 .main { flex: 1; }
@@ -545,6 +545,10 @@ table.items th.left { text-align: left; }
 .words-area { display: flex; border: 0.75pt solid #000; margin-top: 8px; }
 .words-lbl { padding: 4px 8px; border-right: 0.75pt solid #000; font-weight: 700; font-size: 9pt; white-space: nowrap; }
 .words-val { padding: 4px 10px; font-size: 9.5pt; font-weight: 700; }
+.fbr-block { border: 0.75pt solid #000; margin-top: 8px; padding: 6px 8px; display: flex; align-items: center; gap: 12px; }
+.fbr-info { flex: 1; font-size: 8.5pt; line-height: 1.5; }
+.fbr-irn { font-size: 9.5pt; font-weight: 700; }
+.fbr-qr { text-align: center; font-size: 7pt; }
 .sig-row { display: flex; justify-content: space-between; margin-top: 40px; padding: 0 40px; }
 .sig { text-align: center; }
 .sig .line { width: 190px; border-top: 0.75pt solid #000; margin-bottom: 3px; }
@@ -603,6 +607,19 @@ table.items th.left { text-align: left; }
   <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
 </table>
 <div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
+{{#if fbrIRN}}
+<div class="fbr-block">
+  <div class="fbr-info">
+    <div class="fbr-irn">FBR Invoice Reference No: {{fbrIRN}}</div>
+    {{#if fbrSubmittedAt}}<div>Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+    <div>Registered with the Federal Board of Revenue Digital Invoicing System.</div>
+  </div>
+  <div class="fbr-qr">
+    <img src="{{{fbrQrPngDataUrl}}}" style="width:84px;height:84px">
+    <div>Scan to verify</div>
+  </div>
+</div>
+{{/if}}
 </div>
 <div class="footer">
   <div class="sig-row">
@@ -621,7 +638,7 @@ table.items th.left { text-align: left; }
     type: "TaxInvoice",
     description: "Charcoal & gold luxury look with sidebar totals and FBR compliance block",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } }
+@media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 body { font-family: "Segoe UI", Calibri, Arial, sans-serif; color: #1a1a1a; display: flex; flex-direction: column; min-height: 100vh; }
 .main { flex: 1; padding: 0 10mm 6mm; }
@@ -756,7 +773,7 @@ tbody tr:nth-child(even) td { background: #faf7ef !important; }
     type: "TaxInvoice",
     description: "Tight 8pt font with maximized rows per page for high-volume line items",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@media print { @page { size: A4; margin: 6mm 8mm; } .footer { page-break-inside: avoid; } }
+@media print { @page { size: A4; margin: 6mm 8mm; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 body { font-family: Arial, Helvetica, sans-serif; padding: 6mm 8mm; color: #000; display: flex; flex-direction: column; min-height: 100vh; font-size: 8pt; }
 .main { flex: 1; }
@@ -874,7 +891,7 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
     type: "TaxInvoice",
     description: "Vertical colored sidebar on the left carries supplier info and FBR QR",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } }
+@media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 body { font-family: Calibri, "Segoe UI", Arial, sans-serif; color: #111; min-height: 100vh; display: flex; }
 .sidebar { width: 48mm; background: #1a3a6e !important; color: #fff !important; padding: 12mm 6mm 10mm; display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
@@ -992,7 +1009,7 @@ tbody tr:nth-child(even) td { background: #edf2fb !important; }
     type: "TaxInvoice",
     description: "All sections inside full-border boxes, classic Pakistani stationery style",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@media print { @page { size: A4; margin: 8mm 10mm; } .footer { page-break-inside: avoid; } }
+@media print { @page { size: A4; margin: 8mm 10mm; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 body { font-family: "Times New Roman", Times, serif; padding: 8mm 10mm; color: #000; display: flex; flex-direction: column; min-height: 100vh; }
 .main { flex: 1; }
@@ -1123,7 +1140,7 @@ table.items th.left { text-align: left; }
     type: "TaxInvoice",
     description: "Opens with Bismillah in Arabic calligraphy, traditional Pakistani style with FBR block",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@media print { @page { size: A4; margin: 8mm 10mm; } .footer { page-break-inside: avoid; } }
+@media print { @page { size: A4; margin: 8mm 10mm; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 body { font-family: Calibri, Arial, sans-serif; padding: 8mm 10mm; color: #000; display: flex; flex-direction: column; min-height: 100vh; }
 .main { flex: 1; }
@@ -1258,7 +1275,7 @@ tbody tr:nth-child(even) td { background: #fdf6e3 !important; }
     type: "TaxInvoice",
     description: "Emerald green header with gold accents, bank details section and FBR block",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } }
+@media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 body { font-family: Calibri, "Segoe UI", Arial, sans-serif; color: #111; display: flex; flex-direction: column; min-height: 100vh; }
 .main { flex: 1; padding: 0 10mm 6mm; }
@@ -1395,7 +1412,7 @@ tbody tr:nth-child(even) td { background: #f1f8e9 !important; }
     type: "TaxInvoice",
     description: "Cool teal & slate palette with card-style party boxes and terms section",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@media print { @page { size: A4; margin: 8mm 10mm; } .footer, .terms { page-break-inside: avoid; } }
+@media print { @page { size: A4; margin: 8mm 10mm; } .footer, .terms { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 body { font-family: "Segoe UI", Calibri, Arial, sans-serif; padding: 8mm 10mm; color: #1a1a1a; display: flex; flex-direction: column; min-height: 100vh; font-size: 10pt; }
 .main { flex: 1; }
@@ -1525,7 +1542,7 @@ tbody tr:nth-child(even) td { background: #e0f2f1 !important; }
     type: "TaxInvoice",
     description: "Tall letterhead-style header with large logo space, full-bleed color bar and FBR footer",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } }
+@media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 body { font-family: Calibri, "Segoe UI", Arial, sans-serif; color: #111; display: flex; flex-direction: column; min-height: 100vh; }
 .main { flex: 1; padding: 0 10mm 6mm; }
@@ -1665,7 +1682,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
     type: "TaxInvoice",
     description: "Large centered watermark title in background, clean centered layout",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@media print { @page { size: A4; margin: 8mm 10mm; } .footer { page-break-inside: avoid; } }
+@media print { @page { size: A4; margin: 8mm 10mm; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 body { font-family: Calibri, "Segoe UI", Arial, sans-serif; padding: 8mm 10mm; color: #111; display: flex; flex-direction: column; min-height: 100vh; position: relative; }
 .main { flex: 1; }
@@ -1796,7 +1813,7 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
     type: "TaxInvoice",
     description: "FBR-official government-form style: all cells in a rigid grid with prominent FBR block",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@media print { @page { size: A4; margin: 7mm 9mm; } .footer { page-break-inside: avoid; } }
+@media print { @page { size: A4; margin: 7mm 9mm; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 body { font-family: Arial, Helvetica, sans-serif; padding: 7mm 9mm; color: #000; display: flex; flex-direction: column; min-height: 100vh; font-size: 9pt; }
 .main { flex: 1; }
