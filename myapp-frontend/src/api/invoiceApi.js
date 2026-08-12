@@ -110,6 +110,12 @@ export const getInvoicePrintBill = (invoiceId) =>
 export const getInvoicePrintTaxInvoice = (invoiceId) =>
   httpClient.get(`/invoices/${invoiceId}/print/tax-invoice`);
 
+// Tax Invoice print data for many invoices in one round-trip, returned in the
+// order the ids were sent. Backs the Sales report's PDF downloads; gated by
+// reports.sales.printinvoice, and the server caps the list at 100 per call.
+export const getInvoicePrintTaxInvoiceBatch = (invoiceIds) =>
+  httpClient.post(`/invoices/print/tax-invoice/batch`, { invoiceIds });
+
 export const getInvoicesCount = (companyId) =>
   httpClient.get("/invoices/count", { params: companyId ? { companyId } : {} });
 

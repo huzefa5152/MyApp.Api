@@ -433,6 +433,35 @@ check("Handover tenant guard", "beta bill NOT delivered after cross-tenant bulk"
       status == 200 and (check_bill or {}).get("handoverAt") is None,
       f"expected handoverAt null, got {(check_bill or {}).get('handoverAt')}")
 
+# Suite 8: Sales report batch Tax Invoice print — the id list is client-supplied
+# so every distinct CompanyId behind it must be asserted. Unlike bulk handover
+# (which silently skips), this endpoint is all-or-nothing: one forbidden id 403s
+# the whole request rather than returning the rows the caller CAN see.
+print("\n  Suite 8 — batch Tax Invoice print tenant guard")
+
+status, _ = request("POST", "/api/invoices/print/tax-invoice/batch",
+                    token=tokens["alice"], body={"invoiceIds": [beta_bill["id"]]})
+status_check("Batch print tenant guard", "alice -> POST /invoices/print/tax-invoice/batch (beta id)",
+             status, 403)
+
+# admin owns both tenants, so the same id is fine for them — proves the 403 above
+# came from the tenant guard and not from the route being broken outright.
+status, rows = request("POST", "/api/invoices/print/tax-invoice/batch",
+                       token=admin, body={"invoiceIds": [beta_bill["id"]]})
+check("Batch print tenant guard", "admin -> batch print (beta id) returns the row",
+      status == 200 and isinstance(rows, list) and len(rows) == 1,
+      f"expected 200 with 1 row, got {status} {rows}")
+
+# An empty list is a 400, not an empty 200 — a caller sending nothing is a bug.
+status, _ = request("POST", "/api/invoices/print/tax-invoice/batch",
+                    token=admin, body={"invoiceIds": []})
+status_check("Batch print tenant guard", "admin -> batch print (empty list)", status, 400)
+
+# Over the per-request cap (100) is rejected rather than silently truncated.
+status, _ = request("POST", "/api/invoices/print/tax-invoice/batch",
+                    token=admin, body={"invoiceIds": list(range(1, 202))})
+status_check("Batch print tenant guard", "admin -> batch print (201 ids, over cap)", status, 400)
+
 # Cleanup the seed bill (latest in a fresh company → deletable).
 request("DELETE", f"/api/invoices/{beta_bill['id']}", token=admin)
 

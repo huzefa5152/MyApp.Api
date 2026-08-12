@@ -1,13 +1,28 @@
-import { useState, useEffect, useCallback, Fragment } from "react";
-import { MdAssessment, MdBusiness, MdRefresh, MdDownload, MdChevronRight, MdExpandMore, MdUnfoldMore, MdUnfoldLess, MdPerson } from "react-icons/md";
+import { useState, useEffect, useCallback, useRef, Fragment } from "react";
+import { MdAssessment, MdBusiness, MdRefresh, MdDownload, MdChevronRight, MdExpandMore, MdUnfoldMore, MdUnfoldLess, MdPerson, MdPictureAsPdf, MdFolderZip, MdClose } from "react-icons/md";
 import { getSalesReport, getSalesReportExcel } from "../api/reportApi";
+import { getInvoicePrintTaxInvoiceBatch } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
-import { dropdownStyles } from "../theme";
+import { dropdownStyles, formStyles, modalSizes } from "../theme";
 import SearchableClientSelect from "../Components/SearchableClientSelect";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import { mergeTemplate } from "../utils/templateEngine";
+import { defaultTaxInvoiceTemplate } from "../utils/defaultTemplates";
+import { exportToPdf, renderPdfBlob, buildMergedPrintDocument, printHtmlDocument } from "../utils/exportUtils";
+import { saveAs } from "file-saver";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import useIsNarrow from "../hooks/useIsNarrow";
+
+// The server caps one batch print-data request at 100 ids, so longer periods
+// are fetched in successive chunks.
+const PRINT_BATCH_SIZE = 100;
+
+// ZIP builds one rasterized PDF per invoice at ~1-2s each, so it's capped.
+// Merged print has no such limit — it never rasterizes.
+const ZIP_MAX_INVOICES = 150;
 
 const colors = {
   blue: "#0d47a1",
@@ -56,6 +71,7 @@ export default function SalesReportPage() {
   const { has } = usePermissions();
   const canView = has("reports.sales.view");
   const canExport = has("reports.sales.export");
+  const canPrintInvoice = has("reports.sales.printinvoice");
   const isNarrow = useIsNarrow();
 
   // Period mode: "period" (month / year) or "custom" (date range).
@@ -145,6 +161,129 @@ export default function SalesReportPage() {
       notify("Failed to export the Excel file.", "error");
     } finally {
       setExporting(false);
+    }
+  };
+
+  // ── Tax Invoice PDF download ───────────────────────────────────────────
+  // Same three steps the Invoices page uses (InvoicePage.jsx:handleExportTaxPdf):
+  // fetch print data → merge through the company's TaxInvoice template →
+  // render. Sharing the template means a PDF pulled from the report is
+  // identical to one pulled from the Invoices page.
+  const tplPicker = usePrintTemplates("TaxInvoice");
+  const [rowBusyId, setRowBusyId] = useState(null);
+  const [bulk, setBulk] = useState(null);   // { mode, done, total, phase }
+  const cancelRef = useRef(false);
+
+  const resolveTaxTemplate = useCallback(
+    () => tplPicker.resolveTemplate()?.htmlContent || defaultTaxInvoiceTemplate,
+    [tplPicker]
+  );
+
+  const pdfName = (d) => `INVOICE # ${d.invoiceNumber} ${d.buyerName || d.companyBrandName || ""}`.trim();
+
+  // Print data for many invoices, chunked to the server's per-request cap.
+  // `onProgress` reports invoices fetched so far so the modal can move during
+  // what is otherwise a silent wait.
+  const fetchPrintData = useCallback(async (ids, onProgress) => {
+    const out = [];
+    for (let i = 0; i < ids.length; i += PRINT_BATCH_SIZE) {
+      if (cancelRef.current) break;
+      const { data } = await getInvoicePrintTaxInvoiceBatch(ids.slice(i, i + PRINT_BATCH_SIZE));
+      out.push(...(data || []));
+      onProgress?.(out.length);
+    }
+    return out;
+  }, []);
+
+  const handleRowPdf = async (inv) => {
+    if (rowBusyId || bulk) return;
+    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
+    setRowBusyId(inv.invoiceId);
+    try {
+      const [data] = await fetchPrintData([inv.invoiceId]);
+      if (!data) throw new Error("no print data");
+      await exportToPdf(mergeTemplate(resolveTaxTemplate(), data), pdfName(data));
+    } catch {
+      notify("Failed to download the Tax Invoice PDF.", "error");
+    } finally {
+      setRowBusyId(null);
+    }
+  };
+
+  const invoiceIds = (report?.invoices || []).map((i) => i.invoiceId).filter(Boolean);
+
+  const startBulk = (mode, total) => { cancelRef.current = false; setBulk({ mode, done: 0, total, phase: "Fetching invoice data…" }); };
+  const endBulk = () => { cancelRef.current = false; setBulk(null); };
+
+  // Merged: one A4 document, one invoice per page, handed to the browser's
+  // print engine. No rasterization, so this stays fast for a full year.
+  const handleBulkMerged = async () => {
+    if (bulk || rowBusyId || !invoiceIds.length) return;
+    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
+    startBulk("merged", invoiceIds.length);
+    try {
+      const rows = await fetchPrintData(invoiceIds, (n) => setBulk((b) => (b ? { ...b, done: n } : b)));
+      if (cancelRef.current) { endBulk(); return; }
+      if (!rows.length) { notify("No printable invoices in this period.", "warning"); endBulk(); return; }
+
+      setBulk((b) => (b ? { ...b, phase: "Building the document…", done: b.total } : b));
+      const tpl = resolveTaxTemplate();
+      const merged = buildMergedPrintDocument(
+        rows.map((d) => mergeTemplate(tpl, d)),
+        `Tax Invoices — ${periodLabel}`
+      );
+      setBulk((b) => (b ? { ...b, phase: "Opening the print dialog…" } : b));
+      await printHtmlDocument(merged);
+      notify(`${rows.length} Tax Invoice(s) sent to print. Choose "Save as PDF" to keep a file.`, "success");
+    } catch {
+      notify("Failed to build the merged Tax Invoice PDF.", "error");
+    } finally {
+      endBulk();
+    }
+  };
+
+  // ZIP: one PDF file per invoice. Rasterized, so it's slow and capped.
+  const handleBulkZip = async () => {
+    if (bulk || rowBusyId || !invoiceIds.length) return;
+    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
+    if (invoiceIds.length > ZIP_MAX_INVOICES) {
+      notify(`ZIP is limited to ${ZIP_MAX_INVOICES} invoices (this period has ${invoiceIds.length}). Narrow the period, or use Merged PDF.`, "warning");
+      return;
+    }
+    const mins = Math.max(1, Math.round((invoiceIds.length * 1.5) / 60));
+    if (!window.confirm(`Build ${invoiceIds.length} individual PDF(s)? This renders each invoice separately and takes roughly ${mins} minute(s). You can cancel while it runs.`)) return;
+
+    startBulk("zip", invoiceIds.length);
+    try {
+      const rows = await fetchPrintData(invoiceIds, (n) => setBulk((b) => (b ? { ...b, done: 0, phase: `Fetching invoice data… (${n}/${invoiceIds.length})` } : b)));
+      if (cancelRef.current) { endBulk(); return; }
+
+      // jszip is only ever needed by this one action — keep it out of the main bundle.
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+      const tpl = resolveTaxTemplate();
+      let failed = 0;
+
+      for (let i = 0; i < rows.length; i++) {
+        if (cancelRef.current) break;
+        setBulk((b) => (b ? { ...b, done: i, phase: "Rendering PDFs…" } : b));
+        try {
+          const blob = await renderPdfBlob(mergeTemplate(tpl, rows[i]));
+          // Slashes in a client name would create folders inside the archive.
+          zip.file(`${pdfName(rows[i]).replace(/[\\/:*?"<>|]/g, "-")}.pdf`, blob);
+        } catch { failed++; }
+      }
+
+      if (cancelRef.current) { notify("Cancelled — no file was saved.", "warning"); endBulk(); return; }
+
+      setBulk((b) => (b ? { ...b, done: b.total, phase: "Compressing…" } : b));
+      const archive = await zip.generateAsync({ type: "blob" });
+      saveAs(archive, `Tax-Invoices-${periodLabel}.zip`.replace(/\s+/g, "_"));
+      notify(failed ? `ZIP saved — ${failed} invoice(s) failed to render.` : "ZIP saved.", failed ? "warning" : "success");
+    } catch {
+      notify("Failed to build the ZIP.", "error");
+    } finally {
+      endBulk();
     }
   };
 
@@ -257,6 +396,12 @@ export default function SalesReportPage() {
           />
         </Field>
 
+        {canPrintInvoice && (
+          <Field label="Invoice template">
+            <PrintTemplateSelect picker={tplPicker} style={{ flex: 1, maxWidth: 260 }} />
+          </Field>
+        )}
+
         <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
           <button onClick={fetchReport} disabled={loading || rangeInvalid} style={btn(colors.blue)}>
             <MdRefresh size={16} /> {loading ? "Loading…" : "Refresh"}
@@ -265,6 +410,26 @@ export default function SalesReportPage() {
             <button onClick={exportExcel} disabled={!report || loading || exporting || rangeInvalid} style={btn(colors.teal)}>
               <MdDownload size={16} /> {exporting ? "Exporting…" : "Export Excel"}
             </button>
+          )}
+          {canPrintInvoice && (
+            <>
+              <button
+                onClick={handleBulkMerged}
+                disabled={!invoiceIds.length || loading || !!bulk || rangeInvalid || tplPicker.noTemplate}
+                title={`Print every Tax Invoice in this period as one A4 document — choose "Save as PDF" in the dialog`}
+                style={btn("#6a1b9a")}
+              >
+                <MdPictureAsPdf size={16} /> Tax Invoices (merged)
+              </button>
+              <button
+                onClick={handleBulkZip}
+                disabled={!invoiceIds.length || loading || !!bulk || rangeInvalid || tplPicker.noTemplate}
+                title={`Download one PDF per invoice, zipped (max ${ZIP_MAX_INVOICES})`}
+                style={btn("#455a64")}
+              >
+                <MdFolderZip size={16} /> ZIP of PDFs
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -312,6 +477,21 @@ export default function SalesReportPage() {
                       </span>
                       <span style={{ fontSize: "0.76rem", color: colors.textSecondary }}>{new Date(inv.documentDate).toLocaleDateString()}</span>
                     </button>
+                    {canPrintInvoice && (
+                      <button
+                        type="button"
+                        onClick={() => handleRowPdf(inv)}
+                        disabled={!!rowBusyId || !!bulk || tplPicker.noTemplate}
+                        title="Download this Tax Invoice as PDF"
+                        aria-label={`Download Tax Invoice ${inv.documentNumber} as PDF`}
+                        style={{ ...rowPdfBtn, alignSelf: "flex-start" }}
+                      >
+                        <MdPictureAsPdf size={18} />
+                        <span style={{ fontSize: "0.76rem", fontWeight: 600 }}>
+                          {rowBusyId === inv.invoiceId ? "Preparing…" : "Tax Invoice PDF"}
+                        </span>
+                      </button>
+                    )}
                     <div style={{ fontSize: "0.86rem", fontWeight: 600, color: colors.textPrimary, ...clamp2 }}>{inv.customer}</div>
                     <div style={{ fontFamily: "monospace", fontSize: "0.72rem", color: colors.textSecondary, ...clamp2 }}>FBR {inv.fbrInvoiceNumber || "—"}{hsCodes ? ` · HS ${hsCodes}` : ""}</div>
                     <div style={srMeta}>
@@ -358,6 +538,7 @@ export default function SalesReportPage() {
                     {["", "Doc. No", "Date", "FBR Inv. No.", "Customer", "HS Code", "Items", "Qty", "Amount", "Tax", "Total"].map((h, i) => (
                       <th key={i} style={{ ...th, textAlign: i >= 6 ? "right" : "left" }}>{h}</th>
                     ))}
+                    {canPrintInvoice && <th style={{ ...th, textAlign: "center" }}>PDF</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -386,11 +567,27 @@ export default function SalesReportPage() {
                           <td style={tdR}>{money(inv.totalAmount)}</td>
                           <td style={tdR}>{money(inv.totalTax)}</td>
                           <td style={{ ...tdR, fontWeight: 700 }}>{money(inv.totalGross)}</td>
+                          {canPrintInvoice && (
+                            <td style={{ ...td, textAlign: "center" }}>
+                              <button
+                                type="button"
+                                // The row itself toggles expansion — don't let the
+                                // download also collapse/expand the line items.
+                                onClick={(e) => { e.stopPropagation(); handleRowPdf(inv); }}
+                                disabled={!!rowBusyId || !!bulk || tplPicker.noTemplate}
+                                title="Download this Tax Invoice as PDF"
+                                aria-label={`Download Tax Invoice ${inv.documentNumber} as PDF`}
+                                style={iconBtn}
+                              >
+                                <MdPictureAsPdf size={18} />
+                              </button>
+                            </td>
+                          )}
                         </tr>
                         {/* Expanded line items */}
                         {open && (
                           <tr>
-                            <td colSpan={11} style={{ padding: 0, background: colors.rowAlt }}>
+                            <td colSpan={canPrintInvoice ? 12 : 11} style={{ padding: 0, background: colors.rowAlt }}>
                               <div style={{ overflowX: "auto", padding: "4px 8px 10px 38px" }}>
                                 <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 720, fontSize: "0.8rem" }}>
                                   <thead>
@@ -432,6 +629,7 @@ export default function SalesReportPage() {
                     <td style={{ ...tdR, fontWeight: 800 }}>{money(report.grandAmount)}</td>
                     <td style={{ ...tdR, fontWeight: 800 }}>{money(report.grandTax)}</td>
                     <td style={{ ...tdR, fontWeight: 800, color: colors.blue }}>{money(report.grandTotal)}</td>
+                    {canPrintInvoice && <td style={td} />}
                   </tr>
                 </tbody>
               </table>
@@ -441,6 +639,43 @@ export default function SalesReportPage() {
       )}
 
       {loading && <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>Loading report…</div>}
+
+      {bulk && (
+        <div style={formStyles.backdrop} role="dialog" aria-modal="true" aria-label="Building Tax Invoice PDFs">
+          <div style={{ ...formStyles.modal, maxWidth: modalSizes.sm }}>
+            <div style={{ padding: "1rem 1.25rem", borderBottom: `1px solid ${colors.cardBorder}`, display: "flex", alignItems: "center", gap: 8 }}>
+              {bulk.mode === "zip" ? <MdFolderZip size={20} color={colors.blue} /> : <MdPictureAsPdf size={20} color={colors.blue} />}
+              <strong style={{ color: colors.textPrimary }}>
+                {bulk.mode === "zip" ? "Building ZIP of Tax Invoices" : "Building merged Tax Invoices"}
+              </strong>
+            </div>
+            <div style={{ padding: "1.25rem", overflowY: "auto", flex: 1 }}>
+              <div style={{ color: colors.textSecondary, fontSize: "0.88rem", marginBottom: 10 }}>{bulk.phase}</div>
+              <div style={{ height: 8, background: colors.inputBg, borderRadius: 999, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%",
+                  width: `${bulk.total ? Math.round((bulk.done / bulk.total) * 100) : 0}%`,
+                  background: colors.blue,
+                  transition: "width 0.2s ease",
+                }} />
+              </div>
+              <div style={{ marginTop: 8, fontSize: "0.82rem", color: colors.textPrimary }}>
+                {bulk.done} of {bulk.total} invoice(s)
+              </div>
+              {bulk.mode === "merged" && (
+                <div style={{ marginTop: 12, fontSize: "0.78rem", color: colors.textSecondary }}>
+                  Your browser's print dialog opens when this finishes — pick <strong>Save as PDF</strong> as the destination to keep a file.
+                </div>
+              )}
+            </div>
+            <div style={{ padding: "0.85rem 1.25rem", borderTop: `1px solid ${colors.cardBorder}`, display: "flex", justifyContent: "flex-end" }}>
+              <button type="button" onClick={() => { cancelRef.current = true; }} style={{ ...ghostBtn, minHeight: 40 }}>
+                <MdClose size={15} /> Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -470,6 +705,38 @@ const srLbl = { display: "block", fontSize: "0.6rem", fontWeight: 700, textTrans
 const srVal = { display: "block", fontSize: "0.84rem", fontWeight: 600, color: colors.textPrimary };
 const srLine = { background: colors.rowAlt, borderRadius: 8, padding: "0.5rem 0.6rem", display: "flex", flexDirection: "column", gap: 2 };
 const srLineMeta = { display: "flex", flexWrap: "wrap", gap: "0.3rem 0.7rem", fontSize: "0.78rem", color: colors.textSecondary, marginTop: 2 };
+
+// Icon-only download in the desktop table. padding:0 + boxShadow:none override
+// the global button rule in index.css, which otherwise off-centres the glyph
+// and adds a shadow. 44x44 keeps the tap target usable on touch laptops.
+const iconBtn = {
+  display: "grid",
+  placeItems: "center",
+  padding: 0,
+  boxShadow: "none",
+  width: 44,
+  height: 44,
+  border: `1px solid ${colors.inputBorder}`,
+  borderRadius: 8,
+  background: "#fff",
+  color: "#b71c1c",
+  cursor: "pointer",
+};
+
+// Labelled pill for the mobile card, where an unlabelled icon reads as noise.
+const rowPdfBtn = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  minHeight: 44,
+  padding: "0 12px",
+  boxShadow: "none",
+  border: `1px solid ${colors.inputBorder}`,
+  borderRadius: 8,
+  background: "#fff",
+  color: "#b71c1c",
+  cursor: "pointer",
+};
 
 const btn = (bg) => ({
   display: "inline-flex", alignItems: "center", gap: 6, background: bg, color: "#fff",

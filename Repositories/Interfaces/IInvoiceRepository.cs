@@ -21,5 +21,11 @@ namespace MyApp.Api.Repositories.Interfaces
         /// <summary>True when the company has any notes of the given type (9 = Debit, 10 = Credit). Locks that starting number, mirroring invoices/challans.</summary>
         Task<bool> HasNotesForCompanyAsync(int companyId, int docType);
         Task<Dictionary<int, bool>> HasInvoicesForClientsAsync(IEnumerable<int> clientIds);
+        /// <summary>
+        /// invoiceId → CompanyId for the ids that exist. Cheap projection used to
+        /// tenant-guard a batch of invoice ids without loading each aggregate.
+        /// Ids that don't exist are simply absent from the result.
+        /// </summary>
+        Task<Dictionary<int, int>> GetCompanyIdsAsync(IEnumerable<int> invoiceIds);
     }
 }

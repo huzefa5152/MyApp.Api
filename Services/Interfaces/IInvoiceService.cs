@@ -121,6 +121,8 @@ namespace MyApp.Api.Services.Interfaces
         Task<InvoiceDto?> SetDueDateAsync(int id, DateTime? dueDate);
         Task<PrintBillDto?> GetPrintBillAsync(int invoiceId);
         Task<PrintTaxInvoiceDto?> GetPrintTaxInvoiceAsync(int invoiceId);
+        /// <summary>invoiceId → CompanyId for the ids that exist; missing ids are absent.</summary>
+        Task<Dictionary<int, int>> GetCompanyIdsAsync(IEnumerable<int> invoiceIds);
         Task<int> GetTotalCountAsync();
         Task<int> GetCountByCompanyAsync(int companyId);
         /// <summary>

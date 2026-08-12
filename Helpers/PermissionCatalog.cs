@@ -290,6 +290,7 @@ namespace MyApp.Api.Helpers
             // ── Reports ─────────────────────────────────────────────────────
             new("reports.sales.view",       "Reports", "Sales", "View",   "View the Sales report (FBR-submitted invoices grouped by date, monthly/yearly)"),
             new("reports.sales.export",     "Reports", "Sales", "Export", "Export the Sales report to CSV/Excel"),
+            new("reports.sales.printinvoice","Reports", "Sales", "Print Invoice", "Download Tax Invoice PDFs from the Sales report (single row, or every invoice in the period)"),
             new("reports.taxsheet.view",    "Reports", "Tax Sheet", "View",   "View the Tax Sheet (invoice lines still missing a valid HS code, for the tax consultant)"),
             new("reports.taxsheet.export",  "Reports", "Tax Sheet", "Export", "Export the Tax Sheet to Excel"),
             new("reports.taxsheet.transfer","Reports", "Tax Sheet", "Transfer", "Move the still-unclassified invoices of a period to a new date (defer to next month); changes invoice dates"),

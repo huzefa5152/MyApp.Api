@@ -19,6 +19,11 @@ namespace MyApp.Api.Controllers
         private readonly IPermissionService _permissions;
         private readonly int _defaultPageSize;
 
+        // Ceiling on one batch print-data request. Each id costs a full invoice
+        // aggregate load, so the browser chunks longer periods into successive
+        // calls rather than asking the server for a year in one go.
+        private const int BatchPrintMaxIds = 100;
+
         public InvoicesController(IInvoiceService service, ICompanyAccessGuard access, IPermissionService permissions, IConfiguration configuration)
         {
             _service = service;
@@ -637,6 +642,47 @@ namespace MyApp.Api.Controllers
             var dto = await _service.GetPrintTaxInvoiceAsync(id);
             if (dto == null) return NotFound();
             return Ok(dto);
+        }
+
+        /// <summary>
+        /// Tax Invoice print data for many invoices at once, in request order.
+        /// Backs the Sales report's per-row and bulk PDF downloads: the browser
+        /// merges each payload through the company's Tax Invoice print template.
+        ///
+        /// Gated by reports.sales.printinvoice rather than invoices.print.view so
+        /// a report-only operator can produce the PDFs without being granted the
+        /// full Invoices-page print right.
+        ///
+        /// The id list comes from the client and is NEVER trusted: every distinct
+        /// CompanyId behind those ids is asserted, so a forged id belonging to
+        /// another tenant fails the whole request (403) rather than leaking one row.
+        /// </summary>
+        [HttpPost("print/tax-invoice/batch")]
+        [HasPermission("reports.sales.printinvoice")]
+        public async Task<ActionResult<List<PrintTaxInvoiceDto>>> GetPrintTaxInvoiceBatch([FromBody] BatchPrintRequestDto request)
+        {
+            var ids = request?.InvoiceIds ?? new List<int>();
+            if (ids.Count == 0)
+                return BadRequest(new { message = "Provide at least one invoice id." });
+            if (ids.Count > BatchPrintMaxIds)
+                return BadRequest(new { message = $"Too many invoices in one request. Send at most {BatchPrintMaxIds} at a time." });
+
+            // One cheap projection resolves the owning company of every id, so the
+            // guard costs a single query no matter how long the list is.
+            var companyIds = await _service.GetCompanyIdsAsync(ids);
+            if (companyIds.Count != ids.Distinct().Count())
+                return NotFound(new { message = "One or more invoices no longer exist." });
+
+            foreach (var companyId in companyIds.Values.Distinct())
+                await _access.AssertAccessAsync(CurrentUserId, companyId);   // throws → 403
+
+            var result = new List<PrintTaxInvoiceDto>(ids.Count);
+            foreach (var id in ids)
+            {
+                var dto = await _service.GetPrintTaxInvoiceAsync(id);
+                if (dto != null) result.Add(dto);
+            }
+            return Ok(result);
         }
     }
 }

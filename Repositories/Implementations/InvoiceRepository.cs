@@ -238,5 +238,15 @@ namespace MyApp.Api.Repositories.Implementations
 
             return clientIds.ToDictionary(id => id, id => clientsWithInvoices.Contains(id));
         }
+
+        public async Task<Dictionary<int, int>> GetCompanyIdsAsync(IEnumerable<int> invoiceIds)
+        {
+            var ids = invoiceIds.Distinct().ToList();
+            return await _context.Invoices
+                .AsNoTracking()
+                .Where(i => ids.Contains(i.Id))
+                .Select(i => new { i.Id, i.CompanyId })
+                .ToDictionaryAsync(x => x.Id, x => x.CompanyId);
+        }
     }
 }
