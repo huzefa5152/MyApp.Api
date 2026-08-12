@@ -287,7 +287,11 @@ for username, forbidden in forbidden_for.items():
             # audit M-5 (2026-05-13): the response status / timing must not
             # leak "this company exists in another tenant". Every other
             # tenant-scoped endpoint still returns 403 via [AuthorizeCompany].
-            is_company_get = (method == "GET" and path_tpl.startswith("/api/companies/{cid}"))
+            # Exact match, NOT startswith: sub-routes like
+            # /api/companies/{cid}/stamps are ordinary [AuthorizeCompany]
+            # endpoints and correctly 403. A prefix test swept them into the
+            # 404 rule and failed them for behaving properly.
+            is_company_get = (method == "GET" and path_tpl == "/api/companies/{cid}")
             expected_ok = (status == 404) if is_company_get else (status == 403)
             expected_text = "404" if is_company_get else "403"
             check(suite, f"[{username}] {method} {path}", expected_ok,
@@ -464,6 +468,182 @@ status_check("Batch print tenant guard", "admin -> batch print (201 ids, over ca
 
 # Cleanup the seed bill (latest in a fresh company → deletable).
 request("DELETE", f"/api/invoices/{beta_bill['id']}", token=admin)
+
+# Suite 9: Common Clients / Common Suppliers must respect tenant access.
+# These group endpoints aggregate the SAME legal entity across companies. The
+# group list was previously computed over every Client/Supplier row in the
+# database — [AuthorizeCompany] validated the companyId query param but never
+# scoped the rows — so an operator holding one company could read the names of
+# every other tenant sharing that entity, and the detail route handed back each
+# sibling's full contact record (address / phone / email / NTN / STRN / CNIC).
+#
+# Rule: a group is "common" only across companies the CALLER can reach. alice
+# holds Alpha alone, so an entity shared by Alpha + Beta is not common to her.
+print("\n  Suite 9 — Common Clients / Suppliers tenant scoping")
+
+shared_ntn = "7788991"
+shared_name = "Shared Legal Entity Ltd"
+
+# Same NTN in both tenants → EnsureGroup links them into one group.
+status, alpha_shared = request("POST", "/api/clients", token=admin, body={
+    "companyId": alpha["id"], "name": shared_name, "phone": "+92-00-0000000",
+    "site": "Karachi", "ntn": shared_ntn, "cnic": "0000002000002",
+    "strn": "0000002000002", "registrationType": "Registered",
+})
+assert status in (200, 201), f"seed alpha shared client: {status} {alpha_shared}"
+status, beta_shared = request("POST", "/api/clients", token=admin, body={
+    "companyId": beta["id"], "name": shared_name, "phone": "+92-11-1111111",
+    "site": "Lahore", "ntn": shared_ntn, "cnic": "0000002000002",
+    "strn": "0000002000002", "registrationType": "Registered",
+})
+assert status in (200, 201), f"seed beta shared client: {status} {beta_shared}"
+
+# admin reaches both tenants, so the entity IS common to them — this also
+# proves the group actually formed, so alice's empty result below means
+# "scoped out", not "never grouped".
+status, admin_common = request("GET", f"/api/clients/common?companyId={alpha['id']}", token=admin)
+admin_group = next((g for g in (admin_common or []) if g.get("ntn") == shared_ntn), None)
+check("Common tenant scoping", "admin sees the shared entity as a Common Client",
+      status == 200 and admin_group is not None and admin_group.get("companyCount") == 2,
+      f"expected companyCount=2, got {status} {admin_group}")
+
+group_id = (admin_group or {}).get("groupId")
+
+# alice holds Alpha only → the entity is NOT common to her.
+status, alice_common = request("GET", f"/api/clients/common?companyId={alpha['id']}", token=tokens["alice"])
+leaked = [g for g in (alice_common or []) if g.get("ntn") == shared_ntn]
+check("Common tenant scoping", "alice does NOT see the shared entity in Common Clients",
+      status == 200 and not leaked, f"expected no match, got {status} {leaked}")
+
+# No group card may ever name a company alice cannot reach.
+alice_named = {n for g in (alice_common or []) for n in (g.get("companyNames") or [])}
+check("Common tenant scoping", "alice sees no foreign company names in Common Clients",
+      beta["name"] not in alice_named, f"leaked company names: {sorted(alice_named)}")
+
+# /groups has no companyId at all — previously wide open.
+status, alice_groups = request("GET", "/api/clients/groups", token=tokens["alice"])
+group_named = {n for g in (alice_groups or []) for n in (g.get("companyNames") or [])}
+check("Common tenant scoping", "alice /clients/groups excludes foreign company names",
+      status == 200 and beta["name"] not in group_named,
+      f"leaked company names: {sorted(group_named)}")
+
+# Detail route: alice may see her own Alpha member, never Beta's record.
+if group_id:
+    status, detail = request("GET", f"/api/clients/common/{group_id}", token=tokens["alice"])
+    member_cids = {m.get("companyId") for m in ((detail or {}).get("members") or [])}
+    check("Common tenant scoping", "alice group detail excludes the Beta member",
+          status in (200, 403, 404) and beta["id"] not in member_cids,
+          f"expected no Beta member, got {status} members={sorted(c for c in member_cids if c)}")
+
+# Same story on the supplier side.
+status, alpha_sup = request("POST", "/api/suppliers", token=admin, body={
+    "companyId": alpha["id"], "name": shared_name, "phone": "+92-00-0000000",
+    "ntn": shared_ntn, "strn": "0000002000002",
+})
+assert status in (200, 201), f"seed alpha shared supplier: {status} {alpha_sup}"
+status, beta_sup = request("POST", "/api/suppliers", token=admin, body={
+    "companyId": beta["id"], "name": shared_name, "phone": "+92-11-1111111",
+    "ntn": shared_ntn, "strn": "0000002000002",
+})
+assert status in (200, 201), f"seed beta shared supplier: {status} {beta_sup}"
+
+status, admin_sup_common = request("GET", f"/api/suppliers/common?companyId={alpha['id']}", token=admin)
+admin_sup_group = next((g for g in (admin_sup_common or []) if g.get("ntn") == shared_ntn), None)
+check("Common tenant scoping", "admin sees the shared entity as a Common Supplier",
+      status == 200 and admin_sup_group is not None and admin_sup_group.get("companyCount") == 2,
+      f"expected companyCount=2, got {status} {admin_sup_group}")
+
+status, alice_sup_common = request("GET", f"/api/suppliers/common?companyId={alpha['id']}", token=tokens["alice"])
+sup_leaked = [g for g in (alice_sup_common or []) if g.get("ntn") == shared_ntn]
+check("Common tenant scoping", "alice does NOT see the shared entity in Common Suppliers",
+      status == 200 and not sup_leaked, f"expected no match, got {status} {sup_leaked}")
+
+alice_sup_named = {n for g in (alice_sup_common or []) for n in (g.get("companyNames") or [])}
+check("Common tenant scoping", "alice sees no foreign company names in Common Suppliers",
+      beta["name"] not in alice_sup_named, f"leaked company names: {sorted(alice_sup_named)}")
+
+status, alice_sup_groups = request("GET", "/api/suppliers/groups", token=tokens["alice"])
+sup_group_named = {n for g in (alice_sup_groups or []) for n in (g.get("companyNames") or [])}
+check("Common tenant scoping", "alice /suppliers/groups excludes foreign company names",
+      status == 200 and beta["name"] not in sup_group_named,
+      f"leaked company names: {sorted(sup_group_named)}")
+
+# carol reaches BOTH member companies, so the entity IS common to her — with
+# both names on the card. This is the case that fails if the scoping is too
+# aggressive and quietly kills the feature for multi-company operators.
+status, carol_common = request("GET", f"/api/clients/common?companyId={alpha['id']}", token=tokens["carol"])
+carol_group = next((g for g in (carol_common or []) if g.get("ntn") == shared_ntn), None)
+check("Common tenant scoping", "carol (Alpha+Beta) DOES see the shared entity as a Common Client",
+      status == 200 and carol_group is not None and carol_group.get("companyCount") == 2,
+      f"expected companyCount=2, got {status} {carol_group}")
+check("Common tenant scoping", "carol's card names both her companies",
+      carol_group is not None
+      and {alpha["name"], beta["name"]} <= set(carol_group.get("companyNames") or []),
+      f"expected both names, got {(carol_group or {}).get('companyNames')}")
+
+status, carol_sup_common = request("GET", f"/api/suppliers/common?companyId={beta['id']}", token=tokens["carol"])
+carol_sup_group = next((g for g in (carol_sup_common or []) if g.get("ntn") == shared_ntn), None)
+check("Common tenant scoping", "carol DOES see the shared entity as a Common Supplier",
+      status == 200 and carol_sup_group is not None and carol_sup_group.get("companyCount") == 2,
+      f"expected companyCount=2, got {status} {carol_sup_group}")
+
+# bob mirrors alice from the other side — confirms the rule is "reachable
+# member count", not something accidentally keyed to Alpha.
+status, bob_common = request("GET", f"/api/clients/common?companyId={beta['id']}", token=tokens["bob"])
+bob_leaked = [g for g in (bob_common or []) if g.get("ntn") == shared_ntn]
+check("Common tenant scoping", "bob (Beta only) does NOT see the shared entity",
+      status == 200 and not bob_leaked, f"expected no match, got {status} {bob_leaked}")
+bob_named = {n for g in (bob_common or []) for n in (g.get("companyNames") or [])}
+check("Common tenant scoping", "bob sees no Alpha company name",
+      alpha["name"] not in bob_named, f"leaked company names: {sorted(bob_named)}")
+
+# A group living ENTIRELY outside the caller's access must 404 — not 200 with
+# an empty member list, and not 403. A foreign group has to be
+# indistinguishable from one that never existed.
+foreign_ntn = "5566771"
+status, beta_only_client = request("POST", "/api/clients", token=admin, body={
+    "companyId": beta["id"], "name": "Beta Only Entity", "phone": "+92-22-2222222",
+    "site": "Multan", "ntn": foreign_ntn, "cnic": "0000003000003",
+    "strn": "0000003000003", "registrationType": "Registered",
+})
+assert status in (200, 201), f"seed beta-only client: {status} {beta_only_client}"
+status, beta_only_sup = request("POST", "/api/suppliers", token=admin, body={
+    "companyId": beta["id"], "name": "Beta Only Entity", "phone": "+92-22-2222222",
+    "ntn": foreign_ntn, "strn": "0000003000003",
+})
+assert status in (200, 201), f"seed beta-only supplier: {status} {beta_only_sup}"
+
+# admin can enumerate every group, so use that to learn the foreign group id.
+status, all_client_groups = request("GET", "/api/clients/groups", token=admin)
+foreign_cgroup = next((g for g in (all_client_groups or []) if g.get("ntn") == foreign_ntn), None)
+status, all_sup_groups = request("GET", "/api/suppliers/groups", token=admin)
+foreign_sgroup = next((g for g in (all_sup_groups or []) if g.get("ntn") == foreign_ntn), None)
+
+check("Common tenant scoping", "admin can resolve the Beta-only group ids",
+      foreign_cgroup is not None and foreign_sgroup is not None,
+      f"client={foreign_cgroup} supplier={foreign_sgroup}")
+
+if foreign_cgroup:
+    status, _ = request("GET", f"/api/clients/common/{foreign_cgroup['groupId']}", token=tokens["alice"])
+    status_check("Common tenant scoping",
+                 "alice -> GET /clients/common/{beta-only group} is 404", status, 404)
+if foreign_sgroup:
+    status, _ = request("GET", f"/api/suppliers/common/{foreign_sgroup['groupId']}", token=tokens["alice"])
+    status_check("Common tenant scoping",
+                 "alice -> GET /suppliers/common/{beta-only group} is 404", status, 404)
+
+# ...and the Beta-only group must not surface in alice's group list at all.
+status, alice_groups2 = request("GET", "/api/clients/groups", token=tokens["alice"])
+check("Common tenant scoping", "alice /clients/groups omits the Beta-only group",
+      status == 200 and not any(g.get("ntn") == foreign_ntn for g in (alice_groups2 or [])),
+      "Beta-only group leaked into alice's group list")
+
+request("DELETE", f"/api/suppliers/{beta_only_sup['id']}", token=admin)
+request("DELETE", f"/api/clients/{beta_only_client['id']}", token=admin)
+for sid in (alpha_sup, beta_sup):
+    request("DELETE", f"/api/suppliers/{sid['id']}", token=admin)
+for cid in (alpha_shared, beta_shared):
+    request("DELETE", f"/api/clients/{cid['id']}", token=admin)
 
 # Cleanup the seed Beta client
 request("DELETE", f"/api/clients/{beta_client['id']}", token=admin)

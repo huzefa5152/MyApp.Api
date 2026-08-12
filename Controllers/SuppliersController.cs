@@ -42,18 +42,21 @@ namespace MyApp.Api.Controllers
         [HasPermission("suppliers.manage.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<CommonSupplierDto>>> GetCommon([FromQuery] int companyId)
-            => Ok(await _groupService.GetCommonSuppliersAsync(companyId));
+            => Ok(await _groupService.GetCommonSuppliersAsync(
+                companyId, await _access.GetAccessibleCompanyIdsAsync(CurrentUserId)));
 
         [HttpGet("groups")]
         [HasPermission("suppliers.manage.view")]
         public async Task<ActionResult<List<CommonSupplierDto>>> GetAllGroups()
-            => Ok(await _groupService.GetAllGroupsAsync());
+            => Ok(await _groupService.GetAllGroupsAsync(
+                await _access.GetAccessibleCompanyIdsAsync(CurrentUserId)));
 
         [HttpGet("common/{groupId:int}")]
         [HasPermission("suppliers.manage.view")]
         public async Task<ActionResult<CommonSupplierDetailDto>> GetCommonById(int groupId)
         {
-            var detail = await _groupService.GetByIdAsync(groupId);
+            var allowed = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            var detail = await _groupService.GetByIdAsync(groupId, allowed);
             if (detail == null) return NotFound();
             return Ok(detail);
         }

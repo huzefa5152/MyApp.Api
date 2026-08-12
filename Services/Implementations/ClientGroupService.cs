@@ -96,22 +96,28 @@ namespace MyApp.Api.Services.Implementations
             return group;
         }
 
-        public async Task<List<CommonClientDto>> GetCommonClientsAsync(int companyId)
+        public async Task<List<CommonClientDto>> GetCommonClientsAsync(int companyId, IReadOnlyCollection<int> accessibleCompanyIds)
         {
             // "Common Client" = a legal entity that more than one tenant
-            // has as a client. The panel sits ABOVE the per-company
-            // dropdown precisely because it's cross-tenant by definition,
-            // so the list MUST stay stable when the operator switches
-            // companies — only the per-card "your company has this one"
-            // hint changes.
+            // has as a client.
             //
-            // Filter rule: HAVING COUNT(DISTINCT CompanyId) >= 2.
-            // companyId is used only to compute ThisCompanyClientId
-            // (a deep-link to the operator's own row in the group);
-            // it does NOT exclude groups where the current company
-            // has no member.
+            // Filter rule: HAVING COUNT(DISTINCT CompanyId) >= 2, counted
+            // ONLY over companies the caller can reach. companyId still just
+            // computes ThisCompanyClientId (the deep-link to the operator's
+            // own row).
+            //
+            // The membership filter is the security boundary. This list used
+            // to be built over every Client row in the database on the theory
+            // that the panel should "stay stable when the operator switches
+            // companies" — but that leaked the NAMES of every tenant sharing
+            // the entity to anyone holding any single company. "Common" is
+            // relative to the caller: an operator with one company sees an
+            // empty panel, because from where they stand nothing is shared.
+            var allowed = accessibleCompanyIds as IReadOnlyCollection<int> ?? accessibleCompanyIds.ToList();
+            if (allowed.Count == 0) return new List<CommonClientDto>();
+
             var groupSummaries = await _db.Clients
-                .Where(c => c.ClientGroupId != null)
+                .Where(c => c.ClientGroupId != null && allowed.Contains(c.CompanyId))
                 .GroupBy(c => c.ClientGroupId!.Value)
                 .Where(g => g.Select(c => c.CompanyId).Distinct().Count() >= 2)
                 .Select(g => new
@@ -133,9 +139,13 @@ namespace MyApp.Api.Services.Implementations
                 .Where(g => groupIds.Contains(g.Id))
                 .ToDictionaryAsync(g => g.Id);
 
-            // One-shot fetch of every member-company name for the cards.
+            // One-shot fetch of the member-company names for the cards —
+            // restricted to reachable companies so a card never names a
+            // tenant the caller has no access to.
             var memberCompanies = await _db.Clients
-                .Where(c => c.ClientGroupId != null && groupIds.Contains(c.ClientGroupId!.Value))
+                .Where(c => c.ClientGroupId != null
+                            && groupIds.Contains(c.ClientGroupId!.Value)
+                            && allowed.Contains(c.CompanyId))
                 .Select(c => new { c.ClientGroupId, c.Company.Name })
                 .ToListAsync();
             var companyNamesByGroup = memberCompanies
@@ -158,7 +168,7 @@ namespace MyApp.Api.Services.Implementations
                 .ToList();
         }
 
-        public async Task<List<CommonClientDto>> GetAllGroupsAsync()
+        public async Task<List<CommonClientDto>> GetAllGroupsAsync(IReadOnlyCollection<int> accessibleCompanyIds)
         {
             // Every group, single-member or multi-company. Used by config
             // screens (PO Formats etc.) that key off "the legal entity"
@@ -166,8 +176,16 @@ namespace MyApp.Api.Services.Implementations
             // share with another tenant". The per-card metadata is the
             // same shape as the Common Clients panel so the UI can reuse
             // the rendering bits.
+            //
+            // This route takes no companyId, so it carried NO tenant guard at
+            // all — it returned every group in the database. Scoped to the
+            // caller's companies; a group with no reachable member drops out
+            // because the grouping now has nothing to aggregate.
+            var allowed = accessibleCompanyIds as IReadOnlyCollection<int> ?? accessibleCompanyIds.ToList();
+            if (allowed.Count == 0) return new List<CommonClientDto>();
+
             var groupSummaries = await _db.Clients
-                .Where(c => c.ClientGroupId != null)
+                .Where(c => c.ClientGroupId != null && allowed.Contains(c.CompanyId))
                 .GroupBy(c => c.ClientGroupId!.Value)
                 .Select(g => new
                 {
@@ -186,7 +204,9 @@ namespace MyApp.Api.Services.Implementations
                 .ToDictionaryAsync(g => g.Id);
 
             var memberCompanies = await _db.Clients
-                .Where(c => c.ClientGroupId != null && groupIds.Contains(c.ClientGroupId!.Value))
+                .Where(c => c.ClientGroupId != null
+                            && groupIds.Contains(c.ClientGroupId!.Value)
+                            && allowed.Contains(c.CompanyId))
                 .Select(c => new { c.ClientGroupId, c.Company.Name })
                 .ToListAsync();
             var companyNamesByGroup = memberCompanies
@@ -214,13 +234,22 @@ namespace MyApp.Api.Services.Implementations
                 .ToList();
         }
 
-        public async Task<CommonClientDetailDto?> GetByIdAsync(int groupId)
+        public async Task<CommonClientDetailDto?> GetByIdAsync(int groupId, IReadOnlyCollection<int> accessibleCompanyIds)
         {
+            // Members carry each sibling's full contact record (address,
+            // phone, email, NTN, STRN, CNIC). Unscoped, this route handed
+            // that to anyone who could guess a group id. Restricted to
+            // reachable companies; when none are reachable we return null so
+            // the controller 404s and a foreign group is indistinguishable
+            // from one that doesn't exist.
+            var allowed = accessibleCompanyIds as IReadOnlyCollection<int> ?? accessibleCompanyIds.ToList();
+            if (allowed.Count == 0) return null;
+
             var group = await _db.ClientGroups.FirstOrDefaultAsync(g => g.Id == groupId);
             if (group == null) return null;
 
             var members = await _db.Clients
-                .Where(c => c.ClientGroupId == groupId)
+                .Where(c => c.ClientGroupId == groupId && allowed.Contains(c.CompanyId))
                 .Select(c => new
                 {
                     c.Id,
@@ -238,6 +267,10 @@ namespace MyApp.Api.Services.Implementations
                     c.FbrProvinceCode,
                 })
                 .ToListAsync();
+
+            // No reachable member → treat as not found rather than throwing
+            // on the representative lookup below.
+            if (members.Count == 0) return null;
 
             // Master fields come from the FIRST member by Id — the backfill
             // and EnsureGroup paths keep the group's members in sync, so any

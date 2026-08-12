@@ -13,9 +13,13 @@ namespace MyApp.Api.Services.Interfaces
     public interface ISupplierGroupService
     {
         Task<SupplierGroup> EnsureGroupForSupplierAsync(Supplier supplier);
-        Task<List<CommonSupplierDto>> GetCommonSuppliersAsync(int companyId);
-        Task<List<CommonSupplierDto>> GetAllGroupsAsync();
-        Task<CommonSupplierDetailDto?> GetByIdAsync(int groupId);
+        // Every read is scoped to the caller's accessible companies — see the
+        // matching members on IClientGroupService for the full rationale.
+        // "Common" is relative to the caller: an operator holding one company
+        // sees an empty panel rather than the names of unreachable tenants.
+        Task<List<CommonSupplierDto>> GetCommonSuppliersAsync(int companyId, IReadOnlyCollection<int> accessibleCompanyIds);
+        Task<List<CommonSupplierDto>> GetAllGroupsAsync(IReadOnlyCollection<int> accessibleCompanyIds);
+        Task<CommonSupplierDetailDto?> GetByIdAsync(int groupId, IReadOnlyCollection<int> accessibleCompanyIds);
         Task<CommonSupplierUpdateResultDto> UpdateAsync(int groupId, CommonSupplierUpdateDto dto, IReadOnlyCollection<int> accessibleCompanyIds);
         Task<CommonSupplierUpdateResultDto> DeleteAsync(int groupId, IReadOnlyCollection<int> accessibleCompanyIds);
         (string GroupKey, string? NormalizedNtn, string NormalizedName) ComputeGroupKey(string? name, string? ntn);
