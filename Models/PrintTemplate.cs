@@ -25,6 +25,16 @@ namespace MyApp.Api.Models
         // operator can pin this to the data sheet's name so the importer
         // resolves to the right index every time. Null = auto-detect.
         public string? ExcelSheetName { get; set; }
+
+        // The company stamp rendered into this template's {{stamp}} slot.
+        // NULL = no signature, which is the state every template created before
+        // stamps existed starts in — assignment is always opt-in, never
+        // backfilled. Cleared (not cascaded) when the stamp is deleted, so a
+        // removed stamp degrades the document to "no signature" rather than
+        // leaving a broken image on every print.
+        public int? StampId { get; set; }
+        public CompanyStamp? Stamp { get; set; }
+
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
         public Company Company { get; set; } = null!;

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getTemplatesByCompany } from "../api/printTemplateApi";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
+import { withStamp } from "../utils/stampSlot";
 
 // Generic per-document-type print-template picker state, shared by every
 // document screen (quotes, orders, challans, bills, tax invoices, notes,
@@ -31,7 +32,7 @@ const readStored = (companyId, templateType) => {
 };
 
 export function usePrintTemplates(templateType) {
-  const { selectedCompany } = useCompany();
+  const { selectedCompany, companyStamps } = useCompany();
   const { has } = usePermissions();
   const canViewTemplates = has("printtemplates.manage.view");
   const companyId = selectedCompany?.id || null;
@@ -103,12 +104,28 @@ export function usePrintTemplates(templateType) {
     [templates, selectedId]
   );
 
+  // Slug -> URL for the active company's stamps, so {{stamp}} can be resolved
+  // without another fetch. CompanyContext already holds this list.
+  const stampsBySlug = useMemo(
+    () => Object.fromEntries((companyStamps || []).map((s) => [s.slug, s.url])),
+    [companyStamps]
+  );
+  const defaultStampSlug = useMemo(
+    () => (companyStamps || []).find((s) => s.isDefault)?.slug || null,
+    [companyStamps]
+  );
+
   // Explicit pick wins; Auto (or a not-yet-validated stale pick) falls back to
   // the default template. The `doc` argument is accepted for call-site
   // compatibility but not consulted.
+  //
+  // withStamp() is THE place the {{stamp}} slot becomes a real <img src> (or
+  // disappears). Every print / PDF / Excel path reaches its template through
+  // here, so none of those ~20 call sites needs to know stamps exist. Keep this
+  // wrap in place when porting — it is what makes the feature branch-portable.
   const resolveTemplate = useCallback(
-    (_doc) => selectedTemplate || resolveAuto(),
-    [selectedTemplate, resolveAuto]
+    (_doc) => withStamp(selectedTemplate || resolveAuto(), stampsBySlug, defaultStampSlug),
+    [selectedTemplate, resolveAuto, stampsBySlug, defaultStampSlug]
   );
 
   return {

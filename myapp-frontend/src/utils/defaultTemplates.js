@@ -53,6 +53,7 @@ export const defaultChallanTemplate = `<!DOCTYPE html><html><head><title>DC #{{c
   .sig-block { text-align: center; }
   .sig-block .line { width: 220px; border-top: 1.5px solid #4a90b8; margin-bottom: 1px; }
   .sig-block .label { font-size: 13px; font-weight: normal; color: #000; }
+  .stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
 </style></head><body>
 
 <div class="main-content">
@@ -95,7 +96,7 @@ export const defaultChallanTemplate = `<!DOCTYPE html><html><head><title>DC #{{c
 <div class="footer-section">
   <div class="thank-you">Thank you for your business!</div>
   <div class="sig-row">
-    <div class="sig-block"><div class="line"></div><div class="label">Signature and Stamp</div></div>
+    <div class="sig-block"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Signature and Stamp</div></div>
     <div class="sig-block"><div class="line"></div><div class="label">Receiver Signature and Stamp</div></div>
   </div>
 </div>
@@ -199,6 +200,7 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
   /* ---- Types footer ---- */
   .types-footer { text-align: center; margin-top: 20px; font-size: 12pt; font-weight: bold;
                    text-transform: uppercase; letter-spacing: 2px; }
+  .stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
 </style></head><body>
 
 <div class="main-content">
@@ -285,7 +287,7 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
 <!-- Footer: signature + types (pushed to bottom) -->
 <div class="footer-section">
   <div class="sig-row">
-    <span class="sig-text">Signature and Stamp</span>
+    <span class="sig-text"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>Signature and Stamp</span>
     <span class="sig-text">Receiver Signature and Stamp</span>
   </div>
 
@@ -394,6 +396,7 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
   .sig-block { text-align: center; }
   .sig-block .line { width: 220px; border-top: 1px solid #000; margin-bottom: 3px; }
   .sig-block .label { font-size: 9pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+  .stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
 </style></head><body>
 
 <div class="main-content">
@@ -528,7 +531,7 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
 <!-- Footer -->
 <div class="footer-section">
   <div class="sig-row">
-    <div class="sig-block"><div class="line"></div><div class="label">Signature and Stamp</div></div>
+    <div class="sig-block"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Signature and Stamp</div></div>
     <div class="sig-block"><div class="line"></div><div class="label">Receiver Signature and Stamp</div></div>
   </div>
 </div>

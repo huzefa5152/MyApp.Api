@@ -57,7 +57,7 @@ table.items tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
 .sig .line { width: 200px; border-top: 1.5px solid #555; margin-bottom: 4px; }
 .sig .lbl { font-size: 9pt; color: #444; font-style: italic; }
 .bottom-rule { border-top: 4px double #000; margin-top: 10px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 <div class="top-rule">
   <div>
@@ -107,7 +107,7 @@ table.items tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
 </div>
 <div class="footer-sect">
   <div class="sigs">
-    <div class="sig"><div class="line"></div><div class="lbl">Prepared By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Prepared By</div></div>
     <div class="sig"><div class="line"></div><div class="lbl">Approved By</div></div>
   </div>
   <div class="bottom-rule"></div>
@@ -160,7 +160,7 @@ table.items th.c { text-align: center; }
 .sig { text-align: center; }
 .sig .line { width: 180px; border-top: 1.5px solid #4338ca; margin-bottom: 4px; }
 .sig .lbl { font-size: 8pt; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 <div class="accent"></div>
 <div class="hdr">
@@ -218,7 +218,7 @@ table.items th.c { text-align: center; }
 </div>
 <div class="footer-sect">
   <div class="sigs">
-    <div class="sig"><div class="line"></div><div class="lbl">Prepared By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Prepared By</div></div>
     <div class="sig"><div class="line"></div><div class="lbl">Approved By</div></div>
   </div>
 </div>
@@ -272,7 +272,7 @@ table.items tbody tr:nth-child(even) td { background: #f0f4f8 !important; }
 .sig .line { width: 200px; border-top: 2px solid #1e3a5f; margin-bottom: 4px; }
 .sig .lbl { font-size: 8.5pt; color: #555; text-transform: uppercase; }
 .footer-band { height: 6px; background: #1e3a5f !important; margin-top: 6px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="nav-band">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:55px;display:block;margin-bottom:6px">{{/if}}
@@ -314,7 +314,7 @@ table.items tbody tr:nth-child(even) td { background: #f0f4f8 !important; }
 </div>
 <div class="footer-sect">
   <div class="sigs">
-    <div class="sig"><div class="line"></div><div class="lbl">Prepared By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Prepared By</div></div>
     <div class="sig"><div class="line"></div><div class="lbl">Approved By</div></div>
   </div>
 </div>
@@ -368,7 +368,7 @@ table.items tbody tr:nth-child(even) td { background: #fff7ed !important; }
 .sig .line { width: 200px; border-top: 2px solid #9a3412; margin-bottom: 4px; }
 .sig .lbl { font-size: 8.5pt; color: #555; }
 .footer-accent { height: 6px; background: linear-gradient(135deg, #9a3412, #ea580c) !important; margin-top: 8px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="banner">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:55px;display:block;margin-bottom:6px">{{/if}}
@@ -410,7 +410,7 @@ table.items tbody tr:nth-child(even) td { background: #fff7ed !important; }
 </div>
 <div class="footer-sect">
   <div class="sigs">
-    <div class="sig"><div class="line"></div><div class="lbl">Prepared By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Prepared By</div></div>
     <div class="sig"><div class="line"></div><div class="lbl">Approved By</div></div>
   </div>
 </div>
@@ -460,7 +460,7 @@ table.items th.l { text-align: left; }
 .sig .line { width: 180px; border-top: 1.5px solid #000; margin-bottom: 4px; }
 .sig .lbl { font-size: 8.5pt; text-transform: uppercase; font-weight: 700; }
 .bottom-border { border-top: 2px solid #000; margin-top: 8px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 <div class="hdr">
   <div>
@@ -510,7 +510,7 @@ table.items th.l { text-align: left; }
 </div>
 <div class="footer-sect">
   <div class="sigs">
-    <div class="sig"><div class="line"></div><div class="lbl">Prepared By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Prepared By</div></div>
     <div class="sig"><div class="line"></div><div class="lbl">Checked By</div></div>
     <div class="sig"><div class="line"></div><div class="lbl">Approved By</div></div>
   </div>
@@ -570,7 +570,7 @@ table.items tbody tr:nth-child(even) td { background: #f9f6ef !important; }
 .sig .line { width: 200px; border-top: 1px solid #b8922a; margin-bottom: 4px; }
 .sig .lbl { font-size: 8.5pt; color: #777; font-style: italic; }
 .bot-gold { height: 3px; background: #b8922a !important; margin-top: 10px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 <div class="top-gold"></div>
 <div class="hdr">
@@ -624,7 +624,7 @@ table.items tbody tr:nth-child(even) td { background: #f9f6ef !important; }
 </div>
 <div class="footer-sect">
   <div class="sigs">
-    <div class="sig"><div class="line"></div><div class="lbl">Prepared By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Prepared By</div></div>
     <div class="sig"><div class="line"></div><div class="lbl">Approved By</div></div>
   </div>
   <div class="bot-gold"></div>
@@ -674,7 +674,7 @@ table.items tbody tr:nth-child(even) td { background: #eef2fa !important; }
 .sig { text-align: center; }
 .sig .line { width: 160px; border-top: 1px solid #333; margin-bottom: 3px; }
 .sig .lbl { font-size: 7.5pt; color: #555; text-transform: uppercase; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 <div class="hdr">
   <div>
@@ -714,7 +714,7 @@ table.items tbody tr:nth-child(even) td { background: #eef2fa !important; }
 </div>
 <div class="footer-sect">
   <div class="sigs">
-    <div class="sig"><div class="line"></div><div class="lbl">Prepared By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Prepared By</div></div>
     <div class="sig"><div class="line"></div><div class="lbl">Checked By</div></div>
     <div class="sig"><div class="line"></div><div class="lbl">Approved By</div></div>
   </div>
@@ -769,7 +769,7 @@ table.items tbody tr:nth-child(even) td { background: #edf1f7 !important; }
 .sig { text-align: center; }
 .sig .line { width: 180px; border-top: 1.5px solid #1b3057; margin-bottom: 4px; }
 .sig .lbl { font-size: 8.5pt; color: #666; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="sidebar">
   {{#if companyLogoPath}}<div class="sb-logo"><img src="{{companyLogoPath}}" style="height:55px;max-width:100%"></div>{{/if}}
   <div class="sb-name">{{companyBrandName}}</div>
@@ -825,7 +825,7 @@ table.items tbody tr:nth-child(even) td { background: #edf1f7 !important; }
   </div>
   <div class="footer-sect">
     <div class="sigs">
-      <div class="sig"><div class="line"></div><div class="lbl">Prepared By</div></div>
+      <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Prepared By</div></div>
       <div class="sig"><div class="line"></div><div class="lbl">Approved By</div></div>
     </div>
   </div>
@@ -883,7 +883,7 @@ table.items tbody tr:nth-child(even) td { background: #f4f4f4 !important; }
 .sig { text-align: center; }
 .sig .line { width: 180px; border-top: 1.5px solid #000; margin-bottom: 4px; }
 .sig .lbl { font-size: 8.5pt; color: #444; text-transform: uppercase; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 {{#if companyLogoPath}}<div style="text-align:center;margin-bottom:6px"><img src="{{companyLogoPath}}" style="height:55px"></div>{{/if}}
 <div class="outer-box">
@@ -937,7 +937,7 @@ table.items tbody tr:nth-child(even) td { background: #f4f4f4 !important; }
 </div>
 <div class="footer-sect">
   <div class="sigs">
-    <div class="sig"><div class="line"></div><div class="lbl">Prepared By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Prepared By</div></div>
     <div class="sig"><div class="line"></div><div class="lbl">Checked By</div></div>
     <div class="sig"><div class="line"></div><div class="lbl">Approved By</div></div>
   </div>
@@ -995,7 +995,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
 .sig .line { width: 200px; border-top: 1.5px solid #14532d; margin-bottom: 4px; }
 .sig .lbl { font-size: 8.5pt; color: #555; }
 .bot-rule { border-top: 2px solid #14532d; margin-top: 8px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 <div class="bismillah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
 <div class="top-rule"></div>
@@ -1048,7 +1048,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
 </div>
 <div class="footer-sect">
   <div class="sigs">
-    <div class="sig"><div class="line"></div><div class="lbl">Prepared By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Prepared By</div></div>
     <div class="sig"><div class="line"></div><div class="lbl">Approved By</div></div>
   </div>
   <div class="bot-rule"></div>
@@ -1107,7 +1107,7 @@ table.items tbody tr:nth-child(even) td { background: #f7f7e8 !important; }
 .sig .line { width: 200px; border-top: 2px solid #166534; margin-bottom: 4px; }
 .sig .lbl { font-size: 8.5pt; color: #555; }
 .bot-band { height: 6px; background: linear-gradient(90deg, #166534, #ca8a04) !important; margin-top: 8px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="top-band">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:52px;display:block;margin-bottom:5px">{{/if}}
@@ -1156,7 +1156,7 @@ table.items tbody tr:nth-child(even) td { background: #f7f7e8 !important; }
 </div>
 <div class="footer-sect">
   <div class="sigs">
-    <div class="sig"><div class="line"></div><div class="lbl">Prepared By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Prepared By</div></div>
     <div class="sig"><div class="line"></div><div class="lbl">Approved By</div></div>
   </div>
 </div>
@@ -1211,7 +1211,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdfa !important; }
 .sig .line { width: 200px; border-top: 2px solid #0d9488; margin-bottom: 4px; }
 .sig .lbl { font-size: 8.5pt; color: #64748b; }
 .bot-slate { height: 5px; background: #475569 !important; margin-top: 8px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="hdr-band">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:52px;display:block;margin-bottom:5px">{{/if}}
@@ -1269,7 +1269,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdfa !important; }
 </div>
 <div class="footer-sect">
   <div class="sigs">
-    <div class="sig"><div class="line"></div><div class="lbl">Prepared By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Prepared By</div></div>
     <div class="sig"><div class="line"></div><div class="lbl">Approved By</div></div>
   </div>
 </div>
@@ -1324,7 +1324,7 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
 .sig .line { width: 200px; border-top: 2px solid #1e40af; margin-bottom: 4px; }
 .sig .lbl { font-size: 8.5pt; color: #555; }
 .bot-line { border-top: 2.5px solid #1e40af; margin-top: 8px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 <div class="letterhead">
   {{#if companyLogoPath}}<div class="lh-logo"><img src="{{companyLogoPath}}" style="height:68px"></div>{{/if}}
@@ -1369,7 +1369,7 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
 </div>
 <div class="footer-sect">
   <div class="sigs">
-    <div class="sig"><div class="line"></div><div class="lbl">Prepared By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Prepared By</div></div>
     <div class="sig"><div class="line"></div><div class="lbl">Approved By</div></div>
   </div>
   <div class="bot-line"></div>
@@ -1424,7 +1424,7 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
 .sig .line { width: 200px; border-top: 2px solid #1e40af; margin-bottom: 4px; }
 .sig .lbl { font-size: 8.5pt; color: #555; }
 .bot-line { border-top: 2px solid #1e40af; margin-top: 8px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="watermark">PURCHASE</div>
 <div class="main">
 <div class="hdr">
@@ -1469,7 +1469,7 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
 </div>
 <div class="footer-sect">
   <div class="sigs">
-    <div class="sig"><div class="line"></div><div class="lbl">Prepared By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Prepared By</div></div>
     <div class="sig"><div class="line"></div><div class="lbl">Approved By</div></div>
   </div>
   <div class="bot-line"></div>
@@ -1526,7 +1526,7 @@ table.items tbody tr:nth-child(even) td { background: #f2f2f2 !important; }
 .sig-row { border-top: 2px solid #000; display: flex; }
 .sig-cell { flex: 1; padding: 28px 10px 6px; text-align: center; font-size: 7.5pt; text-transform: uppercase; font-weight: 700; }
 .sig-cell:not(:last-child) { border-right: 2px solid #000; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 {{#if companyLogoPath}}<div style="text-align:center;margin-bottom:4px"><img src="{{companyLogoPath}}" style="height:50px"></div>{{/if}}
 <div class="form-outer">
@@ -1580,7 +1580,7 @@ table.items tbody tr:nth-child(even) td { background: #f2f2f2 !important; }
     </div>
   </div>
   <div class="sig-row">
-    <div class="sig-cell">Prepared By</div>
+    <div class="sig-cell"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>Prepared By</div>
     <div class="sig-cell">Checked By</div>
     <div class="sig-cell">Approved By</div>
   </div>

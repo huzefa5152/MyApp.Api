@@ -11,5 +11,12 @@ namespace MyApp.Api.Repositories.Interfaces
         Task<CompanyStamp> CreateAsync(CompanyStamp stamp);
         Task SaveAsync();
         Task DeleteAsync(CompanyStamp stamp);
+
+        // Make this the company's one default stamp, clearing the previous one.
+        Task SetDefaultAsync(int companyId, int stampId);
+
+        // How many print templates currently render this stamp. Shown before
+        // deleting so the operator knows what will start printing unsigned.
+        Task<int> TemplateUsageCountAsync(int stampId);
     }
 }

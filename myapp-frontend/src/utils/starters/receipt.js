@@ -59,7 +59,7 @@ tfoot td { font-weight: 700; border-top: 2px solid #000; }
 .sig { text-align: center; }
 .sig .line { width: 190px; border-top: 1.5px solid #333; margin: 0 auto 4px; }
 .sig .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="header">
   <div>
     <div class="logo-wrap">{{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:60px">{{/if}}</div>
@@ -103,7 +103,7 @@ tfoot td { font-weight: 700; border-top: 2px solid #000; }
 {{/if}}
 {{#if description}}<div class="desc"><b>Note:</b> {{{richText description}}}</div>{{/if}}
 <div class="footer">
-  <div class="sig"><div class="line"></div><div class="label">Received By</div></div>
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Received By</div></div>
   <div class="sig"><div class="line"></div><div class="label">Authorized Signature</div></div>
 </div>
 </body></html>`,
@@ -156,7 +156,7 @@ tfoot td { font-weight: 700; border-top: 2px solid #1b7a3d; color: #14672f; }
 .sig { text-align: center; }
 .sig .line { width: 180px; border-top: 2px solid #1b7a3d; margin: 0 auto 4px; }
 .sig .label { font-size: 9px; color: #777; text-transform: uppercase; letter-spacing: 0.5px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="accent-rule"></div>
 <div class="header">
   <div>
@@ -201,7 +201,7 @@ tfoot td { font-weight: 700; border-top: 2px solid #1b7a3d; color: #14672f; }
 {{/if}}
 {{#if description}}<div class="desc"><b>Note:</b> {{{richText description}}}</div>{{/if}}
 <div class="footer">
-  <div class="sig"><div class="line"></div><div class="label">Received By</div></div>
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Received By</div></div>
   <div class="sig"><div class="line"></div><div class="label">Authorized Signature</div></div>
 </div>
 </body></html>`,
@@ -259,7 +259,7 @@ tfoot td { font-weight: 700; background: #e8f5e9 !important; }
 .sig { text-align: center; }
 .sig .line { width: 200px; border-top: 2px solid #1b7a3d; margin: 0 auto 5px; }
 .sig .label { font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="header-band">
   <div class="hb-left">
     {{#if companyLogoPath}}<div class="hb-logo"><img src="{{companyLogoPath}}"></div>{{/if}}
@@ -306,7 +306,7 @@ tfoot td { font-weight: 700; background: #e8f5e9 !important; }
   {{/if}}
   {{#if description}}<div class="desc"><b>Note:</b> {{{richText description}}}</div>{{/if}}
   <div class="footer">
-    <div class="sig"><div class="line"></div><div class="label">Received By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Received By</div></div>
     <div class="sig"><div class="line"></div><div class="label">Authorized Signature</div></div>
   </div>
 </div>
@@ -359,7 +359,7 @@ tfoot td { font-weight: 700; }
 .sig { text-align: center; }
 .sig .line { width: 190px; border-top: 1px solid #000; margin: 0 auto 4px; }
 .sig .label { font-size: 8pt; text-transform: uppercase; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:50px;margin-bottom:6px;display:block;filter:grayscale(100%)">{{/if}}
@@ -403,7 +403,7 @@ tfoot td { font-weight: 700; }
 {{/if}}
 {{#if description}}<div class="desc"><b>Note:</b> {{{richText description}}}</div>{{/if}}
 <div class="footer">
-  <div class="sig"><div class="line"></div><div class="label">Received By</div></div>
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Received By</div></div>
   <div class="sig"><div class="line"></div><div class="label">Authorized Signature</div></div>
 </div>
 </body></html>`,

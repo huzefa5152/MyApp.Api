@@ -65,6 +65,7 @@ namespace MyApp.Api.Controllers
             Name = s.Name,
             Slug = s.Slug,
             Url = s.FilePath,
+            IsDefault = s.IsDefault,
             SortOrder = s.SortOrder,
             UpdatedAt = s.UpdatedAt,
         };
@@ -76,7 +77,35 @@ namespace MyApp.Api.Controllers
         {
             await _access.AssertAccessAsync(CurrentUserId, companyId);
             var stamps = await _repo.GetByCompanyAsync(companyId);
-            return Ok(stamps.Select(ToDto));
+            var dtos = new List<CompanyStampDto>();
+            foreach (var s in stamps)
+            {
+                var dto = ToDto(s);
+                dto.UsedByTemplates = await _repo.TemplateUsageCountAsync(s.Id);
+                dtos.Add(dto);
+            }
+            return Ok(dtos);
+        }
+
+        // Mark this stamp as the company default. Pre-selected in the pickers,
+        // and the stamp the built-in fallback templates render — those have no
+        // PrintTemplate row, so there is no StampId for them to carry.
+        [HttpPut("{id:int}/default")]
+        [HasPermission("printtemplates.stamps.manage")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> SetDefault(int companyId, int id)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+
+            var stamp = await _repo.GetByIdAsync(id);
+            if (stamp == null || stamp.CompanyId != companyId) return NotFound();
+
+            await _repo.SetDefaultAsync(companyId, id);
+            await AuditAsync("COMPANYSTAMP_DEFAULT",
+                $"Set stamp \"{stamp.Name}\" (id {id}) as default for company {companyId}", companyId);
+
+            var refreshed = await _repo.GetByIdAsync(id);
+            return Ok(ToDto(refreshed!));
         }
 
         [HttpPost]
