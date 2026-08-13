@@ -74,9 +74,17 @@ export function pinnedSlugs(html) {
 export function materializeStamp(html, url) {
   if (!html) return html;
   if (url) return html.replace(SLOT_TOKEN_RE, escapeAttr(url));
-  // Unassigned: drop the whole slot rather than leave src="" behind, which
-  // renders as a broken-image glyph on the print.
-  return html.replace(SLOT_RE, "").replace(SLOT_TOKEN_RE, "");
+  // Unassigned: drop the slot rather than leave src="" behind, which renders as
+  // a broken-image glyph on the print.
+  //
+  // Only slots that STILL hold an unresolved {{stamp}} are removed. This runs
+  // twice on the real print path — once in withStamp(), again as the safety net
+  // in mergeTemplate() — so removing every slot unconditionally would delete the
+  // <img> withStamp had just resolved, and an assigned stamp would silently
+  // vanish from every document.
+  return html
+    .replace(SLOT_RE, (slot) => (/\{\{\s*stamp\s*\}\}/.test(slot) ? "" : slot))
+    .replace(SLOT_TOKEN_RE, "");
 }
 
 /**

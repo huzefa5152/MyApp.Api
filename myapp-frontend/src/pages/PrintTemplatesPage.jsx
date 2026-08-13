@@ -14,6 +14,7 @@ import { uploadStamp, updateStamp, deleteStamp, setDefaultStamp } from "../api/s
 import StampPicker from "../Components/templateEditor/StampPicker";
 import {
   STAMP_STATE, detectStampState, injectSignatureBlock, convertPinnedToSlot, pinnedSlugs,
+  materializeStamp,
 } from "../utils/stampSlot";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -80,7 +81,10 @@ export default function PrintTemplatesPage() {
   }, [selectedCompany]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setSearch(""); setTypeFilter(""); setDefaultOnly(false); }, [selectedCompany?.id]);
+  // Switching company clears the text search and the default-only toggle, but
+  // deliberately KEEPS the document-type filter: an operator comparing the same
+  // document type across companies should not have to re-pick it every switch.
+  useEffect(() => { setSearch(""); setDefaultOnly(false); }, [selectedCompany?.id]);
 
   const applyFilters = (rows) => rows.filter((t) => {
     if (typeFilter && t.templateType !== typeFilter) return false;
@@ -466,7 +470,13 @@ export default function PrintTemplatesPage() {
 
           {/* ── Tab: Starter Templates ── */}
           {tab === "starter" && (
-            <StarterGallery embedded selectLabel="Create template" onSelect={createFromStarter} />
+            <StarterGallery
+              embedded
+              selectLabel="Create template"
+              onSelect={createFromStarter}
+              typeFilter={typeFilter}
+              onTypeFilterChange={setTypeFilter}
+            />
           )}
 
           {/* ── Tab: Excel Templates (one per document type) ── */}
@@ -615,9 +625,18 @@ export default function PrintTemplatesPage() {
             </div>
             <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
               <A4PreviewFrame
-                html={buildTemplatePreviewHtml(previewTarget.templateType, previewTarget.htmlContent || "", {
-                  company: selectedCompany,
-                })}
+                html={buildTemplatePreviewHtml(
+                  previewTarget.templateType,
+                  // Resolve {{stamp}} the same way printing does, so the preview
+                  // shows the signature this template will actually carry. Without
+                  // this the slot is stripped and the preview silently disagrees
+                  // with the printed document.
+                  materializeStamp(
+                    previewTarget.htmlContent || "",
+                    companyStamps.find((s) => s.id === previewTarget.stampId)?.url || null,
+                  ),
+                  { company: selectedCompany },
+                )}
                 title={`Preview of ${previewTarget.name}`}
               />
             </div>
