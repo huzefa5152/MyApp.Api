@@ -104,3 +104,9 @@ export const setExcelSheetNameById = (id, sheetName) =>
 
 export const deleteExcelTemplateById = (id) =>
   httpClient.delete(`/printtemplates/${id}/excel-template`);
+
+// Assign / clear the stamp rendered in this template's {{stamp}} slot.
+// htmlContent is sent only by the convert-to-slot and add-signature-block
+// flows, which must change markup and assignment in one write.
+export const setTemplateStamp = (id, stampId, htmlContent = null) =>
+  httpClient.put(`/printtemplates/${id}/stamp`, { stampId, htmlContent });

@@ -66,6 +66,16 @@ namespace MyApp.Api.DTOs
     }
 
     // Data for printing a Sales Tax Invoice
+    /// <summary>
+    /// Request body for the batch Tax Invoice print-data endpoint. The Sales
+    /// report sends the invoice ids currently in view so the browser can render
+    /// every Tax Invoice PDF for a period in one pass.
+    /// </summary>
+    public class BatchPrintRequestDto
+    {
+        public List<int> InvoiceIds { get; set; } = new();
+    }
+
     public class PrintTaxInvoiceDto
     {
         // Supplier (company) details

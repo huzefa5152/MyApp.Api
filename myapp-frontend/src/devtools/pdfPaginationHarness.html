@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>PDF pagination harness</title></head>
+<body>
+<h3 style="font:600 15px system-ui;margin:0 0 4px">PDF pagination harness</h3>
+<p style="font:13px system-ui;color:#555;margin:0 0 10px;max-width:56em">
+  Automated by <code>scripts/test_pdf_pagination.py</code> (Chromium). Use the
+  button to run the same assertions in <em>this</em> browser — that is the way
+  to cover Firefox, Edge or Safari, whose layout engines size text slightly
+  differently and so could paginate differently.
+</p>
+<button id="run" style="font:14px system-ui;padding:6px 14px">Run all checks in this browser</button>
+<pre id="summary" style="font:13px ui-monospace,monospace;margin-top:12px"></pre>
+<pre id="status">idle</pre>
+<!--
+  Test fixture driven by scripts/test_pdf_pagination.py. Served by the Vite dev
+  server only — the production build's sole entry point is index.html, so this
+  never ships.
+
+  It calls the real exportToPdf() so the assertions cover the actual html2canvas
+  -> jsPDF path, not a re-implementation of the pagination decision. jsPDF's
+  save() fires a download that the test harness discards.
+-->
+<script type="module">
+import { mergeTemplate } from "/src/utils/templateEngine.js";
+import { defaultTaxInvoiceTemplate } from "/src/utils/defaultTemplates.js";
+import { SAMPLE_DATA } from "/src/utils/templateSampleData.js";
+import { taxInvoiceStarters } from "/src/utils/starters/taxInvoice.js";
+import { exportToPdf } from "/src/utils/exportUtils.js";
+
+// Every starter an operator can pick for a tax invoice, keyed by its id.
+const STARTERS = Object.fromEntries(taxInvoiceStarters.map((s) => [s.id, s.html]));
+
+// 1x1 PNG standing in for the server-rendered QR data URI. Its rendered size
+// comes from the template's inline width/height, so the layout is unaffected.
+const STUB_PNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ" +
+  "AAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+const mkItems = (n) =>
+  Array.from({ length: n }, (_, i) => ({
+    quantity: 10,
+    uom: "Pcs",
+    description: "Sample Item " + (i + 1) + " long-ish description text",
+    hsCode: "8413.7010",
+    valueExclTax: 8000,
+    gstRate: 18,
+    gstAmount: 1440,
+    totalInclTax: 9440,
+  }));
+
+/**
+ * Force a font stack onto the offscreen PDF container, standing in for a
+ * machine that lacks the template's preferred font. Font availability is the
+ * variable that actually differs between operator machines here — the render
+ * width is pinned at 796px and html2canvas hardcodes scale 2, so neither
+ * device pixel ratio nor browser zoom moves the layout.
+ */
+function applyFontOverride(stack) {
+  const id = "pdf-harness-font-override";
+  document.getElementById(id)?.remove();
+  if (!stack) return;
+  const el = document.createElement("style");
+  el.id = id;
+  el.textContent = ".pdf-content, .pdf-content * { font-family: " + stack + " !important; }";
+  document.head.appendChild(el);
+}
+
+/** Bounding band of the FBR block, in the same canvas-pixel space as layout.cuts. */
+function fbrBand(content, pxRatio) {
+  // The shipped template tags the block; the per-company templates stored in
+  // the database predate that class and are matched on their inline border.
+  // Shipped default tags its block .fbr-block; the starters each use their own
+  // class; the per-company templates stored in the database predate all of
+  // that and are matched on their inline border colour.
+  const el = content.querySelector(
+    '.fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, div[style*="1a5276"]');
+  if (!el) return null;
+  const top = content.getBoundingClientRect().top;
+  const r = el.getBoundingClientRect();
+  return { start: (r.top - top) * pxRatio, end: (r.bottom - top) * pxRatio };
+}
+
+window.runPdfCase = async ({ template, itemCount, fontStack }) => {
+  applyFontOverride(fontStack);
+
+  const data = {
+    ...SAMPLE_DATA.TaxInvoice,
+    items: mkItems(itemCount),
+    fbrIRN: "4230193299489DI3H0H1A639572",
+    fbrSubmittedAt: new Date().toISOString(),
+    fbrQrPngDataUrl: STUB_PNG,
+    fbrLogoUrl: STUB_PNG,
+  };
+  const tpl = template === "shipped-default"
+    ? defaultTaxInvoiceTemplate
+    : (STARTERS[template] || window.__EXTRA_TEMPLATES__[template]);
+  if (!tpl) throw new Error("unknown template: " + template);
+
+  let band = null;
+  const layout = await exportToPdf(mergeTemplate(tpl, data), "harness", {
+    onLayout: ({ content, pxRatio }) => { band = fbrBand(content, pxRatio); },
+  });
+
+  applyFontOverride(null);
+  const cutsThroughFbr = band
+    ? layout.cuts.filter((c) => c > band.start + 0.5 && c < band.end - 0.5)
+    : [];
+
+  return {
+    mode: layout.mode,
+    pages: layout.mode === "multipage" ? layout.pages : 1,
+    scale: layout.scale,
+    heightMm: layout.heightMm,
+    oneFitScale: layout.oneFitScale,
+    cuts: layout.cuts,
+    fbrBand: band,
+    fbrFound: !!band,
+    cutsThroughFbr,
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Manual in-browser runner. Mirrors the assertions in
+// scripts/test_pdf_pagination.py so a browser Playwright cannot drive here
+// (Firefox, Edge, Safari) can still be verified by opening this page in it.
+// ---------------------------------------------------------------------------
+const PRODUCTION_SHAPE = 3;   // every invoice on production today is 1-3 items
+const PADDED_ROWS = 20;       // the template pads its table to this many rows
+
+const FONT_MATRIX = [
+  [null, PADDED_ROWS],
+  ["Arial, sans-serif", PADDED_ROWS],
+  ['"Segoe UI", sans-serif', PADDED_ROWS],
+  ['"Times New Roman", serif', PADDED_ROWS],
+  // Stands in for DejaVu Sans — what a machine missing the whole stack falls
+  // back to. Too wide to fit a full 20-row invoice on one page anywhere.
+  ["Verdana, sans-serif", PRODUCTION_SHAPE],
+];
+const COUNTS = [1, 2, 3, 5, 10, 20, 25, 30, 40, 60];
+
+document.getElementById("run").addEventListener("click", async () => {
+  const out = document.getElementById("summary");
+  const fails = [], notes = [];
+  let done = 0;
+  const total = FONT_MATRIX.length * COUNTS.length;
+
+  for (const [font, singlePageUpto] of FONT_MATRIX) {
+    for (const itemCount of COUNTS) {
+      const label = "items=" + String(itemCount).padStart(2) +
+                    " font=" + (font || "template default");
+      const r = await window.runPdfCase({ template: "shipped-default", itemCount, fontStack: font });
+
+      if (!r.fbrFound) fails.push(label + " -- FBR block not found");
+      if (r.cutsThroughFbr.length) fails.push(label + " -- page cut runs through the FBR block");
+      if (itemCount <= singlePageUpto && r.pages !== 1) {
+        fails.push(label + " -- expected 1 page, got " + r.pages +
+                   " (" + r.heightMm.toFixed(1) + "mm)");
+      } else if (itemCount <= PADDED_ROWS && r.pages !== 1) {
+        notes.push(label + " -- paginates (" + r.heightMm.toFixed(1) +
+                   "mm); substituted font too wide for one page");
+      }
+      if (itemCount >= 30 && r.mode !== "multipage") {
+        fails.push(label + " -- expected pagination, got " + r.mode);
+      }
+
+      done++;
+      out.textContent = "running " + done + "/" + total + " ...";
+    }
+  }
+
+  out.textContent =
+    navigator.userAgent + "\n\n" + total + " cases checked\n" +
+    (notes.length ? "\nnotes (not failures):\n  " + notes.join("\n  ") + "\n" : "") +
+    (fails.length ? "\nFAILURES (" + fails.length + "):\n  " + fails.join("\n  ")
+                  : "\nall checks passed");
+});
+
+window.__EXTRA_TEMPLATES__ = window.__EXTRA_TEMPLATES__ || {};
+// Each starter pads its item table to a fixed row count, so every invoice up
+// to that many items renders at exactly the same height. That count is the
+// honest boundary for a "always fits one page" guarantee — past it the table
+// grows per row and the answer depends on the layout.
+window.__STARTER_INFO__ = taxInvoiceStarters.map((s) => {
+  const m = s.html.match(/emptyRows \(math (\d+)/);
+  return { id: s.id, name: s.name, padRows: m ? parseInt(m[1], 10) : 0 };
+});
+window.__STARTER_IDS__ = taxInvoiceStarters.map((s) => s.id);
+window.__HARNESS_READY__ = true;
+document.getElementById("status").textContent = "";
+</script>
+</body>
+</html>

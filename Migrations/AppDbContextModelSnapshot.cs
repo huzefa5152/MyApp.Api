@@ -528,6 +528,56 @@ namespace MyApp.Api.Migrations
                     b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.CompanyStamp", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "Slug")
+                        .IsUnique()
+                        .HasDatabaseName("UX_CompanyStamps_CompanySlug");
+
+                    b.HasIndex(new[] { "CompanyId" }, "UX_CompanyStamps_DefaultPerCompany")
+                        .IsUnique()
+                        .HasFilter("[IsDefault] = 1");
+
+                    b.ToTable("CompanyStamps");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.DeliveryChallan", b =>
                 {
                     b.Property<int>("Id")
@@ -2984,6 +3034,9 @@ namespace MyApp.Api.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<int?>("StampId")
+                        .HasColumnType("int");
+
                     b.Property<string>("TemplateJson")
                         .HasColumnType("nvarchar(max)");
 
@@ -2995,6 +3048,8 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("StampId");
 
                     b.HasIndex(new[] { "CompanyId", "TemplateType" }, "IX_PrintTemplates_CompanyId_TemplateType");
 
@@ -3862,6 +3917,17 @@ namespace MyApp.Api.Migrations
                     b.Navigation("Company");
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.CompanyStamp", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.DeliveryChallan", b =>
                 {
                     b.HasOne("MyApp.Api.Models.Client", "Client")
@@ -4137,7 +4203,14 @@ namespace MyApp.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("MyApp.Api.Models.CompanyStamp", "Stamp")
+                        .WithMany()
+                        .HasForeignKey("StampId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.Navigation("Company");
+
+                    b.Navigation("Stamp");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.PurchaseBill", b =>

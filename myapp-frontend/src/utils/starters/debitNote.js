@@ -58,7 +58,7 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
 .sig { text-align: center; }
 .sig .line { width: 200px; border-top: 1px solid #000; margin-bottom: 3px; }
 .sig .label { font-size: 9pt; font-weight: 700; text-transform: uppercase; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 <div class="header">
   <div>
@@ -131,7 +131,7 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
 </div>
 <div class="footer">
   <div class="sig-row">
-    <div class="sig"><div class="line"></div><div class="label">Authorized Signatory</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Authorized Signatory</div></div>
     <div class="sig"><div class="line"></div><div class="label">Receiver's Signature &amp; Stamp</div></div>
   </div>
 </div>
@@ -185,7 +185,7 @@ table.items thead th.left { text-align: left; }
 .sig { text-align: center; }
 .sig .line { width: 180px; border-top: 2px solid #1565c0; margin-bottom: 3px; }
 .sig .label { font-size: 8pt; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 <div class="accent"></div>
 <div class="top">
@@ -266,7 +266,7 @@ table.items thead th.left { text-align: left; }
 </div>
 <div class="footer">
   <div class="sig-row">
-    <div class="sig"><div class="line"></div><div class="label">Authorized Signatory</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Authorized Signatory</div></div>
     <div class="sig"><div class="line"></div><div class="label">Receiver's Signature &amp; Stamp</div></div>
   </div>
 </div>
@@ -319,7 +319,7 @@ tbody tr:nth-child(even) td { background: #edf2fb !important; }
 .sig { text-align: center; }
 .sig .line { width: 190px; border-top: 1.5px solid #0d2b5e; margin-bottom: 3px; }
 .sig .label { font-size: 8.5pt; color: #555; text-transform: uppercase; font-weight: 700; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="nav-band">
   <div>
     {{#if supplierLogoPath}}<img src="{{supplierLogoPath}}" style="height:44px;margin-bottom:4px;display:block">{{/if}}
@@ -390,7 +390,7 @@ tbody tr:nth-child(even) td { background: #edf2fb !important; }
 </div>
 <div class="footer">
   <div class="sig-row">
-    <div class="sig"><div class="line"></div><div class="label">Authorized Signatory</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Authorized Signatory</div></div>
     <div class="sig"><div class="line"></div><div class="label">Receiver's Signature &amp; Stamp</div></div>
   </div>
 </div>
@@ -443,7 +443,7 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
 .sig { text-align: center; }
 .sig .line { width: 180px; border-top: 2px solid #283593; margin-bottom: 3px; }
 .sig .label { font-size: 8pt; font-weight: 700; text-transform: uppercase; color: #283593; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="banner">
   <div>
     {{#if supplierLogoPath}}<img src="{{supplierLogoPath}}" style="height:40px;margin-bottom:4px;display:block">{{/if}}
@@ -517,7 +517,7 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
 </div>
 <div class="footer">
   <div class="sig-row">
-    <div class="sig"><div class="line"></div><div class="label">Authorized Signatory</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Authorized Signatory</div></div>
     <div class="sig"><div class="line"></div><div class="label">Receiver's Signature &amp; Stamp</div></div>
   </div>
 </div>
@@ -567,7 +567,7 @@ table.items th.left { text-align: left; }
 .sig { text-align: center; }
 .sig .line { width: 190px; border-top: 0.75pt solid #000; margin-bottom: 3px; }
 .sig .label { font-size: 8.5pt; font-weight: 700; text-transform: uppercase; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 <div class="hdr">
   <div>
@@ -637,7 +637,7 @@ table.items th.left { text-align: left; }
 </div>
 <div class="footer">
   <div class="sig-row">
-    <div class="sig"><div class="line"></div><div class="label">Authorized Signatory</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Authorized Signatory</div></div>
     <div class="sig"><div class="line"></div><div class="label">Receiver's Signature &amp; Stamp</div></div>
   </div>
 </div>
@@ -692,7 +692,7 @@ tbody tr:nth-child(even) td { background: #faf7ef !important; }
 .sig { text-align: center; }
 .sig .line { width: 190px; border-top: 1.5px solid #b8960c; margin-bottom: 3px; }
 .sig .label { font-size: 8.5pt; color: #555; text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="gold-top"></div>
 <div class="charcoal-band">
   <div>
@@ -773,7 +773,7 @@ tbody tr:nth-child(even) td { background: #faf7ef !important; }
 <div class="footer">
   <div class="gold-rule"></div>
   <div class="sig-row">
-    <div class="sig"><div class="line"></div><div class="label">Authorized Signatory</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Authorized Signatory</div></div>
     <div class="sig"><div class="line"></div><div class="label">Receiver's Signature &amp; Stamp</div></div>
   </div>
 </div>
@@ -823,7 +823,7 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
 .sig { text-align: center; }
 .sig .line { width: 160px; border-top: 0.75pt solid #000; margin-bottom: 2px; }
 .sig .label { font-size: 7.5pt; font-weight: 700; text-transform: uppercase; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 <div class="hdr">
   <div>
@@ -894,7 +894,7 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
 </div>
 <div class="footer">
   <div class="sig-row">
-    <div class="sig"><div class="line"></div><div class="label">Authorized Signatory</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Authorized Signatory</div></div>
     <div class="sig"><div class="line"></div><div class="label">Receiver's Signature &amp; Stamp</div></div>
   </div>
 </div>
@@ -948,7 +948,7 @@ tbody tr:nth-child(even) td { background: #eaf3f9 !important; }
 .sig { text-align: center; }
 .sig .line { width: 150px; border-top: 1.5px solid #24455f; margin-bottom: 3px; }
 .sig .label { font-size: 8pt; color: #555; text-transform: uppercase; font-weight: 700; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="sidebar">
   {{#if supplierLogoPath}}<div class="sb-logo"><img src="{{supplierLogoPath}}" style="height:44px"></div>{{/if}}
   <div class="sb-name">{{supplierName}}</div>
@@ -1014,7 +1014,7 @@ tbody tr:nth-child(even) td { background: #eaf3f9 !important; }
 </div>
 <div class="footer">
   <div class="sig-row">
-    <div class="sig"><div class="line"></div><div class="label">Authorized Signatory</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Authorized Signatory</div></div>
     <div class="sig"><div class="line"></div><div class="label">Receiver's Signature &amp; Stamp</div></div>
   </div>
 </div>
@@ -1074,7 +1074,7 @@ table.items th.left { text-align: left; }
 .sig { text-align: center; }
 .sig .line { width: 200px; border-top: 1px solid #000; margin-bottom: 3px; }
 .sig .label { font-size: 9pt; font-weight: 700; text-transform: uppercase; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 <div class="outer-box">
   <div class="title-row"><h1>Debit Note</h1></div>
@@ -1148,7 +1148,7 @@ table.items th.left { text-align: left; }
 </div>
 <div class="footer">
   <div class="sig-row">
-    <div class="sig"><div class="line"></div><div class="label">Authorized Signatory</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Authorized Signatory</div></div>
     <div class="sig"><div class="line"></div><div class="label">Receiver's Signature &amp; Stamp</div></div>
   </div>
 </div>
@@ -1210,7 +1210,7 @@ tbody tr:nth-child(even) td { background: #eef7ee !important; }
 .sig { text-align: center; }
 .sig .line { width: 200px; border-top: 1px solid #1a5c2a; margin-bottom: 3px; }
 .sig .label { font-size: 9pt; font-weight: 700; text-transform: uppercase; color: #1a5c2a; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 <div class="bismillah">&#1576;&#1616;&#1587;&#1618;&#1605;&#1616; &#1575;&#1604;&#1604;&#1617;&#1614;&#1607;&#1616; &#1575;&#1604;&#1585;&#1617;&#1614;&#1581;&#1618;&#1605;&#1614;&#1648;&#1606;&#1616; &#1575;&#1604;&#1585;&#1617;&#1614;&#1581;&#1616;&#1610;&#1605;&#1616;</div>
 <div class="outer">
@@ -1286,7 +1286,7 @@ tbody tr:nth-child(even) td { background: #eef7ee !important; }
 </div>
 <div class="footer">
   <div class="sig-row">
-    <div class="sig"><div class="line"></div><div class="label">Authorized Signatory</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Authorized Signatory</div></div>
     <div class="sig"><div class="line"></div><div class="label">Receiver's Signature &amp; Stamp</div></div>
   </div>
 </div>
@@ -1342,7 +1342,7 @@ tbody tr:nth-child(even) td { background: #f1f8e9 !important; }
 .sig { text-align: center; }
 .sig .line { width: 190px; border-top: 1.5px solid #1b5e20; margin-bottom: 3px; }
 .sig .label { font-size: 8.5pt; font-weight: 700; color: #1b5e20; text-transform: uppercase; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="green-bar">
   <div>
     {{#if supplierLogoPath}}<img src="{{supplierLogoPath}}" style="height:40px;margin-bottom:4px;display:block">{{/if}}
@@ -1425,7 +1425,7 @@ tbody tr:nth-child(even) td { background: #f1f8e9 !important; }
 </div>
 <div class="footer">
   <div class="sig-row">
-    <div class="sig"><div class="line"></div><div class="label">Authorized Signatory</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Authorized Signatory</div></div>
     <div class="sig"><div class="line"></div><div class="label">Receiver's Signature &amp; Stamp</div></div>
   </div>
 </div>
@@ -1480,7 +1480,7 @@ tbody tr:nth-child(even) td { background: #e0f2f1 !important; }
 .sig { text-align: center; }
 .sig .line { width: 180px; border-top: 2px solid #00695c; margin-bottom: 3px; }
 .sig .label { font-size: 8pt; color: #546e7a; text-transform: uppercase; font-weight: 700; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 <div class="teal-rule"></div>
 <div class="top">
@@ -1559,7 +1559,7 @@ tbody tr:nth-child(even) td { background: #e0f2f1 !important; }
 </div>
 <div class="footer">
   <div class="sig-row">
-    <div class="sig"><div class="line"></div><div class="label">Authorized Signatory</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Authorized Signatory</div></div>
     <div class="sig"><div class="line"></div><div class="label">Receiver's Signature &amp; Stamp</div></div>
   </div>
 </div>
@@ -1616,7 +1616,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
 .sig { text-align: center; }
 .sig .line { width: 190px; border-top: 1.5px solid #263238; margin-bottom: 3px; }
 .sig .label { font-size: 8.5pt; font-weight: 700; text-transform: uppercase; color: #263238; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="letterhead">
   <div class="lh-inner">
     <div class="lh-left">
@@ -1701,7 +1701,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
 </div>
 <div class="footer">
   <div class="sig-row">
-    <div class="sig"><div class="line"></div><div class="label">Authorized Signatory</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Authorized Signatory</div></div>
     <div class="sig"><div class="line"></div><div class="label">Receiver's Signature &amp; Stamp</div></div>
   </div>
 </div>
@@ -1755,7 +1755,7 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
 .sig { text-align: center; }
 .sig .line { width: 180px; border-top: 1.5px solid #1a237e; margin-bottom: 3px; }
 .sig .label { font-size: 8.5pt; font-weight: 700; text-transform: uppercase; color: #1a237e; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="watermark">Debit Note</div>
 <div class="page-content">
 <div class="main">
@@ -1832,7 +1832,7 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
 </div>
 <div class="footer">
   <div class="sig-row">
-    <div class="sig"><div class="line"></div><div class="label">Authorized Signatory</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Authorized Signatory</div></div>
     <div class="sig"><div class="line"></div><div class="label">Receiver's Signature &amp; Stamp</div></div>
   </div>
 </div>
@@ -1896,7 +1896,7 @@ tbody tr:nth-child(even) td { background: #f7f7f7 !important; }
 .sig { text-align: center; }
 .sig .line { width: 160px; border-top: 1px solid #000; margin-bottom: 3px; }
 .sig .label { font-size: 8.5pt; font-weight: 700; text-transform: uppercase; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
 <div class="form-outer">
   <div class="title-row">
@@ -2000,7 +2000,7 @@ tbody tr:nth-child(even) td { background: #f7f7f7 !important; }
 </div>
 <div class="footer">
   <div class="sig-row">
-    <div class="sig"><div class="line"></div><div class="label">Prepared By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Prepared By</div></div>
     <div class="sig"><div class="line"></div><div class="label">Authorized Signatory</div></div>
     <div class="sig"><div class="line"></div><div class="label">Receiver's Signature &amp; Stamp</div></div>
   </div>

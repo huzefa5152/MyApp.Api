@@ -3,12 +3,19 @@ import { useNavigate } from "react-router-dom";
 import {
   MdDescription, MdBusiness, MdSearch, MdAdd, MdAutoAwesome, MdGridOn,
   MdEdit, MdDelete, MdStar, MdStarBorder, MdVisibility, MdBrush, MdContentCopy,
-  MdUploadFile, MdClose, MdLock, MdSwapHoriz,
+  MdUploadFile, MdClose, MdLock, MdSwapHoriz, MdApproval,
 } from "react-icons/md";
 import {
   getTemplatesByCompany, createTemplate, setDefaultTemplate, deleteTemplate,
   uploadExcelTemplate, deleteExcelTemplate,
 } from "../api/printTemplateApi";
+import { setTemplateStamp } from "../api/printTemplateApi";
+import { uploadStamp, updateStamp, deleteStamp, setDefaultStamp } from "../api/stampApi";
+import StampPicker from "../Components/templateEditor/StampPicker";
+import {
+  STAMP_STATE, detectStampState, injectSignatureBlock, convertPinnedToSlot, pinnedSlugs,
+  materializeStamp,
+} from "../utils/stampSlot";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
@@ -28,16 +35,19 @@ const TABS = [
   { key: "print", label: "Print Templates", icon: MdDescription },
   { key: "starter", label: "Starter Templates", icon: MdAutoAwesome },
   { key: "excel", label: "Excel Templates", icon: MdGridOn },
+  { key: "stamps", label: "Stamps", icon: MdApproval },
 ];
 
 export default function PrintTemplatesPage() {
   const navigate = useNavigate();
   const confirm = useConfirm();
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies, companyStamps, refreshStamps } = useCompany();
   const { has } = usePermissions();
   const canManage = has("printtemplates.manage.update");
   const canDelete = has("printtemplates.manage.delete");
   const canApplyStarter = has("printtemplates.starter.apply");
+  const canViewStamps = has("printtemplates.stamps.view");
+  const canManageStamps = has("printtemplates.stamps.manage");
 
   const [tab, setTab] = useState("print");
   const [templates, setTemplates] = useState([]);
@@ -55,6 +65,11 @@ export default function PrintTemplatesPage() {
   const excelUploadRef = useRef(null);
   const excelTargetTypeRef = useRef(null);
 
+  // Stamps tab
+  const [stampUploading, setStampUploading] = useState(false);
+  const [stampBusyId, setStampBusyId] = useState(null);
+  const stampUploadRef = useRef(null);
+
   const load = useCallback(async () => {
     if (!selectedCompany) { setTemplates([]); return; }
     setLoading(true);
@@ -66,7 +81,10 @@ export default function PrintTemplatesPage() {
   }, [selectedCompany]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setSearch(""); setTypeFilter(""); setDefaultOnly(false); }, [selectedCompany?.id]);
+  // Switching company clears the text search and the default-only toggle, but
+  // deliberately KEEPS the document-type filter: an operator comparing the same
+  // document type across companies should not have to re-pick it every switch.
+  useEffect(() => { setSearch(""); setDefaultOnly(false); }, [selectedCompany?.id]);
 
   const applyFilters = (rows) => rows.filter((t) => {
     if (typeFilter && t.templateType !== typeFilter) return false;
@@ -141,6 +159,9 @@ export default function PrintTemplatesPage() {
         templateType: t.templateType,
         name: `${t.name} (copy)`, htmlContent: t.htmlContent, templateJson: t.templateJson,
         editorMode: t.editorMode, isDefault: false,
+        // Duplicate keeps the source's signature; the assignment lives on the
+        // row, so the duplicate can then be changed independently.
+        stampId: t.stampId ?? null,
       });
       notify(`Duplicated "${t.name}".`, "success"); await load();
     } catch { notify("Failed to duplicate.", "error"); } finally { setBusy(false); }
@@ -156,6 +177,10 @@ export default function PrintTemplatesPage() {
         name: `${t.name} → ${TEMPLATE_TYPE_LABEL[chosenType]}`,
         htmlContent: t.htmlContent, templateJson: t.templateJson,
         editorMode: t.editorMode, isDefault: false,
+        // The copy starts life signed exactly like its source; because the
+        // assignment lives on the row, the copy can then be changed
+        // independently without touching either template's HTML.
+        stampId: t.stampId ?? null,
       });
       notify(`Copied to ${TEMPLATE_TYPE_LABEL[chosenType]} — adjust the merge fields for the new document type.`, "success");
       openInEditor(data);
@@ -176,6 +201,129 @@ export default function PrintTemplatesPage() {
   };
 
   // ── Excel-tab actions (per document TYPE, company-level) ──
+  // ── Per-template stamp assignment ──
+
+  // Assignment is a field write: the template's HTML is untouched, so swapping
+  // a signature can never disturb the layout.
+  const handleSetStamp = async (t, stampId) => {
+    setStampBusyId(t.id);
+    try {
+      await setTemplateStamp(t.id, stampId);
+      await load();
+      notify(stampId ? "Signature updated." : "Signature removed.", "success");
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to update signature.", "error");
+    } finally { setStampBusyId(null); }
+  };
+
+  // A template with no slot in its markup — inject one, then assign. Shows
+  // where the block landed rather than silently rewriting the operator's HTML.
+  const handleAddSignatureBlock = async (t) => {
+    const { html, anchor, changed } = injectSignatureBlock(t.htmlContent || "");
+    if (!changed) { notify("This template already has a signature block.", "info"); return; }
+    const where = anchor === "signature-row" ? "inside the existing signature row"
+      : anchor === "signature-text" ? "above the signature label"
+      : "at the end of the document";
+    const ok = await confirm({
+      title: "Add signature block?",
+      message: `A signature slot will be added ${where}. Nothing else in the template changes. `
+        + `You can then pick which stamp it shows, and reposition it in the editor.`,
+      confirmText: "Add block",
+    });
+    if (!ok) return;
+
+    setStampBusyId(t.id);
+    try {
+      const firstStamp = companyStamps.find((s) => s.isDefault) || companyStamps[0] || null;
+      await setTemplateStamp(t.id, firstStamp?.id ?? null, html);
+      await load();
+      notify(`Signature block added ${where}.`, "success");
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to add signature block.", "error");
+    } finally { setStampBusyId(null); }
+  };
+
+  // A template that names its stamp inline ({{stamps.slug}}) — rewrite it to the
+  // picker-driven {{stamp}} slot so the signature becomes changeable.
+  const handleConvertToSlot = async (t) => {
+    const slug = pinnedSlugs(t.htmlContent || "")[0];
+    const match = companyStamps.find((s) => s.slug === slug) || null;
+    const ok = await confirm({
+      title: "Make the signature changeable?",
+      message: `This template points straight at "${slug}". Converting keeps the same image but `
+        + `lets you switch stamps from a dropdown instead of editing the HTML.`,
+      confirmText: "Convert",
+    });
+    if (!ok) return;
+
+    setStampBusyId(t.id);
+    try {
+      await setTemplateStamp(t.id, match?.id ?? null, convertPinnedToSlot(t.htmlContent || "", slug));
+      await load();
+      notify("Signature is now changeable.", "success");
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to convert.", "error");
+    } finally { setStampBusyId(null); }
+  };
+
+  const handleStampSetDefault = async (s) => {
+    setStampBusyId(s.id);
+    try { await setDefaultStamp(selectedCompany.id, s.id); await refreshStamps(); notify(`"${s.name}" is now the default stamp.`, "success"); }
+    catch { notify("Failed to set default stamp.", "error"); } finally { setStampBusyId(null); }
+  };
+
+  // ── Stamps-tab actions ──
+  const handleStampFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (stampUploadRef.current) stampUploadRef.current.value = "";
+    if (!file || !selectedCompany) return;
+    // Default the operator-facing name to the file name; renameable afterwards.
+    const name = window.prompt("Stamp name", file.name.replace(/\.[^.]+$/, ""));
+    if (name === null) return;
+    setStampUploading(true);
+    try {
+      await uploadStamp(selectedCompany.id, file, name.trim() || undefined);
+      notify("Stamp uploaded.", "success");
+      await refreshStamps();
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to upload stamp.", "error");
+    } finally { setStampUploading(false); }
+  };
+
+  const handleStampRename = async (s) => {
+    const name = window.prompt("Stamp name", s.name);
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === s.name) return;
+    setStampBusyId(s.id);
+    try { await updateStamp(selectedCompany.id, s.id, { name: trimmed }); await refreshStamps(); notify("Stamp renamed.", "success"); }
+    catch { notify("Failed to rename stamp.", "error"); } finally { setStampBusyId(null); }
+  };
+
+  const handleStampDelete = async (s) => {
+    const ok = await confirm({
+      title: "Delete stamp?",
+      // Templates assigned this stamp lose the assignment (FK is SetNull) and
+      // print unsigned — say so, and say how many, before deleting.
+      message: s.usedByTemplates
+        ? `Delete "${s.name}"? ${s.usedByTemplates} template${s.usedByTemplates === 1 ? "" : "s"} `
+          + `use it and will print without a signature. Templates that name it directly as `
+          + `{{stamps.${s.slug}}} will show a broken image.`
+        : `Delete "${s.name}"? No template is using it.`,
+      variant: "danger", confirmText: "Delete",
+    });
+    if (!ok) return;
+    setStampBusyId(s.id);
+    try { await deleteStamp(selectedCompany.id, s.id); notify("Stamp deleted.", "success"); await refreshStamps(); }
+    catch { notify("Failed to delete stamp.", "error"); } finally { setStampBusyId(null); }
+  };
+
+  const copyStampToken = (s) => {
+    const token = `{{stamps.${s.slug}}}`;
+    navigator.clipboard?.writeText(token);
+    notify(`Copied ${token}`, "success");
+  };
+
   const triggerExcelUpload = (type) => { excelTargetTypeRef.current = type; excelUploadRef.current?.click(); };
   const handleExcelFile = async (e) => {
     const file = e.target.files?.[0];
@@ -253,7 +401,7 @@ export default function PrintTemplatesPage() {
 
           {/* Tabs */}
           <div style={st.tabs} role="tablist">
-            {TABS.map((t) => {
+            {TABS.filter((t) => t.key !== "stamps" || canViewStamps).map((t) => {
               const Icon = t.icon;
               const active = tab === t.key;
               return (
@@ -289,6 +437,22 @@ export default function PrintTemplatesPage() {
                         {t.hasExcelTemplate && <span style={st.excelChip}><MdGridOn size={11} /> Excel</span>}
                         <span style={{ color: colors.textSecondary }}>Updated {fmtDate(t.updatedAt)}</span>
                       </div>
+                      {canViewStamps && (
+                        <div style={st.stampRow}>
+                          <span style={st.stampLabel}>Signature</span>
+                          <StampPicker
+                            stamps={companyStamps}
+                            value={t.stampId ?? null}
+                            state={t.stampState || detectStampState(t.htmlContent)}
+                            pinnedSlug={pinnedSlugs(t.htmlContent || "")[0]}
+                            busy={stampBusyId === t.id}
+                            disabled={!canManage}
+                            onChange={(id) => handleSetStamp(t, id)}
+                            onAddBlock={canManage ? () => handleAddSignatureBlock(t) : null}
+                            onConvert={canManage ? () => handleConvertToSlot(t) : null}
+                          />
+                        </div>
+                      )}
                       <div style={st.actions}>
                         <button style={st.actBtn} title="Edit" onClick={() => openInEditor(t)}><MdEdit size={15} /></button>
                         <button style={st.actBtn} title="Preview" onClick={() => setPreviewTarget(t)}><MdVisibility size={15} /></button>
@@ -306,7 +470,13 @@ export default function PrintTemplatesPage() {
 
           {/* ── Tab: Starter Templates ── */}
           {tab === "starter" && (
-            <StarterGallery embedded selectLabel="Create template" onSelect={createFromStarter} />
+            <StarterGallery
+              embedded
+              selectLabel="Create template"
+              onSelect={createFromStarter}
+              typeFilter={typeFilter}
+              onTypeFilterChange={setTypeFilter}
+            />
           )}
 
           {/* ── Tab: Excel Templates (one per document type) ── */}
@@ -350,6 +520,51 @@ export default function PrintTemplatesPage() {
                 </div>
               )}
               <input ref={excelUploadRef} type="file" accept=".xlsx,.xlsm" style={{ display: "none" }} onChange={handleExcelFile} />
+            </>
+          )}
+
+          {/* ── Tab: Stamps ── */}
+          {tab === "stamps" && canViewStamps && (
+            <>
+              <p style={st.hint}>
+                Upload stamps or signatures once, then insert them into any template as{" "}
+                <code style={{ fontFamily: "monospace" }}>{"{{stamps.slug}}"}</code> — no more pasting images into the HTML.
+                Each template can use a different stamp, and renaming a stamp never breaks templates that already use it.
+              </p>
+              {canManageStamps && (
+                <div style={{ marginBottom: "0.85rem" }}>
+                  <button style={{ ...st.btn, ...st.btnPrimary }} disabled={stampUploading} onClick={() => stampUploadRef.current?.click()}>
+                    <MdUploadFile size={16} /> {stampUploading ? "Uploading…" : "Upload Stamp"}
+                  </button>
+                </div>
+              )}
+              {companyStamps.length === 0 ? (
+                <Empty label="No stamps yet. Upload a stamp to use it in your print templates." />
+              ) : (
+                <div style={st.grid}>
+                  {companyStamps.map((s) => (
+                    <div key={s.id} style={st.card}>
+                      <div style={st.cardTop}>
+                        <span style={st.tName} title={s.name}>{s.name}</span>
+                        {s.isDefault && <span style={st.badgeDefault}><MdStar size={12} /> Default</span>}
+                      </div>
+                      <div style={st.stampThumbWrap}>
+                        <img src={s.url} alt={s.name} style={st.stampThumbImg} />
+                      </div>
+                      <button style={st.stampToken} onClick={() => copyStampToken(s)} title="Copy merge field">
+                        <code style={{ fontFamily: "monospace", fontSize: "0.72rem", color: colors.blue, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`{{stamps.${s.slug}}}`}</code>
+                      </button>
+                      <div style={st.actions}>
+                        <button style={st.actBtn} title="Copy merge field" disabled={stampBusyId != null} onClick={() => copyStampToken(s)}><MdContentCopy size={15} /></button>
+                        {canManageStamps && !s.isDefault && <button style={st.actBtn} title="Set as default stamp" disabled={stampBusyId != null} onClick={() => handleStampSetDefault(s)}><MdStar size={15} /></button>}
+                        {canManageStamps && <button style={st.actBtn} title="Rename" disabled={stampBusyId != null} onClick={() => handleStampRename(s)}><MdEdit size={15} /></button>}
+                        {canManageStamps && <button style={{ ...st.actBtn, color: "#dc3545" }} title="Delete" disabled={stampBusyId != null} onClick={() => handleStampDelete(s)}><MdDelete size={15} /></button>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <input ref={stampUploadRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} onChange={handleStampFile} />
             </>
           )}
         </>
@@ -410,9 +625,18 @@ export default function PrintTemplatesPage() {
             </div>
             <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
               <A4PreviewFrame
-                html={buildTemplatePreviewHtml(previewTarget.templateType, previewTarget.htmlContent || "", {
-                  company: selectedCompany,
-                })}
+                html={buildTemplatePreviewHtml(
+                  previewTarget.templateType,
+                  // Resolve {{stamp}} the same way printing does, so the preview
+                  // shows the signature this template will actually carry. Without
+                  // this the slot is stripped and the preview silently disagrees
+                  // with the printed document.
+                  materializeStamp(
+                    previewTarget.htmlContent || "",
+                    companyStamps.find((s) => s.id === previewTarget.stampId)?.url || null,
+                  ),
+                  { company: selectedCompany },
+                )}
                 title={`Preview of ${previewTarget.name}`}
               />
             </div>
@@ -451,6 +675,11 @@ const st = {
   metaLine: { display: "flex", gap: "0.5rem", alignItems: "center", fontSize: "0.72rem" },
   actions: { display: "flex", gap: "0.3rem", flexWrap: "wrap", marginTop: "auto", paddingTop: "0.35rem", borderTop: `1px solid ${colors.cardBorder}` },
   actBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 32, height: 30, padding: 0, borderRadius: 7, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, cursor: "pointer" },
+  stampRow: { display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", paddingTop: "0.35rem", borderTop: `1px dashed ${colors.cardBorder}` },
+  stampLabel: { fontSize: "0.72rem", fontWeight: 600, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.4px" },
+  stampThumbWrap: { display: "flex", alignItems: "center", justifyContent: "center", height: 96, border: `1px solid ${colors.cardBorder}`, borderRadius: 8, background: "#fff", padding: "0.4rem" },
+  stampThumbImg: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" },
+  stampToken: { display: "flex", alignItems: "center", width: "100%", padding: "0.3rem 0.5rem", borderRadius: 7, border: `1px dashed ${colors.inputBorder}`, background: "#f8fbff", cursor: "pointer", overflow: "hidden" },
   actBtnWide: { display: "inline-flex", alignItems: "center", gap: "0.35rem", flex: 1, justifyContent: "center", height: 32, padding: "0 0.5rem", borderRadius: 7, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
   loading: { display: "flex", alignItems: "center", justifyContent: "center", gap: "0.6rem", padding: "3rem 0" },
   spin: { width: 24, height: 24, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },

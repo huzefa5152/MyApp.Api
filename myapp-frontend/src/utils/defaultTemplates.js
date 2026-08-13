@@ -53,6 +53,7 @@ export const defaultChallanTemplate = `<!DOCTYPE html><html><head><title>DC #{{c
   .sig-block { text-align: center; }
   .sig-block .line { width: 220px; border-top: 1.5px solid #4a90b8; margin-bottom: 1px; }
   .sig-block .label { font-size: 13px; font-weight: normal; color: #000; }
+  .stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
 </style></head><body>
 
 <div class="main-content">
@@ -95,7 +96,7 @@ export const defaultChallanTemplate = `<!DOCTYPE html><html><head><title>DC #{{c
 <div class="footer-section">
   <div class="thank-you">Thank you for your business!</div>
   <div class="sig-row">
-    <div class="sig-block"><div class="line"></div><div class="label">Signature and Stamp</div></div>
+    <div class="sig-block"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Signature and Stamp</div></div>
     <div class="sig-block"><div class="line"></div><div class="label">Receiver Signature and Stamp</div></div>
   </div>
 </div>
@@ -199,6 +200,7 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
   /* ---- Types footer ---- */
   .types-footer { text-align: center; margin-top: 20px; font-size: 12pt; font-weight: bold;
                    text-transform: uppercase; letter-spacing: 2px; }
+  .stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
 </style></head><body>
 
 <div class="main-content">
@@ -285,7 +287,7 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
 <!-- Footer: signature + types (pushed to bottom) -->
 <div class="footer-section">
   <div class="sig-row">
-    <span class="sig-text">Signature and Stamp</span>
+    <span class="sig-text"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>Signature and Stamp</span>
     <span class="sig-text">Receiver Signature and Stamp</span>
   </div>
 
@@ -304,6 +306,9 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
     html, body { height: 100%; margin: 0; }
     .footer-section { page-break-inside: avoid; }
     .words-wrap { page-break-inside: avoid; }
+    /* The FBR box carries the IRN and the verification QR — a page break
+       through it produces an unscannable half-QR, so it always moves whole. */
+    .fbr-block, .no-break { page-break-inside: avoid; break-inside: avoid; }
     table.items th,
     table.items td,
     .num-row td,
@@ -391,6 +396,7 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
   .sig-block { text-align: center; }
   .sig-block .line { width: 220px; border-top: 1px solid #000; margin-bottom: 3px; }
   .sig-block .label { font-size: 9pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+  .stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
 </style></head><body>
 
 <div class="main-content">
@@ -504,7 +510,7 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
      doesn't HTML-escape the data URI), and the FBR logo is served from
      wwwroot/images so it deploys with the bundle. Replaces the earlier
      dependency on external image hosts. -->
-<div style="margin-top:14px;padding:8px 12px;border:1.5px solid #1a5276;border-radius:4px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+<div class="fbr-block" style="margin-top:14px;padding:8px 12px;border:1.5px solid #1a5276;border-radius:4px;display:flex;justify-content:space-between;align-items:center;gap:16px">
   <div style="flex:1">
     <div style="font-size:9pt;font-weight:bold;color:#1a5276;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">FBR Digital Invoice</div>
     <div style="font-size:9pt"><strong>IRN:</strong> {{fbrIRN}}</div>
@@ -525,7 +531,7 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
 <!-- Footer -->
 <div class="footer-section">
   <div class="sig-row">
-    <div class="sig-block"><div class="line"></div><div class="label">Signature and Stamp</div></div>
+    <div class="sig-block"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Signature and Stamp</div></div>
     <div class="sig-block"><div class="line"></div><div class="label">Receiver Signature and Stamp</div></div>
   </div>
 </div>

@@ -35,7 +35,7 @@ tbody tr:nth-child(even) td{background:#f5f5f5 !important;}
 .sig{display:flex;justify-content:space-between;margin-top:40px;}
 .sig .b{text-align:center;}.sig .line{width:180px;border-top:1.5px solid #1a1a1a;margin:0 auto;}.sig .l{font-size:10.5px;margin-top:3px;}
 @media print{@page{size:A4;margin:11mm;}}
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="outer"><div class="inner">
   <div class="hdr">
     <div class="brand">
@@ -101,7 +101,7 @@ tbody tr:nth-child(even) td{background:#f5f5f5 !important;}
   </div>
   <div class="words"><strong>Amount in Words:</strong> {{amountInWords}}</div>
   {{#if notes}}<div class="notes"><strong>Notes / Terms &amp; Conditions:</strong><br>{{{nl2br notes}}}</div>{{/if}}
-  <div class="sig">
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
     <div class="b"><div class="line"></div><div class="l">Prepared By</div></div>
     <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
   </div>
@@ -142,7 +142,7 @@ td{border-bottom:1px solid #f0f0f0;padding:7px 8px;font-size:12px;color:#222;}
 .sig{display:flex;justify-content:flex-end;margin-top:50px;}
 .sig .b{text-align:center;}.sig .line{width:180px;border-top:1px solid #ccc;}.sig .l{font-size:10.5px;color:#888;margin-top:3px;}
 @media print{@page{size:A4;margin:12mm;}}
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="hdr">
     <div>
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:52px">{{/if}}
@@ -204,7 +204,7 @@ td{border-bottom:1px solid #f0f0f0;padding:7px 8px;font-size:12px;color:#222;}
   </div>
   <div class="words">Amount in words: {{amountInWords}}</div>
   {{#if notes}}<div class="notes"><strong>Notes / Terms:</strong><br>{{{nl2br notes}}}</div>{{/if}}
-  <div class="sig"><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
 </body></html>`
   },
   {
@@ -242,7 +242,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
 .sig{display:flex;justify-content:space-between;margin-top:40px;padding:0 4px;}
 .sig .b{text-align:center;}.sig .line{width:170px;border-top:1.5px solid #0d2855;margin:0 auto;}.sig .l{font-size:10.5px;margin-top:3px;color:#555;}
 @media print{@page{size:A4;margin:0 0 10mm 0;}}
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="header-band">
     <div style="display:flex;align-items:center;gap:14px;">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:60px">{{/if}}
@@ -303,7 +303,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
     </div>
     <div class="words"><strong>Amount in Words:</strong> {{amountInWords}}</div>
     {{#if notes}}<div class="notes"><strong>Notes / Terms:</strong><br>{{{nl2br notes}}}</div>{{/if}}
-    <div class="sig">
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
       <div class="b"><div class="line"></div><div class="l">Prepared By</div></div>
       <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
     </div>
@@ -347,7 +347,7 @@ tbody tr:nth-child(even) td{background:#f8fbff !important;}
 .sig{display:flex;justify-content:flex-end;margin-top:40px;padding:0 4px;}
 .sig .b{text-align:center;}.sig .line{width:180px;border-top:2px solid #0d47a1;}.sig .l{font-size:10.5px;color:#555;margin-top:3px;}
 @media print{@page{size:A4;margin:0 0 10mm 0;}}
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="banner">
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:60px">{{/if}}
     <div>
@@ -404,7 +404,7 @@ tbody tr:nth-child(even) td{background:#f8fbff !important;}
     </div>
     <div class="words"><strong>Amount in Words:</strong> {{amountInWords}}</div>
     {{#if notes}}<div class="notes"><strong>Notes / Terms:</strong><br>{{{nl2br notes}}}</div>{{/if}}
-    <div class="sig"><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
   </div>
 </body></html>`
   },
@@ -442,7 +442,7 @@ td{border-bottom:1px dotted #999;padding:6px 8px;font-size:11.5px;}
 .sig{display:flex;justify-content:space-between;margin-top:40px;}
 .sig .b{text-align:center;}.sig .line{width:160px;border-top:1px solid #000;margin:0 auto;}.sig .l{font-size:10px;margin-top:3px;}
 @media print{@page{size:A4;margin:10mm;}}
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="hdr">
     <div>
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:54px">{{/if}}
@@ -505,7 +505,7 @@ td{border-bottom:1px dotted #999;padding:6px 8px;font-size:11.5px;}
   </div>
   <div class="words"><strong>Amount in Words:</strong> {{amountInWords}}</div>
   {{#if notes}}<div class="notes"><strong>Notes / Terms:</strong><br>{{{nl2br notes}}}</div>{{/if}}
-  <div class="sig">
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
     <div class="b"><div class="line"></div><div class="l">Prepared By</div></div>
     <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
   </div>
@@ -549,7 +549,7 @@ tbody tr:nth-child(even) td{background:#faf7f0 !important;}
 .sig{display:flex;justify-content:flex-end;margin-top:44px;padding:0 4px;}
 .sig .b{text-align:center;}.sig .line{width:180px;border-top:1.5px solid #f5c518;}.sig .l{font-size:10.5px;color:#666;margin-top:3px;}
 @media print{@page{size:A4;margin:0 0 10mm 0;}}
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="hdr">
     <div style="display:flex;align-items:center;gap:14px;">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:60px">{{/if}}
@@ -611,7 +611,7 @@ tbody tr:nth-child(even) td{background:#faf7f0 !important;}
     </div>
     <div class="words"><strong>Amount in Words:</strong> {{amountInWords}}</div>
     {{#if notes}}<div class="notes"><strong>Notes / Terms:</strong><br>{{{nl2br notes}}}</div>{{/if}}
-    <div class="sig"><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
   </div>
 </body></html>`
   },
@@ -649,7 +649,7 @@ tbody tr:nth-child(even) td{background:#f5f8fc !important;}
 .sig{display:flex;justify-content:flex-end;margin-top:30px;}
 .sig .b{text-align:center;}.sig .line{width:160px;border-top:1.5px solid #0d47a1;}.sig .l{font-size:9.5px;color:#555;margin-top:2px;}
 @media print{@page{size:A4;margin:10mm;}}
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="hdr">
     <div class="brand">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:44px">{{/if}}
@@ -707,7 +707,7 @@ tbody tr:nth-child(even) td{background:#f5f8fc !important;}
   </div>
   <div class="words"><strong>Amount in Words:</strong> {{amountInWords}}</div>
   {{#if notes}}<div class="notes"><strong>Notes:</strong> {{{nl2br notes}}}</div>{{/if}}
-  <div class="sig"><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
 </body></html>`
   },
   {
@@ -748,7 +748,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
 .sig{display:flex;justify-content:flex-end;margin-top:36px;}
 .sig .b{text-align:center;}.sig .line{width:170px;border-top:1.5px solid #0d2855;}.sig .l{font-size:10px;color:#555;margin-top:3px;}
 @media print{@page{size:A4;margin:0;}.layout{min-height:0;}}
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="layout">
     <div class="sidebar">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="width:80px">{{/if}}
@@ -818,7 +818,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
       </div>
       <div class="words"><strong>Amount in Words:</strong> {{amountInWords}}</div>
       {{#if notes}}<div class="notes"><strong>Notes / Terms:</strong><br>{{{nl2br notes}}}</div>{{/if}}
-      <div class="sig"><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
+      <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
     </div>
   </div>
 </body></html>`
@@ -864,7 +864,7 @@ table.items td:last-child{border-right:none;}
 .sig-row{display:flex;justify-content:space-between;margin-top:36px;}
 .sig-row .b{text-align:center;}.sig-row .line{width:160px;border-top:1px solid #555;margin:0 auto;}.sig-row .l{font-size:10px;margin-top:3px;}
 @media print{@page{size:A4;margin:10mm;}}
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="wrapper">
     <div class="hdr">
       <div>
@@ -930,7 +930,7 @@ table.items td:last-child{border-right:none;}
       <div class="words"><strong>Amount in Words:</strong> {{amountInWords}}</div>
       {{#if notes}}<div class="notes"><strong>Notes / Terms &amp; Conditions:</strong><br>{{{nl2br notes}}}</div>{{/if}}
       <div class="sig-row">
-        <div class="b"><div class="line"></div><div class="l">Prepared By</div></div>
+        <div class="b"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="l">Prepared By</div></div>
         <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
       </div>
     </div>
@@ -973,7 +973,7 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
 .sig{display:flex;justify-content:space-between;margin-top:36px;}
 .sig .b{text-align:center;}.sig .line{width:160px;border-top:1.5px solid #1a5c2a;margin:0 auto;}.sig .l{font-size:10.5px;color:#555;margin-top:3px;}
 @media print{@page{size:A4;margin:11mm;}}
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="bismillah">Ø¨ÙØ³Ù’Ù…Ù Ø§Ù„Ù„ÛÙ Ø§Ù„Ø±ÙŽÙ‘Ø­Ù’Ù…Ù°Ù†Ù Ø§Ù„Ø±ÙŽÙ‘Ø­ÙÙŠÙ’Ù…</div>
   <div class="hdr">
     <div>
@@ -1038,7 +1038,7 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
   <div class="words"><strong>Amount in Words:</strong> {{amountInWords}}</div>
   {{#if notes}}<div class="notes"><strong>Notes / Terms &amp; Conditions:</strong><br>{{{nl2br notes}}}</div>{{/if}}
   <div class="closing">We thank you for the opportunity and look forward to your valued business.</div>
-  <div class="sig">
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
     <div class="b"><div class="line"></div><div class="l">Prepared By</div></div>
     <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
   </div>
@@ -1084,7 +1084,7 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
 .sig .b{text-align:center;}.sig .line{width:180px;border-top:2px solid #1b5e20;}.sig .l{font-size:10.5px;color:#555;margin-top:3px;}
 .bottom-strip{height:6px;background:linear-gradient(90deg,#1b5e20,#f9a825,#1b5e20) !important;margin-top:14px;}
 @media print{@page{size:A4;margin:0 0 0 0;}}
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="top-strip"></div>
   <div class="hdr">
     <div>
@@ -1142,7 +1142,7 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
     </div>
     <div class="words"><strong>Amount in Words:</strong> {{amountInWords}}</div>
     {{#if notes}}<div class="notes"><strong>Terms &amp; Conditions:</strong><br>{{{nl2br notes}}}</div>{{/if}}
-    <div class="sig"><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
   </div>
   <div class="bottom-strip"></div>
 </body></html>`
@@ -1183,7 +1183,7 @@ tbody tr:nth-child(even) td{background:#f5f7f8 !important;}
 .sig{display:flex;justify-content:space-between;margin-top:40px;}
 .sig .b{text-align:center;}.sig .line{width:160px;border-top:1.5px solid #37474f;margin:0 auto;}.sig .l{font-size:10.5px;color:#546e7a;margin-top:3px;}
 @media print{@page{size:A4;margin:0 0 10mm 0;}}
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="hdr">
     <div style="display:flex;align-items:center;gap:14px;">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:60px">{{/if}}
@@ -1244,7 +1244,7 @@ tbody tr:nth-child(even) td{background:#f5f7f8 !important;}
     </div>
     <div class="words"><strong>Amount in Words:</strong> {{amountInWords}}</div>
     {{#if notes}}<div class="notes"><strong>Notes / Terms:</strong><br>{{{nl2br notes}}}</div>{{/if}}
-    <div class="sig">
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
       <div class="b"><div class="line"></div><div class="l">Prepared By</div></div>
       <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
     </div>
@@ -1287,7 +1287,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
 .sig{display:flex;justify-content:space-between;margin-top:44px;}
 .sig .b{text-align:center;}.sig .line{width:160px;border-top:1.5px solid #0d47a1;margin:0 auto;}.sig .l{font-size:10.5px;color:#555;margin-top:3px;}
 @media print{@page{size:A4;margin:11mm;}}
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="letterhead">
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:64px"><br>{{/if}}
     <div class="lh-name">{{companyBrandName}}</div>
@@ -1343,7 +1343,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
   </div>
   <div class="words"><strong>Amount in Words:</strong> {{amountInWords}}</div>
   {{#if notes}}<div class="notes"><strong>Notes / Terms &amp; Conditions:</strong><br>{{{nl2br notes}}}</div>{{/if}}
-  <div class="sig">
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
     <div class="b"><div class="line"></div><div class="l">Prepared By</div></div>
     <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
   </div>
@@ -1385,7 +1385,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
 .sig{display:flex;justify-content:space-between;margin-top:44px;}
 .sig .b{text-align:center;}.sig .line{width:160px;border-top:1.5px solid #0d47a1;margin:0 auto;}.sig .l{font-size:10.5px;color:#555;margin-top:3px;}
 @media print{@page{size:A4;margin:11mm;}}
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="watermark">QUOTATION</div>
   <div class="content">
     <div class="hdr">
@@ -1443,7 +1443,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
     </div>
     <div class="words"><strong>Amount in Words:</strong> {{amountInWords}}</div>
     {{#if notes}}<div class="notes"><strong>Notes / Terms:</strong><br>{{{nl2br notes}}}</div>{{/if}}
-    <div class="sig">
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
       <div class="b"><div class="line"></div><div class="l">Prepared By</div></div>
       <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
     </div>
@@ -1496,7 +1496,7 @@ table.items tbody tr:nth-child(even) td{background:#f8f8f8 !important;}
 .sig-cell .sig-line{width:140px;border-top:1px solid #000;margin:20px auto 0;}
 .sig-cell .sig-label{font-size:10px;margin-top:3px;}
 @media print{@page{size:A4;margin:10mm;}}
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="outer">
     <div class="title-row">
       <div class="main-title">QUOTATION / SALES QUOTE</div>
@@ -1570,7 +1570,7 @@ table.items tbody tr:nth-child(even) td{background:#f8f8f8 !important;}
     </div>
     {{#if notes}}<div class="notes-row"><strong>Notes / Terms &amp; Conditions:</strong><br>{{{nl2br notes}}}</div>{{/if}}
     <div class="sig-row">
-      <div class="sig-cell"><div class="sig-line"></div><div class="sig-label">Prepared By</div></div>
+      <div class="sig-cell"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="sig-line"></div><div class="sig-label">Prepared By</div></div>
       <div class="sig-cell"><div class="sig-line"></div><div class="sig-label">Checked By</div></div>
       <div class="sig-cell"><div class="sig-line"></div><div class="sig-label">For {{companyBrandName}}</div></div>
     </div>

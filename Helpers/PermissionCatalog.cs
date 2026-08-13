@@ -177,6 +177,8 @@ namespace MyApp.Api.Helpers
             new("printtemplates.manage.update",   "PrintTemplates", "Manage", "Update",        "Edit a print template"),
             new("printtemplates.manage.delete",   "PrintTemplates", "Manage", "Delete",        "Delete a saved print template"),
             new("printtemplates.starter.apply",   "PrintTemplates", "Manage", "Apply Starter", "Apply a starter design onto an existing template (replace its HTML or its whole layout)"),
+            new("printtemplates.stamps.view",     "PrintTemplates", "Stamps", "View",          "View company stamps/signatures"),
+            new("printtemplates.stamps.manage",   "PrintTemplates", "Stamps", "Manage",        "Upload, rename, reorder and delete company stamps used as print-template merge fields"),
             // Pin the Excel data sheet for import — separate from the broader
             // template-edit perm so a role can be allowed to fix the sheet
             // pin (a low-risk, recoverable change) without also gaining
@@ -290,6 +292,7 @@ namespace MyApp.Api.Helpers
             // ── Reports ─────────────────────────────────────────────────────
             new("reports.sales.view",       "Reports", "Sales", "View",   "View the Sales report (FBR-submitted invoices grouped by date, monthly/yearly)"),
             new("reports.sales.export",     "Reports", "Sales", "Export", "Export the Sales report to CSV/Excel"),
+            new("reports.sales.printinvoice","Reports", "Sales", "Print Invoice", "Download Tax Invoice PDFs from the Sales report (single row, or every invoice in the period)"),
             new("reports.taxsheet.view",    "Reports", "Tax Sheet", "View",   "View the Tax Sheet (invoice lines still missing a valid HS code, for the tax consultant)"),
             new("reports.taxsheet.export",  "Reports", "Tax Sheet", "Export", "Export the Tax Sheet to Excel"),
             new("reports.taxsheet.transfer","Reports", "Tax Sheet", "Transfer", "Move the still-unclassified invoices of a period to a new date (defer to next month); changes invoice dates"),

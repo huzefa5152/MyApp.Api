@@ -25,12 +25,15 @@ namespace MyApp.Api.Controllers
         private static readonly string[] ValidTypes = PrintTemplateTypes.All;
 
         private readonly IPrintTemplateRepository _repo;
+        private readonly ICompanyStampRepository _stamps;
         private readonly ICompanyAccessGuard _access;
         private readonly IAuditLogService _audit;
 
-        public PrintTemplatesController(IPrintTemplateRepository repo, ICompanyAccessGuard access, IAuditLogService audit)
+        public PrintTemplatesController(IPrintTemplateRepository repo, ICompanyStampRepository stamps,
+            ICompanyAccessGuard access, IAuditLogService audit)
         {
             _repo = repo;
+            _stamps = stamps;
             _access = access;
             _audit = audit;
         }
@@ -96,6 +99,12 @@ namespace MyApp.Api.Controllers
                 HasExcelTemplate = hasFile,
                 ExcelSheetName = t.ExcelSheetName,
                 ExcelSheetNames = sheetNames,
+                StampId = t.StampId,
+                // Navigation may not be loaded on every read path; the slug is
+                // only needed where the frontend resolves {{stamp}} to a URL,
+                // and it re-reads the template by id there.
+                StampSlug = t.Stamp?.Slug,
+                StampState = StampSlot.Detect(t.HtmlContent),
                 UpdatedAt = t.UpdatedAt
             };
         }
@@ -156,9 +165,18 @@ namespace MyApp.Api.Controllers
             if (!ValidTypes.Contains(dto.TemplateType))
                 return BadRequest(new { error = "Invalid template type." });
 
+            // Copy / starter-apply may carry a stamp. Validate it belongs to the
+            // TARGET company so a copy can never link to another tenant's stamp.
+            if (dto.StampId.HasValue)
+            {
+                var stamp = await _stamps.GetByIdAsync(dto.StampId.Value);
+                if (stamp == null || stamp.CompanyId != companyId)
+                    return BadRequest(new { error = "Unknown stamp for this company." });
+            }
+
             var name = string.IsNullOrWhiteSpace(dto.Name) ? "Untitled" : dto.Name.Trim();
             var t = await _repo.CreateAsync(companyId, dto.TemplateType, name,
-                dto.HtmlContent, dto.TemplateJson, dto.EditorMode, dto.IsDefault);
+                dto.HtmlContent, dto.TemplateJson, dto.EditorMode, dto.IsDefault, dto.StampId);
             await AuditAsync("PRINTTEMPLATE_CREATE",
                 $"Created {dto.TemplateType} print template \"{name}\" (id {t.Id}) in company {companyId}", companyId);
             return Ok(ToDto(t));
@@ -176,6 +194,40 @@ namespace MyApp.Api.Controllers
             if (updated == null) return NotFound();
             await AuditAsync("PRINTTEMPLATE_UPDATE",
                 $"Edited {updated.TemplateType} print template \"{updated.Name}\" (id {id}) in company {existing.CompanyId}", existing.CompanyId);
+            return Ok(ToDto(updated));
+        }
+
+        // Assign / clear the company stamp rendered in this template's {{stamp}}
+        // slot. Normally an HTML-free field write — swapping a signature must
+        // not require editing the template. HtmlContent is supplied only by the
+        // convert-pinned-to-slot and add-signature-block flows, which have to
+        // change markup and assignment together or leave the template in a
+        // half-converted state.
+        [HttpPut("{id:int}/stamp")]
+        [HasPermission("printtemplates.manage.update")]
+        public async Task<IActionResult> SetStamp(int id, [FromBody] SetTemplateStampDto dto)
+        {
+            var existing = await _repo.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+
+            // A forged stampId must never link a template to another tenant's
+            // stamp — validate against the template's OWN company, not the body.
+            if (dto.StampId.HasValue)
+            {
+                var stamp = await _stamps.GetByIdAsync(dto.StampId.Value);
+                if (stamp == null || stamp.CompanyId != existing.CompanyId)
+                    return BadRequest(new { error = "Unknown stamp for this company." });
+            }
+
+            var updated = await _repo.SetStampAsync(id, dto.StampId, dto.HtmlContent);
+            if (updated == null) return NotFound();
+
+            await AuditAsync("PRINTTEMPLATE_STAMP",
+                dto.StampId.HasValue
+                    ? $"Assigned stamp {dto.StampId} to print template \"{updated.Name}\" (id {id}) in company {existing.CompanyId}"
+                    : $"Cleared stamp on print template \"{updated.Name}\" (id {id}) in company {existing.CompanyId}",
+                existing.CompanyId);
             return Ok(ToDto(updated));
         }
 

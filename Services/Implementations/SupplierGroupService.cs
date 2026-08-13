@@ -81,27 +81,34 @@ namespace MyApp.Api.Services.Implementations
             return group;
         }
 
-        public async Task<List<CommonSupplierDto>> GetCommonSuppliersAsync(int companyId)
+        public async Task<List<CommonSupplierDto>> GetCommonSuppliersAsync(int companyId, IReadOnlyCollection<int> accessibleCompanyIds)
         {
-            // Multi-company groups visible to ANY company — same stable-
-            // across-company-switches behaviour as Common Clients.
-            // companyId is used only to compute ThisCompanyClientId for
-            // the deep-link, NOT to filter the list.
-            return await BuildGroupListAsync(multiCompanyOnly: true, companyId: companyId);
+            // Multi-company groups, counted only over companies the CALLER
+            // can reach — same rule as Common Clients. companyId still just
+            // computes ThisCompanyClientId for the deep-link.
+            return await BuildGroupListAsync(multiCompanyOnly: true, companyId: companyId, accessibleCompanyIds: accessibleCompanyIds);
         }
 
-        public async Task<List<CommonSupplierDto>> GetAllGroupsAsync()
+        public async Task<List<CommonSupplierDto>> GetAllGroupsAsync(IReadOnlyCollection<int> accessibleCompanyIds)
         {
             // Every group, single + multi-company. Used by config screens
             // (purchase-side PO formats etc., when those land) that pick
-            // one row per legal entity.
-            return await BuildGroupListAsync(multiCompanyOnly: false, companyId: null);
+            // one row per legal entity. This route takes no companyId and
+            // so previously carried no tenant guard whatsoever.
+            return await BuildGroupListAsync(multiCompanyOnly: false, companyId: null, accessibleCompanyIds: accessibleCompanyIds);
         }
 
-        private async Task<List<CommonSupplierDto>> BuildGroupListAsync(bool multiCompanyOnly, int? companyId)
+        private async Task<List<CommonSupplierDto>> BuildGroupListAsync(
+            bool multiCompanyOnly, int? companyId, IReadOnlyCollection<int> accessibleCompanyIds)
         {
+            // Membership is filtered to the caller's companies BEFORE grouping,
+            // so CompanyCount, CompanyNames and the multi-company test are all
+            // computed from what this operator is allowed to see.
+            var allowed = accessibleCompanyIds as IReadOnlyCollection<int> ?? accessibleCompanyIds.ToList();
+            if (allowed.Count == 0) return new List<CommonSupplierDto>();
+
             var query = _db.Suppliers
-                .Where(s => s.SupplierGroupId != null)
+                .Where(s => s.SupplierGroupId != null && allowed.Contains(s.CompanyId))
                 .GroupBy(s => s.SupplierGroupId!.Value);
 
             if (multiCompanyOnly)
@@ -127,7 +134,9 @@ namespace MyApp.Api.Services.Implementations
                 .ToDictionaryAsync(g => g.Id);
 
             var memberCompanies = await _db.Suppliers
-                .Where(s => s.SupplierGroupId != null && groupIds.Contains(s.SupplierGroupId!.Value))
+                .Where(s => s.SupplierGroupId != null
+                            && groupIds.Contains(s.SupplierGroupId!.Value)
+                            && allowed.Contains(s.CompanyId))
                 .Select(s => new { s.SupplierGroupId, s.Company.Name })
                 .ToListAsync();
             var companyNamesByGroup = memberCompanies
@@ -150,13 +159,19 @@ namespace MyApp.Api.Services.Implementations
                 .ToList();
         }
 
-        public async Task<CommonSupplierDetailDto?> GetByIdAsync(int groupId)
+        public async Task<CommonSupplierDetailDto?> GetByIdAsync(int groupId, IReadOnlyCollection<int> accessibleCompanyIds)
         {
+            // Same reasoning as the client-side detail route: members expose
+            // each sibling's full contact record, so restrict to reachable
+            // companies and 404 when none are.
+            var allowed = accessibleCompanyIds as IReadOnlyCollection<int> ?? accessibleCompanyIds.ToList();
+            if (allowed.Count == 0) return null;
+
             var group = await _db.SupplierGroups.FirstOrDefaultAsync(g => g.Id == groupId);
             if (group == null) return null;
 
             var members = await _db.Suppliers
-                .Where(s => s.SupplierGroupId == groupId)
+                .Where(s => s.SupplierGroupId == groupId && allowed.Contains(s.CompanyId))
                 .Select(s => new
                 {
                     s.Id,
@@ -174,6 +189,9 @@ namespace MyApp.Api.Services.Implementations
                     s.FbrProvinceCode,
                 })
                 .ToListAsync();
+
+            // No reachable member → not found, rather than throwing below.
+            if (members.Count == 0) return null;
 
             // Pick the lowest-Id member as representative (deterministic).
             var representative = members.OrderBy(m => m.Id).First();

@@ -66,7 +66,7 @@ tfoot td { font-weight: 700; background: #e3f2fd !important; border-top: 2px sol
 .sig { text-align: center; }
 .sig .line { width: 160px; border-top: 1.5px solid #333; margin: 0 auto 4px; }
 .sig .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:58px;margin-bottom:6px;display:block">{{/if}}
@@ -110,7 +110,7 @@ tfoot td { font-weight: 700; background: #e3f2fd !important; border-top: 2px sol
 {{/if}}
 {{#if description}}<div class="desc"><span class="lbl">Remarks:</span> {{{nl2br description}}}</div>{{/if}}
 <div class="footer">
-  <div class="sig"><div class="line"></div><div class="label">Paid By</div></div>
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Paid By</div></div>
   <div class="sig"><div class="line"></div><div class="label">Authorized Signature</div></div>
   <div class="sig"><div class="line"></div><div class="label">Received By</div></div>
 </div>
@@ -164,7 +164,7 @@ tfoot td { font-weight: 700; color: #0d47a1; border-top: 2px solid #0d47a1; bord
 .sig { text-align: center; }
 .sig .line { width: 160px; border-top: 2px solid #0d47a1; margin: 0 auto 4px; }
 .sig .label { font-size: 9px; color: #777; text-transform: uppercase; letter-spacing: 0.5px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="accent-rule"></div>
 <div class="header">
   <div>
@@ -209,7 +209,7 @@ tfoot td { font-weight: 700; color: #0d47a1; border-top: 2px solid #0d47a1; bord
 {{/if}}
 {{#if description}}<div class="desc"><b>Remarks:</b> {{{nl2br description}}}</div>{{/if}}
 <div class="footer">
-  <div class="sig"><div class="line"></div><div class="label">Paid By</div></div>
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Paid By</div></div>
   <div class="sig"><div class="line"></div><div class="label">Authorized Signature</div></div>
   <div class="sig"><div class="line"></div><div class="label">Received By</div></div>
 </div>
@@ -268,7 +268,7 @@ tfoot td { font-weight: 700; background: #e3f2fd !important; }
 .sig { text-align: center; }
 .sig .line { width: 170px; border-top: 2px solid #0d47a1; margin: 0 auto 5px; }
 .sig .label { font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="header-band">
   <div class="hb-left">
     {{#if companyLogoPath}}<div class="hb-logo"><img src="{{companyLogoPath}}"></div>{{/if}}
@@ -319,7 +319,7 @@ tfoot td { font-weight: 700; background: #e3f2fd !important; }
   {{/if}}
   {{#if description}}<div class="desc"><b>Remarks:</b> {{{nl2br description}}}</div>{{/if}}
   <div class="footer">
-    <div class="sig"><div class="line"></div><div class="label">Paid By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Paid By</div></div>
     <div class="sig"><div class="line"></div><div class="label">Authorized Signature</div></div>
     <div class="sig"><div class="line"></div><div class="label">Received By</div></div>
   </div>
@@ -373,7 +373,7 @@ tfoot td { font-weight: 700; }
 .sig { text-align: center; }
 .sig .line { width: 160px; border-top: 1px solid #000; margin: 0 auto 4px; }
 .sig .label { font-size: 8pt; text-transform: uppercase; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:48px;margin-bottom:6px;display:block;filter:grayscale(100%)">{{/if}}
@@ -419,7 +419,7 @@ tfoot td { font-weight: 700; }
 {{/if}}
 {{#if description}}<div class="desc"><span class="lbl">Remarks:</span> {{{nl2br description}}}</div>{{/if}}
 <div class="footer">
-  <div class="sig"><div class="line"></div><div class="label">Paid By</div></div>
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Paid By</div></div>
   <div class="sig"><div class="line"></div><div class="label">Authorized Signature</div></div>
   <div class="sig"><div class="line"></div><div class="label">Received By</div></div>
 </div>

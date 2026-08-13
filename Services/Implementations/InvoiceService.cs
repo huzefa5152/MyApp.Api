@@ -3001,6 +3001,9 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
+        public Task<Dictionary<int, int>> GetCompanyIdsAsync(IEnumerable<int> invoiceIds) =>
+            _invoiceRepo.GetCompanyIdsAsync(invoiceIds);
+
         public async Task<PrintTaxInvoiceDto?> GetPrintTaxInvoiceAsync(int invoiceId)
         {
             var inv = await _invoiceRepo.GetByIdAsync(invoiceId);

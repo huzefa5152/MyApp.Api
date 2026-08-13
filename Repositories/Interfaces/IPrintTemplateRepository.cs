@@ -28,10 +28,17 @@ namespace MyApp.Api.Repositories.Interfaces
         // template of that type; if isDefault is requested while a sibling default
         // exists, the sibling is cleared in the same transaction.
         Task<PrintTemplate> CreateAsync(int companyId, string templateType,
-            string name, string htmlContent, string? templateJson, string? editorMode, bool isDefault);
+            string name, string htmlContent, string? templateJson, string? editorMode, bool isDefault,
+            int? stampId = null);
 
-        // Update name/content only — never changes the default flag.
+        // Update name/content only — never changes the default flag or the stamp
+        // assignment (an HTML edit must not silently drop the signature).
         Task<PrintTemplate?> UpdateContentAsync(int id, string name, string htmlContent, string? templateJson, string? editorMode);
+
+        // Assign / clear the stamp. htmlContent is optional and supplied only by
+        // the convert-to-slot and add-signature-block flows, which must change
+        // markup and assignment in one write.
+        Task<PrintTemplate?> SetStampAsync(int id, int? stampId, string? htmlContent);
 
         // Make the template the default for its type (clears the sibling default).
         Task<bool> SetDefaultAsync(int id);

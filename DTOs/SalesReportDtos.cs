@@ -34,6 +34,12 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class SalesReportInvoiceDto
     {
+        /// <summary>
+        /// The underlying invoice's primary key. The report keys its rows on
+        /// DocumentNumber (human-facing), but the Tax Invoice PDF download needs
+        /// a real id to fetch print data with.
+        /// </summary>
+        public int InvoiceId { get; set; }
         public string DocumentNumber { get; set; } = "";
         public string FbrInvoiceNumber { get; set; } = "";
         public DateTime DocumentDate { get; set; }

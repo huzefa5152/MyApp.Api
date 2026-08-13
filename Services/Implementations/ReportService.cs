@@ -116,6 +116,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 var invDto = new SalesReportInvoiceDto
                 {
+                    InvoiceId = inv.Id,
                     DocumentNumber = inv.InvoiceNumber.ToString(),
                     FbrInvoiceNumber = !string.IsNullOrWhiteSpace(inv.FbrIRN)
                         ? inv.FbrIRN!
