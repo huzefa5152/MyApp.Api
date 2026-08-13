@@ -18,3 +18,8 @@ export const updateStamp = (companyId, id, payload) =>
 
 export const deleteStamp = (companyId, id) =>
   httpClient.delete(`/companies/${companyId}/stamps/${id}`);
+
+// Make this the company's default stamp — pre-selected in pickers and used by
+// the built-in fallback templates, which have no row to carry an assignment.
+export const setDefaultStamp = (companyId, id) =>
+  httpClient.put(`/companies/${companyId}/stamps/${id}/default`);

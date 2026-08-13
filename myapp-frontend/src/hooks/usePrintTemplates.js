@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getTemplatesByCompany } from "../api/printTemplateApi";
 import { useCompany } from "../contexts/CompanyContext";
+import { withStamp } from "../utils/stampSlot";
 import { usePermissions } from "../contexts/PermissionsContext";
 
 // Generic per-document-type print-template picker state, shared by every
@@ -107,7 +108,7 @@ export function invalidatePrintTemplateCache(companyId = null) {
 }
 
 export function usePrintTemplates(templateType, { divisionId = null } = {}) {
-  const { selectedCompany } = useCompany();
+  const { selectedCompany, companyStamps } = useCompany();
   const { has } = usePermissions();
   const canViewTemplates = has("printtemplates.manage.view");
   const companyId = selectedCompany?.id || null;
@@ -228,9 +229,24 @@ export function usePrintTemplates(templateType, { divisionId = null } = {}) {
   // the scope's default template. The `doc` argument is accepted for call-site
   // compatibility but no longer consulted — the screen's division selector, not
   // each document's own division, drives the scope now.
+  // Slug -> URL for the active company's stamps, so {{stamp}} can be resolved
+  // without another fetch. CompanyContext already holds this list.
+  const stampsBySlug = useMemo(
+    () => Object.fromEntries((companyStamps || []).map((s) => [s.slug, s.url])),
+    [companyStamps]
+  );
+  const defaultStampSlug = useMemo(
+    () => (companyStamps || []).find((s) => s.isDefault)?.slug || null,
+    [companyStamps]
+  );
+
+  // withStamp() is THE place the {{stamp}} slot becomes a real <img src> (or
+  // disappears). Every print / PDF / Excel path reaches its template through
+  // here, so none of those call sites needs to know stamps exist. Keep this
+  // wrap in place when porting — it is what makes the feature branch-portable.
   const resolveTemplate = useCallback(
-    (_doc) => selectedTemplate || resolveAuto(),
-    [selectedTemplate, resolveAuto]
+    (_doc) => withStamp(selectedTemplate || resolveAuto(), stampsBySlug, defaultStampSlug),
+    [selectedTemplate, resolveAuto, stampsBySlug, defaultStampSlug]
   );
 
   return {

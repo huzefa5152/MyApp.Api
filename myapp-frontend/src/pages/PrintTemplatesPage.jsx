@@ -9,7 +9,10 @@ import {
   getTemplatesByCompany, getTemplateById, createTemplate, setDefaultTemplate, deleteTemplate,
   uploadExcelTemplateById, deleteExcelTemplateById,
 } from "../api/printTemplateApi";
-import { uploadStamp, deleteStamp, updateStamp } from "../api/stampApi";
+import { uploadStamp, deleteStamp, updateStamp, setDefaultStamp } from "../api/stampApi";
+import { setTemplateStamp } from "../api/printTemplateApi";
+import StampPicker from "../Components/templateEditor/StampPicker";
+import { injectSignatureBlock, convertPinnedToSlot, pinnedSlugs } from "../utils/stampSlot";
 import { getDivisionsByCompany } from "../api/divisionApi";
 import { invalidatePrintTemplateCache } from "../hooks/usePrintTemplates";
 import { useCompany } from "../contexts/CompanyContext";
@@ -158,6 +161,10 @@ export default function PrintTemplatesPage() {
         templateType: t.templateType, divisionId: t.divisionId ?? null,
         name: `${t.name} (copy)`, htmlContent: full.htmlContent, templateJson: full.templateJson,
         editorMode: full.editorMode, isDefault: false,
+        // The copy starts life signed exactly like its source; because the
+        // assignment lives on the row, the copy can then be changed
+        // independently without touching either template's HTML.
+        stampId: t.stampId ?? null,
       });
       notify(`Duplicated "${t.name}".`, "success"); invalidatePrintTemplateCache(selectedCompany?.id); await load();
     } catch { notify("Failed to duplicate.", "error"); } finally { setBusyId(null); }
@@ -231,6 +238,79 @@ export default function PrintTemplatesPage() {
       notify(err.response?.data?.error || "Failed to upload stamp.", "error");
     } finally { setStampUploading(false); }
   };
+  // ── Per-template stamp assignment ──
+
+  // Assignment is a field write: the template's HTML is untouched, so swapping
+  // a signature can never disturb the layout.
+  const handleSetStamp = async (t, stampId) => {
+    setStampBusyId(t.id);
+    try {
+      await setTemplateStamp(t.id, stampId);
+      invalidatePrintTemplateCache(selectedCompany?.id);
+      await load();
+      notify(stampId ? "Signature updated." : "Signature removed.", "success");
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to update signature.", "error");
+    } finally { setStampBusyId(null); }
+  };
+
+  // The list is metadata-only on this branch, so the body has to be fetched
+  // before it can be rewritten.
+  const handleAddSignatureBlock = async (t) => {
+    setStampBusyId(t.id);
+    try {
+      const { data: full } = await getTemplateById(t.id);
+      const { html, anchor, changed } = injectSignatureBlock(full.htmlContent || "");
+      if (!changed) { notify("This template already has a signature block.", "info"); return; }
+      const where = anchor === "signature-row" ? "inside the existing signature row"
+        : anchor === "signature-text" ? "above the signature label"
+        : "at the end of the document";
+      const ok = await confirm({
+        title: "Add signature block?",
+        message: `A signature slot will be added ${where}. Nothing else in the template changes. `
+          + `You can then pick which stamp it shows, and reposition it in the editor.`,
+        confirmText: "Add block",
+      });
+      if (!ok) return;
+      const firstStamp = companyStamps.find((x) => x.isDefault) || companyStamps[0] || null;
+      await setTemplateStamp(t.id, firstStamp?.id ?? null, html);
+      invalidatePrintTemplateCache(selectedCompany?.id);
+      await load();
+      notify(`Signature block added ${where}.`, "success");
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to add signature block.", "error");
+    } finally { setStampBusyId(null); }
+  };
+
+  const handleConvertToSlot = async (t) => {
+    setStampBusyId(t.id);
+    try {
+      const { data: full } = await getTemplateById(t.id);
+      const slug = pinnedSlugs(full.htmlContent || "")[0];
+      if (!slug) { notify("No fixed stamp reference found.", "info"); return; }
+      const match = companyStamps.find((x) => x.slug === slug) || null;
+      const ok = await confirm({
+        title: "Make the signature changeable?",
+        message: `This template points straight at "${slug}". Converting keeps the same image but `
+          + `lets you switch stamps from a dropdown instead of editing the HTML.`,
+        confirmText: "Convert",
+      });
+      if (!ok) return;
+      await setTemplateStamp(t.id, match?.id ?? null, convertPinnedToSlot(full.htmlContent || "", slug));
+      invalidatePrintTemplateCache(selectedCompany?.id);
+      await load();
+      notify("Signature is now changeable.", "success");
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to convert.", "error");
+    } finally { setStampBusyId(null); }
+  };
+
+  const handleStampSetDefault = async (s) => {
+    setStampBusyId(s.id);
+    try { await setDefaultStamp(selectedCompany.id, s.id); await refreshStamps(); notify(`"${s.name}" is now the default stamp.`, "success"); }
+    catch { notify("Failed to set default stamp.", "error"); } finally { setStampBusyId(null); }
+  };
+
   const handleStampRename = async (s) => {
     const name = window.prompt("Stamp name", s.name);
     if (name == null) return;
@@ -241,7 +321,17 @@ export default function PrintTemplatesPage() {
     catch { notify("Failed to rename stamp.", "error"); } finally { setStampBusyId(null); }
   };
   const handleStampDelete = async (s) => {
-    const ok = await confirm({ title: "Delete stamp?", message: `Delete "${s.name}"? Any template using {{stamps.${s.slug}}} will show a broken image.`, variant: "danger", confirmText: "Delete" });
+    const ok = await confirm({
+      title: "Delete stamp?",
+      // Templates assigned this stamp lose the assignment and print unsigned —
+      // say so, and say how many, before deleting.
+      message: s.usedByTemplates
+        ? `Delete "${s.name}"? ${s.usedByTemplates} template${s.usedByTemplates === 1 ? "" : "s"} `
+          + `use it and will print without a signature. Templates that name it directly as `
+          + `{{stamps.${s.slug}}} will show a broken image.`
+        : `Delete "${s.name}"? No template is using it.`,
+      variant: "danger", confirmText: "Delete",
+    });
     if (!ok) return;
     setStampBusyId(s.id);
     try { await deleteStamp(selectedCompany.id, s.id); notify("Stamp deleted.", "success"); await refreshStamps(); }
@@ -364,6 +454,21 @@ export default function PrintTemplatesPage() {
                         {t.hasExcelTemplate && <span style={st.excelChip}><MdGridOn size={11} /> Excel</span>}
                         <span style={{ color: colors.textSecondary }}>Updated {fmtDate(t.updatedAt)}</span>
                       </div>
+                      {canViewStamps && (
+                        <div style={st.stampRow}>
+                          <span style={st.stampLabel}>Signature</span>
+                          <StampPicker
+                            stamps={companyStamps}
+                            value={t.stampId ?? null}
+                            state={t.stampState || "none"}
+                            busy={stampBusyId === t.id}
+                            disabled={!canManage}
+                            onChange={(id) => handleSetStamp(t, id)}
+                            onAddBlock={canManage ? () => handleAddSignatureBlock(t) : null}
+                            onConvert={canManage ? () => handleConvertToSlot(t) : null}
+                          />
+                        </div>
+                      )}
                       <div style={st.actions}>
                         {busyId === t.id && <span style={st.cardSpin} aria-label="Working…" />}
                         <button style={st.actBtn} title="Edit" disabled={busy} onClick={() => openInEditor(t)}><MdEdit size={15} /></button>
@@ -459,6 +564,7 @@ export default function PrintTemplatesPage() {
                       <div style={st.actions}>
                         {stampBusyId === s.id && <span style={st.cardSpin} aria-label="Working…" />}
                         <button style={st.actBtn} title="Copy merge field" disabled={stampBusyId != null} onClick={() => copyStampToken(s)}><MdContentCopy size={15} /></button>
+                        {canManageStamps && !s.isDefault && <button style={st.actBtn} title="Set as default stamp" disabled={stampBusyId != null} onClick={() => handleStampSetDefault(s)}><MdStar size={15} /></button>}
                         {canManageStamps && <button style={st.actBtn} title="Rename" disabled={stampBusyId != null} onClick={() => handleStampRename(s)}><MdEdit size={15} /></button>}
                         {canManageStamps && <button style={{ ...st.actBtn, color: "#dc3545" }} title="Delete" disabled={stampBusyId != null} onClick={() => handleStampDelete(s)}><MdDelete size={15} /></button>}
                       </div>
@@ -655,6 +761,8 @@ const st = {
   scopeList: { display: "flex", flexDirection: "column", gap: "0.5rem", padding: "0.9rem 1.1rem", overflow: "auto" },
   scopeBtn: { display: "flex", alignItems: "center", gap: "0.6rem", textAlign: "left", border: `1px solid ${colors.inputBorder}`, background: "#fff", borderRadius: 10, padding: "0.7rem 0.85rem", cursor: "pointer", fontSize: "0.88rem", color: colors.textPrimary },
   scopeHintTxt: { fontSize: "0.74rem", color: colors.textSecondary, fontWeight: 400 },
+  stampRow: { display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", paddingTop: "0.35rem", borderTop: `1px dashed ${colors.cardBorder}` },
+  stampLabel: { fontSize: "0.72rem", fontWeight: 600, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.4px" },
   stampThumbWrap: { height: 110, display: "flex", alignItems: "center", justifyContent: "center", background: "#f7f9fc", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, padding: 6 },
   stampThumbImg: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" },
   stampToken: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.4rem", width: "100%", padding: "0.3rem 0.5rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 7, background: "#f8fafd", cursor: "pointer" },

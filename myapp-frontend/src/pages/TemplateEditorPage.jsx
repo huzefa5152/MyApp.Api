@@ -19,6 +19,12 @@ import {
 import { dropdownStyles } from "../theme";
 import CodeEditor from "../Components/templateEditor/CodeEditor";
 import MergeFieldSidebar from "../Components/templateEditor/MergeFieldSidebar";
+import StampPicker from "../Components/templateEditor/StampPicker";
+import {
+  STAMP_STATE, detectStampState, injectSignatureBlock, convertPinnedToSlot, pinnedSlugs,
+  firstEmbeddedImage, replaceEmbeddedImageWithSlot, materializeStamp,
+} from "../utils/stampSlot";
+import { setTemplateStamp } from "../api/printTemplateApi";
 import PreviewPane from "../Components/templateEditor/PreviewPane";
 import SyncWarningModal from "../Components/templateEditor/SyncWarningModal";
 import VisualEditor from "../Components/templateEditor/VisualEditor";
@@ -57,6 +63,10 @@ export default function TemplateEditorPage() {
   const [editorMode, setEditorMode] = useState("code"); // "code" | "visual"
   const [activeTab, setActiveTab] = useState("editor"); // editor | preview
   const [saving, setSaving] = useState(false);
+  // Stamp assignment lives on the template row, not in the HTML — so it is
+  // tracked separately from the editor buffer and saved on its own.
+  const [stampId, setStampId] = useState(null);
+  const [stampSaving, setStampSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [showSyncWarning, setShowSyncWarning] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
@@ -178,6 +188,7 @@ export default function TemplateEditorPage() {
       setTemplateJson(tpl.templateJson || null);
       setOriginalJson(tpl.templateJson || null);
       setEditorMode(tpl.editorMode || "code");
+      setStampId(tpl.stampId ?? null);
       setHasExcel(tpl.hasExcelTemplate || false);
       setExcelSheetName(tpl.excelSheetName || null);
       setExcelSheetNames(tpl.excelSheetNames || []);
@@ -191,6 +202,7 @@ export default function TemplateEditorPage() {
       setTemplateJson(null);
       setOriginalJson(null);
       setEditorMode("code");
+      setStampId(null);
       setHasExcel(false);
       setExcelSheetName(null);
       setExcelSheetNames([]);
@@ -326,6 +338,10 @@ export default function TemplateEditorPage() {
         await updateTemplateById(currentTemplateId, {
           name: currentTemplateName, htmlContent: saveHtml, templateJson: saveJson, editorMode,
         });
+        // The content update deliberately leaves the assignment alone; push it
+        // here so an "Add signature block" / "Make changeable" edit that was
+        // only staged in the buffer lands together with the HTML that needs it.
+        await setTemplateStamp(currentTemplateId, stampId);
         // Keep the cached copy fresh so re-opening it from the manager shows latest content.
         setAllTemplates((prev) => prev.map((t) =>
           t.id === currentTemplateId ? { ...t, htmlContent: saveHtml, templateJson: saveJson, editorMode } : t));
@@ -333,7 +349,7 @@ export default function TemplateEditorPage() {
         // Empty scope → create the first template (server forces it default).
         const { data } = await createTemplate(selectedCompany.id, {
           templateType, divisionId: scopeDivisionId, name: currentTemplateName || "Default",
-          htmlContent: saveHtml, templateJson: saveJson, editorMode, isDefault: true,
+          htmlContent: saveHtml, templateJson: saveJson, editorMode, isDefault: true, stampId,
         });
         currentTemplateIdRef.current = data.id;
         setCurrentTemplateId(data.id);
@@ -620,6 +636,41 @@ export default function TemplateEditorPage() {
     }
   };
 
+  // Which stamp mechanism the buffer currently uses. Derived from the live
+  // editor text, so adding or removing a slot by hand updates the control.
+  const stampState = detectStampState(htmlContent);
+
+  // Assignment persists immediately when the template already exists; on an
+  // unsaved new template it is held locally and written by handleSave.
+  const handleEditorStampChange = async (id) => {
+    setStampId(id);
+    if (!currentTemplateId) return;
+    setStampSaving(true);
+    try { await setTemplateStamp(currentTemplateId, id); }
+    catch { showToast("Failed to update signature", "error"); }
+    finally { setStampSaving(false); }
+  };
+
+  const handleEditorAddBlock = () => {
+    const { html, anchor, changed } = injectSignatureBlock(htmlContent);
+    if (!changed) { showToast("Template already has a signature block"); return; }
+    setHtmlContent(html);
+    setEditorMode("code");
+    setActiveTab("editor");
+    showToast(anchor === "appended"
+      ? "No signature row found — block added at the end"
+      : "Signature block added");
+  };
+
+  const handleEditorConvert = () => {
+    const slug = pinnedSlugs(htmlContent)[0];
+    if (!slug) return;
+    setHtmlContent(convertPinnedToSlot(htmlContent, slug));
+    const match = companyStamps.find((x) => x.slug === slug);
+    if (match) setStampId(match.id);
+    showToast("Signature is now changeable — remember to save");
+  };
+
   const handleImportHtml = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -630,7 +681,35 @@ export default function TemplateEditorPage() {
         const ok = await confirm({ title: "Replace Template?", message: "This will replace your current template. Any unsaved changes will be lost.", variant: "warning", confirmText: "Replace" });
         if (!ok) return;
       }
-      setHtmlContent(content);
+      let imported = content;
+
+      // Imported markup usually predates stamps: it either embeds the
+      // signature as base64 (the very bloat stamps exist to remove) or has no
+      // signature slot at all. Offer to fix it now, while the operator is
+      // looking at the result — otherwise every import walks the problem back in.
+      const embedded = firstEmbeddedImage(imported);
+      if (embedded && companyStamps.length > 0) {
+        const useStamp = await confirm({
+          title: "Replace embedded image with a stamp?",
+          message: "This file embeds an image directly in its HTML, which makes the template "
+            + "very large and impossible to reuse. Swap it for one of your uploaded stamps?",
+          confirmText: "Use a stamp",
+        });
+        if (useStamp) imported = replaceEmbeddedImageWithSlot(imported);
+      }
+      if (detectStampState(imported) === STAMP_STATE.NONE) {
+        const addBlock = await confirm({
+          title: "Add a signature block?",
+          message: "This template has no signature slot. Add one so you can pick which stamp it shows?",
+          confirmText: "Add block",
+        });
+        if (addBlock) {
+          const res = injectSignatureBlock(imported);
+          if (res.changed) imported = res.html;
+        }
+      }
+
+      setHtmlContent(imported);
       setTemplateJson(null);
       setEditorMode("code");
       setActiveTab("editor");
@@ -671,7 +750,11 @@ export default function TemplateEditorPage() {
     const scopeDiv = scopeDivisionId != null
       ? divisions.find((d) => d.id === scopeDivisionId)
       : null;
-    return buildTemplatePreviewHtml(templateType, src, { company: selectedCompany, division: scopeDiv });
+    // Resolve {{stamp}} exactly the way printing does, so the preview shows the
+    // signature the document will actually carry — a preview that renders
+    // through a different path is a preview you cannot trust.
+    const stamped = materializeStamp(src, companyStamps.find((x) => x.id === stampId)?.url || null);
+    return buildTemplatePreviewHtml(templateType, stamped, { company: selectedCompany, division: scopeDiv });
   })();
 
   const hasChanges = htmlContent !== originalContent || templateJson !== originalJson;
@@ -880,6 +963,21 @@ export default function TemplateEditorPage() {
                 <button style={{ ...styles.btn, ...styles.btnOutline, padding: "0.4rem 0.6rem", fontSize: "0.78rem", flexShrink: 0 }} onClick={() => setShowApplyStarter(true)} title="Apply a starter design onto this template">
                   <MdBrush size={14} /> Starter
                 </button>
+              )}
+              {companyStamps.length > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", minWidth: 0, flexShrink: 0 }}>
+                  <span style={{ fontSize: "0.78rem", color: "#5f6d7e", whiteSpace: "nowrap" }}>Signature</span>
+                  <StampPicker
+                    stamps={companyStamps}
+                    value={stampId}
+                    state={stampState}
+                    pinnedSlug={pinnedSlugs(htmlContent)[0]}
+                    busy={stampSaving}
+                    onChange={handleEditorStampChange}
+                    onAddBlock={handleEditorAddBlock}
+                    onConvert={handleEditorConvert}
+                  />
+                </div>
               )}
               <button style={{ ...styles.btn, ...styles.btnOutline, padding: "0.4rem 0.6rem", fontSize: "0.78rem", flexShrink: 0 }} onClick={handleReset} title="Reset to default">
                 <MdRefresh size={14} /> Reset

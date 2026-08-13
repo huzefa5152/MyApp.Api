@@ -1,4 +1,5 @@
 import Handlebars from "handlebars";
+import { materializeStamp } from "./stampSlot.js";
 
 // Register custom helpers
 Handlebars.registerHelper("fmtDate", (d) => {
@@ -155,7 +156,17 @@ export function setActiveStamps(dict) {
 }
 
 export function mergeTemplate(htmlTemplate, data) {
-  const compiled = Handlebars.compile(htmlTemplate);
+  // Safety net for the {{stamp}} slot. resolveTemplate() normally materializes
+  // it upstream (see utils/stampSlot.js), but any path that reaches here with
+  // the raw token still in place would have Handlebars resolve it to "" and
+  // leave <img src=""> behind — a broken-image box that silently adds ~64px to
+  // the document and can push a one-page invoice onto a second page. Strip the
+  // whole slot instead, so an unresolved stamp renders as nothing at all.
+  const src = data && data.stamp
+    ? materializeStamp(htmlTemplate, data.stamp)
+    : materializeStamp(htmlTemplate, null);
+
+  const compiled = Handlebars.compile(src);
   // Inject stamps unless the caller already supplied its own.
   const merged = { ...(data || {}), stamps: (data && data.stamps) || _activeStamps };
   const html = compiled(merged);

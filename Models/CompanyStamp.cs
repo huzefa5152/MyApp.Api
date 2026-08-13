@@ -20,6 +20,12 @@ namespace MyApp.Api.Models
         // Served by the /data static provider (same class as the company logo).
         public string FilePath { get; set; } = "";
 
+        // Exactly one default per company (filtered unique index). Used where a
+        // stamp is needed but no template row exists to carry a StampId — the
+        // built-in fallback templates in defaultTemplates.js — and to
+        // pre-select a sensible choice in the pickers.
+        public bool IsDefault { get; set; }
+
         public int SortOrder { get; set; }
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

@@ -127,6 +127,8 @@ namespace MyApp.Api.Repositories.Implementations
             return await _ctx.PrintTemplates
                 .AsNoTracking()
                 .Include(pt => pt.Division)
+                // Stamp carries the slug the frontend resolves {{stamp}} against.
+                .Include(pt => pt.Stamp)
                 .Where(pt => pt.CompanyId == companyId)
                 .OrderBy(pt => pt.TemplateType)
                 .ThenBy(pt => pt.DivisionId)   // NULL (company-level) sorts first on SQL Server
@@ -140,11 +142,13 @@ namespace MyApp.Api.Repositories.Implementations
             // endpoints load via this method, mutate, then SaveAsync.
             return await _ctx.PrintTemplates
                 .Include(pt => pt.Division)
+                .Include(pt => pt.Stamp)
                 .FirstOrDefaultAsync(pt => pt.Id == id);
         }
 
         public async Task<PrintTemplate> CreateAsync(int companyId, int? divisionId, string templateType,
-            string name, string htmlContent, string? templateJson, string? editorMode, bool isDefault)
+            string name, string htmlContent, string? templateJson, string? editorMode, bool isDefault,
+            int? stampId = null)
         {
             await using var tx = await _ctx.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             try
@@ -173,6 +177,7 @@ namespace MyApp.Api.Repositories.Implementations
                     TemplateType = templateType,
                     Name = string.IsNullOrWhiteSpace(name) ? "Untitled" : name.Trim(),
                     IsDefault = makeDefault,
+                    StampId = stampId,
                     HtmlContent = htmlContent,
                     TemplateJson = templateJson,
                     EditorMode = editorMode,
@@ -202,6 +207,24 @@ namespace MyApp.Api.Repositories.Implementations
             t.UpdatedAt = DateTime.UtcNow;
             await _ctx.SaveChangesAsync();
             return t;
+        }
+
+        public async Task<PrintTemplate?> SetStampAsync(int id, int? stampId, string? htmlContent)
+        {
+            var t = await _ctx.PrintTemplates.FirstOrDefaultAsync(pt => pt.Id == id);
+            if (t == null) return null;
+
+            t.StampId = stampId;
+            // Only the convert / inject flows send HTML; a plain assignment must
+            // leave the template body exactly as it was.
+            if (htmlContent != null) t.HtmlContent = htmlContent;
+            t.UpdatedAt = DateTime.UtcNow;
+            await _ctx.SaveChangesAsync();
+
+            // Re-read with the navigation so the caller's DTO carries StampSlug.
+            return await _ctx.PrintTemplates
+                .Include(pt => pt.Stamp)
+                .FirstOrDefaultAsync(pt => pt.Id == id);
         }
 
         public async Task<bool> SetDefaultAsync(int id)

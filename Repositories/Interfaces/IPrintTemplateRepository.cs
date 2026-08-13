@@ -31,7 +31,13 @@ namespace MyApp.Api.Repositories.Interfaces
         // default exists, the sibling is cleared in the same transaction. Caller must
         // have validated divisionId belongs to companyId.
         Task<PrintTemplate> CreateAsync(int companyId, int? divisionId, string templateType,
-            string name, string htmlContent, string? templateJson, string? editorMode, bool isDefault);
+            string name, string htmlContent, string? templateJson, string? editorMode, bool isDefault,
+            int? stampId = null);
+
+        // Assign / clear the stamp. htmlContent is optional and supplied only by
+        // the convert-to-slot and add-signature-block flows, which must change
+        // markup and assignment in one write.
+        Task<PrintTemplate?> SetStampAsync(int id, int? stampId, string? htmlContent);
 
         // Update name/content only — never changes scope or default flag.
         Task<PrintTemplate?> UpdateContentAsync(int id, string name, string htmlContent, string? templateJson, string? editorMode);

@@ -59,7 +59,7 @@ body { font-family: "Times New Roman", Times, serif; padding: 12mm; color: #000;
 .sig .role { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
 .sig .co { font-size: 10px; color: #555; margin-top: 2px; }
 .legal { margin-top: 22px; font-size: 8px; color: #888; text-align: center; font-style: italic; border-top: 1px solid #eee; padding-top: 6px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="outer-border"><div class="inner-border">
 <div class="header">
   <div>
@@ -105,7 +105,7 @@ body { font-family: "Times New Roman", Times, serif; padding: 12mm; color: #000;
 </div>
 {{/if}}
 <div class="footer">
-  <div class="sig">
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
     <div class="line"></div>
     <div class="role">Authorized Signatory</div>
     <div class="co">For {{companyBrandName}}</div>
@@ -160,7 +160,7 @@ body { font-family: Calibri, "Segoe UI", Arial, sans-serif; padding: 14mm; color
 .sig .role { font-size: 10px; font-weight: 700; color: #333; text-transform: uppercase; letter-spacing: 0.5px; }
 .sig .co { font-size: 9px; color: #888; margin-top: 2px; }
 .legal { margin-top: 24px; font-size: 8px; color: #aaa; text-align: center; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="accent-rule"></div>
 <div class="header">
   <div>
@@ -203,7 +203,7 @@ body { font-family: Calibri, "Segoe UI", Arial, sans-serif; padding: 14mm; color
 </div>
 {{/if}}
 <div class="footer">
-  <div class="sig">
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
     <div class="line"></div>
     <div class="role">Authorized Signatory</div>
     <div class="co">For {{companyBrandName}}</div>
@@ -263,7 +263,7 @@ body { font-family: "Times New Roman", Times, serif; padding: 8mm; color: #1a1a1
 .sig .role { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
 .sig .co { font-size: 10px; color: #555; margin-top: 2px; }
 .legal { margin-top: 20px; font-size: 8px; color: #888; text-align: center; font-style: italic; border-top: 1px solid #eee; padding-top: 6px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="frame-outer"><div class="frame-inner">
 <div class="watermark">Official</div>
 <div class="seal">
@@ -309,7 +309,7 @@ body { font-family: "Times New Roman", Times, serif; padding: 8mm; color: #1a1a1
   </div>
   {{/if}}
   <div class="footer">
-    <div class="sig">
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
       <div class="line"></div>
       <div class="role">Authorized Signatory</div>
       <div class="co">For {{companyBrandName}}</div>
@@ -364,7 +364,7 @@ body { font-family: Arial, "Helvetica Neue", sans-serif; padding: 12mm; color: #
 .sig .role { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
 .sig .co { font-size: 9px; margin-top: 2px; }
 .legal { margin-top: 22px; font-size: 8px; text-align: center; font-style: italic; border-top: 1px solid #000; padding-top: 6px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="sheet">
 <div class="header">
   <div>
@@ -406,7 +406,7 @@ body { font-family: Arial, "Helvetica Neue", sans-serif; padding: 12mm; color: #
 </div>
 {{/if}}
 <div class="footer">
-  <div class="sig">
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
     <div class="line"></div>
     <div class="role">Authorized Signatory</div>
     <div class="co">For {{companyBrandName}}</div>

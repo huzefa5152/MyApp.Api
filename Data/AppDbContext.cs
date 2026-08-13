@@ -682,6 +682,27 @@ namespace MyApp.Api.Data
                 .HasForeignKey(s => s.CompanyId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // At most one default stamp per company — same filtered-unique
+            // pattern as PrintTemplates' default-per-scope index.
+            modelBuilder.Entity<CompanyStamp>()
+                .HasIndex(s => s.CompanyId, "UX_CompanyStamps_DefaultPerCompany")
+                .IsUnique()
+                .HasFilter("[IsDefault] = 1");
+
+            // Deleting a stamp must NOT delete templates that used it; they fall
+            // back to printing without a signature.
+            //
+            // NoAction, not SetNull: Company already cascades to both
+            // CompanyStamps and PrintTemplates, so a SetNull here gives SQL
+            // Server multiple cascade paths and it refuses the constraint
+            // (error 1785). CompanyStampRepository.DeleteAsync clears the
+            // assignments explicitly instead, in the same transaction.
+            modelBuilder.Entity<PrintTemplate>()
+                .HasOne(pt => pt.Stamp)
+                .WithMany()
+                .HasForeignKey(pt => pt.StampId)
+                .OnDelete(DeleteBehavior.NoAction);
+
             // DeliveryItem -> ItemType (optional, restrict)
             modelBuilder.Entity<DeliveryItem>()
                 .HasOne(di => di.ItemType)

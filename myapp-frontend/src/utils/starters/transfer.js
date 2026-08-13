@@ -51,7 +51,7 @@ body { font-family: "Times New Roman", Times, serif; padding: 14mm; color: #000;
 .sig { text-align: center; }
 .sig .line { width: 190px; border-top: 1.5px solid #333; margin: 0 auto 4px; }
 .sig .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="outer-border"><div class="inner-border">
 <div class="header">
   <div>
@@ -80,7 +80,7 @@ body { font-family: "Times New Roman", Times, serif; padding: 14mm; color: #000;
 {{#if amountInWords}}<div class="words"><b>Amount in words:</b> {{amountInWords}}</div>{{/if}}
 {{#if description}}<div class="remarks"><span class="lbl">Remarks</span>{{{richText description}}}</div>{{/if}}
 <div class="footer">
-  <div class="sig"><div class="line"></div><div class="label">Prepared By</div></div>
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Prepared By</div></div>
   <div class="sig"><div class="line"></div><div class="label">Authorized Signature</div></div>
 </div>
 </div></div>
@@ -126,7 +126,7 @@ body { font-family: Calibri, "Segoe UI", Arial, sans-serif; padding: 14mm; color
 .sig { text-align: center; }
 .sig .line { width: 190px; border-top: 2px solid #00695c; margin: 0 auto 4px; }
 .sig .label { font-size: 9px; color: #777; text-transform: uppercase; letter-spacing: 0.5px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="accent-rule"></div>
 <div class="header">
   <div>
@@ -154,7 +154,7 @@ body { font-family: Calibri, "Segoe UI", Arial, sans-serif; padding: 14mm; color
 {{#if amountInWords}}<div class="words"><b>Amount in words:</b> {{amountInWords}}</div>{{/if}}
 {{#if description}}<div class="remarks"><span class="lbl">Remarks</span><div class="body">{{{richText description}}}</div></div>{{/if}}
 <div class="footer">
-  <div class="sig"><div class="line"></div><div class="label">Prepared By</div></div>
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Prepared By</div></div>
   <div class="sig"><div class="line"></div><div class="label">Authorized Signature</div></div>
 </div>
 </body></html>`,
@@ -200,7 +200,7 @@ body { font-family: Calibri, Arial, sans-serif; color: #111; }
 .sig { text-align: center; }
 .sig .line { width: 200px; border-top: 2px solid #4527a0; margin: 0 auto 5px; }
 .sig .label { font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="header-band">
   <div class="hb-left">
     {{#if companyLogoPath}}<div class="hb-logo"><img src="{{companyLogoPath}}"></div>{{/if}}
@@ -230,7 +230,7 @@ body { font-family: Calibri, Arial, sans-serif; color: #111; }
   {{#if amountInWords}}<div class="words"><b>Amount in words:</b> {{amountInWords}}</div>{{/if}}
   {{#if description}}<div class="remarks"><span class="lbl">Remarks</span><div class="body">{{{richText description}}}</div></div>{{/if}}
   <div class="footer">
-    <div class="sig"><div class="line"></div><div class="label">Prepared By</div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Prepared By</div></div>
     <div class="sig"><div class="line"></div><div class="label">Authorized Signature</div></div>
   </div>
 </div>
@@ -273,7 +273,7 @@ body { font-family: Arial, sans-serif; padding: 14mm; color: #000; font-size: 11
 .sig { text-align: center; }
 .sig .line { width: 190px; border-top: 1px solid #000; margin: 0 auto 4px; }
 .sig .label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:48px;margin-bottom:6px;display:block;filter:grayscale(100%)">{{/if}}
@@ -301,7 +301,7 @@ body { font-family: Arial, sans-serif; padding: 14mm; color: #000; font-size: 11
 {{#if amountInWords}}<div class="words"><b>Amount in words:</b> {{amountInWords}}</div>{{/if}}
 {{#if description}}<div class="remarks"><span class="lbl">Remarks</span>{{{richText description}}}</div>{{/if}}
 <div class="footer">
-  <div class="sig"><div class="line"></div><div class="label">Prepared By</div></div>
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Prepared By</div></div>
   <div class="sig"><div class="line"></div><div class="label">Authorized Signature</div></div>
 </div>
 </body></html>`,

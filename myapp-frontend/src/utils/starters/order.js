@@ -42,7 +42,7 @@ tfoot td { font-style:italic; font-size:11px; color:#555; padding-top:4px; }
 .sig .line { width:180px; border-top:1.5px solid #333; }
 .sig .l { font-size:11px; margin-top:3px; font-style:italic; }
 @media print { @page { size:A4; margin:11mm; } }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="page-border">
   <div class="hdr">
     <div class="brand">
@@ -101,7 +101,7 @@ tfoot td { font-style:italic; font-size:11px; color:#555; padding-top:4px; }
     </tbody>
   </table>
 
-  <div class="sig">
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
     <div class="b"><div class="line"></div><div class="l">Received By</div></div>
     <div class="b"><div class="line"></div><div class="l">Authorised Signature &mdash; For {{companyBrandName}}</div></div>
   </div>
@@ -144,7 +144,7 @@ td { padding:8px; font-size:12px; border-bottom:1px solid #f0f0f0; color:#333; }
 .sig .line { width:200px; border-top:1px solid #aaa; }
 .sig .l { font-size:11px; margin-top:3px; color:#777; }
 @media print { @page { size:A4; margin:12mm; } }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="hdr">
     <div class="brand">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" />{{/if}}
@@ -203,7 +203,7 @@ td { padding:8px; font-size:12px; border-bottom:1px solid #f0f0f0; color:#333; }
     </tbody>
   </table>
 
-  <div class="sig">
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
     <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
   </div>
 </body></html>`,
@@ -246,7 +246,7 @@ td.rem { font-weight:800; color:#0d3b72; }
 .footer-band { background:#0d3b72 !important; color:#b0c4de !important; padding:10px 18px; margin-top:30px; display:flex; justify-content:space-between; font-size:11px; }
 .sig-line { border-top:1px solid #b0c4de; width:180px; display:inline-block; }
 @media print { @page { size:A4; margin:0; } body { padding:0; } }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="top-band">
     <div class="brand">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" />{{/if}}
@@ -310,7 +310,7 @@ td.rem { font-weight:800; color:#0d3b72; }
 
   <div class="footer-band">
     <span>Delivery Instructions: Handle with care. Partial deliveries accepted.</span>
-    <span><div class="sig-line"></div><br>Authorised Signature</span>
+    <span><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="sig-line"></div><br>Authorised Signature</span>
   </div>
 </body></html>`,
   },
@@ -357,7 +357,7 @@ tbody tr:nth-child(even) .rem-td { background:#00695c !important; color:#fff !im
 .sig .line { border-top:2px solid #00897b; width:180px; }
 .sig .l { font-size:11px; margin-top:3px; color:#444; }
 @media print { @page { size:A4; margin:10mm; } }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="banner">
     <div class="brand">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" />{{/if}}
@@ -416,7 +416,7 @@ tbody tr:nth-child(even) .rem-td { background:#00695c !important; color:#fff !im
       </tbody>
     </table>
 
-    <div class="sig">
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
       <div class="b"><div class="line"></div><div class="l">Received By</div></div>
       <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
     </div>
@@ -460,7 +460,7 @@ td.rem { font-weight:900; border:1.5px solid #000; }
 .sig .l { font-size:10px; margin-top:2px; }
 .note { margin-top:12px; font-size:10px; border:1px dashed #000; padding:6px; }
 @media print { @page { size:A4; margin:12mm; } }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="hdr">
     <div class="brand">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" />{{/if}}
@@ -522,7 +522,7 @@ td.rem { font-weight:900; border:1.5px solid #000; }
 
   <div class="note">Delivery Instructions: Partial deliveries acceptable. Kindly inform before dispatch.</div>
 
-  <div class="sig">
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
     <div class="b"><div class="line"></div><div class="l">Customer Signature</div></div>
     <div class="b"><div class="line"></div><div class="l">Authorised Signature / For {{companyBrandName}}</div></div>
   </div>
@@ -571,7 +571,7 @@ tbody tr:nth-child(even) td.rem { background:#fef9e7 !important; }
 .sig .line { width:200px; border-top:1.5px solid #c8a951; }
 .sig .l { font-size:11px; margin-top:3px; color:#666; font-style:italic; }
 @media print { @page { size:A4; margin:12mm; } }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="outer">
   <div class="hdr">
     <div class="brand">
@@ -631,7 +631,7 @@ tbody tr:nth-child(even) td.rem { background:#fef9e7 !important; }
     </tbody>
   </table>
 
-  <div class="sig">
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
     <div class="b"><div class="line"></div><div class="l">Received / Accepted By</div></div>
     <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
   </div>
@@ -676,7 +676,7 @@ tbody tr:nth-child(even) td.rem { background:#e8f0fe !important; }
 .sig .line { width:160px; border-top:1px solid #666; }
 .sig .l { font-size:9px; margin-top:2px; color:#555; }
 @media print { @page { size:A4; margin:10mm; } }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="hdr">
     <div class="brand">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" />{{/if}}
@@ -732,7 +732,7 @@ tbody tr:nth-child(even) td.rem { background:#e8f0fe !important; }
     </tbody>
   </table>
 
-  <div class="sig">
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
     <div class="b"><div class="line"></div><div class="l">Authorised Signature</div></div>
   </div>
 </body></html>`,
@@ -776,7 +776,7 @@ tbody tr:nth-child(even) td.rem { background:#e8e8f0 !important; }
 .sig .line { width:200px; border-top:1.5px solid #1a1a2e; }
 .sig .l { font-size:11px; margin-top:3px; color:#666; }
 @media print { @page { size:A4; margin:0; } body { min-height:auto; } }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="sidebar">
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" />{{/if}}
     {{#unless companyLogoPath}}<div class="sname">{{companyBrandName}}</div>{{/unless}}
@@ -836,7 +836,7 @@ tbody tr:nth-child(even) td.rem { background:#e8e8f0 !important; }
       </tbody>
     </table>
 
-    <div class="sig">
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
       <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
     </div>
   </div>
@@ -885,7 +885,7 @@ tbody tr:nth-child(even) td.rem { background:#eaf1fb !important; }
 .sig-cell .line { border-top:1px solid #666; width:60%; margin:0 auto 4px; }
 .sig-cell .l { font-size:10px; color:#555; }
 @media print { @page { size:A4; margin:10mm; } }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="outer">
   <div class="top-box">
     <div class="logo-cell">
@@ -948,7 +948,7 @@ tbody tr:nth-child(even) td.rem { background:#eaf1fb !important; }
     </tbody>
   </table>
   <div class="sig-row">
-    <div class="sig-cell"><div class="line"></div><div class="l">Prepared By</div></div>
+    <div class="sig-cell"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="l">Prepared By</div></div>
     <div class="sig-cell"><div class="line"></div><div class="l">Authorised Signature</div></div>
     <div class="sig-cell"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
   </div>
@@ -996,7 +996,7 @@ tbody tr:nth-child(even) td.rem { background:#d4f0dc !important; }
 .sig .l { font-size:11px; margin-top:3px; color:#555; }
 .delivery-note { margin-top:12px; font-size:11px; color:#444; border:1px dashed #1a6e3a; padding:7px 10px; border-radius:2px; }
 @media print { @page { size:A4; margin:11mm; } }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="bismillah">بسم Ø§Ù„Ù„Û الرحمٰن الرحیم</div>
 
   <div class="hdr">
@@ -1058,7 +1058,7 @@ tbody tr:nth-child(even) td.rem { background:#d4f0dc !important; }
 
   <div class="delivery-note">Delivery Instructions: Please ensure items are delivered in good condition. Partial delivery allowed upon mutual agreement.</div>
 
-  <div class="sig">
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
     <div class="b"><div class="line"></div><div class="l">Customer Acknowledgement</div></div>
     <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
   </div>
@@ -1105,7 +1105,7 @@ tbody tr:nth-child(even) td.rem { background:#fffbe6 !important; }
 .sig .line { width:180px; border-top:2px solid #f0c040; }
 .sig .l { font-size:11px; margin-top:3px; color:#555; }
 @media print { @page { size:A4; margin:10mm; } }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="hdr">
     <div class="brand">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" />{{/if}}
@@ -1167,7 +1167,7 @@ tbody tr:nth-child(even) td.rem { background:#fffbe6 !important; }
 
     <div class="footer">Terms: Goods once dispatched are non-returnable without prior written consent. All disputes subject to local jurisdiction.</div>
 
-    <div class="sig">
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
       <div class="b"><div class="line"></div><div class="l">Customer Signature</div></div>
       <div class="b"><div class="line"></div><div class="l">Authorised Signature / For {{companyBrandName}}</div></div>
     </div>
@@ -1214,7 +1214,7 @@ tbody tr:nth-child(even) td.rem { background:#d1fafa !important; }
 .sig .line { width:180px; border-top:2px solid #2b9aa0; }
 .sig .l { font-size:11px; margin-top:3px; color:#718096; }
 @media print { @page { size:A4; margin:11mm; } }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="hdr">
     <div class="brand">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" />{{/if}}
@@ -1272,7 +1272,7 @@ tbody tr:nth-child(even) td.rem { background:#d1fafa !important; }
     </tbody>
   </table>
 
-  <div class="sig">
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
     <div class="b"><div class="line"></div><div class="l">Received By</div></div>
     <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
   </div>
@@ -1320,7 +1320,7 @@ tbody tr:nth-child(even) td.rem { background:#ffe0d8 !important; }
 .sig .line { width:180px; border-top:1.5px solid #c0392b; }
 .sig .l { font-size:11px; margin-top:3px; color:#666; }
 @media print { @page { size:A4; margin:0; } .letterhead, .doc-band, .meta-strip { page-break-inside:avoid; } }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="letterhead">
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" />{{/if}}
     {{#unless companyLogoPath}}<div class="lh-cname">{{companyBrandName}}</div>{{/unless}}
@@ -1378,7 +1378,7 @@ tbody tr:nth-child(even) td.rem { background:#ffe0d8 !important; }
 
   <div class="footer-lh">
     <div style="font-size:11px;color:#888;">This is a computer-generated document. No signature required for digital copy.</div>
-    <div class="sig"><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
+    <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
   </div>
 </body></html>`,
   },
@@ -1427,7 +1427,7 @@ tbody tr:nth-child(even) td.rem { background:#e8ecf5 !important; }
 .sig .line { width:180px; border-top:1.5px solid #3558a8; }
 .sig .l { font-size:11px; margin-top:3px; color:#666; }
 @media print { @page { size:A4; margin:11mm; } }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
   <div class="title-band">
     <div class="watermark">SALES ORDER</div>
     <div class="title">Sales Order</div>
@@ -1489,7 +1489,7 @@ tbody tr:nth-child(even) td.rem { background:#e8ecf5 !important; }
     </tbody>
   </table>
 
-  <div class="sig">
+  <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
     <div class="b"><div class="line"></div><div class="l">Customer Signature</div></div>
     <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
   </div>
@@ -1542,7 +1542,7 @@ tbody tr:nth-child(even) td.rem { background:#fffbe0 !important; }
 .sig-cell .l { font-size:10px; text-align:center; }
 .status-field { font-weight:900; font-size:12px; }
 @media print { @page { size:A4; margin:8mm; } }
-</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="outer">
   <div class="top-row">
     <div class="logo-col">
@@ -1607,7 +1607,7 @@ tbody tr:nth-child(even) td.rem { background:#fffbe0 !important; }
     </tbody>
   </table>
   <div class="sig-row">
-    <div class="sig-cell"><div class="line"></div><div class="l">Prepared By</div></div>
+    <div class="sig-cell"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="l">Prepared By</div></div>
     <div class="sig-cell"><div class="line"></div><div class="l">Checked By</div></div>
     <div class="sig-cell"><div class="line"></div><div class="l">Authorised Signatory<br>For {{companyBrandName}}</div></div>
   </div>
