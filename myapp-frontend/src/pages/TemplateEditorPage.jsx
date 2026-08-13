@@ -38,7 +38,7 @@ export default function TemplateEditorPage() {
   const navigate = useNavigate();
   const { has } = usePermissions();
   const canManage = has("printtemplates.manage.update");
-  const { companies, selectedCompany, setSelectedCompany, loading } = useCompany();
+  const { companies, selectedCompany, setSelectedCompany, loading, companyStamps } = useCompany();
 
   // ── Entry contract (set by PrintTemplatesPage before navigating here) ──
   //   te.type       — the document type to edit/create (e.g. "Challan").
@@ -701,7 +701,7 @@ export default function TemplateEditorPage() {
           <>
             {/* Merge Fields Sidebar - hidden on mobile */}
             {!isMobile && (
-              <MergeFieldSidebar fields={fields} onInsert={insertField} />
+              <MergeFieldSidebar fields={fields} onInsert={insertField} stamps={companyStamps} />
             )}
 
             {/* Code Editor / Preview Area */}

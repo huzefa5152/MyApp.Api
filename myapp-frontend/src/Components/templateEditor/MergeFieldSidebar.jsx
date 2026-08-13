@@ -50,12 +50,40 @@ export function MergeFieldList({ fields, onInsert, dark }) {
   );
 }
 
-export default function MergeFieldSidebar({ fields, onInsert, hint }) {
+export default function MergeFieldSidebar({ fields, onInsert, hint, stamps = [] }) {
+  // Insert a ready-to-use <img> that references the stamp merge field — no base64,
+  // resizable via the style. Name is attribute-escaped for the alt text.
+  const insertStamp = (s) => {
+    const alt = String(s.name || "").replace(/"/g, "");
+    onInsert(`<img src="{{stamps.${s.slug}}}" alt="${alt}" style="height:90px" />`);
+  };
+
   return (
     <div style={styles.sidebar}>
       <div style={styles.header}>Merge Fields</div>
       {hint && <div style={styles.hint}>{hint}</div>}
       <div style={styles.scroll}>
+        {stamps.length > 0 && (
+          <div>
+            <div style={{ ...fieldStyles.cat, color: colors.textSecondary }}>Stamps</div>
+            {stamps.map((s) => (
+              <button
+                key={s.id}
+                style={fieldStyles.stampBtn}
+                onClick={() => insertStamp(s)}
+                title={`Insert {{stamps.${s.slug}}} as an image`}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#e3f2fd")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                <img src={s.url} alt="" style={fieldStyles.stampThumb} />
+                <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                  <span style={{ fontSize: "0.74rem", fontWeight: 600, color: colors.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                  <span style={{ ...fieldStyles.code, color: colors.blue }}>{`{{stamps.${s.slug}}}`}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
         <MergeFieldList fields={fields} onInsert={onInsert} />
       </div>
     </div>
@@ -91,6 +119,28 @@ const fieldStyles = {
   },
   label: {
     fontSize: "0.72rem",
+  },
+  stampBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    width: "100%",
+    padding: "0.4rem 0.6rem",
+    border: "none",
+    background: "transparent",
+    cursor: "pointer",
+    textAlign: "left",
+    borderRadius: 6,
+    transition: "background 0.15s",
+  },
+  stampThumb: {
+    width: 34,
+    height: 34,
+    objectFit: "contain",
+    flexShrink: 0,
+    border: "1px solid #e8edf3",
+    borderRadius: 4,
+    background: "#fff",
   },
 };
 

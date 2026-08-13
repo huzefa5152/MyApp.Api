@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { getCompanies } from "../api/companyApi";
+import { getCompanyStamps } from "../api/stampApi";
+import { setActiveStamps } from "../utils/templateEngine";
 import { useAuth } from "./AuthContext";
 
 const CompanyContext = createContext(null);
@@ -11,6 +13,24 @@ export function CompanyProvider({ children }) {
   const [companies, setCompanies] = useState([]);
   const [selectedCompany, setSelectedCompanyState] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Stamps for the selected company, shared with the Print Templates page + the
+  // editor merge-field sidebar, and pushed into the template engine so
+  // {{stamps.<slug>}} resolves in every print/preview.
+  const [companyStamps, setCompanyStamps] = useState([]);
+
+  const loadStamps = useCallback(async (companyId) => {
+    if (!companyId) { setCompanyStamps([]); setActiveStamps({}); return; }
+    try {
+      const { data } = await getCompanyStamps(companyId);
+      const list = data || [];
+      setCompanyStamps(list);
+      setActiveStamps(Object.fromEntries(list.map((s) => [s.slug, s.url])));
+    } catch {
+      // No view permission or transient error — clear rather than leave stale.
+      setCompanyStamps([]);
+      setActiveStamps({});
+    }
+  }, []);
 
   const fetchCompanies = useCallback(async () => {
     try {
@@ -44,6 +64,16 @@ export function CompanyProvider({ children }) {
     else localStorage.removeItem(STORAGE_KEY);
   }, []);
 
+  // (Re)load stamps whenever the selected company changes.
+  useEffect(() => { loadStamps(selectedCompany?.id || null); }, [selectedCompany?.id, loadStamps]);
+
+  // Called by the Stamps tab after an upload / rename / delete so pickers +
+  // the merge engine reflect the change without a full reload.
+  const refreshStamps = useCallback(
+    () => loadStamps(selectedCompany?.id || null),
+    [selectedCompany?.id, loadStamps],
+  );
+
   const refreshCompanies = useCallback(async () => {
     const res = await getCompanies();
     const list = res.data;
@@ -56,7 +86,7 @@ export function CompanyProvider({ children }) {
 
   return (
     <CompanyContext.Provider
-      value={{ companies, selectedCompany, setSelectedCompany, refreshCompanies, loading }}
+      value={{ companies, selectedCompany, setSelectedCompany, refreshCompanies, loading, companyStamps, refreshStamps }}
     >
       {children}
     </CompanyContext.Provider>

@@ -177,6 +177,8 @@ namespace MyApp.Api.Helpers
             new("printtemplates.manage.update",   "PrintTemplates", "Manage", "Update",        "Edit a print template"),
             new("printtemplates.manage.delete",   "PrintTemplates", "Manage", "Delete",        "Delete a saved print template"),
             new("printtemplates.starter.apply",   "PrintTemplates", "Manage", "Apply Starter", "Apply a starter design onto an existing template (replace its HTML or its whole layout)"),
+            new("printtemplates.stamps.view",     "PrintTemplates", "Stamps", "View",          "View company stamps/signatures"),
+            new("printtemplates.stamps.manage",   "PrintTemplates", "Stamps", "Manage",        "Upload, rename, reorder and delete company stamps used as print-template merge fields"),
             // Pin the Excel data sheet for import — separate from the broader
             // template-edit perm so a role can be allowed to fix the sheet
             // pin (a low-risk, recoverable change) without also gaining

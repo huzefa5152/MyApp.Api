@@ -273,6 +273,8 @@ endpoints_to_test = [
     ("GET",  "/api/attachments/company/{cid}/uncategorized"),
     ("GET",  "/api/attachments/company/{cid}/folder/1"),
     ("GET",  "/api/attachments/company/{cid}/entity/Invoice/1"),
+    # Company stamps — print-template merge-field images, [AuthorizeCompany]-gated.
+    ("GET",  "/api/companies/{cid}/stamps"),
 ]
 for username, forbidden in forbidden_for.items():
     if not forbidden:

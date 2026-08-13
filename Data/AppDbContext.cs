@@ -40,6 +40,7 @@ namespace MyApp.Api.Data
         public DbSet<ItemType> ItemTypes { get; set; }
         public DbSet<User> Users { get; set; }
         public DbSet<PrintTemplate> PrintTemplates { get; set; }
+        public DbSet<CompanyStamp> CompanyStamps { get; set; }
         public DbSet<MergeField> MergeFields { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
         // Audit H-3 (2026-05-08): dedicated FBR communication log so the
@@ -479,6 +480,21 @@ namespace MyApp.Api.Data
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<PrintTemplate>().Property(pt => pt.Name).HasMaxLength(200);
+
+            // CompanyStamp: multiple stamps per company; Slug is the immutable
+            // merge-field key and is unique within a company.
+            modelBuilder.Entity<CompanyStamp>()
+                .HasIndex(s => new { s.CompanyId, s.Slug })
+                .IsUnique()
+                .HasDatabaseName("UX_CompanyStamps_CompanySlug");
+            modelBuilder.Entity<CompanyStamp>().Property(s => s.Name).HasMaxLength(100);
+            modelBuilder.Entity<CompanyStamp>().Property(s => s.Slug).HasMaxLength(60);
+            modelBuilder.Entity<CompanyStamp>().Property(s => s.FilePath).HasMaxLength(400);
+            modelBuilder.Entity<CompanyStamp>()
+                .HasOne(s => s.Company)
+                .WithMany()
+                .HasForeignKey(s => s.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // DeliveryItem -> ItemType (optional, restrict)
             modelBuilder.Entity<DeliveryItem>()
