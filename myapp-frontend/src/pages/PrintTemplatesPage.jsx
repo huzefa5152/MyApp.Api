@@ -12,7 +12,7 @@ import {
 import { uploadStamp, deleteStamp, updateStamp, setDefaultStamp } from "../api/stampApi";
 import { setTemplateStamp } from "../api/printTemplateApi";
 import StampPicker from "../Components/templateEditor/StampPicker";
-import { injectSignatureBlock, convertPinnedToSlot, pinnedSlugs } from "../utils/stampSlot";
+import { injectSignatureBlock, convertPinnedToSlot, pinnedSlugs, materializeStamp } from "../utils/stampSlot";
 import { getDivisionsByCompany } from "../api/divisionApi";
 import { invalidatePrintTemplateCache } from "../hooks/usePrintTemplates";
 import { useCompany } from "../contexts/CompanyContext";
@@ -96,7 +96,11 @@ export default function PrintTemplatesPage() {
   }, [selectedCompany]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setSearch(""); setTypeFilter(""); setDivFilter(""); setDefaultOnly(false); }, [selectedCompany?.id]);
+  // Switching company clears the text search, the division scope and the
+  // default-only toggle, but deliberately KEEPS the document-type filter: an
+  // operator comparing the same document type across companies should not have
+  // to re-pick it every switch.
+  useEffect(() => { setSearch(""); setDivFilter(""); setDefaultOnly(false); }, [selectedCompany?.id]);
 
   const divisionById = useMemo(() => Object.fromEntries(divisions.map((d) => [d.id, d])), [divisions]);
 
@@ -487,7 +491,13 @@ export default function PrintTemplatesPage() {
 
           {/* ── Tab: Starter Templates ── */}
           {tab === "starter" && (
-            <StarterGallery embedded selectLabel="Create template" onSelect={onStarterChosen} />
+            <StarterGallery
+              embedded
+              selectLabel="Create template"
+              onSelect={onStarterChosen}
+              typeFilter={typeFilter}
+              onTypeFilterChange={setTypeFilter}
+            />
           )}
 
           {/* ── Tab: Excel Templates ── */}
@@ -629,10 +639,21 @@ export default function PrintTemplatesPage() {
                 <Spinner label="Loading preview…" />
               ) : (
                 <A4PreviewFrame
-                  html={buildTemplatePreviewHtml(previewTarget.templateType, previewTarget.htmlContent || "", {
-                    company: selectedCompany,
-                    division: previewTarget.divisionId != null ? divisionById[previewTarget.divisionId] : null,
-                  })}
+                  html={buildTemplatePreviewHtml(
+                    previewTarget.templateType,
+                    // Resolve {{stamp}} the same way printing does, so the preview
+                    // shows the signature this template will actually carry. Without
+                    // this the slot is stripped and the preview silently disagrees
+                    // with the printed document.
+                    materializeStamp(
+                      previewTarget.htmlContent || "",
+                      companyStamps.find((s) => s.id === previewTarget.stampId)?.url || null,
+                    ),
+                    {
+                      company: selectedCompany,
+                      division: previewTarget.divisionId != null ? divisionById[previewTarget.divisionId] : null,
+                    },
+                  )}
                   title={`Preview of ${previewTarget.name}`}
                 />
               )}

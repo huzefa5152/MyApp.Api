@@ -5,6 +5,7 @@ import PreviewPane from "./PreviewPane";
 import { buildTemplatePreviewHtml, TEMPLATE_TYPE_LABEL } from "../../utils/templateSampleData";
 import { applyStarterToTemplate } from "../../api/printTemplateApi";
 import { useCompany } from "../../contexts/CompanyContext";
+import { materializeStamp } from "../../utils/stampSlot";
 import { notify } from "../../utils/notify";
 
 /**
@@ -21,7 +22,7 @@ import { notify } from "../../utils/notify";
  *        division? (for branding), onClose(), onApplied(updatedDto).
  */
 export default function ApplyStarterModal({ template, division = null, onClose, onApplied }) {
-  const { selectedCompany } = useCompany();
+  const { selectedCompany, companyStamps } = useCompany();
   const [starter, setStarter] = useState(null);
   const [mode, setMode] = useState("html"); // "html" | "all"
   const [busy, setBusy] = useState(false);
@@ -39,8 +40,14 @@ export default function ApplyStarterModal({ template, division = null, onClose, 
   }
 
   const brand = { company: selectedCompany, division };
-  const currentHtml = buildTemplatePreviewHtml(template.templateType, template.htmlContent || "", brand);
-  const starterHtml = buildTemplatePreviewHtml(starter.type, starter.html, brand);
+  // Applying a starter replaces the HTML but keeps the stamp assignment, so
+  // BOTH panes must render this template's signature — otherwise the "after"
+  // preview shows an unsigned document that will actually print signed.
+  const stampUrl = companyStamps.find((s) => s.id === template.stampId)?.url || null;
+  const currentHtml = buildTemplatePreviewHtml(
+    template.templateType, materializeStamp(template.htmlContent || "", stampUrl), brand);
+  const starterHtml = buildTemplatePreviewHtml(
+    starter.type, materializeStamp(starter.html, stampUrl), brand);
 
   const apply = async () => {
     setBusy(true);

@@ -62,10 +62,19 @@ function PreviewSkeleton() {
  *   selectLabel — CTA text on the card button (e.g. "Use" / "Apply").
  *   onSelect(starter), onClose()
  */
-export default function StarterGallery({ lockType = null, selectLabel = "Use this", embedded = false, onSelect, onClose }) {
+export default function StarterGallery({
+  lockType = null, selectLabel = "Use this", embedded = false, onSelect, onClose,
+  typeFilter: typeFilterProp, onTypeFilterChange,
+}) {
   const { selectedCompany } = useCompany();
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState(lockType || "");
+  const [typeFilterLocal, setTypeFilterLocal] = useState(lockType || "");
+  // Optional controlled document-type filter. The Print Templates page passes
+  // its own filter state so the choice survives switching between the Print /
+  // Starter / Excel tabs instead of each tab keeping a private copy.
+  const isControlled = typeFilterProp !== undefined;
+  const typeFilter = isControlled ? typeFilterProp : typeFilterLocal;
+  const setTypeFilter = isControlled ? (onTypeFilterChange || (() => {})) : setTypeFilterLocal;
   const [sort, setSort] = useState("catalog"); // catalog | name
   const [previewStarter, setPreviewStarter] = useState(null);
 
