@@ -59,6 +59,9 @@ const STATUS = {
   Overpaid:      { label: "Overpaid",       fg: T.info,   bg: T.infoSoft,   dot: T.info },
 };
 
+/** Rows per page offered to the customer; the API caps the request at 200. */
+const PAGE_SIZES = [10, 20, 50, 100, 200];
+
 const money = (n) =>
   "Rs " + Number(n || 0).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
@@ -82,6 +85,7 @@ export default function PublicPortalPage() {
   const [rows, setRows] = useState([]);
   const [listLoading, setListLoading] = useState(false);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
   const [totalPages, setTotalPages] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [status, setStatus] = useState("");
@@ -123,7 +127,7 @@ export default function PublicPortalPage() {
     if (!token || fatal) return;
     setListLoading(true);
     try {
-      const data = await getPortalInvoices(token, { page, pageSize: 10, status, search, dateFrom, dateTo });
+      const data = await getPortalInvoices(token, { page, pageSize, status, search, dateFrom, dateTo });
       setRows(data.items || []);
       setTotalPages(data.totalPages || 0);
       setTotalCount(data.totalCount || 0);
@@ -133,12 +137,16 @@ export default function PublicPortalPage() {
     } finally {
       setListLoading(false);
     }
-  }, [token, fatal, page, status, search, dateFrom, dateTo]);
+  }, [token, fatal, page, pageSize, status, search, dateFrom, dateTo]);
 
   useEffect(() => { loadInvoices(); }, [loadInvoices]);
   // Any filter change restarts paging — otherwise page 3 of "All" becomes an
   // empty page 3 of "Overpaid".
   useEffect(() => { setPage(1); }, [status, search, dateFrom, dateTo]);
+
+  // "Showing 21–40 of 137" — derived, so it can never disagree with the server.
+  const firstOnPage = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const lastOnPage = Math.min(page * pageSize, totalCount);
 
   const openDetail = async (invoiceNumber) => {
     setDetailLoading(true);
@@ -183,14 +191,17 @@ export default function PublicPortalPage() {
 
   const sum = header?.summary || {};
   const openCount = (sum.unpaidCount || 0) + (sum.partiallyPaidCount || 0) + (sum.overdueCount || 0);
+  // A chip with nothing behind it is a dead control — and six of them push the
+  // filter bar onto a second line, which costs a row of invoices. "All" always
+  // shows, and so does whatever is currently selected even once it empties.
   const filters = useMemo(() => ([
     { key: "", label: "All", count: sum.totalInvoices },
     { key: "Unpaid", label: "Unpaid", count: sum.unpaidCount },
-    { key: "PartiallyPaid", label: "Partially paid", count: sum.partiallyPaidCount },
+    { key: "PartiallyPaid", label: "Partial", count: sum.partiallyPaidCount },
     { key: "Overdue", label: "Overdue", count: sum.overdueCount },
     { key: "Paid", label: "Paid", count: sum.paidCount },
-    { key: "Overpaid", label: "Overpaid", count: sum.overpaidCount },
-  ]), [sum]);
+    { key: "Overpaid", label: "Credit", count: sum.overpaidCount },
+  ]).filter((f) => !f.key || f.key === status || (f.count || 0) > 0), [sum, status]);
 
   if (loading) {
     return <Frame><div style={s.centre}><Spinner /><p style={s.centreText}>Loading your account…</p></div></Frame>;
@@ -215,7 +226,7 @@ export default function PublicPortalPage() {
   return (
     <Frame>
       <header style={s.masthead}>
-        <div style={s.mastheadInner}>
+        <div className="portal-masthead" style={s.mastheadInner}>
           <div style={s.brand}>
             {header.companyLogoPath
               ? <img src={header.companyLogoPath} alt="" style={s.logo} />
@@ -232,13 +243,19 @@ export default function PublicPortalPage() {
         </div>
       </header>
 
-      <main className="portal-main" style={s.main}>
-        <div style={s.mainInner}>
-        {/* The one number that matters, then supporting figures. */}
-        <section style={s.hero} aria-label="Account summary">
+      {/* Static band: the figures and the filters stay put, so the customer
+          never loses "what do I owe" or the status chips while scrolling a
+          long list. Only the grid below moves. */}
+      <div className="portal-static" style={s.staticBand}>
+        <div className="portal-band" style={s.bandInner}>
+        {/* One horizontal strip rather than a stack of cards: the figures still
+            read at a glance, but they cost ~75px instead of ~390px, and every
+            pixel saved here is another invoice row visible without scrolling. */}
+        <section className="portal-hero" style={s.hero} aria-label="Account summary">
           <div style={s.heroPrimary}>
             <span style={s.heroLabel}>Amount outstanding</span>
-            <span style={{ ...s.heroValue, color: (sum.outstandingAmount || 0) > 0 ? T.fg : T.accent }}>
+            <span className="portal-herovalue"
+                  style={{ ...s.heroValue, color: (sum.outstandingAmount || 0) > 0 ? T.fg : T.accent }}>
               {money(sum.outstandingAmount)}
             </span>
             <span style={s.heroHint}>
@@ -246,13 +263,14 @@ export default function PublicPortalPage() {
                 ? `across ${openCount} open invoice${openCount === 1 ? "" : "s"}`
                 : "Everything is settled — thank you"}
             </span>
-            {(sum.overdueCount || 0) > 0 && (
-              <span style={s.heroFlag}>
-                <span style={{ ...s.dot, background: T.danger }} aria-hidden="true" />
-                {sum.overdueCount} overdue
-              </span>
-            )}
           </div>
+
+          {(sum.overdueCount || 0) > 0 && (
+            <span style={s.heroFlag}>
+              <span style={{ ...s.dot, background: T.danger }} aria-hidden="true" />
+              {sum.overdueCount} overdue
+            </span>
+          )}
 
           <div style={s.heroStats}>
             <Stat label="Invoices" value={sum.totalInvoices ?? 0} />
@@ -262,7 +280,7 @@ export default function PublicPortalPage() {
           </div>
         </section>
 
-        <section style={s.controls} aria-label="Filter invoices">
+        <section className="portal-controls" style={s.controls} aria-label="Filter invoices">
           <div style={s.chipRow} role="tablist" aria-label="Filter by status">
             {filters.map((f) => {
               const active = status === f.key;
@@ -273,6 +291,7 @@ export default function PublicPortalPage() {
                   role="tab"
                   aria-selected={active}
                   onClick={() => setStatus(f.key)}
+                  className="portal-chip"
                   style={{ ...s.chip, ...(active ? s.chipActive : null) }}
                 >
                   {f.label}
@@ -284,7 +303,7 @@ export default function PublicPortalPage() {
             })}
           </div>
 
-          <div style={s.filterRow}>
+          <div className="portal-filterrow" style={s.filterRow}>
             <div style={s.searchWrap}>
               <MdSearch size={17} style={s.searchIcon} aria-hidden="true" />
               <input
@@ -294,19 +313,26 @@ export default function PublicPortalPage() {
                 placeholder="Search invoice number"
                 aria-label="Search by invoice number"
                 inputMode="numeric"
+                className="portal-search"
                 style={s.search}
               />
             </div>
-            <div style={s.dateGroup}>
+            <div className="portal-dategroup" style={s.dateGroup}>
               <label style={s.dateField}>
                 <span style={s.dateLabel}>From</span>
-                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={s.date} />
+                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="portal-date" style={s.date} />
               </label>
               <label style={s.dateField}>
                 <span style={s.dateLabel}>To</span>
-                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={s.date} />
+                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="portal-date" style={s.date} />
               </label>
             </div>
+            {(dateFrom || dateTo || search) && (
+              <button type="button" className="portal-clear" style={s.clearFilters}
+                      onClick={() => { setDateFrom(""); setDateTo(""); setSearchInput(""); }}>
+                Clear
+              </button>
+            )}
           </div>
         </section>
 
@@ -317,6 +343,11 @@ export default function PublicPortalPage() {
           </div>
         )}
 
+        </div>
+      </div>
+
+      <main className="portal-main" style={s.main}>
+        <div className="portal-inner" style={s.mainInner}>
         {listLoading ? (
           <SkeletonList />
         ) : rows.length === 0 ? (
@@ -402,19 +433,46 @@ export default function PublicPortalPage() {
               ))}
             </div>
 
-            {totalPages > 1 && (
-              <nav style={s.pager} aria-label="Pagination">
-                <button type="button" style={s.pageBtn} disabled={page <= 1}
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}>Previous</button>
-                <span style={s.pageInfo}>Page {page} of {totalPages} · {totalCount} invoices</span>
-                <button type="button" style={s.pageBtn} disabled={page >= totalPages}
-                        onClick={() => setPage((p) => p + 1)}>Next</button>
-              </nav>
-            )}
           </>
         )}
         </div>
       </main>
+
+      {/* Pinned below the scroller, so the pager is reachable without scrolling
+          to the end of the page. It shows for any non-empty result set, not just
+          multi-page ones — the rows-per-page picker lives here. */}
+      {totalCount > 0 && (
+        <div className="portal-pagerbar" style={s.pagerBar}>
+          <nav style={s.pager} aria-label="Pagination">
+            <label style={s.pageSizeWrap}>
+              <span style={s.pageSizeLabel}>Rows</span>
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                className="portal-pagesize"
+                style={s.pageSize}
+                aria-label="Invoices per page"
+              >
+                {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+
+            <span style={s.pagerGroup}>
+              <button type="button" style={s.pageBtn} disabled={page <= 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}>Previous</button>
+              <span style={s.pageInfo}>
+                {firstOnPage}–{lastOnPage} of {totalCount}
+                {totalPages > 1 && ` · page ${page} of ${totalPages}`}
+              </span>
+              <button type="button" style={s.pageBtn} disabled={page >= totalPages}
+                      onClick={() => setPage((p) => p + 1)}>Next</button>
+            </span>
+
+            {/* Mirrors the picker's width so the controls above stay centred. */}
+            <span style={s.pagerBalance} aria-hidden="true" />
+          </nav>
+        </div>
+      )}
 
       <footer className="portal-footer" style={s.footer}>
         <div style={s.footerName}>{header.companyName}</div>
@@ -681,12 +739,28 @@ button:disabled { cursor: not-allowed; }
 @media (max-width: 899px) {
   .portal-table { display: none; }
   .portal-cards { display: grid; }
+  .portal-filterrow { flex-wrap: wrap !important; margin-left: 0 !important; }
+  .portal-filterrow > div:first-child { flex: 1 1 100%; }
+  /* The no-wrap/no-shrink date pair is a desktop trick; on a phone it is wider
+     than the screen. */
+  .portal-dategroup { flex-wrap: wrap !important; flex-shrink: 1 !important;
+                      flex: 1 1 100%; min-width: 0; }
+  .portal-dategroup label { flex: 1 1 140px; min-width: 0; }
+  .portal-date { min-width: 0; width: 100%; }
+  .portal-pagerbar nav { justify-content: center; }
+  .portal-pagerbar nav > span:last-child { display: none; }
 }
 
 /* Touch devices wide enough for the table (an iPad in landscape is 1024px) still
    need finger-sized targets; width alone can't tell a laptop from a tablet. */
 @media (pointer: coarse) {
   .portal-action { min-width: 44px; min-height: 44px; }
+  /* The desktop filter bar is deliberately compact; on a touch screen every one
+     of those controls goes back to a 44px target. */
+  /* !important because these carry a compact min-height inline, and an
+     inline declaration beats a class selector on the same property. */
+  .portal-chip, .portal-search, .portal-date, .portal-clear,
+  .portal-pagesize, .portal-pagerbar button { min-height: 44px !important; }
   /* The invoice number is the main way to open an invoice on a phone, so it
      needs a thumb-sized hit area even though it reads as a text link. */
   .portal-link { display: inline-flex; align-items: center; min-height: 44px; padding-right: 8px; }
@@ -697,10 +771,47 @@ button:disabled { cursor: not-allowed; }
    flow: pinning a 3-line footer on a phone would eat a fifth of the screen, and
    100dvh shells fight mobile browser chrome. The flex column above still keeps
    the footer at the bottom there when content is short. */
-@media (min-width: 900px) {
+/* Below 620px of height there isn't enough room to pin five bands and still
+   show invoices, so the shell is dropped and the page scrolls normally. */
+@media (min-width: 900px) and (min-height: 620px) {
   html, body, #root { height: 100%; }
   .portal-page { height: 100dvh; }
-  .portal-main { overflow-y: auto; }
+  /* Masthead, figures, filters, pager and footer are all fixed bands. The only
+     thing that moves is the grid — and the scroll lives on the card itself, so
+     the scrollbar sits against the table instead of the window edge. */
+  .portal-main { overflow: hidden; }
+  .portal-static, .portal-pagerbar, .portal-footer { flex: 0 0 auto; }
+}
+
+/* Scrollbar styled to belong to the card. */
+.portal-table { scrollbar-width: thin; scrollbar-color: ${T.border} transparent; }
+.portal-table::-webkit-scrollbar { width: 10px; height: 10px; }
+.portal-table::-webkit-scrollbar-track { background: transparent; }
+.portal-table::-webkit-scrollbar-thumb {
+  background: #CBD5E1; border-radius: 999px; border: 3px solid ${T.surface};
+}
+.portal-table::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+/* Laptops are commonly 768px or 720px tall. At full spacing the pinned bands
+   eat 635px of that and the grid is left with one row, so everything above and
+   below the grid tightens up to hand the rows back their space. The inline
+   styles are the base, hence !important. */
+/* Netbook-class heights: squeeze the last few pixels out of the pinned bands
+   so the grid still shows a useful number of rows. */
+@media (min-width: 900px) and (max-height: 700px) {
+  .portal-masthead { padding-top: 0.45rem !important; padding-bottom: 0.45rem !important; }
+  .portal-band { padding-top: 0.5rem !important; }
+  .portal-hero { padding-top: 0.45rem !important; padding-bottom: 0.45rem !important;
+                 margin-bottom: 0.45rem !important; }
+  .portal-controls { margin-bottom: 0.45rem !important; }
+  .portal-inner { padding-bottom: 0.55rem !important; }
+  .portal-footer { padding-top: 0.45rem !important; padding-bottom: 0.45rem !important; }
+}
+
+/* The hairline dividers only make sense while the figures sit on one line;
+   once they wrap onto their own row the leading one would dangle. */
+@media (max-width: 1100px) {
+  .portal-hero > div:last-child > div:first-child { padding-left: 0; border-left: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -722,11 +833,11 @@ const s = {
     fontSize: 15, lineHeight: 1.5 },
 
   masthead: { flex: "0 0 auto", background: T.surface, borderBottom: `1px solid ${T.border}` },
-  mastheadInner: { maxWidth: 1180, margin: "0 auto", padding: "1rem 1.25rem",
+  mastheadInner: { maxWidth: 1180, margin: "0 auto", padding: "0.7rem 1.25rem",
     display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" },
   brand: { display: "flex", alignItems: "center", gap: "0.85rem", minWidth: 0 },
-  logo: { height: 44, width: "auto", maxWidth: 170, objectFit: "contain" },
-  logoFallback: { width: 44, height: 44, borderRadius: 10, background: T.primarySoft,
+  logo: { height: 38, width: "auto", maxWidth: 170, objectFit: "contain" },
+  logoFallback: { width: 38, height: 38, borderRadius: 10, background: T.primarySoft,
     display: "grid", placeItems: "center", flexShrink: 0 },
   companyName: { fontSize: "1.0625rem", fontWeight: 700, letterSpacing: "-0.01em", color: T.fg,
     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
@@ -738,68 +849,91 @@ const s = {
   customerName: { fontSize: "0.95rem", fontWeight: 600, color: T.primary,
     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
 
-  main: { flex: "1 1 auto", minHeight: 0 },
-  mainInner: { maxWidth: 1180, margin: "0 auto", padding: "1.5rem 1.25rem 2.5rem" },
+  staticBand: { flex: "0 0 auto" },
+  bandInner: { maxWidth: 1180, margin: "0 auto", padding: "0.75rem 1.25rem 0" },
+  // The one scrolling region. minHeight:0 is load-bearing — without it a flex
+  // child refuses to shrink below its content and the whole page scrolls again.
+  // minHeight:0 is load-bearing on both of these — without it a flex child
+  // refuses to shrink below its content and the page scrolls instead of the card.
+  main: { flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column" },
+  mainInner: { maxWidth: 1180, width: "100%", margin: "0 auto", padding: "0 1.25rem 0.85rem",
+    flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column" },
+  pagerBar: { flex: "0 0 auto", borderTop: `1px solid ${T.border}`, background: T.surface },
 
-  hero: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px,100%), 1fr))",
-    gap: "1rem", marginBottom: "1.25rem" },
-  heroPrimary: { background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.radius,
-    boxShadow: T.shadow, padding: "1.35rem 1.5rem",
-    display: "flex", flexDirection: "column", gap: "0.3rem" },
-  heroLabel: { fontSize: "0.75rem", fontWeight: 600, letterSpacing: "0.07em",
+  hero: { background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.radius,
+    boxShadow: T.shadow, padding: "0.6rem 1.15rem", marginBottom: "0.6rem",
+    display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: "1.5rem", rowGap: "0.6rem" },
+  heroPrimary: { display: "flex", flexDirection: "column", gap: "0.1rem", minWidth: 0 },
+  heroLabel: { fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.07em",
     textTransform: "uppercase", color: T.muted },
-  heroValue: { fontSize: "clamp(1.9rem, 5vw, 2.6rem)", fontWeight: 700, letterSpacing: "-0.02em",
-    fontVariantNumeric: "tabular-nums", lineHeight: 1.1 },
-  heroHint: { fontSize: "0.875rem", color: T.muted },
-  heroFlag: { display: "inline-flex", alignItems: "center", gap: 6, marginTop: "0.5rem",
-    alignSelf: "flex-start", padding: "0.25rem 0.7rem", borderRadius: 999,
+  heroValue: { fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em",
+    fontVariantNumeric: "tabular-nums", lineHeight: 1.15 },
+  heroHint: { fontSize: "0.8rem", color: T.muted },
+  heroFlag: { display: "inline-flex", alignItems: "center", gap: 6,
+    padding: "0.3rem 0.7rem", borderRadius: 999,
     background: T.dangerSoft, color: T.danger, fontSize: "0.78rem", fontWeight: 600 },
 
-  heroStats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(140px,100%), 1fr))", gap: "1rem" },
-  stat: { background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.radius,
-    boxShadow: T.shadow, padding: "0.9rem 1rem", display: "flex", flexDirection: "column", gap: "0.2rem" },
-  statLabel: { fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.06em",
-    textTransform: "uppercase", color: T.faint },
-  statValue: { fontSize: "1.1rem", fontWeight: 700, color: T.fg, fontVariantNumeric: "tabular-nums" },
+  // Pushed to the right of the strip; each figure is a plain label/value pair
+  // separated by a hairline rather than its own card.
+  heroStats: { marginLeft: "auto", display: "flex", flexWrap: "wrap", alignItems: "center",
+    columnGap: "1.4rem", rowGap: "0.5rem" },
+  stat: { display: "flex", flexDirection: "column", gap: "0.05rem", paddingLeft: "1.4rem",
+    borderLeft: `1px solid ${T.border}` },
+  statLabel: { fontSize: "0.68rem", fontWeight: 600, letterSpacing: "0.06em",
+    textTransform: "uppercase", color: T.faint, whiteSpace: "nowrap" },
+  statValue: { fontSize: "1rem", fontWeight: 700, color: T.fg, fontVariantNumeric: "tabular-nums",
+    whiteSpace: "nowrap" },
 
   controls: { background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.radius,
-    boxShadow: T.shadow, padding: "0.9rem 1rem", marginBottom: "1rem",
-    display: "flex", flexDirection: "column", gap: "0.85rem" },
-  chipRow: { display: "flex", gap: "0.4rem", flexWrap: "wrap" },
-  chip: { display: "inline-flex", alignItems: "center", gap: 7, minHeight: 44,
-    padding: "0.45rem 0.85rem", borderRadius: 999, border: `1px solid ${T.border}`,
-    background: T.surface, color: T.muted, fontSize: "0.85rem", fontWeight: 600 },
+    boxShadow: T.shadow, padding: "0.45rem 0.9rem", marginBottom: "0.6rem",
+    display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: "0.9rem", rowGap: "0.5rem" },
+  chipRow: { display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center", minWidth: 0 },
+  chip: { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
+    padding: "0.3rem 0.65rem", borderRadius: 999, border: `1px solid ${T.border}`,
+    background: T.surface, color: T.muted, fontSize: "0.82rem", fontWeight: 600 },
   chipActive: { background: T.primary, borderColor: T.primary, color: "#fff" },
-  chipCount: { display: "inline-grid", placeItems: "center", minWidth: 22, height: 20,
-    padding: "0 6px", borderRadius: 999, background: T.slateSoft, color: T.muted,
-    fontSize: "0.72rem", fontWeight: 700, fontVariantNumeric: "tabular-nums" },
+  chipCount: { display: "inline-grid", placeItems: "center", minWidth: 20, height: 18,
+    padding: "0 5px", borderRadius: 999, background: T.slateSoft, color: T.muted,
+    fontSize: "0.7rem", fontWeight: 700, fontVariantNumeric: "tabular-nums" },
   chipCountActive: { background: "rgba(255,255,255,0.22)", color: "#fff" },
 
-  filterRow: { display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "flex-end" },
-  searchWrap: { position: "relative", flex: "1 1 240px", minWidth: 0 },
+  filterRow: { display: "flex", gap: "0.6rem", flexWrap: "nowrap", alignItems: "center",
+    marginLeft: "auto", minWidth: 0 },
+  searchWrap: { position: "relative", flex: "0 1 210px", minWidth: 140 },
   searchIcon: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: T.faint },
-  search: { width: "100%", minHeight: 44, padding: "0.6rem 0.85rem 0.6rem 2.35rem",
+  search: { width: "100%", minHeight: 34, padding: "0.35rem 0.8rem 0.35rem 2.2rem",
     borderRadius: 10, border: `1px solid ${T.border}`, background: T.bg, color: T.fg, fontSize: "0.9rem" },
-  dateGroup: { display: "flex", gap: "0.5rem", flexWrap: "wrap" },
-  dateField: { display: "flex", flexDirection: "column", gap: 3 },
+  // Never wraps: it is the search box that gives up width when the filter bar
+  // is tight, otherwise the date pair folds and costs the grid a whole row.
+  dateGroup: { display: "flex", gap: "0.5rem", flexWrap: "nowrap", alignItems: "center",
+    flexShrink: 0 },
+  // Label sits beside the field, not above it: stacked labels doubled the height
+  // of the whole filter bar and pushed invoice rows off the screen.
+  dateField: { display: "flex", alignItems: "center", gap: 6 },
   dateLabel: { fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.06em",
     textTransform: "uppercase", color: T.faint },
-  date: { minHeight: 44, padding: "0.5rem 0.7rem", borderRadius: 10,
-    border: `1px solid ${T.border}`, background: T.bg, color: T.fg, fontSize: "0.86rem" },
+  date: { minHeight: 34, padding: "0.3rem 0.5rem", borderRadius: 9,
+    border: `1px solid ${T.border}`, background: T.bg, color: T.fg, fontSize: "0.82rem" },
+  clearFilters: { minHeight: 34, padding: "0.3rem 0.7rem", borderRadius: 9,
+    border: `1px solid ${T.border}`, background: T.surface, color: T.muted,
+    fontSize: "0.82rem", fontWeight: 600 },
 
   notice: { display: "flex", gap: "0.6rem", alignItems: "center", background: T.warnSoft,
     color: T.warn, border: "1px solid #FDE68A", borderRadius: 10,
     padding: "0.7rem 1rem", marginBottom: "1rem", fontSize: "0.875rem" },
 
+  // The scroller. Sits inside the card's own border so the scrollbar rides the
+  // grid rather than the far right edge of the window.
   tableCard: { background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.radius,
-    boxShadow: T.shadow, overflowX: "auto" },
+    boxShadow: T.shadow, overflow: "auto", flex: "1 1 auto", minHeight: 0 },
   table: { width: "100%", borderCollapse: "collapse", minWidth: 760 },
-  th: { padding: "0.8rem 1rem", fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.07em",
-    textTransform: "uppercase", color: T.faint, borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap" },
+  th: { padding: "0.5rem 1rem", fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.07em",
+    textTransform: "uppercase", color: T.faint, borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap",
+    position: "sticky", top: 0, zIndex: 1, background: T.surface },
   row: { borderBottom: `1px solid ${T.border}` },
-  cell: { padding: "0.8rem 1rem", fontSize: "0.9rem", color: T.fg },
-  cellMuted: { padding: "0.8rem 1rem", fontSize: "0.875rem", color: T.muted, whiteSpace: "nowrap" },
-  num: { padding: "0.8rem 1rem", fontSize: "0.9rem", color: T.fg, textAlign: "right",
+  cell: { padding: "0.45rem 1rem", fontSize: "0.9rem", color: T.fg },
+  cellMuted: { padding: "0.45rem 1rem", fontSize: "0.875rem", color: T.muted, whiteSpace: "nowrap" },
+  num: { padding: "0.45rem 1rem", fontSize: "0.9rem", color: T.fg, textAlign: "right",
     fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" },
   numStrong: { fontWeight: 700 },
   invLink: { background: "none", border: "none", padding: 0, color: T.secondary,
@@ -811,9 +945,9 @@ const s = {
     borderRadius: 999, fontSize: "0.76rem", fontWeight: 600, whiteSpace: "nowrap" },
   dot: { width: 6, height: 6, borderRadius: "50%", flexShrink: 0 },
 
-  action: { display: "inline-grid", placeItems: "center", width: 36, height: 36, marginLeft: 6,
+  action: { display: "inline-grid", placeItems: "center", width: 32, height: 32, marginLeft: 6,
     borderRadius: 9, border: `1px solid ${T.border}`, background: T.surface, color: T.muted },
-  actionPrimary: { display: "inline-grid", placeItems: "center", width: 36, height: 36, marginLeft: 6,
+  actionPrimary: { display: "inline-grid", placeItems: "center", width: 32, height: 32, marginLeft: 6,
     borderRadius: 9, border: `1px solid ${T.border}`, background: T.primarySoft, color: T.primary },
   actionWide: { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 44,
     padding: "0.55rem 0.9rem", borderRadius: 10, border: `1px solid ${T.border}`,
@@ -837,9 +971,18 @@ const s = {
   figureStrong: { fontWeight: 700 },
   cardActions: { marginTop: "0.85rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" },
 
-  pager: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem",
-    padding: "1.25rem 0", flexWrap: "wrap" },
-  pageBtn: { minHeight: 44, padding: "0.55rem 1.1rem", borderRadius: 10,
+  pager: { maxWidth: 1180, margin: "0 auto", display: "flex", justifyContent: "space-between",
+    alignItems: "center", gap: "1rem", padding: "0.45rem 1.25rem", flexWrap: "wrap" },
+  pagerGroup: { display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap",
+    justifyContent: "center" },
+  pagerBalance: { width: 92 },
+  pageSizeWrap: { display: "flex", alignItems: "center", gap: 6 },
+  pageSizeLabel: { fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.06em",
+    textTransform: "uppercase", color: T.faint },
+  pageSize: { minHeight: 34, padding: "0.3rem 0.5rem", borderRadius: 9,
+    border: `1px solid ${T.border}`, background: T.surface, color: T.fg,
+    fontSize: "0.82rem", fontWeight: 600 },
+  pageBtn: { minHeight: 34, padding: "0.35rem 0.9rem", borderRadius: 9,
     border: `1px solid ${T.border}`, background: T.surface, color: T.primary,
     fontSize: "0.875rem", fontWeight: 600 },
   pageInfo: { fontSize: "0.85rem", color: T.muted, fontVariantNumeric: "tabular-nums" },
@@ -860,10 +1003,10 @@ const s = {
     borderRadius: "50%", animation: "portal-spin .8s linear infinite" },
 
   footer: { flex: "0 0 auto", background: T.surface, borderTop: `1px solid ${T.border}`,
-    padding: "1.1rem 1.25rem", textAlign: "center", fontSize: "0.8rem",
-    color: T.muted, lineHeight: 1.6 },
+    padding: "0.6rem 1.25rem", textAlign: "center", fontSize: "0.78rem",
+    color: T.muted, lineHeight: 1.4 },
   footerName: { fontWeight: 600, color: T.fg },
-  footerMeta: { display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap", marginTop: 2 },
+  footerMeta: { display: "flex", gap: "0.9rem", justifyContent: "center", flexWrap: "wrap", marginTop: 1 },
 
   backdrop: { position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)",
     display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem", zIndex: 60 },

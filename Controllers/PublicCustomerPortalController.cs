@@ -74,8 +74,10 @@ namespace MyApp.Api.Controllers
             [FromQuery] DateTime? dateTo = null)
         {
             // Same clamps as every internal paged endpoint — an anonymous caller
-            // cannot ask for 999999 rows.
-            var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
+            // cannot ask for 999999 rows. The ceiling is the audit max rather than
+            // the default 100 so the portal's "200 per page" option is honoured;
+            // the query is already scoped to one client of one company.
+            var size = PaginationHelper.Clamp(pageSize, _defaultPageSize, PaginationHelper.AuditMax);
             var clampedPage = PaginationHelper.ClampPage(page);
             return Ok(await _service.GetInvoicesAsync(Portal, clampedPage, size, status, search, dateFrom, dateTo));
         }

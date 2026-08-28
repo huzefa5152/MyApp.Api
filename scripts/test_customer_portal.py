@@ -565,8 +565,18 @@ def test_detail_and_print(base, token, a, portal_a, inv_a1):
     check(suite, "6e paging reports a total", (page1 or {}).get("totalCount", 0) >= 1, f"got {page1}")
 
     st, huge = public(f"/api/public/customer-portal/{tok}/invoices?pageSize=999999", base)
-    check(suite, "6f oversized pageSize is clamped",
-          st == 200 and len(huge.get("items", [])) <= 100, f"got {len(huge.get('items', []))}")
+    check(suite, "6f oversized pageSize is clamped to 200",
+          st == 200 and (huge or {}).get("pageSize") == 200
+          and len(huge.get("items", [])) <= 200,
+          f"got pageSize={(huge or {}).get('pageSize')} items={len(huge.get('items', []))}")
+
+    # The portal's rows-per-page picker offers 10/20/50/100/200; each must reach
+    # the server intact rather than being silently reduced.
+    for want in (10, 20, 50, 100, 200):
+        st, sized = public(f"/api/public/customer-portal/{tok}/invoices?pageSize={want}", base)
+        check(suite, f"6f rows-per-page {want} is honoured",
+              st == 200 and (sized or {}).get("pageSize") == want,
+              f"got {(sized or {}).get('pageSize')}")
 
     st, found = public(f"/api/public/customer-portal/{tok}/invoices?search={n}", base)
     check(suite, "6g search by invoice number finds it",
