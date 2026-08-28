@@ -6,6 +6,7 @@ import {
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
+import { isFutureDocDate } from "../utils/dateInput";
 
 // Renders the FBR-status pill in compact form for the table.
 function fbrStatusBadge(inv, isBillsMode, fbrEnabled = true) {
@@ -34,6 +35,16 @@ function fbrStatusBadge(inv, isBillsMode, fbrEnabled = true) {
   }
   if (inv.isFbrExcluded) {
     return <StatusBadge tone="excluded" title="Excluded from FBR bulk actions">Excluded</StatusBadge>;
+  }
+  // Future-dated: allowed to exist, but FBR [0043] rejects it until its own
+  // date arrives. Checked before the readiness branch: the date is why the
+  // row's Validate / Submit buttons vanished, so it is the more useful badge.
+  if (isFutureDocDate(inv.date)) {
+    return (
+      <StatusBadge tone="setup" title="FBR rejects a future-dated invoice [0043]. Validate and Submit unlock on this bill's own date.">
+        Future-dated
+      </StatusBadge>
+    );
   }
   if (!inv.fbrReady) {
     const missing = inv.fbrMissing?.length ? `Missing:\n• ${inv.fbrMissing.join("\n• ")}` : "";
@@ -320,7 +331,7 @@ export default function InvoiceTable({
             <MdVisibility size={14} />
           </button>
         )}
-        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && !isSubmitted && !inv.isCancelled && (
+        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && !isSubmitted && !inv.isCancelled && !isFutureDocDate(inv.date) && (
           <>
             {perms.canFbrValidate && (
               <button

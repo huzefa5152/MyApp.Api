@@ -9,7 +9,7 @@ Covers the golden paths Hakimi and Roshan rely on every day:
   4. Invoice update                 (bills.manage.update)
   5. Item Rate History              (quantity / unit-price suggestion source)
   6. Tax calculation correctness    (GST 18 %, GST exempt 0 %, 3rd Schedule retail)
-  7. FBR [0043] future-date guard   (today-in-Pakistan accepted, future rejected)
+  7. Bill date handling             (today-in-Pakistan AND future dates accepted)
 
 Each test runs against a fresh ephemeral company + client created at
 test-start and torn down at the end. Production data is never touched.
@@ -445,14 +445,20 @@ def test_tax_calculations(base: str, token: str, company: dict, client: dict) ->
               f"got {b.get('gstAmount')}")
 
 
-# ── Suite 7: FBR [0043] future-date guard (Pakistan timezone) ──────
+# ── Suite 7: bill date handling (PKT today + future dates) ─────────
 def test_future_date_guard(base: str, token: str, company: dict, client: dict,
                            challan: dict | None) -> None:
-    """Regression for the timezone bug: a bill dated TODAY in Pakistan must be
-    accepted even when the server's UTC clock is still on the previous calendar
-    day, while a genuinely future date must still be rejected with [FBR 0043].
-    Covers both the standalone and the from-challan create paths."""
-    suite = "7. FBR 0043 future-date guard (PKT)"
+    """Two rules, both on the standalone AND from-challan create paths:
+
+      * Regression for the timezone bug - a bill dated TODAY in Pakistan is
+        accepted even when the server's UTC clock is still on the previous
+        calendar day.
+      * Since 2026-08-28 a FUTURE-dated bill is accepted too: operators cut a
+        bill ahead of its billing date (e.g. a 1-September bill in late
+        August). FBR rule [0043] is now enforced only at SUBMIT time
+        (FbrService.ValidateAsync), never at create or update.
+    """
+    suite = "7. Bill date handling (PKT + future)"
     print(f"\n=== {suite} ===")
     it_id = first_item_type_id(base, token)  # bills require a classified line
 
@@ -472,31 +478,45 @@ def test_future_date_guard(base: str, token: str, company: dict, client: dict,
     check(suite, "7a standalone bill dated today (PKT) accepted",
           status in (200, 201), f"got {status} {b}")
 
-    # 7b — A clearly future bill (PKT today + 2 days) is still rejected, with
-    # the 0043 code, proving the guard wasn't simply loosened away.
+    # 7b — A clearly future bill (PKT today + 2 days) is ACCEPTED, and the
+    # date is stored as the operator picked it (never silently clamped).
+    future_iso = pkt_date_iso(2)
     status, b = http("POST", "/api/invoices/standalone", base, token=token, body={
-        "date": pkt_date_iso(2),
+        "date": future_iso,
         "companyId": company["id"], "clientId": client["id"], "gstRate": 18,
         "items": [{"description": "Future Service", "quantity": 1,
                    "uom": "Pcs", "unitPrice": 100, "itemTypeId": it_id}],
     })
-    check(suite, "7b standalone future bill rejected (400)", status == 400, f"got {status} {b}")
-    check(suite, "7b rejection cites [FBR 0043]", cites_0043(b), f"body = {b}")
+    check(suite, "7b standalone future bill accepted", status in (200, 201), f"got {status} {b}")
+    check(suite, "7b acceptance never cites [FBR 0043]", not cites_0043(b), f"body = {b}")
+    if status in (200, 201):
+        check(suite, "7b stored date == requested future date",
+              str(b.get("date", ""))[:10] == future_iso[:10],
+              f"got {b.get('date')} want {future_iso[:10]}")
+        # 7b-2 — a future-dated bill must stay editable: the update path used to
+        # re-run the same guard, which would have locked the bill it just allowed.
+        upd = {"date": pkt_date_iso(3), "gstRate": 18,
+               "items": [{"id": b["items"][0]["id"], "description": "Future Service",
+                          "quantity": 1, "uom": "Pcs", "unitPrice": 120,
+                          "itemTypeId": it_id}]}
+        status2, b2 = http("PUT", f"/api/invoices/{b['id']}", base, token=token, body=upd)
+        check(suite, "7b-2 future-dated bill still editable",
+              status2 in (200, 204), f"got {status2} {b2}")
 
-    # 7c — Same guard on the FROM-challan path. The future-date check runs
-    # before challan billable-status validation, so any challan id for this
-    # company reaches it (the suite-2 challan is fine even after it's invoiced).
+    # 7c — Same on the FROM-challan path. The suite-2 challan may already be
+    # billed, in which case the create is refused for THAT reason — never for
+    # the date, so the assertion is "not blocked with 0043".
     if challan:
         status, b = http("POST", "/api/invoices", base, token=token, body={
-            "date": pkt_date_iso(2),
+            "date": future_iso,
             "companyId": company["id"], "clientId": client["id"], "gstRate": 18,
             "challanIds": [challan["id"]],
             "items": [{"deliveryItemId": challan["items"][0]["id"], "unitPrice": 100}],
         })
-        check(suite, "7c from-challan future bill rejected (400)", status == 400, f"got {status} {b}")
-        check(suite, "7c rejection cites [FBR 0043]", cites_0043(b), f"body = {b}")
+        check(suite, "7c from-challan future bill not blocked on date",
+              status in (200, 201) or not cites_0043(b), f"got {status} {b}")
     else:
-        check(suite, "7c from-challan future guard — skipped (no challan)", True)
+        check(suite, "7c from-challan future date — skipped (no challan)", True)
 
 
 # ── Reporter ───────────────────────────────────────────────────────

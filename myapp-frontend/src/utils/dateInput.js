@@ -53,3 +53,36 @@ function localYmd(d) {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
+
+// ── Pakistan-time helpers (2026-08-28) ────────────────────────────────────
+//
+// Bills may be dated in the FUTURE (an operator cuts a 1-September bill in
+// late August). FBR rule [0043] still refuses to validate/submit a
+// future-dated invoice, so the UI hides those actions until the bill's date
+// arrives. "Future" must be judged in Pakistan time — the same rule the
+// server applies in Helpers/PakistanClock — not in the browser's timezone,
+// so an operator abroad sees the same gate as one in Karachi.
+
+/** Today's calendar date in Pakistan (PKT, UTC+5) as "YYYY-MM-DD". */
+export function todayPakistanYmd() {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Karachi", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date());
+  } catch {
+    // Host without tzdata: PKT has no daylight saving, so a fixed +5 shift
+    // on the UTC instant gives exactly the Karachi calendar date.
+    return new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  }
+}
+
+/**
+ * True when a document's date is AFTER today in Pakistan (date-only).
+ * The stored value's date part is used verbatim (never re-parsed through
+ * `new Date()`), so no timezone math can roll the day — see `toLocalYmd`.
+ * ISO "YYYY-MM-DD" strings compare correctly as plain strings.
+ */
+export function isFutureDocDate(value) {
+  const ymd = toLocalYmd(value);
+  return !!ymd && ymd > todayPakistanYmd();
+}

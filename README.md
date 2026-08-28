@@ -289,6 +289,11 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-28 — Bills can be dated in the future
+
+- **Raise a bill ahead of its billing date.** Both create paths — *from a challan* and *standalone (without a challan)* — now accept a future **Bill Date**, so you can cut a 1-September bill in late August. Editing a bill's date to a future day works too. The date you pick is the date that is stored and printed; nothing is silently moved to today.
+- **FBR submission is unchanged.** FBR rule **[0043]** still refuses a future-dated invoice, so a bill dated ahead simply can't be validated/submitted until its date arrives — you'll get the same clear *"Invoice date cannot be in the future. [FBR 0043]"* message at submit time instead of at create time. Companies with FBR off are unaffected.
+
 ### 2026-08-11 — Product photos on Sales Quote lines (and on the printed quote)
 
 - **Attach a photo to any Sales Quote line.** Each line in the quote form has a photo slot — click it to pick a file, drag an image onto it, or paste one with `Ctrl+V`. Filled slots show a thumbnail with a small ✕ to clear it, and clicking replaces it. Phone photos are shrunk in the browser before upload (long edge 1200px), so a 4 MB snap uploads in a fraction of a second and still prints sharp. *Repeat last* copies the photo along with the rest of the line. Works the same on phone, tablet and desktop.

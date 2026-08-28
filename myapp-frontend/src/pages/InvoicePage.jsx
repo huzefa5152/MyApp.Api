@@ -32,6 +32,7 @@ import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { exportToPdf } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { notify } from "../utils/notify";
+import { isFutureDocDate } from "../utils/dateInput";
 import { useConfirm } from "../Components/ConfirmDialog";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
@@ -559,7 +560,11 @@ export default function InvoicePage({ mode = "invoices" }) {
   // by Validate All / Submit All (bulk actions) but the per-bill buttons still
   // work. So we exclude them from these counts too — the badges are about what
   // the bulk buttons will process.
-  const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.fbrReady && !inv.isFbrExcluded);
+  // Future-dated bills are excluded from every FBR bulk action and from these
+  // counts: FBR rule [0043] rejects a future invoice date, so Validate All /
+  // Submit All would only collect guaranteed failures. They rejoin the queue by
+  // themselves on their own date — nothing to un-exclude. (2026-08-28)
+  const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.fbrReady && !inv.isFbrExcluded && !isFutureDocDate(inv.date));
   const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.fbrReady && !inv.isFbrExcluded).length;
   const validatedCount = unsubmittedInvoices.filter(inv => fbrValidated.has(inv.id)).length;
 
@@ -608,11 +613,12 @@ export default function InvoicePage({ mode = "invoices" }) {
     const { data } = await getPagedInvoicesByCompany(selectedCompany.id, params);
     const all = data.items || [];
     if (action === "validate") {
-      // Skip FBR-excluded bills — operator explicitly opted them out of bulk actions.
-      return all.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.fbrReady && !inv.isFbrExcluded);
+      // Skip FBR-excluded bills — operator explicitly opted them out of bulk
+      // actions — and future-dated ones, which FBR would reject with [0043].
+      return all.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.fbrReady && !inv.isFbrExcluded && !isFutureDocDate(inv.date));
     }
     if (action === "submit") {
-      return all.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && fbrValidated.has(inv.id) && !inv.isFbrExcluded);
+      return all.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && fbrValidated.has(inv.id) && !inv.isFbrExcluded && !isFutureDocDate(inv.date));
     }
     return all;
   };
@@ -1134,10 +1140,29 @@ export default function InvoicePage({ mode = "invoices" }) {
                         </div>
                       </div>
                     )}
-                    {!isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded && (
+                    {!isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded && !isFutureDocDate(inv.date) && (
                       <div style={styles.fbrPillReady} title="All FBR fields are set. Click Validate to dry-run, or Submit to issue the IRN.">
                         <MdCheckCircle size={14} color="#0d47a1" />
                         <span>Ready to Validate</span>
+                      </div>
+                    )}
+                    {/* Future-dated bill: creation is allowed, but FBR rule
+                        [0043] rejects a future invoice date — so Validate /
+                        Submit are hidden until the bill's own date arrives.
+                        The pill says so, otherwise the missing buttons read
+                        as a bug. (2026-08-28) */}
+                    {!isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && isFutureDocDate(inv.date) && (
+                      <div
+                        style={styles.fbrPillIncomplete}
+                        title="FBR rejects a future-dated invoice [0043]. Validate and Submit unlock on this bill's own date."
+                      >
+                        <MdHourglassEmpty size={14} color="#b26a00" style={{ flexShrink: 0 }} />
+                        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.3 }}>
+                          <span>Future-dated</span>
+                          <span style={styles.fbrPillIncompleteHint}>
+                            FBR opens {new Date(inv.date).toLocaleDateString()}
+                          </span>
+                        </div>
                       </div>
                     )}
                     {!isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && inv.isFbrExcluded && (
@@ -1237,7 +1262,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdVisibility size={14} /> View FBR
                       </button>
                     )}
-                    {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
+                    {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && !inv.isCancelled && !isFutureDocDate(inv.date) && (
                       <>
                         {canFbrValidate && (
                           <button

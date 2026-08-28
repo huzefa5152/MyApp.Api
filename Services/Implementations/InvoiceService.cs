@@ -452,11 +452,12 @@ namespace MyApp.Api.Services.Implementations
             if (buyer.CompanyId != dto.CompanyId)
                 throw new InvalidOperationException("Client does not belong to this company.");
 
-            // FBR [0043] rejects future-dated bills. Same PKT date-only guard as
-            // the standalone + update paths — the from-challan bill form lets the
-            // operator override the bill date, so it needs the check too.
-            if (PakistanClock.IsFutureInvoiceDate(dto.Date))
-                throw new InvalidOperationException("Bill date cannot be in the future. [FBR 0043]");
+            // Future-dated bills are ALLOWED at creation (2026-08-28, operator
+            // request): a wholesaler routinely raises a bill ahead of its billing
+            // date (e.g. cutting a 1-September bill in late August). FBR rule
+            // [0043] still rejects a future date at SUBMIT time, so the guard now
+            // lives only in FbrService.ValidateAsync — the bill exists locally, it
+            // just can't be pushed to FBR until its date has arrived.
 
             // Load and validate all challans
             var challans = new List<DeliveryChallan>();
@@ -894,12 +895,12 @@ namespace MyApp.Api.Services.Implementations
             if (dto.GSTRate < 0 || dto.GSTRate > 100)
                 throw new InvalidOperationException("GST rate must be between 0 and 100.");
 
-            // FBR [0043] rejects future-dated bills. Evaluate "future" against
-            // today's date in Pakistan (PKT, UTC+5), comparing date-only — a
-            // server still on the previous UTC day must not block a PKT operator
-            // billing "today". Same guard as UpdateAsync / CreateAsync.
-            if (PakistanClock.IsFutureInvoiceDate(dto.Date))
-                throw new InvalidOperationException("Bill date cannot be in the future. [FBR 0043]");
+            // Future-dated bills are ALLOWED at creation (2026-08-28, operator
+            // request): a wholesaler routinely raises a bill ahead of its billing
+            // date (e.g. cutting a 1-September bill in late August). FBR rule
+            // [0043] still rejects a future date at SUBMIT time, so the guard now
+            // lives only in FbrService.ValidateAsync — the bill exists locally, it
+            // just can't be pushed to FBR until its date has arrived.
 
             // Register any newly-typed UOM names + reject fractional qty
             // for integer-only UOMs. Mirrors the contract on the regular
@@ -1309,16 +1310,11 @@ namespace MyApp.Api.Services.Implementations
             try
             {
                 // Update invoice-level fields
+                // Future dates allowed here too — otherwise a legitimately
+                // future-dated bill (see the create paths) could never be edited,
+                // because the edit form always re-submits its own date.
                 if (dto.Date.HasValue)
-                {
-                    // FBR rejects future dates with [0043]. Evaluate "future"
-                    // against today's date in Pakistan (PKT, UTC+5), date-only,
-                    // so the operator can pick "today" without tripping the gate
-                    // even while the server is still on the previous UTC day.
-                    if (PakistanClock.IsFutureInvoiceDate(dto.Date.Value))
-                        throw new InvalidOperationException("Bill date cannot be in the future. [FBR 0043]");
                     invoice.Date = dto.Date.Value;
-                }
                 invoice.GSTRate = dto.GSTRate;
                 invoice.WithholdingTaxRate = dto.WithholdingTaxRate;
                 invoice.WithholdingTaxAmount = dto.WithholdingTaxAmount;   // reflowed below from rate/amount mode

@@ -538,10 +538,12 @@ namespace MyApp.Api.Services.Implementations
             if (invoice.FbrStatus == "Submitted" && !string.IsNullOrEmpty(invoice.FbrIRN))
                 errors.Add($"Invoice already submitted to FBR. IRN: {invoice.FbrIRN}");
 
-            // Future check in Pakistan time (PKT, date-only) — same rule the
-            // create/update paths enforce, so a bill accepted at create can't be
-            // flagged future here just because the server crossed into a new UTC
-            // day. PKT is UTC+5, well inside FBR's own day boundary.
+            // Future check in Pakistan time (PKT, date-only). Since 2026-08-28
+            // the create/update paths ALLOW future-dated bills (operators cut a
+            // bill ahead of its billing date), so this is the only place the FBR
+            // [0043] rule is enforced: such a bill lives locally and simply can't
+            // be submitted until its date arrives. Date-only in PKT (UTC+5) so a
+            // server that crossed into a new UTC day can't flag today's bill.
             if (PakistanClock.IsFutureInvoiceDate(invoice.Date))
                 errors.Add("Invoice date cannot be in the future. [FBR 0043]");
 
