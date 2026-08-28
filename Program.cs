@@ -2054,10 +2054,10 @@ Directory.CreateDirectory(dataPath);
 Directory.CreateDirectory(Path.Combine(dataPath, "attachments"));
 
 // SECURITY: attachments are tenant-isolated business documents and must NOT be
-// reachable via the public /data static provider (logos/avatars are fine —
-// low-sensitivity). 404 any direct /data/attachments/* hit here, BEFORE the
-// static middleware below; downloads go through the authenticated
+// reachable over HTTP at all; downloads go through the authenticated
 // /api/attachments/{id}/download endpoint, which asserts company access.
+// The allowlist below already leaves them unmounted — this stays as a second
+// lock, and as the place the intent is written down.
 app.Use(async (ctx, next) =>
 {
     if (ctx.Request.Path.StartsWithSegments("/data/attachments", StringComparison.OrdinalIgnoreCase))
@@ -2067,11 +2067,38 @@ app.Use(async (ctx, next) =>
     }
     await next();
 });
-app.UseStaticFiles(new StaticFileOptions
+
+// PUBLIC FILE ALLOWLIST (2026-08-29).
+//
+// This used to mount the whole data/ tree at /data and 404 one child. That is
+// the wrong way round: every folder anyone later added under data/ was public
+// until somebody remembered to block it, and several already were —
+// data/po-audit/archive-{1..N}.pdf (customer PO documents behind a sequential
+// counter), data/uploads/excel-templates/company_{id}_{Type}.xlsx (the tenant's
+// branded workbook), plus the GUID-named PDFs under po_imports and
+// parser_feedback.
+//
+// Now only the folders that a BROWSER genuinely has to fetch are mounted, each
+// on its own provider. Everything else under data/ is private by default,
+// including anything a future feature drops there.
+//
+// Why these four have to be public: all are rendered with a plain <img src> —
+// company logos and stamps inside print templates, quote line photos on the
+// printed quote, avatars in the shell. An <img> cannot carry an Authorization
+// header, so an authenticated endpoint would simply not load. (Stamps include
+// signature images; the stronger fix is to inline them as data: URIs in the
+// print payload and drop the folder from this list — that is a change to the
+// print pipeline, not to this allowlist.)
+foreach (var publicFolder in new[] { "uploads/logos", "uploads/stamps", "uploads/quoteitems", "images" })
 {
-    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(dataPath),
-    RequestPath = "/data"
-});
+    var abs = Path.Combine(dataPath, publicFolder.Replace('/', Path.DirectorySeparatorChar));
+    Directory.CreateDirectory(abs);
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(abs),
+        RequestPath = "/data/" + publicFolder,
+    });
+}
 
 app.MapControllers(); // 👈 maps your controllers (like CompaniesController)
 

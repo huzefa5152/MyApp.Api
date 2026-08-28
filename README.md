@@ -289,6 +289,12 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-29 — Uploaded files are private by default
+
+- **Closed a hole in the public file server.** The app served the whole `data/` folder over the web and blocked one sub-folder by name, which left several things readable by anyone who guessed the address — archived customer PO documents (numbered `archive-1`, `archive-2`, …), each company's branded Excel workbook, and the PDFs behind PO import and parser feedback.
+- Only the four folders a browser genuinely has to load are public now: company logos, stamps/signatures, quote line photos, and avatars. Everything else under `data/` — today's folders and any added later — is unreachable over the web and stays available only through the app's normal, permission-checked screens.
+- Nothing changes for users: logos, stamps and photos still appear on screen and on printed documents, Excel export and PO import work exactly as before, and attachments continue to download through the app.
+
 ### 2026-08-28 — Customer Portal: give a client a private link to their own invoices
 
 - **Create a public portal for any client** from *Configuration → Customer Portal*. Pick the company and the client, and the system generates one secret link. Copy it, open it, disable it, or revoke it for good — one live link per client, and the screen tells you plainly that anyone holding the link can see that client's invoices.

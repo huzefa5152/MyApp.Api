@@ -173,6 +173,19 @@ Rules that must not be relaxed:
   suite 4 (IDOR) — that suite is the only automated proof the hand-rolled scope
   holds.
 
+### 5d. Public file allowlist
+
+`data/` holds user uploads. Program.cs mounts ONLY the folders a browser must
+fetch with a plain `<img src>` — `uploads/logos`, `uploads/stamps`,
+`uploads/quoteitems`, `images` — each on its own provider. Everything else under
+`data/` is private by default.
+
+Do NOT re-introduce a blanket `/data` mount with per-folder denies: that is what
+leaked the PO audit archive, the Excel templates and the import PDFs. If a new
+feature writes somewhere under `data/` and a browser needs it, add the folder to
+that array and to `scripts/verify_public_file_allowlist.py`; if it does not,
+serve it through an authenticated endpoint like attachments do.
+
 ### 6. Pagination
 
 Every paged endpoint clamps via `MyApp.Api.Helpers.PaginationHelper`:
@@ -237,6 +250,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Division isolation | `python scripts/test_division_isolation.py` | `all checks passed` |
 | Document copy | `python scripts/test_document_copy.py` | `184/184 checks passed` |
 | Customer Portal (incl. IDOR suite) | `python scripts/test_customer_portal.py` | `79/79 checks passed` |
+| Public file allowlist | `python scripts/verify_public_file_allowlist.py` | `10/10 checks passed` |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
