@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   MdPublic, MdAdd, MdContentCopy, MdOpenInNew, MdCheck, MdBlock,
-  MdPlayArrow, MdDelete, MdWarningAmber,
+  MdPlayArrow, MdDelete, MdWarningAmber, MdDescription,
 } from "react-icons/md";
 import {
   getCustomerPortals, createCustomerPortal, setCustomerPortalActive, deleteCustomerPortal,
+  getPortalDocumentOptions, setCustomerPortalDocumentType,
 } from "../api/customerPortalApi";
 import { getClientsByCompany } from "../api/clientApi";
 import SearchableSelect from "../Components/SearchableSelect";
@@ -91,6 +92,23 @@ export default function CustomerPortalsPage() {
     }
   };
 
+  /**
+   * Switch which document an existing portal serves. The link is untouched, so
+   * the customer keeps the URL they already have — only the paper changes.
+   * "Automatic" is offered ONLY while a portal is still on it, so legacy portals
+   * can move to an explicit choice but nobody can deliberately go back.
+   */
+  const changeDocument = async (portal, type) => {
+    if ((portal.documentType || "") === type) return;
+    try {
+      await setCustomerPortalDocumentType(portal.id, type || null);
+      notify(`Portal now uses the ${type === "TaxInvoice" ? "Tax Invoice" : "Bill"}.`, "success");
+      reload();
+    } catch (err) {
+      notify(err.response?.data?.error || "Could not change the document.", "error");
+    }
+  };
+
   const revoke = async (portal) => {
     const ok = await confirm({
       title: `Revoke the portal for ${portal.clientName}?`,
@@ -112,6 +130,8 @@ export default function CustomerPortalsPage() {
     { key: "clientName", header: "Client", accessor: (p) => p.clientName,
       render: (p) => <strong style={{ color: colors.blue }}>{p.clientName}</strong> },
     { key: "companyName", header: "Company", accessor: (p) => p.companyName },
+    { key: "documentTypeLabel", header: "Document", accessor: (p) => p.documentTypeLabel,
+      render: (p) => <DocumentPicker portal={p} disabled={!canUpdate} onChange={changeDocument} /> },
     { key: "status", header: "Status", accessor: (p) => (p.isActive ? "Active" : "Disabled"),
       render: (p) => <StatusBadge tone={p.isActive ? "success" : "excluded"}>{p.isActive ? "Active" : "Disabled"}</StatusBadge> },
     { key: "createdAt", header: "Created", accessor: (p) => p.createdAt,
@@ -201,6 +221,10 @@ export default function CustomerPortalsPage() {
                 <div>
                   <h5 style={cardStyles.title}>{p.clientName}</h5>
                   <p style={cardStyles.text}><strong>Company:</strong> {p.companyName}</p>
+                  <div style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <strong>Document:</strong>
+                    <DocumentPicker portal={p} disabled={!canUpdate} onChange={changeDocument} />
+                  </div>
                   <p style={cardStyles.text}><strong>Created:</strong> {new Date(p.createdAt).toLocaleDateString()}</p>
                   <div style={{ margin: "0.4rem 0" }}>
                     <StatusBadge tone={p.isActive ? "success" : "excluded"}>
@@ -234,11 +258,46 @@ export default function CustomerPortalsPage() {
   );
 }
 
+/**
+ * Inline document switcher for a portal that already exists. Options a company
+ * has no template for are shown but disabled — hiding them entirely would leave
+ * an operator wondering why the document they expected isn't listed.
+ */
+function DocumentPicker({ portal, disabled, onChange }) {
+  const available = portal.availableDocumentTypes || [];
+  const isAuto = !portal.documentType;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <select
+        value={portal.documentType || ""}
+        disabled={disabled}
+        onChange={(e) => onChange(portal, e.target.value)}
+        title={portal.templateAvailable
+          ? `Customers download the ${portal.documentTypeLabel}`
+          : "No template of this type on the company — customers see no Print or Download"}
+        style={{ ...st.docSelect, ...(portal.templateAvailable ? null : st.docSelectWarn) }}
+      >
+        {/* Only while it's still automatic — a one-way exit from the legacy default. */}
+        {isAuto && <option value="">Automatic</option>}
+        <option value="Bill" disabled={!available.includes("Bill")}>
+          Bill{available.includes("Bill") ? "" : " (no template)"}
+        </option>
+        <option value="TaxInvoice" disabled={!available.includes("TaxInvoice")}>
+          Tax Invoice{available.includes("TaxInvoice") ? "" : " (no template)"}
+        </option>
+      </select>
+      {!portal.templateAvailable && <span style={st.noTemplate}>no template</span>}
+    </span>
+  );
+}
+
 function CreatePortalModal({ companies, defaultCompanyId, loadingCompanies, onClose, onCreated }) {
   const [companyId, setCompanyId] = useState(defaultCompanyId ? String(defaultCompanyId) : "");
   const [clientId, setClientId] = useState("");
   const [clients, setClients] = useState([]);
   const [loadingClients, setLoadingClients] = useState(false);
+  const [docOptions, setDocOptions] = useState([]);
+  const [documentType, setDocumentType] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -253,12 +312,32 @@ function CreatePortalModal({ companies, defaultCompanyId, loadingCompanies, onCl
     return () => { cancelled = true; };
   }, [companyId]);
 
+  // Which documents this company can actually produce. Offering a type with no
+  // template would create a portal whose Print and Download never appear.
+  useEffect(() => {
+    if (!companyId) { setDocOptions([]); setDocumentType(""); return; }
+    let cancelled = false;
+    getPortalDocumentOptions(companyId)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const opts = data || [];
+        setDocOptions(opts);
+        const firstReady = opts.find((o) => o.available);
+        setDocumentType(firstReady ? firstReady.type : "");
+      })
+      .catch(() => { if (!cancelled) setDocOptions([]); });
+    return () => { cancelled = true; };
+  }, [companyId]);
+
+  const noTemplates = docOptions.length > 0 && !docOptions.some((o) => o.available);
+
   const submit = async () => {
     if (!companyId || !clientId || saving) return;
     setSaving(true);
     setError("");
     try {
-      const { data } = await createCustomerPortal(Number(companyId), Number(clientId));
+      const { data } = await createCustomerPortal(
+        Number(companyId), Number(clientId), documentType || null);
       onCreated(data);
     } catch (err) {
       setError(err.response?.data?.error || "Could not create the portal.");
@@ -307,6 +386,42 @@ function CreatePortalModal({ companies, defaultCompanyId, loadingCompanies, onCl
             }
             disabled={!companyId || loadingClients}
           />
+
+          <div style={{ marginTop: "1.1rem" }}>
+            <label style={st.label}>Invoice document</label>
+            <p style={st.subHint}>
+              What the customer downloads and prints. The portal always uses this one.
+            </p>
+            <div style={st.docRow}>
+              {docOptions.map((o) => {
+                const active = documentType === o.type;
+                return (
+                  <button
+                    key={o.type}
+                    type="button"
+                    disabled={!o.available}
+                    onClick={() => setDocumentType(o.type)}
+                    title={o.available
+                      ? `Use the ${o.label} template`
+                      : `This company has no ${o.label} template yet`}
+                    style={{ ...st.docBtn, ...(active ? st.docBtnActive : null),
+                             ...(o.available ? null : st.docBtnOff) }}
+                  >
+                    <MdDescription size={15} />
+                    <span>{o.label}</span>
+                    {!o.available && <span style={st.docBtnTag}>no template</span>}
+                  </button>
+                );
+              })}
+            </div>
+            {noTemplates && (
+              <p style={st.warnHint}>
+                This company has no Bill or Tax Invoice print template yet. The portal
+                will still list invoices, but customers won't see Print or Download
+                until you add one.
+              </p>
+            )}
+          </div>
 
           <p style={st.hint}>
             One active portal per client. The link is generated by the system and can
@@ -404,6 +519,23 @@ const st = {
   label: { display: "block", marginBottom: "0.35rem", fontWeight: 600,
     fontSize: "0.85rem", color: colors.textSecondary },
   hint: { marginTop: "1rem", fontSize: "0.8rem", color: colors.textSecondary },
+  subHint: { margin: "0 0 0.5rem", fontSize: "0.78rem", color: colors.textSecondary },
+  warnHint: { marginTop: "0.6rem", fontSize: "0.78rem", color: colors.amber,
+    background: colors.amberBg, border: "1px solid #ffe082", borderRadius: 8, padding: "0.5rem 0.7rem" },
+  docRow: { display: "flex", gap: "0.5rem", flexWrap: "wrap" },
+  docBtn: { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 44,
+    padding: "0.55rem 0.9rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`,
+    background: "#fff", color: colors.textSecondary, fontSize: "0.86rem", fontWeight: 600, cursor: "pointer" },
+  docBtnActive: { borderColor: colors.blue, background: "#e8f0fe", color: colors.blue },
+  docBtnOff: { opacity: 0.5, cursor: "not-allowed" },
+  docBtnTag: { fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase",
+    letterSpacing: "0.03em", color: colors.amber },
+  noTemplate: { marginLeft: 2, fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase",
+    letterSpacing: "0.03em", color: colors.amber },
+  docSelect: { minHeight: 34, padding: "0.25rem 0.45rem", borderRadius: 8,
+    border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.textPrimary,
+    fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
+  docSelectWarn: { borderColor: "#ffe082", background: colors.amberBg },
   err: { backgroundColor: "#fff0f1", color: "#dc3545", padding: "0.65rem 1rem",
     borderRadius: 8, marginBottom: "1rem", fontWeight: 500, fontSize: "0.85rem" },
   loading: { display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem 0" },

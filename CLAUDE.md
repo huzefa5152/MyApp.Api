@@ -169,6 +169,14 @@ Rules that must not be relaxed:
 - **The token is a bearer secret.** It is in `SensitiveDataRedactor`, masked out
   of Serilog by `Helpers/PortalTokenLogMasker`, and masked in audit rows. Never
   log it, and never echo the management list response into a log.
+- The portal serves ONE document type, stored on the row (`CustomerPortal.DocumentType`:
+  `Bill` | `TaxInvoice` | NULL = auto, legacy rows only). Bill and Tax Invoice are
+  different templates fed by different print DTOs, so template and data are chosen
+  together in `ResolveDocumentAsync` — never swap one for the other. An explicit
+  choice is absolute: if that template is missing, printing is OFF.
+  Beware `IPrintTemplateRepository.GetForExportAsync` — despite the name it filters
+  `ExcelTemplatePath != null`, so it is the EXCEL resolver and returns null for
+  HTML-only templates.
 - Any new public endpoint needs a case in `scripts/test_customer_portal.py`
   suite 4 (IDOR) — that suite is the only automated proof the hand-rolled scope
   holds.
@@ -249,7 +257,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Inventory V2 lifecycle | `python scripts/test_stock_v2_lifecycle.py` | `29/29 checks passed` |
 | Division isolation | `python scripts/test_division_isolation.py` | `all checks passed` |
 | Document copy | `python scripts/test_document_copy.py` | `184/184 checks passed` |
-| Customer Portal (incl. IDOR suite) | `python scripts/test_customer_portal.py` | `79/79 checks passed` |
+| Customer Portal (incl. IDOR suite) | `python scripts/test_customer_portal.py` | `94/94 checks passed` |
 | Public file allowlist | `python scripts/verify_public_file_allowlist.py` | `10/10 checks passed` |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |

@@ -289,6 +289,12 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-29 — Customer Portal: choose the document, and a redesigned customer view
+
+- **Pick which document customers download.** When you create a portal you now choose the **Bill** or the **Tax Invoice**, and the portal always uses that one. Only documents your company actually has a template for can be selected — the rest are shown greyed out so it's obvious what's missing. You can change the choice on an existing portal at any time from the list, and the customer's link stays the same.
+- **Fixes a case where Print and PDF never appeared.** The portal previously looked only for a Bill template, so a company that had set up a Tax Invoice template got no download buttons and no explanation. It now uses whichever document you chose, with the matching data behind it.
+- **The customer-facing page has been redesigned.** It leads with the one figure that matters — the amount outstanding — with supporting totals beside it, status filters that show how many invoices sit in each state, and amounts set in aligned figures so columns read like a statement. Overdue invoices are called out, the company's details stay pinned at the foot of the page while the invoice list scrolls, and the whole thing is built for phones, tablets and large screens alike.
+
 ### 2026-08-29 — Uploaded files are private by default
 
 - **Closed a hole in the public file server.** The app served the whole `data/` folder over the web and blocked one sub-folder by name, which left several things readable by anyone who guessed the address — archived customer PO documents (numbered `archive-1`, `archive-2`, …), each company's branded Excel workbook, and the PDFs behind PO import and parser feedback.

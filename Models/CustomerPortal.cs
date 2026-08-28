@@ -43,6 +43,20 @@ namespace MyApp.Api.Models
         /// </summary>
         public bool IsActive { get; set; } = true;
 
+        /// <summary>
+        /// Which document the customer downloads: "Bill" or "TaxInvoice" — the
+        /// two are different templates fed by different merge data, so the
+        /// operator picks one when issuing the portal and it never changes on
+        /// its own.
+        ///
+        /// NULL means "decide automatically" (Bill when the company has one,
+        /// otherwise Tax Invoice). That is only for portals issued before this
+        /// column existed: defaulting them to a concrete type would silently
+        /// point a live link at a template the company may not have, and the
+        /// customer would lose the download with no warning.
+        /// </summary>
+        public string? DocumentType { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public int? CreatedByUserId { get; set; }
         public DateTime? UpdatedAt { get; set; }

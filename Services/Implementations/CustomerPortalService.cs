@@ -44,6 +44,32 @@ namespace MyApp.Api.Services.Implementations
             _logger = logger;
         }
 
+        /// <summary>The only two documents a portal can serve, and their labels.</summary>
+        private static readonly Dictionary<string, string> DocumentTypes = new(StringComparer.Ordinal)
+        {
+            ["Bill"] = "Bill",
+            ["TaxInvoice"] = "Tax Invoice",
+        };
+
+        /// <summary>
+        /// Canonicalises the operator's choice. Null/blank means "choose
+        /// automatically" — the pre-existing behaviour that legacy portals keep.
+        /// Anything else must be one of the two known types; a typo becomes an
+        /// error rather than a portal that silently prints nothing.
+        /// </summary>
+        private static string? NormaliseDocumentType(string? documentType)
+        {
+            if (string.IsNullOrWhiteSpace(documentType)) return null;
+            var trimmed = documentType.Trim();
+            foreach (var key in DocumentTypes.Keys)
+                if (string.Equals(key, trimmed, StringComparison.OrdinalIgnoreCase))
+                    return key;
+            throw new InvalidOperationException("Choose either the Bill or the Tax Invoice document.");
+        }
+
+        private static string LabelFor(string? documentType) =>
+            documentType != null && DocumentTypes.TryGetValue(documentType, out var l) ? l : "Automatic";
+
         // ── Management ───────────────────────────────────────────────────────
 
         public async Task<List<CustomerPortalDto>> GetAllAsync(
@@ -55,23 +81,44 @@ namespace MyApp.Api.Services.Implementations
                 .Select(p => new
                 {
                     p.Id, p.CompanyId, p.ClientId, p.PublicToken, p.IsActive,
-                    p.CreatedAt, p.DisabledAt,
+                    p.DocumentType, p.CreatedAt, p.DisabledAt,
                     CompanyName = p.Company.Name,
                     ClientName = p.Client.Name,
                 })
                 .ToListAsync();
 
-            return rows.Select(r => new CustomerPortalDto
+            // One query for every company in the list rather than one per row —
+            // the screen shows a warning when the chosen document has no template.
+            var companyIds = rows.Select(r => r.CompanyId).Distinct().ToList();
+            var templates = await _context.PrintTemplates.AsNoTracking()
+                .Where(t => companyIds.Contains(t.CompanyId)
+                         && (t.TemplateType == "Bill" || t.TemplateType == "TaxInvoice"))
+                .Select(t => new { t.CompanyId, t.TemplateType })
+                .Distinct()
+                .ToListAsync();
+            var available = templates
+                .GroupBy(t => t.CompanyId)
+                .ToDictionary(g => g.Key, g => g.Select(x => x.TemplateType).ToHashSet(StringComparer.Ordinal));
+
+            return rows.Select(r =>
             {
-                Id = r.Id,
-                CompanyId = r.CompanyId,
-                CompanyName = r.CompanyName,
-                ClientId = r.ClientId,
-                ClientName = r.ClientName,
-                PublicUrl = urlBuilder(r.PublicToken),
-                IsActive = r.IsActive,
-                CreatedAt = r.CreatedAt,
-                DisabledAt = r.DisabledAt,
+                var have = available.TryGetValue(r.CompanyId, out var set) ? set : new HashSet<string>(StringComparer.Ordinal);
+                return new CustomerPortalDto
+                {
+                    Id = r.Id,
+                    CompanyId = r.CompanyId,
+                    CompanyName = r.CompanyName,
+                    ClientId = r.ClientId,
+                    ClientName = r.ClientName,
+                    PublicUrl = urlBuilder(r.PublicToken),
+                    IsActive = r.IsActive,
+                    DocumentType = r.DocumentType,
+                    DocumentTypeLabel = LabelFor(r.DocumentType),
+                    TemplateAvailable = r.DocumentType == null ? have.Count > 0 : have.Contains(r.DocumentType),
+                    AvailableDocumentTypes = have.OrderBy(x => x).ToList(),
+                    CreatedAt = r.CreatedAt,
+                    DisabledAt = r.DisabledAt,
+                };
             }).ToList();
         }
 
@@ -80,12 +127,22 @@ namespace MyApp.Api.Services.Implementations
             var p = await _context.CustomerPortals.AsNoTracking()
                 .Include(x => x.Company).Include(x => x.Client)
                 .FirstOrDefaultAsync(x => x.Id == id);
-            return p == null ? null : ToDto(p, urlBuilder);
+            if (p == null) return null;
+
+            var dto = ToDto(p, urlBuilder);
+            var have = await _context.PrintTemplates.AsNoTracking()
+                .Where(t => t.CompanyId == p.CompanyId
+                         && (t.TemplateType == "Bill" || t.TemplateType == "TaxInvoice"))
+                .Select(t => t.TemplateType).Distinct().ToListAsync();
+            dto.AvailableDocumentTypes = have.OrderBy(x => x).ToList();
+            dto.TemplateAvailable = p.DocumentType == null ? have.Count > 0 : have.Contains(p.DocumentType);
+            return dto;
         }
 
         public async Task<CustomerPortalDto> CreateAsync(
-            int companyId, int clientId, int userId, Func<string, string> urlBuilder)
+            int companyId, int clientId, string? documentType, int userId, Func<string, string> urlBuilder)
         {
+            var chosen = NormaliseDocumentType(documentType);
             var client = await _context.Clients.AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == clientId)
                 ?? throw new KeyNotFoundException("Client not found.");
@@ -106,6 +163,7 @@ namespace MyApp.Api.Services.Implementations
                 ClientId = clientId,
                 PublicToken = PublicTokenGenerator.Create(),
                 IsActive = true,
+                DocumentType = chosen,
                 CreatedAt = DateTime.UtcNow,
                 CreatedByUserId = userId,
             };
@@ -146,6 +204,40 @@ namespace MyApp.Api.Services.Implementations
             return await GetByIdAsync(id, urlBuilder);
         }
 
+        public async Task<CustomerPortalDto?> SetDocumentTypeAsync(
+            int id, string? documentType, int userId, Func<string, string> urlBuilder)
+        {
+            var chosen = NormaliseDocumentType(documentType);
+            var portal = await _context.CustomerPortals.FirstOrDefaultAsync(p => p.Id == id);
+            if (portal == null) return null;
+
+            portal.DocumentType = chosen;
+            portal.UpdatedAt = DateTime.UtcNow;
+            portal.UpdatedByUserId = userId;
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Customer portal {PortalId} document set to {DocumentType} by user {UserId}",
+                id, chosen ?? "automatic", userId);
+            return await GetByIdAsync(id, urlBuilder);
+        }
+
+        public async Task<List<PortalDocumentOptionDto>> GetDocumentOptionsAsync(int companyId)
+        {
+            var have = await _context.PrintTemplates.AsNoTracking()
+                .Where(t => t.CompanyId == companyId
+                         && (t.TemplateType == "Bill" || t.TemplateType == "TaxInvoice"))
+                .Select(t => t.TemplateType)
+                .Distinct()
+                .ToListAsync();
+
+            return DocumentTypes.Select(kv => new PortalDocumentOptionDto
+            {
+                Type = kv.Key,
+                Label = kv.Value,
+                Available = have.Contains(kv.Key),
+            }).ToList();
+        }
+
         public async Task<bool> DeleteAsync(int id)
         {
             var portal = await _context.CustomerPortals.FirstOrDefaultAsync(p => p.Id == id);
@@ -165,6 +257,8 @@ namespace MyApp.Api.Services.Implementations
             ClientName = p.Client?.Name ?? "",
             PublicUrl = urlBuilder(p.PublicToken),
             IsActive = p.IsActive,
+            DocumentType = p.DocumentType,
+            DocumentTypeLabel = LabelFor(p.DocumentType),
             CreatedAt = p.CreatedAt,
             DisabledAt = p.DisabledAt,
         };
@@ -177,7 +271,7 @@ namespace MyApp.Api.Services.Implementations
             if (!PublicTokenGenerator.LooksValid(token)) return null;
             return await _context.CustomerPortals.AsNoTracking()
                 .Where(p => p.PublicToken == token && p.IsActive)
-                .Select(p => new ResolvedPortal(p.Id, p.CompanyId, p.ClientId))
+                .Select(p => new ResolvedPortal(p.Id, p.CompanyId, p.ClientId, p.DocumentType))
                 .FirstOrDefaultAsync();
         }
 
@@ -246,8 +340,16 @@ namespace MyApp.Api.Services.Implementations
             // Whether printing is offered at all. A company with no Bill template
             // can't produce a document, and a customer should not meet a button
             // that only ever errors.
+            // Follows the portal's own choice: if the operator picked the Tax
+            // Invoice and the company only has a Bill template, printing is off —
+            // silently substituting the other document would hand the customer a
+            // different piece of paper than the one that was configured.
+            var chosen = portal.DocumentType;
             var canPrint = await _context.PrintTemplates.AsNoTracking()
-                .AnyAsync(t => t.CompanyId == portal.CompanyId && t.TemplateType == "Bill");
+                .AnyAsync(t => t.CompanyId == portal.CompanyId
+                            && (chosen != null
+                                ? t.TemplateType == chosen
+                                : t.TemplateType == "Bill" || t.TemplateType == "TaxInvoice"));
 
             return new PortalHeaderDto
             {
@@ -404,7 +506,7 @@ namespace MyApp.Api.Services.Implementations
         }
 
         /// <summary>
-        /// Which Bill template applies to an invoice: its own division's default
+        /// A template of one type for an invoice: its own division's default
         /// first, then the company-level default, oldest row breaking a tie.
         ///
         /// Resolved here rather than through IPrintTemplateRepository because the
@@ -416,21 +518,68 @@ namespace MyApp.Api.Services.Implementations
         /// The ordering below deliberately mirrors GetForExportAsync minus that
         /// filter, so the portal picks the same template the office would.
         /// </summary>
-        private async Task<PrintTemplate?> ResolveBillTemplateAsync(int companyId, int? divisionId)
+        private async Task<PrintTemplate?> ResolveTemplateAsync(int companyId, int? divisionId, string templateType)
         {
             if (divisionId.HasValue)
             {
                 var div = await _context.PrintTemplates.AsNoTracking()
-                    .Where(t => t.CompanyId == companyId && t.TemplateType == "Bill"
+                    .Where(t => t.CompanyId == companyId && t.TemplateType == templateType
                              && t.DivisionId == divisionId.Value)
                     .OrderByDescending(t => t.IsDefault).ThenBy(t => t.Id)
                     .FirstOrDefaultAsync();
                 if (div != null) return div;
             }
             return await _context.PrintTemplates.AsNoTracking()
-                .Where(t => t.CompanyId == companyId && t.TemplateType == "Bill" && t.DivisionId == null)
+                .Where(t => t.CompanyId == companyId && t.TemplateType == templateType && t.DivisionId == null)
                 .OrderByDescending(t => t.IsDefault).ThenBy(t => t.Id)
                 .FirstOrDefaultAsync();
+        }
+
+        /// <summary>
+        /// The document the customer gets, and the merge data that belongs with it.
+        ///
+        /// A company may have configured a Bill template, a Tax Invoice template,
+        /// or both — many configure only one, and which one is not predictable.
+        /// The two are NOT interchangeable: a Tax Invoice template is written
+        /// against the FBR merge fields (IRN, QR, scenario) that only
+        /// GetPrintTaxInvoiceAsync supplies, so handing it Bill data would render
+        /// a half-empty document. Template and data are therefore chosen together.
+        ///
+        /// Bill wins when both exist: it is the commercial document and its data is
+        /// complete whether or not the invoice was ever sent to FBR, whereas a Tax
+        /// Invoice only carries an IRN once submitted. A company that wants the
+        /// customer to receive the Tax Invoice can simply not configure a Bill one.
+        /// </summary>
+        private async Task<(PrintTemplate? Template, object? PrintData)> ResolveDocumentAsync(
+            int companyId, int? divisionId, int invoiceId, string? chosenType)
+        {
+            // An explicit choice is absolute — no falling back to the other
+            // document. The operator picked what the customer receives.
+            if (chosenType != null)
+            {
+                var picked = await ResolveTemplateAsync(companyId, divisionId, chosenType);
+                if (picked == null) return (null, null);
+                object? data = chosenType == "TaxInvoice"
+                    ? await _invoices.GetPrintTaxInvoiceAsync(invoiceId)
+                    : await _invoices.GetPrintBillAsync(invoiceId);
+                return data == null ? (null, null) : (picked, data);
+            }
+
+            var bill = await ResolveTemplateAsync(companyId, divisionId, "Bill");
+            if (bill != null)
+            {
+                var data = await _invoices.GetPrintBillAsync(invoiceId);
+                if (data != null) return (bill, data);
+            }
+
+            var tax = await ResolveTemplateAsync(companyId, divisionId, "TaxInvoice");
+            if (tax != null)
+            {
+                var data = await _invoices.GetPrintTaxInvoiceAsync(invoiceId);
+                if (data != null) return (tax, data);
+            }
+
+            return (null, null);
         }
 
         public async Task<PortalPrintPayloadDto?> GetPrintPayloadAsync(ResolvedPortal portal, int invoiceNumber)
@@ -444,11 +593,9 @@ namespace MyApp.Api.Services.Implementations
                 .FirstOrDefaultAsync();
             if (owned == null) return null;
 
-            var template = await ResolveBillTemplateAsync(portal.CompanyId, owned.DivisionId);
-            if (template == null) return null;
-
-            var printData = await _invoices.GetPrintBillAsync(owned.Id);
-            if (printData == null) return null;
+            var (template, printData) = await ResolveDocumentAsync(
+                portal.CompanyId, owned.DivisionId, owned.Id, portal.DocumentType);
+            if (template == null || printData == null) return null;
 
             // A stamped template must stay stamped, or the customer's copy differs
             // from the one the office prints. Only the stamp this template

@@ -78,10 +78,40 @@ namespace MyApp.Api.Controllers
             await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
             try
             {
-                var created = await _service.CreateAsync(dto.CompanyId, dto.ClientId, CurrentUserId, UrlBuilder());
+                var created = await _service.CreateAsync(
+                    dto.CompanyId, dto.ClientId, dto.DocumentType, CurrentUserId, UrlBuilder());
                 return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
             }
             catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
+        /// <summary>
+        /// Which invoice documents this company can produce, so the create dialog
+        /// can offer only the ones that will actually work.
+        /// </summary>
+        [HttpGet("document-options")]
+        [HasPermission("customerportal.manage.create")]
+        public async Task<ActionResult<List<PortalDocumentOptionDto>>> GetDocumentOptions([FromQuery] int companyId)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            return Ok(await _service.GetDocumentOptionsAsync(companyId));
+        }
+
+        /// <summary>Change the document an existing portal serves. The link is unchanged.</summary>
+        [HttpPut("{id:int}/document-type")]
+        [HasPermission("customerportal.manage.update")]
+        public async Task<ActionResult<CustomerPortalDto>> SetDocumentType(
+            int id, [FromBody] SetPortalDocumentTypeDto body)
+        {
+            var existing = await _service.GetByIdAsync(id, UrlBuilder());
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            try
+            {
+                var updated = await _service.SetDocumentTypeAsync(id, body.DocumentType, CurrentUserId, UrlBuilder());
+                return updated == null ? NotFound() : Ok(updated);
+            }
             catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
         }
 

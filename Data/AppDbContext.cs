@@ -570,6 +570,10 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<CustomerPortal>()
                 .HasIndex(p => p.PublicToken)
                 .IsUnique();
+            // "Bill" | "TaxInvoice" | NULL (= choose automatically).
+            modelBuilder.Entity<CustomerPortal>()
+                .Property(p => p.DocumentType)
+                .HasMaxLength(20);
             // At most ONE ACTIVE portal per (company, client) — a filtered
             // unique index, so disabled and revoked portals don't block issuing
             // a fresh link while a client still has only one live URL.

@@ -8,7 +8,7 @@ namespace MyApp.Api.Services.Interfaces
     /// and client used to scope every downstream query. Nothing from the route,
     /// query string or body may ever override these two ids.
     /// </summary>
-    public record ResolvedPortal(int PortalId, int CompanyId, int ClientId);
+    public record ResolvedPortal(int PortalId, int CompanyId, int ClientId, string? DocumentType);
 
     /// <summary>
     /// Customer Portal: management for internal users, and the read-only public
@@ -32,7 +32,11 @@ namespace MyApp.Api.Services.Interfaces
         /// client does not belong to the company, or when that pair already has an
         /// active portal (one live link per customer).
         /// </summary>
-        Task<CustomerPortalDto> CreateAsync(int companyId, int clientId, int userId, Func<string, string> urlBuilder);
+        Task<CustomerPortalDto> CreateAsync(int companyId, int clientId, string? documentType, int userId, Func<string, string> urlBuilder);
+        /// <summary>Change which document an existing portal serves. The link is unaffected.</summary>
+        Task<CustomerPortalDto?> SetDocumentTypeAsync(int id, string? documentType, int userId, Func<string, string> urlBuilder);
+        /// <summary>Which invoice documents this company has templates for.</summary>
+        Task<List<PortalDocumentOptionDto>> GetDocumentOptionsAsync(int companyId);
         /// <summary>Enable/disable. The same token is restored on re-enable.</summary>
         Task<CustomerPortalDto?> SetActiveAsync(int id, bool isActive, int userId, Func<string, string> urlBuilder);
         /// <summary>Revoke for good — the row goes and the token can never resolve again.</summary>

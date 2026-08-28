@@ -476,6 +476,30 @@ def test_detail_and_print(base, token, a, portal_a, inv_a1):
             check(suite, f"6b detail hides internal field '{leak}'",
                   leak.lower() not in blob.lower(), f"found in {list(detail.keys())}")
 
+    # ── Regression: a company whose ONLY template is a Tax Invoice ──────
+    # The first cut of this feature hard-coded TemplateType "Bill", so a company
+    # that had configured a Tax Invoice template (the document the Invoices tab
+    # prints) got no Print and no PDF at all, with no explanation. Seed exactly
+    # that shape and prove the portal offers the document.
+    st_seed, _ = http("PUT", f"/api/printtemplates/company/{a['id']}/TaxInvoice", base, token=token,
+                      body={"htmlContent": "<div>Tax Invoice {{invoiceNumber}} for {{clientName}}</div>"})
+    check(suite, "6t seeded a TaxInvoice-only template", st_seed in (200, 201, 204), f"got {st_seed}")
+
+    st_hdr, hdr = public(f"/api/public/customer-portal/{tok}", base)
+    check(suite, "6t portal offers printing with only a TaxInvoice template",
+          st_hdr == 200 and hdr.get("canPrint") is True, f"canPrint={hdr.get('canPrint') if hdr else None}")
+
+    st_tax, tax_payload = public(f"/api/public/customer-portal/{tok}/invoices/{n}/print", base)
+    check(suite, "6t print payload resolves from the TaxInvoice template",
+          st_tax == 200 and bool((tax_payload or {}).get("templateHtml")),
+          f"got {st_tax} {str(tax_payload)[:120]}")
+    if st_tax == 200:
+        # The Tax Invoice template must be paired with Tax Invoice merge data —
+        # handing it Bill data would render a half-empty document.
+        check(suite, "6t merge data carries the invoice number",
+              str((tax_payload.get("printData") or {}).get("invoiceNumber", "")) == str(n),
+              f"got {(tax_payload.get('printData') or {}).get('invoiceNumber')}")
+
     st, payload = public(f"/api/public/customer-portal/{tok}/invoices/{n}/print", base)
     if st == 200:
         check(suite, "6c print payload names the right invoice",
@@ -490,6 +514,47 @@ def test_detail_and_print(base, token, a, portal_a, inv_a1):
         # No Bill template configured for a brand-new company is legitimate.
         check(suite, "6c print payload — skipped (no Bill template on this company)", st == 404,
               f"got {st} {payload}")
+
+    # ── The operator's document choice is honoured, always ──────────────
+    # A portal stores which document it serves. Picking one and then removing
+    # its template must turn printing OFF rather than quietly substituting the
+    # other document — the customer would get different paper than configured.
+    st_opts, opts = http("GET", f"/api/customer-portals/document-options?companyId={a['id']}",
+                         base, token=token)
+    check(suite, "6d document options list both types",
+          st_opts == 200 and {o["type"] for o in (opts or [])} == {"Bill", "TaxInvoice"},
+          f"got {st_opts} {opts}")
+    check(suite, "6d TaxInvoice marked available (seeded above)",
+          any(o["type"] == "TaxInvoice" and o["available"] for o in (opts or [])), f"got {opts}")
+    check(suite, "6d Bill marked unavailable (no Bill template)",
+          any(o["type"] == "Bill" and not o["available"] for o in (opts or [])), f"got {opts}")
+
+    st_set, _ = http("PUT", f"/api/customer-portals/{portal_a['id']}/document-type",
+                     base, token=token, body={"documentType": "TaxInvoice"})
+    check(suite, "6d portal pinned to TaxInvoice", st_set == 200, f"got {st_set}")
+    st_h, h = public(f"/api/public/customer-portal/{tok}", base)
+    check(suite, "6d printing still offered", st_h == 200 and h.get("canPrint") is True,
+          f"canPrint={h.get('canPrint') if h else None}")
+
+    # Pin it to the document the company does NOT have.
+    st_set2, _ = http("PUT", f"/api/customer-portals/{portal_a['id']}/document-type",
+                      base, token=token, body={"documentType": "Bill"})
+    check(suite, "6d portal re-pinned to Bill", st_set2 == 200, f"got {st_set2}")
+    st_h2, h2 = public(f"/api/public/customer-portal/{tok}", base)
+    check(suite, "6d printing switches OFF — no Bill template, no silent fallback",
+          st_h2 == 200 and h2.get("canPrint") is False,
+          f"canPrint={h2.get('canPrint') if h2 else None}")
+    st_p2, _ = public(f"/api/public/customer-portal/{tok}/invoices/{n}/print", base)
+    check(suite, "6d print endpoint refuses rather than serving the other document",
+          st_p2 == 404, f"got {st_p2}")
+
+    st_bad, bad = http("PUT", f"/api/customer-portals/{portal_a['id']}/document-type",
+                       base, token=token, body={"documentType": "Nonsense"})
+    check(suite, "6d an unknown document type is refused", st_bad == 400, f"got {st_bad} {bad}")
+
+    # Put it back so the remaining checks see a working portal.
+    http("PUT", f"/api/customer-portals/{portal_a['id']}/document-type",
+         base, token=token, body={"documentType": "TaxInvoice"})
 
     st, missing = public(f"/api/public/customer-portal/{tok}/invoices/99999999", base)
     check(suite, "6d unknown invoice number 404s", st == 404, f"got {st}")
