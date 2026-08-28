@@ -70,6 +70,17 @@ namespace MyApp.Api.Helpers
             // clients without bare create-from-scratch rights.
             new("clients.manage.copy",     "Clients", "Manage", "Copy",   "Copy an existing client into another company"),
 
+            // ── Customer Portal ─────────────────────────────────────────────
+            // A portal is a public, password-less link that shows ONE client
+            // their own invoices. The link's token is the entire access
+            // control, so `list.view` is not an innocent read: whoever holds it
+            // can copy a URL that hands a stranger a client's financials.
+            // Treat it like a credential when assigning roles.
+            new("customerportal.list.view",     "CustomerPortal", "List",   "View",   "View customer portals and copy their public links (the link grants access to that client's invoices)"),
+            new("customerportal.manage.create", "CustomerPortal", "Manage", "Create", "Create a public customer portal for a client"),
+            new("customerportal.manage.update", "CustomerPortal", "Manage", "Update", "Enable or disable a customer portal"),
+            new("customerportal.manage.delete", "CustomerPortal", "Manage", "Delete", "Revoke a customer portal permanently (its link stops working for good)"),
+
             // ── Delivery Challans ───────────────────────────────────────────
             new("challans.list.view",      "Challans", "List",   "View",   "View the delivery-challan list"),
             new("challans.manage.create",     "Challans", "Manage", "Create",    "Create a new delivery challan"),

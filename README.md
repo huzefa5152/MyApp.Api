@@ -289,6 +289,14 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-28 — Customer Portal: give a client a private link to their own invoices
+
+- **Create a public portal for any client** from *Configuration → Customer Portal*. Pick the company and the client, and the system generates one secret link. Copy it, open it, disable it, or revoke it for good — one live link per client, and the screen tells you plainly that anyone holding the link can see that client's invoices.
+- **Your customer needs no login.** The link opens a clean, branded page showing your company name and logo, their name, and their invoices — total, paid, outstanding, and a card for anything they've overpaid. They can filter by Unpaid / Partially Paid / Overdue / Paid / Overpaid, search by invoice number, filter by date, open any invoice in full, and print or download it as a PDF using **your** configured invoice template. Works on a phone.
+- **They only ever see their own.** The link decides which customer's invoices load — the company and client are resolved on the server from the link itself, so no amount of editing the address bar reaches another customer's documents. Disabling a link cuts access instantly; re-enabling restores the same link; revoking kills it permanently.
+- **Overpayments are finally visible.** If a customer has paid more than an invoice ended up being worth, the portal shows the credit. The internal Bills list still reports that as simply "Paid" with a zero balance.
+- Print and PDF are hidden automatically for a company with no invoice template, rather than offering a button that can only fail. Excel download is not in this first version.
+
 ### 2026-08-28 — Copy any document, or turn it into the next one
 
 - **Copy is now on every Sales Quote, Sales Order, Delivery Challan, Bill, Purchase Bill and Goods Receipt** — on the cards and, where the screen has a table view, on the row too. One dialog asks what to copy it as, what to bring across, and the date; the new document number is always allocated by the system.

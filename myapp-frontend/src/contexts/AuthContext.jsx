@@ -57,7 +57,11 @@ export function AuthProvider({ children }) {
           const appBase = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "");
           let here = window.location.pathname + window.location.search + window.location.hash;
           if (appBase && here.startsWith(appBase)) here = here.slice(appBase.length) || "/";
-          const isProtected = here.startsWith("/") && here !== "/" && !here.startsWith("/login");
+          // "/portal/..." is never captured: that path carries the customer
+          // portal's secret token, and sessionStorage is readable by any script
+          // on the origin. Mirrors the same exclusion in httpClient.
+          const isProtected = here.startsWith("/") && here !== "/"
+            && !here.startsWith("/login") && !here.startsWith("/portal/");
           if (isProtected) {
             sessionStorage.setItem("postLoginReturnTo", here);
             sessionStorage.setItem("loginReason", "expired");

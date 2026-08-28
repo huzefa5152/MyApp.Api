@@ -146,6 +146,33 @@ branch in a controller. Copy lineage is written to the nullable
 `CopiedFromType` / `CopiedFromId` columns (plain columns, not FKs, since the
 source may be a different entity).
 
+### 5c. Customer Portal — the only anonymous surface
+
+`Controllers/PublicCustomerPortalController.cs` is one of just two
+`[AllowAnonymous]` controllers in the repo (the other serves product images).
+Authorization here is opt-in per controller — there is NO global fallback
+policy — so the attribute is carried explicitly and the reasoning lives in a
+header comment. Read it before touching anything in that file.
+
+Rules that must not be relaxed:
+
+- **No tenant guard works on this path.** Every `ICompanyAccessGuard` /
+  `IDivisionAccessGuard` method takes a `userId`, and the seed admin id (1) is
+  granted everything unconditionally. Never synthesise a user id to reuse them.
+  Scope comes from `[ResolvePortal]` → `ResolvedPortal`, and every query filters
+  on BOTH its CompanyId and ClientId.
+- **No public method takes a company, client or invoice id from the caller.**
+  The route carries the document NUMBER, resolved inside the portal's scope.
+- **One generic 404 for every token failure** (unknown / malformed / disabled /
+  revoked). `GlobalExceptionMiddleware` echoes 4xx messages verbatim, so
+  distinct wording is an enumeration oracle.
+- **The token is a bearer secret.** It is in `SensitiveDataRedactor`, masked out
+  of Serilog by `Helpers/PortalTokenLogMasker`, and masked in audit rows. Never
+  log it, and never echo the management list response into a log.
+- Any new public endpoint needs a case in `scripts/test_customer_portal.py`
+  suite 4 (IDOR) — that suite is the only automated proof the hand-rolled scope
+  holds.
+
 ### 6. Pagination
 
 Every paged endpoint clamps via `MyApp.Api.Helpers.PaginationHelper`:
@@ -209,6 +236,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Inventory V2 lifecycle | `python scripts/test_stock_v2_lifecycle.py` | `29/29 checks passed` |
 | Division isolation | `python scripts/test_division_isolation.py` | `all checks passed` |
 | Document copy | `python scripts/test_document_copy.py` | `184/184 checks passed` |
+| Customer Portal (incl. IDOR suite) | `python scripts/test_customer_portal.py` | `79/79 checks passed` |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |

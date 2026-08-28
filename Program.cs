@@ -50,6 +50,8 @@ builder.Host.UseSerilog((ctx, services, lc) => lc
     .Enrich.FromLogContext()
     .Enrich.WithProperty("Application", "MyApp.Api")
     .Enrich.WithProperty("Environment", ctx.HostingEnvironment.EnvironmentName)
+    // Customer Portal tokens ride in the URL path; strip them before any sink.
+    .Enrich.With(new MyApp.Api.Helpers.PortalTokenLogMasker())
     // Defaults if config doesn't override — durable rolling file in
     // logs/ next to the binary, 30-day retention, 50 MB cap per file.
     .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information)
@@ -232,7 +234,40 @@ builder.Services.AddRateLimiter(options =>
             Window = TimeSpan.FromHours(1),
             QueueLimit = 0,
         }));
+
+    // Public Customer Portal. Partitioned on the PORTAL TOKEN, not the caller's
+    // IP: behind the MonsterASP proxy the remote IP is not reliably the visitor's
+    // (ForwardedHeaders:KnownProxies is still unset — audit C-12), so an
+    // IP-partitioned window would throttle every customer as one bucket. The
+    // token is a stable, per-customer key that degrades gracefully.
+    //
+    // This is about COST, not secrecy — a 256-bit token is not guessable, but an
+    // unthrottled anonymous endpoint that runs a paged query per hit is cheap
+    // CPU amplification. Generous enough that a customer clicking through their
+    // invoices never notices.
+    options.AddPolicy("portal", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(PortalPartitionKey(httpContext), _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 120,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        }));
 });
+
+// Token from /api/public/customer-portal/{token}/..., read straight off the path
+// so the partitioner does not depend on routing having run first. Falls back to
+// the IP when the shape is unexpected.
+static string PortalPartitionKey(HttpContext ctx)
+{
+    var segments = ctx.Request.Path.Value?.Split('/', StringSplitOptions.RemoveEmptyEntries);
+    if (segments is { Length: >= 4 }
+        && segments[0].Equals("api", StringComparison.OrdinalIgnoreCase)
+        && segments[1].Equals("public", StringComparison.OrdinalIgnoreCase))
+    {
+        return "portal:" + segments[3];
+    }
+    return "portal-ip:" + (ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+}
 
 // Register Repositories
 builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
@@ -305,6 +340,8 @@ builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 // then defers to that document's own service, so numbering, validation, stock
 // and GL posting stay in one place. Registered after the six services it calls.
 builder.Services.AddScoped<IDocumentCopyService, DocumentCopyService>();
+// Customer Portal: internal management + the public token-scoped read surface.
+builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
 builder.Services.AddScoped<INonInventoryItemService, NonInventoryItemService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
@@ -2044,6 +2081,18 @@ app.MapControllers(); // 👈 maps your controllers (like CompaniesController)
 // matches /admin/assets/*.js, and StaticFileMiddleware skips any request
 // that already matched an endpoint — serving HTML for every asset.
 app.MapFallbackToFile("admin/{*path:nonfile}", "admin/index.html");
+
+// Public Customer Portal deep links: /portal/<token> must serve the React app
+// shell, not the marketing landing page. Which file that is depends on the
+// deployment layout — the customer build ships the ERP under wwwroot/admin/
+// with the landing page at the root, while a plain build has the app at the
+// root — so pick whichever shell actually exists. The :nonfile constraint is
+// load-bearing here for the same reason as the /admin fallback above.
+var portalShellRoot = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+var portalShell = File.Exists(Path.Combine(portalShellRoot, "admin", "index.html"))
+    ? "admin/index.html"
+    : "index.html";
+app.MapFallbackToFile("portal/{*path:nonfile}", portalShell);
 
 // Everything else — including "/" — serves the public landing page.
 app.MapFallbackToFile("index.html");

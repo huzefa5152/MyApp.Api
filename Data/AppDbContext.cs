@@ -77,6 +77,13 @@ namespace MyApp.Api.Data
         public DbSet<Attachment> Attachments { get; set; }
 
         public DbSet<Client> Clients { get; set; } // ✅ add this
+
+        /// <summary>
+        /// Public per-client invoice links. See <see cref="CustomerPortal"/> —
+        /// the PublicToken column is a bearer secret, so never project it into
+        /// a log, an audit row, or any response other than the management API's.
+        /// </summary>
+        public DbSet<CustomerPortal> CustomerPortals { get; set; }
         public DbSet<ClientGroup> ClientGroups { get; set; }
 
         public DbSet<Invoice> Invoices { get; set; }
@@ -551,6 +558,42 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<NonInventoryItem>()
                 .HasOne(n => n.PurchaseAccount).WithMany()
                 .HasForeignKey(n => n.PurchaseAccountId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // ── Customer Portal (public per-client invoice link) ──
+            // The token is the whole access control, so the column is fixed at
+            // the generator's 43 chars and uniquely indexed: the index is both
+            // the lookup path for every public request and the guarantee that
+            // two portals can never share a token.
+            modelBuilder.Entity<CustomerPortal>()
+                .Property(p => p.PublicToken)
+                .HasMaxLength(PublicTokenGenerator.TokenLength)
+                .IsRequired();
+            modelBuilder.Entity<CustomerPortal>()
+                .HasIndex(p => p.PublicToken)
+                .IsUnique();
+            // At most ONE ACTIVE portal per (company, client) — a filtered
+            // unique index, so disabled and revoked portals don't block issuing
+            // a fresh link while a client still has only one live URL.
+            modelBuilder.Entity<CustomerPortal>()
+                .HasIndex(p => new { p.CompanyId, p.ClientId })
+                .HasDatabaseName("UX_CustomerPortals_ActivePerCompanyClient")
+                .IsUnique()
+                .HasFilter("[IsActive] = 1");
+            // Company: Restrict, matching Client → Company. CompanyService
+            // deletes a company's clients explicitly before the company itself,
+            // and the client cascade below clears the portals on the way.
+            modelBuilder.Entity<CustomerPortal>()
+                .HasOne(p => p.Company).WithMany()
+                .HasForeignKey(p => p.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Client: Cascade. A portal exists only to show one client's
+            // invoices, so it has no meaning once that client is gone — and
+            // this keeps the existing client/company delete paths working
+            // without either service having to learn about portals.
+            modelBuilder.Entity<CustomerPortal>()
+                .HasOne(p => p.Client).WithMany()
+                .HasForeignKey(p => p.ClientId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             // Copy Document lineage (2026-08-28). Deliberately NOT foreign keys:
             // the source may be a different entity to the copy (a Purchase Bill
             // copied into a Goods Receipt), and deleting a source must never

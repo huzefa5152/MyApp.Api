@@ -40,6 +40,7 @@ import RolesPage from "./pages/RolesPage";
 import TenantAccessPage from "./pages/TenantAccessPage";
 import TemplateEditorPage from "./pages/TemplateEditorPage";
 import PrintTemplatesPage from "./pages/PrintTemplatesPage";
+import CustomerPortalsPage from "./pages/CustomerPortalsPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import FbrSettingsPage from "./pages/FbrSettingsPage";
 import FbrSandboxPage from "./pages/FbrSandboxPage";
@@ -144,6 +145,9 @@ export default function App() {
           <Route path="/roles" element={<RequirePermission anyPrefix="rbac."><RolesPage /></RequirePermission>} />
           <Route path="/tenant-access" element={<RequirePermission anyPrefix={["tenantaccess.", "divisionaccess."]}><TenantAccessPage /></RequirePermission>} />
           <Route path="/templates" element={<RequirePermission anyPrefix="printtemplates."><PrintTemplatesPage /></RequirePermission>} />
+          {/* Internal management only. The PUBLIC portal at /portal/<token> is
+              rendered outside this router entirely — see main.jsx. */}
+          <Route path="/customer-portals" element={<RequirePermission anyPrefix="customerportal."><CustomerPortalsPage /></RequirePermission>} />
           <Route path="/templates/edit" element={<RequirePermission anyPrefix="printtemplates."><TemplateEditorPage /></RequirePermission>} />
           <Route path="/fbr-settings" element={<RequirePermission anyPrefix={["fbr.config", "fbr.lookup", "fbr.reference"]}><FbrSettingsPage /></RequirePermission>} />
           <Route path="/fbr-sandbox" element={<RequirePermission anyPrefix="fbr.sandbox"><FbrSandboxPage /></RequirePermission>} />

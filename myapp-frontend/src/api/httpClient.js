@@ -108,8 +108,14 @@ httpClient.interceptors.response.use(
     // valid return target — both would land the operator OFF the
     // protected app after re-login. Defense-in-depth alongside the
     // skipAuthRedirect flag above.
+    // "/portal/..." is excluded because that path CONTAINS A SECRET: it is the
+    // public customer portal's access token. Storing it in sessionStorage would
+    // leave a live capability where any script on the origin can read it. The
+    // portal has its own fetch layer and never reaches this interceptor, so this
+    // is belt-and-braces for an operator who happens to be on a portal URL.
     const isReturnSafe = (p) =>
-      typeof p === "string" && p.startsWith("/") && p !== "/" && !p.startsWith("/login");
+      typeof p === "string" && p.startsWith("/") && p !== "/"
+      && !p.startsWith("/login") && !p.startsWith("/portal/");
 
     // The app is served under Vite's BASE_URL ("/admin/" in this build).
     // Stored return-paths stay ROUTER-relative ("/bills", not "/admin/bills")

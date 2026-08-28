@@ -83,6 +83,9 @@ export const PERMISSION_SECTIONS = [
       { key: "Companies" },
       { key: "Divisions" },
       { key: "Clients" },
+      // Per-client public invoice links. Sits next to Clients because a portal
+      // is configured for exactly one client.
+      { key: "CustomerPortal", label: "Customer Portal" },
       { key: "Suppliers" },
       { key: "ItemTypes", label: "Item Types" },
       { key: "NonInventoryItems", label: "Non-Inventory Items" },

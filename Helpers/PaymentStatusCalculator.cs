@@ -14,6 +14,15 @@ namespace MyApp.Api.Helpers
         Paid = 2,
         /// <summary>Balance &gt; 0 and the due date is in the past.</summary>
         Overdue = 3,
+        /// <summary>
+        /// Payments received EXCEED the total. Never returned by
+        /// <see cref="PaymentStatusCalculator.Status"/> — internal screens have
+        /// always shown an over-paid document as <see cref="Paid"/> and still do.
+        /// Only <see cref="PaymentStatusCalculator.PublicStatus"/> emits it, for
+        /// the customer portal, where a customer who has paid too much needs to
+        /// see the credit rather than a bare "Paid". (2026-08-28)
+        /// </summary>
+        Overpaid = 4,
     }
 
     /// <summary>Pure functions that turn (grandTotal, amountPaid, dueDate) into the
@@ -37,6 +46,32 @@ namespace MyApp.Api.Helpers
             if (dueDate.HasValue && dueDate.Value.Date < PakistanClock.Today)
                 return PaymentStatus.Overdue;
             return amountPaid > 0 ? PaymentStatus.PartiallyPaid : PaymentStatus.Unpaid;
+        }
+
+        /// <summary>
+        /// Credit left over when payments EXCEED the total — the mirror of
+        /// <see cref="BalanceDue"/>, which deliberately clamps at zero and so
+        /// discards this number. A separate function rather than a change to
+        /// BalanceDue, because every existing screen is built on that clamp.
+        /// Returns 0 when the document is not over-paid.
+        /// </summary>
+        public static decimal CreditBalance(decimal grandTotal, decimal amountPaid)
+        {
+            var credit = amountPaid - grandTotal;
+            return credit > 0 ? credit : 0;
+        }
+
+        /// <summary>
+        /// Customer-facing status: identical to <see cref="Status"/> except that
+        /// it separates OVERPAID from merely settled. Delegates to Status for
+        /// every other case, so there is still exactly one place that decides
+        /// what "paid" or "overdue" means — this only adds a distinction the
+        /// internal app has no use for.
+        /// </summary>
+        public static PaymentStatus PublicStatus(decimal grandTotal, decimal amountPaid, DateTime? dueDate)
+        {
+            if (amountPaid > grandTotal) return PaymentStatus.Overpaid;
+            return Status(grandTotal, amountPaid, dueDate);
         }
 
         /// <summary>Whole days the document is past due (≥ 0 only when overdue).</summary>

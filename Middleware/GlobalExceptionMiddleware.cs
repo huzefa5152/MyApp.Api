@@ -90,7 +90,9 @@ namespace MyApp.Api.Middleware
                 Level = statusCode >= 500 ? "Error" : "Warning",
                 UserName = context.User.Identity?.Name,
                 HttpMethod = context.Request.Method,
-                RequestPath = context.Request.Path.ToString(),
+                // Masked: a Customer Portal token in the path is a bearer
+                // secret, and audit rows are read far more casually than logs.
+                RequestPath = PortalTokenLogMasker.Mask(context.Request.Path.ToString()),
                 QueryString = context.Request.QueryString.ToString(),
                 StatusCode = statusCode,
                 ExceptionType = "",
@@ -192,7 +194,7 @@ namespace MyApp.Api.Middleware
                     "Unhandled {ExceptionType} on {HttpMethod} {Path} (user={User})",
                     ex.GetType().Name,
                     context.Request.Method,
-                    context.Request.Path.Value,
+                    PortalTokenLogMasker.Mask(context.Request.Path.Value ?? ""),
                     context.User.Identity?.Name ?? "anonymous");
             }
             else
@@ -201,7 +203,7 @@ namespace MyApp.Api.Middleware
                     "{ExceptionType} on {HttpMethod} {Path}: {Message} (user={User})",
                     ex.GetType().Name,
                     context.Request.Method,
-                    context.Request.Path.Value,
+                    PortalTokenLogMasker.Mask(context.Request.Path.Value ?? ""),
                     ex.Message,
                     context.User.Identity?.Name ?? "anonymous");
             }
@@ -213,7 +215,9 @@ namespace MyApp.Api.Middleware
                 Level = statusCode >= 500 ? "Error" : "Warning",
                 UserName = context.User.Identity?.Name,
                 HttpMethod = context.Request.Method,
-                RequestPath = context.Request.Path.ToString(),
+                // Masked: a Customer Portal token in the path is a bearer
+                // secret, and audit rows are read far more casually than logs.
+                RequestPath = PortalTokenLogMasker.Mask(context.Request.Path.ToString()),
                 QueryString = context.Request.QueryString.ToString(),
                 StatusCode = statusCode,
                 ExceptionType = ex.GetType().Name,

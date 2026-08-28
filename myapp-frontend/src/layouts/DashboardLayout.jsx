@@ -16,6 +16,7 @@ import {
   MdAccountCircle,
   MdGroupAdd,
   MdCode,
+  MdPublic,
   MdBugReport,
   MdTune,
   MdScience,
@@ -629,6 +630,12 @@ export default function DashboardLayout() {
                   <span>Divisions</span>
                 </NavLink>
               </Can>
+              <Can permission="customerportal.list.view">
+                <NavLink to="/customer-portals" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdPublic className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Customer Portal</span>
+                </NavLink>
+              </Can>
               <Can permission="printtemplates.manage.update">
                 <NavLink to="/templates" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdCode className="dl-subitem__icon" aria-hidden="true" />
@@ -850,6 +857,7 @@ function getBreadcrumb(pathname) {
     "/profile": "My Profile",
     "/users": "User Management",
     "/roles": "Roles & Permissions",
+    "/customer-portals": "Configuration / Customer Portal",
     "/templates": "Configuration / Print Templates",
     "/templates/edit": "Configuration / Print Templates / Editor",
     "/po-formats": "Configuration / PO Formats",

@@ -79,7 +79,13 @@ namespace MyApp.Api.Helpers
         public static readonly IReadOnlyDictionary<string, string[]> Map =
             new Dictionary<string, string[]>
             {
-                ["clients"]        = new[] { "clients.manage.view" }.Concat(SalesDocKeys).ToArray(),
+                // "customerportal.manage.create" is here because the Create Portal
+                // dialog's only input IS a client picker — without it a role
+                // granted just customerportal.* would 403 on the very screen those
+                // permissions exist for, which is exactly the coupling this policy
+                // was written to remove.
+                ["clients"]        = new[] { "clients.manage.view", "customerportal.manage.create" }
+                                        .Concat(SalesDocKeys).ToArray(),
                 ["suppliers"]      = new[] { "suppliers.manage.view" }.Concat(PurchaseDocKeys).ToArray(),
                 ["divisions"]      = new[] { "divisions.manage.view" }
                                         .Concat(SalesDocKeys).Concat(PurchaseDocKeys).ToArray(),

@@ -64,6 +64,9 @@ namespace MyApp.Api.Helpers
             "fbrtoken", "token", "apikey", "api_key", "secret",
             "jwt", "authorization", "bearer",
             "connectionstring",
+            // Customer Portal: the public token IS the access control for a
+            // client's invoices, so it must never reach a log or an audit row.
+            "publictoken", "portaltoken", "publicurl",
         };
 
         // Mask field names — keep last 4 chars, replace rest with "*".
