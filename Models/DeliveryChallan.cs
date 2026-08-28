@@ -51,6 +51,18 @@
         // for natively-created and imported challans.
         public int? DuplicatedFromId { get; set; }
 
+        /// <summary>
+        /// Copy lineage (2026-08-28): the document this row was created from via
+        /// the Copy Document action, as a (type, id) pair —
+        /// <see cref="Helpers.DocumentCopyTypes"/> holds the allowed type values.
+        /// Deliberately NOT a foreign key: the source may be a different entity
+        /// (a Purchase Bill copied into a Goods Receipt), so no single navigation
+        /// fits, and deleting the source must never cascade into the copy. Null
+        /// on documents that were not created by a copy.
+        /// </summary>
+        public string? CopiedFromType { get; set; }
+        public int? CopiedFromId { get; set; }
+
         // Navigation
         public Company Company { get; set; } = null!;
         public Division? Division { get; set; }

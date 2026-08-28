@@ -583,6 +583,55 @@ request("DELETE", f"/api/salesorders/{beta_so['id']}", token=admin)
 request("DELETE", f"/api/clients/{so_client['id']}", token=admin)
 
 
+# Suite 9b: Copy Document — id-based tenant guard (2026-08-28). The copy
+# endpoints take no companyId: they load the SOURCE document and assert access
+# against its stored CompanyId, so guessing an id must not let a user read
+# another tenant's copy options or clone their document into their own books.
+print("\n  Suite 9b — Copy Document tenant guard")
+suite9b = "document-copy tenant guard"
+status, copy_client = request("POST", "/api/clients", token=admin, body={
+    "companyId": beta["id"], "name": "Beta Copy Client", "phone": "+92-00-0000000",
+    "site": "Karachi", "ntn": "0000003", "cnic": "0000003000003",
+    "strn": "0000003000003", "registrationType": "Registered",
+})
+assert status in (200, 201), f"seed beta copy client: {status} {copy_client}"
+status, beta_copy_so = request("POST", f"/api/salesorders/company/{beta['id']}", token=admin, body={
+    "clientId": copy_client["id"],
+    "orderDate": "2026-08-28",
+    "items": [{"id": 0, "description": "Copy Bait", "quantity": 3, "unit": "Numbers, pieces, units"}],
+})
+assert status in (200, 201), f"seed beta copy order: {status} {beta_copy_so}"
+
+# alice holds Administrator RBAC on Alpha only — every permission check passes,
+# so a 403 here can only come from the tenant guard.
+s, _ = request("GET", f"/api/documents/SalesOrder/{beta_copy_so['id']}/copy-targets", token=tokens["alice"])
+status_check(suite9b, "alice GET copy-targets on beta order", s, 403)
+s, _ = request("POST", "/api/documents/copy", token=tokens["alice"], body={
+    "sourceType": "SalesOrder", "sourceId": beta_copy_so["id"],
+    "destinationType": "SalesOrder", "copyLineItems": True,
+    "copyDocumentDetails": True, "copyAttachments": False,
+})
+status_check(suite9b, "alice POST copy of beta order", s, 403)
+
+# admin (both tenants) sees the options and can copy.
+s, targets = request("GET", f"/api/documents/SalesOrder/{beta_copy_so['id']}/copy-targets", token=admin)
+check(suite9b, "admin copy-targets 200 + destinations listed",
+      s == 200 and isinstance(targets, dict) and len(targets.get("targets") or []) >= 1,
+      f"status {s}, body {targets}")
+s, copied = request("POST", "/api/documents/copy", token=admin, body={
+    "sourceType": "SalesOrder", "sourceId": beta_copy_so["id"],
+    "destinationType": "SalesOrder", "copyLineItems": True,
+    "copyDocumentDetails": True, "copyAttachments": False,
+})
+check(suite9b, "admin copy 200 + new number allocated",
+      s == 200 and isinstance(copied, dict) and copied.get("number") not in (None, beta_copy_so["salesOrderNumber"]),
+      f"status {s}, body {copied}")
+if isinstance(copied, dict) and copied.get("id"):
+    request("DELETE", f"/api/salesorders/{copied['id']}", token=admin)
+request("DELETE", f"/api/salesorders/{beta_copy_so['id']}", token=admin)
+request("DELETE", f"/api/clients/{copy_client['id']}", token=admin)
+
+
 # Suite 10: RBAC access-smoothing (2026-08-10). Proves (a) L1 reference-feed
 # co-authorization — a narrow doc-create role reads the lookup PICKERS its
 # forms need WITHOUT the module's *.view key; (b) tenant isolation is NOT

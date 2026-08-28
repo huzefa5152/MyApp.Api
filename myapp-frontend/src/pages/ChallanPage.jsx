@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { MdDescription, MdAdd, MdBusiness, MdSearch, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
+import CopyDocumentModal from "../Components/CopyDocumentModal";
 import ChallanTable from "../Components/ChallanTable";
 import SearchableSelect from "../Components/SearchableSelect";
 import ChallanForm from "../Components/ChallanForm";
@@ -19,6 +20,8 @@ import {
   duplicateChallan,
   getChallanPrintData,
 } from "../api/challanApi";
+import { DOC_COPY_TYPES } from "../api/documentCopyApi";
+import { useDocumentCopy } from "../hooks/useDocumentCopy";
 import { getClientsByCompany } from "../api/clientApi";
 import { createChallanFromOrder, getSalesOrdersForPicker } from "../api/salesOrderApi";
 import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
@@ -69,6 +72,7 @@ export default function ChallanPage() {
   // AND see an empty dropdown — skip both the fetch and the UI, same as the
   // client filter above.
   const canViewSalesOrders = has("salesorders.list.view");
+  const copy = useDocumentCopy({ sourceType: DOC_COPY_TYPES.challan, onRefresh: () => selectedCompany && fetchChallans(selectedCompany.id, page) });
   const [viewMode, setViewMode, isBigScreen] = useListViewMode("challans");
   const [clients, setClients] = useState([]);
   const [salesOrders, setSalesOrders] = useState([]);
@@ -532,6 +536,7 @@ export default function ChallanPage() {
           {viewMode === "table" ? (
             <ChallanTable
               challans={challans}
+              onCopy={(c) => copy.openCopy(c.id, `Delivery Challan #${c.challanNumber}`)}
               onCancel={handleCancel}
               onDelete={handleDelete}
               onPrint={handlePrint}
@@ -549,6 +554,7 @@ export default function ChallanPage() {
           ) : (
             <ChallanList
               challans={challans}
+              onCopy={(c) => copy.openCopy(c.id, `Delivery Challan #${c.challanNumber}`)}
               onCancel={handleCancel}
               onDelete={handleDelete}
               onPrint={handlePrint}
@@ -574,6 +580,16 @@ export default function ChallanPage() {
             onPageSize={(n) => { setSize(n); setPage(1); }}
           />
         </>
+      )}
+
+      {copy.source && (
+        <CopyDocumentModal
+          sourceType={DOC_COPY_TYPES.challan}
+          sourceId={copy.source.id}
+          sourceLabel={copy.source.label}
+          onClose={copy.close}
+          onCopied={copy.onCopied}
+        />
       )}
 
       {showModal && selectedCompany && (

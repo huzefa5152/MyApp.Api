@@ -130,6 +130,22 @@ in the sidebar. `python scripts/verify_permission_sections.py` enforces this
 
 - Sales-by-client / purchases-by-supplier: group by `Client.ClientGroupId ?? -ClientId` (and `Supplier.SupplierGroupId ?? -SupplierId`). Same legal entity across tenants merges; legacy rows without a group fall back to ClientId. See `Services/Implementations/DashboardService.cs:ComputeSalesAsync`.
 
+### 5b. Copy Document
+
+`Services/Implementations/DocumentCopyService.cs` is the ONLY place a document
+is copied or converted. It maps a source onto the destination's existing
+create-DTO and then calls that document's own `CreateAsync` — numbering,
+validation, stock and GL posting must never be re-implemented there. Where a
+conversion already exists (quote→order, order→challan, order→bill) the copy
+delegates to it rather than re-deriving the mapping.
+
+The supported source→destination matrix, the UI labels, and the permission key
+per type live in `Helpers/DocumentCopyTypes.cs`. Adding a pair means adding a
+mapper + a matrix entry + a case in `scripts/test_document_copy.py` — never a
+branch in a controller. Copy lineage is written to the nullable
+`CopiedFromType` / `CopiedFromId` columns (plain columns, not FKs, since the
+source may be a different entity).
+
 ### 6. Pagination
 
 Every paged endpoint clamps via `MyApp.Api.Helpers.PaginationHelper`:
@@ -192,6 +208,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Stock item-type reflow (V1) | `python scripts/test_stock_itemtype_reflow.py` | `76/76 checks passed` |
 | Inventory V2 lifecycle | `python scripts/test_stock_v2_lifecycle.py` | `29/29 checks passed` |
 | Division isolation | `python scripts/test_division_isolation.py` | `all checks passed` |
+| Document copy | `python scripts/test_document_copy.py` | `184/184 checks passed` |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |

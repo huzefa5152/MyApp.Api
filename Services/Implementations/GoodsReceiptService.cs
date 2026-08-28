@@ -41,6 +41,8 @@ namespace MyApp.Api.Services.Implementations
         private static GoodsReceiptDto ToDto(GoodsReceipt gr) => new()
         {
             Id = gr.Id,
+            CopiedFromType = gr.CopiedFromType,
+            CopiedFromId = gr.CopiedFromId,
             GoodsReceiptNumber = gr.GoodsReceiptNumber,
             ReceiptDate = gr.ReceiptDate,
             CompanyId = gr.CompanyId,

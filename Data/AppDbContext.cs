@@ -551,6 +551,18 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<NonInventoryItem>()
                 .HasOne(n => n.PurchaseAccount).WithMany()
                 .HasForeignKey(n => n.PurchaseAccountId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // Copy Document lineage (2026-08-28). Deliberately NOT foreign keys:
+            // the source may be a different entity to the copy (a Purchase Bill
+            // copied into a Goods Receipt), and deleting a source must never
+            // cascade into the documents copied from it. The type string is one
+            // of Helpers.DocumentCopyTypes.
+            modelBuilder.Entity<SalesQuote>().Property(x => x.CopiedFromType).HasMaxLength(40);
+            modelBuilder.Entity<SalesOrder>().Property(x => x.CopiedFromType).HasMaxLength(40);
+            modelBuilder.Entity<DeliveryChallan>().Property(x => x.CopiedFromType).HasMaxLength(40);
+            modelBuilder.Entity<Invoice>().Property(x => x.CopiedFromType).HasMaxLength(40);
+            modelBuilder.Entity<PurchaseBill>().Property(x => x.CopiedFromType).HasMaxLength(40);
+            modelBuilder.Entity<GoodsReceipt>().Property(x => x.CopiedFromType).HasMaxLength(40);
+
             modelBuilder.Entity<NonInventoryItem>().Property(n => n.Name).HasMaxLength(150);
             modelBuilder.Entity<NonInventoryItem>().Property(n => n.Code).HasMaxLength(60);
             modelBuilder.Entity<NonInventoryItem>().Property(n => n.UnitName).HasMaxLength(50);

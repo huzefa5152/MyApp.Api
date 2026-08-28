@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn, MdContentCopy } from "react-icons/md";
+import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn, MdContentCopy, MdCopyAll } from "react-icons/md";
 import ChallanModal from "./ChallanModal";
 import { cardStyles, cardHover } from "../theme";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -57,7 +57,7 @@ function WarningTooltip({ warnings }) {
   );
 }
 
-export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", companyFbrOff = false }) {
+export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, onCopy, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", companyFbrOff = false }) {
   const { has } = usePermissions();
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
@@ -69,6 +69,8 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
   // scratch. The one-time migration in Program.cs auto-grants the new
   // perm to every role that already had challans.manage.create.
   const permDuplicate = has("challans.manage.duplicate");
+  // Copy allocates a NEW challan number, unlike Duplicate which reuses this one.
+  const permCopy = permCreate;
   const [selectedChallan, setSelectedChallan] = useState(null);
 
   if (!challans || challans.length === 0) return null;
@@ -259,6 +261,15 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       {isDuplicating ? "Duplicating…" : "Duplicate"}
                     </button>
                   )}
+                  {permCopy && onCopy && (
+                    <button
+                      style={{ ...styles.actionBtn, ...styles.copyBtn }}
+                      onClick={() => onCopy(c)}
+                      title="Copy this challan into a new one with its own challan number"
+                    >
+                      <MdCopyAll size={14} /> Copy
+                    </button>
+                  )}
                   {canGenerateBill && (
                     <button
                       style={{ ...styles.actionBtn, ...styles.generateBillBtn }}
@@ -365,6 +376,7 @@ const styles = {
   // Purple matches the "Duplicate of #N" subtitle and the DUPLICATE pill
   // so all three signals form one visual cue across the card.
   duplicateBtn: { backgroundColor: "#ede7f6", color: "#4527a0" },
+  copyBtn: { backgroundColor: "#e8eaf6", color: "#283593" },
   duplicateBadge: {
     backgroundColor: "#ede7f6",
     color: "#4527a0",

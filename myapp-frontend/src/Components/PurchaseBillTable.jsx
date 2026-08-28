@@ -1,4 +1,4 @@
-import { MdVisibility, MdEdit, MdDelete, MdPayments, MdPrint, MdPictureAsPdf } from "react-icons/md";
+import { MdVisibility, MdEdit, MdDelete, MdPayments, MdPrint, MdPictureAsPdf, MdCopyAll } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 
@@ -11,7 +11,7 @@ function paymentStatusBadge(b) {
   return <StatusBadge tone="neutral">Unpaid</StatusBadge>;
 }
 
-export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete, onRecordPayment, onShowPayments, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "" }) {
+export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete, onCopy, onRecordPayment, onShowPayments, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "" }) {
   const columns = [
     {
       key: "purchaseBillNumber",
@@ -117,6 +117,11 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
           <MdEdit size={14} />
         </button>
       )}
+      {perms.canCopy && onCopy && (
+        <button style={btn.copy} onClick={() => onCopy(b)} title="Copy this bill">
+          <MdCopyAll size={14} />
+        </button>
+      )}
       {perms.canDelete && (
         <button style={btn.delete} onClick={() => onDelete?.(b)} title="Delete">
           <MdDelete size={14} />
@@ -154,6 +159,7 @@ const baseBtn = {
 };
 const btn = {
   view:    { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" },
+  copy:    { ...baseBtn, backgroundColor: "#e8eaf6", color: "#283593", border: "1px solid #9fa8da" },
   print:   { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0", border: "1px solid #b39ddb" },
   pdf:     { ...baseBtn, backgroundColor: "#fce4ec", color: "#ad1457", border: "1px solid #f48fb1" },
   payment: { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20", border: "1px solid #a5d6a7" },

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdReceipt, MdClose, MdPayments, MdAssignment, MdPrint, MdPictureAsPdf, MdLocalShipping } from "react-icons/md";
+import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdReceipt, MdClose, MdPayments, MdAssignment, MdPrint, MdPictureAsPdf, MdLocalShipping, MdCopyAll } from "react-icons/md";
 import { getPurchaseBillsByCompanyPaged, deletePurchaseBill, getPurchaseBillPrintData } from "../api/purchaseBillApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
@@ -23,6 +23,9 @@ import PurchaseBillForm from "../Components/PurchaseBillForm";
 import PurchaseBillTable from "../Components/PurchaseBillTable";
 import PaymentForm from "../Components/PaymentForm";
 import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
+import CopyDocumentModal from "../Components/CopyDocumentModal";
+import { DOC_COPY_TYPES } from "../api/documentCopyApi";
+import { useDocumentCopy } from "../hooks/useDocumentCopy";
 import StatusBadge from "../Components/StatusBadge";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
@@ -57,6 +60,8 @@ export default function PurchaseBillsPage() {
   const canUpdate = has("purchasebills.manage.update");
   const canDelete = has("purchasebills.manage.delete");
   const canPrint = has("purchasebills.print.view");
+  // A purchase bill copies to another purchase bill or to a goods receipt.
+  const canCopy = canCreate || has("goodsreceipts.manage.create");
   // Shortcut to record a payment (money out) straight from a purchase bill —
   // opens the PaymentForm pre-filled with this supplier + this bill.
   const canRecordPayment = has("accounting.payments.create");
@@ -305,6 +310,7 @@ export default function PurchaseBillsPage() {
   }, [selectedCompany]);
 
   useEffect(() => { if (selectedCompany) fetchBills(page); }, [page, size, search, supplierFilter, divisionFilter, dateFrom, dateTo]);
+  const copy = useDocumentCopy({ sourceType: DOC_COPY_TYPES.purchaseBill, onRefresh: () => fetchBills(page) });
 
   const onFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
   const hasFilters = search || supplierFilter || divisionFilter || dateFrom || dateTo;
@@ -466,10 +472,11 @@ export default function PurchaseBillsPage() {
               {viewMode === "table" ? (
                 <PurchaseBillTable
                   bills={bills}
-                  perms={{ canUpdate, canDelete, canRecordPayment, canViewPayments, canPrint }}
+                  perms={{ canUpdate, canDelete, canRecordPayment, canViewPayments, canPrint, canCopy }}
                   onView={(b) => { setEditingId(b.id); setViewOnly(true); setShowForm(true); }}
                   onEdit={(b) => { setEditingId(b.id); setViewOnly(false); setShowForm(true); }}
                   onDelete={handleDelete}
+                  onCopy={(b) => copy.openCopy(b.id, `Purchase Bill #${b.purchaseBillNumber}`)}
                   onRecordPayment={(b) => setPaymentPreset({ contactId: b.supplierId, documentId: b.id, divisionId: b.divisionId })}
                   onShowPayments={(b) => setPaymentHistoryDoc(b)}
                   onPrint={handlePrint}
@@ -542,6 +549,11 @@ export default function PurchaseBillsPage() {
                             <MdEdit size={14} /> Edit
                           </button>
                         )}
+                        {canCopy && (
+                          <button style={btnCopy} onClick={() => copy.openCopy(b.id, `Purchase Bill #${b.purchaseBillNumber}`)}>
+                            <MdCopyAll size={14} /> Copy
+                          </button>
+                        )}
                         {canDelete && (
                           <button style={btnDelete} onClick={() => handleDelete(b)}>
                             <MdDelete size={14} /> Delete
@@ -588,6 +600,16 @@ export default function PurchaseBillsPage() {
           preset={paymentPreset}
           onClose={() => setPaymentPreset(null)}
           onSaved={() => { setPaymentPreset(null); fetchBills(page); }}
+        />
+      )}
+
+      {copy.source && (
+        <CopyDocumentModal
+          sourceType={DOC_COPY_TYPES.purchaseBill}
+          sourceId={copy.source.id}
+          sourceLabel={copy.source.label}
+          onClose={copy.close}
+          onCopied={copy.onCopied}
         />
       )}
 
@@ -987,4 +1009,5 @@ const btnPrint = { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0", bor
 const btnPdf = { ...baseBtn, backgroundColor: "#fce4ec", color: "#ad1457", border: "1px solid #f48fb1" };
 const btnPayment = { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20", border: "1px solid #a5d6a7" };
 const btnEdit = { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" };
+const btnCopy = { ...baseBtn, backgroundColor: "#e8eaf6", color: "#283593", border: "1px solid #9fa8da" };
 const btnDelete = { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" };

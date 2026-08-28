@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdInventory2, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdPrint, MdPictureAsPdf } from "react-icons/md";
+import { MdInventory2, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdPrint, MdPictureAsPdf, MdCopyAll } from "react-icons/md";
 import { getGoodsReceiptsByCompanyPaged, deleteGoodsReceipt, getGoodsReceiptPrintData } from "../api/goodsReceiptApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
@@ -17,6 +17,9 @@ import DivisionSelect from "../Components/DivisionSelect";
 import { notify } from "../utils/notify";
 import GoodsReceiptForm from "../Components/GoodsReceiptForm";
 import GoodsReceiptTable from "../Components/GoodsReceiptTable";
+import CopyDocumentModal from "../Components/CopyDocumentModal";
+import { DOC_COPY_TYPES } from "../api/documentCopyApi";
+import { useDocumentCopy } from "../hooks/useDocumentCopy";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
 import Pagination from "../Components/Pagination";
@@ -39,6 +42,8 @@ export default function GoodsReceiptsPage() {
   const canUpdate = has("goodsreceipts.manage.update");
   const canDelete = has("goodsreceipts.manage.delete");
   const canPrint = has("goodsreceipts.print.view");
+  // A receipt copies to another receipt or to a purchase bill.
+  const canCopy = canCreate || has("purchasebills.manage.create");
   const [viewMode, setViewMode, isBigScreen] = useListViewMode("goodsReceipts");
 
   const [receipts, setReceipts] = useState([]);
@@ -93,6 +98,7 @@ export default function GoodsReceiptsPage() {
   }, [selectedCompany]);
 
   useEffect(() => { if (selectedCompany) fetchReceipts(page); }, [page, size, search, supplierFilter, divisionFilter]);
+  const copy = useDocumentCopy({ sourceType: DOC_COPY_TYPES.goodsReceipt, onRefresh: () => fetchReceipts(page) });
 
   const onFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
   const handleDelete = async (gr) => {
@@ -205,10 +211,11 @@ export default function GoodsReceiptsPage() {
               {viewMode === "table" ? (
                 <GoodsReceiptTable
                   receipts={receipts}
-                  perms={{ canUpdate, canDelete, canPrint }}
+                  perms={{ canUpdate, canDelete, canPrint, canCopy }}
                   onView={(g) => { setEditingId(g.id); setShowForm(true); }}
                   onEdit={(g) => { setEditingId(g.id); setShowForm(true); }}
                   onDelete={handleDelete}
+                  onCopy={(g) => copy.openCopy(g.id, `Goods Receipt #${g.goodsReceiptNumber}`)}
                   onPrint={handlePrint}
                   onExportPdf={handleExportPdf}
                   printDisabled={tplPicker.noTemplate}
@@ -239,6 +246,7 @@ export default function GoodsReceiptsPage() {
                         {canPrint && <button style={{ ...btnPrint, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} onClick={() => handlePrint(gr)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print goods receipt"}><MdPrint size={14} /> Print</button>}
                         {canPrint && <button style={{ ...btnPdf, ...((tplPicker.noTemplate || exportingId === gr.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate || !!exportingId} onClick={() => handleExportPdf(gr)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={14} /> PDF</button>}
                         {canUpdate && <button style={btnEdit} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdEdit size={14} /> Edit</button>}
+                        {canCopy && <button style={btnCopy} onClick={() => copy.openCopy(gr.id, `Goods Receipt #${gr.goodsReceiptNumber}`)}><MdCopyAll size={14} /> Copy</button>}
                         {canDelete && <button style={btnDelete} onClick={() => handleDelete(gr)}><MdDelete size={14} /> Delete</button>}
                       </div>
                     </div>
@@ -257,6 +265,16 @@ export default function GoodsReceiptsPage() {
             </>
           )}
         </>
+      )}
+
+      {copy.source && (
+        <CopyDocumentModal
+          sourceType={DOC_COPY_TYPES.goodsReceipt}
+          sourceId={copy.source.id}
+          sourceLabel={copy.source.label}
+          onClose={copy.close}
+          onCopied={copy.onCopied}
+        />
       )}
 
       {showForm && selectedCompany && (
@@ -291,4 +309,5 @@ const btnView = { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", bord
 const btnPrint = { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0", border: "1px solid #b39ddb" };
 const btnPdf = { ...baseBtn, backgroundColor: "#fce4ec", color: "#ad1457", border: "1px solid #f48fb1" };
 const btnEdit = { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" };
+const btnCopy = { ...baseBtn, backgroundColor: "#e8eaf6", color: "#283593", border: "1px solid #9fa8da" };
 const btnDelete = { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" };

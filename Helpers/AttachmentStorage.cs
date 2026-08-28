@@ -65,6 +65,36 @@ namespace MyApp.Api.Helpers
             return File.Exists(abs) ? abs : null;
         }
 
+        /// <summary>
+        /// Duplicates an already-stored file under a fresh GUID name in the same
+        /// folder bucket — the Copy Document flow, which must not let two
+        /// attachment rows share one file on disk (deleting either would take the
+        /// bytes out from under the other). Returns null when the source file is
+        /// missing, so the caller can carry on and report the skipped file.
+        /// </summary>
+        public StoredFile? TryCopyStored(string storagePath)
+        {
+            try
+            {
+                var source = ResolveExisting(storagePath);
+                if (source == null) return null;
+
+                var ext = Path.GetExtension(storagePath) ?? "";
+                var relDir = Path.GetDirectoryName(storagePath.Replace('/', Path.DirectorySeparatorChar));
+                relDir = string.IsNullOrWhiteSpace(relDir) ? Uncategorized : relDir!.Replace(Path.DirectorySeparatorChar, '/');
+                var storedName = $"{Guid.NewGuid():N}{ext}";
+                Directory.CreateDirectory(Path.Combine(_root, relDir.Replace('/', Path.DirectorySeparatorChar)));
+
+                var dest = Path.Combine(_root, relDir.Replace('/', Path.DirectorySeparatorChar), storedName);
+                File.Copy(source, dest);
+                return new StoredFile(storedName, $"{relDir}/{storedName}", ComputeSha256(File.ReadAllBytes(dest)), ext);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         /// <summary>Best-effort delete; never throws (the DB row is the source of truth).</summary>
         public void TryDelete(string storagePath)
         {

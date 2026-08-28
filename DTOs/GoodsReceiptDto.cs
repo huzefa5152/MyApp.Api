@@ -16,6 +16,13 @@ namespace MyApp.Api.DTOs
         public string? Site { get; set; }
         public string Status { get; set; } = "Pending";
         public DateTime CreatedAt { get; set; }
+        /// <summary>
+        /// Copy lineage — when this document was produced by the Copy action,
+        /// the type and id of the document it was copied from. Null otherwise.
+        /// </summary>
+        public string? CopiedFromType { get; set; }
+        public int? CopiedFromId { get; set; }
+
         public List<GoodsReceiptItemDto> Items { get; set; } = new();
     }
 

@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import {
   MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
-  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdPayments, MdUndo, MdPostAdd,
+  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdPayments, MdUndo, MdPostAdd, MdCopyAll,
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
@@ -91,6 +91,7 @@ export default function InvoiceTable({
   onFbrValidate,
   onFbrSubmit,
   onEdit,
+  onCopy,
   onToggleFbrExcluded,
   onDelete,
   onVoid,
@@ -372,6 +373,11 @@ export default function InvoiceTable({
             )}
           </>
         )}
+        {perms.canCopy && onCopy && (
+          <button style={btn.copy} onClick={() => onCopy(inv)} title="Copy this bill">
+            <MdCopyAll size={14} />
+          </button>
+        )}
         {perms.canOpenEdit && !isSubmitted && !inv.isCancelled && (
           <button
             style={btn.edit}
@@ -485,6 +491,7 @@ const btn = {
   pdf:         { ...baseBtn, backgroundColor: "#ffebee", color: "#c62828" },
   excel:       { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
   edit:        { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
+  copy:        { ...baseBtn, backgroundColor: "#e8eaf6", color: "#283593" },
   delete:      { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
   void:        { ...baseBtn, backgroundColor: "#fff8e1", color: "#b26a00" },
   receipt:     { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20" },

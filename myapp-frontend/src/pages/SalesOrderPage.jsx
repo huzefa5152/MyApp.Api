@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdUploadFile, MdVisibility, MdReceiptLong, MdLink } from "react-icons/md";
+import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdUploadFile, MdVisibility, MdReceiptLong, MdLink, MdCopyAll } from "react-icons/md";
 import SalesOrderForm from "../Components/SalesOrderForm";
+import CopyDocumentModal from "../Components/CopyDocumentModal";
+import { DOC_COPY_TYPES } from "../api/documentCopyApi";
+import { useDocumentCopy } from "../hooks/useDocumentCopy";
 import CreateChallanFromOrderModal from "../Components/CreateChallanFromOrderModal";
 import AttachChallanToOrderModal from "../Components/AttachChallanToOrderModal";
 import SalesOrderDetailModal from "../Components/SalesOrderDetailModal";
@@ -52,6 +55,9 @@ export default function SalesOrderPage() {
   const canBill = has("bills.manage.create");
   const canViewClients = has("clients.manage.view");
   const canImportPo = canCreate && has("poformats.import.create");
+  // An order copies to a new order, a challan, or a bill — any one of those
+  // create rights is enough to offer the action.
+  const canCopy = canCreate || canMakeChallan || has("bills.manage.create.standalone");
 
   const navigate = useNavigate();
   // Jump to the Delivery Challan screen filtered to this order's challans.
@@ -124,6 +130,7 @@ export default function SalesOrderPage() {
   useEffect(() => { if (selectedCompany) fetchOrders(selectedCompany.id, page); }, [page, size, search, statusFilter, divisionFilter, clientFilter]);
 
   const reload = () => selectedCompany && fetchOrders(selectedCompany.id, page);
+  const copy = useDocumentCopy({ sourceType: DOC_COPY_TYPES.salesOrder, onRefresh: reload });
 
   const handleSave = async (payload) => {
     // Return the saved order so the form can flush staged attachments against
@@ -329,6 +336,7 @@ export default function SalesOrderPage() {
                         {["Open", "Closed", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}
                       </select>
                     )}
+                    {canCopy && <button style={st.actBtn} onClick={() => copy.openCopy(o.id, `Sales Order #${o.salesOrderNumber}`)} title="Copy this order"><MdCopyAll size={16} /></button>}
                     {canDelete && o.isLatest && o.challanCount === 0 && <button style={{ ...st.actBtn, color: "#dc3545" }} onClick={() => handleDelete(o)} title="Delete"><MdDelete size={16} /></button>}
                   </div>
                 </div>
@@ -387,6 +395,15 @@ export default function SalesOrderPage() {
           companyId={selectedCompany.id}
           onClose={() => setShowImport(false)}
           onSaved={() => { setShowImport(false); reload(); notify("Sales Order created from PO.", "success"); }}
+        />
+      )}
+      {copy.source && (
+        <CopyDocumentModal
+          sourceType={DOC_COPY_TYPES.salesOrder}
+          sourceId={copy.source.id}
+          sourceLabel={copy.source.label}
+          onClose={copy.close}
+          onCopied={copy.onCopied}
         />
       )}
     </div>

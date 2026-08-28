@@ -289,6 +289,14 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-28 — Copy any document, or turn it into the next one
+
+- **Copy is now on every Sales Quote, Sales Order, Delivery Challan, Bill, Purchase Bill and Goods Receipt** — on the cards and, where the screen has a table view, on the row too. One dialog asks what to copy it as, what to bring across, and the date; the new document number is always allocated by the system.
+- **Copy as the same kind of document, or into the next one in the flow.** Supported conversions: Quote → Order, Order → Challan, Order → Bill, Purchase Bill → Goods Receipt, and Goods Receipt → Purchase Bill. Conversions that don't make business sense aren't offered — a challan still becomes a bill through the billing flow, so nothing can be billed twice.
+- **The original is never touched.** Lines, quantities, prices, tax settings, party and division come across; the identity of the source does not — new number, today's date, fresh status, no payments, no FBR submission, no supplier IRN. Anything deliberately dropped or adjusted is reported back (a rounded goods-receipt quantity, a blanked supplier invoice number, a receipt copied to a bill with no prices yet).
+- **Copies remember where they came from**, and attachments can come along — each file is duplicated, so deleting one copy never removes the other's.
+- **Your permissions decide what you can copy into.** A destination you can't create is shown greyed out with the reason, and the server enforces the same rule.
+
 ### 2026-08-28 — Bills can be dated in the future
 
 - **Raise a bill ahead of its billing date.** Both create paths — *from a challan* and *standalone (without a challan)* — now accept a future **Bill Date**, so you can cut a 1-September bill in late August. Editing a bill's date to a future day works too. The date you pick is the date that is stored and printed; nothing is silently moved to today.

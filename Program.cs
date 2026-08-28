@@ -301,6 +301,10 @@ builder.Services.AddScoped<IPurchaseBillService, PurchaseBillService>();
 builder.Services.AddScoped<IPurchaseDebitNoteService, PurchaseDebitNoteService>();
 builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+// Copy Document — maps a source document onto a destination's create DTO and
+// then defers to that document's own service, so numbering, validation, stock
+// and GL posting stay in one place. Registered after the six services it calls.
+builder.Services.AddScoped<IDocumentCopyService, DocumentCopyService>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
 builder.Services.AddScoped<INonInventoryItemService, NonInventoryItemService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();

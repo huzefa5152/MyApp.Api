@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import PaymentForm from "../Components/PaymentForm";
 import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
@@ -33,6 +33,9 @@ import { exportToPdf } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { notify } from "../utils/notify";
 import { isFutureDocDate } from "../utils/dateInput";
+import CopyDocumentModal from "../Components/CopyDocumentModal";
+import { DOC_COPY_TYPES } from "../api/documentCopyApi";
+import { useDocumentCopy } from "../hooks/useDocumentCopy";
 import { useConfirm } from "../Components/ConfirmDialog";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
@@ -568,6 +571,15 @@ export default function InvoicePage({ mode = "invoices" }) {
   const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.fbrReady && !inv.isFbrExcluded).length;
   const validatedCount = unsubmittedInvoices.filter(inv => fbrValidated.has(inv.id)).length;
 
+  // Copy always produces an ordinary standalone bill, so it is gated on the
+  // standalone-create key and hidden in the Credit / Debit Note tabs (a note
+  // only exists against the invoice it adjusts).
+  const canCopyBill = !isNotesMode && has("bills.manage.create.standalone");
+  const copy = useDocumentCopy({
+    sourceType: DOC_COPY_TYPES.bill,
+    onRefresh: () => selectedCompany && fetchInvoices(selectedCompany.id, page),
+  });
+
   const handleToggleFbrExcluded = async (inv) => {
     const nextExcluded = !inv.isFbrExcluded;
     const ok = await confirm({
@@ -970,6 +982,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                 canRecordReceipt,
                 canViewReceipts,
                 canReverse,
+                canCopy: canCopyBill,
                 // Block Print / PDF when no template resolves for this scope —
                 // mirrors the card view so the table can't silently no-op.
                 noTemplate: tplPicker.noTemplate,
@@ -995,6 +1008,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               onFbrValidate={handleFbrValidate}
               onFbrSubmit={handleFbrSubmit}
               onEdit={(inv) => setEditingId(inv.id)}
+              onCopy={(inv) => copy.openCopy(inv.id, `Bill #${inv.invoiceNumber}`)}
               onToggleFbrExcluded={handleToggleFbrExcluded}
               onDelete={handleDeleteInvoice}
               onVoid={handleVoidInvoice}
@@ -1322,6 +1336,15 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdEdit size={14} /> Edit
                       </button>
                     )}
+                    {canCopyBill && !inv.isCancelled && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#e8eaf6", color: "#283593", border: "1px solid #9fa8da" }}
+                        onClick={() => copy.openCopy(inv.id, `Bill #${inv.invoiceNumber}`)}
+                        title="Copy this bill into a new one"
+                      >
+                        <MdCopyAll size={14} /> Copy
+                      </button>
+                    )}
                     {/* Edit on Invoices tab (invoice-mode edit): item type, qty
                         and unit price — kept as an adjustment OVERLAY over the
                         bill (base bill untouched; total reconciles to it). Shown
@@ -1483,6 +1506,16 @@ export default function InvoicePage({ mode = "invoices" }) {
           supp → new unclassified delta bill (navigate to it on the Invoices
           tab to classify); credit/debit → a note against the original (refresh
           so the original's Reversed/Adjusted badge appears). */}
+      {copy.source && (
+        <CopyDocumentModal
+          sourceType={DOC_COPY_TYPES.bill}
+          sourceId={copy.source.id}
+          sourceLabel={copy.source.label}
+          onClose={copy.close}
+          onCopied={copy.onCopied}
+        />
+      )}
+
       {correctTarget && (
         <CorrectionWizard
           invoice={correctTarget}

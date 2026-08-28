@@ -193,6 +193,8 @@ namespace MyApp.Api.Services.Implementations
             return new InvoiceDto
         {
             Id = inv.Id,
+            CopiedFromType = inv.CopiedFromType,
+            CopiedFromId = inv.CopiedFromId,
             InvoiceNumber = inv.InvoiceNumber,
             Date = inv.Date,
             CompanyId = inv.CompanyId,

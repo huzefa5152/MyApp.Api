@@ -38,6 +38,13 @@ namespace MyApp.Api.DTOs
         public string? PaymentMode { get; set; }
         public string ReconciliationStatus { get; set; } = "Pending";
         public DateTime CreatedAt { get; set; }
+        /// <summary>
+        /// Copy lineage — when this document was produced by the Copy action,
+        /// the type and id of the document it was copied from. Null otherwise.
+        /// </summary>
+        public string? CopiedFromType { get; set; }
+        public int? CopiedFromId { get; set; }
+
         public List<PurchaseItemDto> Items { get; set; } = new();
 
         /// <summary>

@@ -46,6 +46,13 @@
         /// the edit form.
         /// </summary>
         public int? DuplicatedFromId { get; set; }
+
+        /// <summary>
+        /// Copy lineage — when this document was produced by the Copy action,
+        /// the type and id of the document it was copied from. Null otherwise.
+        /// </summary>
+        public string? CopiedFromType { get; set; }
+        public int? CopiedFromId { get; set; }
         /// <summary>
         /// Mirror of the parent's ChallanNumber for convenient display
         /// ("Duplicate of #1042") without the frontend having to re-fetch.

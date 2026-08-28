@@ -114,6 +114,8 @@ namespace MyApp.Api.Services.Implementations
             var dto = new DeliveryChallanDto
             {
                 Id = dc.Id,
+                CopiedFromType = dc.CopiedFromType,
+                CopiedFromId = dc.CopiedFromId,
                 ChallanNumber = dc.ChallanNumber,
                 CompanyId = dc.CompanyId,
                 DivisionId = dc.DivisionId,

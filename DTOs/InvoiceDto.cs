@@ -109,6 +109,13 @@ namespace MyApp.Api.DTOs
         /// Human-readable list of what's missing for FBR submission. Empty when FbrReady == true.
         /// </summary>
         public List<string> FbrMissing { get; set; } = new();
+        /// <summary>
+        /// Copy lineage — when this document was produced by the Copy action,
+        /// the type and id of the document it was copied from. Null otherwise.
+        /// </summary>
+        public string? CopiedFromType { get; set; }
+        public int? CopiedFromId { get; set; }
+
         public List<InvoiceItemDto> Items { get; set; } = new();
         public List<int> ChallanNumbers { get; set; } = new();
         // Header link to the source Sales Order (null = not order-linked). Lets the

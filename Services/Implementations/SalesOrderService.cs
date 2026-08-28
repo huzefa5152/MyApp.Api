@@ -221,6 +221,8 @@ namespace MyApp.Api.Services.Implementations
             return new SalesOrderDto
             {
                 Id = o.Id,
+                CopiedFromType = o.CopiedFromType,
+                CopiedFromId = o.CopiedFromId,
                 SalesOrderNumber = o.SalesOrderNumber,
                 CompanyId = o.CompanyId,
                 DivisionId = o.DivisionId,

@@ -1,8 +1,8 @@
-import { MdVisibility, MdEdit, MdDelete, MdPrint, MdPictureAsPdf } from "react-icons/md";
+import { MdVisibility, MdEdit, MdDelete, MdPrint, MdPictureAsPdf, MdCopyAll } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 
-export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onDelete, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "" }) {
+export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onDelete, onCopy, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "" }) {
   const columns = [
     {
       key: "goodsReceiptNumber",
@@ -72,6 +72,11 @@ export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onD
           <MdEdit size={14} />
         </button>
       )}
+      {perms.canCopy && onCopy && (
+        <button style={btn.copy} onClick={() => onCopy(g)} title="Copy this receipt">
+          <MdCopyAll size={14} />
+        </button>
+      )}
       {perms.canDelete && (
         <button style={btn.delete} onClick={() => onDelete?.(g)} title="Delete">
           <MdDelete size={14} />
@@ -106,6 +111,7 @@ const baseBtn = {
 };
 const btn = {
   view:   { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" },
+  copy:   { ...baseBtn, backgroundColor: "#e8eaf6", color: "#283593", border: "1px solid #9fa8da" },
   print:  { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0", border: "1px solid #b39ddb" },
   pdf:    { ...baseBtn, backgroundColor: "#fce4ec", color: "#ad1457", border: "1px solid #f48fb1" },
   edit:   { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },

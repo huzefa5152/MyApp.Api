@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MdVisibility, MdEdit, MdPrint, MdPictureAsPdf, MdGridOn, MdRequestQuote, MdContentCopy, MdCancel, MdDelete, MdWarning } from "react-icons/md";
+import { MdVisibility, MdEdit, MdPrint, MdPictureAsPdf, MdGridOn, MdRequestQuote, MdContentCopy, MdCopyAll, MdCancel, MdDelete, MdWarning } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import DataTable from "./DataTable";
 import StatusBadge, { toneForStatus } from "./StatusBadge";
@@ -31,6 +31,7 @@ export default function ChallanTable({
   onExportExcel,
   onGenerateBill,
   onDuplicate,
+  onCopy,
   exportingId,
   duplicatingId,
   printDisabled = false,
@@ -44,6 +45,7 @@ export default function ChallanTable({
     permPrint: has("challans.print.view"),
     permCreateBill: has("bills.manage.create"),
     permDuplicate: has("challans.manage.duplicate"),
+    permCopy: has("challans.manage.create"),
     companyFbrOff,
   };
   const [selectedChallan, setSelectedChallan] = useState(null);
@@ -177,6 +179,11 @@ export default function ChallanTable({
             {isDuplicating ? <span className="btn-spinner" /> : <MdContentCopy size={14} />}
           </button>
         )}
+        {perms.permCopy && onCopy && (
+          <button style={btnStyles.copy} onClick={() => onCopy(c)} title="Copy this challan (new challan number)">
+            <MdCopyAll size={14} />
+          </button>
+        )}
         {flags.canGenerateBill && (
           <button style={btnStyles.generateBill} onClick={() => onGenerateBill?.(c)} title="Generate Bill from this challan">
             <MdRequestQuote size={14} />
@@ -243,6 +250,7 @@ const btnStyles = {
   excel:        { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
   edit:         { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
   duplicate:    { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0" },
+  copy:         { ...baseBtn, backgroundColor: "#e8eaf6", color: "#283593" },
   generateBill: { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },
   cancel:       { ...baseBtn, backgroundColor: "#fce4ec", color: "#c62828" },
   delete:       { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },

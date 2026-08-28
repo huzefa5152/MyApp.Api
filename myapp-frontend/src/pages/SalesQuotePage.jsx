@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdSwapHoriz, MdAttachFile, MdVisibility, MdUploadFile } from "react-icons/md";
+import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdSwapHoriz, MdAttachFile, MdVisibility, MdUploadFile, MdCopyAll } from "react-icons/md";
 import SalesQuoteForm from "../Components/SalesQuoteForm";
+import CopyDocumentModal from "../Components/CopyDocumentModal";
 import SalesQuoteDetailModal from "../Components/SalesQuoteDetailModal";
 import POImportForm from "../Components/POImportForm";
 import {
@@ -8,6 +9,8 @@ import {
   deleteSalesQuote, convertQuoteToOrder, getSalesQuotePrintData,
 } from "../api/salesQuoteApi";
 import { getEntityAttachmentCounts } from "../api/attachmentApi";
+import { DOC_COPY_TYPES } from "../api/documentCopyApi";
+import { useDocumentCopy } from "../hooks/useDocumentCopy";
 import { getClientsByCompany } from "../api/clientApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
@@ -41,6 +44,10 @@ export default function SalesQuotePage() {
   const canDelete = has("salesquotes.manage.delete");
   const canPrint = has("salesquotes.print.view");
   const canConvert = has("salesorders.manage.create");
+  // Copy offers this quote as a new quote or as a sales order, so either
+  // create right makes the action worth showing; the dialog greys out the
+  // destination the user cannot create.
+  const canCopy = canCreate || canConvert;
   const canImportPo = canCreate && has("poformats.import.create");
   const canSeeAttachments = has("attachments.list.view");
 
@@ -109,6 +116,7 @@ export default function SalesQuotePage() {
   }, [selectedCompany, page, size, search, statusFilter, divisionFilter, clientFilter]);
 
   const reload = () => selectedCompany && fetchQuotes(selectedCompany.id, page);
+  const copy = useDocumentCopy({ sourceType: DOC_COPY_TYPES.salesQuote, onRefresh: reload });
 
   // Resolve the print template for a quote: an explicit dropdown pick wins;
   // otherwise a division quote uses its division's default and a company-level
@@ -282,6 +290,7 @@ export default function SalesQuotePage() {
                   {canPrint && <button style={{ ...st.actBtn, ...(quoteNoTemplate(q) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={quoteNoTemplate(q)} onClick={() => handlePrint(q)} title={quoteNoTemplate(q) ? tplPicker.noTemplateReason : "Print"}><MdPrint size={16} /></button>}
                   {canPrint && <button style={{ ...st.actBtn, opacity: (quoteNoTemplate(q) || exportingId === q.id) ? 0.5 : 1, ...(quoteNoTemplate(q) ? { cursor: "not-allowed" } : {}) }} onClick={() => handleExportPdf(q)} disabled={quoteNoTemplate(q) || !!exportingId} title={quoteNoTemplate(q) ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={16} /></button>}
                   {canConvert && q.status !== "Accepted" && <button style={{ ...st.actBtn, color: colors.teal }} onClick={() => handleConvert(q)} title="Convert to Sales Order"><MdSwapHoriz size={16} /></button>}
+                  {canCopy && <button style={st.actBtn} onClick={() => copy.openCopy(q.id, `Sales Quote #${q.quoteNumber}`)} title="Copy this quote"><MdCopyAll size={16} /></button>}
                   {canDelete && <button style={{ ...st.actBtn, color: "#dc3545" }} onClick={() => handleDelete(q)} title="Delete"><MdDelete size={16} /></button>}
                 </div>
               </div>
@@ -308,6 +317,16 @@ export default function SalesQuotePage() {
           target="salesquote"
           onClose={() => setShowImport(false)}
           onSaved={() => { setShowImport(false); reload(); notify("Sales Quote created from PO.", "success"); }}
+        />
+      )}
+
+      {copy.source && (
+        <CopyDocumentModal
+          sourceType={DOC_COPY_TYPES.salesQuote}
+          sourceId={copy.source.id}
+          sourceLabel={copy.source.label}
+          onClose={copy.close}
+          onCopied={copy.onCopied}
         />
       )}
 

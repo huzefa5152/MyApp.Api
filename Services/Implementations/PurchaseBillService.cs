@@ -35,6 +35,8 @@ namespace MyApp.Api.Services.Implementations
         private static PurchaseBillDto ToDto(PurchaseBill pb) => new()
         {
             Id = pb.Id,
+            CopiedFromType = pb.CopiedFromType,
+            CopiedFromId = pb.CopiedFromId,
             PurchaseBillNumber = pb.PurchaseBillNumber,
             Date = pb.Date,
             CompanyId = pb.CompanyId,

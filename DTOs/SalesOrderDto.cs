@@ -54,6 +54,13 @@ namespace MyApp.Api.DTOs
         public int BillableChallanCount { get; set; }
         public DateTime CreatedAt { get; set; }
 
+        /// <summary>
+        /// Copy lineage — when this document was produced by the Copy action,
+        /// the type and id of the document it was copied from. Null otherwise.
+        /// </summary>
+        public string? CopiedFromType { get; set; }
+        public int? CopiedFromId { get; set; }
+
         public List<SalesOrderItemDto> Items { get; set; } = new();
     }
 

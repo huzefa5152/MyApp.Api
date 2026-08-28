@@ -39,6 +39,8 @@ namespace MyApp.Api.Services.Implementations
             return new SalesQuoteDto
             {
                 Id = q.Id,
+                CopiedFromType = q.CopiedFromType,
+                CopiedFromId = q.CopiedFromId,
                 QuoteNumber = q.QuoteNumber,
                 CompanyId = q.CompanyId,
                 ClientId = q.ClientId,

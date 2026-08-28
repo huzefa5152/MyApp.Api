@@ -58,6 +58,36 @@ namespace MyApp.Api.Helpers
         }
 
         /// <summary>
+        /// Duplicates a line image under a fresh name for the Copy Document flow
+        /// and returns the new URL. Two quotes must never point at one file:
+        /// clearing a line or deleting either quote runs <see cref="TryDelete"/>,
+        /// which would blank the image on the other. Returns null when the source
+        /// file is missing or the copy fails, so the line is simply copied without
+        /// its photo rather than pointing at nothing.
+        /// </summary>
+        public static string? TryCopy(string? url, int companyId)
+        {
+            if (!IsOwnedBy(url, companyId)) return null;
+            try
+            {
+                var root = Directory.GetCurrentDirectory();
+                var abs = Path.Combine(root, url!.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+                if (!File.Exists(abs)) return null;
+
+                var ext = Path.GetExtension(abs);
+                var fileName = $"{Guid.NewGuid():N}{ext}";
+                var destDir = Path.Combine(root, CompanyRelDir(companyId).Replace('/', Path.DirectorySeparatorChar));
+                Directory.CreateDirectory(destDir);
+                File.Copy(abs, Path.Combine(destDir, fileName));
+                return BuildUrl(companyId, fileName);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Best-effort delete of the backing file when a line's image is replaced,
         /// cleared, or its quote is deleted. A missing/locked file must never
         /// break the save — an orphaned file is harmless, a failed save isn't.
