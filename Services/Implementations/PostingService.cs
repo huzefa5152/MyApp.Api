@@ -146,16 +146,28 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
-            // Unallocated remainder of a customer receipt — money in hand that
+            // Unallocated remainder of a customer receipt — CASH in hand that
             // settles no invoice yet. A liability, not negative A/R (see
             // ControlType.CustomerAdvances). Money-out has no supplier
-            // equivalent, so this only ever fires for a Receipt. Must run
-            // BEFORE the generic on-account/Suspense plug below so a genuine
-            // customer advance lands on its own control account instead of
-            // pooling on Suspense; once it's added here drSum/crSum already
-            // balance, so the Suspense plug is a no-op for this case.
-            var allocated = payment.Allocations.Sum(a => a.Amount + a.AdjustmentAmount);
-            var unallocated = payment.Amount - allocated;
+            // equivalent, so this only ever fires for a Receipt.
+            //
+            // Cash only, deliberately: a.Amount is what the customer actually
+            // paid; a.AdjustmentAmount is a non-cash write-off that already
+            // has its own Dr leg above (the settle-remainder adjustment) and
+            // settles the INVOICE, not the receipt. Summing Amount +
+            // AdjustmentAmount here would understate the unspent cash by the
+            // adjustment and let the gap fall through to the unconditional
+            // Suspense plug below instead — that still balances, so nothing
+            // would catch it.
+            //
+            // Must run BEFORE that Suspense plug so a genuine customer
+            // advance lands on its own control account instead of pooling on
+            // Suspense. With this cash-only formula, drSum/crSum already
+            // balance by the time we reach it, so the Suspense plug is
+            // provably a no-op here — a consequence of using cash, not a
+            // separate assumption.
+            var allocatedCash = payment.Allocations.Sum(a => a.Amount);
+            var unallocated = payment.Amount - allocatedCash;
             if (isReceipt && unallocated > 0m)
             {
                 var advances = await ResolveAsync(payment.CompanyId, accounts,
