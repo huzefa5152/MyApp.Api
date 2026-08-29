@@ -17,8 +17,9 @@ namespace MyApp.Api.Services.Implementations
         private readonly IClientGroupService _clientGroupService;
         private readonly AppDbContext _context;
         private readonly AttachmentStorage _attachmentStorage;
+        private readonly ICustomerLedgerService _ledger;
         private readonly ILogger<ClientService> _logger;
-        public ClientService(IClientRepository repo, IInvoiceRepository invoiceRepo, IDeliveryChallanService challanService, IClientGroupService clientGroupService, AppDbContext context, AttachmentStorage attachmentStorage, ILogger<ClientService> logger)
+        public ClientService(IClientRepository repo, IInvoiceRepository invoiceRepo, IDeliveryChallanService challanService, IClientGroupService clientGroupService, AppDbContext context, AttachmentStorage attachmentStorage, ICustomerLedgerService ledger, ILogger<ClientService> logger)
         {
             _repo = repo;
             _invoiceRepo = invoiceRepo;
@@ -26,6 +27,7 @@ namespace MyApp.Api.Services.Implementations
             _clientGroupService = clientGroupService;
             _context = context;
             _attachmentStorage = attachmentStorage;
+            _ledger = ledger;
             _logger = logger;
         }
 
@@ -484,52 +486,58 @@ namespace MyApp.Api.Services.Implementations
             return dto;
         }
 
+        /// <summary>
+        /// Customer statement — kept for its existing signature and callers, but
+        /// the trail itself now comes from <see cref="ICustomerLedgerService"/>
+        /// so there is exactly ONE implementation of a customer's money trail.
+        ///
+        /// Behaviour inherited from the ledger (all deliberate — this method used
+        /// to get them wrong):
+        ///   • credit and debit notes are now included;
+        ///   • receipts show at their FULL amount, so unallocated cash appears;
+        ///   • settle-remainder adjustments are included, so the closing balance
+        ///     agrees with A/R even when a discount was written off;
+        ///   • the columns follow the operator's workbook (invoice → Credit,
+        ///     receipt → Debit; see <see cref="CustomerLedgerEntryDto"/>). The
+        ///     running balance VALUES are unchanged by that swap.
+        /// The 200-row display cap is preserved by asking the ledger for one
+        /// page of 200.
+        /// </summary>
         public async Task<ClientStatementDto> GetStatementAsync(int clientId, string clientName)
         {
-            const int CAP = 200;
-            var entries = new List<ClientStatementEntryDto>();
+            const int CAP = PaginationHelper.AuditMax;   // 200 — the historical cap
 
-            // Debits — sale invoices (exclude demo / cancelled / credit+debit notes).
-            var invoices = await _context.Invoices.AsNoTracking()
-                .Where(i => i.ClientId == clientId && !i.IsDemo && !i.IsCancelled && i.DocumentType != 9 && i.DocumentType != 10)
-                .Select(i => new { i.Id, i.InvoiceNumber, i.Date, i.GrandTotal })
-                .ToListAsync();
-            foreach (var i in invoices)
-                entries.Add(new ClientStatementEntryDto { Date = i.Date, Type = "Sales Invoice", Reference = "INV-" + i.InvoiceNumber, DocId = i.Id, Debit = i.GrandTotal });
+            // The signature carries no companyId, so resolve the owning company
+            // from the client itself; the ledger then re-checks the pair.
+            var companyId = await _context.Clients.AsNoTracking()
+                .Where(c => c.Id == clientId)
+                .Select(c => (int?)c.CompanyId)
+                .FirstOrDefaultAsync();
+            if (companyId == null)
+                return new ClientStatementDto { ClientId = clientId, ClientName = clientName };
 
-            // Credits — receipt allocations against this client's sale invoices.
-            // One row per allocation (matching the reference), so Σ credits ==
-            // Σ invoice AmountPaid → the running balance ends at the A/R figure.
-            var allocs = await (
-                from a in _context.PaymentAllocations.AsNoTracking()
-                join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
-                join inv in _context.Invoices.AsNoTracking() on a.InvoiceId equals inv.Id
-                where a.InvoiceId != null
-                      && inv.ClientId == clientId && !inv.IsDemo && !inv.IsCancelled && inv.DocumentType != 9 && inv.DocumentType != 10
-                      && p.Direction == MyApp.Api.Models.Accounting.PaymentDirection.Receipt && !p.IsCancelled
-                select new { p.Number, p.Date, p.BankAccountName, p.Description, a.Amount, a.Id }
-            ).ToListAsync();
-            foreach (var a in allocs)
-                entries.Add(new ClientStatementEntryDto { Date = a.Date, Type = "Receipt", Reference = "RCP-" + a.Number, DocId = a.Id, BankAccount = a.BankAccountName, Description = a.Description, Credit = a.Amount });
-
-            // Running balance oldest → newest; on the same date, debits (invoices)
-            // land before credits (receipts), mirroring the reference.
-            var ordered = entries.OrderBy(e => e.Date).ThenByDescending(e => e.Debit).ToList();
-            decimal bal = 0m;
-            foreach (var e in ordered) { bal += e.Debit - e.Credit; e.Balance = bal; }
-
-            var total = ordered.Count;
-            ordered.Reverse(); // newest-first for display
-            var shown = ordered.Take(CAP).ToList();
+            var ledger = await _ledger.GetForClientAsync(
+                companyId.Value, clientId, from: null, to: null, type: null, page: 1, pageSize: CAP);
 
             return new ClientStatementDto
             {
-                ClientId = clientId,
-                ClientName = clientName,
-                ClosingBalance = bal,
-                Total = total,
-                Capped = total > shown.Count,
-                Entries = shown,
+                ClientId = ledger.ClientId,
+                ClientName = string.IsNullOrWhiteSpace(clientName) ? ledger.ClientName : clientName,
+                ClosingBalance = ledger.ClosingBalance,
+                Total = ledger.Total,
+                Capped = ledger.Total > ledger.Entries.Count,
+                Entries = ledger.Entries.Select(e => new ClientStatementEntryDto
+                {
+                    Date = e.Date,
+                    Type = e.Type,
+                    Reference = e.Reference,
+                    DocId = e.DocId ?? 0,
+                    Description = e.Description,
+                    BankAccount = e.BankAccount,
+                    Debit = e.Debit,
+                    Credit = e.Credit,
+                    Balance = e.Balance,
+                }).ToList(),
             };
         }
 
