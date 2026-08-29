@@ -348,6 +348,7 @@ builder.Services.AddScoped<IDocumentCopyService, DocumentCopyService>();
 builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
 builder.Services.AddScoped<IHsCodeService, HsCodeService>();
+builder.Services.AddScoped<IClientImportService, ClientImportService>();
 builder.Services.AddScoped<INonInventoryItemService, NonInventoryItemService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<IFbrService, FbrService>();

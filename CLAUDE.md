@@ -295,6 +295,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Public file allowlist | `python scripts/verify_public_file_allowlist.py` | `10/10 checks passed` |
 | Print pagination (offline) | see `PRINT_TEMPLATE_GUIDE.md` §11 | `0 failing cases` |
 | HS code master + FBR-off classification | `python scripts/test_hscode_master.py --fbr-token <token>` | `all PASS` (15 checks) |
+| Bulk client import | `python scripts/test_client_import.py` | `all PASS` (23 checks) |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |

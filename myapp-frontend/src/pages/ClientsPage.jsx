@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
-import { MdPeople, MdAdd, MdSearch, MdBusiness } from "react-icons/md";
+import { MdPeople, MdAdd, MdSearch, MdBusiness, MdUploadFile } from "react-icons/md";
 import ClientList from "../Components/ClientList";
 import ClientDetailModal from "../Components/ClientDetailModal";
 import ClientForm from "../Components/ClientForm";
 import CommonClientsPanel from "../Components/CommonClientsPanel";
 import CommonClientForm from "../Components/CommonClientForm";
 import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
+import ClientImportModal from "../Components/ClientImportModal";
 import { getClientsByCompany, getCommonClients, copyClientToCompanies, getClientSummary } from "../api/clientApi";
 import { notify } from "../utils/notify";
 import { dropdownStyles } from "../theme";
@@ -30,6 +31,9 @@ export default function ClientsPage() {
   const [summaryById, setSummaryById] = useState({});
   const [selectedClient, setSelectedClient] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  // Bulk onboarding — same permission as creating one client by hand, since
+  // that is exactly what it does, just 200 at a time.
+  const [showImport, setShowImport] = useState(false);
   const [search, setSearch] = useState("");
   const [loadingClients, setLoadingClients] = useState(false);
 
@@ -145,6 +149,17 @@ export default function ClientsPage() {
           </div>
         </div>
         {companies.length > 0 && canCreate && (
+          <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+          <button
+            style={styles.importBtn}
+            onClick={() => setShowImport(true)}
+            disabled={!selectedCompany}
+            title={selectedCompany
+              ? "Add many clients at once from a CSV or Excel sheet"
+              : "Select a company first"}
+          >
+            <MdUploadFile size={18} /> Import Clients
+          </button>
           <button
             style={styles.addBtn}
             onClick={handleAdd}
@@ -153,6 +168,7 @@ export default function ClientsPage() {
           >
             <MdAdd size={18} /> New Client
           </button>
+          </div>
         )}
       </div>
 
@@ -269,6 +285,22 @@ export default function ClientsPage() {
         />
       )}
 
+      {/* Bulk import — sample sheet, preview, then create. Scoped to the
+          selected company: the uploaded file never carries a company id. */}
+      {showImport && selectedCompany && (
+        <ClientImportModal
+          companyId={selectedCompany.id}
+          companyName={selectedCompany.brandName || selectedCompany.name}
+          onClose={() => setShowImport(false)}
+          onImported={() => {
+            fetchClients(selectedCompany.id);
+            // Imported clients are grouped by NTN/name like any other, so the
+            // Common Clients panel may have gained members too.
+            setCommonRefreshKey((k) => k + 1);
+          }}
+        />
+      )}
+
       {/* Client Form Modal — `companies` enables the multi-company
           picker on Add. On Edit, the picker is hidden (a Client row
           can only belong to one company; cross-tenant edits are done
@@ -355,6 +387,19 @@ const styles = {
     margin: "0.15rem 0 0",
     fontSize: "0.88rem",
     color: colors.textSecondary,
+  },
+  importBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    padding: "0.55rem 1.1rem",
+    borderRadius: 10,
+    border: "1px solid #d0d7e2",
+    background: "#fff",
+    color: "#0d47a1",
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    cursor: "pointer",
   },
   addBtn: {
     display: "inline-flex",

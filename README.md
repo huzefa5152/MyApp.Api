@@ -289,6 +289,14 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-30 — Import your customer list from a spreadsheet
+
+- **Import Clients** on the Clients screen adds hundreds of customers in one go. Download the sample CSV, paste your list under its headings, upload it, and the screen shows what it will do — row by row — before anything is saved.
+- **Nothing is written until you confirm.** Each row is marked *will be added*, *already exists* or *cannot import*, with the reason next to it (blank name, the same customer twice in the file, a customer already on your books).
+- **Re-importing is safe.** Customers you already have are skipped, never overwritten, so uploading next month's updated list only adds the new names.
+- Accepts CSV and Excel (.xlsx), copes with commas inside quoted addresses, semicolon-separated exports and files saved by Excel with a byte-order mark, and reads the usual column names (Customer / Party / Client all map to Name).
+- Bad rows never sink the whole file: the good ones import and the rest are listed with their reasons.
+
 ### 2026-08-30 — HS codes are your own master data, and new companies start with FBR off
 
 - **New companies now start with FBR integration switched OFF.** Nobody has to paste FBR credentials just to set up their catalog or raise documents; you turn FBR on when you are ready to file digital invoices. Existing companies are untouched — Hakimi and Roshan keep the setting they already have.

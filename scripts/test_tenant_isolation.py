@@ -883,6 +883,30 @@ s, _ = request("GET", "/api/hscodes?search=6109&take=5", token=tokens["alice"])
 check(suite12, "alice searches the HS master with no companyId", s == 200, f"got {s}")
 
 
+# ── Suite 13: bulk client import ─────────────────────────────────────
+# The uploaded sheet never carries a company id — it comes from the request —
+# so the only thing between a user and another tenant's customer list is the
+# guard on that id. Both steps are checked: previewing another tenant's company
+# would already leak its client names back through the duplicate verdict.
+suite13 = "client import"
+
+csv_bytes = "Name,Address,Phone\r\nIsolation Probe,Addr,021-1\r\n".encode()
+
+s, _ = upload_file(f"/api/clients/import/preview?companyId={beta['id']}", tokens["alice"],
+                   "clients.csv", csv_bytes, "text/csv")
+status_check(suite13, "alice POST /clients/import/preview (Beta)", s, 403)
+
+s, _ = request("POST", "/api/clients/import/commit", token=tokens["alice"],
+               body={"companyId": beta["id"],
+                     "rows": [{"rowNumber": 1, "name": "Isolation Probe", "status": "New"}]})
+status_check(suite13, "alice POST /clients/import/commit (Beta)", s, 403)
+
+# Her own company is fine — the guard is on whose customer list is touched.
+s, _ = upload_file(f"/api/clients/import/preview?companyId={alpha['id']}", tokens["alice"],
+                   "clients.csv", csv_bytes, "text/csv")
+check(suite13, "alice previews her own company", s == 200, f"got {s}")
+
+
 # ── Cleanup (test fails → keep rows for inspection) ──────────
 print("\n=== Results ===")
 fails = [r for r in results if not r[2].startswith(PASS)]
